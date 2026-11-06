@@ -74,6 +74,9 @@ public class Bbs757EfbBridgeTests
         public bool Reachable { get; set; } = true;
         public int? Cycle { get; set; }
         public Action<Point>? OnTap { get; set; }
+        public Action<int, int, int>? OnDrag { get; set; }
+        public bool DragReachable { get; set; } = true;
+        public List<(int X, int Y0, int Y1)> Drags { get; } = new();
         public Dictionary<string, Bbs757Value> File { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, double> Vars { get; } = new(StringComparer.Ordinal);
         public List<string> Events { get; } = new();
@@ -102,6 +105,14 @@ public class Bbs757EfbBridgeTests
                 if (!Reachable) return Task.FromResult(false);
                 Taps.Add(p);
                 OnTap?.Invoke(p);
+                return Task.FromResult(true);
+            },
+            Drag = (x, y0, y1, _) =>
+            {
+                Events.Add($"drag {x},{y0},{y1}");
+                if (!DragReachable) return Task.FromResult(false);
+                Drags.Add((x, y0, y1));
+                OnDrag?.Invoke(x, y0, y1);
                 return Task.FromResult(true);
             },
             ReadVar = (name, _) => Task.FromResult<double?>(Vars.TryGetValue(name, out var v) ? v : null),
@@ -754,7 +765,8 @@ public class Bbs757EfbBridgeTests
             "sld:CEILING", Slider: new Bbs757EfbSlider(500, 900, 500));
         var tablet = new FakeTablet(PageOf("AIRCRAFT", "CABIN & DOORS", ceiling));
         var press = tablet.Press(ceiling);
-        tablet.OnTap = p => tablet.Show(PageOf("AIRCRAFT", "CABIN & DOORS", ceiling with { Slider = new Bbs757EfbSlider(500, 900, p.X) }));
+        tablet.OnTap = p => tablet.Show(PageOf("AIRCRAFT", "CABIN & DOORS",
+            ceiling with { Slider = new Bbs757EfbSlider(500, 900, p.X), Value = ((p.X - 500) / 4).ToString(CultureInfo.InvariantCulture) + "%" }));
 
         await TestCulture.Run(culture, () => tablet.Runner().SliderAsync(press, "30", CancellationToken.None));
         Assert.Equal(new[] { new Point(620, 315) }, tablet.Taps);
@@ -775,7 +787,7 @@ public class Bbs757EfbBridgeTests
         Assert.NotNull(Bbs757EfbElements.OptionsFor(irs, page.PageName));
         var tablet = new FakeTablet(page);
         var press = tablet.Press(irs);
-        tablet.OnTap = p => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", irs with { Slider = new Bbs757EfbSlider(895, 1190, p.X) }));
+        tablet.OnTap = p => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", irs with { Slider = new Bbs757EfbSlider(895, 1190, p.X), Value = "50" }));
 
         await TestCulture.Run(culture, () => tablet.Runner().SliderAsync(press, "50", CancellationToken.None));
         Assert.Equal(new[] { new Point(1043, 529) }, tablet.Taps);
@@ -794,6 +806,245 @@ public class Bbs757EfbBridgeTests
 
         Assert.Empty(tablet.Taps);
         Assert.Equal(new[] { "Ceiling could not be set to bright." }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_slider_percent_is_judged_by_its_shown_value(string culture)
+    {
+        // The knob moves, but the value shown is what judges: 30 asked, 90 shown is not set; a value that is no percent but changed is.
+        var ceiling = new Bbs757EfbItem(Bbs757EfbKind.Slider, "Ceiling", new Rectangle(300, 300, 100, 30), new Point(500, 315), true,
+            "sld:CEILING", Value: "10%", Slider: new Bbs757EfbSlider(500, 900, 500));
+        var wrong = new FakeTablet(PageOf("AIRCRAFT", "CABIN & DOORS", ceiling));
+        wrong.OnTap = p => wrong.Show(PageOf("AIRCRAFT", "CABIN & DOORS", ceiling with { Value = "90%", Slider = new Bbs757EfbSlider(500, 900, p.X) }));
+        await TestCulture.Run(culture, () => wrong.Runner().SliderAsync(wrong.Press(ceiling), "30", CancellationToken.None));
+        Assert.Equal(new[] { "Ceiling could not be set to 30 percent." }, wrong.Alerts);
+
+        var feet = ceiling with { Value = "100 ft" };
+        var changed = new FakeTablet(PageOf("AIRCRAFT", "CABIN & DOORS", feet));
+        changed.OnTap = _ => changed.Show(PageOf("AIRCRAFT", "CABIN & DOORS", feet with { Value = "300 ft" }));
+        await TestCulture.Run(culture, () => changed.Runner().SliderAsync(changed.Press(feet), "30", CancellationToken.None));
+        Assert.Empty(changed.Alerts);
+
+        var same = new FakeTablet(PageOf("AIRCRAFT", "CABIN & DOORS", feet));
+        await TestCulture.Run(culture, () => same.Runner().SliderAsync(same.Press(feet), "30", CancellationToken.None));
+        Assert.Equal(new[] { "Ceiling could not be set to 30 percent." }, same.Alerts);
+    }
+
+    // ---- two-choice switches --------------------------------------------------------------------------------------------
+
+    private static Bbs757EfbItem Nosewheel(string value) =>
+        new(Bbs757EfbKind.Toggle, "Nosewheel steering", new Rectangle(273, 333, 237, 33), new Point(1170, 349), true, "tgl:NOSEWHEEL STEERING", Value: value);
+
+    private static async Task<List<string>> SetNosewheel(string shown, string wanted)
+    {
+        var page = PageOf("SETTINGS", "AIRCRAFT", Nosewheel(shown));
+        using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(page, null) };
+        h.Bridge.TakeRead(page);
+        var push = h.Pushes[^1];
+        int row = IndexOf(push, "Nosewheel steering");
+        Assert.Equal("select", push[$"items.{row}.type"]);
+        await h.Bridge.HandleAsync("set_element_value", new Dictionary<string, string> { ["index"] = push[$"items.{row}.aidx"], ["value"] = wanted }, CancellationToken.None);
+        return Texts(h.Pushes[^1]);
+    }
+
+    [Fact]
+    public async Task A_two_choice_switch_set_to_its_other_word_taps_once()
+    {
+        // The harness has no tablet to tap, so the tap ends "cannot be reached": that alert is the proof a tap was tried.
+        var texts = await SetNosewheel("Realistic", "Rudder");
+        Assert.Contains(Bbs757EfbPress.UnreachableText, texts);
+    }
+
+    [Fact]
+    public async Task A_two_choice_switch_set_to_its_shown_word_taps_nothing()
+    {
+        var texts = await SetNosewheel("Realistic", "Realistic");
+        Assert.DoesNotContain(Bbs757EfbPress.UnreachableText, texts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_two_choice_switch_runner_tap_says_the_new_word_once(string culture)
+    {
+        var row = Nosewheel("Realistic");
+        var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", row));
+        tablet.File["tiller_realistic"] = Bbs757Value.Of(true);
+        tablet.OnTap = _ =>
+        {
+            tablet.File["tiller_realistic"] = Bbs757Value.Of(false);
+            tablet.Show(PageOf("SETTINGS", "AIRCRAFT", row with { Value = "Rudder" }));
+        };
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(tablet.Press(row), wantOn: row.On != true, CancellationToken.None));
+
+        Assert.Equal(new[] { row.Hit }, tablet.Taps);
+        Assert.Equal(new[] { "Nosewheel steering: Rudder" }, tablet.Alerts);
+    }
+
+    // ---- scrolling into view --------------------------------------------------------------------------------------------
+
+    /// <summary>A scrolled page: rows at content positions inside a viewport of 250,82 1147x966, drawn at content less the offset;
+    /// a drag moves the offset by y0 - y1, kept between 0 and <see cref="MaxOffset"/>, as the tablet's does (about 1:1).</summary>
+    private sealed class Scrolled
+    {
+        public const int MaxOffset = 214;
+        public double Offset { get; set; }
+        public double Ratio { get; set; } = 1.0;
+        public FakeTablet Tablet { get; }
+        private readonly (string Name, int ContentY)[] _rows;
+
+        public Scrolled(double offset, params (string Name, int ContentY)[] rows)
+        {
+            _rows = rows;
+            Offset = offset;
+            Tablet = new FakeTablet(PageAt());
+            Tablet.OnDrag = (_, y0, y1) =>
+            {
+                Offset = Math.Clamp(Offset + (y0 - y1) * Ratio, 0, MaxOffset);
+                Tablet.Show(PageAt());
+            };
+        }
+
+        public Bbs757EfbItem Row(string name, double? offset = null)
+        {
+            int content = _rows.First(r => r.Name == name).ContentY;
+            int y = (int)Math.Round(content - (offset ?? Offset));
+            return new Bbs757EfbItem(Bbs757EfbKind.Button, name, new Rectangle(273, y, 600, 60), new Point(573, y + 30), true, "btn:" + name.ToUpperInvariant());
+        }
+
+        public Bbs757EfbScreenModel PageAt() =>
+            PageOf("SETTINGS", "AIRCRAFT", _rows.Select(r => Row(r.Name)).ToArray()) with { Scrollable = true, Viewport = new Rectangle(250, 82, 1147, 966) };
+    }
+
+    private static Scrolled TwoRows(double offset) => new(offset, ("First row", 100), ("Dirty panel states", 1202));
+
+    [Fact]
+    public async Task A_control_below_the_viewport_is_scrolled_into_view_before_its_tap()
+    {
+        var s = TwoRows(0);
+        var press = s.Tablet.Press(s.Row("Dirty panel states"));   // drawn at 1202, under the viewport's bottom (1048)
+
+        await s.Tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.NotEmpty(s.Tablet.Drags);
+        Assert.All(s.Tablet.Drags, d => { Assert.Equal(500, d.X); Assert.True(d.Y0 > d.Y1); });   // content moves up
+        var tap = Assert.Single(s.Tablet.Taps);
+        var row = s.Row("Dirty panel states");
+        Assert.True(row.Box.Contains(tap) && s.PageAt().Viewport.Contains(tap), $"tapped {tap} where it is drawn {row.Box}");
+        Assert.True(s.Tablet.Flow.FindIndex(e => e.StartsWith("drag")) < s.Tablet.Flow.FindIndex(e => e.StartsWith("tap")));
+    }
+
+    [Fact]
+    public async Task A_control_above_the_viewport_scrolls_up()
+    {
+        var s = new Scrolled(Scrolled.MaxOffset, ("First row", 100), ("Dirty panel states", 1202));   // First row drawn at -114
+        var press = s.Tablet.Press(s.Row("First row"));
+
+        await s.Tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.NotEmpty(s.Tablet.Drags);
+        Assert.All(s.Tablet.Drags, d => Assert.True(d.Y0 < d.Y1));   // content moves down
+        var tap = Assert.Single(s.Tablet.Taps);
+        Assert.True(s.Row("First row").Box.Contains(tap) && s.PageAt().Viewport.Contains(tap), $"tapped {tap}");
+    }
+
+    [Fact]
+    public async Task A_control_that_never_comes_into_view_is_not_tapped()
+    {
+        var s = TwoRows(0);
+        s.Tablet.OnDrag = null;   // the page does not move
+        var press = s.Tablet.Press(s.Row("Dirty panel states"));
+
+        await s.Tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Empty(s.Tablet.Taps);
+        Assert.Single(s.Tablet.Drags);   // a drag that left it where it was ends the loop
+        Assert.Equal(new[] { "Dirty panel states could not be brought into view, not pressed." }, s.Tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_control_on_a_page_scrolled_since_the_push_is_tapped_where_it_is_drawn()
+    {
+        var s = TwoRows(0);
+        var press = s.Tablet.Press(s.Row("First row"));   // pressed at offset 0, drawn at 100
+        s.Offset = 100;
+        s.Tablet.Show(s.PageAt());                         // now drawn at 0: above the viewport's top (82)? 0..60 is outside
+
+        await s.Tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        var tap = Assert.Single(s.Tablet.Taps);
+        Assert.True(s.Row("First row").Box.Contains(tap) && s.PageAt().Viewport.Contains(tap), $"tapped {tap}");
+    }
+
+    [Fact]
+    public async Task A_control_in_view_taps_without_a_drag()
+    {
+        var s = TwoRows(0);
+        var row = s.Row("First row");
+
+        await s.Tablet.Runner().ClickAsync(s.Tablet.Press(row), CancellationToken.None);
+
+        Assert.Empty(s.Tablet.Drags);
+        Assert.Equal(new[] { row.Hit }, s.Tablet.Taps);
+    }
+
+    [Fact]
+    public async Task A_partly_shown_last_row_is_tapped_in_its_shown_part()
+    {
+        // The evidence: at the end of the scroll (offset 175.19) the row drawn at 1027-1087 shows 21 px above the bottom (1048).
+        var s = new Scrolled(175.19, ("Dirty panel states", 1202));
+        var row = s.Row("Dirty panel states");
+        Assert.Equal(new Rectangle(273, 1027, 600, 60), row.Box);
+
+        await s.Tablet.Runner().ClickAsync(s.Tablet.Press(row), CancellationToken.None);
+
+        Assert.Empty(s.Tablet.Drags);
+        var tap = Assert.Single(s.Tablet.Taps);
+        Assert.InRange(tap.Y, 1027, 1047);
+        Assert.Equal(1037, tap.Y);   // the middle of 1027-1048
+    }
+
+    [Fact]
+    public async Task A_long_way_takes_several_drags()
+    {
+        var s = new Scrolled(0, ("Far row", 5000));
+        s.Tablet.OnDrag = (_, y0, y1) =>
+        {
+            s.Offset += y0 - y1;   // no end: a long page
+            s.Tablet.Show(s.PageAt());
+        };
+
+        await s.Tablet.Runner().ClickAsync(s.Tablet.Press(s.Row("Far row")), CancellationToken.None);
+
+        Assert.True(s.Tablet.Drags.Count >= 2);
+        Assert.True(s.Tablet.Drags.Count <= Bbs757EfbPressRunner.MaxScrollSteps);
+        Assert.All(s.Tablet.Drags, d => Assert.True(d.Y0 - d.Y1 <= 966 - 200));
+        Assert.Single(s.Tablet.Taps);
+    }
+
+    [Fact]
+    public async Task A_control_in_the_side_menu_taps_where_it_is_with_no_drag()
+    {
+        var home = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Fuel", new Rectangle(43, 216, 58, 29), new Point(72, 230), true, "menu:FUEL");
+        var tablet = new FakeTablet(new Bbs757EfbScreenModel("AIRCRAFT", "GROUND SERVICES", new[] { home }, new[] { ReqFuelTruck() }));
+
+        await tablet.Runner().ClickAsync(tablet.Press(home), CancellationToken.None);
+
+        Assert.Empty(tablet.Drags);
+        Assert.Equal(new[] { home.Hit }, tablet.Taps);
+    }
+
+    [Fact]
+    public async Task A_tab_press_says_its_new_words_once()
+    {
+        var tab = new Bbs757EfbItem(Bbs757EfbKind.Tab, "Hydraulic", new Rectangle(300, 200, 150, 40), new Point(375, 220), true, "tab:HYDRAULIC");
+        var tablet = new FakeTablet(PageOf("AIRCRAFT", "MAINTENANCE", tab));
+        tablet.OnTap = _ => tablet.Show(PageOf("AIRCRAFT", "MAINTENANCE", tab with { Text = "Hydraulic (current)", Selected = true }));
+
+        await tablet.Runner().ClickAsync(tablet.Press(tab), CancellationToken.None);
+
+        Assert.Equal(new[] { "Hydraulic (current)" }, tablet.Alerts);
     }
 
     // ---- the pushes: a press is the push's it was made on ---------------------------------------------------------------

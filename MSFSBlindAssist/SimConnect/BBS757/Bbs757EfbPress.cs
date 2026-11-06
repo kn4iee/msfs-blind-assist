@@ -145,6 +145,43 @@ public static class Bbs757EfbPress
         return words.ToArray();
     }
 
+    // ------------------------------------------------------------------ where a control is tapped, and scrolling it into view
+
+    /// <summary>The fewest pixels of a control that must show for it to be tapped where it shows.</summary>
+    public const int MinShownPx = 12;
+
+    /// <summary>
+    /// Where to tap <paramref name="item"/> on the page <paramref name="m"/>: the middle of the part of its drawn box that is inside
+    /// the page's <see cref="Bbs757EfbScreenModel.Viewport"/> (the reader's x, and its y while that lies in that part), or null
+    /// when that part is under <see cref="MinShownPx"/> tall (the last row of Settings, Aircraft at the end of its scroll shows 21 px:
+    /// tapped there). A control that is not part of the page's content (the side menu, the top bar, a question's answers) is
+    /// tapped where the reader found it.
+    /// </summary>
+    public static Point? TapPoint(Bbs757EfbScreenModel m, Bbs757EfbItem item)
+    {
+        if (item.Box.IsEmpty || !m.Items.Contains(item)) return item.Hit;
+        var shown = Rectangle.Intersect(item.Box, m.Viewport);
+        if (shown.Height < MinShownPx || shown.Width <= 0) return null;
+        int y = item.Hit.Y >= shown.Top && item.Hit.Y < shown.Bottom ? item.Hit.Y : shown.Top + shown.Height / 2;
+        return new Point(item.Hit.X, y);
+    }
+
+    /// <summary>
+    /// One drag that scrolls <paramref name="item"/> toward the middle of the viewport: at x 250 into the viewport (the rows' label
+    /// area, measured inert), from y0 to y1 so that y0 - y1 is how far the drawn middle has to go (at most the viewport's height less
+    /// 200 in one drag; a longer way takes more). Null when the item can be tapped where it is.
+    /// </summary>
+    public static (int X, int Y0, int Y1)? DragFor(Bbs757EfbScreenModel m, Bbs757EfbItem item)
+    {
+        if (TapPoint(m, item) != null || item.Box.IsEmpty) return null;
+        var v = m.Viewport;
+        int mid = v.Top + v.Height / 2;
+        int delta = item.Box.Top + item.Box.Height / 2 - mid;   // positive: below the middle, the content has to move up
+        int distance = Math.Clamp(Math.Abs(delta), 1, Math.Max(1, v.Height - 200));
+        int start = mid - distance / 2;
+        return delta > 0 ? (v.X + 250, start + distance, start) : (v.X + 250, start, start + distance);
+    }
+
     // ------------------------------------------------------------------ a question
 
     /// <summary>A question's words as two reads compare them: its letters and digits, upper-cased invariantly. Case, spaces and
@@ -266,6 +303,9 @@ public static class Bbs757EfbPress
     /// <summary>The new choice of a switch of two choices that landed ("CPDLC network: SayIntentions"). The screen reader says only
     /// checked or not checked of its check box, which names no word (CORE-7).</summary>
     public static string ChoiceText(string label, string word) => label + ": " + word;
+
+    /// <summary>A control the page would not scroll to where it can be tapped.</summary>
+    public static string NotInViewText(string name) => name + " could not be brought into view, not pressed.";
 
     /// <summary>A slider that did not reach the wished choice or value.</summary>
     public static string CouldNotSetText(string label, string value) => label + " could not be set to " + value + ".";

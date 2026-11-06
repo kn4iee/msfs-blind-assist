@@ -308,7 +308,7 @@ public static class Bbs757EfbElements
 
     /// <summary>The two words of a switch that is a choice between two things, for a setting whose catalog gives exactly two
     /// choices other than Off and On; null for any other switch.</summary>
-    private static IReadOnlyList<string>? TwoChoicesFor(Bbs757EfbItem it, string pageName)
+    internal static IReadOnlyList<string>? TwoChoicesFor(Bbs757EfbItem it, string pageName)
     {
         if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is not { } setting || Bbs757EfbSettingsMatch.ChoicesFor(setting) is not { Count: 2 } words)
             return null;

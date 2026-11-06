@@ -67,8 +67,8 @@ public sealed record Bbs757EfbScreenModel(
     IReadOnlyList<Bbs757EfbItem> Menu,
     IReadOnlyList<Bbs757EfbItem> Items)
 {
-    /// <summary>Whether the page scrolls (its content does not fit the viewport): the window then offers scroll
-    /// buttons (the agent's wheel).</summary>
+    /// <summary>Whether the page scrolls (its content does not fit the viewport): the presses scroll
+    /// the control they need into view by dragging.</summary>
     public bool Scrollable { get; init; }
 
     /// <summary>The tablet's top bar, left to right: the departure countdown, the boarding control and the
@@ -114,7 +114,7 @@ public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem>
 
 /// <summary>
 /// The constants and the key/state-word helpers the memory tablet reader (<see cref="Bbs757EfbModelReader"/>) and the
-/// window share: the side-menu boundary, the window's own Home button and scroll wheel, and how a tile's key carries
+/// window share: the side-menu boundary, the window's own Home button, and how a tile's key carries
 /// its words. (This was the OCR screen parser; the EFB is now read from the module's memory, so only these shared
 /// pieces remain.)
 /// </summary>
@@ -129,10 +129,6 @@ public static class Bbs757EfbScreen
     /// <summary>The home icon left of every app's title: the window's own Home button taps it, as the reader offers
     /// no control for the icon.</summary>
     public static readonly Point HomeButton = new(19, 62);
-
-    /// <summary>Where the window's scroll buttons send the agent's wheel, and how far each step scrolls.</summary>
-    public static readonly Point WheelPoint = new(800, 600);
-    public const int WheelStep = 300;
 
     /// <summary>The words a tile's text ends in that say its state, not its name ("FUEL TRUCK OFF" is FUEL TRUCK): the
     /// key strips them so a press that changes a tile's state keeps its key, and <see cref="Bbs757EfbPress.Relocate"/>

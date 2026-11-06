@@ -49,6 +49,72 @@ public class Bbs757EfbPressTests
         m.Menu.Concat(m.Items).Concat(m.TopBar).FirstOrDefault(i => i.Text == text)
         ?? throw new Xunit.Sdk.XunitException($"No control '{text}' on {m.PageName}: " + string.Join(" | ", m.Items.Select(i => i.Text)));
 
+    // ---- TapPoint and DragFor ------------------------------------------------------------------------------------------
+
+    private static Bbs757EfbScreenModel InViewport(params Bbs757EfbItem[] items) =>
+        PageOf("SETTINGS", "AIRCRAFT", items) with { Viewport = new Rectangle(250, 82, 1147, 966) };
+
+    [Fact]
+    public void TapPoint_is_the_middle_of_the_shown_part_and_null_under_twelve_pixels()
+    {
+        var whole = Item(Bbs757EfbKind.Button, "Whole", "btn:W", new Rectangle(300, 200, 400, 60));
+        var last = Item(Bbs757EfbKind.Button, "Last", "btn:L", new Rectangle(273, 1027, 600, 60));      // shows 1027-1048: 21 px
+        var edge = Item(Bbs757EfbKind.Button, "Edge", "btn:E", new Rectangle(273, 1037, 600, 60));      // 11 px
+        var below = Item(Bbs757EfbKind.Button, "Below", "btn:B", new Rectangle(273, 1202, 600, 60));
+        var m = InViewport(whole, last, edge, below);
+
+        Assert.Equal(whole.Hit, Bbs757EfbPress.TapPoint(m, whole));
+        Assert.Equal(new Point(573, 1037), Bbs757EfbPress.TapPoint(m, last));
+        Assert.Null(Bbs757EfbPress.TapPoint(m, edge));
+        Assert.Null(Bbs757EfbPress.TapPoint(m, below));
+    }
+
+    [Fact]
+    public void TapPoint_leaves_the_side_menu_and_the_top_bar_where_the_reader_found_them()
+    {
+        var menu = Item(Bbs757EfbKind.Menu, "Fuel", "menu:FUEL", new Rectangle(43, 216, 58, 29));
+        var m = new Bbs757EfbScreenModel("AIRCRAFT", "FUEL", new[] { menu }, Array.Empty<Bbs757EfbItem>());
+
+        Assert.Equal(menu.Hit, Bbs757EfbPress.TapPoint(m, menu));
+        Assert.Null(Bbs757EfbPress.DragFor(m, menu));
+    }
+
+    [Fact]
+    public void DragFor_moves_the_drawn_middle_to_the_viewports_middle_in_one_drag_of_at_most_height_less_200()
+    {
+        var below = Item(Bbs757EfbKind.Button, "Below", "btn:B", new Rectangle(273, 1202, 600, 60));   // middle 1232; viewport middle 565
+        var above = Item(Bbs757EfbKind.Button, "Above", "btn:A", new Rectangle(273, -40, 600, 60));    // middle -10
+        var near = Item(Bbs757EfbKind.Button, "Near", "btn:N", new Rectangle(273, 1000, 600, 60));     // shows 48 px: in view
+        var barely = Item(Bbs757EfbKind.Button, "Barely", "btn:R", new Rectangle(273, 1040, 600, 60)); // shows 8 px: 535 to go
+        var far = Item(Bbs757EfbKind.Button, "Far", "btn:F", new Rectangle(273, 3000, 600, 60));       // 2465 to go: capped
+        var m = InViewport(below, above, near, barely, far);
+
+        var down = Bbs757EfbPress.DragFor(m, below)!.Value;
+        Assert.Equal(500, down.X);
+        Assert.Equal(667, down.Y0 - down.Y1);              // 1232 - 565, under the 766 cap: y0 below y1, the content moves up
+        var up = Bbs757EfbPress.DragFor(m, above)!.Value;
+        Assert.Equal(-575, up.Y0 - up.Y1);                 // the other way: y0 above y1
+        Assert.Null(Bbs757EfbPress.DragFor(m, near));
+        var small = Bbs757EfbPress.DragFor(m, barely)!.Value;
+        Assert.Equal(505, small.Y0 - small.Y1);            // 1070 - 565
+        var capped = Bbs757EfbPress.DragFor(m, far)!.Value;
+        Assert.Equal(966 - 200, capped.Y0 - capped.Y1);
+        foreach (var d in new[] { down, up, small, capped })
+        {
+            Assert.InRange(d.Y0, 82, 1048);
+            Assert.InRange(d.Y1, 82, 1048);
+        }
+    }
+
+    [Fact]
+    public void The_last_row_of_the_real_scrolled_settings_page_shows_21_pixels_and_is_tapped_there()
+    {
+        // Evidence: Settings, Aircraft at its end (offset 175.19): the last row is drawn at 1027-1087.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
+        var rows = page.Items.Where(i => i.Clickable && i.Box.Bottom > page.Viewport.Bottom).ToList();
+        Assert.All(rows, r => Assert.True(Bbs757EfbPress.TapPoint(page, r) is null || Bbs757EfbPress.TapPoint(page, r)!.Value.Y < page.Viewport.Bottom));
+    }
+
     // ---- Relocate ------------------------------------------------------------------------------------------------------
 
     [Fact]

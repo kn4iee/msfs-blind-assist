@@ -306,10 +306,27 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         if (act.Kind != Bbs757EfbElements.ActionKind.Tap || act.Item is not { } item || page == null) return;
         BeginPress();
         var pressed = new Bbs757EfbPressed(item, page.Model);
-        if (item.Kind is Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox)
+        if (item.Kind == Bbs757EfbKind.Toggle && TwoChoiceIndex(item, page.Model.PageName, value) is { } wanted)
+        {
+            // A switch of two words: the window sends the word it was set to. The word it shows already: nothing; the other: one tap
+            // (a two-choice row's On is null, so the press taps it once).
+            if (wanted != Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(page.Model.PageName, item)!, item.Value))
+                await _press.SwitchAsync(pressed, item.On != true, ct);
+        }
+        else if (item.Kind is Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox)
             await _press.SwitchAsync(pressed, value == "true", ct);
         else if (item.Kind == Bbs757EfbKind.Slider)
             await _press.SliderAsync(pressed, value, ct);
+    }
+
+    /// <summary>The index of the word a two-choice switch is set to among its two words; null when the switch has no two words or
+    /// <paramref name="value"/> is none of them (a plain switch's "true" or "false").</summary>
+    private static int? TwoChoiceIndex(Bbs757EfbItem item, string pageName, string value)
+    {
+        if (Bbs757EfbElements.TwoChoicesFor(item, pageName) is null
+            || Bbs757EfbSettingsMatch.SettingFor(pageName, item) is not { } setting) return null;
+        int index = Bbs757EfbSettingsMatch.ChoiceIndex(setting, value);
+        return index >= 0 ? index : null;
     }
 
     /// <summary>A press of the pilot's begins: the alert shown goes, so the window speaks the next one even when it has the same
@@ -327,6 +344,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     {
         Read = ct => ReadNowAsync(ct, asked: true),
         Tap = TapAsync,
+        Drag = (x, y0, y1, ct) => _client.DragAsync(x, y0, y1, ct),
         ReadInstalledCycle = () => Bbs757WorkFolder.Find() is { } folder ? Bbs757WorkFolder.ReadInstalledCycle(folder) : null,
         ReadVar = ReadVarAsync,
         ReadRegistered = (key, ct) => _io.ReadRegistered(key, ct),

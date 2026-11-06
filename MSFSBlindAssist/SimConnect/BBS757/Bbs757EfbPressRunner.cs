@@ -19,6 +19,10 @@ public sealed class Bbs757EfbPressIo
     /// new; the page read, or null when nothing could be read (the window then shows why).</summary>
     public required Func<CancellationToken, Task<Bbs757EfbScreenModel?>> Read { get; init; }
 
+    /// <summary>One drag at a tablet x from y0 to y1 (the page scrolls on a drag): true when it went out, false when nothing was
+    /// dragged.</summary>
+    public required Func<int, int, int, CancellationToken, Task<bool>> Drag { get; init; }
+
     /// <summary>One tap at a tablet point: true when it went out (it may have landed), false when nothing was tapped.</summary>
     public required Func<Point, CancellationToken, Task<bool>> Tap { get; init; }
 
@@ -70,7 +74,8 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// The tablet window's presses (the owner's ruling of 2026-10-29: nothing refuses a press), on the bridge's loop, one at a time:
 /// <list type="number">
 /// <item>Where: the tablet is read again from memory and the control found in it (<see cref="Bbs757EfbPress.Relocate"/>, from the
-/// page the pilot pressed on); it is tapped where it is now. Gone, turned into words that are no control (START BOARDING become
+/// page the pilot pressed on); a control outside the viewport is dragged into view first (at most <see cref="MaxScrollSteps"/>
+    /// drags, each followed by a read), and it is tapped where it is drawn now (<see cref="Bbs757EfbPress.TapPoint"/>). Gone, turned into words that are no control (START BOARDING become
 /// "Boarding… 10 min"), or an answer whose question was answered meanwhile: nothing tapped, "{label} is no longer on the tablet."
 /// Under a question that came up meanwhile, an answer to another question included (every question's YES is keyed alike): nothing
 /// tapped and nothing said. A side-menu entry or a home-screen app whose page the tablet shows already (pressed twice), and the
@@ -104,6 +109,9 @@ public sealed class Bbs757EfbPressRunner
 
     /// <summary>How long BlueBird's file is read for a Settings press. Measured 2026-10-27: its taps were in the file 1.3 s later.</summary>
     public const int FileMaxMs = 2000;
+
+    /// <summary>How many drags a press makes at most to bring its control into view.</summary>
+    public const int MaxScrollSteps = 8;
 
     private const int ChangePollMs = 100, NavigatePollMs = 500, FollowPollMs = 300, FilePollMs = 250;
 
@@ -397,9 +405,10 @@ public sealed class Bbs757EfbPressRunner
         if (read == wanted) return;   // it shows the wish already
 
         int x = Bbs757EfbPress.ChoiceX(track, wanted, options.Count);
+        int y = target.At.Y;
         for (int taps = 1; ; taps++)
         {
-            if (!await TapAsync(row with { Hit = new Point(x, row.Hit.Y) }, target, ct)) return;
+            if (!await TapAsync(row, target, ct, new Point(x, y))) return;
             if (await WaitForChangeAsync(page, ct) is not { } after) return;   // nothing read: the window says why
             var now = Bbs757EfbPress.Relocate(page, after, row);
             read = now == null ? -1 : Bbs757EfbElements.CurrentChoice(now, after.PageName, options);
@@ -407,6 +416,7 @@ public sealed class Bbs757EfbPressRunner
             x = next;
             page = after;
             row = now!;
+            y = Bbs757EfbPress.TapPoint(page, row)?.Y ?? y;
         }
 
         var setting = Bbs757EfbSettingsMatch.SettingFor(target.Page.PageName, target.Item);
@@ -430,21 +440,29 @@ public sealed class Bbs757EfbPressRunner
         var target = await LocateAsync(pressed, ct);
         if (target?.Item.Slider is not { } track) return;
         int x = track.TrackLeft + (int)Math.Round(percent / 100 * (track.TrackRight - track.TrackLeft));
-        if (!await TapAsync(target.Item with { Hit = new Point(x, target.Item.Hit.Y) }, target, ct)) return;
+        if (!await TapAsync(target.Item, target, ct, new Point(x, target.At.Y))) return;
         if (await WaitForChangeAsync(target.Page, ct) is not { } after) return;   // nothing read: the window says why
 
-        if (Bbs757EfbPress.Relocate(target.Page, after, target.Item)?.Slider is { } now && Math.Abs(KnobPercent(now) - percent) <= PercentSlack)
+        // Judged by the value the slider shows now: a percent within the slack, or, when it shows no percent, any other value.
+        if (Bbs757EfbPress.Relocate(target.Page, after, target.Item) is { } now
+            && (ShownPercent(now.Value) is double shown
+                ? Math.Abs(shown - percent) <= PercentSlack
+                : !string.Equals(now.Value, target.Item.Value, StringComparison.Ordinal)))
             return;
         _io.Alert(Bbs757EfbPress.CouldNotSetText(target.Item.Text, percent.ToString("0.#", CultureInfo.InvariantCulture) + " percent"));
     }
 
-    private static double KnobPercent(Bbs757EfbSlider s) =>
-        s.TrackRight > s.TrackLeft ? 100.0 * (s.KnobX - s.TrackLeft) / (s.TrackRight - s.TrackLeft) : 0;
+    /// <summary>A slider's shown value as a percent ("40", "40%"); null when it shows none ("25 ft", nothing).</summary>
+    private static double? ShownPercent(string value)
+    {
+        string text = value.Trim().TrimEnd('%').Trim();
+        return NumberParsing.TryParseExternal(text, out double v) && double.IsFinite(v) ? v : null;
+    }
 
     // ------------------------------------------------------------------ where, and the tap
 
     /// <summary>A control where it is to be tapped: the control and the page it is on in the fresh read.</summary>
-    private sealed record Target(Bbs757EfbItem Item, Bbs757EfbScreenModel Page);
+    private sealed record Target(Bbs757EfbItem Item, Bbs757EfbScreenModel Page, Point At);
 
     /// <summary>
     /// The pressed control where it is to be tapped: the tablet is read again from memory and the control found in it. Null, with
@@ -457,7 +475,28 @@ public sealed class Bbs757EfbPressRunner
     {
         if (await _io.Read(ct) is not { } now) return null;
         var found = Find(pressed, now, out bool gone);
-        if (found != null) return new Target(found, now);
+        for (int steps = 0; found != null && Bbs757EfbPress.TapPoint(now, found) == null; steps++)
+        {
+            // Outside the viewport (or showing under 12 px): dragged toward its middle, read again, found again where it is drawn now.
+            if (steps >= MaxScrollSteps || Bbs757EfbPress.DragFor(now, found) is not { } drag) break;
+            if (!await _io.Drag(drag.X, drag.Y0, drag.Y1, ct))
+            {
+                if (!ct.IsCancellationRequested) _io.Alert(Bbs757EfbPress.UnreachableText);
+                return null;
+            }
+            if (await _io.Read(ct) is not { } next) return null;
+            var moved = Find(pressed, next, out gone);
+            bool stayed = moved != null && moved.Box == found.Box;   // the drag left it where it was: the page's end
+            now = next;
+            found = moved;
+            if (stayed) break;
+        }
+        if (found != null)
+        {
+            if (Bbs757EfbPress.TapPoint(now, found) is { } at) return new Target(found, now, at);
+            _io.Alert(Bbs757EfbPress.NotInViewText(pressed.Item.Text));
+            return null;
+        }
         if (gone) _io.Alert(Bbs757EfbPress.GoneText(pressed.Item.Text));
         return null;
     }
@@ -509,11 +548,11 @@ public sealed class Bbs757EfbPressRunner
     /// The tap at <paramref name="item"/>'s point, and, once it went out, the press's hook; false, said, when nothing was tapped. A
     /// nav data press reads the cycle installed BEFORE its tap and hands it over with its hook.
     /// </summary>
-    private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct)
+    private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct, Point? at = null)
     {
         var hook = Bbs757EfbExtras.HookFor(target.Page.PageName, item);
         int? cycleBefore = hook is Bbs757EfbHook.NavDataUpdate or Bbs757EfbHook.NavDataRemove ? _io.ReadInstalledCycle() : null;
-        if (!await _io.Tap(item.Hit, ct))
+        if (!await _io.Tap(at ?? target.At, ct))
         {
             _io.Alert(Bbs757EfbPress.UnreachableText);
             return false;
@@ -523,7 +562,7 @@ public sealed class Bbs757EfbPressRunner
     }
 
     /// <summary>
-    /// After a tap or a wheel step, reads the tablet again until the page itself changes from <paramref name="before"/> (not the top
+    /// After a tap, reads the tablet again until the page itself changes from <paramref name="before"/> (not the top
     /// bar or notifications, which come and go), at most <see cref="ChangeMaxMs"/>; returns the read the change was seen in, the last
     /// read when none changed it, or null when a read failed. Each read pushes the page to the window.
     /// </summary>
