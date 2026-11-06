@@ -161,20 +161,21 @@ public sealed class Bbs757EfbModelReader
         return "";
     }
 
-    /// <summary>The one tab of a row whose folded words appear in a folded name or text elsewhere in the content (the tab
-    /// buttons' own subtrees, the side menu and the page chrome left out); null when none, or two or more, match.</summary>
+    /// <summary>The one tab of a row whose folded words appear in the name of a content panel (<c>*_panel</c>) outside the tab
+    /// buttons' own subtrees; null when none, or two or more, match. Until the plan 21 reads BlueBird's selected state.</summary>
     private static Bbs757EfbMemory.Node? CurrentTab(List<Bbs757EfbMemory.Node> tabs, Bbs757EfbMemory.App content)
     {
         var own = new HashSet<Bbs757EfbMemory.Node>(ReferenceEqualityComparer.Instance);
         foreach (var t in tabs) { own.Add(t); foreach (var d in Descendants(t)) own.Add(d); }
-        var elsewhere = Flatten(content.Controls)
-            .Where(n => !own.Contains(n) && IsContent(n) && !IsChrome(n))
-            .SelectMany(n => new[] { Fold(n.Name), Fold(n.Text) })
-            .Where(f => f.Length > 0).ToList();
+        // Only a content panel's name counts (maintenance_landing_gear_panel): a text or a canvas/card/grid name can hold a tab's
+        // word without being that tab's page ("RANDOM FAILURES: OFF", planning_weather_notam_canvas).
+        var panels = Flatten(content.Controls)
+            .Where(n => !own.Contains(n) && IsContent(n) && n.Name.EndsWith("_panel", StringComparison.Ordinal))
+            .Select(n => Fold(n.Name)).ToList();
         var hits = tabs.Where(t =>
         {
             string words = Fold(t.Text);
-            return words.Length > 0 && elsewhere.Any(f => f.Contains(words, StringComparison.Ordinal));
+            return words.Length > 0 && panels.Any(f => f.Contains(words, StringComparison.Ordinal));
         }).ToList();
         return hits.Count == 1 ? hits[0] : null;
     }

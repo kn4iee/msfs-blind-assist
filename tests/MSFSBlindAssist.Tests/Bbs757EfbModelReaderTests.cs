@@ -292,14 +292,35 @@ public class Bbs757EfbModelReaderTests
     }
 
     [Fact]
-    public void A_tab_row_with_two_matches_marks_none()
+    public void A_tab_row_with_two_matching_panels_marks_none()
     {
         var page = PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"],
             N("other", "planning_perf_calc_canvas", "", 250, 82, 1147, 966,
                 N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("x_tab_button_0", "TAKE OFF"), Tab("x_tab_button_1", "LANDING")),
-                N("label", "a", "Takeoff Weight", 300, 200, 100, 30), N("label", "b", "Landing Weight", 300, 240, 100, 30)));
+                N("other", "x_takeoff_panel", "", 300, 200, 100, 30), N("other", "x_landing_panel", "", 300, 240, 100, 30)));
 
         Assert.DoesNotContain(Bbs757EfbModelReader.Read(new[] { page })!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
+    }
+
+    [Fact]
+    public void A_tab_row_is_not_marked_from_a_text()
+    {
+        // The Failures shape: the footer button "RANDOM FAILURES: OFF" holds the RANDOM tab's word.
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("16-aircraft-failures"))!;
+        var tabs = model.Items.Where(i => i.Kind == Bbs757EfbKind.Tab).ToList();
+        Assert.Equal(3, tabs.Count);
+        Assert.DoesNotContain(tabs, t => t.Selected);
+    }
+
+    [Fact]
+    public void A_tab_row_is_not_marked_from_a_canvas_name()
+    {
+        // The Weather shape: planning_weather_notam_canvas holds the NOTAM tab's word.
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("22-navigation-weather"))!;
+        var tabs = model.Items.Where(i => i.Kind == Bbs757EfbKind.Tab).ToList();
+        Assert.Contains(tabs, t => t.Name == "planning_weather_primary_tab_button_3");
+        Assert.Contains(tabs, t => t.Name == "planning_weather_primary_selector_button_0");
+        Assert.DoesNotContain(tabs, t => t.Selected);
     }
 
     [Fact]
@@ -319,7 +340,8 @@ public class Bbs757EfbModelReaderTests
         foreach (var name in new[] { "maintenance_apu_tab_button", "planning_weather_primary_tab_button_3", "failure_tab_2",
                      "planning_charts_source_button_0", "planning_charts_type_button_4" })
             Assert.True(Bbs757EfbPageRules.IsTabName(name), name);
-        foreach (var name in new[] { "planning_perf_calc_unit_button_0", "planning_weather_primary_selector_button_0", "failure_tabs_divider", "x_tab_button_x" })
+        Assert.True(Bbs757EfbPageRules.IsTabName("planning_weather_primary_selector_button_0"));
+        foreach (var name in new[] { "planning_perf_calc_unit_button_0", "failure_tabs_divider", "x_tab_button_x" })
             Assert.False(Bbs757EfbPageRules.IsTabName(name), name);
     }
 

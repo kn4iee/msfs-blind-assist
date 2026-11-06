@@ -58,7 +58,7 @@ internal static class Bbs757EfbPageRules
     }
 
     /// <summary>Whether a control name is a tab row's button: BlueBird's <c>_tab_button</c> (Maintenance), <c>_tab_button_N</c>,
-    /// <c>_tab_N</c> (Failures), <c>_source_button_N</c> and <c>_type_button_N</c> (Charts). PERF calc's <c>_unit_button_N</c> is
+    /// <c>_tab_N</c> (Failures), <c>_source_button_N</c> and <c>_type_button_N</c> (Charts), <c>_selector_button_N</c> (Weather). PERF calc's <c>_unit_button_N</c> is
     /// not one: they are three independent switches.</summary>
     internal static bool IsTabName(string name)
     {
@@ -67,7 +67,8 @@ internal static class Bbs757EfbPageRules
         if (us < 0 || us == name.Length - 1 || !name[(us + 1)..].All(char.IsAsciiDigit)) return false;
         string head = name[..us];
         return head.EndsWith("_tab_button", StringComparison.Ordinal) || head.EndsWith("_tab", StringComparison.Ordinal)
-            || head.EndsWith("_source_button", StringComparison.Ordinal) || head.EndsWith("_type_button", StringComparison.Ordinal);
+            || head.EndsWith("_source_button", StringComparison.Ordinal) || head.EndsWith("_type_button", StringComparison.Ordinal)
+            || head.EndsWith("_selector_button", StringComparison.Ordinal);
     }
 
     /// <summary>A value's letters and digits, upper-cased invariantly: how names and words are compared.</summary>
