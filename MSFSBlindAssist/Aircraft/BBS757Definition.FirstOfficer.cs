@@ -33,6 +33,15 @@ public partial class BBS757Definition
         };
     }
 
+    /// <summary>How long a First Officer write waits before its first read-back.</summary>
+    internal const int FoSettleMs = 150;
+
+    /// <summary>The gap between the read-backs that follow while the switch has not landed.</summary>
+    internal const int FoPollMs = 250;
+
+    /// <summary>The most a First Officer write waits for a switch to land before it gives up.</summary>
+    internal const int FoLandMaxMs = 3000;
+
     /// <summary>True when the map knows this node (the First Officer's tables are checked against it).</summary>
     internal bool HasControl(string node) => _byNode.ContainsKey(node);
 
@@ -54,7 +63,7 @@ public partial class BBS757Definition
     }
 
     /// <summary>The testable core of <see cref="FoSetAsync"/>.</summary>
-    internal async Task<bool> FoSetCoreAsync(Bbs757Control control, double target, Bbs757SimIo io, CancellationToken ct)
+    internal async Task<bool> FoSetCoreAsync(Bbs757Control control, double target, Bbs757SimIo io, CancellationToken ct, bool pollForLanding = true)
     {
         if (!io.CanWrite()) return false;
         var pick = BeginPick(control.Node);
@@ -101,9 +110,30 @@ public partial class BBS757Definition
                 io.Write(calls[i]);
             }
 
-            await io.Delay(ReadBackDelayMs, token);
-            double? after = await io.ReadFresh(control.Node, token);
-            landed = LandedOnPick(control, after, target);
+            double? after;
+            if (!pollForLanding)
+            {
+                await io.Delay(ReadBackDelayMs, token);
+                after = await io.ReadFresh(control.Node, token);
+                landed = LandedOnPick(control, after, target);
+            }
+            else
+            {
+                // Landed only when TWO reads in a row show the target: BlueBird's REALISTIC parking brake
+                // writes itself back, so one read of the target can lie (evidence: flight-10.md).
+                int waited = FoSettleMs;
+                await io.Delay(FoSettleMs, token);
+                after = await io.ReadFresh(control.Node, token);
+                int hits = LandedOnPick(control, after, target) ? 1 : 0;
+                while (hits < 2 && waited + FoPollMs <= FoLandMaxMs)
+                {
+                    await io.Delay(FoPollMs, token);
+                    waited += FoPollMs;
+                    after = await io.ReadFresh(control.Node, token);
+                    hits = LandedOnPick(control, after, target) ? hits + 1 : 0;
+                }
+                landed = hits >= 2;
+            }
             if (status != null)
             {
                 double? state = await io.ReadFresh(status, token);
@@ -215,7 +245,7 @@ public partial class BBS757Definition
     internal async Task<bool> FoSetParkingBrakeCoreAsync(Bbs757SimIo io, CancellationToken ct)
     {
         if (!_byNode.TryGetValue(Bbs757ParkingBrake.Node, out var control)) return false;
-        if (await FoSetCoreAsync(control, 1, io, ct)) return true;
+        if (await FoSetCoreAsync(control, 1, io, ct, pollForLanding: false)) return true;
         if (!io.CanWrite() || _lifetime.IsCancellationRequested || ct.IsCancellationRequested) return false;
         if (!Bbs757ParkingBrake.ShouldRetry(await io.ReadFresh(control.Node, ct), set: true, ParkingBrakeRealistic()))
             return false;   // unread, already set, or EASY mode: never retry blind

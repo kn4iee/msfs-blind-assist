@@ -170,6 +170,72 @@ public class Bbs757FoWriteTests
         Assert.Equal(1, rig.Sim.Fresh["X"]);
     }
 
+    /// <summary>The control reads 0 until the press, then answers the given reads in order (the last repeats).</summary>
+    private static Rig AnsweringAfterPress(params double[] afterPress)
+    {
+        var rig = new Rig(Toggle());
+        rig.Sim.Fresh["X"] = 0;
+        bool pressed = false;
+        int next = 0;
+        rig.Sim.OnWrite = _ => pressed = true;
+        rig.Sim.OnFreshRead = key =>
+        {
+            if (!pressed) return rig.Sim.Fresh[key];
+            return afterPress[Math.Min(next++, afterPress.Length - 1)];
+        };
+        return rig;
+    }
+
+    [Fact]
+    public async Task A_switch_that_lands_at_once_is_done_in_two_reads()
+    {
+        var rig = AnsweringAfterPress(1);
+
+        Assert.True(await rig.Set("X", 1));
+        Assert.Equal(new[] { BBS757Definition.FoSettleMs, BBS757Definition.FoPollMs }, rig.Sim.Delays);
+    }
+
+    [Fact]
+    public async Task A_switch_that_lands_late_is_polled_until_it_holds()
+    {
+        var rig = AnsweringAfterPress(0, 0, 1, 1);
+
+        Assert.True(await rig.Set("X", 1));
+        Assert.Equal(new[] { 150, 250, 250, 250 }, rig.Sim.Delays);
+    }
+
+    [Fact]
+    public async Task A_target_read_once_then_lost_is_not_landed()
+    {
+        var rig = AnsweringAfterPress(1, 0);   // then 0 for ever
+
+        Assert.False(await rig.Set("X", 1));
+        Assert.True(rig.Sim.Delays.Sum() <= BBS757Definition.FoLandMaxMs);
+    }
+
+    [Fact]
+    public async Task A_switch_that_never_lands_gives_up_at_three_seconds()
+    {
+        var rig = AnsweringAfterPress(0);
+
+        Assert.False(await rig.Set("X", 1));
+        int sum = rig.Sim.Delays.Sum();
+        Assert.True(sum <= BBS757Definition.FoLandMaxMs);
+        Assert.True(sum + BBS757Definition.FoPollMs > BBS757Definition.FoLandMaxMs);
+        Assert.Equal(BBS757Definition.FoSettleMs, rig.Sim.Delays[0]);
+        Assert.All(rig.Sim.Delays.Skip(1), d => Assert.Equal(BBS757Definition.FoPollMs, d));
+    }
+
+    [Fact]
+    public async Task The_parking_brake_keeps_its_fixed_settle()
+    {
+        var rig = ParkRig(realistic: false);
+        rig.Sim.OnWrite = rpn => { if (rpn == ParkPress) rig.Sim.Fresh[ParkNode] = 1; };
+
+        Assert.True(await rig.Def.FoSetParkingBrakeCoreAsync(rig.Sim.Io, CancellationToken.None));
+        Assert.Equal(new[] { 1500 }, rig.Sim.Delays);
+    }
+
     [Fact]
     public async Task A_set_already_there_sends_nothing_and_returns_true()
     {

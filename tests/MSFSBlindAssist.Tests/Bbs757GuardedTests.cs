@@ -703,6 +703,9 @@ internal sealed class Bbs757FakeIo
     /// <summary>The fresh read of a key; a missing key or a null value is an unread variable.</summary>
     public readonly Dictionary<string, double?> Fresh = new(StringComparer.Ordinal);
 
+    /// <summary>When set, answers a fresh read before <see cref="Fresh"/> is consulted, so a test can answer a sequence.</summary>
+    public Func<string, double?>? OnFreshRead;
+
     /// <summary>The cached read of a key.</summary>
     public readonly Dictionary<string, double?> Cache = new(StringComparer.Ordinal);
 
@@ -737,6 +740,7 @@ internal sealed class Bbs757FakeIo
         ReadFresh = (key, ct) =>
         {
             ct.ThrowIfCancellationRequested();
+            if (OnFreshRead != null) return Task.FromResult(OnFreshRead(key));
             return Task.FromResult(Fresh.TryGetValue(key, out double? v) ? v : null);
         },
         Cached = key => Cache.TryGetValue(key, out double? v) ? v : null,
