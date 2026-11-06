@@ -978,6 +978,32 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
+    public async Task A_control_left_of_the_viewport_is_tapped_where_it_is()
+    {
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("30-systems"))!;
+        var zoom = page.Items.First(i => i.Clickable && i.Box.Right <= page.Viewport.Left && i.Name.Contains("elec_zoom_in", StringComparison.Ordinal));
+        var tablet = new FakeTablet(page);
+
+        await tablet.Runner().ClickAsync(tablet.Press(zoom), CancellationToken.None);
+
+        Assert.Empty(tablet.Drags);
+        Assert.Equal(new[] { zoom.Hit }, tablet.Taps);
+    }
+
+    [Fact]
+    public async Task A_page_without_a_scrollbox_is_never_dragged()
+    {
+        var below = Tile("Below", "btn:BELOW", new Rectangle(300, 1100, 200, 40));
+        var tablet = new FakeTablet(PageOf("NAVIGATION", "MAP", below));   // Scrollable is false
+
+        await tablet.Runner().ClickAsync(tablet.Press(below), CancellationToken.None);
+
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Below could not be brought into view, not pressed." }, tablet.Alerts);
+    }
+
+    [Fact]
     public async Task A_control_in_view_taps_without_a_drag()
     {
         var s = TwoRows(0);

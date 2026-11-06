@@ -160,20 +160,23 @@ public static class Bbs757EfbPress
     public static Point? TapPoint(Bbs757EfbScreenModel m, Bbs757EfbItem item)
     {
         if (item.Box.IsEmpty || !m.Items.Contains(item)) return item.Hit;
-        var shown = Rectangle.Intersect(item.Box, m.Viewport);
-        if (shown.Height < MinShownPx || shown.Width <= 0) return null;
-        int y = item.Hit.Y >= shown.Top && item.Hit.Y < shown.Bottom ? item.Hit.Y : shown.Top + shown.Height / 2;
+        // Vertically only: pages scroll up and down, and a content control may sit left of the viewport (Systems' zoom buttons).
+        int top = Math.Max(item.Box.Top, m.Viewport.Top), bottom = Math.Min(item.Box.Bottom, m.Viewport.Bottom);
+        if (bottom - top < MinShownPx) return null;
+        int y = item.Hit.Y >= top && item.Hit.Y < bottom ? item.Hit.Y : top + (bottom - top) / 2;
         return new Point(item.Hit.X, y);
     }
 
     /// <summary>
     /// One drag that scrolls <paramref name="item"/> toward the middle of the viewport: at x 250 into the viewport (the rows' label
     /// area, measured inert), from y0 to y1 so that y0 - y1 is how far the drawn middle has to go (at most the viewport's height less
-    /// 200 in one drag; a longer way takes more). Null when the item can be tapped where it is.
+    /// 200 in one drag; a longer way takes more). Null when the item can be tapped where it is, and when the page does not scroll
+    /// (<see cref="Bbs757EfbScreenModel.Scrollable"/>).
     /// </summary>
     public static (int X, int Y0, int Y1)? DragFor(Bbs757EfbScreenModel m, Bbs757EfbItem item)
     {
-        if (TapPoint(m, item) != null || item.Box.IsEmpty) return null;
+        // A page with no content scrollbox does not scroll: a drag there pans what is under it (the map, the diagram).
+        if (!m.Scrollable || TapPoint(m, item) != null || item.Box.IsEmpty) return null;
         var v = m.Viewport;
         int mid = v.Top + v.Height / 2;
         int delta = item.Box.Top + item.Box.Height / 2 - mid;   // positive: below the middle, the content has to move up

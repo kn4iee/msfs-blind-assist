@@ -52,7 +52,7 @@ public class Bbs757EfbPressTests
     // ---- TapPoint and DragFor ------------------------------------------------------------------------------------------
 
     private static Bbs757EfbScreenModel InViewport(params Bbs757EfbItem[] items) =>
-        PageOf("SETTINGS", "AIRCRAFT", items) with { Viewport = new Rectangle(250, 82, 1147, 966) };
+        PageOf("SETTINGS", "AIRCRAFT", items) with { Viewport = new Rectangle(250, 82, 1147, 966), Scrollable = true };
 
     [Fact]
     public void TapPoint_is_the_middle_of_the_shown_part_and_null_under_twelve_pixels()
@@ -104,6 +104,15 @@ public class Bbs757EfbPressTests
             Assert.InRange(d.Y0, 82, 1048);
             Assert.InRange(d.Y1, 82, 1048);
         }
+    }
+
+    [Theory]
+    [InlineData("51-settings-aircraft", true)]
+    [InlineData("30-systems", false)]
+    [InlineData("24-navigation-map", false)]
+    public void Only_a_page_with_a_content_scrollbox_reads_scrollable(string fixture, bool scrollable)
+    {
+        Assert.Equal(scrollable, Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!.Scrollable);
     }
 
     [Fact]
