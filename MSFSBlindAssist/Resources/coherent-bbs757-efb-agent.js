@@ -151,16 +151,30 @@
                     startedAt: Date.now(), totalMs: total, timer: null };
         state.run = run;
         var ev = function (y) { return { clientX: r.left + x, clientY: r.top + y, button: 0, preventDefault: function () { } }; };
-        var fail = function (e) { run.error = 'error: ' + (e && e.message); run.running = false; };
+        // The mouse button is down from OnMouseDown until letGo: run.letGo is set while it is, and stopRun
+        // calls it, so a cancel or a failed move never leaves the tablet's mouse button held.
+        var lastY = y0;
+        run.letGo = function () {
+          run.letGo = null;
+          try { c.OnMouseUp(ev(lastY)); } catch (e) { }
+        };
+        var fail = function (e) {
+          run.error = 'error: ' + (e && e.message);
+          run.running = false;
+          if (run.letGo) run.letGo();
+        };
         var release = function () {
           run.timer = null;
-          try { c.OnMouseUp(ev(y1)); run.done = run.n; run.running = false; } catch (e) { fail(e); }
+          if (run.letGo) run.letGo();
+          run.done = run.n;
+          run.running = false;
         };
         var move = function (k) {
           run.timer = null;
           if (!run.running) return;
           try {
-            c.onMouseMove(ev(y0 + (y1 - y0) * k / DRAG_MOVES));
+            lastY = y0 + (y1 - y0) * k / DRAG_MOVES;
+            c.onMouseMove(ev(lastY));
             run.done = k + 1;
             if (k < DRAG_MOVES) run.timer = setTimeout(function () { move(k + 1); }, DRAG_MOVE_MS);
             else run.timer = setTimeout(release, DRAG_HOLD_MS);
@@ -168,7 +182,7 @@
         };
         c.onMouseMove(ev(y0));
         c.OnMouseDown(ev(y0));
-        move(1);
+        move(1);   // a throw in it goes to fail, which lets go
         return 'started';
       } catch (e) {
         return 'error: ' + (e && e.message);
@@ -230,11 +244,13 @@
       return !!run && run.running && (Date.now() - run.startedAt) < run.totalMs + STALE_MS;
     }
 
-    // Stops a run: its pending click is cleared, so nothing more of it is clicked.
+    // Stops a run: its pending click is cleared, so nothing more of it is clicked. A drag still holding
+    // the mouse button down lets go first.
     function stopRun(run, reason) {
       if (!run) return false;
       if (run.timer) clearTimeout(run.timer);
       run.timer = null;
+      if (run.letGo) run.letGo();
       if (!run.running) return false;
       run.running = false;
       run.error = reason;

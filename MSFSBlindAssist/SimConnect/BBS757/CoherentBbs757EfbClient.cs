@@ -338,7 +338,10 @@ public sealed class CoherentBbs757EfbClient : IDisposable
             string.Join(",", x.ToString(inv), y0.ToString(inv), y1.ToString(inv)), ct, stringResult: true);
         if (doc == null || doc.RootElement.ValueKind != JsonValueKind.String || doc.RootElement.GetString() != "started")
             return false;
-        await Task.Delay(DragWaitMs, ct);
+        // Like the other agent calls, a cancel answers instead of throwing: false, the drag may still be finishing in the page
+        // (it lets go of the mouse itself).
+        try { await Task.Delay(DragWaitMs, ct); }
+        catch (OperationCanceledException) { return false; }
         return true;
     }
 
@@ -348,7 +351,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     /// <summary>
     /// Calls one of the agent's functions with literal JS arguments and parses its JSON answer. Null
     /// when the view or agent cannot be reached (the loop re-installs it), or the answer is not JSON.
-    /// Never connects ([A380C-3]) and takes no run's place: the reader's reads, mirror and wheel
+    /// Never connects ([A380C-3]) and takes no run's place: the reader's reads, mirror and drag
     /// share the loop's socket between click runs.
     /// </summary>
     private async Task<JsonDocument?> CallAgentAsync(string function, string args, CancellationToken ct, bool stringResult = false)

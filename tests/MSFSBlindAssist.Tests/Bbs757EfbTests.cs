@@ -379,6 +379,20 @@ public class Bbs757EfbTests
         Assert.Contains("8: drag(x, y0, y1) replaces wheel", agent);
     }
 
+    [Fact]
+    public void The_efb_agent_lets_go_of_the_mouse_when_a_drag_is_stopped_or_fails()
+    {
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
+        string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
+        // The drag marks itself as holding the button, and the one place a run stops (cancel, a new run) and the failure path
+        // both call it; the release itself is the mouse up at the last position.
+        Assert.Contains("run.letGo = function ()", code);
+        Assert.Contains("c.OnMouseUp(ev(lastY))", code);
+        Assert.Matches(@"function stopRun\(run, reason\) \{[^}]*if \(run\.letGo\) run\.letGo\(\);", code);
+        Assert.Matches(@"var fail = function \(e\) \{[^}]*if \(run\.letGo\) run\.letGo\(\);", code);
+        Assert.Matches(@"var release = function \(\) \{[^}]*if \(run\.letGo\) run\.letGo\(\);", code);
+    }
+
     // ---- weight units -------------------------------------------------------
 
     [Fact]
