@@ -472,6 +472,53 @@ public class Bbs757FoChecklistStructureTests
         }
     }
 
+    /// <summary>
+    /// Fix round 1: a hand tick runs a test only parked with both engines stopped, as the flow's own guards have it
+    /// (FO-25's pattern): never in flight or during an engine start, and never on an unread state.
+    /// </summary>
+    [Fact]
+    public void EveryTestLine_IsLeftAlone_UnlessParkedWithTheEnginesStopped()
+    {
+        var airborne = new Bbs757FoStateEvaluator();
+        airborne.SetSimConnect(SeededSimConnectCache.With(("SIM_ON_GROUND", 0)));
+        airborne.SetEngineN2(0, 0);
+        var engineRunning = Parked();
+        engineRunning.SetEngineN2(0, 60);
+        var enginesUnread = new Bbs757FoStateEvaluator();
+        enginesUnread.SetSimConnect(SeededSimConnectCache.With(("SIM_ON_GROUND", 1)));
+
+        var lines = Group("PREFLIGHT").Items.Where(i => Bbs757FoFlowTests.PreflightTestIds.Contains(i.Id)).ToList();
+        Assert.Equal(13, lines.Count);
+        foreach (var line in lines)
+        {
+            Assert.NotNull(line.LeaveAloneWhen);
+            Assert.Equal("Tests left alone: not read on the ground with the engines stopped.", line.LeaveAloneText);
+            Assert.True(line.LeaveAloneWhen!(airborne), $"{line.Id}: airborne");
+            Assert.True(line.LeaveAloneWhen!(engineRunning), $"{line.Id}: an engine running");
+            Assert.True(line.LeaveAloneWhen!(enginesUnread), $"{line.Id}: the engines unread");
+            Assert.True(line.LeaveAloneWhen!(new Bbs757FoStateEvaluator()), $"{line.Id}: nothing read");
+            Assert.False(line.LeaveAloneWhen!(Parked()), $"{line.Id}: parked with both engines stopped");
+        }
+    }
+
+    [Fact]
+    public void ATestLineTick_InFlight_IsRefusedAloud_AndPressesNothing()
+    {
+        var sc = SeededSimConnectCache.ConnectedWith(("SIM_ON_GROUND", 0));
+        var state = new Bbs757FoStateEvaluator();
+        state.SetSimConnect(sc);
+        state.SetEngineN2(60, 60);
+        var io = new FakeBbs757FoTransport();
+        var exec = new X();
+        exec.SetTransport(io);
+        exec.SetState(state);
+        var mgr = new MSFSBlindAssist.FirstOfficer.ChecklistManager<X, Bbs757FoStateEvaluator>(state, exec, Bbs757FoChecklistDefinitions.Build());
+
+        Assert.False(mgr.ToggleItem("PREFLIGHT", "PF_TEST_GND_PROX", out string? why));
+        Assert.Contains("not read on the ground with the engines stopped", why);
+        Assert.Empty(io.Events);
+    }
+
     [Fact]
     public async Task ATestLinesTick_RunsItsTest()
     {

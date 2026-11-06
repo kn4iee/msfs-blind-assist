@@ -129,8 +129,10 @@ public static class Bbs757FoChecklistDefinitions
             Auto("PF_BANK_LIMIT", "PREFLIGHT", "Bank limit: AUTO", K.BankLimit, v => Is(v, 0), Set(K.BankLimit, 0)),
             Auto("PF_AUTOBRAKE", "PREFLIGHT", "Autobrake: RTO", K.Autobrake, v => Is(v, K.AutobrakeRto), Set(K.Autobrake, K.AutobrakeRto)),
             // BlueBird's tests, as the flow runs them: a tick runs the test. A self-test has no state, so every tick
-            // runs it again (FO-12).
-            .. Bbs757FoTests.Preflight.Select(t => ActionManual(Bbs757FoTests.PreflightId(t), "PREFLIGHT", t.Label, Set(t.Key, 1))),
+            // runs it again (FO-12). Only parked with both engines stopped, as the flow's guards have it (FO-25's
+            // pattern): never a TCAS test, stick shaker, GPWS or fire bell in flight or during an engine start.
+            .. Bbs757FoTests.Preflight.Select(t => LeaveAlone(
+                ActionManual(Bbs757FoTests.PreflightId(t), "PREFLIGHT", t.Label, Set(t.Key, 1)), NotParked, TestsStayText)),
             Reminder("PF_FMS", "PREFLIGHT", "FMS: route, winds, performance and takeoff data loaded"),
             Reminder("PF_ALTIMETERS", "PREFLIGHT", "Altimeters: set"),
         ]
@@ -611,7 +613,7 @@ public static class Bbs757FoChecklistDefinitions
     }
 
     // FO-25: on the ground with both engines read stopped; airborne, an engine turning, or either
-    // unread, fuel, IRS, hydraulics and battery stay as they are.
+    // unread, fuel, IRS, hydraulics and battery stay as they are, and no preflight test is run.
     internal static bool NotParked(Bbs757FoStateEvaluator s) =>
         !s.IsPosition("SIM_ON_GROUND", 1) || !s.IsOn("FO_ENGINES_STOPPED");
 
@@ -646,4 +648,5 @@ public static class Bbs757FoChecklistDefinitions
     internal const string PacksStayText = "Packs left on: not read on the ground.";
     internal const string ApuStaysText = "APU left running: neither both engines nor external power read on line.";
     internal const string SpeedbrakeStaysText = "Speedbrake extended, not armed. Left as it is.";
+    internal const string TestsStayText = "Tests left alone: not read on the ground with the engines stopped.";
 }
