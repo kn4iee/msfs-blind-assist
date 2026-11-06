@@ -3,10 +3,10 @@ using System.Text;
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// Matches the Settings rows the tablet reader parses (<see cref="Bbs757EfbItem"/>, from <see cref="Bbs757EfbScreen.Parse"/>)
+/// Matches the Settings rows the tablet reader reads (<see cref="Bbs757EfbItem"/>, from <see cref="Bbs757EfbModelReader"/>)
 /// to the catalog of BlueBird's settings (<see cref="Bbs757EfbSettings"/>), so the tablet window can offer a Settings slider
 /// as the choice list it is and judge a press by BlueBird's own file. A row is matched by the page's section and its label,
-/// with case, spaces and punctuation ignored: the reader's words are OCR'd capitals made sentence case ("Automatic gpu/jetway"
+/// with case, spaces and punctuation ignored: the reader's words are the tablet's capitals made sentence case ("Automatic gpu/jetway"
 /// for the catalog's "Automatic GPU/jetway", "FULL(7 MIN+)" for "Full (7 min+)"). A label that matches nothing is no setting:
 /// a press on it is judged by the page alone, never by a key that may be another setting's. Pure: no files, no simulator,
 /// and the same in every Windows culture.

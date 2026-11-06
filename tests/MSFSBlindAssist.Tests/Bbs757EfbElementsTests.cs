@@ -13,37 +13,6 @@ namespace MSFSBlindAssist.Tests;
 /// </summary>
 public class Bbs757EfbElementsTests
 {
-    private static Bbs757EfbTextLine Line(string text, int x, int y, int h = 12) =>
-        new(text, new Rectangle(x, y, 60, h), Array.Empty<Bbs757EfbWord>(), 'A');
-
-    [Fact]
-    public void A_pixel_of_wobble_does_not_swap_two_things_on_one_line()
-    {
-        // With the old 12 px bands, y 11 and y 12 fell in different bands and the right-hand item
-        // came FIRST on one read and second on the next.
-        foreach (int wobble in new[] { 0, 1, 2 })
-        {
-            var lines = new[] { Line("RIGHT", 300, 11 + wobble), Line("LEFT", 50, 12 - wobble) };
-            var order = Bbs757EfbReadingOrder.Lines(lines).Select(l => l.Text).ToArray();
-            Assert.Equal(new[] { "LEFT", "RIGHT" }, order);
-        }
-    }
-
-    [Fact]
-    public void Lines_a_row_apart_stay_in_top_to_bottom_order()
-    {
-        var lines = new[] { Line("SECOND", 50, 40), Line("FIRST", 300, 20), Line("THIRD", 10, 60) };
-        Assert.Equal(new[] { "FIRST", "SECOND", "THIRD" }, Bbs757EfbReadingOrder.Lines(lines).Select(l => l.Text));
-    }
-
-    [Fact]
-    public void A_column_of_close_lines_is_not_chained_into_one_row()
-    {
-        // Anchored on a row's first line: 5 px steps must not pull a whole column into one row.
-        var lines = new[] { Line("C", 10, 20), Line("A", 200, 0), Line("B", 100, 10) };
-        Assert.Equal(new[] { "A", "B", "C" }, Bbs757EfbReadingOrder.Lines(lines, 6).Select(l => l.Text));
-    }
-
     // ---- helpers -------------------------------------------------------------------------------------------------------
 
     public static TheoryData<string> Cultures => new() { "en-US", "de-DE", "sv-SE" };
