@@ -1,0 +1,90 @@
+namespace MSFSBlindAssist.Services.BBS757;
+
+/// <summary>The spoken reasons a 757 display reader is unavailable or stopped (the 757's own list; the PMDG
+/// reader has its own). "BlueBird file not recognised" is the one a missing layout always gives.</summary>
+public static class Bbs757DisplayReasons
+{
+    public const string FileNotRecognised = "BlueBird file not recognised";
+    public const string FilesNotFound = "BlueBird 757 files not found";
+    public const string MemoryNotFound = "aircraft memory not found";
+    public const string NoAccess = "no access to the simulator";
+    public const string Mismatch = "values do not match the simulator";
+    public const string UnexpectedValues = "unexpected values";
+    public const string InternalError = "internal error, see the log";
+}
+
+/// <summary>
+/// Where one installed BBS752.wasm keeps the ADI flight mode annunciator, all from that file's layout file,
+/// never hardcoded (BBS757-D2). The 757 reaches its objects through the gauge manager: <see cref="ManagerBase"/>
+/// is the manager's static address (the constant the gauge-callback accessor returns); the Captain's primary
+/// flight display is the first pointer in the manager whose object carries <see cref="PfdVptr"/>; the autoflight
+/// and thrust objects hang off it at <see cref="PfdToAfds"/> and <see cref="PfdToTmc"/>. Field offsets are into
+/// those objects. Equality compares <see cref="Anchor"/> and the word tables by content and ignores
+/// <see cref="SourceFile"/>, so the same build installed twice gives one layout.
+/// </summary>
+public sealed record Bbs757FmaLayout(
+    string SourceFile,
+    uint AnchorAddress,
+    byte[] Anchor,
+    uint ManagerBase,
+    uint ManagerSpan,
+    uint PfdVptr,
+    int PfdToAfds,
+    int PfdToTmc,
+    int Pitch,
+    int PitchArmed,
+    int Roll,
+    int RollArmed,
+    int AtMode,
+    Bbs757WordTable AtWords,
+    Bbs757WordTable PitchWords,
+    Bbs757WordTable PitchArmedWords,
+    Bbs757WordTable RollWords,
+    Bbs757WordTable RollArmedWords)
+{
+    public bool Equals(Bbs757FmaLayout? other) =>
+        other is not null
+        && AnchorAddress == other.AnchorAddress
+        && Anchor.AsSpan().SequenceEqual(other.Anchor)
+        && ManagerBase == other.ManagerBase
+        && ManagerSpan == other.ManagerSpan
+        && PfdVptr == other.PfdVptr
+        && PfdToAfds == other.PfdToAfds
+        && PfdToTmc == other.PfdToTmc
+        && Pitch == other.Pitch
+        && PitchArmed == other.PitchArmed
+        && Roll == other.Roll
+        && RollArmed == other.RollArmed
+        && AtMode == other.AtMode
+        && AtWords.Equals(other.AtWords)
+        && PitchWords.Equals(other.PitchWords)
+        && PitchArmedWords.Equals(other.PitchArmedWords)
+        && RollWords.Equals(other.RollWords)
+        && RollArmedWords.Equals(other.RollArmedWords);
+
+    public override int GetHashCode()
+    {
+        var h = new HashCode();
+        h.Add(AnchorAddress);
+        h.AddBytes(Anchor);
+        h.Add(ManagerBase);
+        h.Add(ManagerSpan);
+        h.Add(PfdVptr);
+        h.Add(PfdToAfds);
+        h.Add(PfdToTmc);
+        h.Add(Pitch);
+        h.Add(PitchArmed);
+        h.Add(Roll);
+        h.Add(RollArmed);
+        h.Add(AtMode);
+        h.Add(AtWords);
+        h.Add(PitchWords);
+        h.Add(PitchArmedWords);
+        h.Add(RollWords);
+        h.Add(RollArmedWords);
+        return h.ToHashCode();
+    }
+}
+
+/// <summary>The FMA's result in a layout file: a layout, or the detailed reason (for the log) there is none.</summary>
+public sealed record Bbs757FmaDerivation(Bbs757FmaLayout? Layout, string? Failure);
