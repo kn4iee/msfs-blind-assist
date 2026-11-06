@@ -772,15 +772,32 @@ public class Bbs757NavRadTests
     }
 
     [Theory]
-    [InlineData(0.0)]
     [InlineData(118.0)]
     [InlineData(107.9)]
-    [InlineData(double.NaN)]
     public void Variables_out_of_the_vor_band_are_not_tuned(double mhz)
     {
         var t = Bbs757NavRad.TuningFromVariables(mhz, 1);
         Assert.Equal(new Bbs757VorTuning(null, 'A', null), t);
         Assert.StartsWith("VOR L not tuned.", Bbs757NavRad.Readout(null, 95, 95, 95, IlsParked, null, t, t));
+    }
+
+    [Theory]
+    [InlineData(107.999999, 108.00)]
+    [InlineData(117.950001, 117.95)]
+    public void Variables_at_the_band_edge_are_tuned_by_the_rounding(double mhz, double tuned)
+    {
+        Assert.Equal(new Bbs757VorTuning(tuned, 'A', null), Bbs757NavRad.TuningFromVariables(mhz, 1));
+    }
+
+    [Fact]
+    public void A_vor_variable_reading_zero_or_nothing_is_unread()
+    {
+        Assert.Null(Bbs757NavRad.TuningFromVariables(0, 1));
+        Assert.Null(Bbs757NavRad.TuningFromVariables(double.NaN, 1));
+        var zero = Bbs757NavRad.TuningFromVariables(0, 0);
+        Assert.StartsWith("VOR L course 095, VOR R course 000, ILS course 095.",
+            Bbs757NavRad.Readout(null, 95, 0, 95, IlsParked, null, zero, zero));
+        Assert.EndsWith("VOR frequencies unavailable.", Bbs757NavRad.Readout(null, 95, 0, 95, IlsParked, null, zero, zero));
     }
 
     [Fact]

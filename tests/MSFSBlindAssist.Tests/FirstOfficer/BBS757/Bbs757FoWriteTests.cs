@@ -58,15 +58,20 @@ public class Bbs757FoWriteTests
         public readonly BBS757Definition Def;
         public readonly SimConnectManager Manager = new(IntPtr.Zero);
 
-        public Rig(params Bbs757Control[] controls) : this(null, controls) { }
+        public Rig(params Bbs757Control[] controls) : this((bool?)null, (Func<long>?)null, controls) { }
 
-        public Rig(bool? parkingBrakeRealistic, params Bbs757Control[] controls)
+        public Rig(bool? parkingBrakeRealistic, params Bbs757Control[] controls) : this(parkingBrakeRealistic, (Func<long>?)null, controls) { }
+
+        public Rig(Func<long> nowMs, params Bbs757Control[] controls) : this((bool?)null, nowMs, controls) { }
+
+        private Rig(bool? parkingBrakeRealistic, Func<long>? nowMs, params Bbs757Control[] controls)
         {
             var map = new Bbs757ControlMap();
             foreach (var c in controls) map.Controls.Add(c);
             Def = new BBS757Definition(map)
             {
                 NestRunning = () => true, WriteIo = _ => Sim.Io, ParkingBrakeRealistic = () => parkingBrakeRealistic,
+                NowMs = nowMs ?? (() => Environment.TickCount64),
             };
         }
 
@@ -224,6 +229,26 @@ public class Bbs757FoWriteTests
         Assert.True(sum + BBS757Definition.FoPollMs > BBS757Definition.FoLandMaxMs);
         Assert.Equal(BBS757Definition.FoSettleMs, rig.Sim.Delays[0]);
         Assert.All(rig.Sim.Delays.Skip(1), d => Assert.Equal(BBS757Definition.FoPollMs, d));
+    }
+
+    [Fact]
+    public async Task A_poll_whose_reads_take_real_time_stops_early_with_a_false_verdict()
+    {
+        long clock = 0;
+        var rig = new Rig(() => clock, Toggle());
+        rig.Sim.Fresh["X"] = 0;
+        bool pressed = false;
+        rig.Sim.OnWrite = _ => pressed = true;
+        rig.Sim.OnFreshRead = key =>
+        {
+            if (!pressed) return rig.Sim.Fresh[key];
+            clock += 1200;   // each read takes 1.2 s of real time; the fake waits take none
+            return 0;
+        };
+
+        Assert.False(await rig.Set("X", 1));
+        // Unclocked, the waits alone would run 12 times (150 + 11 x 250 ms); the real time ends it after 3.
+        Assert.Equal(new[] { 150, 250, 250 }, rig.Sim.Delays);
     }
 
     [Fact]

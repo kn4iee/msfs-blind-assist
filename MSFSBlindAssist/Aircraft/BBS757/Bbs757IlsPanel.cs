@@ -276,7 +276,8 @@ public static class Bbs757IlsPanel
     /// <summary>
     /// The display from the frequency variable and the course variable: parked within 0.001 of
     /// <see cref="ParkedValue"/>; an ILS channel (<see cref="TryDialFor"/>) as its frequency; anything else
-    /// (not read, 0, NaN, a frequency off the channels) null. The course is rounded to whole degrees 0 to 359,
+    /// (not read, 0, NaN, a frequency off the channels) null. A frequency within 0.003 of a hundredth is
+    /// rounded to it first (a 32-bit float stores 108.15 a little off). The course is rounded to whole degrees 0 to 359,
     /// else null.
     /// </summary>
     public static Bbs757IlsReading? ReadingFrom(double? frequency, double? course)
@@ -284,6 +285,10 @@ public static class Bbs757IlsPanel
         if (frequency is not double f || !double.IsFinite(f)) return null;
         int? shownCourse = course is double c && double.IsFinite(c) && Math.Round(c) is >= 0 and <= 359 ? (int)Math.Round(c) : null;
         if (Math.Abs(f - ParkedValue) <= 0.001) return new Bbs757IlsReading(true, null, shownCourse);
+        // A frequency stored as a 32-bit float reads a little off (108.15f is 108.1500015...): round to the
+        // hundredth when it is within 0.003 of it; 110.52 stays as it is and fails as no channel.
+        double hundredth = Math.Round(f, 2);
+        if (Math.Abs(f - hundredth) <= 0.003) f = hundredth;
         return TryDialFor(f, out var dial) ? new Bbs757IlsReading(false, dial.Mhz, shownCourse) : null;
     }
 

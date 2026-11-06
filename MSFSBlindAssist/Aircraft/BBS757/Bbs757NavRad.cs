@@ -244,13 +244,17 @@ public static class Bbs757NavRad
 
     /// <summary>
     /// One VOR's tuning from BlueBird's variables, for N when the CDU page cannot be read: null when the
-    /// frequency was not read; <c>Mhz</c> null ("not tuned") outside 108.00-117.95 (a not-tuned receiver's
-    /// reading is unmeasured); <c>Mode</c> 'A' for an auto flag of 1, 'M' for 0, null when unread. No ident.
+    /// frequency was not read, is not a number or reads 0 (within 0.0005: a BlueBird build without the
+    /// 2026-10-31 variables reads an absent L:var as 0, so 0 is unread, never "not tuned"); otherwise the
+    /// frequency rounded to 0.01, with <c>Mhz</c> null ("not tuned") when that is outside 108.00-117.95 (a
+    /// not-tuned receiver's reading is unmeasured); <c>Mode</c> 'A' for an auto flag of 1, 'M' for 0, null
+    /// when unread. No ident.
     /// </summary>
     public static Bbs757VorTuning? TuningFromVariables(double? mhz, double? auto)
     {
-        if (mhz is not double f) return null;
-        double? tuned = f >= 108.00 && f <= 117.95 ? Math.Round(f, 2) : null;
+        if (mhz is not double f || !double.IsFinite(f) || Math.Abs(f) < 0.0005) return null;
+        double rounded = Math.Round(f, 2);
+        double? tuned = rounded >= 108.00 && rounded <= 117.95 ? rounded : null;
         char? mode = auto is double a && double.IsFinite(a) ? (a >= 0.5 ? 'A' : 'M') : null;
         return new Bbs757VorTuning(tuned, mode, null);
     }

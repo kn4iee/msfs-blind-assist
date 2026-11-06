@@ -121,11 +121,14 @@ public partial class BBS757Definition
             {
                 // Landed only when TWO reads in a row show the target: BlueBird's REALISTIC parking brake
                 // writes itself back, so one read of the target can lie (evidence: flight-10.md).
+                // The budget counts the waits asked or the real time since the poll began, whichever is larger
+                // (a real wait runs long and a read takes time; HoldSpringAsync counts the same way).
+                long start = NowMs();
                 int waited = FoSettleMs;
                 await io.Delay(FoSettleMs, token);
                 after = await io.ReadFresh(control.Node, token);
                 int hits = LandedOnPick(control, after, target) ? 1 : 0;
-                while (hits < 2 && waited + FoPollMs <= FoLandMaxMs)
+                while (hits < 2 && Math.Max(waited, NowMs() - start) + FoPollMs <= FoLandMaxMs)
                 {
                     await io.Delay(FoPollMs, token);
                     waited += FoPollMs;

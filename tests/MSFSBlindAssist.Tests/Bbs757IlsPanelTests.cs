@@ -74,6 +74,15 @@ public class Bbs757IlsPanelTests
         Assert.Equal(new Bbs757IlsReading(parked, mhz, shownCourse), reading);
     }
 
+    [Fact]
+    public void A_frequency_stored_as_a_32_bit_float_still_reads()
+    {
+        Assert.Equal(new Bbs757IlsReading(false, 108.15, 95), Bbs757IlsPanel.ReadingFrom((double)108.15f, 95));
+        Assert.Equal(new Bbs757IlsReading(false, 111.95, 95), Bbs757IlsPanel.ReadingFrom((double)111.95f, 95));
+        Assert.Equal(new Bbs757IlsReading(false, 110.10, 95), Bbs757IlsPanel.ReadingFrom((double)110.10f, 95));
+        Assert.Null(Bbs757IlsPanel.ReadingFrom(110.52, 95));
+    }
+
     [Theory]
     [InlineData(0.0)]
     [InlineData(null)]

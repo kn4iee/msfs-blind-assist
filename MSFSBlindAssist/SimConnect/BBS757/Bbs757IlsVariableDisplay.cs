@@ -1,4 +1,6 @@
+using System.Globalization;
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
@@ -23,9 +25,12 @@ public sealed class Bbs757IlsVariableDisplay(Func<string, CancellationToken, Tas
     {
         try
         {
-            double? frequency = await readFresh(Bbs757NavRad.IlsFrequencyKey, ct).ConfigureAwait(false);
-            double? course = await readFresh(Bbs757NavRad.IlsCourseKey, ct).ConfigureAwait(false);
-            return Bbs757IlsPanel.ReadingFrom(frequency, course);
+            double? frequency = await readFresh(Bbs757NavRad.IlsFrequencyKey, ct);
+            double? course = await readFresh(Bbs757NavRad.IlsCourseKey, ct);
+            var reading = Bbs757IlsPanel.ReadingFrom(frequency, course);
+            if (reading == null && frequency is double v && double.IsFinite(v) && Math.Abs(v) >= 0.0005 && Math.Abs(v + 1) >= 0.0005)
+                Log.Debug("BBS757", $"ILS frequency variable read {v.ToString("0.######", CultureInfo.InvariantCulture)} (invariant), not an ILS channel");
+            return reading;
         }
         catch (OperationCanceledException)
         {
