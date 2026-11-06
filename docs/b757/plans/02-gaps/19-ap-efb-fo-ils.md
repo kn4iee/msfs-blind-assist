@@ -212,3 +212,69 @@ The After waits are first values, to be measured in the sim (Task 10's checks): 
 - [ ] **Step 2:** `dotnet build MSFSBlindAssist.sln -c Debug` and the full suite: 0 failed; record the count.
 - [ ] **Step 3:** The in-sim checks for the owner (a few, prioritised): (1) Ctrl+P A/P Disconnect with CMD engaged in flight: CMD lights out, the warning, a second press silences; (2) the EFB at night: Aircraft and Navigation sections each read with their name, no "did not show"; (3) Ctrl+N: an ILS frequency set and parked, N's words; (4) a cold-and-dark Preflight flow: the thirteen tests in order, each heard (and the After waits judged), then Before Start to After Start for the logo and taxi lights and the pace; (5) a 2020 tester reads the ILS once (the variable on MSFS 2020).
 - [ ] **Step 4:** Fetch `kn4iee/B757`; if it moved, rebase onto it and rerun the suite; then `git push kn4iee B757` (plain, no force).
+
+## Execution record
+
+Date: 2026-11-05. Worked by Claude with subagents (one implementer and one reviewer per task), on branch B757 in the main folder (the owner's go-ahead; no worktree). Base 6ad94a4ad. Every commit carries `Plan: 19`. Not yet pushed (Task 10).
+
+- Task 0, c6c3f37ec: the plan and its evidence (`docs/b757/evidence/flight-19.md`).
+- Task 1, 96dbf46a3: Ctrl+P's last button is A/P Disconnect, the captain's yoke button (a held press, a second press silences the warning); the disengage bar stays only on the MCP panel.
+- Task 2, 4f7de825f: the EFB finds the selected side-menu entry on a dim tablet by its gap to the other bands (`SelectedEntry`); 16 dim fixtures pin it.
+- Task 3, 1b9a3e07c: the EFB says "did not show" only when the tablet shows another page, not when only the section was not read.
+- Task 4, aeac9dc86: the First Officer's switch writes poll (150 ms, then 250 ms steps, at most 3 s) and move on once two reads show the target; the parking brake keeps its fixed 1.5 s.
+- Task 5, 4bb67cd2d: the ILS display is read from `L:BBS_757_ILS_FREQ` and its course variable through `Bbs757IlsVariableDisplay`; the picture reader (`Bbs757IlsOcr`, the Coherent display, 14 fixture images) is deleted.
+- Task 6, 5e59cfcf0 and e960904be: N, and the Ctrl+N window, say the VORs from the four variables when the first officer's CDU page cannot be read.
+- Task 7, a2448143d: the First Officer sets the taxi, runway turnoff and logo lights at their flows.
+- Task 8, b72e14cf6 and 7e66a7eb3: the First Officer runs BlueBird's thirteen preflight tests (squib, ground proximity, left and right stall, takeoff and landing config, CVR, two oxygen, TCAS, three fire tests) in the Preflight flow, each with its checklist line.
+- Task 9: this record.
+
+### What changed from the plan, and why
+
+- Task 1: `PressAsync` (Interaction.cs, not in the plan's file list) gained an optional `label` parameter. The map's label is "Captain Yoke A/P Disconnect", and the plan requires exactly "A/P Disconnect pressed".
+- Task 2: three assertions in `The_page_behind_a_question_is_text_while_the_answers_and_the_top_bar_press` (bright/21-defuel-question) were updated: "Fuel" became "Fuel (current page)", "Total fuel: Import from SIMBRIEF" became "Import from SIMBRIEF", and "14%" became "Center tank: 14%". The old rule missed that page's band (gap 11.2 against 12), so the assertions recorded the reading without its section; raising the minimum gap above 11.2 would break the dim pages (10.7 to 13.6).
+- Task 6: the Ctrl+N window keeps the same fallback as N, and two window-level tests pin it. The plan said the window's fill is unchanged; the design meant the VOR source stays the CDU page, and splitting the two would make the window say "VOR frequencies unavailable" while N gives the frequencies.
+- Task 8: every test line carries a `LeaveAlone` guard (`NotParked`, as FO-25's lines are): a hand tick runs a test only on the ground with the engines stopped, and an unread state counts as not safe. The plan's line spec left the tick guard out; without it a tick could run a test in flight or during an engine start and hold the executor gate for up to about 18 s.
+- Task 8: the P61 rows' hold is the switch's own 3 s (`Bbs757SpringControls.TestHoldMs`); the table records `HoldMs` null for them, since the P61 test takes no hold.
+
+Final full suite, after Task 8: 21,078 passed, 0 failed.
+
+### Open items
+
+Deferred minors, for the final review:
+
+- Task 1: `SayUnavailable` (Autopilot.cs:120) uses the map label ("Captain Yoke A/P Disconnect unavailable") while the press says "A/P Disconnect pressed".
+- Task 1: "A/P Disconnect pressed" comes after the 1.5 s hold, so nothing is said meanwhile.
+- Task 2: the bridge's "no menu entry selected" line prints empty bands on the SYSTEMS path; also require `MenuBands.Count > 0`.
+- Task 2: `SelectedEntry` needs 3 or more bands, so a 2-entry menu cannot select (none exists among the fixtures).
+- Task 2: no near-threshold test (gap just under 6, ratio exactly 3).
+- Task 3: the `app:` branch of `ShowsOtherPage` has no test; an empty `pressedOn.App` should mean "no basis to compare"; no direct matrix test of `ShowsOtherPage`.
+- Task 4: `FoLandMaxMs` is documented as the most a write waits, but the real ceiling is 2,900 ms; `A_target_read_once_then_lost_is_not_landed` asserts only `Sum() <= 3000`.
+- Task 5: the two catches in `Bbs757IlsVariableDisplay` have identical bodies; a course of 360 reads null; one over-long summary line in `AddRadioVariables`.
+- Task 6: the VOR band check is a strict float compare (compare rounded to 0.01); `TuningFromVariables(NaN)` gives "not tuned", not unread; `WindowRig`'s constructor doc sits above the new `Reads` field.
+- Task 7: no direct assertion that Before Landing's `BL_LIGHTS` follows `BL_SPEEDBRAKE`, nor a step-level NaN skip test for `BL_LIGHTS` (the theories cover both).
+- Task 8: a failed test step is announced "Skipping: <label with the listen-for cue>", also for a P61 test that ran but did not rest (its switch is released silently for up to 60 s); a tick whose test could not be pressed stays ticked silently; held-button tests take no claim, so a panel press of the same oxygen button during the 10 s hold lets go at 3 s; a tick's After wait runs on `CancellationToken.None`.
+
+Only the sim can confirm:
+
+- The After waits of the 13 tests (first values, judged by ear; the cockpit watcher keeps speaking during them).
+- The oxygen tests' 10 s hold.
+- The ILS variable on MSFS 2020.
+- The frequency variable of a VOR that is not tuned.
+- The A/P Disconnect press, and the silence of its warning on the second press.
+- The EFB at night (Aircraft and Navigation sections each read with their name).
+- Task 7's light steps and the pace of the flows with the polling writes.
+
+## Handoff to plan 16
+
+Plan 16 owns `docs/b757.md`, `BBS757_Hotkeys.txt`, `guide/**` and `.claude/rules/b757.md`; plan 19 touched none of them. Paste these in each file's voice.
+
+- `docs/b757.md`:
+  - "The autopilot window (Ctrl+P)": the button list ends with Speed Intervene, A/T Disconnect and A/P Disconnect. A/P Disconnect is the captain's yoke button (a held press; a second press silences the warning). The disengage bar is only on the MCP panel.
+  - Radios section (plan 04's handoff): the ILS display is read from `L:BBS_757_ILS_FREQ` (-1 when parked) and its course variable, not from a picture of the panel. N's VOR words fall back to the four VOR variables when the first officer's CDU page cannot be read, and the Ctrl+N window does the same.
+  - EFB section, side-menu rule: the selected entry is the one whose band stands out from the others (a gap of at least 6 and more than three times the next); when only the section was not read, a menu press says nothing, and "did not show" is spoken only when the tablet shows another page or app.
+  - First Officer section, pace: a switch write moves on as soon as two reads show it landed (at most 3 s); the parking brake keeps its 1.5 s settle.
+  - First Officer section, lights: Preflight turns anti-collision, wing, landing, both turnoff and taxi lights off; Before Start sets the logo lights; After Start sets the taxi light; Before Takeoff sets taxi, landing, turnoff, strobe and wing; After Takeoff turns the turnoff and taxi lights off; Before Landing turns the taxi and turnoff lights on; After Landing turns the turnoff lights off and the taxi light on.
+  - First Officer section, tests: the Preflight flow runs BlueBird's thirteen tests in order: squib, ground proximity, left stall, right stall, takeoff config, landing config, CVR, captain oxygen (held 10 s), first officer oxygen (held 10 s), TCAS, wheel well fire, engine fire, engine/APU/cargo fire. Each says what to listen for and has a checklist line; a hand tick runs it only parked with the engines stopped. There is no battery test.
+- `BBS757_Hotkeys.txt`, Ctrl+P: "... LOC, APP, Speed Intervene, A/T Disconnect, A/P Disconnect (Alt+B: the yoke's button; press it again to silence the warning)".
+- Guide: `guide/boeing-aircraft-and-the-md-11.md`, 757 section, the Ctrl+P paragraph (the last buttons and the yoke's A/P Disconnect); `guide/first-officer.md`, the 757 row (the thirteen tests and when each light is set). PR line: `User guide: needed: boeing-aircraft-and-the-md-11, first-officer`.
+- Candidate rule for `.claude/rules/b757.md`: "[B757-22] Read the 757's ILS frequency from `L:BBS_757_ILS_FREQ` (-1 parked) through `Bbs757IlsVariableDisplay`; never from a picture of the panel (the owner, 2026-11-05)."
