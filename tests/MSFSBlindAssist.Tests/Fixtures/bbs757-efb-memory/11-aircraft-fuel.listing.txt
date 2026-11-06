@@ -1,0 +1,27 @@
+title: Aircraft
+button  Home
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+text  70%
+text  0%
+text  70%
+text  LEFT
+text  CENTER
+text  RIGHT
+text  Gal
+text  Lbs
+text  Gal
+text  Lbs
+text  TOTAL FUEL
+text  27%
+text  Gal
+text  Lbs
+text  Gal
+text  Lbs
+heading 2  More
+button  Read the tablet again

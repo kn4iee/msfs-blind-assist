@@ -1,0 +1,17 @@
+title: Settings, General
+button  Home
+button  General (current page)
+button  Aircraft
+button  Livery options
+button  Callouts
+button  Cabin audio
+button  AIRAC data
+checkbox checked  LOCK KEYBOARD TO EFB
+checkbox checked  EFB POWERED ON DURING INITIALIZATION
+checkbox not checked  EFB BRIGHTNESS MODE: AUTO
+combo [Default] {Default|1|2|3|4|5|6|7|8|9}  EFB BACKGROUND
+checkbox checked  LIVE AUTOBRAKE INFO
+combo [10 sec] {3 sec|4 sec|5 sec|6 sec|7 sec|8 sec|9 sec|10 sec|11 sec|12 sec|13 sec|14 sec|15 sec|16 sec|17 sec|18 sec|19 sec|20 sec|21 sec|22 sec|23 sec|24 sec|25 sec|26 sec|27 sec|28 sec|29 sec|30 sec|Never}  NOTIFICATIONS FADE-OUT TIMER
+text  EFB colors theme: Dark blue. Non-default color schemes are not supported.
+heading 2  More
+button  Read the tablet again

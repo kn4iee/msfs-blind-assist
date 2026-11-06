@@ -1,0 +1,37 @@
+title: Aircraft
+button  Home
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+button  Closed
+button  Closed
+button  Closed
+button  Closed
+button  Closed
+button  Closed
+button  Closed
+button  Closed
+button  Close all
+button  Cockpit open
+text  LEFT FWD
+text  LEFT MID
+text  LEFT AFT
+text  RIGHT FWD
+text  RIGHT MID
+text  RIGHT AFT
+text  FWD CARGO
+text  AFT CARGO
+text  CABIN LIGHTING
+button  Ground service off
+text  CEILING
+text  WINDOW
+text  ENTRY
+text  OFF
+text  OFF
+text  OFF
+heading 2  More
+button  Read the tablet again

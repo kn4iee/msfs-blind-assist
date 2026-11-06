@@ -1,0 +1,14 @@
+title: Settings
+button  Home
+button  General
+button  Aircraft
+button  Livery options
+button  Callouts
+button  Cabin audio
+button  AIRAC data
+checkbox not checked  UNITS: IMPERIAL
+checkbox not checked  EHSI UP REFERENCE: HDG
+checkbox not checked  VNAV TAKEOFF BEHAVIOR: OPTION 1
+heading 2  MADEUP
+heading 2  More
+button  Read the tablet again

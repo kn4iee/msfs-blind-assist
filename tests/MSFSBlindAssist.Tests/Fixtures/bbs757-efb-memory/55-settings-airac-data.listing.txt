@@ -1,0 +1,23 @@
+title: Settings
+button  Home
+button  General
+button  Aircraft
+button  Livery options
+button  Callouts
+button  Cabin audio
+button  AIRAC data
+text  SIMBRIEF ID NUMBER
+text  123456
+button  Logout
+heading 2  HOPPIE LOGON CODE
+text  ------
+heading 2  SAYINTENTIONS ACARS KEY
+button  Fetch key
+text  ------
+heading 2  2611
+button  Remove
+heading 2  2611 | EXP: 2026-11-25
+heading 2  CONNECTED TO NAVIGRAPH
+button  Logout
+heading 2  More
+button  Read the tablet again

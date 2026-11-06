@@ -1,0 +1,43 @@
+title: Navigation
+button  Home
+button  ACARS dashboard
+button  Operating FP
+button  Weather & NOTAM
+button  Charts
+button  Map
+button  PERF calc
+text  DEPARTURE WEATHER
+button  Departure
+button  Arrival
+button  Manual
+button  Refresh
+text  AIRPORT
+text  KSEA/SEA
+SEATTLE-TACOMA INTL
+text  |
+text  ELEVATION
+text  432 FT
+text  |
+text  LOCAL TIME
+text  9:22 AM (UTC-8)
+text  |
+text  CURRENT WX
+text  VFR
+text  |
+text  METAR CEILING
+text  9999 FT
+text  |
+text  METAR VISIBILITY
+text  9999 M
+text  |
+text  TRANSITION ALT/LVL
+text  18000 / 18000
+button  METAR
+button  TAF
+button  ATIS
+button  NOTAM
+text  Observed -> 2026-11-06 | 11:53:00 Z
+
+KSEA 061153Z 15006KT 10SM SCT085 OVC100 10/07 A3010 RMK AO2 SLP200 VIRGA T01000067 10111 20094 58011
+heading 2  More
+button  Read the tablet again

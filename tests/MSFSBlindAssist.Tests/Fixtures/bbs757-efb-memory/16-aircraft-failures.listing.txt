@@ -1,0 +1,53 @@
+title: Aircraft
+button  Home
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+text  FAILURES
+text  ACTIVE 0    ARMED 0
+button  Catalog
+button  Active / armed
+button  Random
+button  Fires
+button  Detection
+button  Engines / APU
+button  Automation
+button  Electrical
+button  Avionics
+button  Ice / rain
+button  Doors
+button  Air conditioning
+button  Flight controls
+button  Hydraulics
+button  Lights
+text  FAILURE
+text  STATUS
+text  ACTIONS
+text  L ENGINE FIRE
+text  READY
+button  Fail now
+button  Set UP
+text  R ENGINE FIRE
+text  READY
+button  Fail now
+button  Set UP
+text  APU FIRE
+text  READY
+button  Fail now
+button  Set UP
+text  FWD CARGO FIRE
+text  READY
+button  Fail now
+button  Set UP
+text  AFT CARGO FIRE
+text  READY
+button  Fail now
+button  Set UP
+button  Random failures: off
+button  Notifications: off
+heading 2  More
+button  Read the tablet again

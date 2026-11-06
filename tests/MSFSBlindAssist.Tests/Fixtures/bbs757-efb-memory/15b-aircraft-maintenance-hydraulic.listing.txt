@@ -1,0 +1,20 @@
+title: Aircraft
+button  Home
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+button  Landing gear
+button  Hydraulic
+button  Oxygen
+button  Fire protect
+button  APU
+text  RAM AIR TURBINE
+text  RAT stowed.
+DEPLOY available when aircraft is stationary on ground.
+button  Deploy
+heading 2  More
+button  Read the tablet again

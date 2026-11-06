@@ -1,0 +1,32 @@
+title: Settings, Aircraft
+button  Home
+button  General
+button  Aircraft (current page)
+button  Livery options
+button  Callouts
+button  Cabin audio
+button  AIRAC data
+checkbox not checked  ADAPTIVE HANDLING ASSIST
+checkbox not checked  ADAPTIVE COCKPIT LIGHTING: AUTOMATIC
+checkbox not checked  tod_pause_setting_grid
+checkbox not checked  AUTOMATIC STEP CLIMBS MASTER OPTION: (EXPERIMENTAL): DISABLED
+heading 2  AUTOMATIC STEP CLIMB STATUS:
+text  OFF
+checkbox not checked  NOSEWHEEL STEERING: RUDDER
+checkbox not checked  THROTTLE LOCKOUT
+checkbox not checked  DISPLAYS BOOTUP SPEED: REALISTIC
+checkbox checked  SYNC BAROMETERS
+checkbox not checked  INITIAL COCKPIT DOOR: OPEN
+checkbox not checked  PARKING BRAKE MODE: REALISTIC
+combo [Full (7 min+)] {Instant|1 min|2 min|5 min|Full (7 min+)}  IRS ALIGNMENT TIME
+combo [Standard] {Realistic|Standard|Quick|Instant}  BOARDING & LOAD RATE
+checkbox checked  AUTOMATIC BOARDING
+checkbox checked  AUTOMATIC GPU/JETWAY
+checkbox not checked  HOPPIE ACARS
+checkbox not checked  CPDLC NETWORK: HOPPIE
+checkbox checked  INITIAL CHOCKS IN PLACE
+checkbox not checked  DIRTY PANEL STATES
+button  Scroll down
+button  Scroll up
+heading 2  More
+button  Read the tablet again

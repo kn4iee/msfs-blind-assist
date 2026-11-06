@@ -1,0 +1,29 @@
+title: Aircraft
+button  Home
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+button  Landing gear
+button  Hydraulic
+button  Oxygen
+button  Fire protect
+button  APU
+text  BRAKE TEMPERATURE
+button  Reset
+button  Repair altn
+text  LANDING GEAR DOORS
+text  NOSE DOOR
+text  LEFT DOOR
+text  RIGHT DOOR
+button  Open
+button  Open
+button  Open
+text  0%
+text  0%
+text  0%
+heading 2  More
+button  Read the tablet again

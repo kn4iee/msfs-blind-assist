@@ -1,0 +1,24 @@
+title: Navigation
+button  Home
+button  ACARS dashboard
+button  Operating FP
+button  Weather & NOTAM
+button  Charts
+button  Map
+button  PERF calc
+button  Departure
+button  Arrival
+button  Manual
+heading 2  SEATTLE-TACOMA INTL
+heading 2  SEATTLE, UNITED STATES
+button  STAR
+button  App
+button  Taxi
+button  SID
+button  Ref
+button  Day
+button  -
+button  +
+button  Pin
+heading 2  More
+button  Read the tablet again

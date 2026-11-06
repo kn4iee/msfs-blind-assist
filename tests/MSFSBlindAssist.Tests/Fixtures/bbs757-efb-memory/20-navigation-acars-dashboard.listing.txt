@@ -1,0 +1,103 @@
+title: Navigation
+button  Home
+button  ACARS dashboard
+button  Operating FP
+button  Weather & NOTAM
+button  Charts
+button  Map
+button  PERF calc
+button  Refresh SIMBRIEF OFP
+button  Remove FP
+heading 2  FROM
+text  Airport:
+text  SEATTLE-TACOMA INTL
+text  Runway:
+text  16L
+text  SID:
+text  BTG1
+heading 2  TO
+text  Airport:
+text  PORTLAND INTL
+text  Runway:
+text  28R
+text  STAR:
+text  BTG2
+text  FLIGHT INFO
+text  Flight Number
+text  MSF1
+text  Callsign
+text  MSF1
+text  Departure
+text  KSEA / SEA
+text  Arrival
+text  KPDX / PDX
+text  Alternate
+text  0
+text  Aircraft
+text  0
+text  Departure Date
+text  01 Jan 26
+text  Departure Time
+text  12:00 UTC
+text  Arrival Time
+text  12:00 UTC
+text  Air Time
+text  0
+text  Block Time
+text  0
+text  Airframe
+text  0
+text  FLIGHT PLAN
+text  Initial Altitude
+text  0
+text  Cruise Profile
+text  0
+text  Route Distance
+text  0
+text  Average Wind
+text  0
+text  Wind Component
+text  0
+text  ISA Deviation
+text  0
+text  Release Number
+text  0
+text  AIRAC Cycle
+text  0
+text  OFP Layout
+text  0
+text  Units
+text  0
+text  Navlog
+text  0
+text  ETOPS
+text  0
+text  LOAD SHEET
+text  Enroute Burn
+text  0
+text  Passenger Count
+text  0
+text  Empty Weight
+text  0
+text  Estimated ZFW
+text  0
+text  Estimated TOW
+text  0
+text  Estimated LW
+text  0
+text  Block Fuel
+text  0
+text  Baggage
+text  0
+text  Payload
+text  0
+text  Max ZFW
+text  0
+text  Max TOW
+text  0
+text  Max LW
+text  0
+text  ROUTE
+heading 2  KSEA/16L DCT BTG DCT KPDX/28R
+heading 2  More
+button  Read the tablet again

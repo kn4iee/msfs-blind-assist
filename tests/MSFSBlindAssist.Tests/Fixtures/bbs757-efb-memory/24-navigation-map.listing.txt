@@ -1,0 +1,13 @@
+title: Navigation
+button  Home
+button  ACARS dashboard
+button  Operating FP
+button  Weather & NOTAM
+button  Charts
+button  Map
+button  PERF calc
+button  Day
+button  +
+button  -
+heading 2  More
+button  Read the tablet again

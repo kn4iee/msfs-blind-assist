@@ -1,0 +1,37 @@
+title: Aircraft
+button  Home
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+heading 2  PRESETS
+heading 2  QUICK START
+heading 2  CIRCUITS STATE
+heading 2  ON GROUND
+heading 2  IN FLIGHT
+heading 2  CUSTOM
+button  Cold & dark
+button  Turnaround
+button  Before start
+button  Ready for taxi
+button  Ready for takeoff
+button  After takeoff
+button  Cruise
+button  Final approach
+button  Approach
+button  Save user config
+button  Load user config
+text  Choose SAVE or LOAD,
+then select a panel state.
+button  APU quick start
+button  Engine quick start
+button  IRS rapid align
+button  PUSH ALL CBs
+button  Battery
+button  External power
+text  ALL BREAKERS PUSHED IN
+heading 2  More
+button  Read the tablet again
