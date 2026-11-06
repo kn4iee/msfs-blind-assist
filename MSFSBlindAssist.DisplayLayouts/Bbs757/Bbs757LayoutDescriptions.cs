@@ -29,4 +29,20 @@ public static class Bbs757LayoutDescriptions
         string body = string.Join(", ", table.Words.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value}"));
         lines.Add($"file analysis: {file}: FMA {column} words: {body}");
     }
+
+    public static IReadOnlyList<string> DescribeEfb(Bbs757EfbMemLayout l)
+    {
+        string H(uint v) => "0x" + v.ToString("x", CultureInfo.InvariantCulture);
+        string classes = string.Join(", ", l.ClassVptrs.Select(c => $"{c.Kind}={H(c.Vptr)}"));
+        return new List<string>
+        {
+            $"file analysis: {l.SourceFile}: EFB: manager {H(l.ManagerBase)} span {l.ManagerSpan}, efb vptr {H(l.EfbVptr)}, " +
+            $"efb->bbos {l.EfbToBbos}, bbos->appMap {l.BbosToAppMap}",
+            $"file analysis: {l.SourceFile}: EFB app fields: front {l.AppFront}, page {l.AppPage}, roots {l.AppRoots}, " +
+            $"pageChildren {l.PageChildren}",
+            $"file analysis: {l.SourceFile}: EFB control fields: name {l.CtrlName}, rect {l.CtrlRect}, visible {l.CtrlVisible}, " +
+            $"children {l.CtrlChildren}, parent {l.CtrlParent}, labelText {l.CtrlLabelText}, buttonText {l.CtrlButtonText}",
+            $"file analysis: {l.SourceFile}: EFB classes: {classes}",
+        };
+    }
 }

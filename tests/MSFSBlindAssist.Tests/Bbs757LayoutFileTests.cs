@@ -45,21 +45,61 @@ public class Bbs757LayoutFileTests
         }),
         RollArmedWords: new Bbs757WordTable(new Dictionary<int, string> { [3] = "LNAV", [4] = "LOC", [5] = "B/CRS", [6] = "ROLLOUT" }));
 
-    private static LayoutFile FileWith(Bbs757FmaLayout layout) => new(
+    private static Bbs757EfbMemLayout SampleEfbLayout() => new(
+        SourceFile: "",
+        AnchorAddress: 0x636930,
+        Anchor: new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 },
+        ManagerBase: 0xf1334,
+        ManagerSpan: 0x100,
+        EfbVptr: 0x13128,
+        EfbToBbos: 132,
+        BbosToAppMap: 0x238,
+        AppFront: 0x140,
+        AppPage: 0x144,
+        AppRoots: 0x17c,
+        PageChildren: 0x4c,
+        CtrlName: 0x1c,
+        CtrlRect: 0x38,
+        CtrlVisible: 0x8c,
+        CtrlChildren: 0xf4,
+        CtrlParent: 0xe8,
+        CtrlLabelText: 0x128,
+        CtrlButtonText: 0x144,
+        ClassVptrs: new[]
+        {
+            new Bbs757EfbClassVptr("button", 0x30164), new Bbs757EfbClassVptr("label", 0x30cd4),
+            new Bbs757EfbClassVptr("toggle", 0x30e7c), new Bbs757EfbClassVptr("slider", 0x30c48),
+            new Bbs757EfbClassVptr("grid", 0x30320), new Bbs757EfbClassVptr("HOME", 0x27bdc),
+            new Bbs757EfbClassVptr("SETTINGS", 0x2c860),
+        });
+
+    private static LayoutFile FileWith(Bbs757FmaLayout layout) => FileWith(layout, SampleEfbLayout());
+
+    private static LayoutFile FileWith(Bbs757FmaLayout fma, Bbs757EfbMemLayout efb) => new(
         GeneratorVersion: 1,
         CodeHash: Hash0,
         DataRanges: new[] { new DataRange(0x400, 64) },
         DataHash: Hash1,
         Searches: Array.Empty<DataSearch>(),
-        Readers: new[] { new ReaderResult(Bbs757Module.Fma, layout, null) });
+        Readers: new[] { new ReaderResult(Bbs757Module.Fma, fma, null), new ReaderResult(Bbs757Module.Efb, efb, null) });
 
     [Fact]
     public void A_fma_layout_round_trips_through_the_format()
     {
         string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
         Assert.True(LayoutFileFormat.TryRead(Module, text, out var file, out string? failure), failure);
-        var loaded = (Bbs757FmaLayout)file!.Readers.Single().Layout!;
+        var loaded = (Bbs757FmaLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Fma).Layout!;
         Assert.Equal(SampleLayout() with { SourceFile = "" }, loaded);
+        Assert.Equal(text, LayoutFileFormat.Write(Module, file));
+    }
+
+    [Fact]
+    public void An_efb_layout_round_trips_through_the_format()
+    {
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        Assert.True(LayoutFileFormat.TryRead(Module, text, out var file, out string? failure), failure);
+        var loaded = (Bbs757EfbMemLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Efb).Layout!;
+        Assert.Equal(SampleEfbLayout() with { SourceFile = "" }, loaded);
         Assert.Equal(text, LayoutFileFormat.Write(Module, file));
     }
 
