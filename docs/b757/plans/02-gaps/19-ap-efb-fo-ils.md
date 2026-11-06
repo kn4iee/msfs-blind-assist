@@ -259,6 +259,7 @@ Only the sim can confirm:
 - The After waits of the 13 tests (first values, judged by ear; the cockpit watcher keeps speaking during them).
 - The oxygen tests' 10 s hold.
 - The ILS variable on MSFS 2020.
+- The live Ctrl+N ILS check: an ILS frequency set and parked through Ctrl+N, and N's words, read from `BBS_757_ILS_FREQ`.
 - The frequency variable of a VOR that is not tuned.
 - The A/P Disconnect press, and the silence of its warning on the second press.
 - The EFB at night (Aircraft and Navigation sections each read with their name).
@@ -271,9 +272,9 @@ Plan 16 owns `docs/b757.md`, `BBS757_Hotkeys.txt`, `guide/**` and `.claude/rules
 - `docs/b757.md`:
   - "The autopilot window (Ctrl+P)": the button list ends with Speed Intervene, A/T Disconnect and A/P Disconnect. A/P Disconnect is the captain's yoke button (a held press; a second press silences the warning). The disengage bar is only on the MCP panel.
   - Radios section (plan 04's handoff): the ILS display is read from `L:BBS_757_ILS_FREQ` (-1 when parked) and its course variable, not from a picture of the panel. N's VOR words fall back to the four VOR variables when the first officer's CDU page cannot be read, and the Ctrl+N window does the same.
-  - EFB section, side-menu rule: the selected entry is the one whose band stands out from the others (a gap of at least 6 and more than three times the next); when only the section was not read, a menu press says nothing, and "did not show" is spoken only when the tablet shows another page or app.
+  - EFB section, side-menu rule: the selected entry is the one whose band stands out from the others (a gap of at least 6 and at least three times the second largest); when only the section was not read, a menu press says nothing, and "did not show" is spoken only when the tablet shows another page or app.
   - First Officer section, pace: a switch write moves on as soon as two reads show it landed (at most 3 s); the parking brake keeps its 1.5 s settle.
-  - First Officer section, lights: Preflight turns anti-collision, wing, landing, both turnoff and taxi lights off; Before Start sets the logo lights; After Start sets the taxi light; Before Takeoff sets taxi, landing, turnoff, strobe and wing; After Takeoff turns the turnoff and taxi lights off; Before Landing turns the taxi and turnoff lights on; After Landing turns the turnoff lights off and the taxi light on.
+  - First Officer section, lights: Preflight turns anti-collision, wing, landing, both turnoff and taxi lights off; Before Start sets the logo lights; After Start sets the taxi light; Before Takeoff sets taxi, landing, turnoff, strobe and wing; After Takeoff turns the turnoff and taxi lights off; Before Landing turns the taxi and turnoff lights on; After Landing turns the landing, strobe and wing lights off (unchanged), the runway turnoff lights off and the taxi light on.
   - First Officer section, tests: the Preflight flow runs BlueBird's thirteen tests in order: squib, ground proximity, left stall, right stall, takeoff config, landing config, CVR, captain oxygen (held 10 s), first officer oxygen (held 10 s), TCAS, wheel well fire, engine fire, engine/APU/cargo fire. Each says what to listen for and has a checklist line; a hand tick runs it only parked with the engines stopped. There is no battery test.
 - `BBS757_Hotkeys.txt`, Ctrl+P: "... LOC, APP, Speed Intervene, A/T Disconnect, A/P Disconnect (Alt+B: the yoke's button; press it again to silence the warning)".
 - Guide: `guide/boeing-aircraft-and-the-md-11.md`, 757 section, the Ctrl+P paragraph (the last buttons and the yoke's A/P Disconnect); `guide/first-officer.md`, the 757 row (the thirteen tests and when each light is set). PR line: `User guide: needed: boeing-aircraft-and-the-md-11, first-officer`.
