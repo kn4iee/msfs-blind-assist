@@ -1,6 +1,6 @@
 {
   "app": "AIRCRAFT",
-  "section": "",
+  "section": "FUEL",
   "scrollable": false,
   "menu": [
     {
@@ -41,7 +41,7 @@
       "key": "menu:FUEL",
       "tint": "None",
       "on": null,
-      "selected": false,
+      "selected": true,
       "value": "",
       "slider": null
     },
@@ -153,146 +153,272 @@
   ],
   "items": [
     {
-      "kind": "Text",
-      "text": "14%",
+      "kind": "Row",
+      "text": "Left tank",
       "box": [
-        792,
-        327,
-        62,
-        33
-      ],
-      "hit": [
-        823,
-        343
-      ],
-      "clickable": false,
-      "key": "txt:14%",
-      "tint": "None",
-      "on": null,
-      "selected": false,
-      "value": "",
-      "slider": null
-    },
-    {
-      "kind": "Text",
-      "text": "45%",
-      "box": [
-        1113,
-        403,
-        68,
+        430,
+        405,
+        140,
         40
       ],
       "hit": [
-        1147,
-        423
+        500,
+        425
       ],
       "clickable": false,
-      "key": "txt:45%",
+      "key": "slot:Left tank@405",
       "tint": "None",
       "on": null,
       "selected": false,
-      "value": "",
+      "value": "not read",
       "slider": null
     },
     {
-      "kind": "Text",
-      "text": "Left, center, right",
+      "kind": "Row",
+      "text": "Center tank",
       "box": [
-        444,
-        718,
-        764,
-        31
-      ],
-      "hit": [
-        826,
-        733
-      ],
-      "clickable": false,
-      "key": "txt:LEFT, CENTER, RIGHT",
-      "tint": "None",
-      "on": null,
-      "selected": false,
-      "value": "",
-      "slider": null
-    },
-    {
-      "kind": "Text",
-      "text": "1000, Gal, 1000, Gal, 1000, Gal",
-      "box": [
-        381,
-        774,
-        883,
+        755,
+        325,
+        140,
         40
       ],
       "hit": [
-        822,
-        794
+        825,
+        345
       ],
       "clickable": false,
-      "key": "txt:1000, Gal, 1000, Gal, 1000, Gal",
+      "key": "slot:Center tank@325",
       "tint": "None",
       "on": null,
       "selected": false,
-      "value": "",
+      "value": "14%",
       "slider": null
     },
     {
-      "kind": "Text",
-      "text": "6700, Lbs, 6700, Lbs, 6700, Lbs",
+      "kind": "Row",
+      "text": "Right tank",
       "box": [
-        381,
+        1080,
+        405,
+        140,
+        40
+      ],
+      "hit": [
+        1150,
+        425
+      ],
+      "clickable": false,
+      "key": "slot:Right tank@405",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "45%",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Left tank volume",
+      "box": [
+        372,
+        778,
+        230,
+        38
+      ],
+      "hit": [
+        487,
+        797
+      ],
+      "clickable": false,
+      "key": "slot:Left tank volume@778",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "1000 gal",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Left tank weight",
+      "box": [
+        372,
         818,
-        884,
-        35
+        230,
+        38
       ],
       "hit": [
-        823,
-        835
+        487,
+        837
       ],
       "clickable": false,
-      "key": "txt:6700, Lbs, 6700, Lbs, 6700, Lbs",
+      "key": "slot:Left tank weight@818",
       "tint": "None",
       "on": null,
       "selected": false,
-      "value": "",
+      "value": "6700 lbs",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Center tank volume",
+      "box": [
+        717,
+        778,
+        230,
+        38
+      ],
+      "hit": [
+        832,
+        797
+      ],
+      "clickable": false,
+      "key": "slot:Center tank volume@778",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "1000 gal",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Center tank weight",
+      "box": [
+        717,
+        818,
+        230,
+        38
+      ],
+      "hit": [
+        832,
+        837
+      ],
+      "clickable": false,
+      "key": "slot:Center tank weight@818",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "6700 lbs",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Right tank volume",
+      "box": [
+        1062,
+        778,
+        230,
+        38
+      ],
+      "hit": [
+        1177,
+        797
+      ],
+      "clickable": false,
+      "key": "slot:Right tank volume@778",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "1000 gal",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Right tank weight",
+      "box": [
+        1062,
+        818,
+        230,
+        38
+      ],
+      "hit": [
+        1177,
+        837
+      ],
+      "clickable": false,
+      "key": "slot:Right tank weight@818",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "6700 lbs",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Total fuel quantity",
+      "box": [
+        925,
+        878,
+        100,
+        40
+      ],
+      "hit": [
+        975,
+        898
+      ],
+      "clickable": false,
+      "key": "slot:Total fuel quantity@878",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "26%",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Total fuel volume",
+      "box": [
+        717,
+        912,
+        230,
+        38
+      ],
+      "hit": [
+        832,
+        931
+      ],
+      "clickable": false,
+      "key": "slot:Total fuel volume@912",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "3000 gal",
+      "slider": null
+    },
+    {
+      "kind": "Row",
+      "text": "Total fuel weight",
+      "box": [
+        717,
+        952,
+        230,
+        38
+      ],
+      "hit": [
+        832,
+        971
+      ],
+      "clickable": false,
+      "key": "slot:Total fuel weight@952",
+      "tint": "None",
+      "on": null,
+      "selected": false,
+      "value": "20100 lbs",
       "slider": null
     },
     {
       "kind": "Text",
-      "text": "26%",
+      "text": "Tank figures as the tablet shows them.",
       "box": [
-        932,
-        879,
-        65,
-        37
+        0,
+        0,
+        0,
+        0
       ],
       "hit": [
-        964,
-        897
+        0,
+        0
       ],
       "clickable": false,
-      "key": "txt:26%",
-      "tint": "None",
-      "on": null,
-      "selected": false,
-      "value": "",
-      "slider": null
-    },
-    {
-      "kind": "Text",
-      "text": "3000, Gal",
-      "box": [
-        725,
-        911,
-        195,
-        36
-      ],
-      "hit": [
-        822,
-        929
-      ],
-      "clickable": false,
-      "key": "txt:3000, Gal",
+      "key": "txt:note",
       "tint": "None",
       "on": null,
       "selected": false,
@@ -301,7 +427,7 @@
     },
     {
       "kind": "Button",
-      "text": "Total fuel: Import from SIMBRIEF",
+      "text": "Import from SIMBRIEF",
       "box": [
         379,
         929,
@@ -313,29 +439,8 @@
         950
       ],
       "clickable": true,
-      "key": "btn:TOTAL FUEL|IMPORT FROM SIMBRIEF@18,46",
+      "key": "btn:|IMPORT FROM SIMBRIEF@18,46",
       "tint": "Blue",
-      "on": null,
-      "selected": false,
-      "value": "",
-      "slider": null
-    },
-    {
-      "kind": "Text",
-      "text": "20100, Lbs",
-      "box": [
-        725,
-        951,
-        197,
-        35
-      ],
-      "hit": [
-        823,
-        968
-      ],
-      "clickable": false,
-      "key": "txt:20100, Lbs",
-      "tint": "None",
       "on": null,
       "selected": false,
       "value": "",

@@ -1,6 +1,6 @@
 {
   "app": "NAVIGATION",
-  "section": "",
+  "section": "ACARS DASHBOARD",
   "scrollable": false,
   "menu": [
     {
@@ -20,7 +20,7 @@
       "key": "menu:ACARS DASHBOARD",
       "tint": "None",
       "on": null,
-      "selected": false,
+      "selected": true,
       "value": "",
       "slider": null
     },
