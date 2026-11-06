@@ -274,7 +274,8 @@ public static class Bbs757EfbPress
     /// <list type="bullet">
     /// <item>the control's new words, when the read finds it again (<see cref="Relocate"/>, whatever its key or kind now) with
     /// other words: "Req fuel truck" become "Requesting…", FETCH SIMBRIEF OFP become REFRESH SIMBRIEF OFP, "Fuel truck off" become
-    /// "Fuel truck on", START BOARDING become the text "Boarding… 10 min". The screen reader cannot say them (CORE-7);</item>
+    /// "Fuel truck on", START BOARDING become the text "Boarding… 10 min", named as the window names the control
+    /// (<see cref="SpokenName"/>: a door's "Left FWD: Open"). The screen reader cannot say them (CORE-7);</item>
     /// <item><see cref="NoChangeText"/> when the press changed nothing (<see cref="PageUnchanged"/>: a new notification over the page,
     /// or a top bar that ticked, is no change of the press's);</item>
     /// <item>null when the page name changed, when a question came up (the read that found it said it, and the dimmed page under
@@ -291,14 +292,36 @@ public static class Bbs757EfbPress
         var now = Relocate(before, after, pressed);
         if (now == null) return null;
         if (!string.Equals(now.Text, pressed.Text, StringComparison.Ordinal))
-            return string.IsNullOrWhiteSpace(now.Text) ? null : now.Text;
+            return string.IsNullOrWhiteSpace(now.Text) ? null : SpokenName(after, now);
         if (Line(now) != Line(pressed)) return null;
-        return PageUnchanged(before, after) ? NoChangeText(pressed.Text) : null;
+        return PageUnchanged(before, after) ? NoChangeText(SpokenName(before, pressed)) : null;
     }
 
-    // Said as alerts (spoken at once, once): verbatim from the plan's speech rules, the label being the element's text, and a
-    // control's new words as the reader gives them (ButtonOutcome). Plain concatenation of the given words, so no culture can
-    // change one.
+    /// <summary>
+    /// What a tab press says (the final review's I2): the tab's name and "(current)", once, when the read after the tap finds it
+    /// (<see cref="Relocate"/>) the selected one and it was not before ("Hydraulic (current)": the window patches the new label
+    /// silently, so the press is its one speaker). Null for any other press, a tab that was the current one already, a page that
+    /// changed its name or brought up a question, and a tab the read did not find selected: the press is then judged as a button
+    /// (<see cref="ButtonOutcome"/>).
+    /// </summary>
+    public static string? TabOutcome(Bbs757EfbScreenModel before, Bbs757EfbScreenModel after, Bbs757EfbItem pressed)
+    {
+        if (pressed.Kind != Bbs757EfbKind.Tab || pressed.Selected || !SamePage(before, after)) return null;
+        if (after.Question != null && !SameQuestion(before.Question, after.Question)) return null;
+        return Relocate(before, after, pressed) is { Kind: Bbs757EfbKind.Tab, Selected: true } now ? SpokenName(after, now) + " (current)" : null;
+    }
+
+    /// <summary>
+    /// How the press runner names a control in what it says: as the window names it (<see cref="Bbs757EfbElements.NameOf"/>, sentence
+    /// case, a labelled button's label first: "Left FWD: Open", "Dirty panel states"), and a top bar control by its words as the bar
+    /// shows them ("Start boarding"), as the window does.
+    /// </summary>
+    public static string SpokenName(Bbs757EfbScreenModel page, Bbs757EfbItem item) =>
+        page.TopBar.Contains(item) ? item.Text : Bbs757EfbElements.NameOf(item);
+
+    // Said as alerts (spoken at once, once): verbatim from the plan's speech rules, the label being the element's name as the window
+    // says it (SpokenName), and a control's new words named so too (ButtonOutcome). Plain concatenation of the given words, so no
+    // culture can change one.
 
     /// <summary>A tap that could not run.</summary>
     public const string UnreachableText = "The tablet cannot be reached, so nothing was tapped.";

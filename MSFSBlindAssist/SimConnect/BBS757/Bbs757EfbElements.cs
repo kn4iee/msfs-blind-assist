@@ -294,14 +294,26 @@ public static class Bbs757EfbElements
     private static string Named(string name, string value) =>
         value.Length == 0 ? name : name + (name.EndsWith(':') ? " " : ": ") + value;
 
-    /// <summary>A control's words, with the label that names it before them when the page grammar gave one ("Left fwd: Closed"); a
+    /// <summary>A control's words, with the label that names it before them when the page grammar gave one ("Left FWD: Closed"); a
     /// tab says "(current)" after its words when it is the one showing. Both parts are names: sentence case.</summary>
     private static string Labelled(Bbs757EfbItem it)
     {
-        string words = Bbs757EfbVocabulary.Pretty(it.Text);
-        string text = it.Label.Length > 0 ? Named(Bbs757EfbVocabulary.Pretty(it.Label), words) : words;
+        string text = NameOf(it);
         return it.Kind == Bbs757EfbKind.Tab && it.Selected ? text + " (current)" : text;
     }
+
+    /// <summary>
+    /// The name the window gives a page control, in sentence case as it says it, without the "(current)" of a tab: a button's or tab's
+    /// words after the label that names it ("Left FWD: Open", "Latest cycle: Remove"), a slider's label or words, any other control's
+    /// words. What the press runner says of a control names it so too (<see cref="Bbs757EfbPress.SpokenName"/>).
+    /// </summary>
+    internal static string NameOf(Bbs757EfbItem it) => it.Kind switch
+    {
+        Bbs757EfbKind.Slider => SliderName(it),
+        Bbs757EfbKind.Button or Bbs757EfbKind.Tab when it.Label.Length > 0 =>
+            Named(Bbs757EfbVocabulary.Pretty(it.Label), Bbs757EfbVocabulary.Pretty(it.Text)),
+        _ => Bbs757EfbVocabulary.Pretty(it.Text),
+    };
 
     /// <summary>A slider's name: its label when the page grammar gave one, else its words, in sentence case.</summary>
     private static string SliderName(Bbs757EfbItem it) => Bbs757EfbVocabulary.Pretty(it.Label.Length > 0 ? it.Label : it.Text);
@@ -315,11 +327,12 @@ public static class Bbs757EfbElements
         return words.Any(IsOnOff) ? null : words;
     }
 
-    /// <summary>A side-menu entry's words, with the page it is marked as the current one (a tab already says "(selected)").</summary>
+    /// <summary>A side-menu entry's words, "(current page)" after them on the entry of the page shown (a tab says "(current)",
+    /// <see cref="Labelled"/>).</summary>
     private static string MenuText(Bbs757EfbItem it)
     {
         string words = Bbs757EfbVocabulary.Pretty(it.Text);
-        return words + (it.Selected && !words.EndsWith("(selected)", StringComparison.Ordinal) ? " (current page)" : "");
+        return it.Selected ? words + " (current page)" : words;
     }
 
     /// <summary>A notification as a line of text: the time the tablet shows over its words, when it was read, then the words.</summary>

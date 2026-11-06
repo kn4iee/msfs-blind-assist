@@ -74,8 +74,9 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// The tablet window's presses (the owner's ruling of 2026-10-29: nothing refuses a press), on the bridge's loop, one at a time:
 /// <list type="number">
 /// <item>Where: the tablet is read again from memory and the control found in it (<see cref="Bbs757EfbPress.Relocate"/>, from the
-/// page the pilot pressed on); a control outside the viewport is dragged into view first (at most <see cref="MaxScrollSteps"/>
-    /// drags, each followed by a read), and it is tapped where it is drawn now (<see cref="Bbs757EfbPress.TapPoint"/>). Gone, turned into words that are no control (START BOARDING become
+/// page the pilot pressed on); a control of the scrollbox that scrolls, outside its view, is dragged into view first (at most
+/// <see cref="MaxScrollSteps"/> drags, each followed by a read), and it is tapped where it is drawn now
+/// (<see cref="Bbs757EfbPress.TapPoint"/>). Gone, turned into words that are no control (START BOARDING become
 /// "Boarding… 10 min"), or an answer whose question was answered meanwhile: nothing tapped, "{label} is no longer on the tablet."
 /// Under a question that came up meanwhile, an answer to another question included (every question's YES is keyed alike): nothing
 /// tapped and nothing said. A side-menu entry or a home-screen app whose page the tablet shows already (pressed twice), and the
@@ -85,7 +86,8 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// <item>The tap, and right after it the press's hook (<see cref="Bbs757EfbExtras.HookFor"/>); then the page re-read until it changes
 /// (at most <see cref="ChangeMaxMs"/>).</item>
 /// <item>What it came to: a navigation (Home, a side-menu entry, a home-screen app) is read again until the page name is the one
-/// tapped (at most <see cref="NavigateMaxMs"/>); any other button says its new words when the read after the tap finds it with
+/// tapped (at most <see cref="NavigateMaxMs"/>); a tab that became the current one says "{name} (current)"
+/// (<see cref="Bbs757EfbPress.TabOutcome"/>); any other button says its new words when the read after the tap finds it with
 /// other words (<see cref="Bbs757EfbPress.ButtonOutcome"/>), and that it changed nothing when nothing on the page did; a Settings
 /// switch or slider is judged by BlueBird's file (at most <see cref="FileMaxMs"/>), and anything with no setting behind it by the
 /// page (a switch within <see cref="FollowMaxMs"/>); a callout the press switched off with it is named. A switch of two choices
@@ -162,8 +164,9 @@ public sealed class Bbs757EfbPressRunner
 
             if (NavigationTarget(item) is { } page)
                 await ArriveAsync(after, page, item, target.Page, ct);
-            // The control's new words, or that the press changed nothing: said here, once, since the window says neither.
-            else if (Bbs757EfbPress.ButtonOutcome(target.Page, after, item) is { } outcome)
+            // A tab that became the current one says so; any other control its new words, or that the press changed nothing: said
+            // here, once, since the window says neither.
+            else if ((Bbs757EfbPress.TabOutcome(target.Page, after, item) ?? Bbs757EfbPress.ButtonOutcome(target.Page, after, item)) is { } outcome)
                 _io.Alert(outcome);
         }
         finally
@@ -265,14 +268,14 @@ public sealed class Bbs757EfbPressRunner
         if (verdict == Verdict.Unread) (verdict, shown) = await PageFollowsAsync(target.Page, after, item, wantOn, tappedAt, ct);
         if (verdict == Verdict.Differs)
         {
-            _io.Alert(Bbs757EfbPress.NotChangedText(item.Text));
+            _io.Alert(Bbs757EfbPress.NotChangedText(Bbs757EfbPress.SpokenName(target.Page, item)));
             return;
         }
         if (verdict != Verdict.Holds) return;
 
         // A callout is an On/Off switch, so a switch of two choices never has a callout to name: one alert at most.
         if (NewChoice(item, setting, wish, shown) is { } choice)
-            _io.Alert(Bbs757EfbPress.ChoiceText(item.Text, choice));
+            _io.Alert(Bbs757EfbPress.ChoiceText(Bbs757EfbPress.SpokenName(target.Page, item), choice));
         else if (onBefore.Count > 0 && await TurnedOffAsync(onBefore, after, ct) is { } turnedOff)
             _io.Alert(turnedOff);
     }
@@ -424,7 +427,7 @@ public sealed class Bbs757EfbPressRunner
             ? await FileHoldsAsync(setting, v => v == stored, ct)
             : Verdict.Unread;
         if (verdict == Verdict.Holds || (verdict == Verdict.Unread && read == wanted)) return;
-        _io.Alert(Bbs757EfbPress.CouldNotSetText(target.Item.Text, options[wanted]));
+        _io.Alert(Bbs757EfbPress.CouldNotSetText(Bbs757EfbPress.SpokenName(target.Page, target.Item), options[wanted]));
     }
 
     private async Task PercentAsync(Bbs757EfbPressed pressed, string value, CancellationToken ct)
@@ -432,7 +435,7 @@ public sealed class Bbs757EfbPressRunner
         // The window's range control writes the number, invariant. Anything else is no place on the track: nothing is tapped.
         if (!NumberParsing.TryParseExternal(value, out double percent) || !double.IsFinite(percent))
         {
-            _io.Alert(Bbs757EfbPress.CouldNotSetText(pressed.Item.Text, value));
+            _io.Alert(Bbs757EfbPress.CouldNotSetText(Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item), value));
             return;
         }
         percent = Math.Clamp(percent, 0, 100);
@@ -449,7 +452,8 @@ public sealed class Bbs757EfbPressRunner
                 ? Math.Abs(shown - percent) <= PercentSlack
                 : !string.Equals(now.Value, target.Item.Value, StringComparison.Ordinal)))
             return;
-        _io.Alert(Bbs757EfbPress.CouldNotSetText(target.Item.Text, percent.ToString("0.#", CultureInfo.InvariantCulture) + " percent"));
+        _io.Alert(Bbs757EfbPress.CouldNotSetText(Bbs757EfbPress.SpokenName(target.Page, target.Item),
+            percent.ToString("0.#", CultureInfo.InvariantCulture) + " percent"));
     }
 
     /// <summary>A slider's shown value as a percent ("40", "40%"); null when it shows none ("25 ft", nothing).</summary>
@@ -495,10 +499,10 @@ public sealed class Bbs757EfbPressRunner
         if (found != null)
         {
             if (Bbs757EfbPress.TapPoint(now, found) is { } at) return new Target(found, now, at);
-            _io.Alert(Bbs757EfbPress.NotInViewText(pressed.Item.Text));
+            _io.Alert(Bbs757EfbPress.NotInViewText(Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item)));
             return null;
         }
-        if (gone) _io.Alert(Bbs757EfbPress.GoneText(pressed.Item.Text));
+        if (gone) _io.Alert(Bbs757EfbPress.GoneText(Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item)));
         return null;
     }
 

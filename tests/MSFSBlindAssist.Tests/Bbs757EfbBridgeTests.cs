@@ -479,17 +479,94 @@ public class Bbs757EfbBridgeTests
     [Fact]
     public async Task A_tab_press_is_judged_as_a_button_not_as_a_page()
     {
-        // A tab (a Menu keyed tab:, not menu:/app:) changes the list under it, not the page name: judged by the page like a button.
-        var tab = new Bbs757EfbItem(Bbs757EfbKind.Menu, "Metar", new Rectangle(300, 100, 120, 40), new Point(360, 120), true, "tab:METAR");
+        // A tab (Kind.Tab, keyed tab:) changes the list under it, not the page name: no navigation, and the reader only flips Selected.
+        var tab = new Bbs757EfbItem(Bbs757EfbKind.Tab, "Metar", new Rectangle(300, 100, 120, 40), new Point(360, 120), true, "tab:METAR");
         var tablet = new FakeTablet(PageOf("NAVIGATION", "WEATHER & NOTAM", tab));
         var press = tablet.Press(tab);
-        tablet.OnTap = _ => tablet.Show(PageOf("NAVIGATION", "WEATHER & NOTAM", tab with { Selected = true, Text = "Metar (selected)" }));
+        tablet.OnTap = _ => tablet.Show(PageOf("NAVIGATION", "WEATHER & NOTAM", tab with { Selected = true }));
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
         Assert.Equal(new[] { tab.Hit }, tablet.Taps);
-        // No "did not show" navigation message: a tab is not a navigation.
-        Assert.DoesNotContain(tablet.Alerts, a => a.Contains("did not show", StringComparison.Ordinal));
+        // No "did not show" navigation message: a tab is not a navigation. It says it is the current one.
+        Assert.Equal(new[] { "Metar (current)" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_tab_of_the_real_maintenance_page_says_it_is_current_once(string culture)
+    {
+        // The final review's I2: HYDRAULIC pressed on Landing gear, the tablet then showing the Hydraulic tab (15b). The reader keeps
+        // the tab's words and flips Selected; the window patches its label silently, so the press says it.
+        var gear = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"))!;
+        var hydraulic = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15b-aircraft-maintenance-hydraulic"))!;
+        var tab = Assert.Single(gear.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Name == "maintenance_hydraulic_tab_button");
+        Assert.False(tab.Selected);
+        var tablet = new FakeTablet(gear);
+        tablet.OnTap = _ => tablet.Show(hydraulic);
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(tablet.Press(tab), CancellationToken.None));
+
+        Assert.Equal(new[] { tab.Hit }, tablet.Taps);
+        Assert.Equal(new[] { "Hydraulic (current)" }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task The_current_tab_pressed_again_changes_nothing_and_says_so()
+    {
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"))!;
+        var tab = Assert.Single(page.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
+        var tablet = new FakeTablet(page);
+
+        await tablet.Runner().ClickAsync(tablet.Press(tab), CancellationToken.None);
+
+        Assert.Equal(new[] { "Landing gear: no change on the tablet." }, tablet.Alerts);
+    }
+
+    // ---- M2: what a press says names the control as the window does ---------------------------------------------------------
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_labelled_door_says_its_label_with_its_new_words(string culture)
+    {
+        var closed = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("14-aircraft-cabin-doors"))!;
+        var door = Assert.Single(closed.Items, i => i.Name == "btn_l1_door");
+        var tablet = new FakeTablet(closed);
+        tablet.OnTap = _ => tablet.Show(closed with { Items = closed.Items.Select(i => i.Name == "btn_l1_door" ? i with { Text = "Open" } : i).ToList() });
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(tablet.Press(door), CancellationToken.None));
+
+        Assert.Equal(new[] { "Left FWD: Open" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_settings_row_the_tablet_did_not_follow_is_named_in_sentence_case(string culture)
+    {
+        // The reader keeps a settings row's words as BlueBird writes them (SYNC BAROMETERS); the window and the press both say
+        // "Sync barometers".
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
+        var sync = Assert.Single(page.Items, i => i.Text == "SYNC BAROMETERS");
+        var tablet = new FakeTablet(page);
+        tablet.File["baro_sync"] = Bbs757Value.Of(true);
+
+        await TestCulture.Run(culture, () => tablet.Runner().SwitchAsync(tablet.Press(sync), wantOn: false, CancellationToken.None));
+
+        Assert.Equal(new[] { "Sync barometers did not change." }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_real_row_that_never_comes_into_view_is_named_in_sentence_case(string culture)
+    {
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
+        var tablet = new FakeTablet(page);   // the drag moves nothing
+
+        await TestCulture.Run(culture, () =>
+            tablet.Runner().SwitchAsync(tablet.Press(page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle)), wantOn: true, CancellationToken.None));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Dirty panel states could not be brought into view, not pressed." }, tablet.Alerts);
     }
 
     // ---- echoes and hooks ---------------------------------------------------------------------------------------------
@@ -1118,7 +1195,8 @@ public class Bbs757EfbBridgeTests
     {
         var tab = new Bbs757EfbItem(Bbs757EfbKind.Tab, "Hydraulic", new Rectangle(300, 200, 150, 40), new Point(375, 220), true, "tab:HYDRAULIC");
         var tablet = new FakeTablet(PageOf("AIRCRAFT", "MAINTENANCE", tab));
-        tablet.OnTap = _ => tablet.Show(PageOf("AIRCRAFT", "MAINTENANCE", tab with { Text = "Hydraulic (current)", Selected = true }));
+        // The reader keeps a tab's words and flips only Selected; "(current)" is the window's.
+        tablet.OnTap = _ => tablet.Show(PageOf("AIRCRAFT", "MAINTENANCE", tab with { Selected = true }));
 
         await tablet.Runner().ClickAsync(tablet.Press(tab), CancellationToken.None);
 
