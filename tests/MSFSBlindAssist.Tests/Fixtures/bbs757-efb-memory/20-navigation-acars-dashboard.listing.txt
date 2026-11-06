@@ -1,22 +1,15 @@
 title: Navigation, ACARS dashboard
-button  Home
-button  ACARS dashboard (current page)
-button  Operating FP
-button  Weather & NOTAM
-button  Charts
-button  Map
-button  PERF calc
 button  Refresh SIMBRIEF OFP
 button  Remove FP
-heading 2  FROM
+heading 2  From
 text  Airport: SEATTLE-TACOMA INTL
 text  Runway: 16L
 text  SID: BTG1
-heading 2  TO
+heading 2  To
 text  Airport: PORTLAND INTL
 text  Runway: 28R
 text  STAR: BTG2
-heading 2  FLIGHT INFO
+heading 2  Flight info
 text  Flight Number: MSF1
 text  Callsign: MSF1
 text  Departure: KSEA / SEA
@@ -29,7 +22,7 @@ text  Arrival Time: 12:00 UTC
 text  Air Time: 0
 text  Block Time: 0
 text  Airframe: 0
-heading 2  FLIGHT PLAN
+heading 2  Flight plan
 text  Initial Altitude: 0
 text  Cruise Profile: 0
 text  Route Distance: 0
@@ -41,8 +34,8 @@ text  AIRAC Cycle: 0
 text  OFP Layout: 0
 text  Units: 0
 text  Navlog: 0
-text  ETOPS: 0
-heading 2  LOAD SHEET
+text  Etops: 0
+heading 2  Load sheet
 text  Enroute Burn: 0
 text  Passenger Count: 0
 text  Empty Weight: 0
@@ -55,7 +48,13 @@ text  Payload: 0
 text  Max ZFW: 0
 text  Max TOW: 0
 text  Max LW: 0
-heading 2  ROUTE
+heading 2  Route
 text  KSEA/16L DCT BTG DCT KPDX/28R
-heading 2  More
-button  Read the tablet again
+heading 2  Sections
+button  ACARS dashboard (current page)
+button  Operating FP
+button  Weather & NOTAM
+button  Charts
+button  Map
+button  PERF calc
+button  Home

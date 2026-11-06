@@ -288,8 +288,10 @@ public static class Bbs757EfbVocabulary
     {
         "GPU", "APU", "IRS", "CG", "ZFW", "ACARS", "NM", "PB", "SVC", "A/C", "EFB", "TOD", "CPDLC", "FP", "NOTAM", "PERF",
         "AIRAC", "SIMBRIEF", "ID", "EHSI", "VNAV", "EGPWS", "RA", "KTS", "V1", "CBs", "MAC", "%MAC", "FWD", "AFT", "L", "R",
-        "BBS", "MSFS", "GND", "SRVC", "UP", "OK", "OFP",
+        "BBS", "MSFS", "GND", "SRVC", "OK", "OFP",
         // Navigation's Weather & NOTAM and Charts tabs (BlueBird's 2026-10-31 update).
         "METAR", "TAF", "ATIS", "SID", "STAR",
+        // The performance calculator's result rows (V speeds, runway distances), spoken as the letters they are.
+        "VR", "TODA", "TORA", "ASDA", "LDA",
     };
 }

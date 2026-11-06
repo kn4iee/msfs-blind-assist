@@ -1,12 +1,12 @@
 title: Navigation, Operating FP
-button  Home
+heading 2  Operating flight plan
+pre
+    0
+heading 2  Sections
 button  ACARS dashboard
 button  Operating FP (current page)
 button  Weather & NOTAM
 button  Charts
 button  Map
 button  PERF calc
-heading 2  OPERATING FLIGHT PLAN
-text  0
-heading 2  More
-button  Read the tablet again
+button  Home

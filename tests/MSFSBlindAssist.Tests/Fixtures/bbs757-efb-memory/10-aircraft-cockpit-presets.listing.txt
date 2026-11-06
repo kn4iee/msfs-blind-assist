@@ -1,18 +1,10 @@
 title: Aircraft, Cockpit presets
-button  Home
-button  Cockpit presets (current page)
-button  Fuel
-button  Weight & balance
-button  Ground services
-button  Cabin & doors
-button  Maintenance
-button  Failures
-heading 2  PRESETS
-heading 2  QUICK START
-heading 2  CIRCUITS STATE
-heading 2  ON GROUND
-heading 2  IN FLIGHT
-heading 2  CUSTOM
+heading 2  Presets
+heading 2  Quick start
+heading 2  Circuits state
+heading 2  On ground
+heading 2  In flight
+heading 2  Custom
 button  Cold & dark
 button  Turnaround
 button  Before start
@@ -24,8 +16,9 @@ button  Final approach
 button  Approach
 button  Save user config
 button  Load user config
-text  Choose SAVE or LOAD,
-then select a panel state.
+pre
+    Choose SAVE or LOAD,
+    then select a panel state.
 button  APU quick start
 button  Engine quick start
 button  IRS rapid align
@@ -33,5 +26,12 @@ button  PUSH ALL CBs
 button  Battery
 button  External power
 text  ALL BREAKERS PUSHED IN
-heading 2  More
-button  Read the tablet again
+heading 2  Sections
+button  Cockpit presets (current page)
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+button  Home

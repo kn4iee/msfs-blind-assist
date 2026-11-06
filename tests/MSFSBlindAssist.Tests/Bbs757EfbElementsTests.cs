@@ -94,7 +94,7 @@ public class Bbs757EfbElementsTests
 
         // Settings: the switches, with the word of their state, and the slider.
         var settings = BuildOf("bright", "51-settings-aircraft");
-        foreach (var row in new[] { "Sync barometers", "Automatic boarding", "Nosewheel steering: Realistic", "IRS alignment time" })
+        foreach (var row in new[] { "Sync barometers", "Automatic boarding", "Nosewheel steering", "IRS alignment time" })
             AssertPressable(settings, row);
 
         // Callouts: Rotate and Positive rate sit where the AIRAC page's UPDATE and REMOVE are drawn (x 1191-1391, y 297-377).
@@ -345,24 +345,31 @@ public class Bbs757EfbElementsTests
     {
         var b = BuildOf("bright", "21-defuel-question");
 
-        // The question and its answers, then the top bar left to right, then the page (Home first).
-        Assert.Equal(new[] { "question", "q:YES", "q:NO", "top:dep", "top:boarding", "top:notifications", "btn:HOME" }, Keys(b).Take(7));
-        Assert.Equal(new[] { "DEP -03:19", "Start boarding", "Notifications" }, Texts(b).Skip(3).Take(3));
+        // The question and its answers lead; the top bar, left to right, sits under "Status bar" after the page.
+        var keys = Keys(b);
+        Assert.Equal(new[] { "question", "q:YES", "q:NO" }, keys.Take(3));
+        int status = keys.IndexOf("h:status");
+        Assert.True(status > 3);
+        Assert.Equal(new[] { "h:status", "top:dep", "top:boarding", "top:notifications" }, keys.Skip(status).Take(4));
+        Assert.Equal(new[] { "Status bar", "DEP -03:19", "Start boarding", "Notifications" }, Texts(b).Skip(status).Take(4));
         // The countdown is a read-out; the boarding control and the notifications are buttons on the tablet's own controls.
         AssertText(b, "DEP -03:19");
         Assert.Equal("top:boarding", AssertPressable(b, "Start boarding").Item!.Key);
         Assert.Equal("top:notifications", AssertPressable(b, "Notifications").Item!.Key);
-        Assert.Equal("button", Field(b, 4, "kind"));
-        Assert.Equal("button", Field(b, 5, "kind"));
+        Assert.Equal("button", Field(b, status + 2, "kind"));
+        Assert.Equal("button", Field(b, status + 3, "kind"));
     }
 
     [Fact]
-    public void The_top_bar_leads_a_page_with_no_question()
+    public void The_top_bar_follows_the_page_under_a_status_bar_heading()
     {
         var b = BuildOf("bright", "13-aircraft-ground-services");
 
-        Assert.Equal(new[] { "top:notifications", "btn:HOME" }, Keys(b).Take(2));
-        Assert.Equal("Home", Field(b, 1, "text"));
+        int status = Keys(b).IndexOf("h:status");
+        Assert.True(status > 0);
+        Assert.Equal("2", Field(b, status, "level"));
+        Assert.Equal("top:notifications", Field(b, status + 1, "key"));
+        Assert.Equal("btn:HOME", Keys(b)[^1]);
         AssertPressable(b, "Home");
     }
 
@@ -405,7 +412,7 @@ public class Bbs757EfbElementsTests
 
         int heading = IndexOf(b, "Notifications");
         Assert.Equal("2", Field(b, heading, "level"));
-        // After the top bar (its button reads Close notifications while the list is open), before the page.
+        // After the top bar (its button reads Close notifications while the list is open), under the status bar.
         Assert.Equal("Close notifications", Field(b, heading - 1, "text"));
         Assert.Equal(new[]
         {
@@ -418,7 +425,7 @@ public class Bbs757EfbElementsTests
             Assert.Equal("0", Field(b, row, "level"));
             Assert.Null(ActionAt(b, row));
         }
-        Assert.Equal("Home", Field(b, heading + 6, "text"));
+        Assert.Equal("Sections", Field(b, heading + 6, "text"));
     }
 
     [Fact]
@@ -453,10 +460,12 @@ public class Bbs757EfbElementsTests
         var without = Texts(Bbs757EfbElements.Build(page, null, NoExtras));
         var b = Bbs757EfbElements.Build(page, null, extras);
 
-        // The page's own elements, then the extras, then Scroll down, Scroll up, More and Read the tablet again.
-        Assert.Equal(without.Take(without.Count - 4).Concat(new[] { "Sign in to Navigraph", "Navigraph code: ABCD-1234" }).Concat(without.Skip(without.Count - 4)),
+        // The page's own content, then the extras, then the status bar, Sections and Home (the page's tail).
+        int tail = without.IndexOf("Sections");
+        if (without.Contains("Status bar")) tail = Math.Min(tail, without.IndexOf("Status bar"));
+        Assert.True(tail > 0);
+        Assert.Equal(without.Take(tail).Concat(new[] { "Sign in to Navigraph", "Navigraph code: ABCD-1234" }).Concat(without.Skip(tail)),
             Texts(b));
-        Assert.Equal(new[] { "Scroll down", "Scroll up", "More", "Read the tablet again" }, without.Skip(without.Count - 4));
 
         int signIn = IndexOf(b, "Sign in to Navigraph");
         Assert.Equal("button", Field(b, signIn, "kind"));
@@ -477,25 +486,15 @@ public class Bbs757EfbElementsTests
     {
         var b = Bbs757EfbElements.Build(null, "The tablet reader could not open.", new[] { new Bbs757EfbExtraElement("extra:signin", "Sign in to Navigraph", true) });
 
-        Assert.Equal(new[] { "The tablet reader could not open.", "Sign in to Navigraph", "More", "Read the tablet again" }, Texts(b));
+        Assert.Equal(new[] { "The tablet reader could not open.", "Sign in to Navigraph" }, Texts(b));
         Assert.Equal(Bbs757EfbElements.ActionKind.Extra, ActionAt(b, 1)!.Kind);
-    }
-
-    [Fact]
-    public void The_scroll_buttons_are_the_windows_own_and_scroll_the_page()
-    {
-        var b = BuildOf("bright", "53-settings-callouts");
-
-        Assert.Equal(Bbs757EfbElements.ActionKind.ScrollDown, ActionAt(b, IndexOf(b, "Scroll down"))!.Kind);
-        Assert.Equal(Bbs757EfbElements.ActionKind.ScrollUp, ActionAt(b, IndexOf(b, "Scroll up"))!.Kind);
-        Assert.DoesNotContain("Scroll down", Texts(BuildOf("bright", "51-settings-aircraft")));
     }
 
     [Fact]
     public void No_classic_window_or_read_only_note()
     {
         // The window presses what the pilot presses (rule B757-19, plan 18): no hand-over to another window, no note that it only reads.
-        Assert.Equal(new[] { "Tap", "Refresh", "ScrollDown", "ScrollUp", "Extra" }, Enum.GetNames<Bbs757EfbElements.ActionKind>());
+        Assert.Equal(new[] { "Tap", "Extra" }, Enum.GetNames<Bbs757EfbElements.ActionKind>());
 
         foreach (var (set, name) in new[]
         {
@@ -508,15 +507,14 @@ public class Bbs757EfbElementsTests
 
             Assert.DoesNotContain(texts, t => t.Contains("classic", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(texts, t => t.Contains("only reads", StringComparison.OrdinalIgnoreCase));
-            Assert.Equal(new[] { "More", "Read the tablet again" }, texts.TakeLast(2));
-            Assert.Equal(Bbs757EfbElements.ActionKind.Refresh, ActionAt(b, b.Count - 1)!.Kind);
-            Assert.Equal("button", Field(b, b.Count - 1, "kind"));
+            Assert.DoesNotContain(texts, t => t is "More" or "Read the tablet again" or "Scroll down" or "Scroll up");
+            Assert.DoesNotContain(b.Actions.Values, a => a.Kind != Bbs757EfbElements.ActionKind.Tap && a.Kind != Bbs757EfbElements.ActionKind.Extra);
         }
 
-        // Nothing to show: still the same two, after the alert.
+        // Nothing to show: the alert alone.
         var none = Bbs757EfbElements.Build(null, "The BlueBird tablet cannot be reached. Is the 757 loaded?", NoExtras);
         Assert.Equal("BlueBird tablet", none.Data["page"]);
-        Assert.Equal(new[] { "The BlueBird tablet cannot be reached. Is the 757 loaded?", "More", "Read the tablet again" }, Texts(none));
+        Assert.Equal(new[] { "The BlueBird tablet cannot be reached. Is the 757 loaded?" }, Texts(none));
     }
 
     // ---- a Settings row's slider is a choice list in the catalog's order -----------------------------------------------

@@ -23,10 +23,12 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// offered as a control at all, by the owner's ruling of 2026-10-30: the EFB colors theme, whose place holds a note
 /// (<see cref="ThemeNoteFor"/>, B757-21).
 ///
-/// The order the pilot meets: the alert; the tablet's question (its words as text, then its answers); the top bar; BlueBird's
-/// notifications under a heading; Home and the side menu; the page; the app's extras; the scroll buttons; and "More" with Read the
-/// tablet again. The window speaks only its first alert and remembers one text, so the question is no alert here: the bridge says a
-/// question once, through its own alert, when a read first shows it (plan 18, Task 8), and the page keeps its words first.
+/// The order the pilot meets (plan 20, D1): the alert; the tablet's question (its words as text, then its answers); the page; the
+/// app's extras; "Status bar" with the top bar, then BlueBird's notifications under a heading; "Sections" with the side menu; and Home
+/// last. The window speaks only its first alert and remembers one text, so the question is no alert here: the bridge says a
+/// question once, through its own alert, when a read first shows it (plan 18, Task 8), and the page keeps its words first. The window's
+/// F5 reads the tablet again (get_display_elements), so no element does, and the wheel is no element's either. Names and headings are
+/// sentence case (<see cref="Bbs757EfbVocabulary.Pretty"/>); values, field values, long text and the extras are as written.
 ///
 /// No element asks the window to say its new words (the shell's <c>announceChange</c>): the window could say them only for a
 /// control that kept its key, and a pressed control's new words are the press's to say, once, whatever its key
@@ -35,7 +37,7 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 public static class Bbs757EfbElements
 {
     /// <summary>What pressing an element does.</summary>
-    public enum ActionKind { Tap, Refresh, ScrollDown, ScrollUp, Extra }
+    public enum ActionKind { Tap, Extra }
 
     /// <summary>One element's action: the tablet control it taps (Tap, and the control a set changes), or the key of the app's extra it
     /// stands for (Extra).</summary>
@@ -44,9 +46,9 @@ public static class Bbs757EfbElements
     /// <summary>A build: the push's data and each aidx's action.</summary>
     public sealed record Built(Dictionary<string, string> Data, IReadOnlyDictionary<int, Action> Actions, int Count);
 
-    public const string ReadAgainText = "Read the tablet again";
-
     private const string NotificationsHeading = "Notifications";
+    private const string StatusBarHeading = "Status bar";
+    private const string SectionsHeading = "Sections";
     private const char OptionSeparator = (char)0x1f;
 
     /// <param name="model">The page read, or null when none is shown (a status in its place).</param>
@@ -111,28 +113,6 @@ public static class Bbs757EfbElements
                     Add(answer.Text, kind: "button", clickable: true, key: answer.Key, action: new Action(ActionKind.Tap, answer), of: asked);
             }
 
-            foreach (var barItem in model.TopBar)
-                AddTopBar(barItem);
-
-            if (model.Notices.Count > 0)
-            {
-                Add(NotificationsHeading, level: 2, key: "h:notifications");
-                foreach (var notice in model.Notices)
-                    Add(NoticeText(notice));
-            }
-
-            if (model.App != "HOME")
-            {
-                if (dimmed)
-                    Add("Home", key: "btn:HOME");
-                else
-                {
-                    var home = new Bbs757EfbItem(Bbs757EfbKind.Button, "Home", Rectangle.Empty, Bbs757EfbScreen.HomeButton, true, "btn:HOME");
-                    Add("Home", kind: "button", clickable: true, key: "btn:HOME", action: new Action(ActionKind.Tap, home));
-                }
-            }
-            foreach (var entry in model.Menu)
-                AddItem(entry, model.PageName, dimmed);
             foreach (var it in model.Items)
                 AddItem(it, model.PageName, dimmed);
         }
@@ -145,13 +125,38 @@ public static class Bbs757EfbElements
                 Add(extra.Text, key: extra.Key);
         }
 
-        if (model?.Scrollable == true)
+        if (model != null)
         {
-            Add("Scroll down", kind: "button", clickable: true, key: "btn:scroll-down", action: new Action(ActionKind.ScrollDown));
-            Add("Scroll up", kind: "button", clickable: true, key: "btn:scroll-up", action: new Action(ActionKind.ScrollUp));
+            bool dimmed = model.Question != null;
+            if (model.TopBar.Count > 0 || model.Notices.Count > 0)
+            {
+                Add(StatusBarHeading, level: 2, key: "h:status");
+                foreach (var barItem in model.TopBar)
+                    AddTopBar(barItem);
+                if (model.Notices.Count > 0)
+                {
+                    Add(NotificationsHeading, level: 2, key: "h:notifications");
+                    foreach (var notice in model.Notices)
+                        Add(NoticeText(notice));
+                }
+            }
+
+            bool homeShown = model.App != "HOME";
+            if (model.Menu.Count > 0 || homeShown)
+                Add(SectionsHeading, level: 2, key: "h:sections");
+            foreach (var entry in model.Menu)
+                AddItem(entry, model.PageName, dimmed);
+            if (homeShown)
+            {
+                if (dimmed)
+                    Add("Home", key: "btn:HOME");
+                else
+                {
+                    var home = new Bbs757EfbItem(Bbs757EfbKind.Button, "Home", Rectangle.Empty, Bbs757EfbScreen.HomeButton, true, "btn:HOME");
+                    Add("Home", kind: "button", clickable: true, key: "btn:HOME", action: new Action(ActionKind.Tap, home));
+                }
+            }
         }
-        Add("More", level: 2, key: "h:more");
-        Add(ReadAgainText, kind: "button", clickable: true, key: "btn:refresh", action: new Action(ActionKind.Refresh));
         return new Built(data, actions, n);
 
         // The top bar stays lit above a question's dimming: its buttons press whatever the page does.
@@ -177,55 +182,62 @@ public static class Bbs757EfbElements
             switch (it.Kind)
             {
                 case Bbs757EfbKind.Heading:
-                    Add(it.Text, level: it.Level == 3 ? 3 : 2, key: it.Key);
+                    Add(Bbs757EfbVocabulary.Pretty(it.Text), level: it.Level == 0 ? 2 : it.Level, key: it.Key);
                     break;
                 case Bbs757EfbKind.Text:
                     Add(it.Text, key: it.Key);
                     break;
                 case Bbs757EfbKind.Row:
-                    // A label the tablet writes with its own colon ("Airport:") gets no second one.
-                    Add(it.Value.Length > 0 ? it.Text + (it.Text.EndsWith(':') ? " " : ": ") + it.Value : it.Text, key: it.Key);
+                    Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     break;
                 case Bbs757EfbKind.Field:
-                {
                     // A value box: its name and what it holds ("Quantity: 1539 Gal"); an input not read yet is just its name.
-                    string name = Bbs757EfbVocabulary.Pretty(it.Text);
-                    Add(it.Value.Length > 0 ? name + (name.EndsWith(':') ? " " : ": ") + it.Value : name, key: it.Key);
+                    Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     break;
-                }
                 case Bbs757EfbKind.LongText:
-                    Add(it.Text, key: it.Key); // Task 8 gives it its own block
+                    Add(it.Text, controlType: "pre", key: it.Key);
                     break;
                 case Bbs757EfbKind.Menu:
                     Add(MenuText(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
-                case Bbs757EfbKind.Tab: // shown as the button it was until the page grammar words the current tab
+                case Bbs757EfbKind.Tab:
                 case Bbs757EfbKind.Button:
                     Add(Labelled(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 case Bbs757EfbKind.Toggle:
                 {
+                    // A two-choice switch ("Nosewheel steering": Realistic or Rudder) is a choice list of its two words (D4).
+                    var pair = TwoChoicesFor(it, pageName);
+                    int chosen = pair == null ? -1 : Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(pageName, it)!, it.Value);
+                    if (pair != null && chosen >= 0)
+                    {
+                        Add(Bbs757EfbVocabulary.Pretty(it.Text), controlType: "select", clickable: true, value: pair[chosen], key: it.Key,
+                            options: pair, action: new Action(ActionKind.Tap, it));
+                        break;
+                    }
                     string word = it.Value;
                     bool plain = word.Length == 0 || IsOnOff(word);
-                    Add(plain ? it.Text : it.Text + ": " + word, controlType: "checkbox", clickable: true,
+                    string toggleName = Bbs757EfbVocabulary.Pretty(it.Text);
+                    Add(plain ? toggleName : toggleName + ": " + word, controlType: "checkbox", clickable: true,
                         value: it.On == true ? "true" : "false", key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 }
                 case Bbs757EfbKind.Checkbox:
-                    Add(it.Text, controlType: "checkbox", clickable: true, value: it.On == true ? "true" : "false",
+                    Add(Bbs757EfbVocabulary.Pretty(it.Text), controlType: "checkbox", clickable: true, value: it.On == true ? "true" : "false",
                         key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 case Bbs757EfbKind.Slider:
                 {
                     var options = OptionsFor(it, pageName);
                     int at = options == null ? -1 : CurrentChoice(it, pageName, options);
+                    string sliderName = SliderName(it);
                     if (options != null && at >= 0)
-                        Add(it.Text, controlType: "select", clickable: true, value: options[at], key: it.Key, options: options,
+                        Add(sliderName, controlType: "select", clickable: true, value: options[at], key: it.Key, options: options,
                             action: new Action(ActionKind.Tap, it));
                     else if (it.Slider is { } sl)
                     {
                         // No known choices (the cabin lights), or the one set was not read: a 0-100 slider from the knob's place.
-                        string label = it.Value.Length > 0 ? it.Text + " (" + it.Value + ")" : it.Text;
+                        string label = it.Value.Length > 0 ? sliderName + " (" + it.Value + ")" : sliderName;
                         Add(label, controlType: "range", clickable: true, value: KnobPercent(sl).ToString(CultureInfo.InvariantCulture),
                             key: it.Key, min: 0, max: 100, step: 10, action: new Action(ActionKind.Tap, it));
                     }
@@ -249,7 +261,7 @@ public static class Bbs757EfbElements
                     return true;
                 case Bbs757EfbKind.Toggle:
                 case Bbs757EfbKind.Checkbox:
-                    Add(it.Text + ": " + StateWord(it), key: it.Key);
+                    Add(Bbs757EfbVocabulary.Pretty(it.Text) + ": " + StateWord(it), key: it.Key);
                     return true;
                 case Bbs757EfbKind.Slider:
                     Add(SliderStateText(it, pageName), key: it.Key);
@@ -277,12 +289,38 @@ public static class Bbs757EfbElements
         return Bbs757EfbSettings.ThemeNote(read >= 0 ? theme.Choices[read].Word : null);
     }
 
-    /// <summary>A control's words, with the label that names it before them when the page grammar gave one ("LEFT FWD: Closed").</summary>
-    private static string Labelled(Bbs757EfbItem it) => it.Label.Length > 0 ? it.Label + ": " + it.Text : it.Text;
+    /// <summary>A name and its value as one line with one colon: a name the tablet writes with its own colon ("Airport:") gets no
+    /// second; no value is the name alone.</summary>
+    private static string Named(string name, string value) =>
+        value.Length == 0 ? name : name + (name.EndsWith(':') ? " " : ": ") + value;
+
+    /// <summary>A control's words, with the label that names it before them when the page grammar gave one ("Left fwd: Closed"); a
+    /// tab says "(current)" after its words when it is the one showing. Both parts are names: sentence case.</summary>
+    private static string Labelled(Bbs757EfbItem it)
+    {
+        string words = Bbs757EfbVocabulary.Pretty(it.Text);
+        string text = it.Label.Length > 0 ? Named(Bbs757EfbVocabulary.Pretty(it.Label), words) : words;
+        return it.Kind == Bbs757EfbKind.Tab && it.Selected ? text + " (current)" : text;
+    }
+
+    /// <summary>A slider's name: its label when the page grammar gave one, else its words, in sentence case.</summary>
+    private static string SliderName(Bbs757EfbItem it) => Bbs757EfbVocabulary.Pretty(it.Label.Length > 0 ? it.Label : it.Text);
+
+    /// <summary>The two words of a switch that is a choice between two things, for a setting whose catalog gives exactly two
+    /// choices other than Off and On; null for any other switch.</summary>
+    private static IReadOnlyList<string>? TwoChoicesFor(Bbs757EfbItem it, string pageName)
+    {
+        if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is not { } setting || Bbs757EfbSettingsMatch.ChoicesFor(setting) is not { Count: 2 } words)
+            return null;
+        return words.Any(IsOnOff) ? null : words;
+    }
 
     /// <summary>A side-menu entry's words, with the page it is marked as the current one (a tab already says "(selected)").</summary>
-    private static string MenuText(Bbs757EfbItem it) =>
-        it.Text + (it.Selected && !it.Text.EndsWith("(selected)", StringComparison.Ordinal) ? " (current page)" : "");
+    private static string MenuText(Bbs757EfbItem it)
+    {
+        string words = Bbs757EfbVocabulary.Pretty(it.Text);
+        return words + (it.Selected && !words.EndsWith("(selected)", StringComparison.Ordinal) ? " (current page)" : "");
+    }
 
     /// <summary>A notification as a line of text: the time the tablet shows over its words, when it was read, then the words.</summary>
     private static string NoticeText(Bbs757EfbNotice notice) =>
@@ -303,7 +341,8 @@ public static class Bbs757EfbElements
             value = options[at];
         else if (value.Length == 0 && it.Slider is { } slider && slider.TrackRight > slider.TrackLeft)
             value = KnobPercent(slider).ToString(CultureInfo.InvariantCulture) + " percent";
-        return value.Length > 0 ? it.Text + ": " + value : it.Text;
+        string name = SliderName(it);
+        return value.Length > 0 ? name + ": " + value : name;
     }
 
     /// <summary>Where a slider's knob is along its track, in whole percent.</summary>

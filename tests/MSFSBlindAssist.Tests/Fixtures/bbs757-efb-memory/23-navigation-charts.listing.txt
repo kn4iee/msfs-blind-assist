@@ -1,11 +1,4 @@
 title: Navigation, Charts
-button  Home
-button  ACARS dashboard
-button  Operating FP
-button  Weather & NOTAM
-button  Charts (current page)
-button  Map
-button  PERF calc
 button  Departure
 button  Arrival
 button  Manual
@@ -18,8 +11,14 @@ button  SID
 button  Ref
 button  Day
 button  -
-slider 0  PLANNING CHARTS ZOOM
+slider 0  Planning charts zoom
 button  +
 button  Pin
-heading 2  More
-button  Read the tablet again
+heading 2  Sections
+button  ACARS dashboard
+button  Operating FP
+button  Weather & NOTAM
+button  Charts (current page)
+button  Map
+button  PERF calc
+button  Home

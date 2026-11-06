@@ -4,5 +4,3 @@ button  Navigation
 button  Systems
 button  Checklist
 button  Settings
-heading 2  More
-button  Read the tablet again

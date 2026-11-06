@@ -292,13 +292,6 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         BeginPress();
         switch (act.Kind)
         {
-            case Bbs757EfbElements.ActionKind.Refresh:
-                await ReadNowAsync(ct, asked: true);
-                Push();   // "Read the tablet again": show what was read even when it reads the same
-                return;
-            case Bbs757EfbElements.ActionKind.ScrollDown or Bbs757EfbElements.ActionKind.ScrollUp:
-                await _press.ScrollAsync(act.Kind == Bbs757EfbElements.ActionKind.ScrollDown, ct);
-                return;
             case Bbs757EfbElements.ActionKind.Extra:
                 await PressExtraAsync(act.ExtraKey, ct);
                 return;

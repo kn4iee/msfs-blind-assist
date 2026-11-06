@@ -1,5 +1,20 @@
 title: Aircraft, Maintenance
-button  Home
+button  Landing gear (current)
+button  Hydraulic
+button  Oxygen
+button  Fire protect
+button  APU
+heading 2  Brake temperature
+button  Reset
+button  Repair altn
+heading 2  Landing gear doors
+button  Nose door: Open
+button  Left door: Open
+button  Right door: Open
+text  0%
+text  0%
+text  0%
+heading 2  Sections
 button  Cockpit presets
 button  Fuel
 button  Weight & balance
@@ -7,20 +22,4 @@ button  Ground services
 button  Cabin & doors
 button  Maintenance (current page)
 button  Failures
-button  Landing gear
-button  Hydraulic
-button  Oxygen
-button  Fire protect
-button  APU
-heading 2  BRAKE TEMPERATURE
-button  Reset
-button  Repair altn
-heading 2  LANDING GEAR DOORS
-button  NOSE DOOR: Open
-button  LEFT DOOR: Open
-button  RIGHT DOOR: Open
-text  0%
-text  0%
-text  0%
-heading 2  More
-button  Read the tablet again
+button  Home

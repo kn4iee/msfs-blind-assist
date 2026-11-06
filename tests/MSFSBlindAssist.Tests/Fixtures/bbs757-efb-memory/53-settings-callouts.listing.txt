@@ -1,22 +1,15 @@
 title: Settings, Callouts
-button  Home
-button  General
-button  Aircraft
-button  Livery options
-button  Callouts (current page)
-button  Cabin audio
-button  AIRAC data
 text  Selections save automatically for this aircraft registration.
-heading 2  PILOT CALLOUTS
+heading 2  Pilot callouts
 checkbox checked  80 KTS
 checkbox checked  V1
-checkbox checked  ROTATE
-checkbox checked  POSITIVE RATE
-heading 2  EGPWS CALLOUTS
+checkbox checked  Rotate
+checkbox checked  Positive rate
+heading 2  EGPWS callouts
 text  Captain DH must be above -20 for EGPWS callouts to play.
-heading 2  RADIO ALTITUDE
+heading 2  Radio altitude
 checkbox checked  2500
-checkbox not checked  RADIO ALTIMETER (2500)
+checkbox not checked  Radio altimeter (2500)
 checkbox checked  1000
 checkbox checked  500
 checkbox checked  400
@@ -32,17 +25,21 @@ checkbox checked  30
 checkbox checked  20
 checkbox checked  10
 checkbox checked  5
-heading 2  APPROACH / MINIMUMS
-checkbox checked  PLUS HUNDRED (DH + 100)
-checkbox not checked  APPROACHING DH (DH + 100)
-checkbox checked  APPROACHING MINIMUMS (DH + 80)
-checkbox checked  FIFTY ABOVE (DH + 50)
-checkbox checked  MINIMUMS
-checkbox not checked  MINIMUMS MINIMUMS
-checkbox not checked  MINIMUM
-checkbox not checked  DECIDE
-checkbox not checked  DECISION HEIGHT
-button  Scroll down
-button  Scroll up
-heading 2  More
-button  Read the tablet again
+heading 2  Approach / minimums
+checkbox checked  Plus hundred (dh + 100)
+checkbox not checked  Approaching dh (dh + 100)
+checkbox checked  Approaching minimums (dh + 80)
+checkbox checked  Fifty above (dh + 50)
+checkbox checked  Minimums
+checkbox not checked  Minimums minimums
+checkbox not checked  Minimum
+checkbox not checked  Decide
+checkbox not checked  Decision height
+heading 2  Sections
+button  General
+button  Aircraft
+button  Livery options
+button  Callouts (current page)
+button  Cabin audio
+button  AIRAC data
+button  Home

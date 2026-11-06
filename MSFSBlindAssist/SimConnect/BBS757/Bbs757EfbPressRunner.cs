@@ -226,7 +226,7 @@ public sealed class Bbs757EfbPressRunner
     }
 
     /// <summary>A navigation the tablet never showed.</summary>
-    public static string NotShownText(string page) => "The tablet did not show " + page + ". Try again, or use Read the tablet again.";
+    public static string NotShownText(string page) => "The tablet did not show " + page + ". Try again, or press F5 to read the tablet again.";
 
     // ------------------------------------------------------------------ switches and check boxes
 

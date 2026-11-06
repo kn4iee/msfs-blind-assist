@@ -1,17 +1,17 @@
 title: Settings, Cabin audio
-button  Home
+pre
+    Selections save automatically for this aircraft registration.
+    Turn announcements ON to adjust the two categories below.
+checkbox checked  Announcements
+checkbox checked  Safety related announcements
+checkbox checked  Non-safety related announcements
+checkbox checked  Flight attendant calls
+checkbox checked  Passenger sounds
+heading 2  Sections
 button  General
 button  Aircraft
 button  Livery options
 button  Callouts
 button  Cabin audio (current page)
 button  AIRAC data
-text  Selections save automatically for this aircraft registration.
-Turn announcements ON to adjust the two categories below.
-checkbox checked  ANNOUNCEMENTS
-checkbox checked  SAFETY RELATED ANNOUNCEMENTS
-checkbox checked  NON-SAFETY RELATED ANNOUNCEMENTS
-checkbox checked  FLIGHT ATTENDANT CALLS
-checkbox checked  PASSENGER SOUNDS
-heading 2  More
-button  Read the tablet again
+button  Home

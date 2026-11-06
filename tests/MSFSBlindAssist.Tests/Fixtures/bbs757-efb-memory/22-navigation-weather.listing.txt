@@ -1,30 +1,30 @@
 title: Navigation, Weather & NOTAM
-button  Home
+heading 2  Departure weather
+button  Departure
+button  Arrival
+button  Manual
+button  Refresh
+text  Airport: KSEA/SEA
+SEATTLE-TACOMA INTL
+text  Elevation: 432 FT
+text  Local time: 9:22 AM (UTC-8)
+text  Current wx: VFR
+text  METAR ceiling: 9999 FT
+text  METAR visibility: 9999 M
+text  Transition alt/lvl: 18000 / 18000
+button  METAR
+button  TAF
+button  ATIS
+button  NOTAM
+pre
+    Observed -> 2026-11-06 | 11:53:00 Z
+    
+    KSEA 061153Z 15006KT 10SM SCT085 OVC100 10/07 A3010 RMK AO2 SLP200 VIRGA T01000067 10111 20094 58011
+heading 2  Sections
 button  ACARS dashboard
 button  Operating FP
 button  Weather & NOTAM (current page)
 button  Charts
 button  Map
 button  PERF calc
-heading 2  DEPARTURE WEATHER
-button  Departure
-button  Arrival
-button  Manual
-button  Refresh
-text  AIRPORT: KSEA/SEA
-SEATTLE-TACOMA INTL
-text  ELEVATION: 432 FT
-text  LOCAL TIME: 9:22 AM (UTC-8)
-text  CURRENT WX: VFR
-text  METAR CEILING: 9999 FT
-text  METAR VISIBILITY: 9999 M
-text  TRANSITION ALT/LVL: 18000 / 18000
-button  METAR
-button  TAF
-button  ATIS
-button  NOTAM
-text  Observed -> 2026-11-06 | 11:53:00 Z
-
-KSEA 061153Z 15006KT 10SM SCT085 OVC100 10/07 A3010 RMK AO2 SLP200 VIRGA T01000067 10111 20094 58011
-heading 2  More
-button  Read the tablet again
+button  Home

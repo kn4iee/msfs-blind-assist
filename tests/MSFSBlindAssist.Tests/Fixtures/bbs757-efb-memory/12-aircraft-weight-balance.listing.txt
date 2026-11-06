@@ -1,5 +1,25 @@
 title: Aircraft, Weight & balance
-button  Home
+text  Empty: 136940 Lbs
+text  ZFW: 176060 Lbs
+text  ZFW CG: 22.5 %
+text  Blk fuel: 20617 Lbs
+text  Take-off: 195977 Lbs
+text  Landing: 184399 Lbs
+heading 2  Business pax - 16/16
+slider 0  Business pax - 16/16
+text  Weight: 2960 Lbs
+heading 2  Economy pax - 160/160
+slider 0  Economy pax - 160/160
+text  Weight: 29600 Lbs
+heading 2  Forward cargo
+slider 0  Forward cargo
+text  Weight: 6160 Lbs
+heading 2  AFT cargo
+slider 0  AFT cargo
+text  Weight: 0 Lbs
+text  Gross weight: 196677 Lbs
+text  Center of gravity: 25.1 %
+heading 2  Sections
 button  Cockpit presets
 button  Fuel
 button  Weight & balance (current page)
@@ -7,25 +27,4 @@ button  Ground services
 button  Cabin & doors
 button  Maintenance
 button  Failures
-text  EMPTY: 136940 Lbs
-text  ZFW: 176060 Lbs
-text  ZFW CG: 22.5 %
-text  BLK FUEL: 20617 Lbs
-text  TAKE-OFF: 195977 Lbs
-text  LANDING: 184399 Lbs
-heading 2  BUSINESS PAX - 16/16
-slider 0  BUSINESS PAX - 16/16
-text  Weight: 2960 Lbs
-heading 2  ECONOMY PAX - 160/160
-slider 0  ECONOMY PAX - 160/160
-text  Weight: 29600 Lbs
-heading 2  FORWARD CARGO
-slider 0  FORWARD CARGO
-text  Weight: 6160 Lbs
-heading 2  AFT CARGO
-slider 0  AFT CARGO
-text  Weight: 0 Lbs
-text  GROSS WEIGHT: 196677 Lbs
-text  CENTER OF GRAVITY: 25.1 %
-heading 2  More
-button  Read the tablet again
+button  Home

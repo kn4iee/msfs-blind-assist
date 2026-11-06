@@ -1,32 +1,29 @@
 title: Settings, Aircraft
-button  Home
+checkbox not checked  Adaptive handling assist
+combo [Automatic] {Automatic|Manual}  Adaptive cockpit lighting
+checkbox not checked  TOD pause distance (NM)
+combo [Disabled] {Enabled|Disabled}  Automatic step climbs master option: (experimental)
+heading 2  Automatic step climb status:
+text  OFF
+combo [Rudder] {Realistic|Rudder}  Nosewheel steering
+checkbox not checked  Throttle lockout
+combo [Realistic] {Realistic|Fast}  Displays bootup speed
+checkbox checked  Sync barometers
+combo [Open] {Open|Closed}  Initial cockpit door
+combo [Realistic] {Realistic|Easy}  Parking brake mode
+combo [Full (7 min+)] {Instant|1 min|2 min|5 min|Full (7 min+)}  IRS alignment time
+combo [Standard] {Realistic|Standard|Quick|Instant}  Boarding & load rate
+checkbox checked  Automatic boarding
+checkbox checked  Automatic gpu/jetway
+checkbox not checked  Hoppie ACARS
+combo [Hoppie] {Hoppie|SayIntentions}  CPDLC network
+checkbox checked  Initial chocks in place
+checkbox not checked  Dirty panel states
+heading 2  Sections
 button  General
 button  Aircraft (current page)
 button  Livery options
 button  Callouts
 button  Cabin audio
 button  AIRAC data
-checkbox not checked  ADAPTIVE HANDLING ASSIST
-checkbox not checked  ADAPTIVE COCKPIT LIGHTING: AUTOMATIC
-checkbox not checked  TOD PAUSE DISTANCE (NM)
-checkbox not checked  AUTOMATIC STEP CLIMBS MASTER OPTION: (EXPERIMENTAL): DISABLED
-heading 2  AUTOMATIC STEP CLIMB STATUS:
-text  OFF
-checkbox not checked  NOSEWHEEL STEERING: RUDDER
-checkbox not checked  THROTTLE LOCKOUT
-checkbox not checked  DISPLAYS BOOTUP SPEED: REALISTIC
-checkbox checked  SYNC BAROMETERS
-checkbox not checked  INITIAL COCKPIT DOOR: OPEN
-checkbox not checked  PARKING BRAKE MODE: REALISTIC
-combo [Full (7 min+)] {Instant|1 min|2 min|5 min|Full (7 min+)}  IRS ALIGNMENT TIME
-combo [Standard] {Realistic|Standard|Quick|Instant}  BOARDING & LOAD RATE
-checkbox checked  AUTOMATIC BOARDING
-checkbox checked  AUTOMATIC GPU/JETWAY
-checkbox not checked  HOPPIE ACARS
-checkbox not checked  CPDLC NETWORK: HOPPIE
-checkbox checked  INITIAL CHOCKS IN PLACE
-checkbox not checked  DIRTY PANEL STATES
-button  Scroll down
-button  Scroll up
-heading 2  More
-button  Read the tablet again
+button  Home

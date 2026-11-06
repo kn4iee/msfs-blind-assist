@@ -1,11 +1,4 @@
 title: Navigation, PERF calc
-button  Home
-button  ACARS dashboard
-button  Operating FP
-button  Weather & NOTAM
-button  Charts
-button  Map
-button  PERF calc (current page)
 button  Take off
 button  Landing
 text  Airport
@@ -34,14 +27,21 @@ button  Calculate
 text  V1: ---
 text  VR: ---
 text  V2: ---
-text  FLAP: ---
+text  Flap: ---
 text  N1: ---
-text  FLX TMP: ---
-text  TRIM: ---
+text  Flx tmp: ---
+text  Trim: ---
 text  TODA: ---
 text  TORA: ---
 text  ASDA: ---
 text  LDA: ---
-text  RW16L
-heading 2  More
-button  Read the tablet again
+pre
+    RW16L
+heading 2  Sections
+button  ACARS dashboard
+button  Operating FP
+button  Weather & NOTAM
+button  Charts
+button  Map
+button  PERF calc (current page)
+button  Home

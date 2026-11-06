@@ -1,5 +1,8 @@
 title: Checklist
-button  Home
+button  Reset all
+checkbox not checked  Interactive
+button  Reset
+heading 2  Sections
 button  Before start
 button  After start
 button  Before take off
@@ -9,8 +12,4 @@ button  Approach
 button  Before landing
 button  After landing
 button  Shut down
-button  Reset all
-checkbox not checked  INTERACTIVE
-button  Reset
-heading 2  More
-button  Read the tablet again
+button  Home

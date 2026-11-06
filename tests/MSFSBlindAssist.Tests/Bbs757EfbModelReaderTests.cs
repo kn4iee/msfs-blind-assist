@@ -774,7 +774,7 @@ public class Bbs757EfbModelReaderTests
         {
             (Bbs757EfbKind.Row, "L ENGINE FIRE", "READY", ""), (Bbs757EfbKind.Button, "Fail now", "", "L ENGINE FIRE"), (Bbs757EfbKind.Button, "Set up", "", "L ENGINE FIRE"),
             (Bbs757EfbKind.Row, "R ENGINE FIRE", "FAILED", ""), (Bbs757EfbKind.Button, "Fail now", "", "R ENGINE FIRE"), (Bbs757EfbKind.Button, "Set up", "", "R ENGINE FIRE"),
-        }, items.Select(i => (i.Kind, i.Kind == Bbs757EfbKind.Row ? i.Text : i.Text.Replace("UP", "up"), i.Value, i.Label)).ToArray());
+        }, items.Select(i => (i.Kind, i.Text, i.Value, i.Label)).ToArray());
     }
 
     [Fact]
@@ -928,12 +928,12 @@ public class Bbs757EfbModelReaderTests
         var model = new Bbs757EfbScreenModel("HOME", "", Array.Empty<Bbs757EfbItem>(), new[] { door, plain });
 
         var live = Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()).Data;
-        Assert.Equal(("LEFT FWD: Closed", "btn:|@36,10", "Close all"), (live["items.0.text"], live["items.0.key"], live["items.1.text"]));
+        Assert.Equal(("Left FWD: Closed", "btn:|@36,10", "Close all"), (live["items.0.text"], live["items.0.key"], live["items.1.text"]));
 
         var dimmed = Bbs757EfbElements.Build(model with { Question = new Bbs757EfbQuestion("Sure?", new[] { plain with { Text = "YES", Key = "q:yes" } }) },
             null, Array.Empty<Bbs757EfbExtraElement>()).Data;
-        Assert.Contains("LEFT FWD: Closed", dimmed.Where(kv => kv.Key.EndsWith(".text", StringComparison.Ordinal)).Select(kv => kv.Value));
-        Assert.Equal("btn:|@36,10", dimmed.Single(kv => kv.Value == "LEFT FWD: Closed").Key.Replace(".text", ".key") is var k ? dimmed[k] : "");
+        Assert.Contains("Left FWD: Closed", dimmed.Where(kv => kv.Key.EndsWith(".text", StringComparison.Ordinal)).Select(kv => kv.Value));
+        Assert.Equal("btn:|@36,10", dimmed.Single(kv => kv.Value == "Left FWD: Closed").Key.Replace(".text", ".key") is var k ? dimmed[k] : "");
     }
 
     [Fact]

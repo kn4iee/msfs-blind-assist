@@ -1,14 +1,14 @@
 title: Settings, Livery options
-button  Home
+combo [Imperial] {Imperial|Metric}  Units
+combo [HDG] {HDG|TRK}  EHSI up reference
+combo [Option 1] {Option 1|Option 2}  VNAV takeoff behavior
+pre
+    MADEUP
+heading 2  Sections
 button  General
 button  Aircraft
 button  Livery options (current page)
 button  Callouts
 button  Cabin audio
 button  AIRAC data
-checkbox not checked  UNITS: IMPERIAL
-checkbox not checked  EHSI UP REFERENCE: HDG
-checkbox not checked  VNAV TAKEOFF BEHAVIOR: OPTION 1
-text  MADEUP
-heading 2  More
-button  Read the tablet again
+button  Home

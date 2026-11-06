@@ -1,5 +1,21 @@
 title: Aircraft, Fuel
-button  Home
+heading 2  Left
+slider 70  Left (70%)
+text  Quantity: 1539 Gal
+text  Weight: 10308 Lbs
+heading 2  Center
+slider 0  Center (0%)
+text  Quantity: 0 Gal
+text  Weight: 0 Lbs
+heading 2  Right
+slider 70  Right (70%)
+text  Quantity: 1539 Gal
+text  Weight: 10308 Lbs
+heading 2  Total fuel
+slider 27  Total fuel (27%)
+text  Quantity: 3077 Gal
+text  Weight: 20617 Lbs
+heading 2  Sections
 button  Cockpit presets
 button  Fuel (current page)
 button  Weight & balance
@@ -7,21 +23,4 @@ button  Ground services
 button  Cabin & doors
 button  Maintenance
 button  Failures
-heading 2  LEFT
-slider 70  LEFT (70%)
-text  Quantity: 1539 Gal
-text  Weight: 10308 Lbs
-heading 2  CENTER
-slider 0  CENTER (0%)
-text  Quantity: 0 Gal
-text  Weight: 0 Lbs
-heading 2  RIGHT
-slider 70  RIGHT (70%)
-text  Quantity: 1539 Gal
-text  Weight: 10308 Lbs
-heading 2  TOTAL FUEL
-slider 27  TOTAL FUEL (27%)
-text  Quantity: 3077 Gal
-text  Weight: 20617 Lbs
-heading 2  More
-button  Read the tablet again
+button  Home

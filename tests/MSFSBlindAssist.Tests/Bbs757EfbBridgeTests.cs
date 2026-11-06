@@ -360,7 +360,7 @@ public class Bbs757EfbBridgeTests
         await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
 
         Assert.Equal(new[] { fuel.Hit }, tablet.Taps);
-        Assert.Equal(new[] { "The tablet did not show Fuel. Try again, or use Read the tablet again." }, tablet.Alerts);
+        Assert.Equal(new[] { "The tablet did not show Fuel. Try again, or press F5 to read the tablet again." }, tablet.Alerts);
     }
 
     [Theory]
@@ -402,7 +402,7 @@ public class Bbs757EfbBridgeTests
 
         await tablet.Runner().ClickAsync(press, CancellationToken.None);
 
-        Assert.Equal(new[] { "The tablet did not show Home. Try again, or use Read the tablet again." }, tablet.Alerts);
+        Assert.Equal(new[] { "The tablet did not show Home. Try again, or press F5 to read the tablet again." }, tablet.Alerts);
     }
 
     [Fact]

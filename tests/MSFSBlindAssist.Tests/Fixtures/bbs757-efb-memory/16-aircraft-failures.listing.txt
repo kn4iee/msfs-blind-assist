@@ -1,13 +1,5 @@
 title: Aircraft, Failures
-button  Home
-button  Cockpit presets
-button  Fuel
-button  Weight & balance
-button  Ground services
-button  Cabin & doors
-button  Maintenance
-button  Failures (current page)
-heading 2  FAILURES
+heading 2  Failures
 text  ACTIVE 0    ARMED 0
 button  Catalog
 button  Active / armed
@@ -27,22 +19,29 @@ button  Lights
 text  FAILURE
 text  STATUS
 text  ACTIONS
-text  L ENGINE FIRE: READY
-button  L ENGINE FIRE: Fail now
-button  L ENGINE FIRE: Set UP
-text  R ENGINE FIRE: READY
-button  R ENGINE FIRE: Fail now
-button  R ENGINE FIRE: Set UP
-text  APU FIRE: READY
-button  APU FIRE: Fail now
-button  APU FIRE: Set UP
-text  FWD CARGO FIRE: READY
-button  FWD CARGO FIRE: Fail now
-button  FWD CARGO FIRE: Set UP
-text  AFT CARGO FIRE: READY
-button  AFT CARGO FIRE: Fail now
-button  AFT CARGO FIRE: Set UP
+text  L engine fire: READY
+button  L engine fire: Fail now
+button  L engine fire: Set up
+text  R engine fire: READY
+button  R engine fire: Fail now
+button  R engine fire: Set up
+text  APU fire: READY
+button  APU fire: Fail now
+button  APU fire: Set up
+text  FWD cargo fire: READY
+button  FWD cargo fire: Fail now
+button  FWD cargo fire: Set up
+text  AFT cargo fire: READY
+button  AFT cargo fire: Fail now
+button  AFT cargo fire: Set up
 button  Random failures: off
 button  Notifications: off
-heading 2  More
-button  Read the tablet again
+heading 2  Sections
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures (current page)
+button  Home
