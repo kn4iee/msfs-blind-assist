@@ -12,34 +12,34 @@ internal static class Bbs757EfbTreeScrub
     internal const string MadeUpCode = "MADEUP";
     internal const string EmptyCode = "------";
 
-    private const string FlightNumber = "MSF1";
-    private const string Origin = "KSEA / SEA";
-    private const string Destination = "KPDX / PDX";
-    private const string Route = "KSEA/16L DCT BTG DCT KPDX/28R";
-    private const string Date = "01 Jan 26";
-    private const string Time = "12:00 UTC";
+    private const string Zero = "0";
+
+    // The made-up flight, by the tablet's own value node names (measured on the ACARS dashboard, 2026-11-06).
+    private static readonly Dictionary<string, string> MadeUpFlightValues = new(StringComparer.Ordinal)
+    {
+        ["planning_acars_flight_info_value_0"] = "MSF1",
+        ["planning_acars_flight_info_value_1"] = "MSF1",
+        ["planning_acars_flight_info_value_2"] = "KSEA / SEA",
+        ["planning_acars_flight_info_value_3"] = "KPDX / PDX",
+        ["planning_acars_flight_info_value_6"] = "01 Jan 26",
+        ["planning_acars_flight_info_value_7"] = "12:00 UTC",
+        ["planning_acars_flight_info_value_8"] = "12:00 UTC",
+        ["planning_acars_departure_value_0"] = "SEATTLE-TACOMA INTL",
+        ["planning_acars_departure_value_1"] = "16L",
+        ["planning_acars_departure_value_2"] = "BTG1",
+        ["planning_acars_arrival_value_0"] = "PORTLAND INTL",
+        ["planning_acars_arrival_value_1"] = "28R",
+        ["planning_acars_arrival_value_2"] = "BTG2",
+        ["planning_acars_route_value"] = "KSEA/16L DCT BTG DCT KPDX/28R",
+    };
 
     internal static IReadOnlyList<Bbs757EfbMemory.App> Scrub(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
         apps.Select(a => a with { Controls = a.Controls.Select(ScrubNode).ToList() }).ToList();
 
-    /// <summary>The made-up flight's value for a flight plan value node, chosen by the node's name: the route,
-    /// a date or time by name, otherwise by the value's index (0 and 1 the flight number and callsign, 2 and 3
-    /// the airports); every other value is "0".</summary>
-    internal static string MadeUpFlight(string name)
-    {
-        if (name == "planning_acars_route_value") return Route;
-        if (name.Contains("date", StringComparison.Ordinal)) return Date;
-        if (name.Contains("time", StringComparison.Ordinal)) return Time;
-        if (name.Contains("callsign", StringComparison.Ordinal)) return FlightNumber;
-        return ValueIndex(name) switch
-        {
-            0 => FlightNumber,
-            1 => FlightNumber,
-            2 => Origin,
-            3 => Destination,
-            _ => "0",
-        };
-    }
+    /// <summary>The made-up flight's value for a flight plan value node: the mapped one for a name in the table,
+    /// "0" for every other flight plan value.</summary>
+    internal static string MadeUpFlight(string name) =>
+        MadeUpFlightValues.TryGetValue(name, out string? v) ? v : Zero;
 
     private static Bbs757EfbMemory.Node ScrubNode(Bbs757EfbMemory.Node n) =>
         n with { Text = ScrubText(n.Name, n.Text), Children = n.Children.Select(ScrubNode).ToList() };
@@ -49,7 +49,7 @@ internal static class Bbs757EfbTreeScrub
         if (name == "simbrief_id_saved_label") return MadeUpSimbriefId;
         if (name == "hoppie_logon_code_value_label" || name == "sayintentions_acars_key_value_label"
             || name.EndsWith("_textbox", StringComparison.Ordinal))
-            return text == EmptyCode ? text : MadeUpCode;
+            return text.Length == 0 || text == EmptyCode ? text : MadeUpCode;
         if (IsFlightPlanValue(name)) return MadeUpFlight(name);
         return text;
     }
@@ -57,10 +57,4 @@ internal static class Bbs757EfbTreeScrub
     private static bool IsFlightPlanValue(string name) =>
         name == "planning_acars_route_value" || name == "planning_operating_fp_value"
         || (name.StartsWith("planning_acars_", StringComparison.Ordinal) && name.Contains("_value_", StringComparison.Ordinal));
-
-    private static int ValueIndex(string name)
-    {
-        int at = name.LastIndexOf("_value_", StringComparison.Ordinal);
-        return at >= 0 && int.TryParse(name.AsSpan(at + 7), out int i) ? i : -1;
-    }
 }

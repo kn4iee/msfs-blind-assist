@@ -31,14 +31,38 @@ public class Bbs757EfbTreeScrubTests
     [Fact]
     public void The_flight_plan_becomes_the_made_up_flight()
     {
-        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(
-            N("planning_acars_flight_info_value_0", "ABC123"), N("planning_acars_flight_info_value_1", "ABC"),
-            N("planning_acars_flight_info_value_2", "EGLL / LHR"), N("planning_acars_flight_info_value_3", "LFPG / CDG"),
-            N("planning_acars_flight_info_value_9", "42"), N("planning_acars_route_value", "EGLL DCT LFPG"),
-            N("planning_acars_date_value_4", "05 Mar 27"), N("planning_acars_time_value_5", "08:30 UTC"),
-            N("planning_operating_fp_value", "1234")));
-        Assert.Equal(new[] { "MSF1", "MSF1", "KSEA / SEA", "KPDX / PDX", "0", "KSEA/16L DCT BTG DCT KPDX/28R",
-            "01 Jan 26", "12:00 UTC", "0" }, scrubbed[0].Controls.Select(c => c.Text));
+        var expected = new (string Name, string Made)[]
+        {
+            ("planning_acars_flight_info_value_0", "MSF1"), ("planning_acars_flight_info_value_1", "MSF1"),
+            ("planning_acars_flight_info_value_2", "KSEA / SEA"), ("planning_acars_flight_info_value_3", "KPDX / PDX"),
+            ("planning_acars_flight_info_value_4", "0"), ("planning_acars_flight_info_value_5", "0"),
+            ("planning_acars_flight_info_value_6", "01 Jan 26"), ("planning_acars_flight_info_value_7", "12:00 UTC"),
+            ("planning_acars_flight_info_value_8", "12:00 UTC"), ("planning_acars_flight_info_value_9", "0"),
+            ("planning_acars_flight_info_value_10", "0"), ("planning_acars_flight_info_value_11", "0"),
+            ("planning_acars_departure_value_0", "SEATTLE-TACOMA INTL"), ("planning_acars_departure_value_1", "16L"),
+            ("planning_acars_departure_value_2", "BTG1"),
+            ("planning_acars_arrival_value_0", "PORTLAND INTL"), ("planning_acars_arrival_value_1", "28R"),
+            ("planning_acars_arrival_value_2", "BTG2"),
+            ("planning_acars_flight_plan_value_0", "0"), ("planning_acars_flight_plan_value_11", "0"),
+            ("planning_acars_load_sheet_value_0", "0"), ("planning_acars_load_sheet_value_11", "0"),
+            ("planning_acars_route_value", "KSEA/16L DCT BTG DCT KPDX/28R"), ("planning_operating_fp_value", "0"),
+        };
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(expected.Select(e => N(e.Name, "REAL VALUE")).ToArray()));
+        Assert.Equal(expected.Select(e => e.Made), scrubbed[0].Controls.Select(c => c.Text));
+    }
+
+    [Fact]
+    public void An_update_or_other_name_containing_date_or_time_is_kept()
+    {
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(N("update_label", "UPDATE"), N("planning_time_label", "Time")));
+        Assert.Equal(new[] { "UPDATE", "Time" }, scrubbed[0].Controls.Select(c => c.Text));
+    }
+
+    [Fact]
+    public void An_empty_textbox_stays_empty()
+    {
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(N("hoppie_textbox", "")));
+        Assert.Equal("", scrubbed[0].Controls[0].Text);
     }
 
     [Fact]
