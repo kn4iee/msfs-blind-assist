@@ -54,22 +54,14 @@ public sealed class Bbs757EfbModelReader
         var menu = new List<Bbs757EfbItem>();
         var items = new List<Bbs757EfbItem>();
         var grammar = new Grammar(content);
-        EmitChildren(content.Controls, content, grammar, section, menu, items);
+        EmitChildren(content.Controls, content, grammar, section, menu, items, Bbs757EfbScreen.ContentArea);
+        var scroller = PageScrollbox(content);
         return new Bbs757EfbScreenModel(content.Class, section, menu, Bbs757EfbPageRules.Reorder(content.Class, section, items))
         {
-            Scrollable = IsScrollable(content),
-            Viewport = ViewportOf(content),
+            Scrollable = scroller is not null,
+            Viewport = scroller is null ? Bbs757EfbScreen.ContentArea : Within(Box(scroller), Bbs757EfbScreen.ContentArea),
             Keyboard = KeyboardOf(apps),
         };
-    }
-
-    /// <summary>The part of the tablet the page is drawn in: the largest <c>*_scrollbox</c> of the content (the page's main one),
-    /// else the whole content area.</summary>
-    private static Rectangle ViewportOf(Bbs757EfbMemory.App content)
-    {
-        var box = Flatten(content.Controls).Where(n => n.Name.EndsWith("_scrollbox", StringComparison.Ordinal))
-            .OrderByDescending(n => n.W * n.H).FirstOrDefault();
-        return box is null ? Bbs757EfbScreen.ContentArea : Box(box);
     }
 
     /// <summary>BlueBird's keyboard from the shell app's <c>kb_grid</c>: its box and its keys in tree order. A <c>char_btn_</c> key
@@ -122,7 +114,18 @@ public sealed class Bbs757EfbModelReader
 
     // ---- flattening a content page -------------------------------------------
 
-    private static void Emit(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, Grammar g, string section, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+    /// <summary>One node and what is under it, as items; each item the node itself makes is clipped to <paramref name="clip"/>, the
+    /// drawn rectangle of the scrollbox it sits in (the content area in none), and a scrollbox's own descendants to that scrollbox.</summary>
+    private static void Emit(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, Grammar g, string section, List<Bbs757EfbItem> menu,
+        List<Bbs757EfbItem> items, Rectangle clip)
+    {
+        int first = items.Count;
+        EmitNode(n, content, g, section, menu, items, IsScrollbox(n) ? Within(Box(n), clip) : clip);
+        Clip(items, first, clip);
+    }
+
+    private static void EmitNode(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, Grammar g, string section, List<Bbs757EfbItem> menu,
+        List<Bbs757EfbItem> items, Rectangle inner)
     {
         if (IsChrome(n)) return; // the home button and the page title: the window adds its own Home and shows the page name
 
@@ -155,33 +158,53 @@ public sealed class Bbs757EfbModelReader
             case "label":
             case "other":
                 if (n.Text.Length > 0 && n.Children.Count == 0) EmitText(n, g, items);
-                EmitChildren(n.Children, content, g, section, menu, items);
+                EmitChildren(n.Children, content, g, section, menu, items, inner);
                 return;
             default: // grid, colorbox, canvas, gradientbox, stack, image, pan_indicator, scrollbox: containers
-                EmitChildren(n.Children, content, g, section, menu, items);
+                EmitChildren(n.Children, content, g, section, menu, items, inner);
                 return;
         }
     }
 
+    /// <summary>The items from <paramref name="first"/> on that have no clip yet get <paramref name="clip"/>.</summary>
+    private static void Clip(List<Bbs757EfbItem> items, int first, Rectangle clip)
+    {
+        for (int i = first; i < items.Count; i++)
+            if (items[i].Clip == default) items[i] = items[i] with { Clip = clip };
+    }
+
+    /// <summary>A scrollbox's drawn rectangle kept within the scrollbox around it (top and bottom only: pages scroll up and down), so a
+    /// control in a scrollbox scrolled out of another is never shown, nor tapped, outside either.</summary>
+    private static Rectangle Within(Rectangle box, Rectangle outer)
+    {
+        int top = Math.Max(box.Top, outer.Top), bottom = Math.Min(box.Bottom, outer.Bottom);
+        return new Rectangle(box.X, top, box.Width, Math.Max(0, bottom - top));
+    }
+
+    /// <summary>A scrollbox: BlueBird's scrollbox class, or a control named <c>*_scrollbox</c> (the committed trees predate the class).</summary>
+    private static bool IsScrollbox(Bbs757EfbMemory.Node n) =>
+        n.Kind == "scrollbox" || n.Name.EndsWith("_scrollbox", StringComparison.Ordinal);
+
     /// <summary>The children of a container in order; the buttons of a tab row (two or more siblings named as
     /// <see cref="Bbs757EfbPageRules.IsTabName"/> says) come out as <see cref="Bbs757EfbKind.Tab"/> items keyed
-    /// <c>tab:&lt;parent's name&gt;|&lt;words&gt;</c>, the current one selected.</summary>
+    /// <c>tab:&lt;parent's name&gt;|&lt;words&gt;</c>, the current one selected. Every item is clipped to <paramref name="clip"/>, the
+    /// scrollbox the children sit in.</summary>
     private static void EmitChildren(IReadOnlyList<Bbs757EfbMemory.Node> kids, Bbs757EfbMemory.App content, Grammar g, string section,
-        List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+        List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items, Rectangle clip)
     {
         var tabs = kids.Where(k => k.Kind == "button" && k.Text.Length > 0 && Bbs757EfbPageRules.IsTabName(k.Name)).ToList();
         if (tabs.Count < 2)
         {
-            foreach (var k in kids) Emit(k, content, g, section, menu, items);
+            foreach (var k in kids) Emit(k, content, g, section, menu, items, clip);
             return;
         }
         var current = CurrentTab(tabs, content);
         foreach (var k in kids)
         {
-            if (!tabs.Contains(k)) { Emit(k, content, g, section, menu, items); continue; }
+            if (!tabs.Contains(k)) { Emit(k, content, g, section, menu, items, clip); continue; }
             string words = string.Join(' ', k.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
             items.Add(new Bbs757EfbItem(Bbs757EfbKind.Tab, Bbs757EfbVocabulary.Pretty(words), Box(k), Hit(k), true,
-                "tab:" + ParentNameOf(content, k) + "|" + words, Selected: ReferenceEquals(k, current), Name: k.Name));
+                "tab:" + ParentNameOf(content, k) + "|" + words, Selected: ReferenceEquals(k, current), Name: k.Name, Clip: clip));
         }
     }
 
@@ -360,16 +383,12 @@ public sealed class Bbs757EfbModelReader
         return "";
     }
 
-    /// <summary>Whether the content scrolls: a <c>*_scrollbox</c> wrapping a taller <c>*_stackbox</c> (its content does
-    /// not fit the viewport).</summary>
-    private static bool IsScrollable(Bbs757EfbMemory.App content)
-    {
-        var all = Flatten(content.Controls).ToList();
-        var scroll = all.FirstOrDefault(n => n.Name.EndsWith("_scrollbox", StringComparison.Ordinal));
-        if (scroll is null) return false;
-        var stack = all.FirstOrDefault(n => n.Name.EndsWith("_stackbox", StringComparison.Ordinal));
-        return stack is not null && stack.H > scroll.H + 4;
-    }
+    /// <summary>The one scrollbox of the content that scrolls: the first that wraps a taller <c>*_stackbox</c> (its content does not
+    /// fit it; Settings' pages). Null when none does: an inner scrollbox holding a text (the ACARS route, Weather's report, the
+    /// checklist's lines) does not make the page scroll, and the controls around it are clipped to the content area, not to it.</summary>
+    private static Bbs757EfbMemory.Node? PageScrollbox(Bbs757EfbMemory.App content) =>
+        Flatten(content.Controls).FirstOrDefault(n => IsScrollbox(n)
+            && Descendants(n).Any(d => d.Name.EndsWith("_stackbox", StringComparison.Ordinal) && d.H > n.H + 4));
 
     // ---- helpers -------------------------------------------------------------
 

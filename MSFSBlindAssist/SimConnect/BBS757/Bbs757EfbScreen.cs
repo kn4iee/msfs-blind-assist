@@ -43,6 +43,10 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX);
 /// own name for the control.
 /// <see cref="Key"/> is stable while the element's state changes (its label without
 /// the state word), so the window keeps the screen reader's focus on it across a refresh.
+/// <see cref="Clip"/> is the drawn rectangle of the scrollbox the control sits in (its nearest <c>*_scrollbox</c> ancestor, within
+/// any scrollbox above that one), the part of the tablet it can show in: the reader sets <see cref="Bbs757EfbScreen.ContentArea"/>
+/// for a control in no scrollbox, and an item built with none (the default) is read as the content area too
+/// (<see cref="Bbs757EfbPress.ClipOf"/>).
 /// </summary>
 public sealed record Bbs757EfbItem(
     Bbs757EfbKind Kind,
@@ -58,7 +62,8 @@ public sealed record Bbs757EfbItem(
     Bbs757EfbSlider? Slider = null,
     int Level = 0,
     string Label = "",
-    string Name = "");
+    string Name = "",
+    Rectangle Clip = default);
 
 /// <summary>A parsed tablet page: which app and menu entry, then its elements in reading order.</summary>
 public sealed record Bbs757EfbScreenModel(
@@ -67,8 +72,8 @@ public sealed record Bbs757EfbScreenModel(
     IReadOnlyList<Bbs757EfbItem> Menu,
     IReadOnlyList<Bbs757EfbItem> Items)
 {
-    /// <summary>Whether the page scrolls (its content does not fit the viewport): the presses scroll
-    /// the control they need into view by dragging.</summary>
+    /// <summary>Whether the page scrolls: a scrollbox of its content wraps a taller stackbox (its content does not fit the
+    /// <see cref="Viewport"/>). The presses scroll a control of that scrollbox into view by dragging.</summary>
     public bool Scrollable { get; init; }
 
     /// <summary>The tablet's top bar, left to right: the departure countdown, the boarding control and the
@@ -83,7 +88,9 @@ public sealed record Bbs757EfbScreenModel(
     /// <summary>A question the tablet shows over the page, with its answers (not in <see cref="Items"/>); null when none.</summary>
     public Bbs757EfbQuestion? Question { get; init; }
 
-    /// <summary>The part of the tablet that shows the page, in tablet pixels; a control outside it is not on screen.</summary>
+    /// <summary>The part of the tablet the page scrolls in, in tablet pixels: the drawn rectangle of the one scrollbox that scrolls
+    /// (<see cref="Scrollable"/>), else the content area. Each control is shown, and tapped, within its own <see cref="Bbs757EfbItem.Clip"/>;
+    /// only a control whose clip is this rectangle is dragged into view.</summary>
     public Rectangle Viewport { get; init; } = Bbs757EfbScreen.ContentArea;
 
     /// <summary>Where BlueBird's QWERTY keyboard keys are, null when the reader found none. BlueBird's keyboard tree reads

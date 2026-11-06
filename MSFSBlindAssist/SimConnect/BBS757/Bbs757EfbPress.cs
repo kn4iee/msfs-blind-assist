@@ -147,36 +147,45 @@ public static class Bbs757EfbPress
 
     // ------------------------------------------------------------------ where a control is tapped, and scrolling it into view
 
-    /// <summary>The fewest pixels of a control that must show for it to be tapped where it shows.</summary>
-    public const int MinShownPx = 12;
+    /// <summary>The fewest pixels of a control that must show for it to be tapped where it shows (Settings, Aircraft's last switch shows
+    /// 9 px at the end of the page's scroll: tapped there).</summary>
+    public const int MinShownPx = 6;
+
+    /// <summary>The part of the tablet <paramref name="item"/> can show in: its <see cref="Bbs757EfbItem.Clip"/>, or the content area for
+    /// an item built with none.</summary>
+    public static Rectangle ClipOf(Bbs757EfbItem item) => item.Clip == default ? Bbs757EfbScreen.ContentArea : item.Clip;
 
     /// <summary>
-    /// Where to tap <paramref name="item"/> on the page <paramref name="m"/>: the middle of the part of its drawn box that is inside
-    /// the page's <see cref="Bbs757EfbScreenModel.Viewport"/> (the reader's x, and its y while that lies in that part), or null
-    /// when that part is under <see cref="MinShownPx"/> tall (the last row of Settings, Aircraft at the end of its scroll shows 21 px:
-    /// tapped there). A control that is not part of the page's content (the side menu, the top bar, a question's answers) is
-    /// tapped where the reader found it.
+    /// Where to tap <paramref name="item"/> on the page <paramref name="m"/>: inside the part of its drawn box that is within its own
+    /// <see cref="ClipOf">clip</see> (the scrollbox it sits in, the content area in none), top and bottom only: the reader's x, the
+    /// reader's y when the whole box shows, else the middle of the strip that shows; null when that strip is under
+    /// <see cref="MinShownPx"/> tall. A control that is not part of the page's content (the side menu, the top bar, a question's
+    /// answers) is tapped where the reader found it.
     /// </summary>
     public static Point? TapPoint(Bbs757EfbScreenModel m, Bbs757EfbItem item)
     {
         if (item.Box.IsEmpty || !m.Items.Contains(item)) return item.Hit;
-        // Vertically only: pages scroll up and down, and a content control may sit left of the viewport (Systems' zoom buttons).
-        int top = Math.Max(item.Box.Top, m.Viewport.Top), bottom = Math.Min(item.Box.Bottom, m.Viewport.Bottom);
+        // Vertically only: pages scroll up and down, and a content control may sit left of its clip (Systems' zoom buttons).
+        var clip = ClipOf(item);
+        int top = Math.Max(item.Box.Top, clip.Top), bottom = Math.Min(item.Box.Bottom, clip.Bottom);
         if (bottom - top < MinShownPx) return null;
-        int y = item.Hit.Y >= top && item.Hit.Y < bottom ? item.Hit.Y : top + (bottom - top) / 2;
+        bool whole = top == item.Box.Top && bottom == item.Box.Bottom;
+        int y = whole && item.Hit.Y >= top && item.Hit.Y < bottom ? item.Hit.Y : top + (bottom - top) / 2;
         return new Point(item.Hit.X, y);
     }
 
     /// <summary>
     /// One drag that scrolls <paramref name="item"/> toward the middle of the viewport: at x 250 into the viewport (the rows' label
     /// area, measured inert), from y0 to y1 so that y0 - y1 is how far the drawn middle has to go (at most the viewport's height less
-    /// 200 in one drag; a longer way takes more). Null when the item can be tapped where it is, and when the page does not scroll
-    /// (<see cref="Bbs757EfbScreenModel.Scrollable"/>).
+    /// 200 in one drag; a longer way takes more). Null when the item can be tapped where it is, when the page does not scroll
+    /// (<see cref="Bbs757EfbScreenModel.Scrollable"/>), and for every item that is not in the scrollbox that scrolls (its clip is not
+    /// the <see cref="Bbs757EfbScreenModel.Viewport"/>): a drag would move nothing under it.
     /// </summary>
     public static (int X, int Y0, int Y1)? DragFor(Bbs757EfbScreenModel m, Bbs757EfbItem item)
     {
-        // A page with no content scrollbox does not scroll: a drag there pans what is under it (the map, the diagram).
-        if (!m.Scrollable || TapPoint(m, item) != null || item.Box.IsEmpty) return null;
+        // A page with no scrollbox that scrolls does not scroll: a drag there pans what is under it (the map, the diagram).
+        if (!m.Scrollable || item.Box.IsEmpty || !m.Items.Contains(item) || ClipOf(item) != m.Viewport || TapPoint(m, item) != null)
+            return null;
         var v = m.Viewport;
         int mid = v.Top + v.Height / 2;
         int delta = item.Box.Top + item.Box.Height / 2 - mid;   // positive: below the middle, the content has to move up

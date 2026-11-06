@@ -1015,20 +1015,72 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { row.Hit }, s.Tablet.Taps);
     }
 
+    /// <summary>Settings, Aircraft read from its committed tree with the page scrolled by <paramref name="offset"/>.</summary>
+    private static Bbs757EfbScreenModel SettingsAircraftAt(double offset) =>
+        Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Scrolled(Bbs757EfbTreeJson.Load("51-settings-aircraft"), "aircraft_scrollbox", (float)offset))!;
+
+    /// <summary>The measured end of Settings, Aircraft's scroll (the evidence: 175.19).</summary>
+    private const double SettingsAircraftEnd = 175.19;
+
     [Fact]
     public async Task A_partly_shown_last_row_is_tapped_in_its_shown_part()
     {
-        // The evidence: at the end of the scroll (offset 175.19) the row drawn at 1027-1087 shows 21 px above the bottom (1048).
-        var s = new Scrolled(175.19, ("Dirty panel states", 1202));
-        var row = s.Row("Dirty panel states");
-        Assert.Equal(new Rectangle(273, 1027, 600, 60), row.Box);
+        // The real tree at the end of its scroll: Dirty panel states' toggle [1137,1214 60x35] is drawn at 1039-1074 and only its top
+        // 9 px or so show above the viewport's bottom (1048). It is tapped there, in the middle of that strip, with no drag.
+        var page = SettingsAircraftAt(SettingsAircraftEnd);
+        var dirty = page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle);
+        var tablet = new FakeTablet(page);
 
-        await s.Tablet.Runner().ClickAsync(s.Tablet.Press(row), CancellationToken.None);
+        await tablet.Runner().SwitchAsync(tablet.Press(dirty), wantOn: true, CancellationToken.None);
 
-        Assert.Empty(s.Tablet.Drags);
-        var tap = Assert.Single(s.Tablet.Taps);
-        Assert.InRange(tap.Y, 1027, 1047);
-        Assert.Equal(1037, tap.Y);   // the middle of 1027-1048
+        Assert.Empty(tablet.Drags);
+        var tap = Assert.Single(tablet.Taps);
+        Assert.InRange(tap.Y, dirty.Box.Top, 1047);
+        Assert.Equal(dirty.Box.Top + (1048 - dirty.Box.Top) / 2, tap.Y);
+        Assert.Equal(dirty.Hit.X, tap.X);
+    }
+
+    [Fact]
+    public async Task The_last_row_of_the_real_settings_page_is_scrolled_into_view_and_tapped_from_the_top()
+    {
+        // Review Focus 1 on the real tree: pressed at the top of the page, Dirty panel states is dragged into view (the drag moves the
+        // page 1:1 up to its measured end), read again and tapped where it is drawn then, inside the viewport.
+        double offset = 0;
+        var tablet = new FakeTablet(SettingsAircraftAt(0));
+        var press = tablet.Press(tablet.Page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle));
+        tablet.OnDrag = (_, y0, y1) =>
+        {
+            offset = Math.Clamp(offset + (y0 - y1), 0, SettingsAircraftEnd);
+            tablet.Show(SettingsAircraftAt(offset));
+        };
+
+        await tablet.Runner().SwitchAsync(press, wantOn: true, CancellationToken.None);
+
+        Assert.Single(tablet.Drags);
+        var tap = Assert.Single(tablet.Taps);
+        var drawn = tablet.Page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle);
+        Assert.True(tap.Y >= drawn.Box.Top && tap.Y < 1048, $"tapped {tap}, drawn {drawn.Box}");
+        Assert.DoesNotContain(tablet.Alerts, a => a.Contains("could not be brought into view", StringComparison.Ordinal));
+    }
+
+    // ---- C1: a page whose only scrollbox is an inner one --------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("20-navigation-acars-dashboard", "planning_acars_fetch_button")]
+    [InlineData("22-navigation-weather", "planning_weather_primary_tab_button_0")]
+    [InlineData("40-checklist", "checklist_reset")]
+    public async Task A_control_outside_an_inner_scrollbox_is_tapped_once_with_no_drag(string fixture, string name)
+    {
+        // REFRESH SIMBRIEF OFP above the ACARS route's box, METAR above Weather's report box, the Checklist's RESET above its lines.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!;
+        var control = Assert.Single(page.Items, i => i.Name == name);
+        var tablet = new FakeTablet(page);
+
+        await tablet.Runner().ClickAsync(tablet.Press(control), CancellationToken.None);
+
+        Assert.Empty(tablet.Drags);
+        Assert.Equal(new[] { control.Hit }, tablet.Taps);
+        Assert.DoesNotContain(tablet.Alerts, a => a.Contains("could not be brought into view", StringComparison.Ordinal));
     }
 
     [Fact]

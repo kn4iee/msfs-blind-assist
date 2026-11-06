@@ -477,7 +477,8 @@ public sealed class Bbs757EfbPressRunner
         var found = Find(pressed, now, out bool gone);
         for (int steps = 0; found != null && Bbs757EfbPress.TapPoint(now, found) == null; steps++)
         {
-            // Outside the viewport (or showing under 12 px): dragged toward its middle, read again, found again where it is drawn now.
+            // Outside its clip (or showing under MinShownPx): dragged toward the viewport's middle, read again, found again where it is
+            // drawn now. Only a control of the scrollbox that scrolls has a drag (DragFor); any other is not brought into view.
             if (steps >= MaxScrollSteps || Bbs757EfbPress.DragFor(now, found) is not { } drag) break;
             if (!await _io.Drag(drag.X, drag.Y0, drag.Y1, ct))
             {

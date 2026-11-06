@@ -55,18 +55,51 @@ public class Bbs757EfbPressTests
         PageOf("SETTINGS", "AIRCRAFT", items) with { Viewport = new Rectangle(250, 82, 1147, 966), Scrollable = true };
 
     [Fact]
-    public void TapPoint_is_the_middle_of_the_shown_part_and_null_under_twelve_pixels()
+    public void TapPoint_is_the_middle_of_the_shown_part_and_null_under_six_pixels()
     {
         var whole = Item(Bbs757EfbKind.Button, "Whole", "btn:W", new Rectangle(300, 200, 400, 60));
         var last = Item(Bbs757EfbKind.Button, "Last", "btn:L", new Rectangle(273, 1027, 600, 60));      // shows 1027-1048: 21 px
-        var edge = Item(Bbs757EfbKind.Button, "Edge", "btn:E", new Rectangle(273, 1037, 600, 60));      // 11 px
+        var strip = Item(Bbs757EfbKind.Button, "Strip", "btn:S", new Rectangle(273, 1040, 600, 60));    // 8 px
+        var edge = Item(Bbs757EfbKind.Button, "Edge", "btn:E", new Rectangle(273, 1043, 600, 60));      // 5 px
         var below = Item(Bbs757EfbKind.Button, "Below", "btn:B", new Rectangle(273, 1202, 600, 60));
-        var m = InViewport(whole, last, edge, below);
+        var cut = Item(Bbs757EfbKind.Button, "Cut", "btn:C", new Rectangle(273, 1000, 600, 60));        // 48 px, its middle (1030) shows
+        var m = InViewport(whole, last, strip, edge, below, cut);
 
         Assert.Equal(whole.Hit, Bbs757EfbPress.TapPoint(m, whole));
         Assert.Equal(new Point(573, 1037), Bbs757EfbPress.TapPoint(m, last));
+        Assert.Equal(new Point(573, 1044), Bbs757EfbPress.TapPoint(m, strip));
         Assert.Null(Bbs757EfbPress.TapPoint(m, edge));
         Assert.Null(Bbs757EfbPress.TapPoint(m, below));
+        Assert.Equal(new Point(573, 1024), Bbs757EfbPress.TapPoint(m, cut));   // the middle of the strip, not the box's middle near its edge
+    }
+
+    [Fact]
+    public void TapPoint_clips_a_control_to_its_own_scrollbox_not_to_the_pages()
+    {
+        // A control in an inner scrollbox (Weather's report box at 292-1022) is clipped to it; one outside it to the content area.
+        var inner = new Rectangle(344, 292, 960, 730);
+        var tab = Item(Bbs757EfbKind.Tab, "Metar", "tab:METAR", new Rectangle(324, 250, 250, 34)) with { Clip = Bbs757EfbScreen.ContentArea };
+        var inside = Item(Bbs757EfbKind.Button, "Inside", "btn:I", new Rectangle(400, 270, 100, 40)) with { Clip = inner };   // 18 px show
+        var hidden = Item(Bbs757EfbKind.Button, "Hidden", "btn:H", new Rectangle(400, 250, 100, 40)) with { Clip = inner };   // none shows
+        var m = PageOf("NAVIGATION", "WEATHER & NOTAM", tab, inside, hidden);
+
+        Assert.Equal(tab.Hit, Bbs757EfbPress.TapPoint(m, tab));
+        Assert.Equal(new Point(450, 301), Bbs757EfbPress.TapPoint(m, inside));
+        Assert.Null(Bbs757EfbPress.TapPoint(m, hidden));
+        Assert.Null(Bbs757EfbPress.DragFor(m, hidden));   // the page does not scroll
+    }
+
+    [Fact]
+    public void DragFor_drags_only_a_control_of_the_scrollbox_that_scrolls()
+    {
+        var other = new Rectangle(324, 820, 1000, 120);
+        var row = Item(Bbs757EfbKind.Button, "Row", "btn:R", new Rectangle(273, 1202, 600, 60));                         // the viewport's
+        var boxed = Item(Bbs757EfbKind.Button, "Boxed", "btn:X", new Rectangle(400, 960, 100, 40)) with { Clip = other }; // another box's
+        var m = InViewport(row, boxed);
+
+        Assert.NotNull(Bbs757EfbPress.DragFor(m, row));
+        Assert.Null(Bbs757EfbPress.TapPoint(m, boxed));
+        Assert.Null(Bbs757EfbPress.DragFor(m, boxed));
     }
 
     [Fact]
@@ -85,7 +118,7 @@ public class Bbs757EfbPressTests
         var below = Item(Bbs757EfbKind.Button, "Below", "btn:B", new Rectangle(273, 1202, 600, 60));   // middle 1232; viewport middle 565
         var above = Item(Bbs757EfbKind.Button, "Above", "btn:A", new Rectangle(273, -40, 600, 60));    // middle -10
         var near = Item(Bbs757EfbKind.Button, "Near", "btn:N", new Rectangle(273, 1000, 600, 60));     // shows 48 px: in view
-        var barely = Item(Bbs757EfbKind.Button, "Barely", "btn:R", new Rectangle(273, 1040, 600, 60)); // shows 8 px: 535 to go
+        var barely = Item(Bbs757EfbKind.Button, "Barely", "btn:R", new Rectangle(273, 1043, 600, 60)); // shows 5 px: 508 to go
         var far = Item(Bbs757EfbKind.Button, "Far", "btn:F", new Rectangle(273, 3000, 600, 60));       // 2465 to go: capped
         var m = InViewport(below, above, near, barely, far);
 
@@ -96,7 +129,7 @@ public class Bbs757EfbPressTests
         Assert.Equal(-575, up.Y0 - up.Y1);                 // the other way: y0 above y1
         Assert.Null(Bbs757EfbPress.DragFor(m, near));
         var small = Bbs757EfbPress.DragFor(m, barely)!.Value;
-        Assert.Equal(505, small.Y0 - small.Y1);            // 1070 - 565
+        Assert.Equal(508, small.Y0 - small.Y1);            // 1073 - 565
         var capped = Bbs757EfbPress.DragFor(m, far)!.Value;
         Assert.Equal(966 - 200, capped.Y0 - capped.Y1);
         foreach (var d in new[] { down, up, small, capped })
@@ -116,12 +149,63 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
-    public void The_last_row_of_the_real_scrolled_settings_page_shows_21_pixels_and_is_tapped_there()
+    public void The_last_switch_of_settings_aircraft_at_the_end_of_its_scroll_is_tapped_in_the_strip_that_shows()
     {
-        // Evidence: Settings, Aircraft at its end (offset 175.19): the last row is drawn at 1027-1087.
-        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
-        var rows = page.Items.Where(i => i.Clickable && i.Box.Bottom > page.Viewport.Bottom).ToList();
-        Assert.All(rows, r => Assert.True(Bbs757EfbPress.TapPoint(page, r) is null || Bbs757EfbPress.TapPoint(page, r)!.Value.Y < page.Viewport.Bottom));
+        // Evidence: Settings, Aircraft at its end (offset 175.19). The row's control is its toggle, [1137,1214 60x35]: drawn at
+        // 1039-1074, of which 9 or 10 px show above the viewport's bottom (1048). It is tapped in the middle of that strip.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Scrolled(Bbs757EfbTreeJson.Load("51-settings-aircraft"), "aircraft_scrollbox", 175.19f))!;
+        var dirty = page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle);
+        Assert.Equal("DIRTY PANEL STATES", dirty.Text);
+        Assert.Equal(1048, page.Viewport.Bottom);
+        Assert.InRange(dirty.Box.Top, 1038, 1039);
+
+        var tap = Bbs757EfbPress.TapPoint(page, dirty);
+
+        Assert.NotNull(tap);
+        Assert.Equal(dirty.Hit.X, tap!.Value.X);
+        Assert.Equal(dirty.Box.Top + (1048 - dirty.Box.Top) / 2, tap.Value.Y);
+        Assert.Null(Bbs757EfbPress.DragFor(page, dirty));
+    }
+
+    /// <summary>Every page item a pilot can press, of every committed tree.</summary>
+    public static IEnumerable<object[]> PressablesOfEveryFixture()
+    {
+        foreach (var path in Directory.GetFiles(Path.Combine(FixtureRoot(), "bbs757-efb-memory"), "*.tree.json").OrderBy(p => p, StringComparer.Ordinal))
+            yield return new object[] { Path.GetFileName(path)[..^".tree.json".Length] };
+    }
+
+    private static string FixtureRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MSFSBlindAssist.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        return Path.Combine(dir!.FullName, "tests", "MSFSBlindAssist.Tests", "Fixtures");
+    }
+
+    [Theory]
+    [MemberData(nameof(PressablesOfEveryFixture))]
+    public void Every_control_of_every_page_is_tapped_where_it_shows_or_scrolled_to(string fixture)
+    {
+        // At offset 0, as captured: a page that does not scroll has every control tappable inside its own clip; a page that scrolls has
+        // each one tappable or dragged into view. The final review's C1: the ACARS dashboard, Weather & NOTAM and the Checklist had their
+        // only (inner) scrollbox as the viewport, so every control outside it could never be pressed.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture));
+        if (page == null) return;
+        var pressables = page.Items.Where(i => i.Kind is Bbs757EfbKind.Button or Bbs757EfbKind.Tab or Bbs757EfbKind.Toggle
+            or Bbs757EfbKind.Checkbox or Bbs757EfbKind.Slider).ToList();
+        Assert.All(pressables, i =>
+        {
+            var tap = Bbs757EfbPress.TapPoint(page, i);
+            if (tap is { } p)
+            {
+                var clip = Bbs757EfbPress.ClipOf(i);
+                Assert.True(p.Y >= i.Box.Top && p.Y < i.Box.Bottom && p.Y >= clip.Top && p.Y < clip.Bottom,
+                    $"{fixture}: {i.Kind} '{i.Text}' tapped at {p}, outside its box {i.Box} or its clip {clip}");
+                return;
+            }
+            Assert.True(page.Scrollable && Bbs757EfbPress.DragFor(page, i) != null,
+                $"{fixture}: {i.Kind} '{i.Text}' {i.Box} can neither be tapped nor scrolled to (clip {i.Clip}, viewport {page.Viewport})");
+        });
     }
 
     // ---- Relocate ------------------------------------------------------------------------------------------------------

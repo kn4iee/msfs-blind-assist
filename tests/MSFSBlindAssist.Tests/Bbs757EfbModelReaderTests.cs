@@ -1030,11 +1030,34 @@ public class Bbs757EfbModelReaderTests
         var fuel = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!;
         Assert.Equal(Bbs757EfbScreen.ContentArea, fuel.Viewport);
 
-        // Several scrollboxes: the largest is the page's.
-        var small = N("scrollbox", "side_scrollbox", "", 260, 100, 100, 100);
+        // Several scrollboxes: the page's is the one wrapping a taller stackbox, whatever its size; the larger one holding only a text
+        // makes nothing scroll. Scrollable and the viewport name the same box.
+        var small = N("scrollbox", "side_scrollbox", "", 260, 100, 300, 400, N("other", "side_stackbox", "", 260, 100, 300, 900));
         var big = N("scrollbox", "main_scrollbox", "", 300, 90, 900, 800);
         var label = N("label", "x_label", "Hello", 320, 100, 80, 20);
-        var app = new Bbs757EfbMemory.App(7, "SYSTEMS", new[] { small, N("grid", "g", "", 250, 82, 1147, 966, label, big) });
-        Assert.Equal(new System.Drawing.Rectangle(300, 90, 900, 800), Bbs757EfbModelReader.Read(new[] { app })!.Viewport);
+        var app = new Bbs757EfbMemory.App(7, "SYSTEMS", new[] { N("grid", "g", "", 250, 82, 1147, 966, label, big, small) });
+        var both = Bbs757EfbModelReader.Read(new[] { app })!;
+        Assert.True(both.Scrollable);
+        Assert.Equal(new System.Drawing.Rectangle(260, 100, 300, 400), both.Viewport);
+
+        // An inner scrollbox and no taller stackbox (the ACARS route, Weather's report, the checklist's lines): the content area.
+        foreach (var page in new[] { "20-navigation-acars-dashboard", "22-navigation-weather", "40-checklist" })
+        {
+            var m = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(page))!;
+            Assert.False(m.Scrollable, page);
+            Assert.Equal(Bbs757EfbScreen.ContentArea, m.Viewport);
+        }
+    }
+
+    [Fact]
+    public void Each_control_is_clipped_to_the_scrollbox_it_sits_in()
+    {
+        var acars = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("20-navigation-acars-dashboard"))!;
+        Assert.Equal(Bbs757EfbScreen.ContentArea, acars.Items.Single(i => i.Name == "planning_acars_fetch_button").Clip);
+        var route = acars.Items.Single(i => i.Name == "planning_acars_route_value");
+        Assert.Equal(new System.Drawing.Rectangle(323, 820, 1000, 120), route.Clip);   // planning_acars_route_scrollbox
+
+        var settings = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
+        Assert.All(settings.Items, i => Assert.Equal(settings.Viewport, i.Clip));
     }
 }

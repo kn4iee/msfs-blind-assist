@@ -40,6 +40,21 @@ internal static class Bbs757EfbTreeJson
     internal static IReadOnlyList<Bbs757EfbMemory.App> Load(string name) =>
         Read(File.ReadAllText(Path.Combine(FixtureDir(), name + ".tree.json")));
 
+    /// <summary>
+    /// The trees as the memory walk reads them with the scrollbox named <paramref name="scrollbox"/> scrolled by
+    /// <paramref name="offset"/>: everything inside it drawn that much higher, the box itself where it is with its offset
+    /// (<see cref="Bbs757EfbMemory"/> subtracts only the ancestors' offsets). Stands in for a capture of a scrolled page.
+    /// </summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> Scrolled(IReadOnlyList<Bbs757EfbMemory.App> apps, string scrollbox, float offset)
+    {
+        static Bbs757EfbMemory.Node Up(Bbs757EfbMemory.Node n, float by) =>
+            n with { Y = n.Y - by, Children = n.Children.Select(c => Up(c, by)).ToList() };
+        Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) => n.Name == scrollbox
+            ? n with { Scroll = offset, Children = n.Children.Select(c => Up(c, offset)).ToList() }
+            : n with { Children = n.Children.Select(Walk).ToList() };
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
     private static string FixtureDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
