@@ -7,14 +7,14 @@ button  Ground services
 button  Cabin & doors (current page)
 button  Maintenance
 button  Failures
-button  Closed
-button  Closed
-button  Closed
-button  Closed
-button  Closed
-button  Closed
-button  Closed
-button  Closed
+button  LEFT FWD: Closed
+button  LEFT MID: Closed
+button  LEFT AFT: Closed
+button  RIGHT FWD: Closed
+button  RIGHT MID: Closed
+button  RIGHT AFT: Closed
+button  FWD CARGO: Closed
+button  AFT CARGO: Closed
 button  Close all
 button  Cockpit open
 heading 2  CABIN LIGHTING

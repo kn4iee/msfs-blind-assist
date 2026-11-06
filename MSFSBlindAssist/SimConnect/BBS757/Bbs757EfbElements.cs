@@ -201,7 +201,7 @@ public static class Bbs757EfbElements
                     break;
                 case Bbs757EfbKind.Tab: // shown as the button it was until the page grammar words the current tab
                 case Bbs757EfbKind.Button:
-                    Add(it.Text, kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
+                    Add(Labelled(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
                 case Bbs757EfbKind.Toggle:
                 {
@@ -245,7 +245,7 @@ public static class Bbs757EfbElements
                     return true;
                 case Bbs757EfbKind.Tab:
                 case Bbs757EfbKind.Button:
-                    Add(it.Text, key: it.Key);
+                    Add(Labelled(it), key: it.Key);
                     return true;
                 case Bbs757EfbKind.Toggle:
                 case Bbs757EfbKind.Checkbox:
@@ -276,6 +276,9 @@ public static class Bbs757EfbElements
         int read = Bbs757EfbSettingsMatch.ChoiceIndex(theme, it.Value);
         return Bbs757EfbSettings.ThemeNote(read >= 0 ? theme.Choices[read].Word : null);
     }
+
+    /// <summary>A control's words, with the label that names it before them when the page grammar gave one ("LEFT FWD: Closed").</summary>
+    private static string Labelled(Bbs757EfbItem it) => it.Label.Length > 0 ? it.Label + ": " + it.Text : it.Text;
 
     /// <summary>A side-menu entry's words, with the page it is marked as the current one (a tab already says "(selected)").</summary>
     private static string MenuText(Bbs757EfbItem it) =>

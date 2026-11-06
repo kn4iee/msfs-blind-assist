@@ -919,6 +919,22 @@ public class Bbs757EfbModelReaderTests
     }
 
     [Fact]
+    public void A_labelled_button_reads_label_then_words()
+    {
+        var door = new Bbs757EfbItem(Bbs757EfbKind.Button, "Closed", default, default, true, "btn:|@36,10", Label: "LEFT FWD");
+        var plain = new Bbs757EfbItem(Bbs757EfbKind.Button, "Close all", default, default, true, "btn:|CLOSE ALL@16,11");
+        var model = new Bbs757EfbScreenModel("HOME", "", Array.Empty<Bbs757EfbItem>(), new[] { door, plain });
+
+        var live = Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()).Data;
+        Assert.Equal(("LEFT FWD: Closed", "btn:|@36,10", "Close all"), (live["items.0.text"], live["items.0.key"], live["items.1.text"]));
+
+        var dimmed = Bbs757EfbElements.Build(model with { Question = new Bbs757EfbQuestion("Sure?", new[] { plain with { Text = "YES", Key = "q:yes" } }) },
+            null, Array.Empty<Bbs757EfbExtraElement>()).Data;
+        Assert.Contains("LEFT FWD: Closed", dimmed.Where(kv => kv.Key.EndsWith(".text", StringComparison.Ordinal)).Select(kv => kv.Value));
+        Assert.Equal("btn:|@36,10", dimmed.Single(kv => kv.Value == "LEFT FWD: Closed").Key.Replace(".text", ".key") is var k ? dimmed[k] : "");
+    }
+
+    [Fact]
     public void A_field_is_built_as_a_value_line_under_every_culture()
     {
         var model = new Bbs757EfbScreenModel("HOME", "", Array.Empty<Bbs757EfbItem>(), new[]
