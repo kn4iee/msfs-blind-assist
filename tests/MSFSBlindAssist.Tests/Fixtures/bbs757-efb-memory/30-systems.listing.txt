@@ -1,8 +1,8 @@
 title: Systems
 heading 2  Electrical
+button  Elec zoom in
 slider 0  Elec zoom
+button  Elec zoom out
+button  Elec zoom reset
 heading 2  Sections
-button  
-button  
-button  
 button  Home

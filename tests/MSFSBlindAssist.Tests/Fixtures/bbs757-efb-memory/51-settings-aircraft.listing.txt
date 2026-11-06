@@ -3,8 +3,7 @@ checkbox not checked  Adaptive handling assist
 combo [Automatic] {Automatic|Manual}  Adaptive cockpit lighting
 checkbox not checked  TOD pause distance (NM)
 combo [Disabled] {Enabled|Disabled}  Automatic step climbs master option: (experimental)
-heading 2  Automatic step climb status:
-text  OFF
+text  Automatic step climb status: OFF
 combo [Rudder] {Realistic|Rudder}  Nosewheel steering
 checkbox not checked  Throttle lockout
 combo [Realistic] {Realistic|Fast}  Displays bootup speed
@@ -14,7 +13,7 @@ combo [Realistic] {Realistic|Easy}  Parking brake mode
 combo [Full (7 min+)] {Instant|1 min|2 min|5 min|Full (7 min+)}  IRS alignment time
 combo [Standard] {Realistic|Standard|Quick|Instant}  Boarding & load rate
 checkbox checked  Automatic boarding
-checkbox checked  Automatic gpu/jetway
+checkbox checked  Automatic GPU/jetway
 checkbox not checked  Hoppie ACARS
 combo [Hoppie] {Hoppie|SayIntentions}  CPDLC network
 checkbox checked  Initial chocks in place

@@ -279,7 +279,15 @@ public static class Bbs757EfbVocabulary
             var w = words[i];
             if (w.Length <= 1 || Acronyms.Contains(w.Trim('(', ')', ':', ',')) || w.Any(char.IsDigit)) continue;
             if (!w.Any(char.IsLetter)) continue;
-            words[i] = (i == 0 ? w.Substring(0, 1) : w.Substring(0, 1).ToLowerInvariant()) + w.Substring(1).ToLowerInvariant();
+            // A word joined by "/" is checked part by part ("GPU/JETWAY" is GPU/jetway); a whole word in the acronyms ("A/C") stays.
+            var parts = w.Split('/');
+            for (int j = 0; j < parts.Length; j++)
+            {
+                var part = parts[j];
+                if (part.Length <= 1 || Acronyms.Contains(part.Trim('(', ')', ':', ',')) || part.Any(char.IsDigit) || !part.Any(char.IsLetter)) continue;
+                parts[j] = (i == 0 && j == 0 ? part.Substring(0, 1) : part.Substring(0, 1).ToLowerInvariant()) + part.Substring(1).ToLowerInvariant();
+            }
+            words[i] = string.Join('/', parts);
         }
         return string.Join(' ', words);
     }

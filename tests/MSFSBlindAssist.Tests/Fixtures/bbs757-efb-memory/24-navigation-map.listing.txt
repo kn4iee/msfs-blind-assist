@@ -1,7 +1,7 @@
 title: Navigation, Map
 button  Day
-button  +
-button  -
+button  Map plus
+button  Map minus
 heading 2  Sections
 button  ACARS dashboard
 button  Operating FP

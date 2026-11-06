@@ -1,6 +1,5 @@
 title: Aircraft, Ground services
-heading 2  GND SRVC Mode:
-button  BBS
+button  GND SRVC Mode: BBS
 button  Remove all
 button  FWD stair off
 button  Jetway removed

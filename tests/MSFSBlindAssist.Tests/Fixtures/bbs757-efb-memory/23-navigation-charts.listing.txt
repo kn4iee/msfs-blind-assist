@@ -10,9 +10,9 @@ button  Taxi
 button  SID
 button  Ref
 button  Day
-button  -
+button  Planning charts zoom out
 slider 0  Planning charts zoom
-button  +
+button  Planning charts zoom in
 button  Pin
 heading 2  Sections
 button  ACARS dashboard

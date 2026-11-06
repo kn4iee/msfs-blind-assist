@@ -134,7 +134,7 @@ public sealed class Bbs757EfbModelReader
         }
 
         // A side-menu entry: a control in the left column (an app's section list, the checklist's sections).
-        if (IsMenu(n) && n.Kind is "button" or "toggle")
+        if (IsMenu(n, content.Class) && n.Kind is "button" or "toggle")
         {
             EmitMenu(n, content.Class, section, menu, items);
             return;
@@ -463,7 +463,10 @@ public sealed class Bbs757EfbModelReader
     /// <summary>Whether a control is part of the page's content area, which starts at x 250 (the settings scrollbox is drawn
     /// at 250, two pixels left of <see cref="MenuRight"/>): the shell's own grids start at 0.</summary>
     private static bool IsContent(Bbs757EfbMemory.Node n) => n.X >= MenuRight - 10;
-    private static bool IsMenu(Bbs757EfbMemory.Node n) => n.X is >= 0 and < MenuRight && n.W <= MenuRight;
+    /// <summary>A side-menu entry: a control in the left column of an app that has a side menu (the apps with sections, and the
+    /// checklist's section list). In any other app (Systems' zoom toolbar at x 16) a control left of the content is content.</summary>
+    private static bool IsMenu(Bbs757EfbMemory.Node n, string app) =>
+        (Bbs757EfbPageRules.HasSections(app) || app == "CHECKLIST") && n.X is >= 0 and < MenuRight && n.W <= MenuRight;
     private static string KeyOf(Bbs757EfbMemory.Node n) => n.Name.Length > 0 ? n.Name : "text|" + n.Text;
     private static Rectangle Box(Bbs757EfbMemory.Node n) => new((int)n.X, (int)n.Y, (int)n.W, (int)n.H);
     private static Point Hit(Bbs757EfbMemory.Node n) => new((int)(n.X + n.W / 2), (int)(n.Y + n.H / 2));
@@ -532,12 +535,13 @@ public sealed class Bbs757EfbModelReader
             var free = labels.Where(l => !_fieldLabels.Contains(l)).ToList();
 
             _needsLabel.AddRange(Reachable(content.Controls).Where(n => n.Kind == "slider"
-                || (n.Kind == "button" && !IsMenu(n) && (FieldButtons.Contains(n) || Bbs757EfbPageRules.IsStateOrAction(n.Text)))));
+                || (n.Kind == "button" && !IsMenu(n, content.Class) && (FieldButtons.Contains(n) || Bbs757EfbPageRules.IsStateOrAction(n.Text)))));
             Rows(all, free);
             Sliders(content.Controls, free);
             Pair(free);
             JoinUnits(labels);
             LabelControls(content.Controls, free);
+            ColonLabels(free, parentOf);
             Inputs(all, free, parentOf);
             Title(content.Controls, titledAbove: false);
             Pictures(all);
@@ -644,7 +648,7 @@ public sealed class Bbs757EfbModelReader
         private void LabelControls(IReadOnlyList<Bbs757EfbMemory.Node> roots, List<Bbs757EfbMemory.Node> free)
         {
             var pool = free.Where(l => !Taken.Contains(l) && !ValueOf.ContainsKey(l) && _info[l].Role != Bbs757EfbPageRules.NameRole.Unit).ToList();
-            foreach (var b in Reachable(roots).Where(n => n.Kind == "button" && !IsMenu(n)))
+            foreach (var b in Reachable(roots).Where(n => n.Kind == "button" && !IsMenu(n, _app)))
             {
                 if (!FieldButtons.Contains(b) && !Bbs757EfbPageRules.IsStateOrAction(b.Text)) continue;
                 if (NamingLabel(b, pool) is not { } label) continue;
@@ -658,12 +662,15 @@ public sealed class Bbs757EfbModelReader
         public Bbs757EfbItem? ButtonItem(Bbs757EfbMemory.Node n)
         {
             _labelOf.TryGetValue(n, out var label);
-            if (n.Text.Length == 0)
+            // A button whose text is only marks ("+", "-") has no words either.
+            bool wordless = !n.Text.Any(char.IsLetterOrDigit);
+            if (wordless)
             {
                 // A background box of the page (chocks_service_box) is no control the pilot presses.
-                if (Bbs757EfbPageRules.NameParts(n.Name).Contains("box")) return null;
+                if (n.Text.Length == 0 && Bbs757EfbPageRules.NameParts(n.Name).Contains("box")) return null;
                 string? name = label ?? Bbs757EfbPageRules.NameFromParts(n.Name);
-                return name is null ? null : Tile(n, null, name);
+                if (name is not null) return Tile(n, null, name);
+                return n.Text.Length == 0 ? null : Tile(n, PictureStateOf(n), label: label ?? "");
             }
             return Tile(n, PictureStateOf(n), label: label ?? "");
         }
@@ -742,6 +749,44 @@ public sealed class Bbs757EfbModelReader
                 _unitOf[partner] = unit.Text;
                 Taken.Add(unit);
             }
+        }
+
+        // ---- a title ending in a colon ----------------------------------------------------
+
+        /// <summary>A title whose text ends in ":" is a label, never a heading: it names the one value or control beside it. Beside
+        /// means a sibling in its parent; when a sibling box (<c>*_box</c>) holds the title, only the siblings inside that box. One
+        /// other readable label there is its value (the pair is a line); one button with words there takes the title as its label.
+        /// With none or several the title stays what it was.</summary>
+        private void ColonLabels(List<Bbs757EfbMemory.Node> free, Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> parentOf)
+        {
+            foreach (var title in free.Where(l => _info[l].IsTitle && l.Text.TrimEnd().EndsWith(':') && !Taken.Contains(l)
+                && !ValueOf.ContainsKey(l) && !RowValues.ContainsKey(l)).ToList())
+            {
+                if (!parentOf.TryGetValue(title, out var parent)) continue;
+                var siblings = parent.Children.Where(s => !ReferenceEquals(s, title)).ToList();
+                var box = siblings.FirstOrDefault(s => s.Text.Length == 0 && s.Children.Count == 0
+                    && Bbs757EfbPageRules.NameParts(s.Name).Contains("box") && Inside(title, s));
+                var beside = box is null ? siblings : siblings.Where(s => !ReferenceEquals(s, box) && Inside(s, box)).ToList();
+                var values = beside.Where(s => IsReadable(s) && !Taken.Contains(s) && !ValueOf.ContainsKey(s)).ToList();
+                var controls = beside.Where(s => s.Kind == "button" && s.Text.Any(char.IsLetterOrDigit)).ToList();
+                if (controls.Count == 1 && values.Count == 0 && !_labelOf.ContainsKey(controls[0]))
+                {
+                    _labelOf[controls[0]] = title.Text;
+                    Taken.Add(title);
+                }
+                else if (values.Count == 1 && controls.Count == 0)
+                {
+                    ValueOf[title] = values[0];
+                    Taken.Add(values[0]);
+                }
+            }
+        }
+
+        /// <summary>Whether the middle of <paramref name="n"/> lies inside <paramref name="box"/>.</summary>
+        private static bool Inside(Bbs757EfbMemory.Node n, Bbs757EfbMemory.Node box)
+        {
+            float cx = n.X + n.W / 2, cy = n.Y + n.H / 2;
+            return cx >= box.X && cx <= box.X + box.W && cy >= box.Y && cy <= box.Y + box.H;
         }
 
         // ---- inputs the reader cannot read ----------------------------------------------
