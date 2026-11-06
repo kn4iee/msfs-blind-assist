@@ -4,10 +4,18 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
 /// Turns the EFB memory walk (<see cref="Bbs757EfbMemory"/>) into the window's model (<see cref="Bbs757EfbScreenModel"/>),
-/// the memory replacement for <see cref="Bbs757EfbScreen"/>'s OCR parse: the front content app's page becomes the
-/// App, its side menu and its items; settings rows (a grid holding a toggle or slider with its label and value) become
-/// one Toggle or Slider item carrying the value the tablet shows. Pure over the walk; tested against a synthetic tree
-/// and live against the running 757.
+/// the memory replacement for <see cref="Bbs757EfbScreen"/>'s OCR parse. The front content app's page becomes the model:
+/// its side menu (<c>GENERAL</c>, <c>FUEL</c>, …) as <see cref="Bbs757EfbKind.Menu"/> entries, the home screen's five app
+/// icons as menu entries that navigate, and the page's own controls as items. The keys it gives match the schemes the
+/// press runner, the elements builder and the settings matcher already speak (<c>app:</c>, <c>menu:</c>,
+/// <c>btn:…|words@x,y</c>), so the memory read drops in where the OCR read was; a control's name in BlueBird's tree is
+/// its stable identity, kept as the key of a settings row so a re-read relocates it exactly.
+///
+/// Settings rows (a grid holding a toggle or slider with its label and value) become one Toggle or Slider item carrying
+/// the value the tablet shows and the switch state its value label gives. The current section comes from the content
+/// scrollbox's name (<c>callouts_scrollbox</c> → CALLOUTS), which is also the selected side-menu entry; whether the page
+/// scrolls comes from the scrollbox holding a taller stackbox. Pure over the walk (<see cref="Read(IReadOnlyList{Bbs757EfbMemory.App})"/>):
+/// tested against synthetic trees and live against the running 757.
 /// </summary>
 public sealed class Bbs757EfbModelReader
 {
@@ -15,7 +23,7 @@ public sealed class Bbs757EfbModelReader
 
     public Bbs757EfbModelReader(Bbs757EfbMemory memory) => _memory = memory;
 
-    private const int MenuRight = 252; // controls left of this are the side menu
+    private const int MenuRight = Bbs757EfbScreen.MenuRight; // controls left of this are the side menu
 
     /// <summary>The App tokens whose app is a content screen (the reader's class comes from the app's vtable, which
     /// the layout maps to these tokens); "HOME" is the home screen, handled apart.</summary>
@@ -23,9 +31,11 @@ public sealed class Bbs757EfbModelReader
         { "AIRCRAFT", "NAVIGATION", "SYSTEMS", "CHECKLIST", "SETTINGS", "SIGN IN" };
 
     /// <summary>The current page as the window's model; null when the EFB is not reachable (not located yet).</summary>
-    public Bbs757EfbScreenModel? Read()
+    public Bbs757EfbScreenModel? Read() => Read(_memory.ReadFrontApps());
+
+    /// <summary>The page the front apps show, as the window's model; null when none is drawn. Pure, for the tests.</summary>
+    public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps)
     {
-        var apps = _memory.ReadFrontApps();
         if (apps.Count == 0) return null;
 
         // The content app: the front content app with the most visible controls (the one drawn on top).
@@ -35,53 +45,129 @@ public sealed class Bbs757EfbModelReader
             .FirstOrDefault();
 
         if (content is null)
-            return new Bbs757EfbScreenModel("HOME", "", Array.Empty<Bbs757EfbItem>(), HomeTiles(apps));
+        {
+            var home = apps.FirstOrDefault(a => a.Class == "HOME" && Count(a.Controls) > 0);
+            return home is null ? null : HomeModel(home);
+        }
 
+        string section = SectionOf(content, content.Class);
         var menu = new List<Bbs757EfbItem>();
         var items = new List<Bbs757EfbItem>();
-        foreach (var root in content.Controls) Emit(root, menu, items);
-        return new Bbs757EfbScreenModel(content.Class, "", menu, items);
+        foreach (var root in content.Controls) Emit(root, content.Class, section, menu, items);
+        return new Bbs757EfbScreenModel(content.Class, section, menu, items) { Scrollable = IsScrollable(content) };
     }
 
-    // ---- flattening ----------------------------------------------------------
+    // ---- the home screen -----------------------------------------------------
 
-    private void Emit(Bbs757EfbMemory.Node n, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+    /// <summary>The home screen: the five app icons as menu entries that navigate (<c>app:AIRCRAFT</c>), so a press
+    /// takes the tablet into that app.</summary>
+    private static Bbs757EfbScreenModel HomeModel(Bbs757EfbMemory.App home)
     {
+        var tiles = new List<Bbs757EfbItem>();
+        foreach (var n in Flatten(home.Controls))
+        {
+            if (n.Kind != "button" || IsChrome(n)) continue;
+            string app = AppToken(n);
+            if (app.Length == 0) continue;
+            tiles.Add(new Bbs757EfbItem(Bbs757EfbKind.Menu, Bbs757EfbVocabulary.Pretty(app), Box(n), Hit(n), true, "app:" + app));
+        }
+        return new Bbs757EfbScreenModel("HOME", "", Array.Empty<Bbs757EfbItem>(), tiles);
+    }
+
+    /// <summary>The app a home icon opens, from its control name (<c>aircraft_btn</c> → AIRCRAFT) or its words; "" when
+    /// it names none of the apps.</summary>
+    private static string AppToken(Bbs757EfbMemory.Node n)
+    {
+        string fromName = n.Name.EndsWith("_btn", StringComparison.Ordinal)
+            ? n.Name[..^4].Replace("_", " ").ToUpperInvariant() : "";
+        foreach (var a in Bbs757EfbVocabulary.Apps)
+            if (string.Equals(a, fromName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(a, n.Text, StringComparison.OrdinalIgnoreCase)) return a;
+        return "";
+    }
+
+    // ---- flattening a content page -------------------------------------------
+
+    private static void Emit(Bbs757EfbMemory.Node n, string app, string section, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+    {
+        if (IsChrome(n)) return; // the home button and the page title: the window adds its own Home and shows the page name
+
         // A settings row: a grid that directly holds a toggle or slider, with its label and value beside it.
         if (n.Kind == "grid" && n.Children.FirstOrDefault(c => c.Kind is "toggle" or "slider") is { } control)
         {
             items.Add(Row(n, control));
             return;
         }
+
+        // A side-menu entry: a control in the left column (an app's section list, the checklist's sections).
+        if (IsMenu(n) && n.Kind is "button" or "toggle")
+        {
+            EmitMenu(n, app, section, menu, items);
+            return;
+        }
+
         switch (n.Kind)
         {
             case "button":
-                if (n.Name == "home_btn") return; // the window adds its own Home
-                var item = new Bbs757EfbItem(IsMenu(n) ? Bbs757EfbKind.Menu : Bbs757EfbKind.Button,
-                    n.Text, Box(n), Hit(n), true, n.Name);
-                (IsMenu(n) ? menu : items).Add(item);
+                if (n.Text.Length == 0) return; // an icon-only button the reader cannot name
+                items.Add(Tile(n));
                 return;
             case "toggle":
-                items.Add(new Bbs757EfbItem(Bbs757EfbKind.Toggle, n.Text, Box(n), Hit(n), true, n.Name));
+                items.Add(new Bbs757EfbItem(Bbs757EfbKind.Toggle, n.Text, Box(n), Hit(n), true, n.Name, On: StateOf(n.Text), Value: n.Text));
                 return;
             case "slider":
-                items.Add(new Bbs757EfbItem(Bbs757EfbKind.Slider, n.Text, Box(n), Hit(n), true, n.Name));
+                items.Add(new Bbs757EfbItem(Bbs757EfbKind.Slider, n.Text, Box(n), Hit(n), true, n.Name, Value: n.Text));
                 return;
             case "label":
             case "other":
                 if (n.Text.Length > 0 && n.Children.Count == 0 && !IsNoise(n))
                     items.Add(new Bbs757EfbItem(IsHeading(n) ? Bbs757EfbKind.Heading : Bbs757EfbKind.Text,
                         n.Text, Box(n), Hit(n), false, KeyOf(n)));
-                foreach (var c in n.Children) Emit(c, menu, items);
+                foreach (var c in n.Children) Emit(c, app, section, menu, items);
                 return;
             default: // grid, colorbox, canvas, gradientbox, stack, image, pan_indicator, scrollbox: containers
-                foreach (var c in n.Children) Emit(c, menu, items);
+                foreach (var c in n.Children) Emit(c, app, section, menu, items);
                 return;
         }
     }
 
+    /// <summary>A left-column control: a side-menu entry (<c>menu:GENERAL</c>, selected when it is the section the page
+    /// shows), or the checklist's own RESET ALL button and INTERACTIVE switch, which sit in that column but are not
+    /// sections.</summary>
+    private static void EmitMenu(Bbs757EfbMemory.Node n, string app, string section, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+    {
+        if (n.Kind == "toggle")
+        {
+            // The checklist's INTERACTIVE switch has no value label; its state is not read from the tree here.
+            items.Add(new Bbs757EfbItem(Bbs757EfbKind.Toggle, Bbs757EfbVocabulary.Pretty(Clean(n.Text)), Box(n), Hit(n), true,
+                "tgl:" + Clean(n.Text)));
+            return;
+        }
+        string word = MenuWord(app, n.Text);
+        if (word == "RESET ALL") // the checklist's RESET ALL is a button, not a section
+        {
+            items.Add(new Bbs757EfbItem(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(word), Box(n), Hit(n), true, "btn:RESET ALL"));
+            return;
+        }
+        bool selected = word.Length > 0 && Fold(word) == Fold(section);
+        menu.Add(new Bbs757EfbItem(Bbs757EfbKind.Menu, Bbs757EfbVocabulary.Pretty(word), Box(n), Hit(n), true, "menu:" + word, Selected: selected));
+    }
+
+    /// <summary>A page button or tile: keyed <c>btn:|words@x,y</c> as the OCR reader keyed it, so the press runner reads
+    /// its words (<see cref="Bbs757EfbScreen.KeyWords"/>) and a ground-service tile is found (<see cref="Bbs757GroundServices.ForTile"/>).
+    /// The words are the control's text without its trailing state word ("GPU REMOVED" → GPU), the same the OCR reader
+    /// stripped.</summary>
+    private static Bbs757EfbItem Tile(Bbs757EfbMemory.Node n)
+    {
+        var hit = Hit(n);
+        string key = "btn:|" + StripState(n.Text) + "@" + (hit.X / 20).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + "," + (hit.Y / 20).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return new Bbs757EfbItem(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(n.Text), Box(n), hit, true, key);
+    }
+
     /// <summary>A settings row as one item: the control's kind and tap point, the label's words, and the value the
-    /// row's value label shows (the toggle/slider has no text of its own).</summary>
+    /// row's value label shows (the toggle/slider has no text of its own). The row's control name is its key, stable
+    /// across reads, so a re-read relocates it exactly.</summary>
     private static Bbs757EfbItem Row(Bbs757EfbMemory.Node grid, Bbs757EfbMemory.Node control)
     {
         // The descriptive label and the value label are not always direct children of the row grid (they sit
@@ -93,9 +179,87 @@ public sealed class Bbs757EfbModelReader
             .OrderBy(c => c.X).ThenBy(c => c.Y).FirstOrDefault()?.Text ?? grid.Name;
         string value = leaves.FirstOrDefault(IsValue)?.Text ?? "";
         var kind = control.Kind == "toggle" ? Bbs757EfbKind.Toggle : Bbs757EfbKind.Slider;
-        bool? on = value.Equals("ON", StringComparison.OrdinalIgnoreCase) ? true
-            : value.Equals("OFF", StringComparison.OrdinalIgnoreCase) ? false : null;
-        return new Bbs757EfbItem(kind, label, Box(control), Hit(control), true, control.Name, On: on, Value: value);
+        return new Bbs757EfbItem(kind, label, Box(control), Hit(control), true, control.Name, On: StateOf(value), Value: value);
+    }
+
+    /// <summary>A switch state from the word a value label shows: on for ON, off for OFF, unknown for a word of two
+    /// choices (AUTO, a cycle time) that the window reads as the value instead.</summary>
+    private static bool? StateOf(string value) =>
+        value.Equals("ON", StringComparison.OrdinalIgnoreCase) ? true
+        : value.Equals("OFF", StringComparison.OrdinalIgnoreCase) ? false : null;
+
+    // ---- the section and whether the page scrolls ----------------------------
+
+    /// <summary>
+    /// The section the page shows, as a side-menu word (CALLOUTS, LIVERY OPTIONS): from the content scrollbox's name
+    /// (<c>callouts_scrollbox</c> → the app's menu word whose folded form the prefix matches, equal or by start). "" when
+    /// there is no scrollbox or its prefix names no menu word (the home-less apps, the checklist).
+    /// </summary>
+    private static string SectionOf(Bbs757EfbMemory.App content, string app)
+    {
+        var scroll = Flatten(content.Controls).FirstOrDefault(n => n.Name.EndsWith("_scrollbox", StringComparison.Ordinal));
+        if (scroll is null || !Bbs757EfbVocabulary.Menus.TryGetValue(app, out var words)) return "";
+        string prefix = Fold(scroll.Name[..^"_scrollbox".Length]);
+        if (prefix.Length == 0) return "";
+        foreach (var w in words)
+        {
+            string fw = Fold(w);
+            if (fw == prefix || fw.StartsWith(prefix, StringComparison.Ordinal)) return w;
+        }
+        return "";
+    }
+
+    /// <summary>Whether the content scrolls: a <c>*_scrollbox</c> wrapping a taller <c>*_stackbox</c> (its content does
+    /// not fit the viewport).</summary>
+    private static bool IsScrollable(Bbs757EfbMemory.App content)
+    {
+        var all = Flatten(content.Controls).ToList();
+        var scroll = all.FirstOrDefault(n => n.Name.EndsWith("_scrollbox", StringComparison.Ordinal));
+        if (scroll is null) return false;
+        var stack = all.FirstOrDefault(n => n.Name.EndsWith("_stackbox", StringComparison.Ordinal));
+        return stack is not null && stack.H > scroll.H + 4;
+    }
+
+    // ---- helpers -------------------------------------------------------------
+
+    /// <summary>The page chrome the model never lists: the home button (the window adds its own) and the page title
+    /// (the window shows the page name).</summary>
+    private static bool IsChrome(Bbs757EfbMemory.Node n) =>
+        n.Name.EndsWith("home_btn", StringComparison.Ordinal) || n.Name.EndsWith("title_label", StringComparison.Ordinal);
+
+    /// <summary>The app's menu word a side button names: its text cleaned of a status glyph ("__   BEFORE START" →
+    /// BEFORE START) and snapped to the menu word whose folded form it matches; the cleaned text when it matches none.</summary>
+    private static string MenuWord(string app, string text)
+    {
+        string clean = Clean(text);
+        if (!Bbs757EfbVocabulary.Menus.TryGetValue(app, out var words)) return clean;
+        string folded = Fold(clean);
+        foreach (var w in words) if (Fold(w) == folded) return w;
+        return clean;
+    }
+
+    /// <summary>Text without a leading glyph run (the checklist's "__" completion mark) and with runs of spaces as one.</summary>
+    private static string Clean(string text)
+    {
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(p => p.Any(char.IsLetterOrDigit));
+        return string.Join(' ', parts);
+    }
+
+    /// <summary>A value's letters and digits, upper-cased invariantly: how a section name and a menu word are compared.</summary>
+    private static string Fold(string text) =>
+        string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
+
+    /// <summary>A control's text without its trailing state word ("FUEL TRUCK OFF" → FUEL TRUCK), as the OCR reader's
+    /// key stripped it, so <see cref="Bbs757EfbScreen.KeyWords"/> gives the same words.</summary>
+    private static string StripState(string text)
+    {
+        foreach (var w in Bbs757EfbScreen.StateWords)
+        {
+            if (string.Equals(text, w, StringComparison.Ordinal)) return "";
+            if (text.EndsWith(" " + w, StringComparison.Ordinal)) return text[..(text.Length - w.Length - 1)];
+        }
+        return text;
     }
 
     private static bool IsValue(Bbs757EfbMemory.Node n) =>
@@ -103,11 +267,10 @@ public sealed class Bbs757EfbModelReader
             || n.Name.EndsWith("_value_label", StringComparison.Ordinal) || n.X >= 1180);
 
     /// <summary>Text that is not part of the page's reading: an image or asset path the tablet keeps in a label
-    /// field, or the app's own page-title label (the window shows that as the page name, not an item). A real
-    /// label may hold a slash ("AUTOMATIC GPU/JETWAY", "B/CRS"), so only a leading path marker or an image file
-    /// extension counts as a path, never a bare slash.</summary>
+    /// field, or the app's own page-title label. A real label may hold a slash ("AUTOMATIC GPU/JETWAY", "B/CRS"), so
+    /// only a leading path marker or an image file extension counts as a path, never a bare slash.</summary>
     private static bool IsNoise(Bbs757EfbMemory.Node n) =>
-        n.Name == "page_title_label"
+        n.Name.EndsWith("title_label", StringComparison.Ordinal)
         || n.Text.StartsWith("./", StringComparison.Ordinal)
         || n.Text.StartsWith("../", StringComparison.Ordinal)
         || n.Text.StartsWith("/", StringComparison.Ordinal)
@@ -117,6 +280,16 @@ public sealed class Bbs757EfbModelReader
         || n.Text.EndsWith(".svg", StringComparison.OrdinalIgnoreCase)
         || n.Text.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
         || n.Text.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Every node under the roots, depth first, each root included.</summary>
+    private static IEnumerable<Bbs757EfbMemory.Node> Flatten(IReadOnlyList<Bbs757EfbMemory.Node> roots)
+    {
+        foreach (var r in roots)
+        {
+            yield return r;
+            foreach (var d in Descendants(r)) yield return d;
+        }
+    }
 
     /// <summary>Every node under <paramref name="n"/>, depth first; the node itself is not included.</summary>
     private static IEnumerable<Bbs757EfbMemory.Node> Descendants(Bbs757EfbMemory.Node n)
@@ -129,15 +302,6 @@ public sealed class Bbs757EfbModelReader
     }
 
     private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));
-
-    private IReadOnlyList<Bbs757EfbItem> HomeTiles(IReadOnlyList<Bbs757EfbMemory.App> apps)
-    {
-        var tiles = new List<Bbs757EfbItem>();
-        var main = apps.FirstOrDefault(a => a.Class == "HOME");
-        if (main != null)
-            foreach (var root in main.Controls) Emit(root, new List<Bbs757EfbItem>(), tiles);
-        return tiles;
-    }
 
     private static bool IsMenu(Bbs757EfbMemory.Node n) => n.X is >= 0 and < MenuRight && n.W <= MenuRight;
     private static bool IsHeading(Bbs757EfbMemory.Node n) => n.Text == n.Text.ToUpperInvariant() && n.W > 300;
