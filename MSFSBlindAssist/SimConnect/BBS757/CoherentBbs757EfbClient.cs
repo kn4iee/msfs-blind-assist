@@ -59,7 +59,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     /// click near the AIRAC page's UPDATE spot and the run guards it needed. An older agent on the
     /// page answers "no agent" to a run and is replaced by the install.
     /// </summary>
-    internal const int AgentVersion = 7;   // 4: mirror(on), 5: wheel(x, y, deltaY), 6: readVars(names), 7: no UPDATE-spot refusal or run guards
+    internal const int AgentVersion = 8;   // 4: mirror(on), 5: wheel (gone), 6: readVars(names), 7: no UPDATE-spot refusal or run guards, 8: drag(x, y0, y1) replaces wheel
 
     // How long Dispose waits for its best-effort cancel of a run still going in the page: short,
     // since it runs on the UI thread during a profile switch or app exit.
@@ -328,17 +328,22 @@ public sealed class CoherentBbs757EfbClient : IDisposable
         return o;
     }
 
-    /// <summary>One mouse-wheel step at a tablet-local point (positive deltaY scrolls down): true when
-    /// the agent delivered it, false when it refused, null when it could not be reached.</summary>
-    public async Task<bool?> WheelAsync(int x, int y, int deltaY, CancellationToken ct)
+    /// <summary>A drag at a tablet-local x from y0 to y1 (this build scrolls on a drag): starts it in the page, then waits
+    /// <see cref="DragWaitMs"/> for it to finish. True when the agent started it, false when it refused or could not be
+    /// reached.</summary>
+    public async Task<bool> DragAsync(int x, int y0, int y1, CancellationToken ct)
     {
-        using var doc = await CallAgentAsync("wheel",
-            string.Join(",", x.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                y.ToString(System.Globalization.CultureInfo.InvariantCulture), deltaY.ToString(System.Globalization.CultureInfo.InvariantCulture)), ct,
-            stringResult: true);
-        if (doc == null) return null;
-        return doc.RootElement.ValueKind == JsonValueKind.String && doc.RootElement.GetString() == "ok";
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        using var doc = await CallAgentAsync("drag",
+            string.Join(",", x.ToString(inv), y0.ToString(inv), y1.ToString(inv)), ct, stringResult: true);
+        if (doc == null || doc.RootElement.ValueKind != JsonValueKind.String || doc.RootElement.GetString() != "started")
+            return false;
+        await Task.Delay(DragWaitMs, ct);
+        return true;
     }
+
+    /// <summary>The agent's drag takes about 1,400 ms; this is how long <see cref="DragAsync"/> waits before it returns.</summary>
+    internal const int DragWaitMs = 1500;
 
     /// <summary>
     /// Calls one of the agent's functions with literal JS arguments and parses its JSON answer. Null

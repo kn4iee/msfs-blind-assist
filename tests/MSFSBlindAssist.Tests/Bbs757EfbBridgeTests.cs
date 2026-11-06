@@ -104,7 +104,6 @@ public class Bbs757EfbBridgeTests
                 OnTap?.Invoke(p);
                 return Task.FromResult(true);
             },
-            Wheel = (delta, _) => { Events.Add("wheel " + delta.ToString(CultureInfo.InvariantCulture)); return Task.CompletedTask; },
             ReadVar = (name, _) => Task.FromResult<double?>(Vars.TryGetValue(name, out var v) ? v : null),
             ReadRegistered = (key, _) => Task.FromResult<double?>(Vars.TryGetValue(key, out var v) ? v : null),
             ReadSetting = (s, _) => { SettingsRead.Add(s.Path); return Task.FromResult<Bbs757Value?>(File.TryGetValue(s.Path, out var v) ? v : null); },
@@ -480,17 +479,6 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { tab.Hit }, tablet.Taps);
         // No "did not show" navigation message: a tab is not a navigation.
         Assert.DoesNotContain(tablet.Alerts, a => a.Contains("did not show", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task A_scroll_wheels_the_page_and_reads_it()
-    {
-        var tablet = new FakeTablet(PageOf("SETTINGS", "CALLOUTS", Switch("80 KTS", "tgl:80 KTS", on: true)) with { Scrollable = true });
-
-        await tablet.Runner().ScrollAsync(down: true, CancellationToken.None);
-        await tablet.Runner().ScrollAsync(down: false, CancellationToken.None);
-
-        Assert.Equal(new[] { "wheel 300", "read", "wheel -300", "read" }, tablet.Events);
     }
 
     // ---- echoes and hooks ---------------------------------------------------------------------------------------------

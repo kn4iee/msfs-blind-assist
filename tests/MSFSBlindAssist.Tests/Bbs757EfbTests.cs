@@ -362,8 +362,21 @@ public class Bbs757EfbTests
             .Select(m => m.Groups[1].Value).Distinct().OrderBy(r => r, StringComparer.Ordinal).ToList();
         Assert.Equal(new[] { "bad-seq", "busy", "no-canvas: ", "unknown-run" }, refusals);
 
-        Assert.Equal(7, CoherentBbs757EfbClient.AgentVersion);
+        Assert.Equal(8, CoherentBbs757EfbClient.AgentVersion);
         Assert.Contains("var VERSION = " + CoherentBbs757EfbClient.AgentVersion.ToString(CultureInfo.InvariantCulture) + ";", code);
+    }
+
+    [Fact]
+    public void The_efb_agent_scrolls_by_dragging_not_by_the_wheel()
+    {
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
+        string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
+        Assert.Contains("A.drag = function (x, y0, y1)", code);
+        Assert.Contains("return 'busy'", code);
+        Assert.Contains("return 'started'", code);
+        Assert.DoesNotContain("A.wheel", code);
+        Assert.DoesNotContain("onMouseWheel", code);
+        Assert.Contains("8: drag(x, y0, y1) replaces wheel", agent);
     }
 
     // ---- weight units -------------------------------------------------------

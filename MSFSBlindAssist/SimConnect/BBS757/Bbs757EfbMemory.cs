@@ -23,8 +23,10 @@ public sealed class Bbs757EfbMemory
         _l = layout;
     }
 
-    /// <summary>One control read from memory: its class kind, name, text, rectangle, and child controls.</summary>
-    public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children);
+    /// <summary>One control read from memory: its class kind, name, text, rectangle, and child controls. <c>Y</c> is
+    /// where the control is DRAWN (its rectangle less its scrollbox ancestors' offsets); <c>Scroll</c> is a
+    /// scrollbox's own offset, 0 for any other control.</summary>
+    public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children, float Scroll = 0f);
 
     /// <summary>One EFB app that is currently drawn (its front flag set), with the controls of its roots and its
     /// current page.</summary>
@@ -63,17 +65,33 @@ public sealed class Bbs757EfbMemory
 
     // ---- the control tree ----------------------------------------------------
 
-    private void AddVisible(uint ctrl, List<Node> into)
+    /// <summary>The largest scroll offset believed: a torn or foreign float cannot move a page by more.</summary>
+    private const float MaxScroll = 100_000f;
+
+    /// <param name="ancestorScroll">The sum of the offsets of the scrollboxes above this control; its rectangle
+    /// never moves, but it is drawn that much higher.</param>
+    private void AddVisible(uint ctrl, List<Node> into, float ancestorScroll = 0f)
     {
         if (ctrl == 0 || !_m.TryReadByte(ctrl + (uint)_l.CtrlVisible, out byte vis) || (vis & 1) == 0) return;
+        string kind = KindOf(ctrl);
+        float scroll = kind == "scrollbox" ? ReadScroll(ctrl) : 0f;
         var children = new List<Node>();
-        foreach (uint ch in Vector(ctrl + (uint)_l.CtrlChildren)) AddVisible(ch, children);
-        into.Add(ReadNode(ctrl, children));
+        foreach (uint ch in Vector(ctrl + (uint)_l.CtrlChildren)) AddVisible(ch, children, ancestorScroll + scroll);
+        into.Add(ReadNode(ctrl, kind, children, ancestorScroll, scroll));
     }
 
-    private Node ReadNode(uint ctrl, IReadOnlyList<Node> children)
+    private string KindOf(uint ctrl) =>
+        (_m.TryReadPtr(ctrl, out uint vptr) ? _l.KindFor(vptr) : null) ?? "other";
+
+    /// <summary>A scrollbox's offset: 0 when unreadable or not finite, clamped to 0..<see cref="MaxScroll"/>.</summary>
+    private float ReadScroll(uint ctrl)
     {
-        string kind = (_m.TryReadPtr(ctrl, out uint vptr) ? _l.KindFor(vptr) : null) ?? "other";
+        float v = _m.ReadFloat(ctrl + (uint)_l.ScrollboxOffset);
+        return float.IsFinite(v) ? Math.Clamp(v, 0f, MaxScroll) : 0f;
+    }
+
+    private Node ReadNode(uint ctrl, string kind, IReadOnlyList<Node> children, float ancestorScroll, float scroll)
+    {
         string name = _m.ReadStdString(ctrl + (uint)_l.CtrlName) ?? "";
         // A button keeps its text at CtrlButtonText, a label at CtrlLabelText; the other field is an empty string
         // (not null), so take the first non-empty of the two.
@@ -81,7 +99,7 @@ public sealed class Bbs757EfbMemory
             ?? NonEmpty(_m.ReadStdString(ctrl + (uint)_l.CtrlLabelText)) ?? "";
         float X = _m.ReadFloat(ctrl + (uint)_l.CtrlRect), Y = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 4);
         float W = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 8), H = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 12);
-        return new Node(kind, name, text, X, Y, W, H, ctrl, children);
+        return new Node(kind, name, text, X, Y - ancestorScroll, W, H, ctrl, children, scroll);
     }
 
     private static string? NonEmpty(string? s) => string.IsNullOrEmpty(s) ? null : s;

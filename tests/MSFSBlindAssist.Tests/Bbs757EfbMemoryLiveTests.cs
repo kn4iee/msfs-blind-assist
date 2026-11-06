@@ -26,9 +26,10 @@ public class Bbs757EfbMemoryLiveTests
         ManagerBase: 0xf1334, ManagerSpan: 0x100, EfbVptr: 0x13128, EfbToBbos: 132, BbosToAppMap: 0x238,
         AppFront: 0x140, AppPage: 0x144, AppRoots: 0x17c, PageChildren: 0x4c,
         CtrlName: 0x1c, CtrlRect: 0x38, CtrlVisible: 0x8c, CtrlChildren: 0xf4, CtrlParent: 0xe8,
-        CtrlLabelText: 0x128, CtrlButtonText: 0x144,
+        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x158,
         ClassVptrs: new[]
         {
+            new Bbs757EfbClassVptr("scrollbox", 0x30c38),
             new Bbs757EfbClassVptr("button", 0x30164), new Bbs757EfbClassVptr("label", 0x30cd4),
             new Bbs757EfbClassVptr("toggle", 0x30e7c), new Bbs757EfbClassVptr("slider", 0x30c48),
             new Bbs757EfbClassVptr("grid", 0x30320),

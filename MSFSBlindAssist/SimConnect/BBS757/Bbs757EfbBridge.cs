@@ -321,13 +321,12 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         Push();
     }
 
-    /// <summary>The press runner's seams: this bridge's memory read, the agent's taps, wheel and variable reads, BlueBird's file
+    /// <summary>The press runner's seams: this bridge's memory read, the agent's taps and variable reads, BlueBird's file
     /// through the app, the window's alert, and the app's echoes and hooks marshaled to the UI thread.</summary>
     private Bbs757EfbPressIo PressIo() => new()
     {
         Read = ct => ReadNowAsync(ct, asked: true),
         Tap = TapAsync,
-        Wheel = async (delta, ct) => await _client.WheelAsync(Bbs757EfbScreen.WheelPoint.X, Bbs757EfbScreen.WheelPoint.Y, delta, ct),
         ReadInstalledCycle = () => Bbs757WorkFolder.Find() is { } folder ? Bbs757WorkFolder.ReadInstalledCycle(folder) : null,
         ReadVar = ReadVarAsync,
         ReadRegistered = (key, ct) => _io.ReadRegistered(key, ct),

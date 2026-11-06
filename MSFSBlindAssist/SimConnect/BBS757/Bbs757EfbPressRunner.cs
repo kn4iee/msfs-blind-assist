@@ -7,7 +7,7 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// What a press on the tablet window needs, as delegates: the bridge builds it over the EFB agent (the tap and the wheel), its own
+/// What a press on the tablet window needs, as delegates: the bridge builds it over the EFB agent (the tap), its own
 /// memory re-read of the tablet, and the app's seams; the tests stand a fake tablet, file and clock behind it. Every member is
 /// called on the bridge's loop, one press at a time; the bridge marshals to the UI thread the ones that need it (the echoes, the
 /// hook). The reader reads the tablet from the module's memory, so a press asks "where is the control now?" and "did the page
@@ -21,9 +21,6 @@ public sealed class Bbs757EfbPressIo
 
     /// <summary>One tap at a tablet point: true when it went out (it may have landed), false when nothing was tapped.</summary>
     public required Func<Point, CancellationToken, Task<bool>> Tap { get; init; }
-
-    /// <summary>One mouse-wheel step on the page (positive scrolls down).</summary>
-    public required Func<int, CancellationToken, Task> Wheel { get; init; }
 
     /// <summary>The nav data cycle BlueBird has installed now (<c>NavigationData\cycle.json</c>), read before a nav data press's tap;
     /// null when none is installed or it cannot be read.</summary>
@@ -443,19 +440,6 @@ public sealed class Bbs757EfbPressRunner
 
     private static double KnobPercent(Bbs757EfbSlider s) =>
         s.TrackRight > s.TrackLeft ? 100.0 * (s.KnobX - s.TrackLeft) / (s.TrackRight - s.TrackLeft) : 0;
-
-    // ------------------------------------------------------------------ scrolling
-
-    /// <summary>
-    /// One wheel step on the page, then a read. Memory reads the whole page, on-screen and off, so scrolling does not change what
-    /// the window lists; it moves the content under the viewport so an off-screen control's tap point (its rectangle in the fresh
-    /// read) comes into reach, which the read after the wheel picks up.
-    /// </summary>
-    public async Task ScrollAsync(bool down, CancellationToken ct)
-    {
-        await _io.Wheel(down ? Bbs757EfbScreen.WheelStep : -Bbs757EfbScreen.WheelStep, ct);
-        await _io.Read(ct);
-    }
 
     // ------------------------------------------------------------------ where, and the tap
 

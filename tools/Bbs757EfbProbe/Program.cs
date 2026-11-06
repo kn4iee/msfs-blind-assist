@@ -2,12 +2,12 @@
 // the module's WASM memory, not OCR, so this keeps only the commands that drive BlueBird's EFB through its agent:
 //
 //   Bbs757EfbProbe tap x,y [x,y ...]     tap the points (tablet pixels, 1.2 s apart)
-//   Bbs757EfbProbe wheel <x> <y> <deltaY>
+//   Bbs757EfbProbe drag <x> <y0> <y1>    drag the page from y0 to y1 at x (this build scrolls on a drag)
 //   Bbs757EfbProbe vars NAME [NAME ...]  BlueBird L:vars read in the tablet's page
 //   Bbs757EfbProbe mirror on|off         mirror the tablet onto the ND pop-out (diagnostic only)
 //
 // Everything is the app's own agent (coherent-bbs757-efb-agent.js), evaluated over the debugger. Read-only but for the
-// taps/wheel the pilot could make themselves.
+// taps/drags the pilot could make themselves.
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -18,7 +18,7 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            Console.WriteLine("commands: tap x,y [x,y ...] | wheel x y deltaY | vars NAME [NAME ...] | mirror on|off");
+            Console.WriteLine("commands: tap x,y [x,y ...] | drag x y0 y1 | vars NAME [NAME ...] | mirror on|off");
             return 1;
         }
         switch (args[0])
@@ -26,8 +26,8 @@ internal static class Program
             case "mirror":
                 Console.WriteLine(await Agent($"JSON.stringify(__MSFSBA_BBS757EFB.mirror({(args[1] == "on" ? "true" : "false")}))"));
                 return 0;
-            case "wheel":   // wheel <x> <y> <deltaY>
-                Console.WriteLine(await Agent($"JSON.stringify(__MSFSBA_BBS757EFB.wheel({args[1]},{args[2]},{args[3]}))"));
+            case "drag":    // drag <x> <y0> <y1>   (the agent's drag takes about 1.4 s)
+                Console.WriteLine(await Agent($"JSON.stringify(__MSFSBA_BBS757EFB.drag({int.Parse(args[1])},{int.Parse(args[2])},{int.Parse(args[3])}))"));
                 return 0;
             case "vars":    // vars NAME [NAME ...]
                 Console.WriteLine(await Agent("JSON.stringify(__MSFSBA_BBS757EFB.readVars(" + JsonSerializer.Serialize(args.Skip(1).ToArray()) + "))"));

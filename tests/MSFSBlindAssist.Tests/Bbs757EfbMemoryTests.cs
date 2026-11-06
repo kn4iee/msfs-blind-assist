@@ -15,18 +15,19 @@ public class Bbs757EfbMemoryTests
     private const uint Manager = 0x1000, Efb = 0x2000, Bbos = 0x3000, MapNode = 0x3400, AppVec = 0x3480,
         App = 0x4000, RootsVec = 0x4400, Page = 0x5000, PageVec = 0x5400,
         Grid = 0x6000, GridChildrenVec = 0x6400, Button = 0x7000, ValueLabel = 0x8000, HiddenBtn = 0x9000;
-    private const uint EfbVptr = 0x13128, ButtonVptr = 0x30164, LabelVptr = 0x30cd4, GridVptr = 0x30320;
+    private const uint EfbVptr = 0x13128, ButtonVptr = 0x30164, LabelVptr = 0x30cd4, GridVptr = 0x30320, ScrollboxVptr = 0x30400;
+    private const uint Outside = 0xA000, InnerVec = 0xA200, Inner = 0xA300;
 
     private static readonly Bbs757EfbMemLayout Layout = new(
         SourceFile: "", AnchorAddress: 0x400, Anchor: new byte[] { 1 },
         ManagerBase: Manager, ManagerSpan: 0x100, EfbVptr: EfbVptr, EfbToBbos: 132, BbosToAppMap: 0x238,
         AppFront: 0x140, AppPage: 0x144, AppRoots: 0x17c, PageChildren: 0x4c,
         CtrlName: 0x1c, CtrlRect: 0x38, CtrlVisible: 0x8c, CtrlChildren: 0xf4, CtrlParent: 0xe8,
-        CtrlLabelText: 0x128, CtrlButtonText: 0x144,
+        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x158,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),
-            new Bbs757EfbClassVptr("grid", GridVptr),
+            new Bbs757EfbClassVptr("grid", GridVptr), new Bbs757EfbClassVptr("scrollbox", ScrollboxVptr),
         });
 
     private readonly byte[] _b = new byte[0x10000];
@@ -36,7 +37,7 @@ public class Bbs757EfbMemoryTests
     private void Rect(uint ctrl, float x, float y, float w, float h) { F32(ctrl + 0x38, x); F32(ctrl + 0x3c, y); F32(ctrl + 0x40, w); F32(ctrl + 0x44, h); }
     private void Control(uint ctrl, uint vptr, string name, bool visible) { Ptr(ctrl, vptr); ShortStr(ctrl + 0x1c, name); _b[ctrl + 0x8c] = (byte)(visible ? 1 : 0); }
 
-    private Bbs757EfbMemory Build()
+    private Bbs757EfbMemory Build(Action? mutate = null)
     {
         Ptr(Manager + 0x70, Efb);           // efb in the manager
         Ptr(Efb, EfbVptr);
@@ -59,6 +60,7 @@ public class Bbs757EfbMemoryTests
         Control(Button, ButtonVptr, "btn_fuel", true); Rect(Button, 0, 202, 250, 60); ShortStr(Button + 0x144, "FUEL");
         Control(ValueLabel, LabelVptr, "tiller_value", true); Rect(ValueLabel, 1197, 422, 200, 60); ShortStr(ValueLabel + 0x128, "RUDDER");
         Control(HiddenBtn, ButtonVptr, "btn_hidden", false); Rect(HiddenBtn, 0, 300, 250, 60); ShortStr(HiddenBtn + 0x144, "HIDDEN");
+        mutate?.Invoke();
 
         var src = new FakeProcessMemory().Add(new MemoryRegion(B, B, (ulong)_b.Length, true, true, true), _b);
         return new Bbs757EfbMemory(new ModuleEfbMemory(new ModuleMemory(src, B)), Layout);
@@ -81,6 +83,59 @@ public class Bbs757EfbMemoryTests
         var value = grid.Children[1];
         Assert.Equal("label", value.Kind);
         Assert.Equal("RUDDER", value.Text);
+    }
+
+    private void ScrolledGrid(float offset)
+    {
+        Ptr(Grid, ScrollboxVptr); F32(Grid + 0x158, offset);
+        Rect(Button, 0, 1202, 250, 60);
+    }
+
+    [Fact]
+    public void A_scrolled_scrollbox_moves_its_controls_up_by_its_offset()
+    {
+        var apps = Build(() =>
+        {
+            ScrolledGrid(175.19f);
+            // a second page child, outside the scrollbox
+            Ptr(Page + 0x50, PageVec + 16); Ptr(PageVec + 8, Outside);
+            Control(Outside, LabelVptr, "outside", true); Rect(Outside, 0, 1202, 100, 20); ShortStr(Outside + 0x128, "TOP");
+        }).ReadFrontApps();
+        var controls = Assert.Single(apps).Controls;
+        var grid = controls[0];
+        Assert.Equal("scrollbox", grid.Kind);
+        Assert.Equal(175.19f, grid.Scroll);
+        Assert.Equal(32f, grid.Y);                                   // the scrollbox itself is not moved
+        Assert.Equal(1202f - 175.19f, grid.Children[0].Y, 0.01);     // the row reads where it is drawn
+        Assert.Equal(1202f, controls[1].Y);                          // outside the scrollbox: unmoved
+        Assert.Equal(0f, controls[1].Scroll);
+    }
+
+    [Fact]
+    public void A_nested_scrollbox_adds_its_offset()
+    {
+        var apps = Build(() =>
+        {
+            ScrolledGrid(100f);
+            Ptr(Button, ScrollboxVptr); F32(Button + 0x158, 50f);
+            Ptr(Button + 0xf4, InnerVec); Ptr(Button + 0xf8, InnerVec + 8); Ptr(InnerVec, Inner);
+            Control(Inner, LabelVptr, "inner", true); Rect(Inner, 0, 500, 100, 20); ShortStr(Inner + 0x128, "IN");
+        }).ReadFrontApps();
+        var button = Assert.Single(apps).Controls[0].Children[0];
+        Assert.Equal(1102f, button.Y);
+        Assert.Equal(350f, Assert.Single(button.Children).Y);
+    }
+
+    [Theory]
+    [InlineData(float.NaN, 0f)]
+    [InlineData(float.PositiveInfinity, 0f)]
+    [InlineData(-5f, 0f)]
+    [InlineData(1e9f, 100000f)]
+    public void An_unreadable_offset_reads_as_zero(float stored, float expected)
+    {
+        var grid = Assert.Single(Assert.Single(Build(() => ScrolledGrid(stored)).ReadFrontApps()).Controls);
+        Assert.Equal(expected, grid.Scroll);
+        Assert.Equal(1202f - expected, grid.Children[0].Y);
     }
 
     [Fact]

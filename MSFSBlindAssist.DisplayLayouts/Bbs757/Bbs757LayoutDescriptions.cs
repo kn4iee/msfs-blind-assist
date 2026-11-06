@@ -41,7 +41,7 @@ public static class Bbs757LayoutDescriptions
             $"file analysis: {l.SourceFile}: EFB app fields: front {l.AppFront}, page {l.AppPage}, roots {l.AppRoots}, " +
             $"pageChildren {l.PageChildren}",
             $"file analysis: {l.SourceFile}: EFB control fields: name {l.CtrlName}, rect {l.CtrlRect}, visible {l.CtrlVisible}, " +
-            $"children {l.CtrlChildren}, parent {l.CtrlParent}, labelText {l.CtrlLabelText}, buttonText {l.CtrlButtonText}",
+            $"children {l.CtrlChildren}, parent {l.CtrlParent}, labelText {l.CtrlLabelText}, buttonText {l.CtrlButtonText}, scrollboxOffset {l.ScrollboxOffset}",
             $"file analysis: {l.SourceFile}: EFB classes: {classes}",
         };
     }

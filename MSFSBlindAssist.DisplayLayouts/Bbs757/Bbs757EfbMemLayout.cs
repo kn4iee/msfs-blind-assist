@@ -9,7 +9,8 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// <see cref="EfbToBbos"/>; BBOS holds the app map at <see cref="BbosToAppMap"/> (a <c>std::map&lt;int, vector&gt;</c>
 /// whose node and vector layout are libc++ ABI, known to the reader). Each app has a front flag, a current page
 /// and a roots vector; each control a name, rectangle, visible byte, children vector, parent, and the label or
-/// button text. The reader tells a control's kind from its vtable (<see cref="ClassVptrs"/>). Equality compares
+/// button text. A control's rectangle never moves when its page scrolls: a <c>scrollbox</c> control keeps the
+/// scroll as a float at <see cref="ScrollboxOffset"/> and draws its controls that much higher. The reader tells a control's kind from its vtable (<see cref="ClassVptrs"/>). Equality compares
 /// the byte and class lists by content, ignoring <see cref="SourceFile"/>.
 /// </summary>
 public sealed record Bbs757EfbMemLayout(
@@ -32,6 +33,7 @@ public sealed record Bbs757EfbMemLayout(
     int CtrlParent,
     int CtrlLabelText,
     int CtrlButtonText,
+    int ScrollboxOffset,
     IReadOnlyList<Bbs757EfbClassVptr> ClassVptrs)
 {
     public bool Equals(Bbs757EfbMemLayout? other) =>
@@ -45,6 +47,7 @@ public sealed record Bbs757EfbMemLayout(
         && CtrlName == other.CtrlName && CtrlRect == other.CtrlRect && CtrlVisible == other.CtrlVisible
         && CtrlChildren == other.CtrlChildren && CtrlParent == other.CtrlParent
         && CtrlLabelText == other.CtrlLabelText && CtrlButtonText == other.CtrlButtonText
+        && ScrollboxOffset == other.ScrollboxOffset
         && ClassVptrs.SequenceEqual(other.ClassVptrs);
 
     public override int GetHashCode()
@@ -55,7 +58,7 @@ public sealed record Bbs757EfbMemLayout(
         h.Add(ManagerBase); h.Add(ManagerSpan); h.Add(EfbVptr); h.Add(EfbToBbos); h.Add(BbosToAppMap);
         h.Add(AppFront); h.Add(AppPage); h.Add(AppRoots); h.Add(PageChildren);
         h.Add(CtrlName); h.Add(CtrlRect); h.Add(CtrlVisible); h.Add(CtrlChildren); h.Add(CtrlParent);
-        h.Add(CtrlLabelText); h.Add(CtrlButtonText);
+        h.Add(CtrlLabelText); h.Add(CtrlButtonText); h.Add(ScrollboxOffset);
         foreach (var c in ClassVptrs) h.Add(c);
         return h.ToHashCode();
     }

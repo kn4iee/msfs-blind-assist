@@ -65,8 +65,10 @@ public class Bbs757LayoutFileTests
         CtrlParent: 0xe8,
         CtrlLabelText: 0x128,
         CtrlButtonText: 0x144,
+        ScrollboxOffset: 0x158,
         ClassVptrs: new[]
         {
+            new Bbs757EfbClassVptr("scrollbox", 0x30400),
             new Bbs757EfbClassVptr("button", 0x30164), new Bbs757EfbClassVptr("label", 0x30cd4),
             new Bbs757EfbClassVptr("toggle", 0x30e7c), new Bbs757EfbClassVptr("slider", 0x30c48),
             new Bbs757EfbClassVptr("grid", 0x30320), new Bbs757EfbClassVptr("HOME", 0x27bdc),
@@ -101,6 +103,27 @@ public class Bbs757LayoutFileTests
         var loaded = (Bbs757EfbMemLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Efb).Layout!;
         Assert.Equal(SampleEfbLayout() with { SourceFile = "" }, loaded);
         Assert.Equal(text, LayoutFileFormat.Write(Module, file));
+    }
+
+    [Fact]
+    public void The_efb_layout_with_the_scroll_offset_round_trips()
+    {
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        Assert.Contains("\"scrollboxOffset\": 344", text);
+        Assert.True(LayoutFileFormat.TryRead(Module, text, out var file, out string? failure), failure);
+        var loaded = (Bbs757EfbMemLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Efb).Layout!;
+        Assert.Equal(0x158, loaded.ScrollboxOffset);
+        Assert.Equal("scrollbox", loaded.KindFor(0x30400));
+    }
+
+    [Fact]
+    public void A_layout_without_the_scroll_offset_reads_as_missing()
+    {
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        string damaged = System.Text.RegularExpressions.Regex.Replace(text, "\\s*\"scrollboxOffset\": 344,?", "");
+        Assert.NotEqual(text, damaged);
+        Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? failure));
+        Assert.False(string.IsNullOrEmpty(failure));
     }
 
     [Fact]

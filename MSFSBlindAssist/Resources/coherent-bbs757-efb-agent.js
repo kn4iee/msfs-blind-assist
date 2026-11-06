@@ -34,8 +34,9 @@
     // 5: wheel(x, y, deltaY), for scrolling a long tablet page.
     // 6: readVars(names), the L:vars the reader judges a tap by.
     // 7: that refusal, the run guards it needed and the page clock they ran on are gone: a click runs anywhere on the tablet.
+    // 8: drag(x, y0, y1) replaces wheel: this build scrolls on a drag (plan 20, Task 1)
     // The app's calls ask for this version or later; an older agent on the page is replaced.
-    var VERSION = 7;
+    var VERSION = 8;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
@@ -129,23 +130,46 @@
       }
     };
 
-    // One mouse-wheel step at a tablet-local point (the canvas's own onMouseWheel handler, a
-    // WASM_MOUSE_WHEEL call), for the reader to scroll a list longer than the page (Settings >
-    // Callouts). deltaY as the browser gives it: positive scrolls down. 'ok', or why not.
-    A.wheel = function (x, y, deltaY) {
+    // A drag at a tablet-local x from y0 to y1, for the reader to scroll a page longer than the
+    // tablet (this build scrolls on a drag, not reliably on the wheel): mouse move and down at
+    // (x, y0), 20 moves 50 ms apart to (x, y1), held 400 ms, then up. It runs in the page, one run
+    // at a time with the click runs: refused while one is going. 'started', or why not.
+    var DRAG_MOVES = 20, DRAG_MOVE_MS = 50, DRAG_HOLD_MS = 400;
+    A.drag = function (x, y0, y1) {
       try {
         if (coherentProblem()) return 'no-coherent';
         var c = findCanvas();
         var p = canvasProblem(c);
         if (p) return 'no-canvas: ' + p;
-        if (typeof c.onMouseWheel !== 'function') return 'no-wheel';
+        if (runIsLive(state.run)) return 'busy';
         var r = c.getBoundingClientRect();
-        if (!isWhole(x) || !isWhole(y) || x < 0 || y < 0 || x >= r.width || y >= r.height) return 'bad-point';
-        if (typeof deltaY !== 'number' || !isFinite(deltaY) || Math.abs(deltaY) > 2000) return 'bad-delta';
-        var ev = { clientX: r.left + x, clientY: r.top + y, deltaY: deltaY, button: 0, preventDefault: function () { } };
-        c.onMouseMove(ev);
-        c.onMouseWheel(ev);
-        return 'ok';
+        if (!isWhole(x) || !isWhole(y0) || !isWhole(y1) || x < 0 || x >= r.width
+            || y0 < 0 || y0 >= r.height || y1 < 0 || y1 >= r.height) return 'bad-point';
+        stopRun(state.run, 'canceled');
+        var total = DRAG_MOVES * DRAG_MOVE_MS + DRAG_HOLD_MS;
+        var run = { id: state.nextId++, n: DRAG_MOVES + 2, done: 0, running: true, error: null,
+                    startedAt: Date.now(), totalMs: total, timer: null };
+        state.run = run;
+        var ev = function (y) { return { clientX: r.left + x, clientY: r.top + y, button: 0, preventDefault: function () { } }; };
+        var fail = function (e) { run.error = 'error: ' + (e && e.message); run.running = false; };
+        var release = function () {
+          run.timer = null;
+          try { c.OnMouseUp(ev(y1)); run.done = run.n; run.running = false; } catch (e) { fail(e); }
+        };
+        var move = function (k) {
+          run.timer = null;
+          if (!run.running) return;
+          try {
+            c.onMouseMove(ev(y0 + (y1 - y0) * k / DRAG_MOVES));
+            run.done = k + 1;
+            if (k < DRAG_MOVES) run.timer = setTimeout(function () { move(k + 1); }, DRAG_MOVE_MS);
+            else run.timer = setTimeout(release, DRAG_HOLD_MS);
+          } catch (e) { fail(e); }
+        };
+        c.onMouseMove(ev(y0));
+        c.OnMouseDown(ev(y0));
+        move(1);
+        return 'started';
       } catch (e) {
         return 'error: ' + (e && e.message);
       }
