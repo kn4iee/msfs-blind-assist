@@ -1,11 +1,11 @@
-title: Settings
+title: Settings, AIRAC data
 button  Home
 button  General
 button  Aircraft
 button  Livery options
 button  Callouts
 button  Cabin audio
-button  AIRAC data
+button  AIRAC data (current page)
 text  SIMBRIEF ID NUMBER
 text  123456
 button  Logout

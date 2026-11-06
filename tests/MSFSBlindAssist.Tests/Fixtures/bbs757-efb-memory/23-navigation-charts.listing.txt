@@ -1,9 +1,9 @@
-title: Navigation
+title: Navigation, Charts
 button  Home
 button  ACARS dashboard
 button  Operating FP
 button  Weather & NOTAM
-button  Charts
+button  Charts (current page)
 button  Map
 button  PERF calc
 button  Departure

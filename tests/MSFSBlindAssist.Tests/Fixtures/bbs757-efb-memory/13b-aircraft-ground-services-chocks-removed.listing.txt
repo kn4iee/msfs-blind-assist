@@ -1,9 +1,9 @@
-title: Aircraft
+title: Aircraft, Ground services
 button  Home
 button  Cockpit presets
 button  Fuel
 button  Weight & balance
-button  Ground services
+button  Ground services (current page)
 button  Cabin & doors
 button  Maintenance
 button  Failures

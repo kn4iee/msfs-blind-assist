@@ -53,7 +53,7 @@ public sealed class Bbs757EfbModelReader
         string section = SectionOf(content, content.Class);
         var menu = new List<Bbs757EfbItem>();
         var items = new List<Bbs757EfbItem>();
-        foreach (var root in content.Controls) Emit(root, content.Class, section, menu, items);
+        EmitChildren(content.Controls, content, section, menu, items);
         return new Bbs757EfbScreenModel(content.Class, section, menu, items) { Scrollable = IsScrollable(content) };
     }
 
@@ -88,7 +88,7 @@ public sealed class Bbs757EfbModelReader
 
     // ---- flattening a content page -------------------------------------------
 
-    private static void Emit(Bbs757EfbMemory.Node n, string app, string section, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+    private static void Emit(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, string section, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
     {
         if (IsChrome(n)) return; // the home button and the page title: the window adds its own Home and shows the page name
 
@@ -102,7 +102,7 @@ public sealed class Bbs757EfbModelReader
         // A side-menu entry: a control in the left column (an app's section list, the checklist's sections).
         if (IsMenu(n) && n.Kind is "button" or "toggle")
         {
-            EmitMenu(n, app, section, menu, items);
+            EmitMenu(n, content.Class, section, menu, items);
             return;
         }
 
@@ -123,12 +123,60 @@ public sealed class Bbs757EfbModelReader
                 if (n.Text.Length > 0 && n.Children.Count == 0 && !IsNoise(n))
                     items.Add(new Bbs757EfbItem(IsHeading(n) ? Bbs757EfbKind.Heading : Bbs757EfbKind.Text,
                         n.Text, Box(n), Hit(n), false, KeyOf(n)));
-                foreach (var c in n.Children) Emit(c, app, section, menu, items);
+                EmitChildren(n.Children, content, section, menu, items);
                 return;
             default: // grid, colorbox, canvas, gradientbox, stack, image, pan_indicator, scrollbox: containers
-                foreach (var c in n.Children) Emit(c, app, section, menu, items);
+                EmitChildren(n.Children, content, section, menu, items);
                 return;
         }
+    }
+
+    /// <summary>The children of a container in order; the buttons of a tab row (two or more siblings named as
+    /// <see cref="Bbs757EfbPageRules.IsTabName"/> says) come out as <see cref="Bbs757EfbKind.Tab"/> items keyed
+    /// <c>tab:&lt;parent's name&gt;|&lt;words&gt;</c>, the current one selected.</summary>
+    private static void EmitChildren(IReadOnlyList<Bbs757EfbMemory.Node> kids, Bbs757EfbMemory.App content, string section,
+        List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+    {
+        var tabs = kids.Where(k => k.Kind == "button" && k.Text.Length > 0 && Bbs757EfbPageRules.IsTabName(k.Name)).ToList();
+        if (tabs.Count < 2)
+        {
+            foreach (var k in kids) Emit(k, content, section, menu, items);
+            return;
+        }
+        var current = CurrentTab(tabs, content);
+        foreach (var k in kids)
+        {
+            if (!tabs.Contains(k)) { Emit(k, content, section, menu, items); continue; }
+            string words = string.Join(' ', k.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            items.Add(new Bbs757EfbItem(Bbs757EfbKind.Tab, Bbs757EfbVocabulary.Pretty(words), Box(k), Hit(k), true,
+                "tab:" + ParentNameOf(content, k) + "|" + words, Selected: ReferenceEquals(k, current), Name: k.Name));
+        }
+    }
+
+    /// <summary>The control a tab button sits in (the scope of the tab's key), found from the content's tree.</summary>
+    private static string ParentNameOf(Bbs757EfbMemory.App content, Bbs757EfbMemory.Node child)
+    {
+        foreach (var n in Flatten(content.Controls))
+            if (n.Children.Any(c => ReferenceEquals(c, child))) return n.Name;
+        return "";
+    }
+
+    /// <summary>The one tab of a row whose folded words appear in a folded name or text elsewhere in the content (the tab
+    /// buttons' own subtrees, the side menu and the page chrome left out); null when none, or two or more, match.</summary>
+    private static Bbs757EfbMemory.Node? CurrentTab(List<Bbs757EfbMemory.Node> tabs, Bbs757EfbMemory.App content)
+    {
+        var own = new HashSet<Bbs757EfbMemory.Node>(ReferenceEqualityComparer.Instance);
+        foreach (var t in tabs) { own.Add(t); foreach (var d in Descendants(t)) own.Add(d); }
+        var elsewhere = Flatten(content.Controls)
+            .Where(n => !own.Contains(n) && IsContent(n) && !IsChrome(n))
+            .SelectMany(n => new[] { Fold(n.Name), Fold(n.Text) })
+            .Where(f => f.Length > 0).ToList();
+        var hits = tabs.Where(t =>
+        {
+            string words = Fold(t.Text);
+            return words.Length > 0 && elsewhere.Any(f => f.Contains(words, StringComparison.Ordinal));
+        }).ToList();
+        return hits.Count == 1 ? hits[0] : null;
     }
 
     /// <summary>A left-column control: a side-menu entry (<c>menu:GENERAL</c>, selected when it is the section the page
@@ -191,20 +239,26 @@ public sealed class Bbs757EfbModelReader
     // ---- the section and whether the page scrolls ----------------------------
 
     /// <summary>
-    /// The section the page shows, as a side-menu word (CALLOUTS, LIVERY OPTIONS): from the content scrollbox's name
-    /// (<c>callouts_scrollbox</c> → the app's menu word whose folded form the prefix matches, equal or by start). "" when
-    /// there is no scrollbox or its prefix names no menu word (the home-less apps, the checklist).
+    /// The section the page shows, as a side-menu word (CALLOUTS, LIVERY OPTIONS): the page rules' table of distinctive names
+    /// when it has an entry (<see cref="Bbs757EfbPageRules.SectionFromTable"/>), else the first menu word whose folded letters
+    /// equal, or start, the folded name of a content container (<c>planning_perf_calc_canvas</c>, <c>callouts_scrollbox</c>) in
+    /// tree order. "" for an app with no sections (Systems, Checklist) or a page that matches none.
     /// </summary>
     private static string SectionOf(Bbs757EfbMemory.App content, string app)
     {
-        var scroll = Flatten(content.Controls).FirstOrDefault(n => n.Name.EndsWith("_scrollbox", StringComparison.Ordinal));
-        if (scroll is null || !Bbs757EfbVocabulary.Menus.TryGetValue(app, out var words)) return "";
-        string prefix = Fold(scroll.Name[..^"_scrollbox".Length]);
-        if (prefix.Length == 0) return "";
-        foreach (var w in words)
+        if (!Bbs757EfbPageRules.HasSections(app) || !Bbs757EfbVocabulary.Menus.TryGetValue(app, out var words)) return "";
+        var all = Flatten(content.Controls).ToList();
+        if (Bbs757EfbPageRules.SectionFromTable(app, all.Select(n => n.Name)) is { } fromTable) return fromTable;
+        foreach (var n in all)
         {
-            string fw = Fold(w);
-            if (fw == prefix || fw.StartsWith(prefix, StringComparison.Ordinal)) return w;
+            if (!IsContent(n)) continue; // the shell's and the side menu's own grids (main_grid, control_grid)
+            string prefix = Bbs757EfbPageRules.ContainerWords(n.Name);
+            if (prefix.Length == 0) continue;
+            foreach (var w in words)
+            {
+                string fw = Fold(w);
+                if (fw == prefix || fw.StartsWith(prefix, StringComparison.Ordinal)) return w;
+            }
         }
         return "";
     }
@@ -303,6 +357,9 @@ public sealed class Bbs757EfbModelReader
 
     private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));
 
+    /// <summary>Whether a control is part of the page's content area, which starts at x 250 (the settings scrollbox is drawn
+    /// at 250, two pixels left of <see cref="MenuRight"/>): the shell's own grids start at 0.</summary>
+    private static bool IsContent(Bbs757EfbMemory.Node n) => n.X >= MenuRight - 10;
     private static bool IsMenu(Bbs757EfbMemory.Node n) => n.X is >= 0 and < MenuRight && n.W <= MenuRight;
     private static bool IsHeading(Bbs757EfbMemory.Node n) => n.Text == n.Text.ToUpperInvariant() && n.W > 300;
     private static string KeyOf(Bbs757EfbMemory.Node n) => n.Name.Length > 0 ? n.Name : "text|" + n.Text;

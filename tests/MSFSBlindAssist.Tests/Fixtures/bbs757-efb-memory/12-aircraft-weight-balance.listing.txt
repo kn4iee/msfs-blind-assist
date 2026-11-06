@@ -1,8 +1,8 @@
-title: Aircraft
+title: Aircraft, Weight & balance
 button  Home
 button  Cockpit presets
 button  Fuel
-button  Weight & balance
+button  Weight & balance (current page)
 button  Ground services
 button  Cabin & doors
 button  Maintenance

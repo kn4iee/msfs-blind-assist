@@ -1,6 +1,6 @@
-title: Navigation
+title: Navigation, ACARS dashboard
 button  Home
-button  ACARS dashboard
+button  ACARS dashboard (current page)
 button  Operating FP
 button  Weather & NOTAM
 button  Charts

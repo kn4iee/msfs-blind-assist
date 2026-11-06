@@ -1,11 +1,11 @@
-title: Navigation
+title: Navigation, PERF calc
 button  Home
 button  ACARS dashboard
 button  Operating FP
 button  Weather & NOTAM
 button  Charts
 button  Map
-button  PERF calc
+button  PERF calc (current page)
 button  Take off
 button  Landing
 text  Airport

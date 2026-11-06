@@ -1,4 +1,4 @@
-title: Aircraft
+title: Aircraft, Failures
 button  Home
 button  Cockpit presets
 button  Fuel
@@ -6,7 +6,7 @@ button  Weight & balance
 button  Ground services
 button  Cabin & doors
 button  Maintenance
-button  Failures
+button  Failures (current page)
 text  FAILURES
 text  ACTIVE 0    ARMED 0
 button  Catalog

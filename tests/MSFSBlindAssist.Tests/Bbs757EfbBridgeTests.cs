@@ -1097,6 +1097,21 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
+    public async Task The_airac_page_from_memory_offers_the_sign_in()
+    {
+        // The real tree of Settings > AIRAC data, read by the model reader: its page name is "Settings, AIRAC data".
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("55-settings-airac-data"))!;
+        Assert.Equal("Settings, AIRAC data", model.PageName);
+        using var h = new BridgeHarness { SignedInAnswer = false };
+        h.Bridge.TakeRead(model);
+        await h.Bridge.RefreshSignInAsync(CancellationToken.None);
+
+        var push = h.Pushes[^1];
+        int signIn = IndexOf(push, Bbs757EfbExtras.SignInText);
+        Assert.Equal("x:navigraph", push[$"items.{signIn}.key"]);
+    }
+
+    [Fact]
     public async Task A_press_queued_when_the_window_hid_never_runs()
     {
         using var h = new BridgeHarness { SignedInAnswer = false };

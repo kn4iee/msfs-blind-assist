@@ -188,6 +188,7 @@ public static class Bbs757EfbElements
                 case Bbs757EfbKind.Menu:
                     Add(MenuText(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
+                case Bbs757EfbKind.Tab: // shown as the button it was until the page grammar words the current tab
                 case Bbs757EfbKind.Button:
                     Add(it.Text, kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
                     break;
@@ -231,6 +232,7 @@ public static class Bbs757EfbElements
                 case Bbs757EfbKind.Menu:
                     Add(MenuText(it), key: it.Key);
                     return true;
+                case Bbs757EfbKind.Tab:
                 case Bbs757EfbKind.Button:
                     Add(it.Text, key: it.Key);
                     return true;

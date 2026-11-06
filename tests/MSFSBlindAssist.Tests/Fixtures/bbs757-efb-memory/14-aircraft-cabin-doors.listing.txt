@@ -1,10 +1,10 @@
-title: Aircraft
+title: Aircraft, Cabin & doors
 button  Home
 button  Cockpit presets
 button  Fuel
 button  Weight & balance
 button  Ground services
-button  Cabin & doors
+button  Cabin & doors (current page)
 button  Maintenance
 button  Failures
 button  Closed

@@ -1,6 +1,6 @@
-title: Aircraft
+title: Aircraft, Cockpit presets
 button  Home
-button  Cockpit presets
+button  Cockpit presets (current page)
 button  Fuel
 button  Weight & balance
 button  Ground services

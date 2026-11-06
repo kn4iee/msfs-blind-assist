@@ -1,11 +1,11 @@
-title: Aircraft
+title: Aircraft, Maintenance
 button  Home
 button  Cockpit presets
 button  Fuel
 button  Weight & balance
 button  Ground services
 button  Cabin & doors
-button  Maintenance
+button  Maintenance (current page)
 button  Failures
 button  Landing gear
 button  Hydraulic
