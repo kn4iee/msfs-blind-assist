@@ -201,7 +201,7 @@ public class Bbs757EfbExtrasTests
     public void The_captured_airac_pages_remove_hooks_the_nav_data_removal()
     {
         // The same box reading REMOVE, as BlueBird shows it when no newer cycle waits.
-        var m = Bbs757EfbScreenTests.Load("bright", "55-settings-airac-data", line => Bbs757EfbScreenTests.UpdateReadAs(line, "REMOVE"));
+        var m = Bbs757EfbScreenTests.LoadVariant("bright", "55-settings-airac-data", "remove");
 
         var remove = m.Items.Single(i => i.Text == "Remove, Latest cycle");
         Assert.Equal(Bbs757EfbHook.NavDataRemove, Bbs757EfbExtras.HookFor(m.PageName, remove));
