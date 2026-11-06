@@ -21,6 +21,12 @@ public enum Bbs757EfbKind
     Checkbox,
     /// <summary>A settings row with neither (a read-only value or a text field).</summary>
     Row,
+    /// <summary>A value box: Text is its name, Value its value.</summary>
+    Field,
+    /// <summary>A tab of a page; Selected is the current one.</summary>
+    Tab,
+    /// <summary>A long text: Text is the whole text, its lines separated by <c>\n</c>.</summary>
+    LongText,
 }
 
 /// <summary>The color of a box: on BlueBird's tablet the color IS the state of a tile.</summary>
@@ -32,6 +38,9 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX);
 /// <summary>
 /// One element of the page. <see cref="Hit"/> is where to tap it (tablet pixels, the agent's click
 /// coordinates); <see cref="Clickable"/> false means it is not a control (a read-out, a credential).
+/// <see cref="Level"/> is a heading's level (2 or 3), 0 otherwise. <see cref="Label"/> is the name the page grammar gave a
+/// control whose own words are a state or an action ("NOSE DOOR" for the button "OPEN"); <see cref="Name"/> is BlueBird's
+/// own name for the control.
 /// <see cref="Key"/> is stable while the element's state changes (its label without
 /// the state word), so the window keeps the screen reader's focus on it across a refresh.
 /// </summary>
@@ -46,7 +55,10 @@ public sealed record Bbs757EfbItem(
     bool? On = null,
     bool Selected = false,
     string Value = "",
-    Bbs757EfbSlider? Slider = null);
+    Bbs757EfbSlider? Slider = null,
+    int Level = 0,
+    string Label = "",
+    string Name = "");
 
 /// <summary>A parsed tablet page: which app and menu entry, then its elements in reading order.</summary>
 public sealed record Bbs757EfbScreenModel(
@@ -71,6 +83,13 @@ public sealed record Bbs757EfbScreenModel(
     /// <summary>A question the tablet shows over the page, with its answers (not in <see cref="Items"/>); null when none.</summary>
     public Bbs757EfbQuestion? Question { get; init; }
 
+    /// <summary>The part of the tablet that shows the page, in tablet pixels; a control outside it is not on screen.</summary>
+    public Rectangle Viewport { get; init; } = Bbs757EfbScreen.ContentArea;
+
+    /// <summary>Where BlueBird's QWERTY keyboard keys are, null when the reader found none. BlueBird's keyboard tree reads
+    /// visible whether it shows or not (measured 2026-11-06), so this is only where the keys are, never "the keyboard is up".</summary>
+    public Bbs757EfbKeyboard? Keyboard { get; init; }
+
     /// <summary>"Aircraft, Ground services" / "Home".</summary>
     public string PageName =>
         App.Length == 0 ? "Unknown page"
@@ -81,6 +100,13 @@ public sealed record Bbs757EfbScreenModel(
 /// <summary>One entry of BlueBird's notification panel: its words as the tablet writes them, made readable ("GPU
 /// connected."), and its time ("14:17Z"), null when the time is not known.</summary>
 public sealed record Bbs757EfbNotice(string Text, string? Time);
+
+/// <summary>BlueBird's keyboard: the box it covers and its keys.</summary>
+public sealed record Bbs757EfbKeyboard(Rectangle Box, IReadOnlyList<Bbs757EfbKey> Keys);
+
+/// <summary>One key: BlueBird's name (<c>char_btn_q|Q|1</c> is Lower "q", Upper "Q", Third "1"; a command key such as
+/// <c>btn_enter</c> has its name and empty layers) and where to tap it.</summary>
+public sealed record Bbs757EfbKey(string Name, string Lower, string Upper, string Third, Point Hit);
 
 /// <summary>A box the tablet shows over its page with words and one or two answers (YES, NO, OK, CANCEL): the words,
 /// then the answers as buttons, left to right.</summary>
@@ -94,6 +120,9 @@ public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem>
 /// </summary>
 public static class Bbs757EfbScreen
 {
+    /// <summary>The part of the tablet that shows a page (right of the side menu, below the top bar).</summary>
+    public static readonly Rectangle ContentArea = new(250, 82, 1147, 966);
+
     /// <summary>Controls left of this (tablet x) are the side menu.</summary>
     public const int MenuRight = 252;
 

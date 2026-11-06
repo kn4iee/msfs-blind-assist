@@ -17,6 +17,39 @@ public class Bbs757EfbModelReaderTests
     private static Node N(string kind, string name, string text, int x, int y, int w, int h, params Node[] children) =>
         new(kind, name, text, x, y, w, h, _addr += 0x40, children);
 
+    // ---- the model's grammar fields ----
+
+    [Fact]
+    public void A_model_with_every_new_field_reads_back_equal()
+    {
+        var box = new System.Drawing.Rectangle(300, 200, 100, 30);
+        var hit = new System.Drawing.Point(350, 215);
+        var items = new[]
+        {
+            new Bbs757EfbItem(Bbs757EfbKind.Heading, "Doors", box, hit, false, "h:Doors", Level: 3, Name: "doors_title"),
+            new Bbs757EfbItem(Bbs757EfbKind.Button, "OPEN", box, hit, true, "btn:OPEN", Label: "NOSE DOOR", Name: "nose_btn"),
+            new Bbs757EfbItem(Bbs757EfbKind.Field, "SimBrief ID", box, hit, true, "f:id", Value: "12345"),
+            new Bbs757EfbItem(Bbs757EfbKind.Tab, "Fuel", box, hit, true, "tab:Fuel", Selected: true),
+            new Bbs757EfbItem(Bbs757EfbKind.LongText, "one\ntwo", box, hit, false, "lt:1"),
+        };
+        var model = new Bbs757EfbScreenModel("AIRCRAFT", "GROUND SERVICES", Array.Empty<Bbs757EfbItem>(), items)
+        {
+            Viewport = new System.Drawing.Rectangle(1, 2, 3, 4),
+            Keyboard = new Bbs757EfbKeyboard(new System.Drawing.Rectangle(0, 648, 1397, 400), new[]
+            {
+                new Bbs757EfbKey("char_btn_q|Q|1", "q", "Q", "1", new System.Drawing.Point(40, 700)),
+                new Bbs757EfbKey("btn_enter", "", "", "", new System.Drawing.Point(900, 800)),
+            }),
+        };
+
+        var back = Bbs757EfbModelJson.Read(Bbs757EfbModelJson.Write(model));
+
+        Assert.Equal(model.Items, back.Items);
+        Assert.Equal(model.Viewport, back.Viewport);
+        Assert.Equal(model.Keyboard!.Box, back.Keyboard!.Box);
+        Assert.Equal(model.Keyboard.Keys, back.Keyboard.Keys);
+    }
+
     // ---- the home screen ----
 
     [Fact]

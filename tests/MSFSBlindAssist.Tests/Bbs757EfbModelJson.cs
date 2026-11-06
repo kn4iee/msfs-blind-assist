@@ -31,6 +31,15 @@ internal static class Bbs757EfbModelJson
                 ["text"] = n.Text,
                 ["time"] = n.Time,
             }).ToArray()),
+            ["viewport"] = Rect(m.Viewport),
+            ["keyboard"] = m.Keyboard is null ? null : new JsonObject
+            {
+                ["box"] = Rect(m.Keyboard.Box),
+                ["keys"] = new JsonArray(m.Keyboard.Keys.Select(k => (JsonNode)new JsonObject
+                {
+                    ["name"] = k.Name, ["lower"] = k.Lower, ["upper"] = k.Upper, ["third"] = k.Third, ["hit"] = Pt(k.Hit),
+                }).ToArray()),
+            },
             ["question"] = m.Question is null ? null : new JsonObject
             {
                 ["text"] = m.Question.Text,
@@ -53,6 +62,12 @@ internal static class Bbs757EfbModelJson
             Notices = (o["notices"]?.AsArray() ?? new JsonArray())
                 .Select(n => new Bbs757EfbNotice(Str(n!.AsObject(), "text"), n!.AsObject()["time"]?.GetValue<string>())).ToList(),
             Question = question,
+            Viewport = o["viewport"] is JsonArray vp ? ReadRect(vp) : Bbs757EfbScreen.ContentArea,
+            Keyboard = o["keyboard"] is JsonObject kb
+                ? new Bbs757EfbKeyboard(ReadRect(kb["box"]!.AsArray()),
+                    kb["keys"]!.AsArray().Select(k => new Bbs757EfbKey(Str(k!.AsObject(), "name"), Str(k.AsObject(), "lower"),
+                        Str(k.AsObject(), "upper"), Str(k.AsObject(), "third"), ReadPt(k.AsObject()["hit"]!.AsArray()))).ToList())
+                : null,
         };
     }
 
@@ -75,6 +90,9 @@ internal static class Bbs757EfbModelJson
             ["on"] = i.On,
             ["selected"] = i.Selected,
             ["value"] = i.Value,
+            ["level"] = i.Level,
+            ["label"] = i.Label,
+            ["name"] = i.Name,
             ["slider"] = i.Slider is null ? null
                 : new JsonArray(i.Slider.TrackLeft, i.Slider.TrackRight, i.Slider.KnobX),
         };
@@ -99,7 +117,10 @@ internal static class Bbs757EfbModelJson
                 o["on"]?.GetValue<bool>(),
                 o["selected"]!.GetValue<bool>(),
                 o["value"]?.GetValue<string>() ?? "",
-                slider);
+                slider,
+                o["level"]?.GetValue<int>() ?? 0,
+                Str(o, "label"),
+                Str(o, "name"));
         }).ToList();
     }
 

@@ -419,6 +419,32 @@ public class Bbs757EfbPressTests
         Assert.Equal(prints.Count, prints.Distinct().Count());
     }
 
+    [Fact]
+    public void A_label_change_is_a_new_page_to_push()
+    {
+        var box = new Rectangle(300, 300, 80, 40);
+        var plain = Ground(Tile("OPEN", "btn:OPEN", box));
+        var labeled = Ground(Tile("OPEN", "btn:OPEN", box) with { Label = "NOSE DOOR" });
+        var heading = Ground(Item(Bbs757EfbKind.Heading, "Doors", "h:Doors", box) with { Level = 2 });
+        var heading3 = Ground(Item(Bbs757EfbKind.Heading, "Doors", "h:Doors", box) with { Level = 3 });
+
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(plain), Bbs757EfbPress.Fingerprint(labeled));
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(heading), Bbs757EfbPress.Fingerprint(heading3));
+    }
+
+    [Fact]
+    public void The_keyboard_coming_up_is_no_page_change()
+    {
+        var page = Ground(ReqFuelTruck());
+        var withKeys = page with
+        {
+            Keyboard = new Bbs757EfbKeyboard(new Rectangle(0, 648, 1397, 400),
+                new[] { new Bbs757EfbKey("char_btn_q|Q|1", "q", "Q", "1", new Point(40, 700)) }),
+        };
+
+        Assert.True(Bbs757EfbPress.PageUnchanged(page, withKeys));
+    }
+
     [Theory]
     [MemberData(nameof(Cultures))]
     public void The_fingerprint_does_not_depend_on_the_Windows_culture(string culture)

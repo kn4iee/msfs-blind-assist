@@ -63,7 +63,7 @@ public static class Bbs757EfbPress
     /// <summary>One control as the fingerprint says it: what the pilot would hear change.</summary>
     private static string Line(Bbs757EfbItem i) =>
         new StringBuilder().Append(i.Kind).Append('|').Append(i.Key).Append('|').Append(i.Text).Append('|')
-            .Append(i.Value).Append('|').Append(i.On).Append('|').Append(i.Selected).Append('\n').ToString();
+            .Append(i.Label).Append('|').Append(i.Level).Append('|').Append(i.Value).Append('|').Append(i.On).Append('|').Append(i.Selected).Append('\n').ToString();
 
     // ------------------------------------------------------------------ finding a pressed control again
 
