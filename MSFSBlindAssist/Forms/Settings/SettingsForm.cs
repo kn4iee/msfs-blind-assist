@@ -16,8 +16,7 @@ public class SettingsForm : Form
     internal SettingsForm(Func<Task>? refreshTaxiwayNames = null,
                         Func<Services.VPilot.VatsimStatus?>? vatsimStatus = null,
                         Func<string>? sceneryIndexStatus = null,
-                        Services.Geography.LocationDataDownloader? locationDataDownloader = null,
-                        Services.TextRecognition.TextRecognitionDownloader? textRecognitionDownloader = null)
+                        Services.Geography.LocationDataDownloader? locationDataDownloader = null)
     {
         Text = "Settings";
         StartPosition = FormStartPosition.CenterParent;
@@ -32,13 +31,12 @@ public class SettingsForm : Form
         { if (_tabs.SelectedIndex >= 0 && _tabs.SelectedIndex < _panels.Count) _currentPanel = _panels[_tabs.SelectedIndex]; };
 
         // Panels are added here in FINAL TAB ORDER:
-        // Announcements, Weather, VATSIM, GeoNames, Text recognition, SimBrief, Gemini, Audio, HandFly,
+        // Announcements, Weather, VATSIM, GeoNames, SimBrief, Gemini, Audio, HandFly,
         // TaxiGuidance, FirstOfficer, Updates.
         AddPanel(new AnnouncementsPanel());
         AddPanel(new WeatherPanel());
         AddPanel(new VatsimPanel(vatsimStatus));
         AddPanel(new GeoNamesPanel(locationDataDownloader));
-        AddPanel(new TextRecognitionPanel(textRecognitionDownloader));
         AddPanel(new SimBriefPanel());
         AddPanel(new AiSettingsPanel());
         AddPanel(new AudioPanel());

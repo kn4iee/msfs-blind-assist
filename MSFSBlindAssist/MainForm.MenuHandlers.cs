@@ -120,8 +120,7 @@ public partial class MainForm
             refreshTaxiwayNames: refreshCallback,
             vatsimStatus: () => vatsimService?.GetStatus(),
             sceneryIndexStatus: () => sceneryIndexer.LastStatus,
-            locationDataDownloader: locationDataDownloader,
-            textRecognitionDownloader: textRecognitionDownloader);
+            locationDataDownloader: locationDataDownloader);
         if (dlg.ShowDialog(this) == DialogResult.OK)
         {
             ApplyRuntimeSettings();

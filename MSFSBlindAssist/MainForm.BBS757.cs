@@ -1,5 +1,4 @@
 using MSFSBlindAssist.Aircraft;
-using MSFSBlindAssist.Services.TextRecognition;
 using MSFSBlindAssist.SimConnect.BBS757;
 using MSFSBlindAssist.Utils.Logging;
 
@@ -425,40 +424,8 @@ public partial class MainForm
         bbs757ModuleSession = null;
     }
 
-    /// <summary>
-    /// The text recognition offer, made like the startup data check ([UPD-9]): at startup on a restored 757
-    /// profile (<c>MainForm_Shown</c>, after the PMDG SDK check and before the update check) and after a pick of
-    /// the 757 in the Aircraft menu, never at connect; a dismissal is never remembered and only the pilot's
-    /// checkbox silences it (<see cref="TextRecognitionOffer.ShouldOffer"/>). The window waits for the pilot;
-    /// the download it starts keeps running when it closes.
-    /// </summary>
-    private void OfferTextRecognition()
-    {
-        if (currentAircraft is not BBS757Definition) return;
-        bool settingOn = MSFSBlindAssist.Settings.SettingsManager.Current.OfferTextRecognitionFor757;
-        if (!TextRecognitionOffer.ShouldOffer(true, settingOn, textRecognitionDownloader.Installed().State, textRecognitionDownloader.IsRunning))
-            return;
-        ShowTextRecognitionOffer();
-    }
-
-    /// <summary>Shows the offer window, modal over the main window, and never throws: the pilot is not left
-    /// without the app because a window could not open.</summary>
-    private void ShowTextRecognitionOffer()
-    {
-        try
-        {
-            using var dialog = new Forms.TextRecognitionOfferDialog(textRecognitionDownloader);
-            dialog.ShowDialog(this);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("BBS757", $"The text recognition offer failed: {ex.Message}");
-        }
-    }
-
     private void BBS757MenuItem_Click(object? sender, EventArgs e)
     {
         SwitchAircraft(new BBS757Definition());
-        OfferTextRecognition();
     }
 }
