@@ -422,4 +422,34 @@ public class Bbs757FoChecklistStructureTests
         state.SetEngineN2(0, 30);
         Assert.True(Bbs757FoChecklistDefinitions.NotParked(state));
     }
+
+    // ------------------------------------------------------------------ exterior lights (plan 19, task 7)
+
+    [Theory]
+    [InlineData("PREFLIGHT", "PF_LIGHTS_OFF", "Anti-collision, wing, landing, runway turnoff and taxi lights: OFF", null)]
+    [InlineData("BEFORE_START", "BS_LOGO", "Logo lights: ON", "BS_BEACON")]
+    [InlineData("AFTER_START", "AS_TAXI_LIGHT", "Taxi light: ON", "AS_AUTOBRAKE")]
+    [InlineData("BEFORE_TAKEOFF", "BT_TAXI_LIGHT", "Taxi light: ON", "BT_TURNOFF")]
+    [InlineData("AFTER_TAKEOFF", "AT_GROUND_LIGHTS", "Runway turnoff and taxi lights: OFF", "AT_GEAR_OFF")]
+    [InlineData("BEFORE_LANDING", "BL_LIGHTS", "Taxi light and runway turnoff lights: ON", "BL_SPEEDBRAKE")]
+    [InlineData("AFTER_LANDING", "AL_TURNOFF", "Runway turnoff lights: OFF", "AL_WING_LIGHTS")]
+    [InlineData("AFTER_LANDING", "AL_TAXI_LIGHT", "Taxi light: ON", "AL_TURNOFF")]
+    public void The_light_lines_exist_with_the_flow_steps_label_after_their_neighbour(string group, string id, string label, string? after)
+    {
+        var items = Group(group).Items;
+        var item = items.Single(i => i.Id == id);
+        Assert.Equal(label, item.Label);
+        Assert.NotNull(item.CheckAction);
+        Assert.Equal(label, Bbs757FoFlowDefinitions.Build().Single(f => f.Id == group).Steps.Single(s => s.Id == id).Label);
+        if (after != null) Assert.Equal(items.FindIndex(i => i.Id == after) + 1, items.FindIndex(i => i.Id == id));
+    }
+
+    [Fact]
+    public void AfterTakeoff_and_BeforeLanding_lines_sit_where_the_flow_puts_them()
+    {
+        var at = Group("AFTER_TAKEOFF").Items;
+        Assert.Equal(at.FindIndex(i => i.Id == "AT_GROUND_LIGHTS") + 1, at.FindIndex(i => i.Id == "AT_FLAPS"));
+        var bl = Group("BEFORE_LANDING").Items;
+        Assert.Equal("BL_GEAR", bl[^1].Id);
+    }
 }

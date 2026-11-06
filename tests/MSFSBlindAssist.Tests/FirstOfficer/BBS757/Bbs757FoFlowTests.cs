@@ -415,6 +415,101 @@ public class Bbs757FoFlowTests
         Assert.False(captain.SkipCondition!(State((K.ExtPwrOn, 0), (K.ApuState, 0))));   // neither: the Captain is asked
     }
 
+    // ------------------------------------------------------------------ exterior lights at their flows (plan 19, task 7)
+
+    private static void AssertWrites(string flow, string stepId, string label, params (string Key, int? Target)[] writes)
+    {
+        var step = Step(flow, stepId);
+        Assert.Equal(label, step.Label);
+        var actual = step.ActionType == FlowStepActionType.SetSwitchMultiple
+            ? step.MultiActions.ToArray()
+            : new[] { (step.EventName!, step.TargetValue) };
+        Assert.Equal(writes, actual);
+        Assert.Contains(stepId, step.LinkedChecklistItemIds);
+    }
+
+    [Fact]
+    public void Preflight_LightsOff_AlsoTakesTheTaxiLight()
+    {
+        AssertWrites("PREFLIGHT", "PF_LIGHTS_OFF", "Anti-collision, wing, landing, runway turnoff and taxi lights: OFF",
+            (K.BeaconLight, 0), (K.StrobeLights, 0), (K.WingLights, 0), (K.LeftLanding, 0), (K.RightLanding, 0),
+            (K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0));
+        var step = Step("PREFLIGHT", "PF_LIGHTS_OFF");
+        Assert.False(step.SkipCondition!(State((K.BeaconLight, 0), (K.StrobeLights, 0), (K.WingLights, 0), (K.LeftLanding, 0),
+            (K.RightLanding, 0), (K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 1))));
+    }
+
+    [Fact]
+    public void BeforeStart_LogoLightsOn_RightAfterTheBeacon()
+    {
+        AssertWrites("BEFORE_START", "BS_LOGO", "Logo lights: ON", (K.LogoLights, 1));
+        Assert.Equal(Index("BEFORE_START", "BS_BEACON") + 1, Index("BEFORE_START", "BS_LOGO"));
+        var skip = Step("BEFORE_START", "BS_LOGO").SkipCondition!;
+        Assert.True(skip(State((K.LogoLights, 1))));
+        Assert.False(skip(State((K.LogoLights, 0))));
+    }
+
+    [Fact]
+    public void AfterStart_TaxiLightOn_AfterTheAutobrake()
+    {
+        AssertWrites("AFTER_START", "AS_TAXI_LIGHT", "Taxi light: ON", (K.TaxiLight, 1));
+        Assert.Equal(Index("AFTER_START", "AS_AUTOBRAKE") + 1, Index("AFTER_START", "AS_TAXI_LIGHT"));
+        var skip = Step("AFTER_START", "AS_TAXI_LIGHT").SkipCondition!;
+        Assert.True(skip(State((K.TaxiLight, 1))));
+        Assert.False(skip(State((K.TaxiLight, 0))));
+    }
+
+    [Fact]
+    public void BeforeTakeoff_TaxiLightOn_AfterTheTurnoffLights()
+    {
+        AssertWrites("BEFORE_TAKEOFF", "BT_TAXI_LIGHT", "Taxi light: ON", (K.TaxiLight, 1));
+        Assert.Equal(Index("BEFORE_TAKEOFF", "BT_TURNOFF") + 1, Index("BEFORE_TAKEOFF", "BT_TAXI_LIGHT"));
+        var skip = Step("BEFORE_TAKEOFF", "BT_TAXI_LIGHT").SkipCondition!;
+        Assert.True(skip(State((K.TaxiLight, 1))));
+        Assert.False(skip(State((K.TaxiLight, 0))));
+    }
+
+    [Fact]
+    public void AfterTakeoff_GroundLightsOff_AfterTheGearLever_BeforeTheFlaps_GearCheckStillLast()
+    {
+        AssertWrites("AFTER_TAKEOFF", "AT_GROUND_LIGHTS", "Runway turnoff and taxi lights: OFF",
+            (K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0));
+        Assert.Equal(Index("AFTER_TAKEOFF", "AT_GEAR_OFF") + 1, Index("AFTER_TAKEOFF", "AT_GROUND_LIGHTS"));
+        Assert.Equal(Index("AFTER_TAKEOFF", "AT_GROUND_LIGHTS") + 1, Index("AFTER_TAKEOFF", "AT_CHK_FLAPS"));
+        Assert.Equal("AT_CHK_GEAR", Flow("AFTER_TAKEOFF").Steps[^1].Id);
+        var skip = Step("AFTER_TAKEOFF", "AT_GROUND_LIGHTS").SkipCondition!;
+        Assert.True(skip(State((K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0))));
+        Assert.False(skip(State((K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 1))));
+        Assert.False(skip(State()));
+    }
+
+    [Fact]
+    public void BeforeLanding_TaxiAndTurnoffLightsOn_AfterTheSpeedbrake_GearCheckStillLast()
+    {
+        AssertWrites("BEFORE_LANDING", "BL_LIGHTS", "Taxi light and runway turnoff lights: ON",
+            (K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1));
+        Assert.Equal(Index("BEFORE_LANDING", "BL_SPEEDBRAKE") + 1, Index("BEFORE_LANDING", "BL_LIGHTS"));
+        Assert.Equal("BL_CHK_GEAR", Flow("BEFORE_LANDING").Steps[^1].Id);
+        var skip = Step("BEFORE_LANDING", "BL_LIGHTS").SkipCondition!;
+        Assert.True(skip(State((K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1))));
+        Assert.False(skip(State((K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 0))));
+    }
+
+    [Fact]
+    public void AfterLanding_TurnoffOff_AndTaxiOn_AfterTheWingLights()
+    {
+        AssertWrites("AFTER_LANDING", "AL_TURNOFF", "Runway turnoff lights: OFF", (K.LeftTurnoff, 0), (K.RightTurnoff, 0));
+        AssertWrites("AFTER_LANDING", "AL_TAXI_LIGHT", "Taxi light: ON", (K.TaxiLight, 1));
+        Assert.Equal(Index("AFTER_LANDING", "AL_WING_LIGHTS") + 1, Index("AFTER_LANDING", "AL_TURNOFF"));
+        Assert.Equal(Index("AFTER_LANDING", "AL_TURNOFF") + 1, Index("AFTER_LANDING", "AL_TAXI_LIGHT"));
+        var off = Step("AFTER_LANDING", "AL_TURNOFF").SkipCondition!;
+        Assert.True(off(State((K.LeftTurnoff, 0), (K.RightTurnoff, 0))));
+        Assert.False(off(State((K.LeftTurnoff, 0), (K.RightTurnoff, 1))));
+        var taxi = Step("AFTER_LANDING", "AL_TAXI_LIGHT").SkipCondition!;
+        Assert.True(taxi(State((K.TaxiLight, 1))));
+        Assert.False(taxi(State((K.TaxiLight, 0))));
+    }
+
     [Fact]
     public void Preflight_TurnsTheRunwayTurnoffLightsOff_ArmsTheAtByItsFlag_AndRemindsTheLandingAltitude()
     {

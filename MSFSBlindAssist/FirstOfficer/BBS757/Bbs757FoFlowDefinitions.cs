@@ -101,7 +101,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildPreflight() => new()
     {
         Id = "PREFLIGHT", Name = "Preflight",
-        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights, window heat, signs, pressurization, air; then the MCP and autobrake RTO.",
+        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights (anti-collision, wing, landing, runway turnoff and taxi off), window heat, signs, pressurization, air; then the MCP and autobrake RTO.",
         RelatedChecklistGroupIds = new[] { "PREFLIGHT" },
         Steps = new()
         {
@@ -124,9 +124,9 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(Multi("PF_ANTI_ICE", "Wing and engine anti-ice: OFF", (K.WingAntiIce, 0), (K.LeftEngAntiIce, 0), (K.RightEngAntiIce, 0)),
                 s => s.IsOn("FO_ANTI_ICE_OFF")), "PF_ANTI_ICE"),
             Done(Skip(SW("PF_WIPERS", "Wipers: OFF", K.Wipers, 0), s => s.IsPosition(K.Wipers, 0)), "PF_WIPERS"),
-            Done(Skip(Multi("PF_LIGHTS_OFF", "Anti-collision, wing, landing and runway turnoff lights: OFF",
+            Done(Skip(Multi("PF_LIGHTS_OFF", "Anti-collision, wing, landing, runway turnoff and taxi lights: OFF",
                     (K.BeaconLight, 0), (K.StrobeLights, 0), (K.WingLights, 0), (K.LeftLanding, 0), (K.RightLanding, 0),
-                    (K.LeftTurnoff, 0), (K.RightTurnoff, 0)),
+                    (K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0)),
                 s => s.IsOn("FO_PREFLIGHT_LIGHTS_OFF")), "PF_LIGHTS_OFF"),
             Done(Skip(Multi("PF_WINDOW_HEAT", "Window heat: ON", K.WindowHeat.Select(k => (k, (int?)1)).ToArray()),
                 s => s.IsOn("FO_WINDOW_HEAT_ON")), "PF_WINDOW_HEAT"),
@@ -158,7 +158,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildBeforeStart() => new()
     {
         Id = "BEFORE_START", Name = "Before Start",
-        Description = "Parking brake, doors, electric hydraulic pumps R then C then L, fuel pumps, seat belts, APU running, external power off once the APU is on line, APU bleed, transponder TA/RA, beacon, IRS aligned.",
+        Description = "Parking brake, doors, electric hydraulic pumps R then C then L, fuel pumps, seat belts, APU running, external power off once the APU is on line, APU bleed, transponder TA/RA, beacon and logo lights on, IRS aligned.",
         RelatedChecklistGroupIds = new[] { "BEFORE_START", "BEFORE_START_CL" },
         Steps = new()
         {
@@ -196,6 +196,7 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(SW("BS_APU_BLEED", "APU bleed: ON", K.ApuBleed, 1), s => s.IsOn(K.ApuBleed)), "BS_APU_BLEED"),
             Done(Skip(SW("BS_XPDR", "Transponder: TA/RA", K.TcasMode, (int)K.TcasTaRa), s => s.IsPosition(K.TcasMode, (int)K.TcasTaRa)), "BS_XPDR"),
             Also(Done(Skip(SW("BS_BEACON", "Beacon: ON", K.BeaconLight, 1), s => s.IsOn(K.BeaconLight)), "BS_BEACON"), "BSC_BEACON"),
+            Done(Skip(SW("BS_LOGO", "Logo lights: ON", K.LogoLights, 1), s => s.IsOn(K.LogoLights)), "BS_LOGO"),
             // Last before the Captain's items, so the rest of the flow runs while the IRS aligns (about 10 min;
             // a 5 s check here failed every normal start from cold, live 2026-10-28).
             Check("BS_CHK_IRS", "IRS: ALIGNED", "FO_IRS_ALIGNED", On, IrsAlignSeconds, "BSC_IRS"),
@@ -285,7 +286,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildAfterStart() => new()
     {
         Id = "AFTER_START", Name = "After Start",
-        Description = "Start selectors in AUTO, packs AUTO, isolation closed, APU bleed and APU off, speedbrake down, autobrake RTO; flaps and trims are the Captain's.",
+        Description = "Start selectors in AUTO, packs AUTO, isolation closed, APU bleed and APU off, speedbrake down, autobrake RTO, taxi light on; flaps and trims are the Captain's.",
         RelatedChecklistGroupIds = new[] { "AFTER_START", "AFTER_START_CL" },
         Steps = new()
         {
@@ -306,6 +307,7 @@ public static class Bbs757FoFlowDefinitions
                 Bbs757FoChecklistDefinitions.NoOtherPower, Bbs757FoChecklistDefinitions.ApuStaysText), "AS_APU"),
             Done(Skip(SW("AS_SPEEDBRAKE", "Speedbrake lever: DOWN", X.SpeedbrakeDown, 1), s => s.IsOn("FO_SPEEDBRAKE_DOWN")), "AS_SPEEDBRAKE"),
             Done(Skip(SW("AS_AUTOBRAKE", "Autobrake: RTO", K.Autobrake, (int)K.AutobrakeRto), s => s.IsPosition(K.Autobrake, (int)K.AutobrakeRto)), "AS_AUTOBRAKE"),
+            Done(Skip(SW("AS_TAXI_LIGHT", "Taxi light: ON", K.TaxiLight, 1), s => s.IsOn(K.TaxiLight)), "AS_TAXI_LIGHT"),
             Done(Skip(Captain("AS_FLAPS", "Takeoff flaps", "Set the flaps for takeoff."), s => s.IsOn("FO_FLAPS_TAKEOFF")), "AS_FLAPS"),
             Check("AS_CHK_FLAPS", "Flaps: set for takeoff", "FO_FLAPS_TAKEOFF", On, CaptainFlapsSeconds, "ASC_FLAPS"),
             Done(Captain("AS_TRIMS", "Trims", "Set the trims: rudder zero, aileron zero, stabilizer for takeoff."), "AS_TRIMS"),
@@ -316,7 +318,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildBeforeTakeoff() => new()
     {
         Id = "BEFORE_TAKEOFF", Name = "Before Takeoff",
-        Description = "Both engines running, seat belts on, flaps and autobrake checked, landing, strobe, wing and runway turnoff lights on.",
+        Description = "Both engines running, seat belts on, flaps and autobrake checked, landing, strobe, wing, runway turnoff and taxi lights on.",
         RelatedChecklistGroupIds = new[] { "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL" },
         Steps = new()
         {
@@ -331,6 +333,7 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(SW("BT_WING", "Wing lights: ON", K.WingLights, 1), s => s.IsOn(K.WingLights)), "BT_WING"),
             Done(Skip(Multi("BT_TURNOFF", "Runway turnoff lights: ON", (K.LeftTurnoff, 1), (K.RightTurnoff, 1)),
                 s => s.IsOn("FO_TURNOFF_LIGHTS_ON")), "BT_TURNOFF"),
+            Done(Skip(SW("BT_TAXI_LIGHT", "Taxi light: ON", K.TaxiLight, 1), s => s.IsOn(K.TaxiLight)), "BT_TAXI_LIGHT"),
             Done(Captain("BT_CONFIG", "Takeoff configuration", "Press the CONFIG button and check there is no configuration warning."), "BT_CONFIG"),
         }
     };
@@ -339,12 +342,14 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildAfterTakeoff() => new()
     {
         Id = "AFTER_TAKEOFF", Name = "After Takeoff",
-        Description = "Gear lever OFF after retraction (the Captain's), then flaps up and gear up and off confirmed, read only.",
+        Description = "Gear lever OFF after retraction (the Captain's), runway turnoff and taxi lights off, then flaps up and gear up and off confirmed, read only.",
         RelatedChecklistGroupIds = new[] { "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL" },
         Steps = new()
         {
             Done(Skip(Captain("AT_GEAR_OFF", "Gear lever OFF", "Gear lever to OFF once the gear is up."),
                 s => s.IsOn("FO_GEAR_UP_OFF")), "AT_GEAR_OFF"),
+            Done(Skip(Multi("AT_GROUND_LIGHTS", "Runway turnoff and taxi lights: OFF", (K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0)),
+                s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "AT_GROUND_LIGHTS"),
             Also(Check("AT_CHK_FLAPS", "Flaps: up", "FO_FLAPS_UP", On, FlapsUpCheckSeconds, "AT_FLAPS"), "ATC_FLAPS"),
             // Last (FO-13): the lever at OFF and every leg up.
             Also(Check("AT_CHK_GEAR", "Gear: up and off", "FO_GEAR_UP_OFF", On, GearCheckSeconds, "AT_GEAR"), "ATC_GEAR"),
@@ -372,12 +377,14 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildBeforeLanding() => new()
     {
         Id = "BEFORE_LANDING", Name = "Before Landing",
-        Description = "Speedbrake armed, seat belts checked, landing flaps 25 or 30 checked, then gear down and three green confirmed, read only.",
+        Description = "Speedbrake armed, taxi light and runway turnoff lights on, seat belts checked, landing flaps 25 or 30 checked, then gear down and three green confirmed, read only.",
         RelatedChecklistGroupIds = new[] { "BEFORE_LANDING", "BEFORE_LANDING_CL" },
         Steps = new()
         {
             Also(Done(LeaveAlone(Skip(SW("BL_SPEEDBRAKE", "Speedbrake: ARMED", X.SpeedbrakeArm, 1), s => s.IsOn("FO_SPEEDBRAKE_ARMED")),
                 s => s.IsOn("FO_SPEEDBRAKE_EXTENDED"), Bbs757FoChecklistDefinitions.SpeedbrakeStaysText), "BL_SPEEDBRAKE"), "BLC_SPEEDBRAKE"),
+            Done(Skip(Multi("BL_LIGHTS", "Taxi light and runway turnoff lights: ON", (K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1)),
+                s => s.IsOn("FO_GROUND_LIGHTS_ON")), "BL_LIGHTS"),
             Check("BL_CHK_SEAT_BELTS", "Seat belt signs: ON", K.SeatBelts, v => Is(v, K.SignOn), CheckSeconds, "BLC_SEAT_BELTS"),
             // The Captain's flap lever, read (E181: "The normal landing choices are 25 or 30").
             Check("BL_CHK_FLAPS", "Flaps: landing, 25 or 30", "FO_FLAPS_LANDING", On, CaptainFlapsSeconds, "BLC_FLAPS"),
@@ -390,7 +397,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildAfterLanding() => new()
     {
         Id = "AFTER_LANDING", Name = "After Landing",
-        Description = "Speedbrake down, autobrake off, weather radar and terrain off, wing anti-ice off, landing, strobe and wing lights off, flight directors off; flaps and trims are the Captain's; then the APU start.",
+        Description = "Speedbrake down, autobrake off, weather radar and terrain off, wing anti-ice off, landing, strobe, wing and runway turnoff lights off, taxi light on, flight directors off; flaps and trims are the Captain's; then the APU start.",
         RelatedChecklistGroupIds = new[] { "AFTER_LANDING", "AFTER_LANDING_CL" },
         Steps = new()
         {
@@ -404,6 +411,9 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(Multi("AL_LANDING", "Landing lights: OFF", (K.LeftLanding, 0), (K.RightLanding, 0)), s => s.IsOn("FO_LANDING_LIGHTS_OFF")), "AL_LANDING"),
             Done(Skip(SW("AL_STROBES", "Strobe lights: OFF", K.StrobeLights, 0), s => s.IsPosition(K.StrobeLights, 0)), "AL_STROBES"),
             Done(Skip(SW("AL_WING_LIGHTS", "Wing lights: OFF", K.WingLights, 0), s => s.IsPosition(K.WingLights, 0)), "AL_WING_LIGHTS"),
+            Done(Skip(Multi("AL_TURNOFF", "Runway turnoff lights: OFF", (K.LeftTurnoff, 0), (K.RightTurnoff, 0)),
+                s => s.IsOn("FO_TURNOFF_LIGHTS_OFF")), "AL_TURNOFF"),
+            Done(Skip(SW("AL_TAXI_LIGHT", "Taxi light: ON", K.TaxiLight, 1), s => s.IsOn(K.TaxiLight)), "AL_TAXI_LIGHT"),
             Done(Skip(Multi("AL_FDS", "Flight directors: OFF", (K.CaptainFd, 0), (K.FirstOfficerFd, 0)), s => s.IsOn("FO_FDS_OFF")), "AL_FDS"),
             Done(Skip(Captain("AL_FLAPS", "Flaps up", "Flaps up."), s => s.IsOn("FO_FLAPS_UP")), "AL_FLAPS"),
             Check("AL_CHK_FLAPS", "Flaps: up", "FO_FLAPS_UP", On, CaptainFlapsSeconds, "ALC_FLAPS"),

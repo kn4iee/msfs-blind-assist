@@ -111,9 +111,9 @@ public static class Bbs757FoChecklistDefinitions
             Auto("PF_ANTI_ICE", "PREFLIGHT", "Wing and engine anti-ice: OFF", "FO_ANTI_ICE_OFF", On,
                 SetAll((K.WingAntiIce, 0), (K.LeftEngAntiIce, 0), (K.RightEngAntiIce, 0))),
             Auto("PF_WIPERS", "PREFLIGHT", "Wipers: OFF", K.Wipers, v => Is(v, 0), Set(K.Wipers, 0)),
-            Auto("PF_LIGHTS_OFF", "PREFLIGHT", "Anti-collision, wing, landing and runway turnoff lights: OFF", "FO_PREFLIGHT_LIGHTS_OFF", On,
+            Auto("PF_LIGHTS_OFF", "PREFLIGHT", "Anti-collision, wing, landing, runway turnoff and taxi lights: OFF", "FO_PREFLIGHT_LIGHTS_OFF", On,
                 SetAll((K.BeaconLight, 0), (K.StrobeLights, 0), (K.WingLights, 0), (K.LeftLanding, 0), (K.RightLanding, 0),
-                    (K.LeftTurnoff, 0), (K.RightTurnoff, 0))),
+                    (K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0))),
             Auto("PF_WINDOW_HEAT", "PREFLIGHT", "Window heat: ON", "FO_WINDOW_HEAT_ON", On, AllTo(K.WindowHeat, 1)),
             Auto("PF_NO_SMOKING", "PREFLIGHT", "No smoking signs: ON", K.NoSmoking, v => Is(v, K.SignOn), Set(K.NoSmoking, K.SignOn)),
             Auto("PF_PRESS_MODE", "PREFLIGHT", "Pressurization mode: AUTO", K.PressMode, v => !double.IsNaN(v) && v < 1.5, Set(K.PressMode, 0)),
@@ -160,6 +160,7 @@ public static class Bbs757FoChecklistDefinitions
             Auto("BS_APU_BLEED", "BEFORE_START", "APU bleed: ON", K.ApuBleed, On, Set(K.ApuBleed, 1)),
             Auto("BS_XPDR", "BEFORE_START", "Transponder: TA/RA", K.TcasMode, v => Is(v, K.TcasTaRa), Set(K.TcasMode, K.TcasTaRa)),
             Auto("BS_BEACON", "BEFORE_START", "Beacon: ON", K.BeaconLight, On, Set(K.BeaconLight, 1)),
+            Auto("BS_LOGO", "BEFORE_START", "Logo lights: ON", K.LogoLights, On, Set(K.LogoLights, 1)),
             // The Captain's, last on every profile (FoChecklistRefinementTests).
             Reminder("BS_ACARS", "BEFORE_START", "Start ACARS"),
             Reminder("BS_CLEARANCE", "BEFORE_START", "Obtain pushback and start clearance"),
@@ -223,6 +224,7 @@ public static class Bbs757FoChecklistDefinitions
             LeaveAlone(Auto("AS_APU", "AFTER_START", "APU: OFF", "FO_APU_OFF", On, Set(K.ApuSelector, 0)), NoOtherPower, ApuStaysText),
             Auto("AS_SPEEDBRAKE", "AFTER_START", "Speedbrake lever: DOWN", "FO_SPEEDBRAKE_DOWN", On, Set(X.SpeedbrakeDown, 1)),
             Auto("AS_AUTOBRAKE", "AFTER_START", "Autobrake: RTO", K.Autobrake, v => Is(v, K.AutobrakeRto), Set(K.Autobrake, K.AutobrakeRto)),
+            Auto("AS_TAXI_LIGHT", "AFTER_START", "Taxi light: ON", K.TaxiLight, On, Set(K.TaxiLight, 1)),
             Reminder("AS_FLAPS", "AFTER_START", "Flaps: set for takeoff"),
             Reminder("AS_TRIMS", "AFTER_START", "Trims: rudder zero, aileron zero, stabilizer set for takeoff"),
         }
@@ -241,6 +243,7 @@ public static class Bbs757FoChecklistDefinitions
             Auto("BT_WING", "BEFORE_TAKEOFF", "Wing lights: ON", K.WingLights, On, Set(K.WingLights, 1)),
             Auto("BT_TURNOFF", "BEFORE_TAKEOFF", "Runway turnoff lights: ON", "FO_TURNOFF_LIGHTS_ON", On,
                 SetAll((K.LeftTurnoff, 1), (K.RightTurnoff, 1))),
+            Auto("BT_TAXI_LIGHT", "BEFORE_TAKEOFF", "Taxi light: ON", K.TaxiLight, On, Set(K.TaxiLight, 1)),
             Reminder("BT_CONFIG", "BEFORE_TAKEOFF", "Takeoff configuration: press the CONFIG button and check no warning"),
         }
     };
@@ -251,6 +254,8 @@ public static class Bbs757FoChecklistDefinitions
         Items = new()
         {
             Reminder("AT_GEAR_OFF", "AFTER_TAKEOFF", "Landing gear lever: OFF after retraction"),
+            Auto("AT_GROUND_LIGHTS", "AFTER_TAKEOFF", "Runway turnoff and taxi lights: OFF", "FO_GROUND_LIGHTS_OFF", On,
+                SetAll((K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0))),
             Auto("AT_FLAPS", "AFTER_TAKEOFF", "Flaps: up", "FO_FLAPS_UP", On, null),
             Auto("AT_GEAR", "AFTER_TAKEOFF", "Gear: up and off", "FO_GEAR_UP_OFF", On, null),
         }
@@ -275,6 +280,8 @@ public static class Bbs757FoChecklistDefinitions
         {
             LeaveAlone(Auto("BL_SPEEDBRAKE", "BEFORE_LANDING", "Speedbrake: ARMED", "FO_SPEEDBRAKE_ARMED", On, Set(X.SpeedbrakeArm, 1)),
                 s => s.IsOn("FO_SPEEDBRAKE_EXTENDED"), SpeedbrakeStaysText),
+            Auto("BL_LIGHTS", "BEFORE_LANDING", "Taxi light and runway turnoff lights: ON", "FO_GROUND_LIGHTS_ON", On,
+                SetAll((K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1))),
             Auto("BL_GEAR", "BEFORE_LANDING", "Landing gear: down, three green", "FO_GEAR_DOWN", On, null),
         }
     };
@@ -292,6 +299,9 @@ public static class Bbs757FoChecklistDefinitions
                 SetAll((K.LeftLanding, 0), (K.RightLanding, 0))),
             Auto("AL_STROBES", "AFTER_LANDING", "Strobe lights: OFF", K.StrobeLights, Off, Set(K.StrobeLights, 0)),
             Auto("AL_WING_LIGHTS", "AFTER_LANDING", "Wing lights: OFF", K.WingLights, Off, Set(K.WingLights, 0)),
+            Auto("AL_TURNOFF", "AFTER_LANDING", "Runway turnoff lights: OFF", "FO_TURNOFF_LIGHTS_OFF", On,
+                SetAll((K.LeftTurnoff, 0), (K.RightTurnoff, 0))),
+            Auto("AL_TAXI_LIGHT", "AFTER_LANDING", "Taxi light: ON", K.TaxiLight, On, Set(K.TaxiLight, 1)),
             Auto("AL_FDS", "AFTER_LANDING", "Flight directors: OFF", "FO_FDS_OFF", On, SetAll((K.CaptainFd, 0), (K.FirstOfficerFd, 0))),
             Reminder("AL_FLAPS", "AFTER_LANDING", "Flaps: up"),
             Reminder("AL_TRIMS", "AFTER_LANDING", "Trims: zero, zero, stabilizer 4 units"),

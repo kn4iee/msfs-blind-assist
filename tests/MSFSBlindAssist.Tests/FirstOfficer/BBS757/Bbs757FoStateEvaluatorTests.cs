@@ -85,7 +85,9 @@ public class Bbs757FoStateEvaluatorTests
         new object[] { "FO_APU_ON_LINE", new[] { K.ApuState, K.ApuGen } },
         new object[] { "FO_PARKED_LIGHTS_OFF", new[] { K.WingLights, K.LogoLights, K.TaxiLight } },
         new object[] { "FO_PREFLIGHT_LIGHTS_OFF", new[] { K.BeaconLight, K.StrobeLights, K.WingLights, K.LeftLanding, K.RightLanding,
-            K.LeftTurnoff, K.RightTurnoff } },
+            K.LeftTurnoff, K.RightTurnoff, K.TaxiLight } },
+        new object[] { "FO_GROUND_LIGHTS_OFF", new[] { K.LeftTurnoff, K.RightTurnoff, K.TaxiLight } },
+        new object[] { "FO_GROUND_LIGHTS_ON", new[] { K.LeftTurnoff, K.RightTurnoff, K.TaxiLight } },
     };
 
     [Theory]
@@ -401,11 +403,36 @@ public class Bbs757FoStateEvaluatorTests
     [Fact]
     public void Preflight_lights_off_includes_the_runway_turnoff_lights()
     {
-        var off = new[] { K.BeaconLight, K.StrobeLights, K.WingLights, K.LeftLanding, K.RightLanding, K.LeftTurnoff, K.RightTurnoff }
+        var off = new[] { K.BeaconLight, K.StrobeLights, K.WingLights, K.LeftLanding, K.RightLanding, K.LeftTurnoff, K.RightTurnoff, K.TaxiLight }
             .ToDictionary(k => k, _ => 0.0);
         Assert.Equal(1, C("FO_PREFLIGHT_LIGHTS_OFF", off));
         off[K.RightTurnoff] = 1;
         Assert.Equal(0, C("FO_PREFLIGHT_LIGHTS_OFF", off));
+    }
+
+    [Fact]
+    public void Preflight_lights_off_is_false_with_only_the_taxi_light_on()
+    {
+        var d = new[] { K.BeaconLight, K.StrobeLights, K.WingLights, K.LeftLanding, K.RightLanding, K.LeftTurnoff, K.RightTurnoff }
+            .ToDictionary(k => k, _ => 0.0);
+        d[K.TaxiLight] = 1;
+        Assert.Equal(0, C("FO_PREFLIGHT_LIGHTS_OFF", d));
+    }
+
+    [Fact]
+    public void Ground_lights_off_needs_both_turnoffs_and_the_taxi_light_off()
+    {
+        Assert.Equal(1, C("FO_GROUND_LIGHTS_OFF", D((K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0))));
+        Assert.Equal(0, C("FO_GROUND_LIGHTS_OFF", D((K.LeftTurnoff, 1), (K.RightTurnoff, 0), (K.TaxiLight, 0))));
+        Assert.Equal(0, C("FO_GROUND_LIGHTS_OFF", D((K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 1))));
+    }
+
+    [Fact]
+    public void Ground_lights_on_needs_both_turnoffs_and_the_taxi_light_on()
+    {
+        Assert.Equal(1, C("FO_GROUND_LIGHTS_ON", D((K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1))));
+        Assert.Equal(0, C("FO_GROUND_LIGHTS_ON", D((K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 0))));
+        Assert.Equal(0, C("FO_GROUND_LIGHTS_ON", D((K.LeftTurnoff, 0), (K.RightTurnoff, 1), (K.TaxiLight, 1))));
     }
 
     [Fact]

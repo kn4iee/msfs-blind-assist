@@ -324,7 +324,10 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
         ["FO_YAW_DAMPERS_ON"] = Vars(v => v.All(On), K.LeftYawDamper, K.RightYawDamper),
         ["FO_START_SELECTORS_AUTO"] = Vars(v => v.All(x => Pos(x, K.StartAuto)), K.LeftStart, K.RightStart),
         ["FO_PREFLIGHT_LIGHTS_OFF"] = Vars(v => !v.Any(On), K.BeaconLight, K.StrobeLights, K.WingLights, K.LeftLanding, K.RightLanding,
-            K.LeftTurnoff, K.RightTurnoff),
+            K.LeftTurnoff, K.RightTurnoff, K.TaxiLight),
+        // After Takeoff / Before Landing: both runway turnoff lights and BlueBird's one taxi light together.
+        ["FO_GROUND_LIGHTS_OFF"] = Vars(v => !v.Any(On), K.LeftTurnoff, K.RightTurnoff, K.TaxiLight),
+        ["FO_GROUND_LIGHTS_ON"] = Vars(v => v.All(On), K.LeftTurnoff, K.RightTurnoff, K.TaxiLight),
         // Shutdown's powered parked configuration (E196): position lights only, so wing, logo and taxi OFF.
         ["FO_PARKED_LIGHTS_OFF"] = Vars(v => !v.Any(On), K.WingLights, K.LogoLights, K.TaxiLight),
         ["FO_TURNOFF_LIGHTS_ON"] = Vars(v => v.All(On), K.LeftTurnoff, K.RightTurnoff),
