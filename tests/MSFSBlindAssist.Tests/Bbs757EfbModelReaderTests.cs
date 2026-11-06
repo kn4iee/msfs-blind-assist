@@ -297,9 +297,26 @@ public class Bbs757EfbModelReaderTests
         var page = PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"],
             N("other", "planning_perf_calc_canvas", "", 250, 82, 1147, 966,
                 N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("x_tab_button_0", "TAKE OFF"), Tab("x_tab_button_1", "LANDING")),
-                N("other", "x_takeoff_panel", "", 300, 200, 100, 30), N("other", "x_landing_panel", "", 300, 240, 100, 30)));
+                N("other", "x_take_off_panel", "", 300, 200, 100, 30), N("other", "x_landing_panel", "", 300, 240, 100, 30)));
 
         Assert.DoesNotContain(Bbs757EfbModelReader.Read(new[] { page })!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
+    }
+
+    [Fact]
+    public void A_short_tab_word_does_not_match_inside_another_word()
+    {
+        var page = PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"],
+            N("other", "maintenance_layout_grid", "", 250, 82, 1147, 966,
+                N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("m_tab_button_0", "APU"), Tab("m_tab_button_1", "ON")),
+                N("other", "maintenance_captured_conditions_panel", "", 300, 200, 100, 30)));
+        Assert.DoesNotContain(Bbs757EfbModelReader.Read(new[] { page })!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
+
+        var whole = PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"],
+            N("other", "maintenance_layout_grid", "", 250, 82, 1147, 966,
+                N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("m_tab_button_0", "APU"), Tab("m_tab_button_1", "ON")),
+                N("other", "maintenance_apu_panel", "", 300, 200, 100, 30)));
+        var apu = Assert.Single(Bbs757EfbModelReader.Read(new[] { whole })!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
+        Assert.Equal("m_tab_button_0", apu.Name);
     }
 
     [Fact]

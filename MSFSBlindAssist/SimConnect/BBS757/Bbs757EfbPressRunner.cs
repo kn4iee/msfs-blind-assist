@@ -499,7 +499,7 @@ public sealed class Bbs757EfbPressRunner
         }
 
         var found = Bbs757EfbPress.Relocate(pressed.Page, now, item);
-        if (found == null || found.Kind is not (Bbs757EfbKind.Button or Bbs757EfbKind.Menu or Bbs757EfbKind.Toggle
+        if (found == null || found.Kind is not (Bbs757EfbKind.Button or Bbs757EfbKind.Tab or Bbs757EfbKind.Menu or Bbs757EfbKind.Toggle
                 or Bbs757EfbKind.Checkbox or Bbs757EfbKind.Slider))
         {
             gone = true;

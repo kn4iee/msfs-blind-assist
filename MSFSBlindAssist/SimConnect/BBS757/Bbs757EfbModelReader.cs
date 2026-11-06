@@ -171,13 +171,28 @@ public sealed class Bbs757EfbModelReader
         // word without being that tab's page ("RANDOM FAILURES: OFF", planning_weather_notam_canvas).
         var panels = Flatten(content.Controls)
             .Where(n => !own.Contains(n) && IsContent(n) && n.Name.EndsWith("_panel", StringComparison.Ordinal))
-            .Select(n => Fold(n.Name)).ToList();
+            .Select(n => n.Name.Split('_', StringSplitOptions.RemoveEmptyEntries)).ToList();
         var hits = tabs.Where(t =>
         {
-            string words = Fold(t.Text);
-            return words.Length > 0 && panels.Any(f => f.Contains(words, StringComparison.Ordinal));
+            var words = t.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Select(w => string.Concat(w.Where(char.IsLetterOrDigit))).Where(w => w.Length > 0).ToArray();
+            return words.Length > 0 && panels.Any(parts => HasRun(parts, words));
         }).ToList();
         return hits.Count == 1 ? hits[0] : null;
+    }
+
+    /// <summary>Whether the words are a contiguous run of the name's parts, compared case-insensitively ("landing", "gear" in
+    /// maintenance_landing_gear_panel); a word never matches inside another part ("apu" is not in "capture").</summary>
+    private static bool HasRun(string[] parts, string[] words)
+    {
+        for (int i = 0; i + words.Length <= parts.Length; i++)
+        {
+            bool all = true;
+            for (int j = 0; j < words.Length && all; j++)
+                all = string.Equals(parts[i + j], words[j], StringComparison.OrdinalIgnoreCase);
+            if (all) return true;
+        }
+        return false;
     }
 
     /// <summary>A left-column control: a side-menu entry (<c>menu:GENERAL</c>, selected when it is the section the page

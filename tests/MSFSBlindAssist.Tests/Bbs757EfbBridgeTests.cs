@@ -122,6 +122,18 @@ public class Bbs757EfbBridgeTests
     // ---- where a press taps -----------------------------------------------------------------------------------------
 
     [Fact]
+    public async Task A_tab_from_the_real_maintenance_page_is_relocated_and_tapped()
+    {
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"))!;
+        var hydraulic = Assert.Single(page.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Name == "maintenance_hydraulic_tab_button");
+        var tablet = new FakeTablet(page);
+
+        await tablet.Runner().ClickAsync(tablet.Press(hydraulic), CancellationToken.None);
+
+        Assert.Equal(new[] { hydraulic.Hit }, tablet.Taps);
+    }
+
+    [Fact]
     public async Task A_press_reads_relocates_and_taps_the_tile_in_place()
     {
         var tile = ReqFuelTruck();
