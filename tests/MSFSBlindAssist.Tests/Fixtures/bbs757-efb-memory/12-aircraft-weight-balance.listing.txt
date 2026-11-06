@@ -5,16 +5,12 @@ text  ZFW CG: 22.5 %
 text  Blk fuel: 20617 Lbs
 text  Take-off: 195977 Lbs
 text  Landing: 184399 Lbs
-heading 2  Business pax - 16/16
-slider 0  Business pax - 16/16
+slider 100  Business pax (16/16)
 text  Weight: 2960 Lbs
-heading 2  Economy pax - 160/160
-slider 0  Economy pax - 160/160
+slider 100  Economy pax (160/160)
 text  Weight: 29600 Lbs
-heading 2  Forward cargo
 slider 0  Forward cargo
 text  Weight: 6160 Lbs
-heading 2  AFT cargo
 slider 0  AFT cargo
 text  Weight: 0 Lbs
 text  Gross weight: 196677 Lbs

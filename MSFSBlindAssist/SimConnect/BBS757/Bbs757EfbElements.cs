@@ -352,20 +352,14 @@ public static class Bbs757EfbElements
         int at = options == null ? -1 : CurrentChoice(it, pageName, options);
         if (options != null && at >= 0)
             value = options[at];
-        else if (value.Length == 0 && it.Slider is { } slider && slider.TrackRight > slider.TrackLeft)
+        else if (value.Length == 0 && it.Slider is { } slider && slider.TrackRight != slider.TrackLeft)
             value = KnobPercent(slider).ToString(CultureInfo.InvariantCulture) + " percent";
         string name = SliderName(it);
         return value.Length > 0 ? name + ": " + value : name;
     }
 
-    /// <summary>Where a slider's knob is along its track, in whole percent.</summary>
-    private static double KnobPercent(Bbs757EfbSlider slider)
-    {
-        double percent = slider.TrackRight > slider.TrackLeft
-            ? Math.Round(100.0 * (slider.KnobX - slider.TrackLeft) / (slider.TrackRight - slider.TrackLeft))
-            : 0;
-        return Math.Clamp(percent, 0, 100);
-    }
+    /// <summary>Where a slider's knob is along its track, in whole percent (from the bottom of a vertical one).</summary>
+    private static double KnobPercent(Bbs757EfbSlider slider) => Math.Round(slider.PercentOf(slider.KnobX));
 
     /// <summary>
     /// A slider's choices, left to right, as the tablet offers them; null when the slider is a number. A row of the Settings pages that is

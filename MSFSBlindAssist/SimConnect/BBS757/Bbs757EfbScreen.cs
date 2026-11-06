@@ -32,8 +32,54 @@ public enum Bbs757EfbKind
 /// <summary>The color of a box: on BlueBird's tablet the color IS the state of a tile.</summary>
 public enum Bbs757EfbTint { None, Blue, Red, Green, Grey, Other }
 
-/// <summary>A slider's geometry: where its track runs and where its knob is, in tablet pixels.</summary>
-public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX);
+/// <summary>
+/// A slider's geometry, in tablet pixels: where its track runs and where its knob is. A track runs from <see cref="TrackLeft"/>, its
+/// 0 end, to <see cref="TrackRight"/>, its 100 end, and <see cref="KnobX"/> is the knob's place along it: x left to right for a
+/// slider wider than tall (every settings slider, the cabin lights, Weight &amp; balance), and y for a <see cref="Vertical"/> one (the
+/// hydraulic reservoirs, Systems' zoom), whose 0 end is its bottom (provisional: Task 13 measures the direction) and which is tapped
+/// at <see cref="AcrossX"/>, its track's x middle.
+/// </summary>
+public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
+{
+    /// <summary>Whether the track runs up and down (the slider's box is taller than wide).</summary>
+    public bool Vertical { get; init; }
+
+    /// <summary>A vertical track's x middle, where it is tapped; 0 for a horizontal one.</summary>
+    public int AcrossX { get; init; }
+
+    /// <summary>The place along the track of <paramref name="percent"/> (0 to 100) of it.</summary>
+    public int At(double percent) => TrackLeft + (int)Math.Round((TrackRight - TrackLeft) * percent / 100.0);
+
+    /// <summary>How far along the track <paramref name="place"/> is, in percent, 0 to 100; 0 for a track of no length.</summary>
+    public double PercentOf(int place)
+    {
+        if (TrackRight == TrackLeft) return 0;
+        double percent = 100.0 * (place - TrackLeft) / (TrackRight - TrackLeft);
+        return percent <= 0 ? 0 : percent >= 100 ? 100 : percent;   // never -0 (a vertical track's 0 end divides by a negative length)
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex Count =
+        new(@"^\s*(\d+)\s*/\s*(\d+)\s*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The part of its track a slider's shown value says, in percent: a percent ("70%", "40"), or a count of its most ("8/16", Weight
+    /// &amp; balance's passengers, as their titles show them); null for any other value ("100 ft", "OFF", nothing) and one past 0 to
+    /// 100. Numbers read as another program writes them (CORE-17).
+    /// </summary>
+    public static double? PercentShown(string value)
+    {
+        var count = Count.Match(value);
+        if (count.Success)
+        {
+            if (!int.TryParse(count.Groups[1].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n)
+                || !int.TryParse(count.Groups[2].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int most)
+                || most <= 0 || n > most) return null;
+            return 100.0 * n / most;
+        }
+        string text = value.Trim().TrimEnd('%').Trim();
+        return MSFSBlindAssist.Utils.NumberParsing.TryParseExternal(text, out double v) && double.IsFinite(v) && v is >= 0 and <= 100 ? v : null;
+    }
+}
 
 /// <summary>
 /// One element of the page. <see cref="Hit"/> is where to tap it (tablet pixels, the agent's click

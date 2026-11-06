@@ -908,6 +908,93 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { "Ceiling could not be set to 30 percent." }, same.Alerts);
     }
 
+    // ---- I3, I4: sliders whose value shows elsewhere, or nowhere, and vertical ones -----------------------------------------
+
+    private static Bbs757EfbScreenModel WeightBalance(string? businessTitle = null, string? forwardCargo = null)
+    {
+        var apps = Bbs757EfbTreeJson.Load("12-aircraft-weight-balance");
+        if (businessTitle != null) apps = Bbs757EfbTreeJson.WithText(apps, "wb_pax_business_title", businessTitle);
+        if (forwardCargo != null) apps = Bbs757EfbTreeJson.WithText(apps, "wb_baggage_fwd_value", forwardCargo);
+        return Bbs757EfbModelReader.Read(apps)!;
+    }
+
+    [Fact]
+    public void A_passenger_slider_is_named_by_its_title_and_placed_by_its_count()
+    {
+        var page = WeightBalance();
+        var pax = Assert.Single(page.Items, i => i.Name == "wb_pax_business_slider");
+
+        Assert.Equal("BUSINESS PAX", pax.Text);
+        Assert.Equal("16/16", pax.Value);
+        Assert.Equal(pax.Slider!.TrackRight, pax.Slider.KnobX);   // 16 of 16 boarded: the knob at the end
+        Assert.Equal(pax.Slider.At(50), WeightBalance("BUSINESS PAX - 8/16").Items.Single(i => i.Name == "wb_pax_business_slider").Slider!.KnobX);
+        Assert.DoesNotContain(page.Items, i => i.Kind == Bbs757EfbKind.Heading && i.Text.StartsWith("BUSINESS PAX", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_passenger_slider_is_judged_by_the_count_its_title_shows_after_the_tap(string culture)
+    {
+        var page = WeightBalance();
+        var pax = Assert.Single(page.Items, i => i.Name == "wb_pax_business_slider");
+        var set = new FakeTablet(page);
+        set.OnTap = _ => set.Show(WeightBalance("BUSINESS PAX - 8/16"));
+
+        await TestCulture.Run(culture, () => set.Runner().SliderAsync(set.Press(pax), "50", CancellationToken.None));
+
+        Assert.Equal(new[] { new Point(pax.Slider!.At(50), pax.Hit.Y) }, set.Taps);
+        Assert.Empty(set.Alerts);
+
+        var wrong = new FakeTablet(page);
+        wrong.OnTap = _ => wrong.Show(WeightBalance("BUSINESS PAX - 15/16"));
+        await TestCulture.Run(culture, () => wrong.Runner().SliderAsync(wrong.Press(pax), "50", CancellationToken.None));
+        Assert.Equal(new[] { "Business pax could not be set to 50 percent." }, wrong.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_slider_whose_value_shows_nowhere_is_judged_by_its_page(string culture)
+    {
+        // The cargo slider shows no value of its own: its weight box beside it is what the tap changes.
+        var page = WeightBalance();
+        var cargo = Assert.Single(page.Items, i => i.Name == "wb_baggage_fwd_slider");
+        Assert.Equal("", cargo.Value);
+        var followed = new FakeTablet(page);
+        followed.OnTap = _ => followed.Show(WeightBalance(forwardCargo: "3080"));
+
+        await TestCulture.Run(culture, () => followed.Runner().SliderAsync(followed.Press(cargo), "50", CancellationToken.None));
+
+        Assert.Single(followed.Taps);
+        Assert.Empty(followed.Alerts);
+
+        var stuck = new FakeTablet(page);
+        await TestCulture.Run(culture, () => stuck.Runner().SliderAsync(stuck.Press(cargo), "50", CancellationToken.None));
+        Assert.Equal(new[] { "Forward cargo could not be set to 50 percent." }, stuck.Alerts);
+    }
+
+    [Theory]
+    [InlineData("15b-aircraft-maintenance-hydraulic", "maintenance_hyd_res_left_slider")]
+    [InlineData("30-systems", "elec_zoom_slider")]
+    public async Task A_vertical_slider_is_set_along_its_height(string fixture, string name)
+    {
+        // A slider taller than wide runs bottom (0, provisional until measured) to top, and is tapped at its x middle.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!;
+        var slider = Assert.Single(page.Items, i => i.Name == name);
+        Assert.True(slider.Slider!.Vertical);
+        var taps = new List<Point>();
+        foreach (var percent in new[] { "10", "90" })
+        {
+            var tablet = new FakeTablet(page);
+            await tablet.Runner().SliderAsync(tablet.Press(slider), percent, CancellationToken.None);
+            taps.Add(Assert.Single(tablet.Taps));
+        }
+
+        Assert.All(taps, t => Assert.Equal(slider.Box.Left + slider.Box.Width / 2, t.X));
+        Assert.All(taps, t => Assert.InRange(t.Y, slider.Box.Top, slider.Box.Bottom - 1));
+        Assert.True(taps[0].Y > taps[1].Y, $"10 percent at {taps[0]} should be below 90 percent at {taps[1]}");
+        Assert.InRange(taps[0].Y, slider.Box.Bottom - slider.Box.Height / 10 - 2, slider.Box.Bottom - slider.Box.Height / 10 + 2);
+    }
+
     // ---- two-choice switches --------------------------------------------------------------------------------------------
 
     private static Bbs757EfbItem Nosewheel(string value) =>

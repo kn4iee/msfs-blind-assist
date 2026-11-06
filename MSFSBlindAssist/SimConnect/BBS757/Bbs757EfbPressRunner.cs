@@ -382,8 +382,9 @@ public sealed class Bbs757EfbPressRunner
     /// A slider set to <paramref name="value"/>: one of its choices (<see cref="Bbs757EfbElements.OptionsFor"/>'s words), or else a
     /// percent along its track. A choice: the choice's place tapped (<see cref="Bbs757EfbPress.ChoiceX"/>), read back, and stepped
     /// toward it, at most <see cref="Bbs757EfbPress.MaxSliderTaps"/> taps; then judged by BlueBird's file when the row is one of its
-    /// settings, else by the page. A percent: one tap at its place, judged by where the knob is. Not set: "{label} could not be set
-    /// to {value}."
+    /// settings, else by the page. A percent: one tap at its place (along a vertical track for a slider taller than wide), judged by
+    /// the part of the track its value shows ("50%", "8/16") when it shows one, else by whether the tap changed the page or the
+    /// slider's words. Not set: "{label} could not be set to {value}."
     /// </summary>
     public async Task SliderAsync(Bbs757EfbPressed pressed, string value, CancellationToken ct)
     {
@@ -442,25 +443,32 @@ public sealed class Bbs757EfbPressRunner
 
         var target = await LocateAsync(pressed, ct);
         if (target?.Item.Slider is not { } track) return;
-        int x = track.TrackLeft + (int)Math.Round(percent / 100 * (track.TrackRight - track.TrackLeft));
-        if (!await TapAsync(target.Item, target, ct, new Point(x, target.At.Y))) return;
+        if (!await TapAsync(target.Item, target, ct, PercentPoint(target, track, percent))) return;
         if (await WaitForChangeAsync(target.Page, ct) is not { } after) return;   // nothing read: the window says why
 
-        // Judged by the value the slider shows now: a percent within the slack, or, when it shows no percent, any other value.
+        // Judged by the value the slider shows now when it shows a part of its track (a percent, a count of its most: within the
+        // slack); else by whether the tap changed anything: the page (the weight beside a cargo slider), or the slider's own words.
+        // A value that shows nowhere ("") never judges it alone: it stays "" whatever the tap did.
         if (Bbs757EfbPress.Relocate(target.Page, after, target.Item) is { } now
-            && (ShownPercent(now.Value) is double shown
+            && (Bbs757EfbSlider.PercentShown(now.Value) is double shown
                 ? Math.Abs(shown - percent) <= PercentSlack
-                : !string.Equals(now.Value, target.Item.Value, StringComparison.Ordinal)))
+                : !Bbs757EfbPress.PageUnchanged(target.Page, after)
+                  || !string.Equals(now.Value, target.Item.Value, StringComparison.Ordinal)
+                  || !string.Equals(now.Text, target.Item.Text, StringComparison.Ordinal)))
             return;
         _io.Alert(Bbs757EfbPress.CouldNotSetText(Bbs757EfbPress.SpokenName(target.Page, target.Item),
             percent.ToString("0.#", CultureInfo.InvariantCulture) + " percent"));
     }
 
-    /// <summary>A slider's shown value as a percent ("40", "40%"); null when it shows none ("25 ft", nothing).</summary>
-    private static double? ShownPercent(string value)
+    /// <summary>Where a set to <paramref name="percent"/> taps a slider: along a horizontal track on the row's tap point, along a
+    /// vertical one at its x middle, kept inside the part of its box that shows, so no tap lands outside the control's clip.</summary>
+    private static Point PercentPoint(Target target, Bbs757EfbSlider track, double percent)
     {
-        string text = value.Trim().TrimEnd('%').Trim();
-        return NumberParsing.TryParseExternal(text, out double v) && double.IsFinite(v) ? v : null;
+        if (!track.Vertical) return new Point(track.At(percent), target.At.Y);
+        var box = target.Item.Box;
+        var clip = Bbs757EfbPress.ClipOf(target.Item);
+        int top = Math.Max(box.Top, clip.Top), bottom = Math.Min(box.Bottom, clip.Bottom) - 1;
+        return new Point(track.AcrossX, Math.Clamp(track.At(percent), top, Math.Max(top, bottom)));
     }
 
     // ------------------------------------------------------------------ where, and the tap

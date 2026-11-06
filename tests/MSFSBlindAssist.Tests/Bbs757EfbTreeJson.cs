@@ -55,6 +55,15 @@ internal static class Bbs757EfbTreeJson
         return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
     }
 
+    /// <summary>The trees with the control named <paramref name="name"/> showing <paramref name="text"/>: the tablet after a tap that
+    /// changed one label.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithText(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, string text)
+    {
+        Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) =>
+            (n.Name == name ? n with { Text = text } : n) with { Children = n.Children.Select(Walk).ToList() };
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
     private static string FixtureDir()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

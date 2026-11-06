@@ -963,8 +963,9 @@ public class Bbs757EfbModelReaderTests
         var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"))!.Items;
 
         Assert.Equal(new[] { "EMPTY", "ZFW", "ZFW CG", "BLK FUEL", "TAKE-OFF", "LANDING" }, items.Take(6).Select(i => i.Text).ToArray());
-        // Everything else keeps tree order: the pax and cargo cards, then the gross weight and center of gravity drawn beside them.
-        Assert.Equal("BUSINESS PAX - 16/16", items[6].Text);
+        // Everything else keeps tree order: the pax and cargo cards, then the gross weight and center of gravity drawn beside them. The
+        // business pax title names its slider ("BUSINESS PAX", its count "16/16" the slider's value) and is no heading of its own.
+        Assert.Equal((Bbs757EfbKind.Slider, "BUSINESS PAX", "16/16"), (items[6].Kind, items[6].Text, items[6].Value));
         var rest = items.Skip(6).Select(i => i.Text).ToList();
         Assert.True(rest.IndexOf("AFT CARGO") < rest.IndexOf("GROSS WEIGHT"));
         Assert.True(rest.IndexOf("GROSS WEIGHT") < rest.IndexOf("CENTER OF GRAVITY"));

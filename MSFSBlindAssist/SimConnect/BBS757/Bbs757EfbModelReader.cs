@@ -339,15 +339,28 @@ public sealed class Bbs757EfbModelReader
             Slider: kind == Bbs757EfbKind.Slider ? SliderOf(control, value) : null);
     }
 
-    /// <summary>A slider's track from its rectangle, and its knob: at the percent its value reads as, else at the start (the
-    /// choices of a settings slider are told by the catalog, not by the knob).</summary>
+    /// <summary>A slider's track from its rectangle, left to right, or bottom to top for a box taller than wide (the hydraulic reservoirs,
+    /// Systems' zoom; the direction is provisional until measured), and its knob: at the part of the track its value reads as (a percent,
+    /// "70%", or a count of its most, "16/16"), else at the start (the choices of a settings slider are told by the catalog, not by the
+    /// knob; a slider whose value shows nowhere keeps R8's start).</summary>
     private static Bbs757EfbSlider SliderOf(Bbs757EfbMemory.Node slider, string value)
     {
-        int left = (int)slider.X, width = (int)slider.W;
-        int knob = left;
-        if (value.EndsWith('%') && MSFSBlindAssist.Utils.NumberParsing.TryParseExternal(value[..^1], out double percent) && percent is >= 0 and <= 100)
-            knob = left + (int)Math.Round(width * percent / 100.0);
-        return new Bbs757EfbSlider(left, left + width, knob);
+        bool vertical = slider.H > slider.W;
+        int start, end;
+        if (vertical)
+        {
+            int top = (int)slider.Y;
+            (start, end) = (top + (int)slider.H, top);
+        }
+        else
+        {
+            int left = (int)slider.X;
+            (start, end) = (left, left + (int)slider.W);
+        }
+        var track = new Bbs757EfbSlider(start, end, start) { Vertical = vertical, AcrossX = vertical ? (int)(slider.X + slider.W / 2) : 0 };
+        // Only a value that is a percent or a count places the knob: a bare number on a settings slider is one of its choices.
+        double? shown = value.EndsWith('%') || value.Contains('/') ? Bbs757EfbSlider.PercentShown(value) : null;
+        return shown is double percent ? track with { KnobX = track.At(percent) } : track;
     }
 
     /// <summary>A switch state from the word a value label shows: on for ON, off for OFF, unknown for a word of two
@@ -715,11 +728,25 @@ public sealed class Bbs757EfbModelReader
                 if (value is null && Bbs757EfbPageRules.SliderValueName(s.Name) is { } valueName)
                     value = free.FirstOrDefault(l => l.Name == valueName && !Taken.Contains(l));
                 if (value is not null) Taken.Add(value);
-                if (label is not null) Use(label);
+                if (label is not null)
+                {
+                    Use(label);
+                    // A title that names a slider is the slider's name, not a heading too: the slider says it (Weight & balance).
+                    if (_info[label].IsTitle) Taken.Add(label);
+                }
                 string own = string.Join(' ', Bbs757EfbPageRules.NameParts(s.Name).Where(p => !Bbs757EfbPageRules.ControlWords.Contains(p))).ToUpperInvariant();
-                _sliderOf[s] = (label?.Text ?? (own.Length > 0 ? own : s.Name), value?.Text ?? "");
+                string text = label?.Text ?? (own.Length > 0 ? own : s.Name), shown = value?.Text ?? "";
+                // A title that also shows the slider's count ("BUSINESS PAX - 16/16") gives the slider its name and its value: the
+                // count is where its knob is.
+                if (shown.Length == 0 && label is not null && TitleCount.Match(label.Text) is { Success: true } count)
+                    (text, shown) = (count.Groups[1].Value, count.Groups[2].Value);
+                _sliderOf[s] = (text, shown);
             }
         }
+
+        /// <summary>A title and the count it shows after a dash: "BUSINESS PAX - 16/16" is BUSINESS PAX, 16/16.</summary>
+        private static readonly System.Text.RegularExpressions.Regex TitleCount =
+            new(@"^(.*\S)\s+-\s+(\d+\s*/\s*\d+)\s*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
         /// <summary>A slider outside a settings row as an item: named by R5, valued by its partner, its track from its rectangle.</summary>
         public Bbs757EfbItem SliderItem(Bbs757EfbMemory.Node s)
