@@ -47,7 +47,7 @@ public sealed class Bbs757EfbModelReader
         if (content is null)
         {
             var home = apps.FirstOrDefault(a => a.Class == "HOME" && Count(a.Controls) > 0);
-            return home is null ? null : HomeModel(home);
+            return home is null ? null : HomeModel(home) with { Keyboard = KeyboardOf(apps) };
         }
 
         string section = SectionOf(content, content.Class);
@@ -55,7 +55,40 @@ public sealed class Bbs757EfbModelReader
         var items = new List<Bbs757EfbItem>();
         var grammar = new Grammar(content);
         EmitChildren(content.Controls, content, grammar, section, menu, items);
-        return new Bbs757EfbScreenModel(content.Class, section, menu, items) { Scrollable = IsScrollable(content) };
+        return new Bbs757EfbScreenModel(content.Class, section, menu, Bbs757EfbPageRules.Reorder(content.Class, section, items))
+        {
+            Scrollable = IsScrollable(content),
+            Viewport = ViewportOf(content),
+            Keyboard = KeyboardOf(apps),
+        };
+    }
+
+    /// <summary>The part of the tablet the page is drawn in: the largest <c>*_scrollbox</c> of the content (the page's main one),
+    /// else the whole content area.</summary>
+    private static Rectangle ViewportOf(Bbs757EfbMemory.App content)
+    {
+        var box = Flatten(content.Controls).Where(n => n.Name.EndsWith("_scrollbox", StringComparison.Ordinal))
+            .OrderByDescending(n => n.W * n.H).FirstOrDefault();
+        return box is null ? Bbs757EfbScreen.ContentArea : Box(box);
+    }
+
+    /// <summary>BlueBird's keyboard from the shell app's <c>kb_grid</c>: its box and its keys in tree order. A <c>char_btn_</c> key
+    /// (and the comma and period keys, whose words are <c>,|,|!</c> and <c>.|.|?</c>) carries three layers split on <c>|</c>; a
+    /// <c>btn_*</c> command key keeps its name and empty layers. Null without a <c>kb_grid</c>. The grid reads visible whether the
+    /// keyboard shows or not, so this says where the keys are, never that the keyboard is up.</summary>
+    private static Bbs757EfbKeyboard? KeyboardOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
+        var grid = apps.Where(a => a.Class == "app").SelectMany(a => Flatten(a.Controls)).FirstOrDefault(n => n.Name == "kb_grid");
+        if (grid is null) return null;
+        var keys = new List<Bbs757EfbKey>();
+        foreach (var k in Descendants(grid).Where(n => n.Kind == "button"))
+        {
+            string[] layers = k.Name.StartsWith("char_btn_", StringComparison.Ordinal) ? k.Name["char_btn_".Length..].Split('|') : k.Text.Split('|');
+            keys.Add(layers.Length == 3
+                ? new Bbs757EfbKey(k.Name, layers[0], layers[1], layers[2], Hit(k))
+                : new Bbs757EfbKey(k.Name, "", "", "", Hit(k)));
+        }
+        return new Bbs757EfbKeyboard(Box(grid), keys);
     }
 
     // ---- the home screen -----------------------------------------------------

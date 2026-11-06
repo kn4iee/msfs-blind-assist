@@ -153,6 +153,69 @@ internal static class Bbs757EfbPageRules
         return side == "total" ? "total_fuel_perc_label" : side.Length > 0 ? "fuel_" + side + "_tank_label" : null;
     }
 
+    // ---- R9: reading order ------------------------------------------------------
+
+    private static readonly string[] WeightBalanceTopRow =
+    {
+        "wb_empty_weight_title", "wb_zero_fuel_weight_title", "wb_zero_fuel_cg_title",
+        "wb_block_fuel_title", "wb_takeoff_weight_title", "wb_landing_weight_title",
+    };
+
+    private static readonly string[] FuelTanks = { "left", "center", "right", "total" };
+
+    /// <summary>The items in the order the page reads (plan 20, R9). Weight &amp; balance puts the six lines BlueBird draws across the
+    /// top (EMPTY, ZFW, ZFW CG, BLK FUEL, TAKE-OFF, LANDING) first, in tree order; Fuel reads tank by tank (LEFT, CENTER, RIGHT, TOTAL
+    /// FUEL), each a level 2 heading, its slider, its quantity box and its weight box, matched on the tank part of BlueBird's names
+    /// (<c>fuel_left_slider_title</c>, <c>fuel_slider_left</c>, <c>fuel_left_qty_box</c>, <c>fuel_left_weight_box</c>; the total's are
+    /// <c>fuel_slider_total</c>, <c>total_fuel_qty_box</c>, <c>total_fuel_weight_box</c>). Every other page keeps tree order.</summary>
+    internal static IReadOnlyList<Bbs757EfbItem> Reorder(string app, string section, IReadOnlyList<Bbs757EfbItem> items)
+    {
+        if (app != "AIRCRAFT") return items;
+        if (section == "WEIGHT & BALANCE")
+        {
+            var top = items.Where(i => i.Kind == Bbs757EfbKind.Row && WeightBalanceTopRow.Contains(i.Name)).ToList();
+            return top.Count == 0 ? items : top.Concat(items.Where(i => !top.Contains(i))).ToList();
+        }
+        if (section == "FUEL") return ByTank(items);
+        return items;
+    }
+
+    private static string? TankOf(Bbs757EfbItem item)
+    {
+        if (item.Kind is not (Bbs757EfbKind.Heading or Bbs757EfbKind.Slider or Bbs757EfbKind.Field)) return null;
+        if (!item.Name.StartsWith("fuel_", StringComparison.Ordinal) && !item.Name.StartsWith("total_fuel_", StringComparison.Ordinal)) return null;
+        var parts = NameParts(item.Name);
+        return FuelTanks.FirstOrDefault(parts.Contains);
+    }
+
+    private static int RankInTank(Bbs757EfbItem item) =>
+        item.Kind == Bbs757EfbKind.Heading ? 0 : item.Kind == Bbs757EfbKind.Slider ? 1 : NameParts(item.Name).Contains("qty") ? 2 : 3;
+
+    private static IReadOnlyList<Bbs757EfbItem> ByTank(IReadOnlyList<Bbs757EfbItem> items)
+    {
+        var groups = FuelTanks.ToDictionary(t => t, t => items.Where(i => TankOf(i) == t).OrderBy(RankInTank).ToList());
+        foreach (var tank in FuelTanks)
+        {
+            var g = groups[tank];
+            // The total's title is BlueBird's total_fuel_label, which names the slider: the heading is made from the slider.
+            if (g.Count > 0 && !g.Any(i => i.Kind == Bbs757EfbKind.Heading) && g.FirstOrDefault(i => i.Kind == Bbs757EfbKind.Slider) is { } slider)
+            {
+                string name = tank == "total" ? "total_fuel_label" : "fuel_" + tank + "_slider_title";
+                g.Insert(0, new Bbs757EfbItem(Bbs757EfbKind.Heading, slider.Text, slider.Box, slider.Hit, false, name, Level: 2, Name: name));
+            }
+        }
+        var result = new List<Bbs757EfbItem>(items.Count + 1);
+        bool placed = false;
+        foreach (var item in items)
+        {
+            if (TankOf(item) is null) { result.Add(item); continue; }
+            if (placed) continue;
+            placed = true;
+            foreach (var tank in FuelTanks) result.AddRange(groups[tank]);
+        }
+        return result;
+    }
+
     /// <summary>Whether a control's words are none, or only one state word or action word.</summary>
     internal static bool IsStateOrAction(string text)
     {

@@ -826,7 +826,9 @@ public class Bbs757EfbModelReaderTests
 
         var total = ItemsOf(Lbl("total_fuel_label", "TOTAL FUEL", 542, 884, 147), N("slider", "fuel_slider_total", "", 722, 889, 200, 20),
             Lbl("total_fuel_perc_label", "27%", 942, 884, 49));
-        Assert.Equal(("TOTAL FUEL", "27%", 776), (total[0].Text, total[0].Value, total[0].Slider!.KnobX));
+        var totalSlider = Assert.Single(total, i => i.Kind == Bbs757EfbKind.Slider);
+        Assert.Equal(("TOTAL FUEL", "27%", 776), (totalSlider.Text, totalSlider.Value, totalSlider.Slider!.KnobX));
+        Assert.Equal((Bbs757EfbKind.Heading, "TOTAL FUEL"), (total[0].Kind, total[0].Text)); // the heading Fuel's order makes from the slider
     }
 
     [Fact]
@@ -951,5 +953,88 @@ public class Bbs757EfbModelReaderTests
             });
             Assert.Equal(new[] { "Quantity: 1539,5 Gal", "Flap Setting" }, texts);
         }
+    }
+
+    // ---- R9 order, R12 the keyboard and the viewport -----------------------------
+
+    [Fact]
+    public void Weight_and_balance_reads_its_top_row_first()
+    {
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"))!.Items;
+
+        Assert.Equal(new[] { "EMPTY", "ZFW", "ZFW CG", "BLK FUEL", "TAKE-OFF", "LANDING" }, items.Take(6).Select(i => i.Text).ToArray());
+        // Everything else keeps tree order: the pax and cargo cards, then the gross weight and center of gravity drawn beside them.
+        Assert.Equal("BUSINESS PAX - 16/16", items[6].Text);
+        var rest = items.Skip(6).Select(i => i.Text).ToList();
+        Assert.True(rest.IndexOf("AFT CARGO") < rest.IndexOf("GROSS WEIGHT"));
+        Assert.True(rest.IndexOf("GROSS WEIGHT") < rest.IndexOf("CENTER OF GRAVITY"));
+    }
+
+    [Fact]
+    public void Fuel_reads_tank_by_tank()
+    {
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!.Items;
+
+        Assert.Equal(new[]
+        {
+            (Bbs757EfbKind.Heading, "LEFT", "fuel_left_slider_title"), (Bbs757EfbKind.Slider, "LEFT", "fuel_slider_left"),
+            (Bbs757EfbKind.Field, "QUANTITY", "fuel_left_qty_box"), (Bbs757EfbKind.Field, "WEIGHT", "fuel_left_weight_box"),
+            (Bbs757EfbKind.Heading, "CENTER", "fuel_center_slider_title"), (Bbs757EfbKind.Slider, "CENTER", "fuel_slider_center"),
+            (Bbs757EfbKind.Field, "QUANTITY", "fuel_center_qty_box"), (Bbs757EfbKind.Field, "WEIGHT", "fuel_center_weight_box"),
+            (Bbs757EfbKind.Heading, "RIGHT", "fuel_right_slider_title"), (Bbs757EfbKind.Slider, "RIGHT", "fuel_slider_right"),
+            (Bbs757EfbKind.Field, "QUANTITY", "fuel_right_qty_box"), (Bbs757EfbKind.Field, "WEIGHT", "fuel_right_weight_box"),
+            (Bbs757EfbKind.Heading, "TOTAL FUEL", "total_fuel_label"), (Bbs757EfbKind.Slider, "TOTAL FUEL", "fuel_slider_total"),
+            (Bbs757EfbKind.Field, "QUANTITY", "total_fuel_qty_box"), (Bbs757EfbKind.Field, "WEIGHT", "total_fuel_weight_box"),
+        }, items.Select(i => (i.Kind, i.Text, i.Name)).ToArray());
+        Assert.All(items.Where(i => i.Kind == Bbs757EfbKind.Heading), h => Assert.Equal(2, h.Level));
+    }
+
+    [Fact]
+    public void The_keyboard_keys_are_read_and_never_an_item()
+    {
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"))!;
+
+        var keyboard = Assert.IsType<Bbs757EfbKeyboard>(model.Keyboard);
+        Assert.Equal(648, keyboard.Box.Top);
+        Assert.Equal(1048, keyboard.Box.Bottom);
+        var letters = keyboard.Keys.Where(k => k.Name.StartsWith("char_btn_", StringComparison.Ordinal)).ToList();
+        Assert.Equal(26, letters.Count);
+        var q = keyboard.Keys.Single(k => k.Name == "char_btn_q|Q|1");
+        Assert.Equal(("q", "Q", "1", new System.Drawing.Point(203, 750)), (q.Lower, q.Upper, q.Third, q.Hit));
+        var comma = keyboard.Keys.Single(k => k.Name == "btn_exclamation");
+        Assert.Equal((",", ",", "!"), (comma.Lower, comma.Upper, comma.Third));
+        var period = keyboard.Keys.Single(k => k.Name == "btn_question");
+        Assert.Equal((".", ".", "?"), (period.Lower, period.Upper, period.Third));
+        var enter = keyboard.Keys.Single(k => k.Name == "btn_enter");
+        Assert.Equal(("", "", ""), (enter.Lower, enter.Upper, enter.Third));
+        Assert.Contains(keyboard.Keys, k => k.Name == "btn_keyboard_down");
+        Assert.DoesNotContain(model.Items.Concat(model.Menu), i => i.Key.StartsWith("char_btn_", StringComparison.Ordinal)
+            || i.Name is "btn_enter" or "btn_keyboard_down" or "kb_grid");
+    }
+
+    [Fact]
+    public void No_kb_grid_reads_as_null()
+    {
+        var apps = Bbs757EfbTreeJson.Load("25-navigation-perf-calc")
+            .Where(a => a.Class != "app").ToList();
+        Assert.Null(Bbs757EfbModelReader.Read(apps)!.Keyboard);
+    }
+
+    [Fact]
+    public void The_viewport_is_the_content_scrollbox()
+    {
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
+        Assert.Equal(new System.Drawing.Rectangle(250, 82, 1147, 966), model.Viewport);
+
+        // No scrollbox on the page: the whole content area.
+        var fuel = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!;
+        Assert.Equal(Bbs757EfbScreen.ContentArea, fuel.Viewport);
+
+        // Several scrollboxes: the largest is the page's.
+        var small = N("scrollbox", "side_scrollbox", "", 260, 100, 100, 100);
+        var big = N("scrollbox", "main_scrollbox", "", 300, 90, 900, 800);
+        var label = N("label", "x_label", "Hello", 320, 100, 80, 20);
+        var app = new Bbs757EfbMemory.App(7, "SYSTEMS", new[] { small, N("grid", "g", "", 250, 82, 1147, 966, label, big) });
+        Assert.Equal(new System.Drawing.Rectangle(300, 90, 900, 800), Bbs757EfbModelReader.Read(new[] { app })!.Viewport);
     }
 }
