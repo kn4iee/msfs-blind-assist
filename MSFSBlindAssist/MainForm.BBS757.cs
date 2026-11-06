@@ -80,9 +80,30 @@ public partial class MainForm
         bbs757CduForm.ShowForm();
     }
 
-    /// <summary>The 757 tablet window (plan 11; plan 18): the shared accessible EFB window over the tablet bridge.</summary>
+    /// <summary>The 757 tablet window: the shared accessible EFB window over the tablet bridge.</summary>
     private Forms.FBWA380.FbwEfbForm? bbs757TabletForm;
     private Bbs757EfbBridge? bbs757EfbBridge;
+
+    /// <summary>
+    /// The shared module session for BlueBird's BBS752.wasm, from which the tablet bridge reads the EFB control tree
+    /// (and, in time, the FMA and the displays: WASM-11, one load of the file's layouts and one memory search for every
+    /// reader). Made when the tablet window first opens, disposed with the 757's windows. Its layouts come from the layout
+    /// store (the layouts folder beside the app and %APPDATA%, and LayoutGenerator.exe when present): without a current EFB
+    /// layout the reader is unavailable, and the window says so (WASM-2).
+    /// </summary>
+    private Services.WasmMemory.ModuleSession? bbs757ModuleSession;
+
+    /// <summary>The module session for the 757, created on first use over a layout store with the generator when the app
+    /// has one.</summary>
+    private Services.WasmMemory.ModuleSession EnsureBbs757ModuleSession()
+    {
+        if (bbs757ModuleSession != null) return bbs757ModuleSession;
+        var module = DisplayLayouts.Bbs757Module.Description;
+        var host = new Services.WasmMemory.ModuleHost(simConnectManager, module);
+        var layouts = new Services.WasmMemory.LayoutStore(module, Services.WasmMemory.LayoutStore.DefaultRoot,
+            Services.WasmMemory.LayoutStore.BundledRoot, Services.WasmMemory.ProcessLayoutGenerator.NextToApp(), host.ReadFile, host.Log);
+        return bbs757ModuleSession = new Services.WasmMemory.ModuleSession(module, host, layouts);
+    }
 
     /// <summary>
     /// Shift+T on the 757 opens one of two windows, by whether a simulator runs, asked afresh on each press
@@ -120,33 +141,20 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The 757 tablet window (titled "757 EFB"; plan 11, plan 18), which Shift+T opens while a simulator runs: BlueBird's
-    /// tablet in the shared accessible EFB window, read from its pixels and pressed where the reader found each control
-    /// (<see cref="Bbs757EfbBridge"/>, the owner's ruling of 2026-10-29: nothing refuses a press). The first time it shows,
-    /// the tablet reader's pop-out is made as the A300 and A330 CDU windows make theirs: the camera goes to the captain's
-    /// instrument view, the simulator comes to the front for a moment, and the camera is put back. While the window is shown
-    /// the tablet is mirrored onto the captain's ND and read; hidden, nothing is read and the ND is the ND. The reader reads
-    /// with the downloaded text recognition: while that is not Ready the window does not open, and the offer window is shown
-    /// instead, whatever the offer checkbox says (the pilot asked for the tablet with Shift+T, [OCR-2]). Ready, a press also has
-    /// the reader try again an engine that could not load: its status sent the pilot to download the models again, and the
-    /// window may still be open.
+    /// The 757 tablet window (titled "757 EFB"), which Shift+T opens while a simulator runs: BlueBird's tablet in the shared
+    /// accessible EFB window, READ from the 757 module's memory (<see cref="Bbs757EfbBridge"/> over the module session) and
+    /// pressed where the reader found each control (the owner's ruling of 2026-10-29: nothing refuses a press). No text
+    /// recognition, no pop-out and no ND mirror: the tree is read straight from memory and the ND stays the ND. The window opens
+    /// at once; when the 757's memory is not located yet, or its build has no layout, the window says so as its status.
     /// </summary>
     private void ShowBBS757TabletWindow()
     {
-        if (textRecognitionDownloader.Installed().State != TextRecognitionState.Ready)
-        {
-            ShowTextRecognitionOffer();
-            return;
-        }
-
         var efb = EnsureBbs757EfbClient();
         if (bbs757EfbBridge == null)
         {
             bbs757EfbBridge = new Bbs757EfbBridge(efb, CreateBbs757EfbBridgeIo());
             bbs757EfbBridge.Start();
         }
-        // Only after the Ready check above, so a retry never loads models without their marker (OCR-1).
-        bbs757EfbBridge.RetryTextRecognition();
         if (bbs757TabletForm == null || bbs757TabletForm.IsDisposed)
         {
             var form = new Forms.FBWA380.FbwEfbForm(bbs757EfbBridge, announcer, "757 EFB", "tablet", "BlueBird tablet");
@@ -167,18 +175,12 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The bridge's seams. Camera reads and writes go to the UI thread (SimConnect calls stay there); the
-    /// type and the index are written apart, since leaving an instrument view needs the two spaced
-    /// (<c>SimConnectManager.SetCameraView</c>, measured). Variables are read fresh (safe from any thread).
-    /// The text recognition engine loads from the downloaded models with <see cref="PaddleOcrEngine.ThreadsFor"/>'s
-    /// threads, on the bridge's loop; a load that fails is logged and the models' installed marker removed, so the
-    /// next check offers the download again. That report runs on the loop too, so it never throws.
-    ///
-    /// Plan 18, Task 8: a Settings press is judged by BlueBird's file, read on the bridge's loop
-    /// (<see cref="Bbs757SettingsFile.ReadValue"/> in the work folder <see cref="Bbs757WorkFolder.Find()"/> picks);
-    /// the Navigraph sign-in is read and run over the definition's tablet client (one per view, [DBG-9]), taken here
-    /// on the UI thread, its speech marshaled back to it; and the hooks a press starts run on the UI thread
-    /// (<see cref="OnBbs757EfbHook"/>).
+    /// The bridge's seams. The tablet is read from the 757 module's memory through the shared module session
+    /// (<see cref="ReadBbs757EfbModelAsync"/>), off the UI thread. Variables are read fresh (safe from any thread). A Settings
+    /// press is judged by BlueBird's file, read on the bridge's loop (<see cref="Bbs757SettingsFile.ReadValue"/> in the work
+    /// folder <see cref="Bbs757WorkFolder.Find()"/> picks); the Navigraph sign-in is read and run over the definition's tablet
+    /// client (one per view, [DBG-9]), taken here on the UI thread, its speech marshaled back to it; and the hooks a press
+    /// starts run on the UI thread (<see cref="OnBbs757EfbHook"/>).
     /// </summary>
     private Bbs757EfbBridgeIo CreateBbs757EfbBridgeIo()
     {
@@ -186,22 +188,7 @@ public partial class MainForm
         var tablet = EnsureBbs757TabletClient();
         return new()
         {
-            ReadCamera = async () =>
-            {
-                var sim = simConnectManager;
-                if (sim == null || !sim.IsConnected) return null;
-                var task = (Task<MSFSBlindAssist.Services.CameraViewReading?>)Invoke(new Func<Task<MSFSBlindAssist.Services.CameraViewReading?>>(() => sim.ReadCameraViewAsync(1500)));
-                var r = await task;
-                return r is { } v ? (v.ViewType, v.ViewIndex) : null;
-            },
-            SetCamera = (type, index) =>
-            {
-                var sim = simConnectManager;
-                if (sim == null || !sim.IsConnected) return;
-                Invoke(() => sim.SetCameraViewType(type));
-                Thread.Sleep(150);
-                Invoke(() => sim.SetCameraViewIndex(index));
-            },
+            ReadModel = ReadBbs757EfbModelAsync,
             ReadRegistered = (key, ct) => simConnectManager is { IsConnected: true } sim
                 ? sim.ReadFreshAsync(key, 1500, ct)
                 : Task.FromResult<double?>(null),
@@ -216,23 +203,49 @@ public partial class MainForm
             SettleServiceEcho = (s, v) => { if (currentAircraft is BBS757Definition def) def.SettleServiceEcho(s, v); },
             ArmGroundPowerEcho = () => { if (currentAircraft is BBS757Definition def) def.ArmGroundPowerEcho(); },
             SettleGroundPowerEcho = v => { if (currentAircraft is BBS757Definition def) def.SettleGroundPowerEcho(v); },
-            LoadOcr = () => PaddleOcrEngine.Load(TextRecognitionModels.DefaultFolder(), PaddleOcrEngine.ThreadsFor(Environment.ProcessorCount)),
-            OcrFailed = ex =>
-            {
-                // The exception itself, so the log has its type and every inner exception down to the base one: a
-                // TypeInitializationException's own message names only the type that failed, never why. Logging never throws.
-                Log.Error("BBS757", "Text recognition could not start.", ex);
-                try
-                {
-                    TextRecognitionModels.RemoveMarker(TextRecognitionModels.DefaultFolder());
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    Log.Warn("BBS757", $"Could not remove the text recognition marker: {e.Message}");
-                }
-            },
         };
     }
+
+    /// <summary>
+    /// Reads BlueBird's tablet control tree from the 757 module's memory now, as the window's model, or the reason there is none.
+    /// Locates the module through the shared session (every reader shares the one simulator handle and the one search, WASM-11),
+    /// takes the build whose EFB layout the generator wrote, and walks its memory read-only through that layout (WASM-1, WASM-2);
+    /// a build without a current EFB layout is "not recognised", no located build is "not found yet", and no access is final.
+    /// Runs on the bridge's loop, off the UI thread; never throws.
+    /// </summary>
+    private async Task<Bbs757EfbModelRead> ReadBbs757EfbModelAsync(CancellationToken ct)
+    {
+        try
+        {
+            var location = await EnsureBbs757ModuleSession().LocateAsync();
+            var module = location.Found.FirstOrDefault(m =>
+                m.Build.Layout<Services.BBS757.Bbs757EfbMemLayout>(DisplayLayouts.Bbs757Module.Efb) is not null);
+            if (module is null)
+            {
+                string reason = location.Failure
+                    ?? (location.Found.Count > 0 ? Services.BBS757.Bbs757DisplayReasons.FileNotRecognised : Services.BBS757.Bbs757DisplayReasons.MemoryNotFound);
+                return new Bbs757EfbModelRead(null, TabletStatus(reason));
+            }
+            var layout = module.Build.Layout<Services.BBS757.Bbs757EfbMemLayout>(DisplayLayouts.Bbs757Module.Efb)!;
+            using var lease = module.AcquireLease();
+            var memory = new Bbs757EfbMemory(new ModuleEfbMemory(module.Memory), layout);
+            var model = new Bbs757EfbModelReader(memory).Read();
+            return new Bbs757EfbModelRead(model, model is null ? TabletStatus(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound) : null);
+        }
+        catch (ObjectDisposedException)
+        {
+            return new Bbs757EfbModelRead(null, TabletStatus(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("BBS757", "EFB memory read failed: " + ex.Message);
+            return new Bbs757EfbModelRead(null, TabletStatus(Services.BBS757.Bbs757DisplayReasons.InternalError));
+        }
+    }
+
+    /// <summary>The window's status line for a reason the tablet could not be read: the reason, then how to retry.</summary>
+    private static string TabletStatus(string reason) =>
+        "The BlueBird tablet could not be read: " + reason + ". Is the 757 loaded? Press F5 to try again.";
 
     /// <summary>
     /// Whether the pilot is signed in to Navigraph, read fresh through the tablet client: true, false, or null when the helper
@@ -402,11 +415,14 @@ public partial class MainForm
         CloseBbs757TabletWindows();
         if (bbs757TabletForm != null && !bbs757TabletForm.IsDisposed) bbs757TabletForm.Dispose();
         bbs757TabletForm = null;
-        // The bridge before the client it reads through (it turns the mirror off on its way out).
+        // The bridge before the client it taps through.
         bbs757EfbBridge?.Dispose();
         bbs757EfbBridge = null;
         bbs757EfbClient?.Dispose();
         bbs757EfbClient = null;
+        // The module session holds the read-only simulator handle through its lease; dispose it so the handle closes.
+        bbs757ModuleSession?.Dispose();
+        bbs757ModuleSession = null;
     }
 
     /// <summary>
