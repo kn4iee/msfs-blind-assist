@@ -1249,6 +1249,24 @@ public class Bbs757EfbModelReaderTests
     }
 
     [Fact]
+    public void A_drop_down_with_no_entries_read_shows_its_face_as_its_value()
+    {
+        // Task 5's review, M2: a face is a prompt only beside entries it matches none of. With none read (a torn vector, which the walk
+        // reads as none; a list BlueBird has not filled yet) the face is the value and the drop-down keeps its own name: Map's provider
+        // reads "Map provider" showing IFR Low, never a drop-down named "IFR Low" with nothing chosen.
+        var map = Bbs757EfbTreeJson.AsDropDown(Bbs757EfbTreeJson.Load("24-navigation-map"), "map_provider_dropdown", "IFR Low");
+
+        var provider = Assert.Single(Bbs757EfbModelReader.Read(map)!.Items, i => i.Name == "map_provider_dropdown");
+
+        Assert.Equal((Bbs757EfbKind.Choice, "MAP PROVIDER", "IFR Low"), (provider.Kind, provider.Text, provider.Value));
+        Assert.Empty(provider.Entries!);
+        Assert.StartsWith("title: Navigation, Map\ncombo [IFR Low] {IFR Low}  Map provider\n", ListingOf(map));
+
+        // Systems' SELECT, with its entries read, stays a prompt.
+        Assert.Contains("combo [] {|24 - ELECTRICAL|28 - FUEL|29 - HYDRAULICS|36 - PNEUMATICS}  Select\n", ListingOf(Bbs757EfbTreeJson.Load("30-systems")));
+    }
+
+    [Fact]
     public void The_selected_menu_entry_is_the_section()
     {
         // BlueBird's selected state (plan 21, measured 2026-11-07 on three side menus): the entry it marks current is the section and
@@ -1515,7 +1533,8 @@ public class Bbs757EfbModelReaderTests
     public void Each_control_is_clipped_to_the_scrollbox_it_sits_in()
     {
         var acars = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("20-navigation-acars-dashboard"))!;
-        Assert.Equal(Bbs757EfbScreen.ContentArea, acars.Items.Single(i => i.Name == "planning_acars_fetch_button").Clip);
+        // A control in no scrollbox: the page area, the content area with the app's title row above it (plan 21, Task 7).
+        Assert.Equal(Bbs757EfbScreen.PageArea, acars.Items.Single(i => i.Name == "planning_acars_fetch_button").Clip);
         var route = acars.Items.Single(i => i.Name == "planning_acars_route_value");
         Assert.Equal(new System.Drawing.Rectangle(323, 820, 1000, 120), route.Clip);   // planning_acars_route_scrollbox
 

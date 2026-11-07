@@ -126,6 +126,22 @@ internal static class Bbs757EfbTreeJson
         params string[] entries) =>
         Change(apps, name, n => n with { Kind = "pulldown", Text = face, Value = entries.Contains(face) ? face : "", Entries = entries });
 
+    /// <summary>The trees with the drop-down named <paramref name="name"/> open as the memory walk reads an open list
+    /// (<see cref="Bbs757EfbMemory"/>): its list a scrollbox at the face's x and width from <paramref name="top"/>, <paramref name="height"/>
+    /// tall and scrolled by <paramref name="scroll"/>, and one row per entry, 38 px apart from <paramref name="top"/> (as measured on the
+    /// runway list, 2026-11-07), drawn <paramref name="scroll"/> higher. Stands in for a capture of a list that scrolls (none was made: no
+    /// drag was made in an open list) or of a drop-down no capture shows open.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithOpenList(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, float top, float height,
+        float scroll = 0f) =>
+        Change(apps, name, n => n with
+        {
+            Open = true,
+            OpenList = new Bbs757EfbMemory.Node("scrollbox", "item_scrollbox", "", n.X, top, n.W, height, 0, Array.Empty<Bbs757EfbMemory.Node>(),
+                Scroll: scroll),
+            Rows = (n.Entries ?? Array.Empty<string>()).Select((entry, i) => new Bbs757EfbMemory.Node("button", "item_btn_" + i.ToString(CultureInfo.InvariantCulture),
+                entry, n.X, top + 38 * i - scroll, n.W, 38, 0, Array.Empty<Bbs757EfbMemory.Node>())).ToList(),
+        });
+
     /// <summary>The trees as the memory walk reads BlueBird's selected state: each button named in <paramref name="selected"/> the
     /// current one of its row (Selected true), the other buttons with words beside it in its parent not (false), every other control
     /// none (null), as only a side menu's and a tab row's buttons are selectable (measured 2026-11-07).</summary>

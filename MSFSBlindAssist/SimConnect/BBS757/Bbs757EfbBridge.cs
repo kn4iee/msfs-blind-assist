@@ -328,6 +328,11 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             await _press.SwitchAsync(pressed, value == "true", ct);
         else if (item.Kind == Bbs757EfbKind.Slider)
             await _press.SliderAsync(pressed, value, ct);
+        else if (item.Kind == Bbs757EfbKind.Choice)
+            // A drop-down's choice list sends the entry picked: chosen on the tablet (B757-27). One that did not take, or was not made, is
+            // said by the runner as an alert, which pushes the page the runner read last: the window's list shows the tablet's entry
+            // again, not the pilot's pick (Task 5's review, M3).
+            await _press.ChooseAsync(pressed, value, ct);
     }
 
     /// <summary>The index of the word a two-choice switch is set to among its two words; null when the switch has no two words or

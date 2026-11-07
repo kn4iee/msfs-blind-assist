@@ -139,6 +139,103 @@ public class Bbs757EfbPressTests
         }
     }
 
+    // ---- an open drop-down's list (plan 21, Task 7) -------------------------------------------------------------------
+
+    /// <summary>The runway list as captured open (25c, 2026-11-07): its scrollbox at 519,189 150x228, six rows 38 px apart from 189.</summary>
+    private static readonly Rectangle RunwayList = new(519, 189, 150, 228);
+
+    private static Rectangle RunwayRow(int index, int scroll = 0) => new(519, 189 + 38 * index - scroll, 150, 38);
+
+    [Fact]
+    public void An_open_lists_row_is_tapped_at_its_middle_and_a_strip_of_it_only_from_six_pixels()
+    {
+        Assert.True(Bbs757EfbPress.RowShowsWhole(RunwayList, RunwayRow(5)));                     // 379-417: the list's bottom is 417
+        Assert.Equal(new Point(594, 398), Bbs757EfbPress.RowTapPoint(RunwayList, RunwayRow(5)));
+        Assert.Equal(new Point(594, 208), Bbs757EfbPress.RowTapPoint(RunwayList, RunwayRow(0)));
+
+        var view = RunwayList with { Height = 152 };                                              // four rows show: 189-341
+        Assert.False(Bbs757EfbPress.RowShowsWhole(view, RunwayRow(4)));                           // 341-379: none of it shows
+        Assert.Null(Bbs757EfbPress.RowTapPoint(view, RunwayRow(4)));
+        Assert.False(Bbs757EfbPress.RowShowsWhole(view, RunwayRow(4, scroll: 20)));               // 321-359: 20 px show
+        Assert.Equal(new Point(594, 331), Bbs757EfbPress.RowTapPoint(view, RunwayRow(4, scroll: 20)));
+        Assert.Null(Bbs757EfbPress.RowTapPoint(view, RunwayRow(4, scroll: 5)));                   // 336-374: 5 px show
+        Assert.Equal(new Point(594, 192), Bbs757EfbPress.RowTapPoint(view, RunwayRow(0, scroll: 32)));   // 157-195: 6 px show
+    }
+
+    [Fact]
+    public void A_drag_in_an_open_list_stays_inside_it_and_moves_the_row_toward_its_middle()
+    {
+        // A list of four rows shown (152 px) holding six: a drag at the list's x middle, at most the list's height less two rows (76 px)
+        // in one drag, every point of it at least a row inside the list.
+        var view = RunwayList with { Height = 152 };   // middle 265
+
+        var down = Bbs757EfbPress.ListDragFor(view, RunwayRow(5))!.Value;     // the row's middle is 398: 133 below
+        Assert.Equal(594, down.X);
+        Assert.Equal(76, down.Y0 - down.Y1);                                  // the content moves up, capped at 76
+        var near = Bbs757EfbPress.ListDragFor(view, RunwayRow(4, scroll: 20))!.Value;   // middle 340: 75 below, under the cap
+        Assert.Equal(75, near.Y0 - near.Y1);
+        var up = Bbs757EfbPress.ListDragFor(view, RunwayRow(0, scroll: 76))!.Value;     // middle 132: 133 above
+        Assert.Equal(-76, up.Y0 - up.Y1);                                     // the content moves down
+        foreach (var d in new[] { down, near, up })
+        {
+            Assert.InRange(d.Y0, view.Top + 38, view.Bottom - 38);
+            Assert.InRange(d.Y1, view.Top + 38, view.Bottom - 38);
+        }
+        Assert.Null(Bbs757EfbPress.ListDragFor(view, RunwayRow(2)));          // it shows whole: no drag
+    }
+
+    [Fact]
+    public void An_open_list_is_read_from_the_capture_and_its_rows_are_its_entries()
+    {
+        var open = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25c-navigation-perf-calc-runway-open"))!;
+        var runway = Assert.Single(open.Items, i => i.Name == "planning_perf_calc_runway_dropdown");
+
+        Assert.True(runway.Open);
+        Assert.Equal(RunwayList, Bbs757EfbPress.ListViewOf(runway));
+        Assert.Equal(runway.Entries, runway.List!.Rows.Select(r => r.Text));
+        Assert.Equal(Enumerable.Range(0, 6).Select(i => RunwayRow(i)), runway.List.Rows.Select(r => r.Box));
+        Assert.Equal(RunwayRow(5), Bbs757EfbPress.RowOf(runway, "RW26")!.Box);
+        Assert.Null(Bbs757EfbPress.RowOf(runway, "RW99"));
+
+        var closed = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"))!;
+        var shut = Assert.Single(closed.Items, i => i.Name == "planning_perf_calc_runway_dropdown");
+        Assert.False(shut.Open);
+        Assert.Null(shut.List);
+        Assert.Null(Bbs757EfbPress.ListViewOf(shut));
+        Assert.Null(Bbs757EfbPress.RowOf(shut, "RW26"));
+    }
+
+    [Fact]
+    public void A_control_under_another_drop_downs_open_list_is_covered()
+    {
+        // 25c: the runway list (519-669, 189-417) covers the Flap Setting drop-down's face (519,240 150x34); the Thrust Setting drop-down
+        // beside it (748,240) and the runway drop-down's own face (above its list) are not covered.
+        var open = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25c-navigation-perf-calc-runway-open"))!;
+        var runway = open.Items.Single(i => i.Name == "planning_perf_calc_runway_dropdown");
+        var flap = open.Items.Single(i => i.Name == "planning_perf_calc_flap_dropdown");
+        var thrust = open.Items.Single(i => i.Name == "planning_perf_calc_thrust_dropdown");
+
+        Assert.Same(runway, Bbs757EfbPress.CoveringList(open, flap, Bbs757EfbPress.TapPoint(open, flap)!.Value));
+        Assert.Null(Bbs757EfbPress.CoveringList(open, thrust, Bbs757EfbPress.TapPoint(open, thrust)!.Value));
+        Assert.Null(Bbs757EfbPress.CoveringList(open, runway, Bbs757EfbPress.TapPoint(open, runway)!.Value));
+
+        var closed = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"))!;
+        var shutFlap = closed.Items.Single(i => i.Name == "planning_perf_calc_flap_dropdown");
+        Assert.Null(Bbs757EfbPress.CoveringList(closed, shutFlap, Bbs757EfbPress.TapPoint(closed, shutFlap)!.Value));
+    }
+
+    [Fact]
+    public void The_systems_page_menu_in_the_title_row_is_tapped_where_it_is_drawn()
+    {
+        // Systems keeps its page menu in the app's title row (1097,32 300x50), above the content area (82): a control in no scrollbox
+        // is clipped to the page area, so it is tapped at its own point, not refused as out of view.
+        var systems = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("30-systems"))!;
+        var menu = systems.Items.Single(i => i.Name == "pb_menu1");
+
+        Assert.Equal(Bbs757EfbScreen.PageArea, menu.Clip);
+        Assert.Equal(new Point(1247, 57), Bbs757EfbPress.TapPoint(systems, menu));
+    }
+
     [Theory]
     [InlineData("51-settings-aircraft", true)]
     [InlineData("30-systems", false)]

@@ -1303,25 +1303,273 @@ public class Bbs757EfbBridgeTests
     // ---- drop-downs and text boxes (plan 21) ----------------------------------------------------------------------------
 
     [Fact]
-    public async Task A_set_on_a_drop_down_taps_nothing_and_a_text_box_is_no_control()
+    public async Task A_set_on_a_drop_down_is_chosen_on_the_tablet_and_a_text_box_is_no_control()
     {
-        // The window shows a drop-down as a choice list; choosing is plan 21 Task 7's, so a set the window sends for one taps nothing and
-        // says nothing: a tap tried would end "cannot be reached". A text box is a line until plan 22 types (B757-23): nothing to set.
-        var runway = new Bbs757EfbItem(Bbs757EfbKind.Choice, "Runway", new Rectangle(519, 156, 150, 34), new Point(594, 173), true,
-            "planning_perf_calc_runway_dropdown", Value: "RW07L", Entries: new[] { "RW07L", "RW26" });
-        var airport = new Bbs757EfbItem(Bbs757EfbKind.Field, "Airport", new Rectangle(289, 156, 150, 34), new Point(364, 173), true,
-            "planning_perf_calc_airport_input", Value: "KSEA");
-        var page = PageOf("NAVIGATION", "PERF CALC", runway, airport);
+        // The window shows a drop-down as a choice list, and a choice in it is made on the tablet (plan 21, Task 7): the harness has no
+        // tablet to tap, so the face's tap ends "cannot be reached", the proof a tap was tried. That push shows the tablet's entry again
+        // (Task 5's review, M3): the window's list returns to RW07L, not the RW26 the pilot picked. A text box is a line until plan 22
+        // types (B757-23): nothing to set.
+        var page = PerfCalc();
         using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(page, null) };
         h.Bridge.TakeRead(page);
         var push = h.Pushes[^1];
         int pushes = h.Pushes.Count;
-        Assert.Equal(("", "false"), (push[$"items.{IndexOf(push, "Airport: KSEA")}.type"], push[$"items.{IndexOf(push, "Airport: KSEA")}.clickable"]));
+        int airport = IndexOf(push, "Airport: KSEA");
+        Assert.Equal(("", "false"), (push[$"items.{airport}.type"], push[$"items.{airport}.clickable"]));
 
         await h.Bridge.HandleAsync("set_element_value",
             new Dictionary<string, string> { ["index"] = push[$"items.{IndexOf(push, "Runway")}.aidx"], ["value"] = "RW26" }, CancellationToken.None);
 
-        Assert.Equal(pushes, h.Pushes.Count);
+        Assert.True(h.Pushes.Count > pushes);
+        var after = h.Pushes[^1];
+        Assert.Equal(("alert", Bbs757EfbPress.UnreachableText), (after["items.0.kind"], after["items.0.text"]));
+        Assert.Equal(("select", "RW07L"), (after[$"items.{IndexOf(after, "Runway")}.type"], after[$"items.{IndexOf(after, "Runway")}.value"]));
+    }
+
+    // ---- choosing from a drop-down (plan 21, Task 7) ---------------------------------------------------------------------
+
+    private const string RunwayDropDown = "planning_perf_calc_runway_dropdown";
+    private static readonly string[] Runways = { "RW07L", "RW07R", "RW08", "RW25L", "RW25R", "RW26" };
+
+    /// <summary>Where RW26's row is drawn in the runway list captured open (25c): [519,379 150x38], its middle.</summary>
+    private static readonly Point Rw26Row = new(594, 398);
+
+    /// <summary>PERF calc as captured with the runway list closed (25b, RW07L) or open (25c); closed, showing <paramref name="face"/>
+    /// when one is given (the tablet after a choice).</summary>
+    private static Bbs757EfbScreenModel PerfCalc(bool open = false, string? face = null)
+    {
+        var apps = Bbs757EfbTreeJson.Load(open ? "25c-navigation-perf-calc-runway-open" : "25b-navigation-perf-calc-calculated");
+        if (face != null) apps = Bbs757EfbTreeJson.AsDropDown(apps, RunwayDropDown, face, Runways);
+        return Bbs757EfbModelReader.Read(apps)!;
+    }
+
+    private static Bbs757EfbItem Named(Bbs757EfbScreenModel m, string name) => m.Items.Single(i => i.Name == name);
+
+    [Fact]
+    public async Task A_drop_down_opens_and_its_entry_is_tapped()
+    {
+        // The captures of 2026-11-07: the runway drop-down closed (25b), its face tapped, the list open (25c, six rows 38 px apart from
+        // 189), RW26's row tapped where the open list draws it, then the face shows RW26.
+        var closed = PerfCalc();
+        var runway = Named(closed, RunwayDropDown);
+        var tablet = new FakeTablet(closed);
+        tablet.OnTap = _ => tablet.Show(tablet.Taps.Count == 1 ? PerfCalc(open: true) : PerfCalc(face: "RW26"));
+
+        bool took = await tablet.Runner().ChooseAsync(tablet.Press(runway), "RW26", CancellationToken.None);
+
+        Assert.True(took);
+        Assert.Equal(new[] { runway.Hit, Rw26Row }, tablet.Taps);
+        Assert.Equal(new Point(594, 173), runway.Hit);   // the face, 519,156 150x34
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task An_open_drop_down_is_not_opened_again()
+    {
+        // The pilot's own mouse left the list open after the window's push: the fresh read shows it open, so the entry's row is tapped
+        // with no tap on the face, which would close it.
+        var pushed = PerfCalc();
+        var tablet = new FakeTablet(pushed);
+        var press = tablet.Press(Named(pushed, RunwayDropDown));
+        tablet.Show(PerfCalc(open: true));
+        tablet.OnTap = _ => tablet.Show(PerfCalc(face: "RW26"));
+
+        Assert.True(await tablet.Runner().ChooseAsync(press, "RW26", CancellationToken.None));
+
+        Assert.Equal(new[] { Rw26Row }, tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    /// <summary>PERF calc with the runway list open, four of its six rows shown (152 px from 189) and scrolled by <see cref="Offset"/>; a
+    /// drag in it moves the offset by y0 - y1, kept between 0 and the six rows less the four shown (76), as a scrollbox's does (about 1:1,
+    /// B757-26); <see cref="Inert"/>, a drag moves nothing.</summary>
+    private sealed class ScrolledList
+    {
+        public const int ShownPx = 152, MaxOffset = 6 * 38 - ShownPx;
+        public static readonly Rectangle View = new(519, 189, 150, ShownPx);
+
+        public ScrolledList(double offset, bool inert = false)
+        {
+            Offset = offset;
+            Tablet = new FakeTablet(PageAt());
+            if (!inert)
+                Tablet.OnDrag = (_, y0, y1) =>
+                {
+                    Offset = Math.Clamp(Offset + (y0 - y1), 0, MaxOffset);
+                    Tablet.Show(PageAt());
+                };
+        }
+
+        public double Offset { get; private set; }
+        public FakeTablet Tablet { get; }
+
+        public Bbs757EfbScreenModel PageAt() => Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithOpenList(
+            Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"), RunwayDropDown, 189, ShownPx, (float)Offset))!;
+    }
+
+    [Fact]
+    public async Task A_drop_down_entry_out_of_view_is_dragged_to_or_not_chosen()
+    {
+        // RW26 is the sixth row, under the four the list shows (341-379, the list's bottom 341): one drag inside the list, at its x
+        // middle and a row in from its edges, brings it whole into view (303-341), and it is tapped there.
+        var s = new ScrolledList(0);
+        s.Tablet.OnTap = _ => s.Tablet.Show(PerfCalc(face: "RW26"));
+
+        Assert.True(await s.Tablet.Runner().ChooseAsync(s.Tablet.Press(Named(s.PageAt(), RunwayDropDown)), "RW26", CancellationToken.None));
+
+        var drag = Assert.Single(s.Tablet.Drags);
+        Assert.Equal((594, 303, 227), drag);   // the content moves up: 76 px, the list's height less two rows
+        Assert.Equal(new[] { new Point(594, 322) }, s.Tablet.Taps);
+        Assert.Empty(s.Tablet.Alerts);
+        Assert.True(s.Tablet.Flow.FindIndex(e => e.StartsWith("drag")) < s.Tablet.Flow.FindIndex(e => e.StartsWith("tap")));
+
+        // A list that does not move: the drag leaves the row where it was, none of it shows, nothing is tapped and the list stays open.
+        var stuck = new ScrolledList(0, inert: true);
+        Assert.False(await stuck.Tablet.Runner().ChooseAsync(stuck.Tablet.Press(Named(stuck.PageAt(), RunwayDropDown)), "RW26", CancellationToken.None));
+        Assert.Single(stuck.Tablet.Drags);
+        Assert.Empty(stuck.Tablet.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW26." }, stuck.Tablet.Alerts);
+
+        // One that does not move with 20 px of the row shown (321-341): tapped in that strip, as a page control is (MinShownPx).
+        var strip = new ScrolledList(58, inert: true);
+        strip.Tablet.OnTap = _ => strip.Tablet.Show(PerfCalc(face: "RW26"));
+        Assert.True(await strip.Tablet.Runner().ChooseAsync(strip.Tablet.Press(Named(strip.PageAt(), RunwayDropDown)), "RW26", CancellationToken.None));
+        Assert.Equal(new[] { new Point(594, 331) }, strip.Tablet.Taps);
+        Assert.All(s.Tablet.Drags.Concat(stuck.Tablet.Drags).Concat(strip.Tablet.Drags), d =>
+        {
+            Assert.Equal(594, d.X);
+            Assert.InRange(d.Y0, ScrolledList.View.Top, ScrolledList.View.Bottom);
+            Assert.InRange(d.Y1, ScrolledList.View.Top, ScrolledList.View.Bottom);
+        });
+    }
+
+    [Fact]
+    public async Task A_drop_down_showing_the_entry_taps_nothing()
+    {
+        var closed = PerfCalc();
+        var tablet = new FakeTablet(closed);
+
+        Assert.True(await tablet.Runner().ChooseAsync(tablet.Press(Named(closed, RunwayDropDown)), "RW07L", CancellationToken.None));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+
+        // Pressed on a push showing RW07L, the tablet's fresh read shows RW26 already (B757-18: the press's own read decides).
+        var moved = new FakeTablet(closed);
+        var press = moved.Press(Named(closed, RunwayDropDown));
+        moved.Show(PerfCalc(face: "RW26"));
+        Assert.True(await moved.Runner().ChooseAsync(press, "RW26", CancellationToken.None));
+        Assert.Empty(moved.Taps);
+        Assert.Empty(moved.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_choice_that_did_not_take_says_so(string culture)
+    {
+        // The row tapped, the list closed, and the face still shows RW07L: said once.
+        var closed = PerfCalc();
+        var back = new FakeTablet(closed);
+        back.OnTap = _ => back.Show(back.Taps.Count == 1 ? PerfCalc(open: true) : closed);
+        Assert.False(await TestCulture.Run(culture, () => back.Runner().ChooseAsync(back.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None)));
+        Assert.Equal(new[] { Named(closed, RunwayDropDown).Hit, Rw26Row }, back.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW26." }, back.Alerts);
+
+        // The face tapped and the list never opened: nothing more is tapped.
+        var shut = new FakeTablet(closed);
+        Assert.False(await TestCulture.Run(culture, () => shut.Runner().ChooseAsync(shut.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None)));
+        Assert.Single(shut.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW26." }, shut.Alerts);
+
+        // The row tapped and the list left open: said once the wait is over.
+        var open = new FakeTablet(PerfCalc(open: true));
+        Assert.False(await TestCulture.Run(culture, () => open.Runner().ChooseAsync(open.Press(Named(open.Page, RunwayDropDown)), "RW26", CancellationToken.None)));
+        Assert.Equal(new[] { Rw26Row }, open.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW26." }, open.Alerts);
+
+        // An entry the drop-down does not list: nothing tapped.
+        var unlisted = new FakeTablet(closed);
+        Assert.False(await TestCulture.Run(culture, () => unlisted.Runner().ChooseAsync(unlisted.Press(Named(closed, RunwayDropDown)), "RW99", CancellationToken.None)));
+        Assert.Empty(unlisted.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW99." }, unlisted.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_choice_that_took_says_nothing(string culture)
+    {
+        // The owner's ruling of 2026-11-07 for choice lists: NVDA said the entry as the pilot picked it (CORE-7, B757-20's two-choice rule).
+        var closed = PerfCalc();
+        var tablet = new FakeTablet(closed);
+        tablet.OnTap = _ => tablet.Show(tablet.Taps.Count == 1 ? PerfCalc(open: true) : PerfCalc(face: "RW26"));
+
+        Assert.True(await TestCulture.Run(culture, () => tablet.Runner().ChooseAsync(tablet.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None)));
+
+        Assert.Equal(2, tablet.Taps.Count);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_prompt_drop_down_is_judged_by_its_page(string culture)
+    {
+        // Systems' page menu always shows SELECT, none of its entries (30-systems): choosing 28 - FUEL changes the page, not the face, so
+        // the choice is judged by the list closing and the page changing. Its list opens below its face (82, four rows: 152 px).
+        var apps = Bbs757EfbTreeJson.Load("30-systems");
+        var systems = Bbs757EfbModelReader.Read(apps)!;
+        var menu = Named(systems, "pb_menu1");
+        var opened = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithOpenList(apps, "pb_menu1", 82, 152))!;
+        var fuel = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithText(apps, "selected_page_title_label", "FUEL"))!;
+        var tablet = new FakeTablet(systems);
+        tablet.OnTap = _ => tablet.Show(tablet.Taps.Count == 1 ? opened : fuel);
+
+        Assert.True(await TestCulture.Run(culture, () => tablet.Runner().ChooseAsync(tablet.Press(menu), "28 - FUEL", CancellationToken.None)));
+
+        Assert.Equal(new[] { new Point(1247, 57), new Point(1247, 139) }, tablet.Taps);   // the face, then the second row (120-158)
+        Assert.Empty(tablet.Alerts);
+
+        // The list closed over a page that did not change: not chosen.
+        var same = new FakeTablet(systems);
+        same.OnTap = _ => same.Show(same.Taps.Count == 1 ? opened : systems);
+        Assert.False(await TestCulture.Run(culture, () => same.Runner().ChooseAsync(same.Press(menu), "28 - FUEL", CancellationToken.None)));
+        Assert.Equal(new[] { "Select could not be set to 28 - FUEL." }, same.Alerts);
+    }
+
+    [Fact]
+    public async Task A_question_over_the_page_holds_back_a_choice()
+    {
+        // B757-18: under a question the tablet takes no tap on its page. Up before the press: nothing tapped, nothing said (the read that
+        // found it said it). Raised by the face's tap: nothing more tapped, nothing said.
+        var closed = PerfCalc();
+        var asked = new Bbs757EfbQuestion("Insert desired fuel level (0-2176 Gal)", new[] { Tile("Cancel", "q:CANCEL", new Rectangle(608, 589, 180, 60)) });
+        var before = new FakeTablet(closed);
+        var press = before.Press(Named(closed, RunwayDropDown));
+        before.Show(closed with { Question = asked });
+        Assert.False(await before.Runner().ChooseAsync(press, "RW26", CancellationToken.None));
+        Assert.Empty(before.Taps);
+        Assert.Empty(before.Alerts);
+
+        var raised = new FakeTablet(closed);
+        raised.OnTap = _ => raised.Show(PerfCalc(open: true) with { Question = asked });
+        Assert.False(await raised.Runner().ChooseAsync(raised.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None));
+        Assert.Single(raised.Taps);
+        Assert.Empty(raised.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_control_under_an_open_list_is_not_tapped(string culture)
+    {
+        // The runway list open (25c) covers the Flap Setting drop-down's face: a tap there would land on RW07R or RW08 (the review of Task
+        // 5, "Noted"). Nothing is tapped, and the pilot is told why.
+        var open = PerfCalc(open: true);
+        var tablet = new FakeTablet(open);
+
+        Assert.False(await TestCulture.Run(culture, () => tablet.Runner().ChooseAsync(tablet.Press(Named(open, "planning_perf_calc_flap_dropdown")), "15", CancellationToken.None)));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Flap Setting is under the open Runway list, not pressed." }, tablet.Alerts);
     }
 
     // ---- scrolling into view --------------------------------------------------------------------------------------------

@@ -9,7 +9,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// from the reads lives here, where it is tested without a tablet: finding the control the pilot pressed again in a fresh read
 /// (<see cref="Relocate"/>), whether a switch still needs its tap (<see cref="NeedsTap"/>), which new word a switch of two choices
 /// shows (<see cref="NewChoiceWord"/>), where to tap a slider with choices and where to tap next (<see cref="ChoiceX"/>,
-/// <see cref="NextChoiceX"/>), whether a press changed the page (<see cref="PageUnchanged"/>), what a button press says
+/// <see cref="NextChoiceX"/>), where an open drop-down's row is tapped and how its list is dragged (<see cref="RowTapPoint"/>,
+/// <see cref="ListDragFor"/>), whether a press changed the page (<see cref="PageUnchanged"/>), what a button press says
 /// (<see cref="ButtonOutcome"/>: the pressed control's new words, or that nothing changed), and the words said when a press did
 /// not go through or a switch of two choices went to its other choice. Nothing here
 /// refuses a press (the owner's ruling of 2026-10-29): a decision says where a control is now, whether its tap is still wanted,
@@ -208,6 +209,67 @@ public static class Bbs757EfbPress
         return delta > 0 ? (v.X + 250, start + distance, start) : (v.X + 250, start, start + distance);
     }
 
+    // ------------------------------------------------------------------ an open drop-down's list (plan 21, Task 7)
+
+    /// <summary>
+    /// The part of the tablet an open drop-down's rows show in: its list's drawn rectangle (<see cref="Bbs757EfbOpenList.Viewport"/>),
+    /// kept within the drop-down's own <see cref="ClipOf">clip</see> top and bottom, so a row is never tapped outside the part of the page
+    /// the drop-down shows in either; null when no open list was read.
+    /// </summary>
+    public static Rectangle? ListViewOf(Bbs757EfbItem dropDown)
+    {
+        if (dropDown.List is not { } list) return null;
+        var clip = ClipOf(dropDown);
+        int top = Math.Max(list.Viewport.Top, clip.Top), bottom = Math.Min(list.Viewport.Bottom, clip.Bottom);
+        return new Rectangle(list.Viewport.X, top, list.Viewport.Width, Math.Max(0, bottom - top));
+    }
+
+    /// <summary>The row of an open drop-down's list that shows <paramref name="entry"/> (its words exactly, as the window's choice list
+    /// sends them), the first when two do; null when the list is not open, was not read, or shows no such row.</summary>
+    public static Bbs757EfbListRow? RowOf(Bbs757EfbItem dropDown, string entry) =>
+        dropDown.List?.Rows.FirstOrDefault(r => string.Equals(r.Text, entry, StringComparison.Ordinal));
+
+    /// <summary>Whether all of <paramref name="row"/> shows in <paramref name="view"/>, top and bottom.</summary>
+    public static bool RowShowsWhole(Rectangle view, Rectangle row) => row.Top >= view.Top && row.Bottom <= view.Bottom;
+
+    /// <summary>Where to tap an open list's row: its middle when it shows whole in <paramref name="view"/>, else the middle of the strip of
+    /// it that shows when at least <see cref="MinShownPx"/> does (as <see cref="TapPoint"/> taps a page control); null when less shows. x is
+    /// the row's middle.</summary>
+    public static Point? RowTapPoint(Rectangle view, Rectangle row)
+    {
+        int top = Math.Max(row.Top, view.Top), bottom = Math.Min(row.Bottom, view.Bottom);
+        if (bottom - top < MinShownPx) return null;
+        int x = row.Left + row.Width / 2;
+        return RowShowsWhole(view, row) ? new Point(x, row.Top + row.Height / 2) : new Point(x, top + (bottom - top) / 2);
+    }
+
+    /// <summary>
+    /// One drag inside an open list that moves <paramref name="row"/> toward the middle of the list's <paramref name="view"/>: at the
+    /// list's x middle, from y0 to y1 so that y0 - y1 is how far the row's middle has to go (positive: it is below, the list's content moves
+    /// up), at most the list's height less two rows in one drag, so every point of the drag lies a row inside the list and none outside it
+    /// (BlueBird's scrollbox scrolls on a drag, B757-26; the agent eases it out, B757-25). Null when the row shows whole.
+    /// </summary>
+    public static (int X, int Y0, int Y1)? ListDragFor(Rectangle view, Rectangle row)
+    {
+        if (RowShowsWhole(view, row)) return null;
+        int mid = view.Top + view.Height / 2;
+        int delta = row.Top + row.Height / 2 - mid;
+        int distance = Math.Clamp(Math.Abs(delta), 1, Math.Max(1, view.Height - 2 * row.Height));
+        int start = mid - distance / 2;
+        int x = view.Left + view.Width / 2;
+        return delta > 0 ? (x, start + distance, start) : (x, start, start + distance);
+    }
+
+    /// <summary>
+    /// The drop-down whose open list covers <paramref name="at"/>, where <paramref name="item"/> of the page <paramref name="m"/> would be
+    /// tapped: BlueBird draws an open list over the page, so the tap would land on one of its rows and choose that entry (the runway list
+    /// of 25c covers the Flap Setting drop-down's face). Null when none does; a drop-down's own list never covers it.
+    /// </summary>
+    public static Bbs757EfbItem? CoveringList(Bbs757EfbScreenModel m, Bbs757EfbItem item, Point at) =>
+        m.Items.Contains(item)
+            ? m.Items.FirstOrDefault(i => !ReferenceEquals(i, item) && i.Kind == Bbs757EfbKind.Choice && ListViewOf(i) is { } view && view.Contains(at))
+            : null;
+
     // ------------------------------------------------------------------ a question
 
     /// <summary>A question's words as two reads compare them: its letters and digits, upper-cased invariantly. Case, spaces and
@@ -365,6 +427,9 @@ public static class Bbs757EfbPress
     /// <summary>A control the page would not scroll to where it can be tapped.</summary>
     public static string NotInViewText(string name) => name + " could not be brought into view, not pressed.";
 
-    /// <summary>A slider that did not reach the wished choice or value.</summary>
+    /// <summary>A slider that did not reach the wished choice or value, or a drop-down whose entry was not chosen.</summary>
     public static string CouldNotSetText(string label, string value) => label + " could not be set to " + value + ".";
+
+    /// <summary>A control another drop-down's open list covers (<see cref="CoveringList"/>), so it was not tapped.</summary>
+    public static string CoveredText(string name, string list) => name + " is under the open " + list + " list, not pressed.";
 }

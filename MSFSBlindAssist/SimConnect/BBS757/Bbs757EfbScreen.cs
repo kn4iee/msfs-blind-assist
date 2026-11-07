@@ -98,10 +98,12 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
 /// <see cref="Key"/> is stable while the element's state changes (its label without
 /// the state word), so the window keeps the screen reader's focus on it across a refresh.
 /// <see cref="Clip"/> is the drawn rectangle of the scrollbox the control sits in (its nearest <c>*_scrollbox</c> ancestor, within
-/// any scrollbox above that one), the part of the tablet it can show in: the reader sets <see cref="Bbs757EfbScreen.ContentArea"/>
-/// for a control in no scrollbox, and an item built with none (the default) is read as the content area too
+/// any scrollbox above that one), the part of the tablet it can show in: the reader sets <see cref="Bbs757EfbScreen.PageArea"/>
+/// for a control in no scrollbox, and an item built with none (the default) is read as the content area
 /// (<see cref="Bbs757EfbPress.ClipOf"/>).
-/// <see cref="Entries"/> are a <see cref="Bbs757EfbKind.Choice"/>'s entries, in BlueBird's order, null for any other kind.
+/// <see cref="Entries"/> are a <see cref="Bbs757EfbKind.Choice"/>'s entries, in BlueBird's order, null for any other kind;
+/// <see cref="Open"/> says its list is shown, and <see cref="List"/> is that list as drawn (null while it is closed, or open with its
+/// list not read). Neither is in the page's fingerprint: the window shows a drop-down as a choice list, open or not.
 /// </summary>
 public sealed record Bbs757EfbItem(
     Bbs757EfbKind Kind,
@@ -119,7 +121,20 @@ public sealed record Bbs757EfbItem(
     string Label = "",
     string Name = "",
     Rectangle Clip = default,
-    IReadOnlyList<string>? Entries = null);
+    IReadOnlyList<string>? Entries = null,
+    bool Open = false,
+    Bbs757EfbOpenList? List = null);
+
+/// <summary>
+/// A drop-down's list while it is open (plan 21, Task 7; measured 2026-11-07, <c>docs/b757/evidence/efb-memory-classes.md</c>): the part
+/// of the tablet its rows show in (<see cref="Viewport"/>, the drawn rectangle of its <c>item_scrollbox</c>: the runway list's 519,189
+/// 150x228) and its rows in the list's order, one per entry, each with its words and where it is drawn now (the list's own scroll and the
+/// page's taken off: the runway list's rows 38 px apart from y 189). A list taller than its cap scrolls inside the viewport.
+/// </summary>
+public sealed record Bbs757EfbOpenList(Rectangle Viewport, IReadOnlyList<Bbs757EfbListRow> Rows);
+
+/// <summary>One row of an open drop-down's list: the entry's words it shows and where it is drawn.</summary>
+public sealed record Bbs757EfbListRow(string Text, Rectangle Box);
 
 /// <summary>A parsed tablet page: which app and menu entry, then its elements in reading order.</summary>
 public sealed record Bbs757EfbScreenModel(
@@ -195,8 +210,14 @@ public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem>
 /// </summary>
 public static class Bbs757EfbScreen
 {
-    /// <summary>The part of the tablet that shows a page (right of the side menu, below the top bar).</summary>
+    /// <summary>The part of the tablet that shows a page's content (right of the side menu, below the top bar and the app's title
+    /// row).</summary>
     public static readonly Rectangle ContentArea = new(250, 82, 1147, 966);
+
+    /// <summary>The part of the tablet an app draws its page in, right of the side menu and below the top bar (0 to 32): the content
+    /// area with the app's title row above it (32 to 82), where Systems keeps its page menu (<c>pb_menu1</c>, 1097,32 300x50; plan 21,
+    /// Task 7). A page control in no scrollbox is clipped to it, so a control of the title row is tapped where it is drawn.</summary>
+    public static readonly Rectangle PageArea = new(250, 32, 1147, 1016);
 
     /// <summary>Controls left of this (tablet x) are the side menu.</summary>
     public const int MenuRight = 252;

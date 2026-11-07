@@ -204,9 +204,9 @@ public static class Bbs757EfbElements
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     break;
                 case Bbs757EfbKind.Choice:
-                    // A drop-down: a choice list of its entries valued by the one it shows (choosing is plan 21 Task 7's: until then the
-                    // bridge taps nothing for it). One that shows none of them (Systems' SELECT) starts with an empty choice, so the list
-                    // never reads an entry as chosen.
+                    // A drop-down: a choice list of its entries valued by the one it shows, chosen from by tapping the tablet
+                    // (Bbs757EfbPressRunner.ChooseAsync, B757-27). One that shows none of them (Systems' SELECT) starts with an empty
+                    // choice, so the list never reads an entry as chosen.
                     Add(Bbs757EfbVocabulary.Pretty(it.Text), controlType: "select", clickable: true, value: it.Value, key: it.Key,
                         options: ChoiceOptions(it), action: new Action(ActionKind.Tap, it));
                     break;
@@ -359,11 +359,13 @@ public static class Bbs757EfbElements
         it.Kind == Bbs757EfbKind.Toggle && TwoChoicesFor(it, pageName) != null
         && Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(pageName, it)!, it.Value) >= 0;
 
-    /// <summary>A drop-down's choices: its entries in BlueBird's order, after an empty one when it shows none of them.</summary>
+    /// <summary>A drop-down's choices: its entries in BlueBird's order, after an empty one when it shows none of them, or after the
+    /// words it shows when they are no entry read (a read with no entries: the face is its value, Task 5's review M2), so the list's
+    /// value is always one of its choices.</summary>
     private static IReadOnlyList<string> ChoiceOptions(Bbs757EfbItem it)
     {
         var entries = it.Entries ?? Array.Empty<string>();
-        return it.Value.Length == 0 ? new[] { "" }.Concat(entries).ToList() : entries;
+        return entries.Contains(it.Value) ? entries : new[] { it.Value }.Concat(entries).ToList();
     }
 
     /// <summary>A side-menu entry's words, "(current page)" after them on the entry of the page shown (a tab says "(current)",

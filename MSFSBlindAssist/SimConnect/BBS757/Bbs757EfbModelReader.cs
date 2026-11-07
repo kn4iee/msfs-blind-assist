@@ -77,7 +77,8 @@ public sealed class Bbs757EfbModelReader
         string section = SectionOf(content.Class, grammar);
         var menu = new List<Bbs757EfbItem>();
         var items = new List<Bbs757EfbItem>();
-        EmitChildren(content.Controls, content, grammar, menu, items, Bbs757EfbScreen.ContentArea, parent: null);
+        // A control in no scrollbox shows anywhere the app draws, its title row included (Systems' page menu, plan 21 Task 7).
+        EmitChildren(content.Controls, content, grammar, menu, items, Bbs757EfbScreen.PageArea, parent: null);
         var scroller = PageScrollbox(content);
         return new Bbs757EfbScreenModel(content.Class, section, menu, Bbs757EfbPageRules.Reorder(content.Class, section, items))
         {
@@ -1055,7 +1056,10 @@ public sealed class Bbs757EfbModelReader
                     _inputName[input] = rowLabel.Text;
                     if (!ValueOf.ContainsKey(rowLabel)) Use(rowLabel);
                 }
-                else if (input.Kind == "pulldown" && input.Text.Any(char.IsLetterOrDigit) && !(input.Entries ?? Array.Empty<string>()).Contains(input.Text))
+                // A face is a prompt only beside entries it matches none of: with none read (a torn vector, a list BlueBird has not
+                // filled yet) it is a value (Task 5's review, M2).
+                else if (input.Kind == "pulldown" && input.Text.Any(char.IsLetterOrDigit) && input.Entries is { Count: > 0 } entries
+                    && !entries.Contains(input.Text))
                     _inputName[input] = input.Text;
                 else _inputName[input] = OwnName(input.Name);
             }
@@ -1065,15 +1069,25 @@ public sealed class Bbs757EfbModelReader
         public string InputNameOf(Bbs757EfbMemory.Node input) => _inputName.GetValueOrDefault(input) ?? OwnName(input.Name);
 
         /// <summary>An input as an item named <paramref name="name"/>: a drop-down a <see cref="Bbs757EfbKind.Choice"/> of its entries,
-        /// valued by the one it shows; a text box a <see cref="Bbs757EfbKind.Field"/> holding its text; an input the reader cannot read a
-        /// field with no value. Keyed by its control name.</summary>
+        /// valued by the one it shows (by its face's words when no entry was read: the face is then a value, not a prompt), open or not,
+        /// with its open list as drawn (<see cref="OpenListOf"/>); a text box a <see cref="Bbs757EfbKind.Field"/> holding its text; an
+        /// input the reader cannot read a field with no value. Keyed by its control name.</summary>
         public Bbs757EfbItem InputItem(Bbs757EfbMemory.Node input, string name) => input.Kind switch
         {
-            "pulldown" => new Bbs757EfbItem(Bbs757EfbKind.Choice, name, Box(input), Hit(input), true, input.Name, Value: input.Value, Name: input.Name,
-                Entries: input.Entries ?? Array.Empty<string>()),
+            "pulldown" => new Bbs757EfbItem(Bbs757EfbKind.Choice, name, Box(input), Hit(input), true, input.Name,
+                Value: input.Entries is { Count: > 0 } ? input.Value : input.Text, Name: input.Name,
+                Entries: input.Entries ?? Array.Empty<string>(), Open: input.Open, List: OpenListOf(input)),
             "textbox" => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Value: input.Text, Name: input.Name),
             _ => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Name: input.Name),
         };
+
+        /// <summary>A drop-down's open list as the walk drew it (<see cref="Bbs757EfbMemory.Node.OpenList"/>, <see cref="Bbs757EfbMemory.Node.Rows"/>):
+        /// its scrollbox's rectangle and its entry buttons, each with its words; null while the list is closed, or open with its scrollbox not
+        /// read (a torn list: nothing to tap in it).</summary>
+        private static Bbs757EfbOpenList? OpenListOf(Bbs757EfbMemory.Node input) =>
+            input.Open && input.OpenList is { } list
+                ? new Bbs757EfbOpenList(Box(list), (input.Rows ?? Array.Empty<Bbs757EfbMemory.Node>()).Select(r => new Bbs757EfbListRow(r.Text, Box(r))).ToList())
+                : null;
 
         private bool IsHeadingTitle(Bbs757EfbMemory.Node n) =>
             _info.TryGetValue(n, out var info) && (info.IsTitle || Bbs757EfbPageRules.IsHeadingName(_app, n.Name)) && !ValueOf.ContainsKey(n)
