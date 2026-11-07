@@ -53,6 +53,8 @@ public static class Bbs757LayoutDescriptions
             $"file analysis: {l.SourceFile}: EFB notification panel: overlayPanelShown {l.OverlayPanelShown}, " +
             $"overlayListOpen {l.OverlayListOpen}, overlayPanelRect {l.OverlayPanelRect}, overlayPanelHeight {l.OverlayPanelHeight}, " +
             $"overlayFlightTimeText {l.OverlayFlightTimeText}",
+            $"file analysis: {l.SourceFile}: EFB boarding box: overlayBoardingRect {l.OverlayBoardingRect}, bbosLoadState {l.BbosLoadState}, " +
+            $"bbosLoadDeboarding {l.BbosLoadDeboarding}, bbosLoadFlown {l.BbosLoadFlown}, bbosLoadRemaining {l.BbosLoadRemaining}",
             $"file analysis: {l.SourceFile}: EFB classes: {classes}",
         };
     }

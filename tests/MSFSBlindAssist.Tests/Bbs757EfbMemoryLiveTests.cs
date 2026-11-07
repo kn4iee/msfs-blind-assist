@@ -38,6 +38,8 @@ public class Bbs757EfbMemoryLiveTests
         NoticeText: 0x10, NoticeTime: 0x1c, NoticeUnread: 0x34,
         // The top bar app's notification panel (measured 2026-11-07): shown byte, list byte, rectangle (x, y, w) and height.
         OverlayPanelShown: 0x1fc, OverlayListOpen: 0x1fd, OverlayPanelRect: 0x234, OverlayPanelHeight: 0x240, OverlayFlightTimeText: 0x1b4,
+        // The top bar's boarding box and BBOS's loading state (decoded from BBS752.wasm, read live 2026-11-07).
+        OverlayBoardingRect: 0x214, BbosLoadState: 0x9160, BbosLoadDeboarding: 0x9164, BbosLoadFlown: 0x9167, BbosLoadRemaining: 0x9278,
         ClassVptrs: new[]
         {
             // N3bbs22bbos_control_scrollboxE's vtable is at 0x30bb0 (its typeinfo at 0x30c34): read live, 2026-11-07.

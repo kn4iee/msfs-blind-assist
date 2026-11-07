@@ -60,6 +60,17 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// <param name="OverlayFlightTimeText">The top bar's flight-time text, a std::string in the top bar app (0x1b4): "DEP ±hh:mm" around
 /// departure ("DEP 00:28" at 14:16L, counting up from the scheduled departure); "ETA hhmmZ" seen in its stale bytes after a flight,
 /// empty (size 0) when it shows nothing.</param>
+/// <param name="OverlayBoardingRect">The top bar's boarding box, x, y, width and height floats in the top bar app (0x214): BlueBird's
+/// top bar draw writes the box's rectangle there on every frame it draws the box ([1144,4 176x24] offering START BOARDING) and zeros it
+/// on every frame it does not (decoded from BBS752.wasm, 2026-11-07), so a width above 0 is the box showing.</param>
+/// <param name="BbosLoadState">BBOS's loading state, an int (0x9160): 0 idle, 1 just started, 2 running, 3 paused, 4 done (its
+/// writers in BBS752.wasm: start 1, the tick 2 and 4, pause 3, resume 2, cancel 0).</param>
+/// <param name="BbosLoadDeboarding">BBOS's byte, 1 while the loading started is a deboarding (0x9164): START DEBOARDING sets it, START
+/// BOARDING and the end of a deboarding clear it.</param>
+/// <param name="BbosLoadFlown">BBOS's byte, 1 once the aircraft has flown since its boarding (0x9167), cleared when a deboarding ends:
+/// the top bar offers START DEBOARDING rather than START BOARDING while it is set.</param>
+/// <param name="BbosLoadRemaining">BBOS's three remaining loading times, 64-bit seconds 8 bytes apart (0x9278): the box reads
+/// "BOARDING... N MIN" with N the largest rounded up to whole minutes, and "BOARDING..." when none is above 0.</param>
 public sealed record Bbs757EfbMemLayout(
     string SourceFile,
     uint AnchorAddress,
@@ -104,6 +115,11 @@ public sealed record Bbs757EfbMemLayout(
     int OverlayPanelRect,
     int OverlayPanelHeight,
     int OverlayFlightTimeText,
+    int OverlayBoardingRect,
+    int BbosLoadState,
+    int BbosLoadDeboarding,
+    int BbosLoadFlown,
+    int BbosLoadRemaining,
     IReadOnlyList<Bbs757EfbClassVptr> ClassVptrs)
 {
     public bool Equals(Bbs757EfbMemLayout? other) =>
@@ -129,6 +145,9 @@ public sealed record Bbs757EfbMemLayout(
         && OverlayPanelShown == other.OverlayPanelShown && OverlayListOpen == other.OverlayListOpen
         && OverlayPanelRect == other.OverlayPanelRect && OverlayPanelHeight == other.OverlayPanelHeight
         && OverlayFlightTimeText == other.OverlayFlightTimeText
+        && OverlayBoardingRect == other.OverlayBoardingRect && BbosLoadState == other.BbosLoadState
+        && BbosLoadDeboarding == other.BbosLoadDeboarding && BbosLoadFlown == other.BbosLoadFlown
+        && BbosLoadRemaining == other.BbosLoadRemaining
         && ClassVptrs.SequenceEqual(other.ClassVptrs);
 
     public override int GetHashCode()
@@ -146,6 +165,7 @@ public sealed record Bbs757EfbMemLayout(
         h.Add(NoticeStride); h.Add(NoticeId); h.Add(NoticeTitle); h.Add(NoticeText); h.Add(NoticeTime); h.Add(NoticeUnread);
         h.Add(OverlayPanelShown); h.Add(OverlayListOpen); h.Add(OverlayPanelRect); h.Add(OverlayPanelHeight);
         h.Add(OverlayFlightTimeText);
+        h.Add(OverlayBoardingRect); h.Add(BbosLoadState); h.Add(BbosLoadDeboarding); h.Add(BbosLoadFlown); h.Add(BbosLoadRemaining);
         foreach (var c in ClassVptrs) h.Add(c);
         return h.ToHashCode();
     }
