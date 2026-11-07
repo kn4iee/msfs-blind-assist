@@ -777,6 +777,22 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
+    public void A_field_becoming_an_edit_box_or_a_line_is_a_new_page_to_push_and_its_caret_is_not()
+    {
+        // The final review's M4: the window shows a field with its caret read as an edit box and one without as a line, so a read where a
+        // field gains or loses its state, its text the same, is pushed; the caret moving (it does as the pilot types) and the box's other
+        // state are no change.
+        var box = new Rectangle(289, 156, 150, 34);
+        Bbs757EfbScreenModel Airport(Bbs757EfbTextState? state) => PageOf("NAVIGATION", "PERF CALC",
+            Item(Bbs757EfbKind.Field, "AIRPORT", "planning_perf_calc_airport_input", box, value: "KSEA") with { TextState = state });
+
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(Airport(null)), Bbs757EfbPress.Fingerprint(Airport(new Bbs757EfbTextState(4, 4, false))));
+        Assert.False(Bbs757EfbPress.PageUnchanged(Airport(new Bbs757EfbTextState(4, 4, false)), Airport(null)));
+        Assert.Equal(Bbs757EfbPress.Fingerprint(Airport(new Bbs757EfbTextState(4, 4, false))),
+            Bbs757EfbPress.Fingerprint(Airport(new Bbs757EfbTextState(1, 4, false))));
+    }
+
+    [Fact]
     public void The_keyboard_coming_up_is_no_page_change()
     {
         var page = Ground(ReqFuelTruck());

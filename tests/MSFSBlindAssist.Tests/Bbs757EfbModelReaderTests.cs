@@ -1596,8 +1596,11 @@ public class Bbs757EfbModelReaderTests
             Assert.Null(Assert.Single(partial.Items, i => i.Name == "planning_perf_calc_airport_input").TextState);
         }
 
-        // The page says the same (the caret moves as the pilot types); the window shows the box as an edit box (Task 5), the rest as before.
-        Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(model));
+        // The window shows the box as an edit box (Task 5), the rest as before, so a read that gains the state is a new page to push (the
+        // final review's M4); the caret moving, as it does while the pilot types, is none.
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(model));
+        Assert.Equal(Bbs757EfbPress.Fingerprint(model),
+            Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithTextState(page, "planning_perf_calc_airport_input", 4, 4, false))!));
         Assert.Equal(ListingOf(page).Replace("text  Airport: KSEA\n", "edit [KSEA]  Airport\n", StringComparison.Ordinal), ListingOf(apps));
         Assert.NotEqual(ListingOf(page), ListingOf(apps));
     }
@@ -1612,7 +1615,8 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal(("fuel_input_textbox", "752", "Gal"), (row.Name, row.Value, row.Unit));
         Assert.Equal(new Bbs757EfbTextState(3, 8, true), row.TextState);
         Assert.Null(Assert.Single(Bbs757EfbModelReader.Read(page)!.Question!.Rows).TextState);
-        Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(apps)!));
+        // An edit box in the window, a line without the state: the read that gains it is pushed (the final review's M4).
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(apps)!));
     }
 
     // ---- a toggle's own state (plan 22, Task 1c; measured 2026-11-07, docs/b757/evidence/efb-typing.md "Follow-up") ----

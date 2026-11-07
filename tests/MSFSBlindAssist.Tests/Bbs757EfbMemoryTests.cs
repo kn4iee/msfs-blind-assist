@@ -397,15 +397,16 @@ public class Bbs757EfbMemoryTests
     }
 
     [Theory]
-    [InlineData(5)]             // past the end of "EDDF"
-    [InlineData(-1)]
-    [InlineData(int.MaxValue)]
-    public void A_caret_outside_the_text_reads_none(int caret)
+    [InlineData(5, 4)]                // past the end of "EDDF"
+    [InlineData(int.MaxValue, 4)]
+    [InlineData(-1, 0)]
+    public void A_caret_outside_the_text_is_kept_inside_it(int caret, int kept)
     {
-        // A torn read: the caret is a boundary of the text, 0 to its length. The other fields still read.
+        // The final review's M4: a text BlueBird sets itself (PERF calc's lookups, a saved ID) may leave the caret where an older, longer
+        // text had it, and dropping the box's state for it made a text box a line in the window. The caret is a boundary of the text, so
+        // it is kept to 0 to the text's length (the planner clamps it too); the box stays a text box, and the other fields read.
         var box = FirstChild(() => TextBox("EDDF", caret, 4, 1));
-        Assert.Null(box.Caret);
-        Assert.Equal(((int?)4, (bool?)true), (box.MaxLength, box.Keypad));
+        Assert.Equal(((int?)kept, (int?)4, (bool?)true), (box.Caret, box.MaxLength, box.Keypad));
     }
 
     [Theory]
@@ -468,9 +469,9 @@ public class Bbs757EfbMemoryTests
         var box = Assert.Single(Bbs757EfbTreeJson.Read(json)).Controls[0].Children[0];
         Assert.Equal(((int?)2, (int?)4, (bool?)true), (box.Caret, box.MaxLength, box.Keypad));
 
-        var torn = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(Build(() => TextBox("EDDF", 9, 4, 0)).ReadFrontApps()));
+        var torn = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(Build(() => TextBox("EDDF", 2, 0, 0)).ReadFrontApps()));
         var tornBox = Assert.Single(torn).Controls[0].Children[0];
-        Assert.Equal(((int?)null, (int?)4, (bool?)false), (tornBox.Caret, tornBox.MaxLength, tornBox.Keypad));
+        Assert.Equal(((int?)2, (int?)null, (bool?)false), (tornBox.Caret, tornBox.MaxLength, tornBox.Keypad));
 
         string bare = Bbs757EfbTreeJson.Write(Build().ReadFrontApps());
         foreach (string field in new[] { "caret", "maxLength", "keypad" })

@@ -312,11 +312,13 @@ public sealed class Bbs757EfbMemory
 
     /// <summary>A text box with its caret, maximum length and keypad flag (<see cref="Node"/>): the ints at the layout's
     /// <c>TextboxCaret</c>, <c>TextboxMaxLength</c> and <c>TextboxKeypad</c> (measured live 2026-11-07, docs/b757/evidence/efb-typing.md).
-    /// Each is null when it cannot be read or lies outside its range, a torn read: a caret outside 0 to the text's length, a maximum length
-    /// outside 1 to <see cref="MaxTextboxLength"/>, a keypad int other than 0 (the QWERTY keyboard) or 1 (the numeric keypad).</summary>
+    /// Each is null when it cannot be read; a maximum length outside 1 to <see cref="MaxTextboxLength"/> and a keypad int other than 0 (the
+    /// QWERTY keyboard) or 1 (the numeric keypad) read as none too, a torn read. A caret outside 0 to the text's length is kept inside it
+    /// (the final review's M4): a text BlueBird sets itself may leave the caret where a longer one had it, the planner clamps it anyway, and
+    /// dropping it would make the text box a line in the window.</summary>
     private Node WithTyping(Node node, uint ctrl)
     {
-        int? caret = _m.TryReadInt(ctrl + (uint)_l.TextboxCaret, out int c) && c >= 0 && c <= node.Text.Length ? c : null;
+        int? caret = _m.TryReadInt(ctrl + (uint)_l.TextboxCaret, out int c) ? Math.Clamp(c, 0, node.Text.Length) : null;
         int? maxLength = _m.TryReadInt(ctrl + (uint)_l.TextboxMaxLength, out int m) && m is >= 1 and <= MaxTextboxLength ? m : null;
         bool? keypad = _m.TryReadInt(ctrl + (uint)_l.TextboxKeypad, out int k) && k is 0 or 1 ? k == 1 : null;
         return node with { Caret = caret, MaxLength = maxLength, Keypad = keypad };

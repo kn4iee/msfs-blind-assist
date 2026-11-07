@@ -105,7 +105,8 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
 /// <see cref="Open"/> says its list is shown, and <see cref="List"/> is that list as drawn (null while it is closed, or open with its
 /// list not read). Neither is in the page's fingerprint: the window shows a drop-down as a choice list, open or not.
 /// <see cref="TextState"/> is a <see cref="Bbs757EfbKind.Field"/>'s caret, maximum length and keypad flag when it is one of BlueBird's
-/// text boxes and all three were read (plan 22), null otherwise; not in the fingerprint either, as the caret moves while the pilot types.
+/// text boxes and all three were read (plan 22), null otherwise; in the fingerprint only whether it is set (the window shows such a field
+/// as an edit box, any other as a line), never the caret, which moves while the pilot types.
 /// <see cref="Unit"/> is the unit BlueBird draws beside a dialog's text box ("Gal" beside the fuel input dialog's box), "" for any other
 /// item: the box's <see cref="Value"/> is its own text alone ("752"), so a typing compares and reads back what the box holds, and the window
 /// names it with the unit after its name ("Fuel (Gal)", plan 22, Task 5).

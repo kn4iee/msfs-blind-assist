@@ -68,7 +68,9 @@ public static class Bbs757EfbPress
     /// (<see cref="Bbs757EfbSlider.KnobRead"/>) adds its place, in whole percent as the window shows it, so a knob moved alone (a zoom
     /// button's tap, a set with no value shown, BlueBird moving a reservoir's level) is a change; a pixel of wobble within the same
     /// percent is none. Any other slider's knob comes from its value, which the line has already. A drop-down adds its entries, which
-    /// its choice list offers (another airport's runways under the same first one shown are a change).</summary>
+    /// its choice list offers (another airport's runways under the same first one shown are a change). A field whose text state was read
+    /// adds that it was (the final review's M4): the window shows it as an edit box and any other field as a line, so a read where a field
+    /// gains or loses it is a change; its caret is not, as it moves while the pilot types.</summary>
     private static string Line(Bbs757EfbItem i)
     {
         var sb = new StringBuilder().Append(i.Kind).Append('|').Append(i.Key).Append('|').Append(i.Text).Append('|')
@@ -77,6 +79,7 @@ public static class Bbs757EfbPress
                 ? Math.Round(s.PercentOf(s.KnobX)).ToString(System.Globalization.CultureInfo.InvariantCulture) : "");
         if (i.Entries is { } entries) sb.Append("|entries|").Append(string.Join('\u001f', entries));
         if (i.Unit.Length > 0) sb.Append("|unit|").Append(i.Unit);   // a dialog box's unit: its name says it (plan 22)
+        if (i.TextState != null) sb.Append("|edit");                // an edit box in the window, not a line (plan 22)
         return sb.Append('\n').ToString();
     }
 
