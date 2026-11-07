@@ -212,3 +212,64 @@ test('without a key, "(now …)" and an after-colon tail are part of the key aga
   assert.notStrictEqual(s.buttonByLabel('Runway next'), step, 'an unkeyed "(now …)" change was patched in place');
   assert.notStrictEqual(s.buttonByLabel('GPU'), gpu, 'an unkeyed after-colon change was patched in place');
 });
+
+// ---- opt-in Enter-only edit box (item key commit = 'enter') ----
+const fld = (idx, text, value, extra) => Object.assign({ idx, kind: 'field', controlType: 'text', text, value, clickable: false, level: 0, live: '', disabled: false }, extra || {});
+const keydown = (win, el, k) => el.dispatchEvent(new win.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+const sets = (s) => s.posted.map((m) => JSON.parse(m)).filter((m) => m.type === 'set');
+
+test('An_enter_only_box_posts_on_enter_only', (t) => {
+  const s = loadShell(t);
+  s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.value = '250';
+  box.dispatchEvent(new s.window.Event('change', { bubbles: true }));
+  assert.strictEqual(sets(s).length, 0, 'change must not post');
+  keydown(s.window, box, 'Enter');
+  assert.deepStrictEqual(sets(s), [{ type: 'set', idx: '3', value: '250', controlType: 'text' }]);
+});
+
+test('Leaving_an_enter_only_box_restores_it', async (t) => {
+  const s = loadShell(t);
+  s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.value = '250';
+  box.dispatchEvent(new s.window.Event('blur'));
+  assert.strictEqual(box.value, '100');
+  assert.strictEqual(sets(s).length, 0);
+  assert.strictEqual(await s.spoken(), 'Zero fuel weight not changed');
+});
+
+test('A_box_without_commit_posts_on_change_as_before', (t) => {
+  const s = loadShell(t);
+  s.render('Fuel', [fld(3, 'Zero fuel weight', '100')]);
+  const box = s.window.document.querySelector('input.in');
+  box.value = '250';
+  box.dispatchEvent(new s.window.Event('change', { bubbles: true }));
+  assert.deepStrictEqual(sets(s), [{ type: 'set', idx: '3', value: '250', controlType: 'text' }]);
+  box.value = '260';
+  box.dispatchEvent(new s.window.Event('blur'));
+  assert.strictEqual(box.value, '260', 'no restore without commit');
+});
+
+test('An_enter_only_box_keeps_its_text_after_Enter_and_a_blur_says_nothing', async (t) => {
+  const s = loadShell(t);
+  s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.value = '250';
+  keydown(s.window, box, 'Enter');
+  box.dispatchEvent(new s.window.Event('blur'));
+  assert.strictEqual(box.value, '250');
+  assert.strictEqual(await s.spoken(), 'EFB page: Fuel', 'only the page announce, nothing about the box');
+  s.render('Fuel', [fld(3, 'Zero fuel weight', '250', { commit: 'enter' })]);
+  assert.strictEqual(box.value, '250');
+});
+
+test('Enter_with_the_text_unchanged_posts_and_says_nothing', async (t) => {
+  const s = loadShell(t);
+  s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  keydown(s.window, box, 'Enter');
+  assert.strictEqual(sets(s).length, 0);
+  assert.strictEqual(await s.spoken(), 'EFB page: Fuel', 'only the page announce, nothing about the box');
+});
