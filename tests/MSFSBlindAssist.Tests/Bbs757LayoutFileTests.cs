@@ -111,6 +111,8 @@ public class Bbs757LayoutFileTests
         TextboxCaret: 0x1ac,
         TextboxMaxLength: 0x1bc,
         TextboxKeypad: 0x1cc,
+        // A toggle control's own byte: 1 on, 0 off (measured live 2026-11-07).
+        ToggleOn: 0x188,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("scrollbox", 0x30400),
@@ -148,6 +150,7 @@ public class Bbs757LayoutFileTests
         ("keyboardShown", 0x1ac), ("keyboardReady", 0x1ad), ("keyboardKeypad", 0x1ae), ("keyboardTarget", 0x1ec),
         ("keypadRect", 0x1d8), ("keyboardNumeric", 0x1e8), ("keyboardShift", 0x1e9), ("keyboardCaps", 0x1ea),
         ("textboxCaret", 0x1ac), ("textboxMaxLength", 0x1bc), ("textboxKeypad", 0x1cc),
+        ("toggleOn", 0x188),
     };
 
     private static string WithoutField(string text, string name, int value) =>
@@ -382,6 +385,7 @@ public class Bbs757LayoutFileTests
             (loaded.KeyboardShown, loaded.KeyboardReady, loaded.KeyboardKeypad, loaded.KeyboardTarget, loaded.KeypadRect,
                 loaded.KeyboardNumeric, loaded.KeyboardShift, loaded.KeyboardCaps));
         Assert.Equal((0x1ac, 0x1bc, 0x1cc), (loaded.TextboxCaret, loaded.TextboxMaxLength, loaded.TextboxKeypad));
+        Assert.Equal(0x188, loaded.ToggleOn); // a toggle's own byte, after TextboxKeypad
         Assert.Equal("keyboard", loaded.KindFor(0x26f18));
         Assert.Equal("keyboard", loaded.ClassVptrs[^1].Kind); // after modal
         Assert.Equal("modal", loaded.ClassVptrs[^2].Kind);
@@ -400,6 +404,7 @@ public class Bbs757LayoutFileTests
                      sample with { KeyboardTarget = 1 }, sample with { KeypadRect = 1 }, sample with { KeyboardNumeric = 1 },
                      sample with { KeyboardShift = 1 }, sample with { KeyboardCaps = 1 }, sample with { TextboxCaret = 1 },
                      sample with { TextboxMaxLength = 1 }, sample with { TextboxKeypad = 1 },
+                     sample with { ToggleOn = 1 },
                  })
         {
             Assert.NotEqual(sample, changed);
@@ -408,7 +413,7 @@ public class Bbs757LayoutFileTests
 
         var line = Assert.Single(Bbs757LayoutDescriptions.DescribeEfb(loaded), l => l.Contains("EFB keyboard:", StringComparison.Ordinal));
         foreach (string part in new[] { "keyboardShown 428", "keyboardReady 429", "keyboardKeypad 430", "keyboardTarget 492", "keypadRect 472",
-                     "keyboardNumeric 488", "keyboardShift 489", "keyboardCaps 490", "textboxCaret 428", "textboxMaxLength 444", "textboxKeypad 460" })
+                     "keyboardNumeric 488", "keyboardShift 489", "keyboardCaps 490", "textboxCaret 428", "textboxMaxLength 444", "textboxKeypad 460", "toggleOn 392" })
             Assert.Contains(part, line, StringComparison.Ordinal);
         Assert.Contains("keyboard=0x26f18", string.Join("\n", Bbs757LayoutDescriptions.DescribeEfb(loaded)), StringComparison.Ordinal);
     }

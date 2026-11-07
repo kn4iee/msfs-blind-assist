@@ -94,6 +94,9 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// <param name="TextboxMaxLength">A text box's int, the most characters it takes (0x1bc): Airport 4, the fuel dialog 8, Hoppie 24,
 /// SayIntentions 64; a key tapped on a full box is dropped.</param>
 /// <param name="TextboxKeypad">A text box's int, 1 when it opens the numeric keypad, 0 the QWERTY keyboard (0x1cc).</param>
+/// <param name="ToggleOn">A toggle control's (<c>bbos_control_toggle</c>, a settings switch) own byte, 1 on and 0 off (0x188; measured
+/// live 2026-11-07, docs/b757/evidence/efb-typing.md): the only word that changed when TOD pause was turned on and off, and it matched
+/// all 16 of Settings &gt; Aircraft's toggles. Only its low bit is the state.</param>
 public sealed record Bbs757EfbMemLayout(
     string SourceFile,
     uint AnchorAddress,
@@ -154,6 +157,7 @@ public sealed record Bbs757EfbMemLayout(
     int TextboxCaret,
     int TextboxMaxLength,
     int TextboxKeypad,
+    int ToggleOn,
     IReadOnlyList<Bbs757EfbClassVptr> ClassVptrs)
 {
     public bool Equals(Bbs757EfbMemLayout? other) =>
@@ -186,6 +190,7 @@ public sealed record Bbs757EfbMemLayout(
         && KeyboardTarget == other.KeyboardTarget && KeypadRect == other.KeypadRect && KeyboardNumeric == other.KeyboardNumeric
         && KeyboardShift == other.KeyboardShift && KeyboardCaps == other.KeyboardCaps
         && TextboxCaret == other.TextboxCaret && TextboxMaxLength == other.TextboxMaxLength && TextboxKeypad == other.TextboxKeypad
+        && ToggleOn == other.ToggleOn
         && ClassVptrs.SequenceEqual(other.ClassVptrs);
 
     public override int GetHashCode()
@@ -206,7 +211,7 @@ public sealed record Bbs757EfbMemLayout(
         h.Add(OverlayBoardingRect); h.Add(BbosLoadState); h.Add(BbosLoadDeboarding); h.Add(BbosLoadFlown); h.Add(BbosLoadRemaining);
         h.Add(KeyboardShown); h.Add(KeyboardReady); h.Add(KeyboardKeypad); h.Add(KeyboardTarget); h.Add(KeypadRect);
         h.Add(KeyboardNumeric); h.Add(KeyboardShift); h.Add(KeyboardCaps);
-        h.Add(TextboxCaret); h.Add(TextboxMaxLength); h.Add(TextboxKeypad);
+        h.Add(TextboxCaret); h.Add(TextboxMaxLength); h.Add(TextboxKeypad); h.Add(ToggleOn);
         foreach (var c in ClassVptrs) h.Add(c);
         return h.ToHashCode();
     }

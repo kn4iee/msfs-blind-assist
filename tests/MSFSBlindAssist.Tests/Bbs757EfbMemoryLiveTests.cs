@@ -44,6 +44,8 @@ public class Bbs757EfbMemoryLiveTests
         // docs/b757/evidence/efb-typing.md).
         KeyboardShown: 0x1ac, KeyboardReady: 0x1ad, KeyboardKeypad: 0x1ae, KeyboardTarget: 0x1ec, KeypadRect: 0x1d8,
         KeyboardNumeric: 0x1e8, KeyboardShift: 0x1e9, KeyboardCaps: 0x1ea, TextboxCaret: 0x1ac, TextboxMaxLength: 0x1bc, TextboxKeypad: 0x1cc,
+        // A toggle control's own byte (measured live 2026-11-07).
+        ToggleOn: 0x188,
         ClassVptrs: new[]
         {
             // N3bbs22bbos_control_scrollboxE's vtable is at 0x30bb0 (its typeinfo at 0x30c34): read live, 2026-11-07.

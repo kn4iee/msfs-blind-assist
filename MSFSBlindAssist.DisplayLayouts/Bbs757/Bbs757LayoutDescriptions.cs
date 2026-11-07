@@ -58,7 +58,7 @@ public static class Bbs757LayoutDescriptions
             $"file analysis: {l.SourceFile}: EFB keyboard: keyboardShown {l.KeyboardShown}, keyboardReady {l.KeyboardReady}, " +
             $"keyboardKeypad {l.KeyboardKeypad}, keyboardTarget {l.KeyboardTarget}, keypadRect {l.KeypadRect}, " +
             $"keyboardNumeric {l.KeyboardNumeric}, keyboardShift {l.KeyboardShift}, keyboardCaps {l.KeyboardCaps}, " +
-            $"textboxCaret {l.TextboxCaret}, textboxMaxLength {l.TextboxMaxLength}, textboxKeypad {l.TextboxKeypad}",
+            $"textboxCaret {l.TextboxCaret}, textboxMaxLength {l.TextboxMaxLength}, textboxKeypad {l.TextboxKeypad}, toggleOn {l.ToggleOn}",
             $"file analysis: {l.SourceFile}: EFB classes: {classes}",
         };
     }
