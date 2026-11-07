@@ -15,8 +15,8 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// A read tablet page (<see cref="Bbs757EfbScreenModel"/>) as the shared EFB window's elements, and what pressing each does. Pure:
 /// tested. The window (FbwEfbForm) renders headings, buttons, check boxes, choice lists and sliders from the push's "items.N.*" keys
 /// (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx. A drop-down is a choice
-/// list of its entries (plan 21), whose set the bridge taps nothing for until choosing is built (plan 21, Task 7); a text box is a line
-/// with what it holds until typing is (plan 22, B757-23).
+/// list of its entries (plan 21), whose set the press runner chooses on the tablet (<see cref="Bbs757EfbPressRunner.ChooseAsync"/>,
+/// B757-27); a text box is a line with what it holds until typing is built (plan 22, B757-23).
 ///
 /// Every control the reader offers can be pressed (the owner's ruling of 2026-10-29): a button, tile, switch, check box, slider and tab
 /// is clickable whatever the reader's <see cref="Bbs757EfbItem.Clickable"/> says, and nothing here refuses a press. The one exception

@@ -46,8 +46,8 @@ Also seen live, already read as other kinds or "other": stack 0x30d60, canvas 0x
 ## Multi-line text box: +0x128 is the whole text
 
 - **+0x128 is a std::string**, the whole text with '\n' between lines (the offset of a label's text). It can exceed
-  `ReadStdString`'s 4,096-character cap: the Operating FP is 91,869 characters and reads null today, so its reader needs a
-  larger cap for this field.
+  `ReadStdString`'s 4,096-character cap: the Operating FP is 91,869 characters, so this field is read with its own cap
+  (`Bbs757EfbMemory.LongTextCap`, 1 MiB, plan 21 Task 4), under which the Operating FP reads whole (the live check of Task 4).
 - +0x134 is a std::vector of 16-byte line records {int start, int end, int next, float width px}; the character at
   `end` is '\n' (a hard break) or ' ' (a wrap); next is end + 1, but for the last line (next = end = the length).
 - Proven on the Operating FP (`planning_operating_fp_value`): 91,869 characters, 2,225 newlines, 2,226 records, none

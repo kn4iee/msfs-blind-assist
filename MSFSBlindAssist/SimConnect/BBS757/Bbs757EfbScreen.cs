@@ -129,7 +129,9 @@ public sealed record Bbs757EfbItem(
 /// A drop-down's list while it is open (plan 21, Task 7; measured 2026-11-07, <c>docs/b757/evidence/efb-memory-classes.md</c>): the part
 /// of the tablet its rows show in (<see cref="Viewport"/>, the drawn rectangle of its <c>item_scrollbox</c>: the runway list's 519,189
 /// 150x228) and its rows in the list's order, one per entry, each with its words and where it is drawn now (the list's own scroll and the
-/// page's taken off: the runway list's rows 38 px apart from y 189). A list taller than its cap scrolls inside the viewport.
+/// page's taken off: the runway list's rows 38 px apart from y 189). A list taller than its cap does not scroll: its box clips the rows
+/// past it, and no input measured scrolls it (2026-11-07, PERF calc's Surface list: Wet's row lies past the box, so it cannot be chosen;
+/// B757-27).
 /// </summary>
 public sealed record Bbs757EfbOpenList(Rectangle Viewport, IReadOnlyList<Bbs757EfbListRow> Rows);
 
