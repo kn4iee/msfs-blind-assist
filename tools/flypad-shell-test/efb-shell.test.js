@@ -252,17 +252,128 @@ test('A_box_without_commit_posts_on_change_as_before', (t) => {
   assert.strictEqual(box.value, '260', 'no restore without commit');
 });
 
-test('An_enter_only_box_keeps_its_text_after_Enter_and_a_blur_says_nothing', async (t) => {
+// Left after Enter, before the read-back came: the box shows what the tablet shows (D2), its text before the typing, and says
+// nothing (the set is on its way); the read-back's value then shows in it.
+test('An_enter_only_box_left_before_the_read_back_shows_the_tablets_text_until_it_arrives', async (t) => {
   const s = loadShell(t);
   s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
   const box = s.window.document.querySelector('input.in');
   box.value = '250';
   keydown(s.window, box, 'Enter');
   box.dispatchEvent(new s.window.Event('blur'));
-  assert.strictEqual(box.value, '250');
+  assert.strictEqual(box.value, '100');
   assert.strictEqual(await s.spoken(), 'EFB page: Fuel', 'only the page announce, nothing about the box');
   s.render('Fuel', [fld(3, 'Zero fuel weight', '250', { commit: 'enter' })]);
   assert.strictEqual(box.value, '250');
+});
+
+// The final review's I1. The read-back arrives while the pilot is still in the box (the normal case after Enter), in the tablet's
+// own text: the Airport box upper-cases "kpdx". The box keeps the pilot's text while they are in it, a second Enter types nothing
+// again, and leaving it shows the tablet's text with nothing said: the runner said "Airport: KPDX", and "Airport not changed"
+// after it would be wrong.
+test('An_enter_only_box_left_after_the_tablet_changed_the_text_shows_it_and_says_nothing', async (t) => {
+  const s = loadShell(t);
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.focus();
+  box.value = 'kpdx';
+  box.dispatchEvent(new s.window.Event('input', { bubbles: true }));
+  keydown(s.window, box, 'Enter');
+  s.render('PERF calc', [fld(3, 'Airport', 'KPDX', { commit: 'enter' })]);
+  assert.strictEqual(s.window.document.activeElement, box, 'the re-render kept the focus');
+  assert.strictEqual(box.value, 'kpdx', 'the box the pilot is in is never written');
+  keydown(s.window, box, 'Enter');
+  assert.deepStrictEqual(sets(s), [{ type: 'set', idx: '3', value: 'kpdx', controlType: 'text' }], 'a second Enter typed it again');
+  box.blur();
+  assert.strictEqual(box.value, 'KPDX');
+  assert.strictEqual(await s.spoken(), 'EFB page: PERF calc', 'only the page announce, nothing about the box');
+});
+
+// The tablet took none of it (Airport drops digits, so "k1" leaves KSEA): the window's next read shows the same value, so no new value
+// arrives at all. Leaving the box shows the tablet's text again, and says nothing (the runner said what the tablet reads).
+test('An_enter_only_box_whose_text_the_tablet_rejected_shows_the_tablets_text_on_leaving', async (t) => {
+  const s = loadShell(t);
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.focus();
+  box.value = 'k1';
+  box.dispatchEvent(new s.window.Event('input', { bubbles: true }));
+  keydown(s.window, box, 'Enter');
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);
+  box.blur();
+  assert.strictEqual(box.value, 'KSEA');
+  assert.strictEqual(await s.spoken(), 'EFB page: PERF calc', 'only the page announce, nothing about the box');
+  assert.strictEqual(sets(s).length, 1);
+});
+
+// A long text goes in several runs, and the window may read the box between them: a partial value arrives, then the final one (the
+// scrub's made-up key, 44 characters: two runs). In the box throughout, the pilot leaves it showing the final value with nothing
+// said; left between the two, it shows the partial one, silently, and follows the final one when it arrives.
+const acarsKey = (v) => [fld(4, 'Sayintentions ACARS key', v, { commit: 'enter' })];
+const longKey = 'MADEUPMADEUPMADEUPMADEUPMADEUPMADEUPMADEUPMA', partKey = longKey.slice(0, 40);
+
+function enterLongKey(s) {
+  s.render('AIRAC data', acarsKey(''));
+  const box = s.window.document.querySelector('input.in');
+  box.focus();
+  box.value = longKey;
+  box.dispatchEvent(new s.window.Event('input', { bubbles: true }));
+  keydown(s.window, box, 'Enter');
+  return box;
+}
+
+test('An_enter_only_box_takes_a_partial_value_then_the_final_one_while_the_pilot_is_in_it', async (t) => {
+  const s = loadShell(t);
+  const box = enterLongKey(s);
+  s.render('AIRAC data', acarsKey(partKey));
+  s.render('AIRAC data', acarsKey(longKey));
+  box.blur();
+  assert.strictEqual(box.value, longKey);
+  assert.strictEqual(sets(s).length, 1);
+  assert.strictEqual(await s.spoken(), 'EFB page: AIRAC data', 'only the page announce, nothing about the box');
+});
+
+test('An_enter_only_box_left_between_a_partial_value_and_the_final_one_follows_the_final_one', async (t) => {
+  const s = loadShell(t);
+  const box = enterLongKey(s);
+  s.render('AIRAC data', acarsKey(partKey));
+  box.blur();
+  assert.strictEqual(box.value, partKey);
+  s.render('AIRAC data', acarsKey(longKey));
+  assert.strictEqual(box.value, longKey);
+  assert.strictEqual(await s.spoken(), 'EFB page: AIRAC data', 'only the page announce, nothing about the box');
+});
+
+// Typing again after the read-back is a new edit: leaving the box without Enter then puts the tablet's text back and says so, as
+// any edit left without Enter does.
+test('Typing_again_after_the_read_back_is_a_new_edit_that_leaving_does_not_type', async (t) => {
+  const s = loadShell(t);
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.focus();
+  box.value = 'kpdx';
+  box.dispatchEvent(new s.window.Event('input', { bubbles: true }));
+  keydown(s.window, box, 'Enter');
+  s.render('PERF calc', [fld(3, 'Airport', 'KPDX', { commit: 'enter' })]);
+  box.value = 'KPDXY';
+  box.dispatchEvent(new s.window.Event('input', { bubbles: true }));
+  box.blur();
+  assert.strictEqual(box.value, 'KPDX');
+  assert.strictEqual(sets(s).length, 1);
+  assert.strictEqual(await s.spoken(), 'Airport not changed');
+});
+
+// The final review's M6: nothing on an Enter-only box said that only Enter types it. It carries that as its accessible description
+// (aria-description, which NVDA says after the box's name, role and value when it gets the focus); a box with no commit key, every
+// other EFB's, carries none.
+test('An_enter_only_box_says_that_Enter_types_it_and_another_box_says_nothing_more', (t) => {
+  const s = loadShell(t);
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' }), fld(4, 'Zero fuel weight', '100')]);
+  const [enterOnly, other] = s.window.document.querySelectorAll('input.in');
+  assert.strictEqual(enterOnly.getAttribute('aria-description'), 'Press Enter to type it on the tablet.');
+  assert.strictEqual(enterOnly.getAttribute('aria-label'), 'Airport', 'the name stays the label alone');
+  assert.strictEqual(other.getAttribute('aria-description'), null);
+  assert.strictEqual(other.getAttribute('aria-describedby'), null);
 });
 
 test('Enter_with_the_text_unchanged_posts_and_says_nothing', async (t) => {

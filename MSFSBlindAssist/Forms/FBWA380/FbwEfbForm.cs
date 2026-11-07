@@ -876,7 +876,7 @@ public class FbwEfbForm : Form
         public string Key = "";       // agent-stamped reconcile key for a control whose LABEL carries changing state; "" = key by label
         public string Commit = "";    // agent opt-in: "enter" makes a text box post its set only on Enter ("" = on change, as before)
         public string[]? Options;
-        public double? Min;     // range (slider) bounds for controlType "range"
+        public double? Min;      // range (slider) bounds for controlType "range"
         public double? Max;
         public double? Step;
     }
@@ -1051,19 +1051,27 @@ public class FbwEfbForm : Form
         // Opt-in Enter-only box (the BlueBird 757 tablet's fields, which TYPE on the tablet's own
         // keyboard): the set posts ONLY on Enter. Leaving the box any other way puts the item's value
         // back and says '<label> not changed' once -- the one thing the screen reader cannot say.
-        // inp._val is the item's last rendered value; inp._sent is true from Enter until the page
-        // re-renders with a new value (the set is on its way, so a blur then restores nothing).
+        // inp._val is the item's latest rendered value, the tablet's own text; inp._sent is true from
+        // Enter until the pilot's next keystroke in the box ('input'), across every re-render: the
+        // tablet's read-back may differ from what was typed (a box upper-cases it, drops a key, or
+        // rejects it and keeps its old text). Left with _sent set, the box shows the tablet's text
+        // again with nothing said (the runner said what the tablet reads), and a second Enter types
+        // nothing again. Its accessible description says Enter types it (NVDA says it after the
+        // name, role and value as the box gets the focus; the final review's M6).
+        inp.setAttribute('aria-description', 'Press Enter to type it on the tablet.');
         inp._val = it.value || ''; inp._sent = false;
+        inp.addEventListener('input', function () { inp._sent = false; });
         inp.addEventListener('keydown', function (ev) {
           if (ev.key !== 'Enter') return;
           ev.preventDefault();
-          if (inp.value === inp._val) return;
+          if (inp._sent || inp.value === inp._val) return;
           inp._sent = true; commit();
         });
         inp.addEventListener('blur', function () {
-          if (inp._sent || inp.value === inp._val) return;
+          if (inp.value === inp._val) return;
+          var sent = inp._sent;
           inp.value = inp._val;
-          announce((text || 'Field') + ' not changed');
+          if (!sent) announce((text || 'Field') + ' not changed');
         });
       } else {
         inp.addEventListener('change', commit);
@@ -1137,9 +1145,11 @@ public class FbwEfbForm : Form
     if (type === 'in') {
       c.disabled = !!it.disabled;
       if (it.commit === 'enter' && c._val !== undefined) {
+        // The tablet's latest text, put back when the pilot leaves the box; _sent is the pilot's to clear (by typing), never a
+        // re-render's. The box the pilot is in is never written; one they are not in shows the item's value.
         var ev2 = it.value || '';
-        if (ev2 !== c._val) { c._val = ev2; c._sent = false; }   // the page re-rendered with a new value: the set landed
-        if (!c._sent && document.activeElement !== c && c.value !== ev2) c.value = ev2;
+        c._val = ev2;
+        if (document.activeElement !== c && c.value !== ev2) c.value = ev2;
       }
       else if (document.activeElement !== c) { var nv = it.value || ''; if (c.value !== nv) c.value = nv; }
       var sp2 = node.querySelector('span'); if (sp2) setText(sp2, (text || 'Field') + ': ');
