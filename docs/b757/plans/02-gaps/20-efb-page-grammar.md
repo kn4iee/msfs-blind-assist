@@ -238,13 +238,32 @@ The listings prove the words; these are only what needs the owner's ears.
 
 ## Execution record
 
-- **Status:** claimed
+- **Status:** done (2026-11-07): landed on `kn4iee/B757` at the owner's word, together with plan 21 (stacked on it); the live checks and the owner's in-sim checks passed
 - **Claimed by:** Robin Kipp (robin24), 2026-11-06
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
-- **Started:** 2026-11-06, from `B757` e37a642c6
-- **Landed:**
-- **Tests at landing:**
+- **Started:** 2026-11-06, from `B757` e37a642c6 (claim 2b496239f)
+- **Landed:** 2026-11-07, as a fast-forward of `B757` 4e60754cc (plan 21's claim; nothing else had moved since e37a642c6), with plan 21 on top; the last code commit `fix(b757): the knob tests on real pages; recaptured trees` (03970e12d), the docs after it 5925653fb; `git log --grep "^Plan: 20"` lists the plan's 43 commits
+- **Tests at landing:** see plan 21's record (both plans landed in one push; the suite ran once on the combined head). At the end of plan 20's own work: 21,220 passed, 0 failed (03970e12d); EFB tests 923 → 1,098 in the final fix wave
 - **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+  - 0 done: the claim (2b496239f), pushed before any work.
+  - 1 done: 1a, the tree format, the scrub and the capture test (to 147d08423, reviewed); 1b, the controller's live captures, the wheel measurement and the evidence (to d7eb80e20).
+  - 2 to 12 done, each reviewed: 2 (to 98136c51f), 3 (to 51b80fbd5), 4 (to e099cbf0a), 5 (to 745c2db9e), 6 (to c3fb49f71), 7 (to be94837fc), 8 (to 11febfd6a), 8b (added from Task 1's measurement: the scroll offset and the drag, to aaf96fbc3; private recipe f7a9e03d), 9 (to a57cf491a), 10 (PaddleOCR removed, to d63a989c6), 11 (to eed621f77), 12 (the rules, to 56f9aa1d8).
+  - The whole-branch review (opus) on Tasks 1-12: 1 Critical, 9 Important, 13 Minor; its fix wave 084fbb0d7..6f3ed019c, a scoped re-review (every finding addressed), the residual Minor inline (0e11c2535).
+  - 13 done 2026-11-07: every Task 1 page recaptured and compared (only live values differ), new fixtures 11b and 25b, the live test's scrollbox vptr (a4d010fdc); the eased drag (agent v11, 12cf06e0a); the content offset and the slider knob into the layout (a29bf5bc3, 00f3e4408; private 3b47eafa), two fix rounds after its review (62c243a55, 9394717d3, 03970e12d), the docs and rules B757-25 and B757-26 (5925653fb); deployed with plan 21 (9c31e533b, then 57a182bf4 and 5989c117d) for the in-sim checks.
+- **Waiting on the owner:** "After landing": deleting the model release `text-recognition-1` and its tag (decision D7), at his word.
+- **In-sim results:** 2026-11-07, EDDF, the owner by ear on build 9c31e533b; all three passed:
+  - 1: Fuel and Cabin & doors read through: the title, then the content; headings with H; Sections lists the side menu with the current page, Home last ("All looks great!"). The owner also signed in to Navigraph through the window.
+  - 2: a side-menu press lands NVDA on the new page's title (Task 13 step 6, the focus opt-in, was not needed). Forward cargo read 0, and rightly: the tablet showed 0 lbs and its knob at 0% in the freshly loaded flight.
+  - 3: Displays bootup speed Realistic → Fast → Realistic through its choice list, silent once set; Dirty panel states pressed from the top of the page (scrolled into view, on, then back off); `efb_settings.json` followed.
+  - Task 13's own live checks (the controller, the owner's go-ahead, every tap undone and `efb_settings.json` compared, 42 keys equal): taps land after a scroll on Settings, Aircraft and Callouts; the Navigraph signed-out row ("Sign in to Navigraph.: Sign in", the label's period kept) with the owner's leave to sign out.
 - **Changed from the plan:**
+  - **Task 8b added** (Task 1's measurement): the mouse wheel does not scroll BlueBird's pages; rectangles never move; a drag scrolls. The layout gained the scroll offset and the scrollbox class; the press drags the page and taps where the control is drawn. Task 13 found the offset Task 1 measured (+0x158) was the scrollbar thumb, which stops short of the end (taps landed 22% off); the content offset is +0x134 (rule B757-26).
+  - **The drag eases out** (agent v11): even steps fling the page about 25% past the drag when the button comes up (rule B757-25).
+  - **Clipping per item:** a control is clipped to its nearest scrollbox, not to one page viewport (the final review's Critical: ACARS dashboard, Weather & NOTAM and Checklist controls were unpressable).
+  - **Sliders read from BlueBird's knob** (`SliderKnob`, the knob's rectangle, moved here from plan 21): an upright slider's 0 is its bottom; a tap centers the knob on the tap point.
+  - **The keyboard is never tapped:** its tree reads visible whether it shows or not (B757-23).
+  - **The current tab** came from `_panel` names here; plan 21 replaced it with BlueBird's selected state.
+  - **Comment-only and test-only edits** are listed in the commits; the bridge's Refresh and scroll cases went with their enum values (Task 8), the wheel's leftovers with Task 8b.
+  - **GeneratorVersion stays 2** for the 757 recipe until its layout is first published (raising it regenerates every module's layouts, the PMDG 737's too); the regenerated file keeps its name.
+- **Open at landing (later work, none blocking):** a control whose clip matches the viewport by rectangle gets one wasted drag (none in any tree); a chart's airport labels (KINGMAN) are not scrubbed (not flight plan data, B757-24); the plan 16 handoff above.
+- **Rulings made while working:** in the SDD ledger (git-ignored, `.superpowers/sdd/20-efb-page-grammar/progress.md`) and the commit messages; the owner's: the knob is spoken as BlueBird shows it (what a sighted pilot sees stays spoken), a two-choice list and a choice list say nothing once set (2026-11-07), leave to sign out of Navigraph for the measurement.
