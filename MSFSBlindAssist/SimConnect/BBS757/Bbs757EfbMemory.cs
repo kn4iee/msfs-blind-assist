@@ -7,8 +7,9 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// Reads BlueBird's EFB tablet control tree straight from the 757 module's memory through a layout
 /// (<see cref="Bbs757EfbMemLayout"/>), so the text is BlueBird's own, with
 /// visibility and tap rectangles and no screen capture. Reaches the EFB object through the gauge manager, then BBOS,
-/// then its app map; walks each front app's roots and current page, keeping the controls whose own visible byte
-/// (and whose ancestors') is set. Pure over an <see cref="IEfbMemory"/> so it runs against a fake or the live
+/// then its app map; walks each drawn app's roots and current page (the top bar's and an open dialog's among them),
+/// keeping the controls whose own visible byte (and whose ancestors') is set; and reads BBOS's notifications
+/// (<see cref="ReadNotices"/>). Pure over an <see cref="IEfbMemory"/> so it runs against a fake or the live
 /// simulator. The std::map/std::vector/std::string shapes it reads are the Emscripten libc++ ABI, stable across
 /// BlueBird builds; only the BlueBird-specific field offsets come from the layout.
 /// </summary>
@@ -28,31 +29,98 @@ public sealed class Bbs757EfbMemory
     /// scrollbox's own offset (its content offset, B757-26), 0 for any other control. <c>Knob</c> is a slider's place along
     /// its track, 0 to 1, from BlueBird's knob (<see cref="ReadKnob"/>): across a slider at least as wide as tall from its left,
     /// up an upright one from its bottom; null for a slider whose knob is unreadable and for every other kind. <c>KnobSpan</c>
-    /// is the knob's size along the track in tablet pixels, 0 with no <c>Knob</c>.</summary>
+    /// is the knob's size along the track in tablet pixels, 0 with no <c>Knob</c>.
+    /// <para>The text: a label's or button's own, a <c>textbox</c>'s its text label's, a <c>multiline</c> box's its whole text
+    /// ('\n' between lines), a <c>pulldown</c>'s its face's (the current choice as shown), an <c>image</c>'s its picture's path.
+    /// <c>Selected</c> is a button's current-entry state: true for the current side-menu entry or tab, false for another entry
+    /// of a menu or tab row, null for a button that is neither (its selectable byte not 1) and for every other kind. A
+    /// <c>pulldown</c> has <c>Entries</c> (its entries' texts in BlueBird's order), <c>Value</c> (the entry whose text is its
+    /// face's, "" when none is, as Systems' "SELECT"), <c>Open</c> (its list shown) and, open, <c>Rows</c>: its list's entry
+    /// buttons where they are drawn (their rectangles less the list's and its ancestors' scroll offsets), null closed. The face,
+    /// the list and a text box's label are in no children vector, so they are never <c>Children</c>.</para></summary>
     public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children,
-        float Scroll = 0f, float? Knob = null, float KnobSpan = 0f);
+        float Scroll = 0f, float? Knob = null, float KnobSpan = 0f,
+        bool? Selected = null, string Value = "", IReadOnlyList<string>? Entries = null, bool Open = false, IReadOnlyList<Node>? Rows = null);
 
-    /// <summary>One EFB app that is currently drawn (its front flag set), with the controls of its roots and its
-    /// current page.</summary>
+    /// <summary>The class of the top bar's app (BlueBird's <c>app_overlay</c>), read on every page whatever its front flag.</summary>
+    public const string TopBarClass = "overlay";
+
+    /// <summary>The class of the dialog app (BlueBird's <c>app_modaldialog</c>), read only while BBOS's dialog byte is 1.</summary>
+    public const string DialogClass = "modal";
+
+    /// <summary>The cap of every std::string read but a multi-line box's text: past it a string reads as none.</summary>
+    public const int TextCap = 4096;
+
+    /// <summary>The cap of a multi-line box's text: the Operating FP measured 91,869 characters (2026-11-07).</summary>
+    public const int LongTextCap = 1_048_576;
+
+    /// <summary>The most notification records read: BlueBird kept 47 (capacity 64) when measured; a count past this is a torn read.</summary>
+    private const int MaxNotices = 256;
+
+    /// <summary>One EFB app that is currently drawn (its front flag set, the top bar always, the dialog while one is up), with
+    /// the controls of its roots and its current page.</summary>
     public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls);
 
-    /// <summary>The front apps in key order, each with its visible control tree; empty when the module is not
-    /// reachable (not located, or BBOS/app map not where the layout says).</summary>
+    /// <summary>The drawn apps in the map's walk order, each with its visible control tree; empty when the module is not
+    /// reachable (not located, or BBOS/app map not where the layout says). An app is drawn while its front flag is set, but
+    /// two: the top bar's app (<see cref="TopBarClass"/>) always, though its front flag reads 0 on every page, and the dialog
+    /// app (<see cref="DialogClass"/>) only while BBOS's dialog byte is 1, whatever its front flag, as a closed dialog keeps
+    /// its front flag and page (measured 2026-11-07: an answered defuel question stayed "front" for hours).</summary>
     public IReadOnlyList<App> ReadFrontApps()
     {
-        if (!TryEfb(out uint efb)) return Array.Empty<App>();
-        if (!_m.TryReadPtr(efb + (uint)_l.EfbToBbos, out uint bbos) || bbos == 0) return Array.Empty<App>();
+        if (!TryBbos(out uint bbos)) return Array.Empty<App>();
         var apps = new List<App>();
         foreach (var (key, app) in AppMapEntries(bbos))
         {
-            if (!_m.TryReadInt(app + (uint)_l.AppFront, out int front) || front == 0) continue;
+            string cls = ClassName(app);
+            if (!Drawn(app, cls, bbos)) continue;
             var controls = new List<Node>();
             foreach (uint root in Vector(app + (uint)_l.AppRoots)) AddVisible(root, controls);
             if (_m.TryReadPtr(app + (uint)_l.AppPage, out uint page) && page != 0)
                 foreach (uint root in Vector(page + (uint)_l.PageChildren)) AddVisible(root, controls);
-            apps.Add(new App(key, ClassName(app), controls));
+            apps.Add(new App(key, cls, controls));
         }
         return apps;
+    }
+
+    private bool Drawn(uint app, string cls, uint bbos) => cls switch
+    {
+        TopBarClass => true,
+        DialogClass => _m.TryReadByte(bbos + (uint)_l.BbosModalOpen, out byte open) && open == 1,
+        _ => _m.TryReadInt(app + (uint)_l.AppFront, out int front) && front != 0,
+    };
+
+    /// <summary>
+    /// BlueBird's notifications, oldest record first: BBOS's std::vector (begin, end) at the layout's <c>BbosNotices</c>, records
+    /// <c>NoticeStride</c> bytes apart, each its id, title, text, time and unread byte. Empty when the module is not reachable, and
+    /// none at all from a torn vector: no buffer, its end before its start or not a whole number of records from it, or more
+    /// than <see cref="MaxNotices"/> records, or a record whose id or unread byte cannot be read. A string that is not a
+    /// readable one reads "".
+    /// </summary>
+    public IReadOnlyList<Bbs757EfbNoticeRecord> ReadNotices()
+    {
+        var none = Array.Empty<Bbs757EfbNoticeRecord>();
+        if (!TryBbos(out uint bbos)) return none;
+        uint vec = bbos + (uint)_l.BbosNotices;
+        if (!_m.TryReadPtr(vec, out uint begin) || !_m.TryReadPtr(vec + 4, out uint end)) return none;
+        if (begin == 0 || end < begin || _l.NoticeStride <= 0) return none;
+        uint stride = (uint)_l.NoticeStride, bytes = end - begin;
+        if (bytes % stride != 0 || bytes / stride > MaxNotices) return none;
+        var notices = new List<Bbs757EfbNoticeRecord>();
+        for (uint r = begin; r < end; r += stride)
+        {
+            if (!_m.TryReadInt(r + (uint)_l.NoticeId, out int id) || !_m.TryReadByte(r + (uint)_l.NoticeUnread, out byte unread)) return none;
+            notices.Add(new Bbs757EfbNoticeRecord(id, _m.ReadStdString(r + (uint)_l.NoticeTitle) ?? "",
+                _m.ReadStdString(r + (uint)_l.NoticeText) ?? "", _m.ReadStdString(r + (uint)_l.NoticeTime) ?? "", unread == 1));
+        }
+        return notices;
+    }
+
+    /// <summary>BBOS: the pointer at the EFB object's <c>EfbToBbos</c>.</summary>
+    private bool TryBbos(out uint bbos)
+    {
+        bbos = 0;
+        return TryEfb(out uint efb) && _m.TryReadPtr(efb + (uint)_l.EfbToBbos, out bbos) && bbos != 0;
     }
 
     /// <summary>The EFB object: the first gauge-manager pointer whose object carries the efb vptr.</summary>
@@ -72,16 +140,26 @@ public sealed class Bbs757EfbMemory
     /// <summary>The largest scroll offset believed: a torn or foreign float cannot move a page by more.</summary>
     private const float MaxScroll = 100_000f;
 
+    /// <summary>The deepest a walk goes (the tablet's trees are about 15 deep): a torn pointer that loops ends here, not in a
+    /// stack overflow.</summary>
+    private const int MaxDepth = 64;
+
     /// <param name="ancestorScroll">The sum of the offsets of the scrollboxes above this control; its rectangle
     /// never moves, but it is drawn that much higher.</param>
-    private void AddVisible(uint ctrl, List<Node> into, float ancestorScroll = 0f)
+    private void AddVisible(uint ctrl, List<Node> into, float ancestorScroll = 0f, int depth = 0)
     {
-        if (ctrl == 0 || !_m.TryReadByte(ctrl + (uint)_l.CtrlVisible, out byte vis) || (vis & 1) == 0) return;
+        if (depth > MaxDepth || ctrl == 0 || !_m.TryReadByte(ctrl + (uint)_l.CtrlVisible, out byte vis) || (vis & 1) == 0) return;
         string kind = KindOf(ctrl);
         float scroll = kind == "scrollbox" ? ReadScroll(ctrl) : 0f;
         var children = new List<Node>();
-        foreach (uint ch in Vector(ctrl + (uint)_l.CtrlChildren)) AddVisible(ch, children, ancestorScroll + scroll);
-        into.Add(ReadNode(ctrl, kind, children, ancestorScroll, scroll));
+        foreach (uint ch in Vector(ctrl + (uint)_l.CtrlChildren)) AddVisible(ch, children, ancestorScroll + scroll, depth + 1);
+        var node = ReadNode(ctrl, kind, children, ancestorScroll, scroll);
+        into.Add(kind switch
+        {
+            "button" => node with { Selected = ReadSelected(ctrl) },
+            "pulldown" => WithEntries(node, ctrl, ancestorScroll, depth),
+            _ => node,
+        });
     }
 
     private string KindOf(uint ctrl) =>
@@ -97,14 +175,57 @@ public sealed class Bbs757EfbMemory
     private Node ReadNode(uint ctrl, string kind, IReadOnlyList<Node> children, float ancestorScroll, float scroll)
     {
         string name = _m.ReadStdString(ctrl + (uint)_l.CtrlName) ?? "";
-        // A button keeps its text at CtrlButtonText, a label at CtrlLabelText; the other field is an empty string
-        // (not null), so take the first non-empty of the two.
-        string text = NonEmpty(_m.ReadStdString(ctrl + (uint)_l.CtrlButtonText))
-            ?? NonEmpty(_m.ReadStdString(ctrl + (uint)_l.CtrlLabelText)) ?? "";
         float X = _m.ReadFloat(ctrl + (uint)_l.CtrlRect), Y = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 4);
         float W = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 8), H = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 12);
         var (knob, span) = kind == "slider" ? ReadKnob(ctrl, X, Y, W, H) : (null, 0f);
-        return new Node(kind, name, text, X, Y - ancestorScroll, W, H, ctrl, children, scroll, knob, span);
+        return new Node(kind, name, TextOf(ctrl, kind), X, Y - ancestorScroll, W, H, ctrl, children, scroll, knob, span);
+    }
+
+    /// <summary>A control's text by its kind (<see cref="Node"/>); "" when it is not a readable string.</summary>
+    private string TextOf(uint ctrl, string kind) => kind switch
+    {
+        // A text box holds no text itself: its text label, outside every children vector, does.
+        "textbox" => _m.TryReadPtr(ctrl + (uint)_l.TextboxLabel, out uint label) && label != 0
+            ? _m.ReadStdString(label + (uint)_l.CtrlLabelText) ?? "" : "",
+        "multiline" => _m.ReadStdString(ctrl + (uint)_l.MultilineText, LongTextCap) ?? "",
+        "pulldown" => FaceText(ctrl),
+        // A button keeps its text at CtrlButtonText, a label (and an image its path) at CtrlLabelText; the other field is an
+        // empty string (not null), so take the first non-empty of the two.
+        _ => NonEmpty(_m.ReadStdString(ctrl + (uint)_l.CtrlButtonText)) ?? NonEmpty(_m.ReadStdString(ctrl + (uint)_l.CtrlLabelText)) ?? "",
+    };
+
+    /// <summary>A drop-down's face's text, the current choice as shown: its face is a button outside every children vector.</summary>
+    private string FaceText(uint ctrl) =>
+        _m.TryReadPtr(ctrl + (uint)_l.PulldownFace, out uint face) && face != 0 ? _m.ReadStdString(face + (uint)_l.CtrlButtonText) ?? "" : "";
+
+    /// <summary>A button's current-entry state (<see cref="Node.Selected"/>): null unless its selectable byte is 1, then whether its
+    /// unselected byte is 0 (measured 2026-11-07 on side menus and tab rows; a tile that takes no tap has 0 in both).</summary>
+    private bool? ReadSelected(uint ctrl)
+    {
+        if (!_m.TryReadByte(ctrl + (uint)_l.ButtonSelectable, out byte selectable) || selectable != 1) return null;
+        return _m.TryReadByte(ctrl + (uint)_l.ButtonUnselected, out byte unselected) ? unselected == 0 : null;
+    }
+
+    /// <summary>
+    /// A drop-down with its entries' texts (its vector of entry records, in BlueBird's order: the list's drawn order), its value
+    /// (the entry whose text is the face's; it has no index field) and whether its list is open. Open, its rows are the entry
+    /// buttons of its list (a scrollbox) > its stack > the buttons, read as any control inside a scrollbox is: drawn its own offset
+    /// and the drop-down's ancestors' higher. Closed, BlueBird leaves them at [0,0 50x38], so none are read.
+    /// </summary>
+    private Node WithEntries(Node node, uint ctrl, float ancestorScroll, int depth)
+    {
+        var entries = new List<string>();
+        foreach (uint record in Vector(ctrl + (uint)_l.PulldownEntries))
+            entries.Add(_m.ReadStdString(record + (uint)_l.PulldownEntryText) ?? "");
+        bool open = _m.TryReadByte(ctrl + (uint)_l.PulldownOpen, out byte b) && b == 1;
+        List<Node>? rows = null;
+        if (open)
+        {
+            var list = new List<Node>();
+            if (_m.TryReadPtr(ctrl + (uint)_l.PulldownList, out uint scrollbox)) AddVisible(scrollbox, list, ancestorScroll, depth + 1);
+            rows = list.SelectMany(l => l.Children).SelectMany(stack => stack.Children).Where(r => r.Kind == "button").ToList();
+        }
+        return node with { Value = entries.Contains(node.Text) ? node.Text : "", Entries = entries, Open = open, Rows = rows };
     }
 
     /// <summary>The slack a knob's place may sit past either end of its track and still be read (then as that end).</summary>
@@ -176,6 +297,11 @@ public sealed class Bbs757EfbMemory
     }
 }
 
+/// <summary>One of BlueBird's notifications as BBOS keeps it (<see cref="Bbs757EfbMemory.ReadNotices"/>): its id, rising with each
+/// new one; its title, empty but for a few (the autobrake ones); its text ("GPU CONNECTED."); its time ("21:37Z"); and whether
+/// the pilot has not yet opened the notification list since it came.</summary>
+public sealed record Bbs757EfbNoticeRecord(int Id, string Title, string Text, string Time, bool Unread);
+
 /// <summary>Read-only access to the located 757 module's memory, by wasm address, for the EFB reader. The live
 /// implementation wraps <see cref="ModuleMemory"/>; tests supply a fake.</summary>
 public interface IEfbMemory
@@ -188,8 +314,8 @@ public interface IEfbMemory
     bool TryReadPtr(uint wasmAddress, out uint value);
 
     /// <summary>A libc++ std::string at this address (short-string optimisation or long form); null when it is not
-    /// a readable printable string.</summary>
-    string? ReadStdString(uint wasmAddress);
+    /// a readable printable string or is longer than <paramref name="maxLength"/> characters.</summary>
+    string? ReadStdString(uint wasmAddress, int maxLength = Bbs757EfbMemory.TextCap);
 }
 
 /// <summary>
@@ -217,7 +343,7 @@ public sealed class ModuleEfbMemory : IEfbMemory
     public float ReadFloat(uint wasmAddress) =>
         _memory.TryReadInt32(wasmAddress, out int v) ? BitConverter.Int32BitsToSingle(v) : 0f;
 
-    public string? ReadStdString(uint wasmAddress)
+    public string? ReadStdString(uint wasmAddress, int maxLength = Bbs757EfbMemory.TextCap)
     {
         Span<byte> head = stackalloc byte[12];
         if (!_memory.TryRead(wasmAddress, head)) return null;
@@ -226,7 +352,7 @@ public sealed class ModuleEfbMemory : IEfbMemory
         {
             uint ptr = (uint)(head[0] | head[1] << 8 | head[2] << 16 | head[3] << 24);
             int size = head[4] | head[5] << 8 | head[6] << 16 | head[7] << 24;
-            if (size <= 0 || size > 4096 || ptr == 0) return null;
+            if (size <= 0 || size > maxLength || ptr == 0) return null;
             var buffer = new byte[size];
             if (!_memory.TryRead(ptr, buffer)) return null;
             return Printable(buffer);

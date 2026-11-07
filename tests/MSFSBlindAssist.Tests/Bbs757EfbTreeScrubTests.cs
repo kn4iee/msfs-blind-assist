@@ -45,7 +45,8 @@ public class Bbs757EfbTreeScrubTests
             ("planning_acars_arrival_value_2", "BTG2"),
             ("planning_acars_flight_plan_value_0", "0"), ("planning_acars_flight_plan_value_11", "0"),
             ("planning_acars_load_sheet_value_0", "0"), ("planning_acars_load_sheet_value_11", "0"),
-            ("planning_acars_route_value", "KSEA/16L DCT BTG DCT KPDX/28R"), ("planning_operating_fp_value", "0"),
+            ("planning_acars_route_value", "KSEA/16L DCT BTG DCT KPDX/28R"),
+            ("planning_operating_fp_value", Bbs757EfbTreeScrub.MadeUpOperatingFp),
         };
         var scrubbed = Bbs757EfbTreeScrub.Scrub(App(expected.Select(e => N(e.Name, "REAL VALUE")).ToArray()));
         Assert.Equal(expected.Select(e => e.Made), scrubbed[0].Controls.Select(c => c.Text));
@@ -69,6 +70,55 @@ public class Bbs757EfbTreeScrubTests
 
         static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
     }
+
+    [Fact]
+    public void The_airac_text_boxes_become_made_up_ones()
+    {
+        // The AIRAC page's three text boxes (plan 21 reads a text box's text): the SimBrief ID as the made-up ID, the codes as MADEUP.
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(Box("simbrief_id_textbox", "987654"), Box("hoppie_logon_code_textbox", "abc"),
+            Box("sayintentions_acars_key_textbox", "xyz"), Box("simbrief_id_textbox", ""), Box("hoppie_logon_code_textbox", "")));
+        Assert.Equal(new[] { "123456", "MADEUP", "MADEUP", "", "" }, scrubbed[0].Controls.Select(c => c.Text));
+    }
+
+    [Fact]
+    public void The_operating_fp_becomes_a_made_up_plan()
+    {
+        // The whole Operating FP, read as one multi-line text: a few made-up lines of the made-up flight in its place.
+        var fp = new Bbs757EfbMemory.Node("multiline", "planning_operating_fp_value", "REAL PLAN\nLINE 2\nLINE 3", 323.5f, 120, 700, 5000, 0,
+            Array.Empty<Bbs757EfbMemory.Node>());
+        string made = Bbs757EfbTreeScrub.Scrub(App(fp))[0].Controls[0].Text;
+        Assert.Equal(Bbs757EfbTreeScrub.MadeUpOperatingFp, made);
+        Assert.True(made.Split('\n').Length is >= 3 and <= 10, made);
+        Assert.Contains("KSEA", made);
+        Assert.Contains("KPDX", made);
+    }
+
+    [Fact]
+    public void The_perf_calc_text_boxes_become_made_up_ones()
+    {
+        // PERF calc's six text boxes (KPHX, 10300, 207322, 260/07, 23 and 29.92 when measured) take the made-up flight's airport and
+        // made-up numbers; a PERF calc text box not in the table reads 0; an empty one stays empty; its labels are kept.
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(
+            Box("planning_perf_calc_airport_input", "KPHX"), Box("planning_perf_calc_runway_length_input", "10300"),
+            Box("planning_perf_calc_weight", "207322"), Box("planning_perf_calc_wind", "260/07"), Box("planning_perf_calc_temp", "23"),
+            Box("planning_perf_calc_press", "29.92"), Box("planning_perf_calc_new_input", "77"), Box("planning_perf_calc_weight", ""),
+            N("planning_perf_calc_airport_title", "Airport")));
+        Assert.Equal(new[] { "KSEA", "11900", "180000", "160/05", "15", "30.01", "0", "", "Airport" },
+            scrubbed[0].Controls.Select(c => c.Text));
+    }
+
+    [Fact]
+    public void The_scrub_reaches_a_drop_downs_rows()
+    {
+        var dropDown = new Bbs757EfbMemory.Node("pulldown", "some_dropdown", "A", 0, 0, 100, 34, 0, Array.Empty<Bbs757EfbMemory.Node>(),
+            Value: "A", Entries: new[] { "A" }, Open: true, Rows: new[] { N("simbrief_id_saved_label", "987654") });
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(dropDown))[0].Controls[0];
+        Assert.Equal("123456", Assert.Single(scrubbed.Rows!).Text);
+        Assert.Equal(("A", "A"), (scrubbed.Text, scrubbed.Value));
+    }
+
+    private static Bbs757EfbMemory.Node Box(string name, string text) =>
+        new("textbox", name, text, 1.5f, 2.25f, 30, 40, 0x1234, Array.Empty<Bbs757EfbMemory.Node>());
 
     [Fact]
     public void An_update_or_other_name_containing_date_or_time_is_kept()
@@ -139,6 +189,64 @@ public class Bbs757EfbTreeScrubTests
         Assert.Equal("slider", read.Kind);
         Assert.Null(read.Knob);
         Assert.Equal(0f, read.KnobSpan);
+    }
+
+    [Fact]
+    public void The_phase_2_fields_round_trip()
+    {
+        // Plan 21's node fields: a button's selected state, a drop-down's value, entries, open state and rows (drawn rectangles), a text
+        // box's text; each written only when set, so a node without them writes as before.
+        var row = new Bbs757EfbMemory.Node("button", "item_btn_0", "RW07L", 519.1f, 151, 150, 38, 0, Array.Empty<Bbs757EfbMemory.Node>(),
+            Selected: false);
+        var dropDown = new Bbs757EfbMemory.Node("pulldown", "planning_perf_calc_runway_dropdown", "RW07L", 519.1f, 156, 150, 34, 0x99,
+            Array.Empty<Bbs757EfbMemory.Node>(), Value: "RW07L", Entries: new[] { "RW07L", "RW26" }, Open: true, Rows: new[] { row });
+        var tab = new Bbs757EfbMemory.Node("button", "planning_perf_calc_tab_button_0", "TAKE OFF", 300, 100, 120, 40, 0,
+            Array.Empty<Bbs757EfbMemory.Node>(), Selected: true);
+        var closed = new Bbs757EfbMemory.Node("pulldown", "planning_perf_calc_flap_dropdown", "SELECT", 0, 0, 150, 34, 0,
+            Array.Empty<Bbs757EfbMemory.Node>(), Entries: Array.Empty<string>());
+        foreach (var culture in new[] { "en-US", "sv-SE" })
+        {
+            string json = TestCulture.Run(culture, () => Bbs757EfbTreeJson.Write(App(dropDown, tab, closed, N("plain", "x"))));
+            var back = TestCulture.Run(culture, () => Bbs757EfbTreeJson.Read(json))[0].Controls;
+
+            Assert.Equal(("RW07L", true), (back[0].Value, back[0].Open));
+            Assert.Equal(new[] { "RW07L", "RW26" }, back[0].Entries);
+            var r = Assert.Single(back[0].Rows!);
+            Assert.Equal(("item_btn_0", "RW07L", 519.1f, 151f, 150f, 38f, (bool?)false), (r.Name, r.Text, r.X, r.Y, r.W, r.H, r.Selected));
+            Assert.True(back[1].Selected);
+            Assert.Equal(("", false, 0), (back[2].Value, back[2].Open, back[2].Entries!.Count));
+            Assert.Null(back[2].Rows);
+            var plain = back[3];
+            Assert.Equal(((bool?)null, "", false), (plain.Selected, plain.Value, plain.Open));
+            Assert.Null(plain.Entries);
+            Assert.Null(plain.Rows);
+        }
+
+        // A node without them writes none of their names.
+        string bare = Bbs757EfbTreeJson.Write(App(N("a", "x")));
+        foreach (string field in new[] { "selected", "value", "entries", "open", "rows" })
+            Assert.DoesNotContain($"\"{field}\"", bare);
+    }
+
+    [Fact]
+    public void The_notices_round_trip_and_a_tree_without_them_reads_none()
+    {
+        var notices = new[]
+        {
+            new Bbs757EfbNoticeRecord(50, "", "AFT CARGO DOOR OPENED.", "03:15Z", true),
+            new Bbs757EfbNoticeRecord(52, "AUTOBRAKE 1", "TARGET 4.5 | ACTUAL 4.5 ft/s2", "03:20Z", false),
+        };
+        string json = Bbs757EfbTreeJson.Write(App(N("a", "x")), notices);
+        Assert.StartsWith("{", json);
+        Assert.Equal(notices, Bbs757EfbTreeJson.ReadNotices(json));
+        Assert.Equal("x", Bbs757EfbTreeJson.Read(json)[0].Controls[0].Text);
+
+        // A tree written without notices is the array it always was, and reads none.
+        string plain = Bbs757EfbTreeJson.Write(App(N("a", "x")));
+        Assert.StartsWith("[", plain);
+        Assert.Empty(Bbs757EfbTreeJson.ReadNotices(plain));
+        Assert.Empty(Bbs757EfbTreeJson.LoadNotices("13-aircraft-ground-services"));
+        Assert.Empty(Bbs757EfbTreeJson.ReadNotices(Bbs757EfbTreeJson.Write(App(N("a", "x")), Array.Empty<Bbs757EfbNoticeRecord>())));
     }
 
     [Fact]

@@ -38,6 +38,7 @@ public sealed class Bbs757EfbModelReader
     public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps)
     {
         if (apps.Count == 0) return null;
+        apps = AsOther(apps);
 
         // The content app: the front content app with the most visible controls (the one drawn on top).
         var content = apps
@@ -64,6 +65,18 @@ public sealed class Bbs757EfbModelReader
             Keyboard = KeyboardOf(apps),
         };
     }
+
+    /// <summary>The kinds plan 21's layout added for BlueBird's text box, multi-line text box, drop-down and image classes. Until
+    /// the model maps them (plan 21, Tasks 5 and 6) it reads them as it read them before the layout knew their classes, as "other";
+    /// the top bar's and the dialog's apps (<see cref="Bbs757EfbMemory.TopBarClass"/>, <see cref="Bbs757EfbMemory.DialogClass"/>)
+    /// are no content app, home screen or keyboard app, so it passes them by.</summary>
+    private static readonly HashSet<string> UnmappedKinds = new(StringComparer.Ordinal) { "textbox", "multiline", "pulldown", "image" };
+
+    private static IReadOnlyList<Bbs757EfbMemory.App> AsOther(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
+        apps.Select(a => a with { Controls = a.Controls.Select(AsOther).ToList() }).ToList();
+
+    private static Bbs757EfbMemory.Node AsOther(Bbs757EfbMemory.Node n) =>
+        n with { Kind = UnmappedKinds.Contains(n.Kind) ? "other" : n.Kind, Children = n.Children.Select(AsOther).ToList() };
 
     /// <summary>BlueBird's keyboard from the shell app's <c>kb_grid</c>: its box and its keys in tree order. A <c>char_btn_</c> key
     /// (and the comma and period keys, whose words are <c>,|,|!</c> and <c>.|.|?</c>) carries three layers split on <c>|</c>; a

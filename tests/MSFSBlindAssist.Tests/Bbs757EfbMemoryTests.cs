@@ -17,7 +17,19 @@ public class Bbs757EfbMemoryTests
         Grid = 0x6000, GridChildrenVec = 0x6400, Button = 0x7000, ValueLabel = 0x8000, HiddenBtn = 0x9000;
     private const uint EfbVptr = 0x13128, ButtonVptr = 0x30164, LabelVptr = 0x30cd4, GridVptr = 0x30320, ScrollboxVptr = 0x30400,
         SliderVptr = 0x30c48;
+    // The fake's own vptrs for plan 21's kinds; a stack is no kind the layout names, so it reads "other".
+    private const uint TextboxVptr = 0x30d00, MultilineVptr = 0x30500, PulldownVptr = 0x30700, ImageVptr = 0x30300,
+        OverlayVptr = 0x28c00, ModalVptr = 0x27d00, StackVptr = 0x30d60;
     private const uint Outside = 0xA000, InnerVec = 0xA200, Inner = 0xA300;
+    // A text box's label, a drop-down's face, list, stack and entries, the entry buttons and records.
+    private const uint TextLabel = 0xD000, Face = 0xD200, List = 0xD400, ListVec = 0xD600, Stack = 0xD700, StackVec = 0xD900,
+        EntriesVec = 0xDA00, Items = 0x10000, Records = 0x11000;
+    // The top bar's app (key 1) and the dialog app (key 3), beside the page's app in the map.
+    private const uint BarNode = 0xE000, BarAppVec = 0xE080, BarApp = 0xE100, BarRoots = 0xE400, BarGrid = 0x12000, BarGridVec = 0x12200,
+        TimeLabel = 0x12400, ResetButton = 0x12600;
+    private const uint DialogNode = 0xE800, DialogAppVec = 0xE880, DialogApp = 0xE900, DialogPage = 0x13000, DialogPageVec = 0x13400,
+        DialogGrid = 0x13600, DialogGridVec = 0x13800, Prompt = 0x13A00, YesButton = 0x13C00;
+    private const uint NoticeRecords = 0x14000, Heap = 0x18000;
 
     private static readonly Bbs757EfbMemLayout Layout = new(
         SourceFile: "", AnchorAddress: 0x400, Anchor: new byte[] { 1 },
@@ -34,14 +46,37 @@ public class Bbs757EfbMemoryTests
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),
             new Bbs757EfbClassVptr("grid", GridVptr), new Bbs757EfbClassVptr("scrollbox", ScrollboxVptr),
             new Bbs757EfbClassVptr("slider", SliderVptr),
+            new Bbs757EfbClassVptr("textbox", TextboxVptr), new Bbs757EfbClassVptr("multiline", MultilineVptr),
+            new Bbs757EfbClassVptr("pulldown", PulldownVptr), new Bbs757EfbClassVptr("image", ImageVptr),
+            new Bbs757EfbClassVptr("overlay", OverlayVptr), new Bbs757EfbClassVptr("modal", ModalVptr),
         });
 
-    private readonly byte[] _b = new byte[0x10000];
+    private readonly byte[] _b = new byte[0x20000];
+    private uint _heap = Heap;
     private void Ptr(uint at, uint v) => BinaryPrimitives.WriteUInt32LittleEndian(_b.AsSpan((int)at), v);
     private void F32(uint at, float v) => BinaryPrimitives.WriteSingleLittleEndian(_b.AsSpan((int)at), v);
     private void ShortStr(uint at, string s) { Encoding.ASCII.GetBytes(s).CopyTo(_b.AsSpan((int)at)); _b[at + 11] = (byte)s.Length; }
+
+    /// <summary>A libc++ long-form string: its characters on the fake's heap, the pointer, the size and the capacity with the long flag.</summary>
+    private void LongStr(uint at, string s)
+    {
+        uint data = _heap;
+        Encoding.ASCII.GetBytes(s).CopyTo(_b.AsSpan((int)data));
+        _heap += (uint)s.Length + 1;
+        Ptr(at, data); Ptr(at + 4, (uint)s.Length); Ptr(at + 8, 0x80000000u | (uint)(s.Length + 1));
+    }
+
+    /// <summary>A std::string in the form libc++ keeps it: short up to 10 characters, long past that.</summary>
+    private void Str(uint at, string s) { if (s.Length <= 10) ShortStr(at, s); else LongStr(at, s); }
     private void Rect(uint ctrl, float x, float y, float w, float h) { F32(ctrl + 0x38, x); F32(ctrl + 0x3c, y); F32(ctrl + 0x40, w); F32(ctrl + 0x44, h); }
-    private void Control(uint ctrl, uint vptr, string name, bool visible) { Ptr(ctrl, vptr); ShortStr(ctrl + 0x1c, name); _b[ctrl + 0x8c] = (byte)(visible ? 1 : 0); }
+    private void Control(uint ctrl, uint vptr, string name, bool visible) { Ptr(ctrl, vptr); Str(ctrl + 0x1c, name); _b[ctrl + 0x8c] = (byte)(visible ? 1 : 0); }
+
+    /// <summary>A control's children vector (8-byte slots, as libc++ keeps BlueBird's).</summary>
+    private void Children(uint ctrl, uint vec, params uint[] kids)
+    {
+        Ptr(ctrl + 0xf4, vec); Ptr(ctrl + 0xf8, vec + 8 * (uint)kids.Length);
+        for (int i = 0; i < kids.Length; i++) Ptr(vec + 8 * (uint)i, kids[i]);
+    }
 
     private Bbs757EfbMemory Build(Action? mutate = null)
     {
@@ -267,6 +302,253 @@ public class Bbs757EfbMemoryTests
         });
         Assert.Equal("button", button.Kind);
         Assert.Null(button.Knob);
+    }
+
+    // ---- text boxes, drop-downs and the selected entry (plan 21, measured 2026-11-07: docs/b757/evidence/efb-memory-classes.md) ----
+
+    [Fact]
+    public void A_text_box_reads_its_text()
+    {
+        // PERF calc's airport box: its text is its text_label's, a label in no children vector that the box points at; 2 of 6 boxes
+        // had theirs allocated apart, so the label sits far from the box here. The box's own button-text field holds "FUEL".
+        var box = FirstChild(() =>
+        {
+            Ptr(Button, TextboxVptr); Ptr(Button + (uint)Layout.TextboxLabel, TextLabel);
+            Control(TextLabel, LabelVptr, "text_label", true); Rect(TextLabel, 1, 203, 248, 58);
+            ShortStr(TextLabel + (uint)Layout.CtrlLabelText, "KPHX");
+        });
+        Assert.Equal("textbox", box.Kind);
+        Assert.Equal("KPHX", box.Text);
+        Assert.Empty(box.Children);
+
+        // No label: no text, never the box's other fields.
+        var bare = FirstChild(() => { Ptr(Button, TextboxVptr); Ptr(Button + (uint)Layout.TextboxLabel, 0); });
+        Assert.Equal("", bare.Text);
+    }
+
+    [Fact]
+    public void A_multiline_box_reads_every_line()
+    {
+        // The Operating FP: 91,869 characters with '\n' between lines, past the 4,096 every other string is capped at.
+        string plan = string.Join("\n", Enumerable.Range(1, 150).Select(i => FormattableString.Invariant($"{i:000} WPT{i:000} N47 26.9 W122 18.5 FL350")));
+        Assert.True(plan.Length > 4096);
+        var fp = FirstChild(() => { Ptr(Button, MultilineVptr); LongStr(Button + (uint)Layout.MultilineText, plan); });
+        Assert.Equal("multiline", fp.Kind);
+        Assert.Equal(plan, fp.Text);
+
+        // A label keeps the 4,096 cap: past it, no text.
+        var label = FirstChild(() =>
+        {
+            Ptr(Button, LabelVptr); ShortStr(Button + (uint)Layout.CtrlButtonText, "");
+            LongStr(Button + (uint)Layout.CtrlLabelText, plan);
+        });
+        Assert.Equal("", label.Text);
+    }
+
+    /// <summary>The grid's first child made a drop-down, as PERF calc's runway one was read: its face (a button showing
+    /// <paramref name="face"/>), its entry records, and its list (a scrollbox below the face holding a stack of one button per
+    /// entry, 38 px apart while open, [0,0 50x38] while closed), scrolled by <paramref name="scroll"/>.</summary>
+    private void DropDown(string face, string[] entries, bool open = false, float scroll = 0)
+    {
+        Ptr(Button, PulldownVptr); Rect(Button, 519.1f, 156, 150, 34);
+        Ptr(Button + (uint)Layout.PulldownFace, Face);
+        Control(Face, ButtonVptr, "main_button", true); Rect(Face, 519.1f, 156, 150, 34); Str(Face + (uint)Layout.CtrlButtonText, face);
+        Ptr(Button + (uint)Layout.PulldownList, List);
+        Control(List, ScrollboxVptr, "item_scrollbox", true); Rect(List, 519.1f, 189, 150, 180);
+        F32(List + (uint)Layout.ScrollboxOffset, scroll);
+        Children(List, ListVec, Stack);
+        Control(Stack, StackVptr, "item_stack", true); Rect(Stack, 519.1f, 189, 150, 38 * entries.Length);
+        var items = Enumerable.Range(0, entries.Length).Select(i => Items + (uint)i * 0x200).ToArray();
+        Children(Stack, StackVec, items);
+        uint vec = Button + (uint)Layout.PulldownEntries;
+        Ptr(vec, EntriesVec); Ptr(vec + 4, EntriesVec + 8 * (uint)entries.Length);
+        for (int i = 0; i < entries.Length; i++)
+        {
+            Control(items[i], ButtonVptr, "item_btn_" + i, true);
+            if (open) Rect(items[i], 519.1f, 189 + 38 * i, 150, 38); else Rect(items[i], 0, 0, 50, 38);
+            Str(items[i] + (uint)Layout.CtrlButtonText, entries[i]);
+            uint record = Records + (uint)i * 0x40;
+            Ptr(EntriesVec + 8 * (uint)i, record);
+            Str(record + (uint)Layout.PulldownEntryText, entries[i]);
+        }
+        _b[Button + (uint)Layout.PulldownOpen] = (byte)(open ? 1 : 0);
+    }
+
+    [Fact]
+    public void A_drop_down_reads_its_entries_and_current_one()
+    {
+        // PERF calc's flap drop-down: no index field; the current entry is the one whose text is the face's.
+        var flap = FirstChild(() => DropDown("Optimum", new[] { "15", "20", "5", "Optimum" }));
+        Assert.Equal("pulldown", flap.Kind);
+        Assert.Equal("Optimum", flap.Text);
+        Assert.Equal("Optimum", flap.Value);
+        Assert.Equal(new[] { "15", "20", "5", "Optimum" }, flap.Entries);
+        Assert.False(flap.Open);
+        Assert.Null(flap.Rows);
+        Assert.Empty(flap.Children); // the face and the list are in no children vector
+    }
+
+    [Fact]
+    public void A_drop_down_whose_face_matches_no_entry_has_no_value()
+    {
+        // Systems' pb_menu1 always shows SELECT.
+        var menu = FirstChild(() => DropDown("SELECT", new[] { "24 - ELECTRICAL", "28 - FUEL", "29 - HYDRAULICS", "36 - PNEUMATICS" }));
+        Assert.Equal("SELECT", menu.Text);
+        Assert.Equal("", menu.Value);
+        Assert.Equal(new[] { "24 - ELECTRICAL", "28 - FUEL", "29 - HYDRAULICS", "36 - PNEUMATICS" }, menu.Entries);
+    }
+
+    [Fact]
+    public void An_open_drop_down_reads_its_rows()
+    {
+        // The runway drop-down tapped open: its +0x154 byte 1, the entry buttons laid out 38 px apart from the list's top. The list
+        // (180 px tall for six 38 px rows) is scrolled by one row here, so each row is drawn 38 px higher than its rectangle.
+        string[] runways = { "RW07L", "RW07R", "RW08", "RW25L", "RW25R", "RW26" };
+        var runway = FirstChild(() => DropDown("RW07L", runways, open: true, scroll: 38));
+        Assert.True(runway.Open);
+        Assert.Equal("RW07L", runway.Value);
+        var rows = runway.Rows!;
+        Assert.Equal(runways, rows.Select(r => r.Text));
+        Assert.All(rows, r => Assert.Equal("button", r.Kind));
+        Assert.Equal(Enumerable.Range(0, 6).Select(i => 189f + 38 * i - 38), rows.Select(r => r.Y));
+        Assert.Equal((519.1f, 150f, 38f), (rows[0].X, rows[0].W, rows[0].H));
+        Assert.Empty(runway.Children);
+    }
+
+    private bool? Selection(byte selectable, byte unselected) => FirstChild(() =>
+    {
+        _b[Button + (uint)Layout.ButtonSelectable] = selectable; _b[Button + (uint)Layout.ButtonUnselected] = unselected;
+    }).Selected;
+
+    [Fact]
+    public void A_selected_button_reads_selected()
+    {
+        // Side menus and tab rows: the current entry is the button whose +0x140 byte is 1 and +0x143 byte 0.
+        Assert.True(Selection(selectable: 1, unselected: 0));
+        Assert.False(Selection(selectable: 1, unselected: 1)); // another entry of the menu
+        Assert.Null(Selection(selectable: 0, unselected: 0));  // a tile that takes no tap (Ground services' chocks_service_box)
+
+        var label = FirstChild(() =>
+        {
+            Ptr(Button, LabelVptr);
+            _b[Button + (uint)Layout.ButtonSelectable] = 1; _b[Button + (uint)Layout.ButtonUnselected] = 0;
+        });
+        Assert.Null(label.Selected); // only a button is selected or not
+    }
+
+    // ---- notifications ----
+
+    /// <summary>BBOS's notification vector holding <paramref name="records"/>, each <c>NoticeStride</c> bytes, capacity 64.</summary>
+    private void Notices(params (int Id, string Title, string Text, string Time, bool Unread)[] records)
+    {
+        uint vec = Bbos + (uint)Layout.BbosNotices, stride = (uint)Layout.NoticeStride;
+        Ptr(vec, NoticeRecords); Ptr(vec + 4, NoticeRecords + stride * (uint)records.Length); Ptr(vec + 8, NoticeRecords + stride * 64);
+        for (int i = 0; i < records.Length; i++)
+        {
+            uint r = NoticeRecords + stride * (uint)i;
+            Ptr(r + (uint)Layout.NoticeId, (uint)records[i].Id);
+            Str(r + (uint)Layout.NoticeTitle, records[i].Title);
+            Str(r + (uint)Layout.NoticeText, records[i].Text);
+            Str(r + (uint)Layout.NoticeTime, records[i].Time);
+            _b[r + (uint)Layout.NoticeUnread] = (byte)(records[i].Unread ? 1 : 0);
+        }
+    }
+
+    [Fact]
+    public void The_notifications_read_text_and_time()
+    {
+        // Measured: id 45 read, the AFT cargo door's id 50 new and unread, an autobrake one with a title.
+        var reader = Build(() => Notices((45, "", "CHOCKS REMOVED.", "21:37Z", false), (50, "", "AFT CARGO DOOR OPENED.", "03:15Z", true),
+            (52, "AUTOBRAKE 1", "TARGET 4.5 | ACTUAL 4.5 ft/s2", "03:20Z", true)));
+        Assert.Equal(new[]
+        {
+            new Bbs757EfbNoticeRecord(45, "", "CHOCKS REMOVED.", "21:37Z", false),
+            new Bbs757EfbNoticeRecord(50, "", "AFT CARGO DOOR OPENED.", "03:15Z", true),
+            new Bbs757EfbNoticeRecord(52, "AUTOBRAKE 1", "TARGET 4.5 | ACTUAL 4.5 ft/s2", "03:20Z", true),
+        }, reader.ReadNotices());
+    }
+
+    [Fact]
+    public void No_notification_reads_none()
+    {
+        Assert.Empty(Build(() => Notices()).ReadNotices());
+        Assert.Empty(Build().ReadNotices()); // a vector never allocated
+    }
+
+    [Theory]
+    [InlineData(NoticeRecords, NoticeRecords - 0x3c)]             // its end before its start
+    [InlineData(NoticeRecords, NoticeRecords + 0x3c + 7)]         // not a whole record
+    [InlineData(0u, 0x3cu)]                                      // no buffer
+    [InlineData(NoticeRecords, NoticeRecords + 257 * 0x3c)]       // more records than any BlueBird keeps
+    public void A_torn_notices_vector_reads_none(uint begin, uint end)
+    {
+        var reader = Build(() =>
+        {
+            Notices((45, "", "CHOCKS REMOVED.", "21:37Z", false), (50, "", "AFT CARGO DOOR OPENED.", "03:15Z", true));
+            Ptr(Bbos + (uint)Layout.BbosNotices, begin); Ptr(Bbos + (uint)Layout.BbosNotices + 4, end);
+        });
+        Assert.Empty(reader.ReadNotices());
+    }
+
+    // ---- the top bar and the dialog: apps found by their class ----
+
+    /// <summary>The map gains the top bar's app (key 1, its front flag 0, as measured) and the dialog app (key 3, its front flag 18 and
+    /// its page set, as BlueBird leaves them after a dialog closes), with BBOS's dialog byte <paramref name="dialogOpen"/>.</summary>
+    private void TopBarAndDialog(bool dialogOpen)
+    {
+        Ptr(Bbos + 0x238 + 8, 3);
+        Ptr(MapNode, BarNode); Ptr(MapNode + 4, DialogNode);
+        Ptr(BarNode + 0x10, 1); Ptr(BarNode + 0x14, BarAppVec); Ptr(BarNode + 0x18, BarAppVec + 8); Ptr(BarAppVec, BarApp);
+        Ptr(BarApp, OverlayVptr); Ptr(BarApp + 0x140, 0); Ptr(BarApp + 0x144, 0);
+        Ptr(BarApp + 0x17c, BarRoots); Ptr(BarApp + 0x180, BarRoots + 16); Ptr(BarRoots, ResetButton); Ptr(BarRoots + 8, BarGrid);
+        Control(ResetButton, ButtonVptr, "reset_points_button", false);
+        Control(BarGrid, GridVptr, "overlay_grid", true); Rect(BarGrid, 0, 0, 1397, 32);
+        Children(BarGrid, BarGridVec, TimeLabel);
+        Control(TimeLabel, LabelVptr, "time_label", true); Rect(TimeLabel, 15, 0, 1382, 32);
+        Str(TimeLabel + (uint)Layout.CtrlLabelText, "Sat, 7th Nov 2026 | 20:28L | 02:28Z | OAT 6 C");
+
+        Ptr(DialogNode + 0x10, 3); Ptr(DialogNode + 0x14, DialogAppVec); Ptr(DialogNode + 0x18, DialogAppVec + 8); Ptr(DialogAppVec, DialogApp);
+        Ptr(DialogApp, ModalVptr); Ptr(DialogApp + 0x140, 18); Ptr(DialogApp + 0x144, DialogPage);
+        Ptr(DialogApp + 0x17c, 0); Ptr(DialogApp + 0x180, 0);
+        Ptr(DialogPage + 0x4c, DialogPageVec); Ptr(DialogPage + 0x50, DialogPageVec + 8); Ptr(DialogPageVec, DialogGrid);
+        Control(DialogGrid, GridVptr, "dialog_grid", true); Rect(DialogGrid, 334.5f, 431, 728, 218);
+        Children(DialogGrid, DialogGridVec, Prompt, YesButton);
+        Control(Prompt, LabelVptr, "text_label", true); Rect(Prompt, 435.5f, 436, 622, 148);
+        Str(Prompt + (uint)Layout.CtrlLabelText, "Power off the EFB?");
+        Control(YesButton, ButtonVptr, "yes_btn", true); Rect(YesButton, 334.5f, 589, 180, 60); Str(YesButton + (uint)Layout.CtrlButtonText, "YES");
+
+        _b[Bbos + (uint)Layout.BbosModalOpen] = (byte)(dialogOpen ? 1 : 0);
+    }
+
+    [Fact]
+    public void The_top_bar_app_is_read_though_not_front()
+    {
+        var apps = Build(() => TopBarAndDialog(dialogOpen: false)).ReadFrontApps();
+        var bar = Assert.Single(apps, a => a.Class == Bbs757EfbMemory.TopBarClass);
+        Assert.Equal(1, bar.Key);
+        var grid = Assert.Single(bar.Controls); // its hidden reset_points_button dropped
+        Assert.Equal("overlay_grid", grid.Name);
+        Assert.Equal("Sat, 7th Nov 2026 | 20:28L | 02:28Z | OAT 6 C", Assert.Single(grid.Children).Text);
+    }
+
+    [Fact]
+    public void A_closed_dialog_is_not_read()
+    {
+        // BlueBird left an answered defuel question "front" for hours, its page set; only BBOS's dialog byte said it was gone.
+        var apps = Build(() => TopBarAndDialog(dialogOpen: false)).ReadFrontApps();
+        Assert.DoesNotContain(apps, a => a.Class == Bbs757EfbMemory.DialogClass || a.Key == 3);
+        Assert.Contains(apps, a => a.Key == 7); // the page's app as before
+    }
+
+    [Fact]
+    public void An_open_dialog_is_read()
+    {
+        var apps = Build(() => TopBarAndDialog(dialogOpen: true)).ReadFrontApps();
+        var dialog = Assert.Single(apps, a => a.Class == Bbs757EfbMemory.DialogClass);
+        Assert.Equal(3, dialog.Key);
+        var grid = Assert.Single(dialog.Controls);
+        Assert.Equal(new[] { "Power off the EFB?", "YES" }, grid.Children.Select(c => c.Text));
+        Assert.Equal(3, apps.Count);
     }
 
     [Fact]

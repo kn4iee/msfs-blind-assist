@@ -88,8 +88,8 @@ public class Bbs757EfbMemoryLiveTests
     }
 
     /// <summary>
-    /// Writes the front apps' trees, scrubbed, as a <c>.tree.json</c> fixture. Skipped unless BBS_EFB_CAPTURE names
-    /// the output file. Node texts are never printed.
+    /// Writes the drawn apps' trees, scrubbed, and BlueBird's notifications as a <c>.tree.json</c> fixture. Skipped unless
+    /// BBS_EFB_CAPTURE names the output file. Node texts are never printed.
     /// </summary>
     [Fact]
     public void Captures_the_tablet_as_a_tree_fixture()
@@ -105,8 +105,9 @@ public class Bbs757EfbMemoryLiveTests
 
         var apps = reader.ReadFrontApps();
         Assert.NotEmpty(apps);
-        File.WriteAllText(outFile, Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(apps)));
-        _out.WriteLine($"wrote {apps.Count} app(s), {apps.Sum(a => Count(a.Controls))} controls");
+        var notices = reader.ReadNotices();
+        File.WriteAllText(outFile, Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(apps), notices));
+        _out.WriteLine($"wrote {apps.Count} app(s), {apps.Sum(a => Count(a.Controls))} controls, {notices.Count} notification(s)");
     }
 
     private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));

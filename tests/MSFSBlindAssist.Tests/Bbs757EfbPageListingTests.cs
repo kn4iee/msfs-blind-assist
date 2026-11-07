@@ -40,6 +40,55 @@ public class Bbs757EfbPageListingTests
         Assert.Equal(File.ReadAllText(path).Replace("\r\n", "\n"), actual);
     }
 
+    public static IEnumerable<object[]> FixtureNames() =>
+        Directory.GetFiles(FixtureDir(), "*.tree.json").OrderBy(p => p, StringComparer.Ordinal)
+            .Select(p => new object[] { Path.GetFileName(p)[..^".tree.json".Length] });
+
+    /// <summary>Until plan 21's Tasks 5 and 6 map them, the model reads the new kinds as it read "other" and passes the top bar's and
+    /// the dialog's apps by: every committed tree, with each "other" control given each new kind and those two apps added, reads as its
+    /// listing.</summary>
+    [Theory]
+    [MemberData(nameof(FixtureNames))]
+    public void Every_page_reads_as_its_listing_with_the_phase_2_kinds_and_apps(string name)
+    {
+        string expected = File.ReadAllText(Path.Combine(FixtureDir(), name + ".listing.txt")).Replace("\r\n", "\n");
+        var apps = Bbs757EfbTreeJson.Load(name);
+        foreach (string kind in new[] { "textbox", "multiline", "pulldown", "image" })
+        {
+            var retyped = new[] { TopBar, Dialog }.Concat(apps.Select(a => a with { Controls = a.Controls.Select(n => Retype(n, kind)).ToList() }))
+                .ToList();
+            var model = Bbs757EfbModelReader.Read(retyped);
+            Assert.Equal(expected, Bbs757EfbListing.Of(Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>())));
+        }
+
+        static Bbs757EfbMemory.Node Retype(Bbs757EfbMemory.Node n, string kind) =>
+            n with { Kind = n.Kind == "other" ? kind : n.Kind, Children = n.Children.Select(c => Retype(c, kind)).ToList() };
+    }
+
+    private static Bbs757EfbMemory.Node Leaf(string kind, string name, string text, float x, float y, float w, float h) =>
+        new(kind, name, text, x, y, w, h, 0, Array.Empty<Bbs757EfbMemory.Node>());
+
+    /// <summary>The top bar's app as measured on 2026-11-07: overlay_grid holding the clock line.</summary>
+    private static readonly Bbs757EfbMemory.App TopBar = new(1, Bbs757EfbMemory.TopBarClass, new[]
+    {
+        new Bbs757EfbMemory.Node("grid", "overlay_grid", "", 0, 0, 1397, 32, 0, new[]
+        {
+            Leaf("label", "time_label", "Sat, 7th Nov 2026 | 20:28L | 02:28Z | OAT 6 C", 15, 0, 1382, 32),
+            Leaf("label", "keyboard_locked_label", "", 0, 0, 100, 100),
+        }),
+    });
+
+    /// <summary>An open question as the defuel one was laid out: its words and YES and NO.</summary>
+    private static readonly Bbs757EfbMemory.App Dialog = new(3, Bbs757EfbMemory.DialogClass, new[]
+    {
+        new Bbs757EfbMemory.Node("grid", "dialog_grid", "", 334.5f, 431, 728, 218, 0, new[]
+        {
+            Leaf("label", "text_label", "Current fuel exceeds the flight plan fuel.\nAre you sure you want to defuel?", 435.5f, 436, 622, 148),
+            Leaf("button", "yes_btn", "YES", 334.5f, 589, 180, 60),
+            Leaf("button", "no_btn", "NO", 882.5f, 589, 180, 60),
+        }),
+    });
+
     [Fact]
     public void The_listing_names_each_role()
     {
