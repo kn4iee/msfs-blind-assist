@@ -1557,7 +1557,10 @@ public class Bbs757EfbModelReaderTests
 
         // A keypad rectangle that is no number, or lies far off the tablet, is no box; the rest of the state still reads.
         foreach (var torn in new[] { AirportTyping with { KeypadX = float.NaN }, AirportTyping with { KeypadH = float.PositiveInfinity },
-                     AirportTyping with { KeypadW = -360 }, AirportTyping with { KeypadY = 1e9f } })
+                     AirportTyping with { KeypadW = -360 }, AirportTyping with { KeypadY = 1e9f },
+                     // The walk's torn rectangle (all four 0), and a width or height of 0: no keypad, as a notice panel of no size.
+                     AirportTyping with { KeypadX = 0, KeypadY = 0, KeypadW = 0, KeypadH = 0 },
+                     AirportTyping with { KeypadW = 0 }, AirportTyping with { KeypadH = 0 }, AirportTyping with { KeypadH = -430 } })
         {
             var state = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithKeyboard(page, torn))!.KeyboardState!;
             Assert.Equal((System.Drawing.Rectangle.Empty, true, "planning_perf_calc_airport_input"), (state.KeypadBox, state.Ready, state.Target));
@@ -1608,6 +1611,58 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal(new Bbs757EfbTextState(3, 8, true), row.TextState);
         Assert.Null(Assert.Single(Bbs757EfbModelReader.Read(page)!.Question!.Rows).TextState);
         Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(apps)!));
+    }
+
+    // ---- a toggle's own state (plan 22, Task 1c; measured 2026-11-07, docs/b757/evidence/efb-typing.md "Follow-up") ----
+
+    private static string LineOf(string listing, string word) =>
+        Assert.Single(listing.Split('\n'), l => l.Contains(word, StringComparison.OrdinalIgnoreCase));
+
+    [Fact]
+    public void A_toggle_with_no_value_label_reads_its_own_on_byte()
+    {
+        // Settings > Aircraft's TOD pause row has no value label: the window said "not checked" while it was on. BlueBird's byte on the
+        // toggle (+0x188) is its state; without one read (every committed tree) the row reads as before.
+        var apps = Bbs757EfbTreeJson.Load("51-settings-aircraft");
+        var before = Assert.Single(Bbs757EfbModelReader.Read(apps)!.Items, i => i.Key == "tod_pause_toggle");
+        Assert.Null(before.On);
+        Assert.Contains("checkbox not checked", LineOf(ListingOf(apps), "TOD PAUSE"));
+
+        var on = Bbs757EfbTreeJson.WithToggleOn(apps, "tod_pause_toggle", true);
+        var row = Assert.Single(Bbs757EfbModelReader.Read(on)!.Items, i => i.Key == "tod_pause_toggle");
+        Assert.Equal(true, row.On);
+        Assert.Contains("checkbox checked", LineOf(ListingOf(on), "TOD PAUSE"));
+        Assert.DoesNotContain("not checked", LineOf(ListingOf(on), "TOD PAUSE"));
+
+        var off = Bbs757EfbTreeJson.WithToggleOn(apps, "tod_pause_toggle", false);
+        Assert.Equal(false, Assert.Single(Bbs757EfbModelReader.Read(off)!.Items, i => i.Key == "tod_pause_toggle").On);
+        Assert.Contains("checkbox not checked", LineOf(ListingOf(off), "TOD PAUSE"));
+    }
+
+    [Fact]
+    public void A_toggles_own_byte_wins_over_its_value_label()
+    {
+        // The label is a picture of BlueBird's state: when they disagree the byte is read, in the row (a value label ON) and in the
+        // toggle that stands alone (its own text). Settings > Aircraft's first value label reads ON or OFF on the committed tree.
+        var apps = Bbs757EfbTreeJson.Load("51-settings-aircraft");
+        var toggles = Bbs757EfbModelReader.Read(apps)!.Items.Where(i => i.Kind == Bbs757EfbKind.Toggle && i.On is not null).ToList();
+        Assert.NotEmpty(toggles);
+        foreach (var t in toggles)
+        {
+            var flipped = Bbs757EfbTreeJson.WithToggleOn(apps, t.Key, t.On != true);
+            var item = Assert.Single(Bbs757EfbModelReader.Read(flipped)!.Items, i => i.Key == t.Key);
+            Assert.Equal(t.On != true, item.On);
+            Assert.Equal(t.Value, item.Value); // the label's words still read as they are
+        }
+        // Standing alone (in a stack, no settings row): a toggle with its text "OFF" and the byte on.
+        var alone = new Bbs757EfbMemory.Node("toggle", "lone_toggle", "OFF", 300, 300, 60, 35, 0, Array.Empty<Bbs757EfbMemory.Node>(), On: true);
+        var app = new Bbs757EfbMemory.App(7, "SYSTEMS", new[]
+        {
+            new Bbs757EfbMemory.Node("stack", "g", "", 250, 82, 1147, 966, 0, new[] { alone }),
+        });
+        Assert.Equal(true, Assert.Single(Bbs757EfbModelReader.Read(new[] { app })!.Items, i => i.Key == "lone_toggle").On);
+        var noByte = app with { Controls = new[] { app.Controls[0] with { Children = new[] { alone with { On = null } } } } };
+        Assert.Equal(false, Assert.Single(Bbs757EfbModelReader.Read(new[] { noByte })!.Items, i => i.Key == "lone_toggle").On);
     }
 
     [Fact]

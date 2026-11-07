@@ -10,7 +10,7 @@ namespace MSFSBlindAssist.Tests;
 /// The test-side file format of the tablet's live memory trees (<c>Fixtures/bbs757-efb-memory/&lt;name&gt;.tree.json</c>).
 /// Each node keeps kind, name, text, rectangle and children, and, only when the walk read them (optional: absent reads as
 /// none), a scrollbox's offset, a slider's knob, a button's selected state, a drop-down's value, entries, open state, rows
-/// and open list, and a text box's caret, maximum length and keypad flag; each app keeps
+/// and open list, a text box's caret, maximum length and keypad flag, and a toggle's on state; each app keeps
 /// key, class and controls, the top bar's app its notification panel, flight-time text and boarding box, and the keyboard app its
 /// state, when the walk read them (optional: absent reads as none). The
 /// file's root is the array of apps, or, for a capture with BlueBird's notifications, an object
@@ -245,6 +245,11 @@ internal static class Bbs757EfbTreeJson
         int? maxLength, bool? keypad) =>
         Change(apps, name, n => n with { Caret = caret, MaxLength = maxLength, Keypad = keypad });
 
+    /// <summary>The trees with the toggle named <paramref name="name"/> carrying its own on byte as the walk reads it (plan 22, Task 1c;
+    /// null: not read); no committed tree carries one.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithToggleOn(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, bool? on) =>
+        Change(apps, name, n => n with { On = on });
+
     /// <summary>The trees with every button's selected state taken off, as a read that marks no side-menu entry or tab (a mid-update
     /// read, or a torn one) gives them: no section and no current tab.</summary>
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithoutSelected(IReadOnlyList<Bbs757EfbMemory.App> apps)
@@ -300,6 +305,7 @@ internal static class Bbs757EfbTreeJson
         if (n.Caret is int caret) o["caret"] = caret;
         if (n.MaxLength is int maxLength) o["maxLength"] = maxLength;
         if (n.Keypad is bool keypad) o["keypad"] = keypad;
+        if (n.On is bool on) o["on"] = on;
         o["children"] = new JsonArray(n.Children.Select(c => (JsonNode?)NodeToJson(c)).ToArray());
         return o;
     }
@@ -316,7 +322,8 @@ internal static class Bbs757EfbTreeJson
         Entries: j["entries"]?.AsArray().Select(e => e!.GetValue<string>()).ToList(), Open: j["open"]?.GetValue<bool>() ?? false,
         Rows: j["rows"]?.AsArray().Select(r => NodeFromJson(r!)).ToList(),
         OpenList: j["list"] is { } list ? NodeFromJson(list) : null,
-        Caret: j["caret"]?.GetValue<int>(), MaxLength: j["maxLength"]?.GetValue<int>(), Keypad: j["keypad"]?.GetValue<bool>());
+        Caret: j["caret"]?.GetValue<int>(), MaxLength: j["maxLength"]?.GetValue<int>(), Keypad: j["keypad"]?.GetValue<bool>(),
+        On: j["on"]?.GetValue<bool>());
 
     // A float widened to a double would print noise digits (12.300000190734863); write its shortest round-trip text.
     private static JsonNode Number(float v) =>

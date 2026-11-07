@@ -145,7 +145,10 @@ public sealed record Bbs757EfbTextState(int Caret, int MaxLength, bool Keypad);
 /// leaves it set after the keypad closes); <see cref="Target"/>, BlueBird's name for the text
 /// box it types into ("" while down); <see cref="Numeric"/>, <see cref="Shift"/> and <see cref="Caps"/>, the third layer, the one-shot
 /// shift and caps lock; and <see cref="KeypadBox"/>, where the numeric keypad is drawn (it has no controls in any tree), empty when its
-/// rectangle read is no box on the tablet.
+/// rectangle read is no box on the tablet (no width or height, or not finite).
+/// <para>The fields are read one at a time, not as one snapshot: a read while the keyboard comes up or goes down can pair
+/// <see cref="Shown"/> with an empty <see cref="Target"/>, or <see cref="Ready"/> without <see cref="Shown"/>. A consumer that types
+/// needs <see cref="Shown"/>, <see cref="Ready"/> and a non-empty <see cref="Target"/> together.</para>
 /// </summary>
 public sealed record Bbs757EfbKeyboardState(bool Shown, bool Ready, bool Keypad, string Target, bool Numeric, bool Shift, bool Caps,
     Rectangle KeypadBox);

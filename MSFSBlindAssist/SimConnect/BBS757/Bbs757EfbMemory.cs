@@ -43,11 +43,13 @@ public sealed class Bbs757EfbMemory
     /// <para>A <c>textbox</c> has <c>Caret</c> (the character boundary a typed character goes in at, 0 to its text's length),
     /// <c>MaxLength</c> (the most characters it takes, 1 to <see cref="MaxTextboxLength"/>) and <c>Keypad</c> (whether it opens the
     /// numeric keypad rather than the QWERTY keyboard), each null when unreadable or out of its range (a torn read), and null for every
-    /// other kind (<see cref="WithTyping"/>; plan 22, measured 2026-11-07).</para></summary>
+    /// other kind (<see cref="WithTyping"/>; plan 22, measured 2026-11-07).</para>
+    /// <para>A <c>toggle</c> has <c>On</c>, its own byte's low bit (1 on, 0 off; <see cref="WithToggle"/>; plan 22, measured 2026-11-07):
+    /// BlueBird's own state, which a row's value label only pictures. Null when the byte cannot be read and for every other kind.</para></summary>
     public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children,
         float Scroll = 0f, float? Knob = null, float KnobSpan = 0f,
         bool? Selected = null, string Value = "", IReadOnlyList<string>? Entries = null, bool Open = false, IReadOnlyList<Node>? Rows = null,
-        Node? OpenList = null, int? Caret = null, int? MaxLength = null, bool? Keypad = null);
+        Node? OpenList = null, int? Caret = null, int? MaxLength = null, bool? Keypad = null, bool? On = null);
 
     /// <summary>The class of the top bar's app (BlueBird's <c>app_overlay</c>), read on every page whatever its front flag.</summary>
     public const string TopBarClass = "overlay";
@@ -85,7 +87,10 @@ public sealed class Bbs757EfbMemory
     /// after the keypad closes, until the QWERTY keyboard next opens: it says which shows only while <c>Shown</c>); <c>Target</c>, the
     /// name of the text box it types into ("" while down, or when its name cannot be read); the layer bytes <c>Numeric</c> (the third
     /// layer), <c>Shift</c> (the one-shot shift) and <c>Caps</c> (caps lock); and the numeric keypad's rectangle in tablet pixels
-    /// ([595.5,348 360x430] under the fuel input dialog; it has no controls in any tree).</summary>
+    /// ([595.5,348 360x430] under the fuel input dialog; it has no controls in any tree).
+    /// <para>The fields are read one at a time, not as one snapshot: a read while the keyboard comes up or goes down can pair
+    /// <c>Shown</c> with an empty <c>Target</c>, or <c>Ready</c> without <c>Shown</c>. A consumer that types needs <c>Shown</c>,
+    /// <c>Ready</c> and a non-empty <c>Target</c> together.</para></summary>
     public sealed record KeyboardState(bool Shown, bool Ready, bool Keypad, string Target, bool Numeric, bool Shift, bool Caps,
         float KeypadX, float KeypadY, float KeypadW, float KeypadH);
 
@@ -132,7 +137,7 @@ public sealed class Bbs757EfbMemory
     /// <summary>The keyboard app's state (<see cref="KeyboardState"/>): its bytes at the layout's <c>KeyboardShown</c>, <c>KeyboardReady</c>,
     /// <c>KeyboardKeypad</c>, <c>KeyboardNumeric</c>, <c>KeyboardShift</c> and <c>KeyboardCaps</c>, each its low bit (as BlueBird tests its
     /// flags); the name of the control its <c>KeyboardTarget</c> pointer points at ("" for 0 or a name that is no readable string); the
-    /// keypad's four floats at <c>KeypadRect</c>, one that is no number read as 0 (as a scrollbox's offset). Null when a byte or the
+    /// keypad's four floats at <c>KeypadRect</c>, all four read as 0 when any one is no number. Null when a byte or the
     /// pointer cannot be read, never a state of zeros.</summary>
     private KeyboardState? ReadKeyboard(uint app)
     {
@@ -142,10 +147,11 @@ public sealed class Bbs757EfbMemory
             || !_m.TryReadPtr(app + (uint)_l.KeyboardTarget, out uint target)) return null;
         string name = target == 0 ? "" : _m.ReadStdString(target + (uint)_l.CtrlName) ?? "";
         uint rect = app + (uint)_l.KeypadRect;
-        static float Finite(float v) => float.IsFinite(v) ? v : 0f;
+        float x = _m.ReadFloat(rect), y = _m.ReadFloat(rect + 4), w = _m.ReadFloat(rect + 8), h = _m.ReadFloat(rect + 12);
+        // A float that is no number is a torn read: all four read 0 together (no keypad), never a rectangle made of the other three.
+        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(w) || !float.IsFinite(h)) x = y = w = h = 0f;
         return new KeyboardState((shown & 1) == 1, (ready & 1) == 1, (keypad & 1) == 1, name, (numeric & 1) == 1, (shift & 1) == 1,
-            (caps & 1) == 1, Finite(_m.ReadFloat(rect)), Finite(_m.ReadFloat(rect + 4)), Finite(_m.ReadFloat(rect + 8)),
-            Finite(_m.ReadFloat(rect + 12)));
+            (caps & 1) == 1, x, y, w, h);
     }
 
     /// <summary>The most seconds believed for a remaining loading time (a day): a torn or foreign word cannot make a count of minutes.</summary>
@@ -289,9 +295,16 @@ public sealed class Bbs757EfbMemory
             "button" => node with { Selected = ReadSelected(ctrl) },
             "pulldown" => WithEntries(node, ctrl, walk, ancestorScroll, depth),
             "textbox" => WithTyping(node, ctrl),
+            "toggle" => WithToggle(node, ctrl),
             _ => node,
         });
     }
+
+    /// <summary>A toggle with its own state (<see cref="Node.On"/>): the low bit of its byte at the layout's <c>ToggleOn</c> (as BlueBird
+    /// tests its flags; +0x189 beside it reads 1 on every toggle, so only the low bit of +0x188 is the state). Null when it cannot be
+    /// read.</summary>
+    private Node WithToggle(Node node, uint ctrl) =>
+        node with { On = _m.TryReadByte(ctrl + (uint)_l.ToggleOn, out byte on) ? (on & 1) == 1 : null };
 
     /// <summary>The longest maximum length believed for a text box (SayIntentions' ACARS key box, 64, is the longest measured): a torn
     /// or foreign word past it reads as none.</summary>

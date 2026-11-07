@@ -137,19 +137,22 @@ public class Bbs757EfbTreeScrubTests
     [Fact]
     public void A_made_up_text_boxs_caret_is_at_its_end()
     {
-        // Plan 22 reads a text box's caret. Where the scrub makes the text up, the real caret would tell where the real text ends (a
-        // credential's length) and could lie past the made-up text's end, which no caret does: it is put at the made-up text's end, where
-        // typing leaves it. A text the scrub keeps keeps its caret; the maximum length and keypad flag are kept either way.
+        // Plan 22 reads a text box's caret. Where the scrub makes a credential up, the real caret would tell where the real text ends
+        // (its length) and could lie past the made-up text's end, which no caret does: it is put at the made-up text's end, where typing
+        // leaves it. A made-up flight value keeps its caret (no length of a credential to tell), cut to the made-up text's end; a text the
+        // scrub keeps keeps its caret. The maximum length and keypad flag are kept either way.
         var scrubbed = Bbs757EfbTreeScrub.Scrub(App(
             Box("hoppie_logon_code_textbox", "REALCODE1234") with { Caret = 12, MaxLength = 24, Keypad = false },
             Box("planning_perf_calc_airport_input", "KPHX") with { Caret = 1, MaxLength = 4, Keypad = false },
             Box("planning_charts_request_input", "EDDF") with { Caret = 2, MaxLength = 4, Keypad = false },
             Box("simbrief_id_textbox", "") with { Caret = 0, MaxLength = 8, Keypad = true },
-            Box("hoppie_logon_code_textbox", "REALCODE") with { MaxLength = 24 }))[0].Controls;
-        Assert.Equal(new (string, int?)[] { ("MADEUP", 6), ("KSEA", 4), ("EDDF", 2), ("", 0), ("MADEUP", null) },
+            Box("hoppie_logon_code_textbox", "REALCODE") with { MaxLength = 24 },
+            Box("planning_perf_calc_weight", "1234567") with { Caret = 7, MaxLength = 8, Keypad = true },
+            Box("planning_perf_calc_temp", "-12") with { Caret = 1, MaxLength = 8, Keypad = true }))[0].Controls;
+        Assert.Equal(new (string, int?)[] { ("MADEUP", 6), ("KSEA", 1), ("EDDF", 2), ("", 0), ("MADEUP", null), ("180000", 6), ("15", 1) },
             scrubbed.Select(c => (c.Text, c.Caret)));
-        Assert.Equal(new int?[] { 24, 4, 4, 8, 24 }, scrubbed.Select(c => c.MaxLength));
-        Assert.Equal(new bool?[] { false, false, false, true, null }, scrubbed.Select(c => c.Keypad));
+        Assert.Equal(new int?[] { 24, 4, 4, 8, 24, 8, 8 }, scrubbed.Select(c => c.MaxLength));
+        Assert.Equal(new bool?[] { false, false, false, true, null, true, true }, scrubbed.Select(c => c.Keypad));
     }
 
     [Fact]

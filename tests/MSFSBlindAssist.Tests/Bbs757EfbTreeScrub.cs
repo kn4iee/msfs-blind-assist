@@ -69,16 +69,19 @@ internal static class Bbs757EfbTreeScrub
     internal static string MadeUpFlight(string name) =>
         MadeUpFlightValues.TryGetValue(name, out string? v) ? v : Zero;
 
-    /// <summary>A node with its text scrubbed, and so its children, rows and open list. A text box whose text is made up has its caret
-    /// (plan 22) at the made-up text's end, where typing leaves it: the real caret could tell where the real text ends, and could lie
-    /// past the made-up text's end.</summary>
+    /// <summary>A node with its text scrubbed, and so its children, rows and open list. A credential box whose text is made up has its
+    /// caret (plan 22) at the made-up text's end, where typing leaves it: the real caret would tell the real credential's length. A text
+    /// box with a made-up flight value keeps its caret, cut to the made-up text's end (no caret lies past its text).</summary>
     private static Bbs757EfbMemory.Node ScrubNode(Bbs757EfbMemory.Node n)
     {
         string text = ScrubText(n.Kind, n.Name, n.Text);
+        bool changed = !string.Equals(text, n.Text, StringComparison.Ordinal);
         return n with
         {
             Text = text,
-            Caret = n.Caret is int && !string.Equals(text, n.Text, StringComparison.Ordinal) ? text.Length : n.Caret,
+            Caret = n.Caret is not int caret ? n.Caret
+                : changed && CodeNodes.Contains(n.Name) ? text.Length
+                : Math.Min(caret, text.Length),
             Children = n.Children.Select(ScrubNode).ToList(),
             Rows = n.Rows?.Select(ScrubNode).ToList(),
             OpenList = n.OpenList is { } list ? ScrubNode(list) : null,

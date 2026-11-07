@@ -19,7 +19,7 @@ public class Bbs757EfbMemoryTests
         SliderVptr = 0x30c48;
     // The fake's own vptrs for plan 21's kinds; a stack is no kind the layout names, so it reads "other".
     private const uint TextboxVptr = 0x30d00, MultilineVptr = 0x30500, PulldownVptr = 0x30700, ImageVptr = 0x30300,
-        OverlayVptr = 0x28c00, ModalVptr = 0x27d00, StackVptr = 0x30d60, KeyboardVptr = 0x26f00;
+        OverlayVptr = 0x28c00, ModalVptr = 0x27d00, StackVptr = 0x30d60, KeyboardVptr = 0x26f00, ToggleVptr = 0x30e00;
     // The keyboard app (key 2) beside the page's app in the map, with its kb_grid and one key; an object whose fields past +0x1a0 lie
     // past the fake's memory (a torn read).
     private const uint KbNode = 0x15000, KbAppVec = 0x15080, KbApp = 0x15100, KbRoots = 0x15400, KbGrid = 0x15600, KbGridVec = 0x15800,
@@ -51,6 +51,7 @@ public class Bbs757EfbMemoryTests
         OverlayBoardingRect: 0x214, BbosLoadState: 0x9160, BbosLoadDeboarding: 0x9164, BbosLoadFlown: 0x9167, BbosLoadRemaining: 0x9278,
         KeyboardShown: 0x1ac, KeyboardReady: 0x1ad, KeyboardKeypad: 0x1ae, KeyboardTarget: 0x1ec, KeypadRect: 0x1d8,
         KeyboardNumeric: 0x1e8, KeyboardShift: 0x1e9, KeyboardCaps: 0x1ea, TextboxCaret: 0x1ac, TextboxMaxLength: 0x1bc, TextboxKeypad: 0x1cc,
+        ToggleOn: 0x188,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),
@@ -59,7 +60,7 @@ public class Bbs757EfbMemoryTests
             new Bbs757EfbClassVptr("textbox", TextboxVptr), new Bbs757EfbClassVptr("multiline", MultilineVptr),
             new Bbs757EfbClassVptr("pulldown", PulldownVptr), new Bbs757EfbClassVptr("image", ImageVptr),
             new Bbs757EfbClassVptr("overlay", OverlayVptr), new Bbs757EfbClassVptr("modal", ModalVptr),
-            new Bbs757EfbClassVptr("keyboard", KeyboardVptr),
+            new Bbs757EfbClassVptr("keyboard", KeyboardVptr), new Bbs757EfbClassVptr("toggle", ToggleVptr),
         });
 
     private readonly byte[] _b = new byte[0x1B0000];
@@ -474,6 +475,53 @@ public class Bbs757EfbMemoryTests
         string bare = Bbs757EfbTreeJson.Write(Build().ReadFrontApps());
         foreach (string field in new[] { "caret", "maxLength", "keypad" })
             Assert.DoesNotContain($"\"{field}\"", bare, StringComparison.Ordinal);
+    }
+
+    // ---- a toggle's own byte (plan 22, measured 2026-11-07: docs/b757/evidence/efb-typing.md, "Follow-up") ----
+
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(0, false)]
+    [InlineData(0x0101, true)]      // +0x189 reads 1 on every toggle: only the low bit of +0x188 is the state
+    [InlineData(0x0100, false)]
+    [InlineData(0x80, false)]       // a high bit alone is not on
+    [InlineData(0xff, true)]
+    public void A_toggle_reads_its_own_on_byte(int word, bool expected)
+    {
+        var toggle = FirstChild(() => { Ptr(Button, ToggleVptr); Ptr(Button + (uint)Layout.ToggleOn, (uint)word); });
+        Assert.Equal("toggle", toggle.Kind);
+        Assert.Equal((bool?)expected, toggle.On);
+    }
+
+    [Fact]
+    public void Only_a_toggle_has_an_on_state_and_an_unreadable_one_is_none()
+    {
+        // A button, a label and a text box with the byte set: none. A toggle at the end of the module's memory: its byte lies past it.
+        void On() => Ptr(Button + (uint)Layout.ToggleOn, 1);
+        Assert.Null(FirstChild(On).On);
+        Assert.Null(FirstChild(() => { On(); Ptr(Button, LabelVptr); }).On);
+        Assert.Null(FirstChild(() => { On(); Ptr(Button, TextboxVptr); }).On);
+        var torn = FirstChild(() =>
+        {
+            // The toggle's byte (+0x188) is the first one past the memory's end.
+            uint edge = 0x1B0000 - 0x188;
+            Children(Grid, GridChildrenVec, edge);
+            Control(edge, ToggleVptr, "edge_toggle", true); Rect(edge, 300, 200, 150, 34);
+        });
+        Assert.Equal(("toggle", "edge_toggle"), (torn.Kind, torn.Name));
+        Assert.Null(torn.On);
+    }
+
+    [Fact]
+    public void The_tree_format_carries_a_toggles_on_state()
+    {
+        // Optional like the typing fields: written only when set, so every node without it (and every committed tree) writes as before.
+        var on = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(Build(() => { Ptr(Button, ToggleVptr); Ptr(Button + (uint)Layout.ToggleOn, 1); }).ReadFrontApps()));
+        Assert.True(Assert.Single(on).Controls[0].Children[0].On);
+        var off = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(Build(() => { Ptr(Button, ToggleVptr); Ptr(Button + (uint)Layout.ToggleOn, 0); }).ReadFrontApps()));
+        Assert.False(Assert.Single(off).Controls[0].Children[0].On);
+        string bare = Bbs757EfbTreeJson.Write(Build().ReadFrontApps());
+        Assert.DoesNotContain("\"on\"", bare, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -924,16 +972,21 @@ public class Bbs757EfbMemoryTests
         Assert.Equal((true, false, false, true, false, true), (kb.Shown, kb.Ready, kb.Keypad, kb.Numeric, kb.Shift, kb.Caps));
     }
 
-    [Fact]
-    public void A_keypad_float_that_is_no_number_reads_0()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void A_keypad_float_that_is_no_number_reads_the_whole_rectangle_as_0(int which)
     {
-        // As a scrollbox's offset: a float that is no number (a torn read) reads 0, never NaN into the model or the tree format.
+        // A float that is no number is a torn read: the four read as 0 together, never a rectangle made of the others (a made-up
+        // 0, 348, 360, 0 would be a keypad that is not there), never NaN into the model or the tree format.
         var kb = KeyboardOf(Build(() =>
         {
             KeyboardApp(); KeyboardState(1, 1, 1, 0);
-            F32(KbApp + (uint)Layout.KeypadRect, float.NaN); F32(KbApp + (uint)Layout.KeypadRect + 12, float.PositiveInfinity);
+            F32(KbApp + (uint)Layout.KeypadRect + 4 * (uint)which, which % 2 == 0 ? float.NaN : float.PositiveInfinity);
         }).ReadFrontApps()).Keyboard!;
-        Assert.Equal((0f, 348f, 360f, 0f), (kb.KeypadX, kb.KeypadY, kb.KeypadW, kb.KeypadH));
+        Assert.Equal((0f, 0f, 0f, 0f), (kb.KeypadX, kb.KeypadY, kb.KeypadW, kb.KeypadH));
     }
 
     [Fact]

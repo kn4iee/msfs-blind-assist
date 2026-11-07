@@ -12,7 +12,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// its stable identity, kept as the key of a settings row so a re-read relocates it exactly.
 ///
 /// Settings rows (a grid holding a toggle or slider with its label and value) become one Toggle or Slider item carrying
-/// the value the tablet shows and the switch state its value label gives. BlueBird's text boxes become fields holding their text,
+/// the value the tablet shows and the switch state: the toggle's own byte (<see cref="Bbs757EfbMemory.Node.On"/>, BlueBird's own state)
+/// when the walk read it, else the one its value label gives. BlueBird's text boxes become fields holding their text,
 /// its multi-line text boxes long texts and its drop-downs choices (plan 21). The current section, also the selected side-menu entry,
 /// and a tab row's current tab are the ones BlueBird's selected state marks (<see cref="Bbs757EfbMemory.Node.Selected"/>,
 /// <see cref="SectionOf"/>); a read that marks none (a tree captured before plan 21) names no section and no current tab. Whether the
@@ -64,13 +65,14 @@ public sealed class Bbs757EfbModelReader
     /// <summary>
     /// The keyboard's state (<see cref="Bbs757EfbScreenModel.KeyboardState"/>) from the keyboard app's (<see cref="Bbs757EfbMemory.KeyboardState"/>),
     /// its keypad's rectangle truncated to whole pixels as every box the reader gives (<see cref="Box"/>), or empty for one that is not
-    /// finite, lies past <see cref="MaxPanelPx"/> (a torn read) or has a negative size; null when none was read.
+    /// finite, lies past <see cref="MaxPanelPx"/> (a torn read) or has no width or no height (as <see cref="NoticePanelOf"/> treats its panel);
+    /// null when none was read.
     /// </summary>
     private static Bbs757EfbKeyboardState? KeyboardStateOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
     {
         if (apps.Select(a => a.Keyboard).FirstOrDefault(k => k is not null) is not { } k) return null;
         static bool Sane(float v) => float.IsFinite(v) && Math.Abs(v) <= MaxPanelPx;
-        var keypad = Sane(k.KeypadX) && Sane(k.KeypadY) && Sane(k.KeypadW) && Sane(k.KeypadH) && k.KeypadW >= 0 && k.KeypadH >= 0
+        var keypad = Sane(k.KeypadX) && Sane(k.KeypadY) && Sane(k.KeypadW) && Sane(k.KeypadH) && k.KeypadW > 0 && k.KeypadH > 0
             ? new Rectangle((int)k.KeypadX, (int)k.KeypadY, (int)k.KeypadW, (int)k.KeypadH)
             : Rectangle.Empty;
         return new Bbs757EfbKeyboardState(k.Shown, k.Ready, k.Keypad, k.Target, k.Numeric, k.Shift, k.Caps, keypad);
@@ -329,7 +331,7 @@ public sealed class Bbs757EfbModelReader
                 if (g.ButtonItem(n) is { } button) items.Add(button);
                 return;
             case "toggle":
-                items.Add(new Bbs757EfbItem(Bbs757EfbKind.Toggle, n.Text, Box(n), Hit(n), true, n.Name, On: StateOf(n.Text), Value: n.Text));
+                items.Add(new Bbs757EfbItem(Bbs757EfbKind.Toggle, n.Text, Box(n), Hit(n), true, n.Name, On: n.On ?? StateOf(n.Text), Value: n.Text));
                 return;
             case "slider":
                 items.Add(g.SliderItem(n));
@@ -429,9 +431,9 @@ public sealed class Bbs757EfbModelReader
     {
         if (n.Kind == "toggle")
         {
-            // The checklist's INTERACTIVE switch has no value label; its state is not read from the tree here.
+            // The checklist's INTERACTIVE switch has no value label; its state is its own byte's when the walk read it (n.On), else none.
             items.Add(new Bbs757EfbItem(Bbs757EfbKind.Toggle, Bbs757EfbVocabulary.Pretty(Clean(n.Text)), Box(n), Hit(n), true,
-                "tgl:" + Clean(n.Text)));
+                "tgl:" + Clean(n.Text), On: n.On));
             return;
         }
         string word = MenuWord(app, n.Text);
@@ -517,7 +519,7 @@ public sealed class Bbs757EfbModelReader
             .OrderBy(c => c.X).ThenBy(c => c.Y).FirstOrDefault()?.Text ?? grid.Name;
         string value = leaves.FirstOrDefault(IsValue)?.Text ?? "";
         var kind = control.Kind == "toggle" ? Bbs757EfbKind.Toggle : Bbs757EfbKind.Slider;
-        return new Bbs757EfbItem(kind, label, Box(control), Hit(control), true, control.Name, On: StateOf(value), Value: value,
+        return new Bbs757EfbItem(kind, label, Box(control), Hit(control), true, control.Name, On: control.On ?? StateOf(value), Value: value,
             Slider: kind == Bbs757EfbKind.Slider ? SliderOf(control, value) : null);
     }
 
