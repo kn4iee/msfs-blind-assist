@@ -5,16 +5,16 @@ using Xunit;
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// What the tablet puts over its page (plan 18): BlueBird's notification panel, read into
-/// <see cref="Bbs757EfbScreenModel.Notices"/> and spoken once per appearance (<see cref="Bbs757EfbNotices.ToSpeak"/>), and a
-/// question box, read into <see cref="Bbs757EfbScreenModel.Question"/> with its answers. Against plan 18's captures (Task
-/// 1, 2026-10-29).
+/// What the tablet puts over its page: BlueBird's notifications, read from BBOS's records into
+/// <see cref="Bbs757EfbScreenModel.Notices"/> (plan 21, Task 6) and spoken once each, by id (<see cref="Bbs757EfbNotices.ToSpeak"/>), and
+/// a question box, read into <see cref="Bbs757EfbScreenModel.Question"/> with its answers. The panel and question tests run against
+/// plan 18's captures (Task 1, 2026-10-29, page models).
 /// </summary>
 public class Bbs757EfbNoticesTests
 {
     private static readonly Bbs757EfbNotice[] None = Array.Empty<Bbs757EfbNotice>();
 
-    private static Bbs757EfbNotice N(string text, string? time) => new(text, time);
+    private static Bbs757EfbNotice N(int id, string text, string? time) => new(id, text, time);
 
     private static void AssertNear(Point hit, int x, int y)
     {
@@ -22,24 +22,62 @@ public class Bbs757EfbNoticesTests
         Assert.InRange(hit.Y, y - 15, y + 15);
     }
 
+    // ---------------------------------------------------------------- reading a notification
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_notification_reads_its_words_and_time(string culture)
+    {
+        // BBOS's records on the home page (captured 2026-11-07): each its words made readable as plan 18's were ("GPU connected."), its
+        // title before them when it has one (the autobrake ones), its time; newest first, by id.
+        var m = TestCulture.Run(culture, () =>
+            Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("01-home"), Bbs757EfbTreeJson.LoadNotices("01-home"))!);
+
+        Assert.Equal(49, m.Notices.Count);
+        Assert.Equal(new (int, string, string?)[]
+            {
+                (51, "AFT cargo door closed.", "03:16Z"), (50, "AFT cargo door opened.", "03:15Z"), (49, "GPU connected.", "01:16Z"),
+                (48, "Brake thermal efficiency: Left 96.2% | right 96.2%", "00:58Z"), (47, "Autobrake 1: TARGET 4.5 | ACTUAL 4.5 ft/s2", "00:58Z"),
+            },
+            m.Notices.Take(5).Select(n => (n.Id, n.Text, n.Time)));
+        Assert.Equal(m.Notices.Select(n => n.Id).OrderByDescending(id => id), m.Notices.Select(n => n.Id));
+        Assert.Equal((1, "GPU connected.", (string?)"19:34Z"), (m.Notices[^1].Id, m.Notices[^1].Text, m.Notices[^1].Time));
+    }
+
+    [Fact]
+    public void A_record_with_no_words_is_no_notification()
+    {
+        var records = new[]
+        {
+            new Bbs757EfbNoticeRecord(1, "", "", "10:00Z", false),
+            new Bbs757EfbNoticeRecord(2, "AUTOBRAKE 1", "", "", true),
+            new Bbs757EfbNoticeRecord(3, "", "GPU CONNECTED.", "", true),
+        };
+
+        Assert.Equal(new (int, string, string?)[] { (3, "GPU connected.", null), (2, "Autobrake 1", null) },
+            Bbs757EfbNotices.From(records).Select(n => (n.Id, n.Text, n.Time)));
+    }
+
     // ---------------------------------------------------------------- speaking a notification
 
     [Fact]
     public void A_notification_is_spoken_once_per_appearance()
     {
-        var first = new[] { N("Chocks attached.", "12:06Z") };
+        var first = new[] { N(16, "Chocks attached.", "12:06Z") };
 
         Assert.Equal("Chocks attached.", Bbs757EfbNotices.ToSpeak(None, first, 60_000));
-        // Still showing at the next read: not again.
+        // Still listed at the next read: not again.
         Assert.Null(Bbs757EfbNotices.ToSpeak(first, first, 60_000));
-        // The same words at a new time are a new appearance.
-        Assert.Equal("Chocks attached.", Bbs757EfbNotices.ToSpeak(first, new[] { N("Chocks attached.", "12:09Z") }, 60_000));
+        // The same words at the same time under a new id are a new appearance.
+        Assert.Equal("Chocks attached.", Bbs757EfbNotices.ToSpeak(first, new[] { N(17, "Chocks attached.", "12:06Z") }.Concat(first).ToList(), 60_000));
     }
 
     [Fact]
     public void No_notification_is_spoken_within_4_s_of_the_pilots_press()
     {
-        var now = new[] { N("GPU connected.", "14:17Z") };
+        var now = new[] { N(1, "GPU connected.", "14:17Z") };
 
         Assert.Equal(4000, Bbs757EfbNotices.QuietAfterPressMs);
         Assert.Null(Bbs757EfbNotices.ToSpeak(None, now, 3_999));
@@ -47,26 +85,29 @@ public class Bbs757EfbNoticesTests
     }
 
     [Fact]
-    public void New_notifications_are_said_together_top_first()
+    public void New_notifications_are_said_together_as_they_came()
     {
-        var before = new[] { N("R3 door closed.", "12:44Z") };
-        var now = new[] { N("GPU disconnected.", "14:17Z"), N("GPU connected.", "14:17Z"), N("R3 door closed.", "12:44Z") };
+        // Listed newest first; said oldest first, as they came.
+        var before = new[] { N(1, "R3 door closed.", "12:44Z") };
+        var now = new[] { N(3, "GPU disconnected.", "14:17Z"), N(2, "GPU connected.", "14:17Z"), N(1, "R3 door closed.", "12:44Z") };
 
-        Assert.Equal("GPU disconnected. GPU connected.", Bbs757EfbNotices.ToSpeak(before, now, 10_000));
+        Assert.Equal("GPU connected. GPU disconnected.", Bbs757EfbNotices.ToSpeak(before, now, 10_000));
         // A notification that went away says nothing.
         Assert.Null(Bbs757EfbNotices.ToSpeak(now, None, 10_000));
         Assert.Null(Bbs757EfbNotices.ToSpeak(None, None, 10_000));
     }
 
     [Fact]
-    public void A_notification_read_again_with_a_small_misread_is_not_said_again()
+    public void A_list_whose_newest_id_went_back_is_taken_as_it_is()
     {
-        // Small text wobbles between reads (a dot, the case, a time not read): the same entry, still showing.
-        var first = new[] { N("GPU connected.", "14:17Z") };
+        // BlueBird's ids rise; a list whose newest is older than the last read's (the EFB started over, or the newest was deleted) holds
+        // no new appearance: nothing is said, and the next id after it is.
+        var before = new[] { N(55, "CHOCKS REMOVED.", "05:06Z"), N(54, "Chocks attached.", "05:06Z") };
+        var restarted = new[] { N(2, "GPU connected.", "06:00Z"), N(1, "SIMBRIEF OFP received.", "06:00Z") };
 
-        Assert.Null(Bbs757EfbNotices.ToSpeak(first, new[] { N("GPU CONNECTED", "14:17Z") }, 60_000));
-        Assert.Null(Bbs757EfbNotices.ToSpeak(first, new[] { N("GPU connected.", null) }, 60_000));
-        Assert.Null(Bbs757EfbNotices.ToSpeak(new[] { N("GPU connected.", null) }, first, 60_000));
+        Assert.Null(Bbs757EfbNotices.ToSpeak(before, restarted, 60_000));
+        Assert.Null(Bbs757EfbNotices.ToSpeak(before, before.Skip(1).ToList(), 60_000));
+        Assert.Equal("Chocks attached.", Bbs757EfbNotices.ToSpeak(restarted, new[] { N(3, "Chocks attached.", "06:01Z") }.Concat(restarted).ToList(), 60_000));
     }
 
     [Theory]
@@ -74,7 +115,7 @@ public class Bbs757EfbNoticesTests
     [InlineData("sv-SE")]
     public void What_is_said_does_not_follow_the_pcs_culture(string culture)
     {
-        var now = new[] { N("SIMBRIEF OFP received.", "14:21Z"), N("R3 door opened.", "12:44Z") };
+        var now = new[] { N(2, "R3 door opened.", "12:44Z"), N(1, "SIMBRIEF OFP received.", "14:21Z") };
 
         Assert.Equal("SIMBRIEF OFP received. R3 door opened.", TestCulture.Run(culture, () => Bbs757EfbNotices.ToSpeak(None, now, 4_000)));
     }

@@ -43,7 +43,7 @@ public class Bbs757EfbPressTests
     private static Bbs757EfbItem Notifications() =>
         Item(Bbs757EfbKind.Button, "Notifications", Bbs757EfbTopBar.NotificationsKey, new Rectangle(1364, 6, 19, 19));
 
-    private static readonly Bbs757EfbNotice GpuConnected = new("GPU connected.", "14:17Z");
+    private static readonly Bbs757EfbNotice GpuConnected = new(1, "GPU connected.", "14:17Z");
 
     private static Bbs757EfbItem ItemNamed(Bbs757EfbScreenModel m, string text) =>
         m.Menu.Concat(m.Items).Concat(m.TopBar).FirstOrDefault(i => i.Text == text)
@@ -582,7 +582,7 @@ public class Bbs757EfbPressTests
         var bar = page with { TopBar = new[] { Item(Bbs757EfbKind.Text, "DEP -00:46", Bbs757EfbTopBar.DepartureKey, new Rectangle(1029, 0, 106, 28)) } };
         var countdown = page with { TopBar = new[] { Item(Bbs757EfbKind.Text, "DEP -00:45", Bbs757EfbTopBar.DepartureKey, new Rectangle(1029, 0, 106, 28)) } };
         var toast = page with { Notices = new[] { GpuConnected } };
-        var later = page with { Notices = new[] { new Bbs757EfbNotice("GPU connected.", "14:19Z") } };
+        var later = page with { Notices = new[] { new Bbs757EfbNotice(1, "GPU connected.", "14:19Z") } };
         var question = page with { Question = new Bbs757EfbQuestion("Are you sure?", new[] { Item(Bbs757EfbKind.Button, "Yes", "q:YES", new Rectangle(336, 591, 177, 57)) }) };
         var other = page with { Question = new Bbs757EfbQuestion("Are you sure?", new[] { Item(Bbs757EfbKind.Button, "OK", "q:OK", new Rectangle(336, 591, 177, 57)) }) };
 

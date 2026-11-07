@@ -433,7 +433,7 @@ public class Bbs757EfbElementsTests
     public void A_notification_without_its_time_is_its_words_alone()
     {
         var page = Bbs757EfbScreenTests.Load("bright", "13-aircraft-ground-services")
-            with { Notices = new[] { new Bbs757EfbNotice("Chocks attached.", null), new Bbs757EfbNotice("GPU connected.", "14:17Z") } };
+            with { Notices = new[] { new Bbs757EfbNotice(2, "Chocks attached.", null), new Bbs757EfbNotice(1, "GPU connected.", "14:17Z") } };
         var b = Bbs757EfbElements.Build(page, null, NoExtras);
 
         int heading = Enumerable.Range(0, b.Count).First(i => Field(b, i, "text") == "Notifications" && Field(b, i, "level") == "2");

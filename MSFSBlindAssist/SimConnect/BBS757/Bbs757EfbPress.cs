@@ -49,6 +49,7 @@ public static class Bbs757EfbPress
         if (m.Question is { } q)
         {
             sb.Append("question|").Append(q.Text).Append('\n');
+            foreach (var r in q.Rows) sb.Append(Line(r));
             foreach (var b in q.Buttons) sb.Append(Line(b));
         }
         if (withBars)
@@ -56,7 +57,8 @@ public static class Bbs757EfbPress
             sb.Append("top bar\n");
             foreach (var i in m.TopBar) sb.Append(Line(i));
             sb.Append("notices\n");
-            foreach (var n in m.Notices) sb.Append(n.Time).Append('|').Append(n.Text).Append('\n');
+            foreach (var n in m.Notices)
+                sb.Append(n.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('|').Append(n.Time).Append('|').Append(n.Text).Append('\n');
         }
         return sb.ToString();
     }

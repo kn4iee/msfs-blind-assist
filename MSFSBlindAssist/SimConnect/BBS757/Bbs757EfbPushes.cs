@@ -72,12 +72,14 @@ public sealed class Bbs757EfbPushes
 }
 
 /// <summary>
-/// What a read of the tablet says by itself (plan 18, Task 8), against the read before it: a question that was not in it, and
-/// BlueBird's notifications that were not (<see cref="Bbs757EfbNotices.ToSpeak"/>, quiet for <see cref="Bbs757EfbNotices.QuietAfterPressMs"/>
-/// after the pilot's own press, whose outcome says enough). The window speaks one alert at a time, so the two are one text, the
-/// question first. A question is the same question when its words are (case, spaces and punctuation ignored): a reread of it is not
-/// said again, and one asked again after a read without it is. The first read takes BlueBird's notifications as they are: it did not
-/// see them appear. On the bridge's loop only.
+/// What a read of the tablet says by itself (plan 18, Task 8), against the reads before it: a question that was not in the read before,
+/// and BlueBird's notifications whose ids are new (<see cref="Bbs757EfbNotices.ToSpeak"/>, quiet for
+/// <see cref="Bbs757EfbNotices.QuietAfterPressMs"/> after the pilot's own press, whose outcome says enough). The window speaks one alert
+/// at a time, so the two are one text, the question first. A question is the same question when its words are (case, spaces and
+/// punctuation ignored): a reread of it is not said again, and one asked again after a read without it is. The first read takes
+/// BlueBird's notifications as they are, the backlog listed and not said: it did not see them appear. A read with no notifications
+/// (none read, as a torn vector reads, or the list cleared) leaves the last ones it had to compare with, so the next whole read says only
+/// what is new, never the backlog again. On the bridge's loop only.
 /// </summary>
 public sealed class Bbs757EfbReadNews
 {
@@ -91,7 +93,7 @@ public sealed class Bbs757EfbReadNews
         _question = read.Question is { } now ? Bbs757EfbPress.QuestionWords(now.Text) : null;
 
         string? notices = _notices == null ? null : Bbs757EfbNotices.ToSpeak(_notices, read.Notices, msSinceOwnPress);
-        _notices = read.Notices;
+        if (_notices == null || read.Notices.Count > 0) _notices = read.Notices;
 
         if (question == null) return notices;
         return notices == null ? question : question + " " + notices;

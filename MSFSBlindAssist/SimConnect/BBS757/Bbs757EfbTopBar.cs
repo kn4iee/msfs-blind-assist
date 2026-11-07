@@ -3,14 +3,22 @@ using System.Text.RegularExpressions;
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// The tablet's top-bar controls (<see cref="Bbs757EfbScreenModel.TopBar"/>): the departure countdown, the boarding
-/// control and the notification control. The keys stay the same whatever the words, so the window keeps the screen
-/// reader's focus on an item while it changes, and the readable text for the countdown and the boarding control is
-/// derived here. Pure; tested against the captured pages (tests/.../Fixtures/bbs757-efb).
+/// The tablet's top bar (<see cref="Bbs757EfbScreenModel.TopBar"/>, the window's "Status bar"). From memory (plan 21) it is the top
+/// bar app's visible labels, each keyed by its control name (<see cref="KeyFor"/>): the time line, and the departure label when it shows
+/// (<see cref="Bbs757EfbModelReader"/>). Plan 18's keys and words for the departure countdown, the boarding control and the
+/// notification control (<see cref="DepartureKey"/>, <see cref="BoardingKey"/>, <see cref="NotificationsKey"/>,
+/// <see cref="DepartureText"/>, <see cref="BoardingText"/>) are kept for when they are measured in memory: the top bar app draws the
+/// boarding control and the notification button from its own fields, not as controls, and START BOARDING and DEP were not seen live
+/// (plan 21, Task 1), so the memory reader feeds none of them yet. The keys stay the same whatever the words, so the window keeps the
+/// screen reader's focus on an item while it changes. Pure.
 /// </summary>
 public static class Bbs757EfbTopBar
 {
     public const string DepartureKey = "top:dep", BoardingKey = "top:boarding", NotificationsKey = "top:notifications";
+
+    /// <summary>The key of the top bar label named <paramref name="controlName"/> (<c>time_label</c> is <c>top:time_label</c>): stable
+    /// while its words change (the clock ticks).</summary>
+    internal static string KeyFor(string controlName) => "top:" + controlName;
 
     /// <summary>A minus read as the minus sign (U+2212) or an en dash (U+2013), and the tablet's ellipsis (U+2026).</summary>
     private const char MinusSign = (char)0x2212, EnDash = (char)0x2013, Ellipsis = (char)0x2026;

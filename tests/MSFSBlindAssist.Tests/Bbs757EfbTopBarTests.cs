@@ -1,15 +1,15 @@
 using System.Drawing;
-using System.Text.RegularExpressions;
 using MSFSBlindAssist.SimConnect.BBS757;
 using Xunit;
 
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// The tablet's top bar (plan 18) against plan 18's captures (Task 1, 2026-10-29): the departure countdown, the boarding
-/// control and the notification control read into the page's <see cref="Bbs757EfbScreenModel.TopBar"/>; the clock, the
-/// date and the outside air temperature left out. The keys are what keeps the screen reader's focus on an item while its
-/// words change, so they are pinned as strings.
+/// The tablet's top bar. From memory (plan 21, Task 6): the status bar is the top bar app's visible labels, the time line as BlueBird
+/// writes it. Plan 18's captures (Task 1, 2026-10-29, page models) carry the departure countdown, the boarding control and the
+/// notification control as plan 18's reader made them; the memory reader feeds none of the three yet (not measured), so their tests
+/// pin <see cref="Bbs757EfbTopBar"/>'s keys and words on those models. The keys are what keeps the screen reader's focus on an item
+/// while its words change, so they are pinned as strings.
 /// </summary>
 public class Bbs757EfbTopBarTests
 {
@@ -17,6 +17,65 @@ public class Bbs757EfbTopBarTests
         m.TopBar.FirstOrDefault(i => i.Key == key)
         ?? throw new Xunit.Sdk.XunitException($"No top bar item '{key}' on {m.PageName}: "
             + string.Join(" | ", m.TopBar.Select(i => i.Key + " = " + i.Text)));
+
+    // ---- the status bar from memory (plan 21, Task 6) ----
+
+    private static Bbs757EfbMemory.Node Leaf(string kind, string name, string text, float x, float y, float w, float h) =>
+        new(kind, name, text, x, y, w, h, 0, Array.Empty<Bbs757EfbMemory.Node>());
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_status_bar_reads_the_time_line(string culture)
+    {
+        // The top bar app (app_overlay, measured 2026-11-07) on every recaptured page: overlay_grid's time_label, BlueBird's words as
+        // presented, a read-out. The empty keyboard_locked_label and the hidden etd_label are no line.
+        var m = TestCulture.Run(culture, () => Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"))!);
+
+        var time = Assert.Single(m.TopBar);
+        Assert.Equal((Bbs757EfbKind.Text, "Sat, 7th Nov 2026 | 23:06L | 05:06Z | OAT 4 C", "top:time_label", false),
+            (time.Kind, time.Text, time.Key, time.Clickable));
+        Assert.Equal(new Rectangle(15, 0, 1382, 32), time.Box);
+        // Its key stays as the minutes go by, so the window keeps the screen reader on it.
+        var later = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25c-navigation-perf-calc-runway-open"))!;
+        Assert.Equal("top:time_label", Assert.Single(later.TopBar).Key);
+        Assert.NotEqual(time.Text, later.TopBar[0].Text);
+
+        // The departure label when it shows (not seen live yet), after the time line, as written; a separator between them is none.
+        var overlay = new Bbs757EfbMemory.App(1, Bbs757EfbMemory.TopBarClass, new[]
+        {
+            new Bbs757EfbMemory.Node("grid", "overlay_grid", "", 0, 0, 1397, 32, 0, new[]
+            {
+                Leaf("label", "time_label", "Sat, 7th Nov 2026 | 20:28L | 02:28Z | OAT 6 C", 15, 0, 1382, 32),
+                Leaf("label", "etd_separator_label", "|", 333, 0, 24, 32),
+                Leaf("label", "etd_label", "ETD 0315Z", 343, 0, 120, 32),
+            }),
+            Leaf("label", "keyboard_locked_label", "", 0, 0, 1397, 32),
+        });
+        var apps = Bbs757EfbTreeJson.Load("13-aircraft-ground-services").Where(a => a.Class != Bbs757EfbMemory.TopBarClass).Append(overlay).ToList();
+        var bar = Bbs757EfbModelReader.Read(apps)!.TopBar;
+        Assert.Equal(new[] { ("top:time_label", "Sat, 7th Nov 2026 | 20:28L | 02:28Z | OAT 6 C"), ("top:etd_label", "ETD 0315Z") },
+            bar.Select(i => (i.Key, i.Text)));
+    }
+
+    [Fact]
+    public void Keyboard_locked_reads_in_the_status_bar_while_it_shows()
+    {
+        // Under the fuel input dialog (11c, captured 2026-11-07) BlueBird writes KEYBOARD LOCKED into its top bar label: a sighted
+        // pilot sees it, so it reads after the time line, as written.
+        var m = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog"))!;
+
+        Assert.Equal(new[] { "top:time_label", "top:keyboard_locked_label" }, m.TopBar.Select(i => i.Key));
+        Assert.Equal("KEYBOARD LOCKED", m.TopBar[1].Text);
+    }
+
+    [Fact]
+    public void A_page_captured_before_plan_21_has_no_status_bar()
+    {
+        // The trees captured before the layout knew the top bar's app (11, 25, 55, 55b) hold none of it.
+        Assert.Empty(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!.TopBar);
+    }
 
     [Fact]
     public void During_boarding_the_bar_reads_the_countdown_the_minutes_left_and_the_count()
@@ -58,25 +117,6 @@ public class Bbs757EfbTopBarTests
         Assert.InRange(boarding.Hit.X, 1200, 1262);
         Assert.InRange(boarding.Hit.Y, 8, 26);
         Assert.Equal("DEP -03:19", Top(m, "top:dep").Text);
-    }
-
-    [Theory]
-    [InlineData("bright", "12-aircraft-fuel-boarding")]
-    [InlineData("bright", "18-aircraft-ground-services-notification")]
-    [InlineData("bright", "19-notification-list")]
-    [InlineData("bright", "20-fuel-start-boarding")]
-    [InlineData("bright", "40-checklist")]
-    [InlineData("bright", "42-checklist-header-unticked")]
-    [InlineData("dim", "15-aircraft-maintenance")]
-    public void The_clock_and_oat_are_left_out(string set, string name)
-    {
-        var m = Bbs757EfbScreenTests.Load(set, name);
-
-        // Every capture shows the notification arrow at least; nothing but the three controls is taken.
-        Assert.Contains(m.TopBar, i => i.Key == "top:notifications");
-        Assert.All(m.TopBar, i => Assert.Contains(i.Key, new[] { "top:dep", "top:boarding", "top:notifications" }));
-        Assert.DoesNotContain(m.TopBar.Concat(m.Items).Concat(m.Menu), i => i.Text.Contains("OAT", StringComparison.OrdinalIgnoreCase)
-            || i.Text.Contains("2026", StringComparison.Ordinal) || Regex.IsMatch(i.Text, @"\d{1,2}:\d{2}[LZ]"));
     }
 
     [Fact]

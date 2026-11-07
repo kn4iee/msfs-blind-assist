@@ -32,8 +32,9 @@ public class Bbs757EfbTreeScrubTests
     public void A_help_text_box_is_kept()
     {
         // B757-24 (plan 21, Task 5): the credential boxes are scrubbed by their exact names. The `_textbox` suffix rule plan 20 had made
-        // up Settings > Livery options' VNAV takeoff help text too (fixture 52 reads MADEUP since); a text box holding no credential
-        // keeps its words, and so does any other `*_textbox`.
+        // up Settings > Livery options' VNAV takeoff help text too (fixture 52 read MADEUP from plan 20's capture until plan 21 scrubbed
+        // the credential boxes by exact name and recaptured it); a text box holding no credential keeps its words, and so does any other
+        // `*_textbox`.
         const string help = "Takeoff VNAV behavior: ARMED engages VNAV at 400 ft.";
         var scrubbed = Bbs757EfbTreeScrub.Scrub(App(N("vnav_takeoff_help_textbox", help), Box("fuel_input_textbox", "1200"),
             N("hoppie_textbox", "words")));

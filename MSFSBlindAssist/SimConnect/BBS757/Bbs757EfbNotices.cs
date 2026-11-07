@@ -1,10 +1,9 @@
 namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
-/// Deciding which of BlueBird's notification-panel entries to speak. The panel's entries are read into
-/// <see cref="Bbs757EfbScreenModel.Notices"/>; this picks the ones new since the last read, each spoken once per
-/// appearance, and stays quiet for a short window after the pilot's own press (the press's own outcome says enough).
-/// Pure.
+/// BlueBird's notifications: the window's from BBOS's records (<see cref="From"/>, plan 21), and which of them to speak
+/// (<see cref="ToSpeak"/>): each once, when its id first shows, and none for a short window after the pilot's own press (the press's
+/// own outcome says enough). Pure.
 /// </summary>
 public static class Bbs757EfbNotices
 {
@@ -12,21 +11,38 @@ public static class Bbs757EfbNotices
     public const int QuietAfterPressMs = 4000;
 
     /// <summary>
-    /// What to say for the panel's entries: the texts in <paramref name="now"/> not in <paramref name="before"/> (the same
-    /// words at the same time), joined with spaces, top first; null when there are none or the pilot's own press was
-    /// less than <see cref="QuietAfterPressMs"/> ago. The words match with case, spaces and punctuation ignored, and a
-    /// time not read matches any (small text wobbles between reads); the same words at another time are a new
-    /// appearance ("Chocks attached." at 12:06Z and again at 12:09Z).
+    /// BlueBird's notification records (<see cref="Bbs757EfbMemory.ReadNotices"/>) as the window's notifications, newest first (by id,
+    /// which rises with each new one): each its words made readable as the window says the tablet's names
+    /// (<see cref="Bbs757EfbVocabulary.Pretty"/>: "GPU CONNECTED." is "GPU connected."), its title before them with a colon when it has
+    /// one ("Autobrake 1: TARGET 4.5 | ACTUAL 4.5 ft/s2"), and its time as BlueBird writes it ("21:37Z", null when none). A record with
+    /// neither title nor text is none.
+    /// </summary>
+    public static IReadOnlyList<Bbs757EfbNotice> From(IReadOnlyList<Bbs757EfbNoticeRecord> records) =>
+        records.OrderByDescending(r => r.Id)
+            .Select(r => (r, Words: Words(r.Title, r.Text)))
+            .Where(x => x.Words.Length > 0)
+            .Select(x => new Bbs757EfbNotice(x.r.Id, x.Words, x.r.Time.Length > 0 ? x.r.Time : null))
+            .ToList();
+
+    private static string Words(string title, string text)
+    {
+        string t = Bbs757EfbVocabulary.Pretty(title.Trim()), words = Bbs757EfbVocabulary.Pretty(text.Trim());
+        return t.Length == 0 ? words : words.Length == 0 ? t : t + ": " + words;
+    }
+
+    /// <summary>
+    /// What to say of the notifications in <paramref name="now"/> against <paramref name="before"/> (the last read that held any): the
+    /// words of each whose id is newer than every id before, oldest first (as they came), joined with spaces; null when there are
+    /// none or the pilot's own press was less than <see cref="QuietAfterPressMs"/> ago. The same words twice (a second CHOCKS
+    /// ATTACHED. in the same minute) are two ids, so two appearances. A list whose newest id is older than the newest before (BlueBird's
+    /// list started over, or its newest was deleted) holds no new appearance.
     /// </summary>
     public static string? ToSpeak(IReadOnlyList<Bbs757EfbNotice> before, IReadOnlyList<Bbs757EfbNotice> now, long msSinceOwnPress)
     {
-        if (msSinceOwnPress < QuietAfterPressMs) return null;
-        var fresh = now.Where(n => !before.Any(b => Same(b, n))).Select(n => n.Text).ToList();
+        if (msSinceOwnPress < QuietAfterPressMs || now.Count == 0) return null;
+        int newest = before.Count == 0 ? int.MinValue : before.Max(n => n.Id);
+        if (now.Max(n => n.Id) < newest) return null;
+        var fresh = now.Where(n => n.Id > newest).OrderBy(n => n.Id).Select(n => n.Text).ToList();
         return fresh.Count == 0 ? null : string.Join(" ", fresh);
     }
-
-    private static bool Same(Bbs757EfbNotice a, Bbs757EfbNotice b) =>
-        Bare(a.Text) == Bare(b.Text) && (a.Time == null || b.Time == null || a.Time == b.Time);
-
-    private static string Bare(string t) => string.Concat(t.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
 }

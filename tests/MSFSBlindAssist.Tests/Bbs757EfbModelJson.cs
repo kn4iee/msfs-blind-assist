@@ -27,6 +27,7 @@ internal static class Bbs757EfbModelJson
             ["topBar"] = Items(m.TopBar),
             ["notices"] = new JsonArray(m.Notices.Select(n => (JsonNode)new JsonObject
             {
+                ["id"] = n.Id,
                 ["text"] = n.Text,
                 ["time"] = n.Time,
             }).ToArray()),
@@ -43,6 +44,7 @@ internal static class Bbs757EfbModelJson
             {
                 ["text"] = m.Question.Text,
                 ["buttons"] = Items(m.Question.Buttons),
+                ["rows"] = Items(m.Question.Rows),
             },
         };
         return o.ToJsonString(Pretty);
@@ -52,14 +54,16 @@ internal static class Bbs757EfbModelJson
     {
         var o = JsonNode.Parse(json)!.AsObject();
         var question = o["question"] is JsonObject q
-            ? new Bbs757EfbQuestion(Str(q, "text"), ReadItems(q["buttons"]))
+            ? new Bbs757EfbQuestion(Str(q, "text"), ReadItems(q["buttons"])) { Rows = ReadItems(q["rows"]) }
             : null;
+        // Plan 18's models list their notifications top first, newest first, with no id: each is given the one its place says.
+        var notices = o["notices"]?.AsArray() ?? new JsonArray();
         return new Bbs757EfbScreenModel(Str(o, "app"), Str(o, "section"), ReadItems(o["menu"]), ReadItems(o["items"]))
         {
             Scrollable = o["scrollable"]?.GetValue<bool>() ?? false,
             TopBar = ReadItems(o["topBar"]),
-            Notices = (o["notices"]?.AsArray() ?? new JsonArray())
-                .Select(n => new Bbs757EfbNotice(Str(n!.AsObject(), "text"), n!.AsObject()["time"]?.GetValue<string>())).ToList(),
+            Notices = notices.Select((n, index) => new Bbs757EfbNotice(n!.AsObject()["id"]?.GetValue<int>() ?? notices.Count - index,
+                Str(n.AsObject(), "text"), n.AsObject()["time"]?.GetValue<string>())).ToList(),
             Question = question,
             Viewport = o["viewport"] is JsonArray vp ? ReadRect(vp) : Bbs757EfbScreen.ContentArea,
             Keyboard = o["keyboard"] is JsonObject kb

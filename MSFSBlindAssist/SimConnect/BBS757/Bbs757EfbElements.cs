@@ -25,8 +25,9 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// offered as a control at all, by the owner's ruling of 2026-10-30: the EFB colors theme, whose place holds a note
 /// (<see cref="ThemeNoteFor"/>, B757-21).
 ///
-/// The order the pilot meets (plan 20, D1): the alert; the tablet's question (its words as text, then its answers); the page; the
-/// app's extras; "Status bar" with the top bar, then BlueBird's notifications under a heading; "Sections" with the side menu; and Home
+/// The order the pilot meets (plan 20, D1): the alert; the tablet's question (its words as text, its text boxes as lines, then its
+/// answers); the page; the app's extras; "Status bar" with the top bar, then BlueBird's notifications, newest first, under a heading;
+/// "Sections" with the side menu; and Home
 /// last. The window speaks only its first alert and remembers one text, so the question is no alert here: the bridge says a
 /// question once, through its own alert, when a read first shows it (plan 18, Task 8), and the page keeps its words first. The window's
 /// F5 reads the tablet again (get_display_elements), so no element does, and the wheel is no element's either. Names and headings are
@@ -108,7 +109,10 @@ public static class Bbs757EfbElements
             if (model.Question is { } question)
             {
                 // Text: an alert here would be said again whenever another alert went (see the class summary).
-                Add(question.Text, key: "question");
+                if (question.Text.Length > 0) Add(question.Text, key: "question");
+                // A text box in it (the fuel input dialog's quantity): its name and what it holds, a line until plan 22 types (B757-23).
+                foreach (var row in question.Rows)
+                    Add(Named(Bbs757EfbVocabulary.Pretty(row.Text), row.Value), key: row.Key);
                 // Each answer is its question's: the next question's YES is another element, under the same key.
                 string asked = Bbs757EfbPress.QuestionWords(question.Text);
                 foreach (var answer in question.Buttons)
@@ -138,8 +142,9 @@ public static class Bbs757EfbElements
                 if (model.Notices.Count > 0)
                 {
                     Add(NotificationsHeading, level: 2, key: "h:notifications");
+                    // Keyed by BlueBird's id: a new one above it never moves another's identity (the same words twice are two).
                     foreach (var notice in model.Notices)
-                        Add(NoticeText(notice));
+                        Add(NoticeText(notice), key: "notice:" + notice.Id.ToString(CultureInfo.InvariantCulture));
                 }
             }
 

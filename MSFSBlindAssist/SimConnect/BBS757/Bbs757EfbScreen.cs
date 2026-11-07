@@ -132,16 +132,17 @@ public sealed record Bbs757EfbScreenModel(
     /// <see cref="Viewport"/>). The presses scroll a control of that scrollbox into view by dragging.</summary>
     public bool Scrollable { get; init; }
 
-    /// <summary>The tablet's top bar, left to right: the departure countdown, the boarding control and the
-    /// notification control, keyed <c>top:dep</c>, <c>top:boarding</c> and <c>top:notifications</c> whatever their
-    /// words (see <see cref="Bbs757EfbTopBar"/> for the words). Empty when none shows.</summary>
+    /// <summary>The tablet's top bar, the window's status bar: from memory, the top bar app's labels (the time line, keyed
+    /// <c>top:time_label</c>, <see cref="Bbs757EfbTopBar.KeyFor"/>); plan 18's models carry the departure countdown, the boarding control and
+    /// the notification control, keyed <c>top:dep</c>, <c>top:boarding</c> and <c>top:notifications</c> whatever their words (see
+    /// <see cref="Bbs757EfbTopBar"/>). Empty when none shows.</summary>
     public IReadOnlyList<Bbs757EfbItem> TopBar { get; init; } = Array.Empty<Bbs757EfbItem>();
 
-    /// <summary>BlueBird's notification panel's entries, top first (<see cref="Bbs757EfbNotice"/>); empty when it does
-    /// not show.</summary>
+    /// <summary>BlueBird's notifications, newest first (<see cref="Bbs757EfbNotice"/>, by id); empty when none is read.</summary>
     public IReadOnlyList<Bbs757EfbNotice> Notices { get; init; } = Array.Empty<Bbs757EfbNotice>();
 
-    /// <summary>A question the tablet shows over the page, with its answers (not in <see cref="Items"/>); null when none.</summary>
+    /// <summary>A question the tablet shows over the page (BlueBird's dialog), with its answers (not in <see cref="Items"/>); null when
+    /// none is up.</summary>
     public Bbs757EfbQuestion? Question { get; init; }
 
     /// <summary>The part of the tablet the page scrolls in, in tablet pixels: the drawn rectangle of the one scrollbox that scrolls
@@ -160,9 +161,11 @@ public sealed record Bbs757EfbScreenModel(
         : Bbs757EfbVocabulary.Pretty(App) + ", " + Bbs757EfbVocabulary.Pretty(Section);
 }
 
-/// <summary>One entry of BlueBird's notification panel: its words as the tablet writes them, made readable ("GPU
-/// connected."), and its time ("14:17Z"), null when the time is not known.</summary>
-public sealed record Bbs757EfbNotice(string Text, string? Time);
+/// <summary>One of BlueBird's notifications (<see cref="Bbs757EfbNotices.From"/>): its id, BlueBird's own, rising with each new one, which
+/// tells one appearance from another however alike their words; its words as the tablet writes them, made readable ("GPU connected.",
+/// a title before them when it has one: "Autobrake 1: TARGET 4.5 | ACTUAL 4.5 ft/s2"); and its time ("14:17Z"), null when none was
+/// read.</summary>
+public sealed record Bbs757EfbNotice(int Id, string Text, string? Time);
 
 /// <summary>BlueBird's keyboard: the box it covers and its keys.</summary>
 public sealed record Bbs757EfbKeyboard(Rectangle Box, IReadOnlyList<Bbs757EfbKey> Keys);
@@ -171,9 +174,14 @@ public sealed record Bbs757EfbKeyboard(Rectangle Box, IReadOnlyList<Bbs757EfbKey
 /// <c>btn_enter</c> has its name and empty layers) and where to tap it.</summary>
 public sealed record Bbs757EfbKey(string Name, string Lower, string Upper, string Third, Point Hit);
 
-/// <summary>A box the tablet shows over its page with words and one or two answers (YES, NO, OK, CANCEL): the words,
-/// then the answers as buttons, left to right.</summary>
-public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem> Buttons);
+/// <summary>A box the tablet shows over its page (BlueBird's dialog) with words and its answers (YES and NO, OK, CANCEL and INSERT): the
+/// words, then the answers as buttons, left to right. <see cref="Rows"/> are the text boxes it holds (the fuel input dialog's quantity),
+/// each a <see cref="Bbs757EfbKind.Field"/> holding its text, read as a line until plan 22 types into the tablet (B757-23).</summary>
+public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem> Buttons)
+{
+    /// <summary>The dialog's text boxes, in its reading order; none for a question of words and answers alone.</summary>
+    public IReadOnlyList<Bbs757EfbItem> Rows { get; init; } = Array.Empty<Bbs757EfbItem>();
+}
 
 /// <summary>
 /// The constants and the key/state-word helpers the memory tablet reader (<see cref="Bbs757EfbModelReader"/>) and the

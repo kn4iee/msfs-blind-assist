@@ -183,7 +183,7 @@ public class Bbs757EfbBridgeTests
         var tile = ReqFuelTruck();
         var tablet = new FakeTablet(Ground(tile, ReqCatering()));
         var press = tablet.Press(tile);
-        tablet.Show(Ground(ReqCatering()) with { Notices = new[] { new Bbs757EfbNotice("GPU connected.", "14:17Z") } });
+        tablet.Show(Ground(ReqCatering()) with { Notices = new[] { new Bbs757EfbNotice(1, "GPU connected.", "14:17Z") } });
 
         await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
 
@@ -235,6 +235,34 @@ public class Bbs757EfbBridgeTests
 
         Assert.Empty(tablet.Taps);
         Assert.Empty(tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_question_over_the_page_holds_back_a_page_press()
+    {
+        // The Fuel page read with no dialog (11b), then the fuel input dialog up over it (11c, captured live 2026-11-07): a press of the
+        // page's IMPORT FROM SIMBRIEF made on the first read taps nothing and says nothing (the tablet takes no tap under its dialog, and
+        // the read that found the dialog said it). The dialog's own answer is tapped where BlueBird draws it.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"))!;
+        var import = Assert.Single(page.Items, i => i.Kind == Bbs757EfbKind.Button && i.Name == "fuel_up_simbrief");
+        var dialog = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog"))!;
+        var tablet = new FakeTablet(page);
+        var press = tablet.Press(import);
+        tablet.Show(dialog);
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+
+        // The window offers no page control under it: only the dialog's two answers press.
+        var built = Bbs757EfbElements.Build(dialog, null, NoExtras);
+        Assert.Equal(new[] { "q:CANCEL", "q:INSERT" }, built.Actions.OrderBy(a => a.Key).Select(a => a.Value.Item!.Key));
+
+        var cancel = dialog.Question!.Buttons[0];
+        tablet.OnTap = _ => tablet.Show(page);
+        await tablet.Runner().ClickAsync(tablet.Press(cancel), CancellationToken.None);
+        Assert.Equal(new[] { new Point(424, 404) }, tablet.Taps);
     }
 
     [Fact]
@@ -1720,13 +1748,68 @@ public class Bbs757EfbBridgeTests
         var news = new Bbs757EfbReadNews();
         var listed = Ground(ReqFuelTruck()) with
         {
-            Notices = new[] { new Bbs757EfbNotice("GPU connected.", "14:17Z"), new Bbs757EfbNotice("R3 door closed.", "12:44Z") },
+            Notices = new[] { new Bbs757EfbNotice(2, "GPU connected.", "14:17Z"), new Bbs757EfbNotice(1, "R3 door closed.", "12:44Z") },
         };
-        var more = listed with { Notices = new[] { new Bbs757EfbNotice("Chocks attached.", "14:20Z") }.Concat(listed.Notices).ToList() };
+        var more = listed with { Notices = new[] { new Bbs757EfbNotice(3, "Chocks attached.", "14:20Z") }.Concat(listed.Notices).ToList() };
 
         Assert.Null(news.After(listed, long.MaxValue));
         Assert.Equal("Chocks attached.", news.After(more, long.MaxValue));
         Assert.Null(news.After(more, long.MaxValue));
+    }
+
+    /// <summary>The page <paramref name="fixture"/> as the memory reader reads it, with the BlueBird notifications its capture holds.</summary>
+    private static Bbs757EfbScreenModel Captured(string fixture, IReadOnlyList<Bbs757EfbNoticeRecord>? notices = null) =>
+        Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture), notices ?? Bbs757EfbTreeJson.LoadNotices(fixture))!;
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void New_notifications_are_spoken_once_and_the_backlog_is_not(string culture)
+    {
+        // The captures of 2026-11-07 in the order they were made: Cabin & doors with 49 notifications (up to id 51), the AFT cargo door
+        // opening (52), closed with the chocks attached (53, 54), the chocks removed (55). The window's first read lists the backlog and
+        // says none of it; each id after it is said once, when it first shows, as the window's alert. A read whose notifications were
+        // torn (none read) says nothing, and the next whole read says only what is new.
+        var moving = Captured("14b-aircraft-cabin-doors-door-moving");
+        var news = new Bbs757EfbReadNews();
+        var said = TestCulture.Run(culture, () => new[]
+        {
+            news.After(Captured("14-aircraft-cabin-doors"), long.MaxValue),
+            news.After(moving, long.MaxValue),
+            news.After(moving with { Notices = Array.Empty<Bbs757EfbNotice>() }, long.MaxValue),
+            news.After(Captured("13-aircraft-ground-services"), long.MaxValue),
+            news.After(Captured("25c-navigation-perf-calc-runway-open"), long.MaxValue),
+            news.After(Captured("51b-settings-aircraft-scrolled"), long.MaxValue),
+        });
+        Assert.Equal(new[] { null, "AFT cargo door opened.", null, "AFT cargo door closed. Chocks attached.", "Chocks removed.", null }, said);
+
+        // Through the bridge: the first read is pushed with the backlog listed and no alert; the next says the new one as its alert.
+        using var h = new BridgeHarness();
+        h.Bridge.TakeRead(Captured("14-aircraft-cabin-doors"));
+        Assert.DoesNotContain(h.Pushes[^1], kv => kv.Key.EndsWith(".kind", StringComparison.Ordinal) && kv.Value == "alert");
+        Assert.Contains("03:16Z AFT cargo door closed.", Texts(h.Pushes[^1]));
+        h.Bridge.TakeRead(moving);
+        Assert.Equal(("alert", "AFT cargo door opened."), (h.Pushes[^1]["items.0.kind"], h.Pushes[^1]["items.0.text"]));
+        Assert.Contains("05:05Z AFT cargo door opened.", Texts(h.Pushes[^1]));
+    }
+
+    [Fact]
+    public void A_repeated_notification_is_spoken_per_appearance()
+    {
+        // A second CHOCKS ATTACHED. in the same minute as the first is a new record with its own id: said too, once.
+        var records = Bbs757EfbTreeJson.LoadNotices("25c-navigation-perf-calc-runway-open");
+        var again = records.Append(new Bbs757EfbNoticeRecord(56, "", "CHOCKS ATTACHED.", "05:06Z", true)).ToList();
+        var news = new Bbs757EfbReadNews();
+
+        var said = new[]
+        {
+            news.After(Captured("13-aircraft-ground-services"), long.MaxValue),
+            news.After(Captured("13-aircraft-ground-services", records), long.MaxValue),
+            news.After(Captured("13-aircraft-ground-services", again), long.MaxValue),
+            news.After(Captured("13-aircraft-ground-services", again), long.MaxValue),
+        };
+
+        Assert.Equal(new[] { null, "Chocks removed.", "Chocks attached.", null }, said);
+        Assert.Equal(2, Captured("13-aircraft-ground-services", again).Notices.Count(n => n.Text == "Chocks attached." && n.Time == "05:06Z"));
     }
 
     [Fact]
@@ -1734,7 +1817,7 @@ public class Bbs757EfbBridgeTests
     {
         var news = new Bbs757EfbReadNews();
         var quiet = Ground(ReqFuelTruck());
-        var toast = quiet with { Notices = new[] { new Bbs757EfbNotice("GPU connected.", "14:17Z") } };
+        var toast = quiet with { Notices = new[] { new Bbs757EfbNotice(1, "GPU connected.", "14:17Z") } };
 
         Assert.Null(news.After(quiet, long.MaxValue));
         Assert.Null(news.After(toast, Bbs757EfbNotices.QuietAfterPressMs - 1));
@@ -1749,7 +1832,7 @@ public class Bbs757EfbBridgeTests
         var both = quiet with
         {
             Question = new Bbs757EfbQuestion("Switch the aircraft unit system?", new[] { YesAnswer }),
-            Notices = new[] { new Bbs757EfbNotice("SIMBRIEF OFP received.", "14:17Z") },
+            Notices = new[] { new Bbs757EfbNotice(1, "SIMBRIEF OFP received.", "14:17Z") },
         };
 
         Assert.Null(news.After(quiet, long.MaxValue));

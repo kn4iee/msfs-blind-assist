@@ -1312,6 +1312,108 @@ public class Bbs757EfbModelReaderTests
         Assert.Contains(Bbs757EfbModelReader.Read(image)!.Items, i => string.Equals(i.Text, "Chocks removed", StringComparison.OrdinalIgnoreCase));
     }
 
+    // ---- plan 21, Task 6: the dialog over the page ----
+
+    private static Bbs757EfbScreenModel ReadCapture(string fixture) =>
+        Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture), Bbs757EfbTreeJson.LoadNotices(fixture))!;
+
+    /// <summary>The dialog app (app_modaldialog) holding <paramref name="page"/>, as the walk returns it while BBOS's dialog byte is 1.</summary>
+    private static App DialogApp(Node page) => new(3, Bbs757EfbMemory.DialogClass, new[] { page });
+
+    /// <summary>The defuel question as BlueBird lays it out (measured 2026-11-07 on the stale one, read only): main_grid > colorbox1 >
+    /// dialog_grid > message_grid (its icon, its words) and btn_grid (YES, NO).</summary>
+    private static Node DefuelDialog() =>
+        N("grid", "main_grid", "", 0, 32, 1397, 1016,
+            N("other", "colorbox1", "", 318, 415, 760, 250,
+                N("grid", "dialog_grid", "", 334, 431, 728, 218,
+                    N("grid", "message_grid", "", 334, 431, 728, 158,
+                        N("image", "fuel_icon", "./data/efb/icons/bbs_icon_fuel1.png", 350, 478, 64, 64),
+                        N("label", "text_label", "Current fuel exceeds the flight plan fuel.\nAre you sure you want to defuel?", 435, 436, 622, 148)),
+                    N("grid", "btn_grid", "", 334, 589, 728, 60,
+                        N("button", "yes_btn", "YES", 334, 589, 180, 60),
+                        N("button", "no_btn", "NO", 882, 589, 180, 60)))));
+
+    [Fact]
+    public void A_dialog_reads_its_words_and_answers()
+    {
+        // The fuel input dialog (11c, captured live 2026-11-07 with BBOS's dialog byte 1): its prompt is its words, its text box a row
+        // with the unit BlueBird draws beside it (fuel_input_unit_label shares the box's name), and CANCEL and INSERT under btn_grid
+        // its answers, each tapped at the middle of its drawn rectangle. Its icon and its empty error label are no words.
+        var m = ReadCapture("11c-aircraft-fuel-input-dialog");
+
+        var q = Assert.IsType<Bbs757EfbQuestion>(m.Question);
+        Assert.Equal("Insert desired fuel level (0-2176 Gal)", q.Text);
+        var row = Assert.Single(q.Rows);
+        Assert.Equal((Bbs757EfbKind.Field, "FUEL", "752 Gal", "fuel_input_textbox"), (row.Kind, row.Text, row.Value, row.Key));
+        Assert.Equal(new[] { ("Cancel", "q:CANCEL"), ("Insert", "q:INSERT") }, q.Buttons.Select(b => (b.Text, b.Key)));
+        Assert.All(q.Buttons, b => Assert.Equal((Bbs757EfbKind.Button, true), (b.Kind, b.Clickable)));
+        Assert.Equal((new System.Drawing.Rectangle(354, 380, 140, 48), new System.Drawing.Point(424, 404)), (q.Buttons[0].Box, q.Buttons[0].Hit));
+        Assert.Equal((new System.Drawing.Rectangle(862, 380, 180, 48), new System.Drawing.Point(952, 404)), (q.Buttons[1].Box, q.Buttons[1].Hit));
+        // The page under it is still the Fuel page, and nothing of the dialog is in it.
+        Assert.Equal("Aircraft, Fuel", m.PageName);
+        Assert.DoesNotContain(m.Items, i => i.Name is "fuel_input_prompt_label" or "fuel_input_textbox" or "fuel_input_unit_label" or "cancel_btn" or "insert_btn");
+
+        // The defuel question's layout: text_label's words (its line break read as a space), YES and NO.
+        var defuel = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import").Append(DialogApp(DefuelDialog())).ToList())!.Question!;
+        Assert.Equal("Current fuel exceeds the flight plan fuel. Are you sure you want to defuel?", defuel.Text);
+        Assert.Empty(defuel.Rows);
+        Assert.Equal(new[] { ("Yes", "q:YES"), ("No", "q:NO") }, defuel.Buttons.Select(b => (b.Text, b.Key)));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_dialog_reads_the_same_under_other_cultures(string culture)
+    {
+        var q = TestCulture.Run(culture, () => ReadCapture("11c-aircraft-fuel-input-dialog")).Question!;
+
+        Assert.Equal(("Insert desired fuel level (0-2176 Gal)", "752 Gal"), (q.Text, q.Rows[0].Value));
+        Assert.Equal(new[] { "q:CANCEL", "q:INSERT" }, q.Buttons.Select(b => b.Key));
+    }
+
+    [Fact]
+    public void A_closed_dialog_is_not_a_question()
+    {
+        // 11b was captured with BlueBird's answered defuel dialog still front in its app (its page and visible bytes kept, measured
+        // 2026-11-07): BBOS's dialog byte read 0, so the walk left the dialog app out, and the page reads with no question, its
+        // controls pressable.
+        var stale = ReadCapture("11b-aircraft-fuel-simbrief-import");
+        Assert.Null(stale.Question);
+        Assert.Contains("button  Import from SIMBRIEF\n", ListingOf(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import")));
+
+        // The fuel input dialog's capture with the dialog app gone (closed): no question, and its page's button presses again.
+        var closed = Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog").Where(a => a.Class != Bbs757EfbMemory.DialogClass).ToList();
+        Assert.Null(Bbs757EfbModelReader.Read(closed)!.Question);
+        Assert.Contains("button  Import from SIMBRIEF\n", ListingOf(closed));
+
+        // A dialog app with nothing visible in it says nothing.
+        Assert.Null(Bbs757EfbModelReader.Read(closed.Append(new App(3, Bbs757EfbMemory.DialogClass, Array.Empty<Node>())).ToList())!.Question);
+    }
+
+    [Fact]
+    public void The_dialog_reads_first_and_the_status_bar_and_notifications_after_the_page()
+    {
+        // D1: the question first (its words, its text box, its answers); the page under it, dimmed, as text; then "Status bar" with the
+        // time line and KEYBOARD LOCKED, BlueBird's notifications under their heading, newest first; then the sections and Home.
+        string listing = Bbs757EfbListing.Of(Bbs757EfbElements.Build(ReadCapture("11c-aircraft-fuel-input-dialog"), null, Array.Empty<Bbs757EfbExtraElement>()));
+
+        Assert.StartsWith("title: Aircraft, Fuel\ntext  Insert desired fuel level (0-2176 Gal)\ntext  Fuel: 752 Gal\nbutton  Cancel\nbutton  Insert\n"
+            + "heading 2  Left\ntext  Left: 34%\n", listing);
+        Assert.Equal(2, listing.Split('\n').Count(l => l.StartsWith("button  ", StringComparison.Ordinal)));
+        int page = listing.IndexOf("text  Import from SIMBRIEF\n", StringComparison.Ordinal);
+        int status = listing.IndexOf("heading 2  Status bar\ntext  Sat, 7th Nov 2026 | 23:06L | 05:06Z | OAT 4 C\ntext  KEYBOARD LOCKED\n"
+            + "heading 2  Notifications\ntext  05:06Z AFT cargo door closed.\ntext  05:05Z AFT cargo door opened.\ntext  03:16Z AFT cargo door closed.\n",
+            StringComparison.Ordinal);
+        int sections = listing.IndexOf("heading 2  Sections\n", StringComparison.Ordinal);
+        Assert.True(page > 0 && status > page && sections > status, listing);
+
+        // A page with no dialog: its own content, then the status bar and the notifications, then the sections.
+        string ground = Bbs757EfbListing.Of(Bbs757EfbElements.Build(ReadCapture("13-aircraft-ground-services"), null, Array.Empty<Bbs757EfbExtraElement>()));
+        Assert.Contains("heading 2  Status bar\ntext  Sat, 7th Nov 2026 | 23:06L | 05:06Z | OAT 4 C\nheading 2  Notifications\n"
+            + "text  05:06Z Chocks attached.\ntext  05:06Z AFT cargo door closed.\n", ground);
+        Assert.True(ground.IndexOf("heading 2  Status bar", StringComparison.Ordinal) < ground.IndexOf("heading 2  Sections", StringComparison.Ordinal));
+    }
+
     // ---- R9 order, R12 the keyboard and the viewport -----------------------------
 
     [Fact]

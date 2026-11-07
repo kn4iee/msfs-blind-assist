@@ -17,8 +17,10 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// and a tab row's current tab are the ones BlueBird's selected state marks (<see cref="Bbs757EfbMemory.Node.Selected"/>,
 /// <see cref="SectionOf"/>); a read that marks none (a tree captured before plan 21) names no section and no current tab. Whether the
 /// page scrolls, and its viewport, come from the one scrollbox holding a taller stackbox, and each item is clipped to the scrollbox it
-/// sits in. Pure over the walk
-/// (<see cref="Read(IReadOnlyList{Bbs757EfbMemory.App})"/>): tested against synthetic trees and the committed trees.
+/// sits in. Beside the page (plan 21, Task 6): the top bar app's labels are the status bar, BBOS's notification records the
+/// notifications, and the dialog app, while one is up, the question over the page. Pure over the walk
+/// (<see cref="Read(IReadOnlyList{Bbs757EfbMemory.App}, IReadOnlyList{Bbs757EfbNoticeRecord})"/>): tested against synthetic trees and
+/// the committed trees.
 /// </summary>
 public sealed class Bbs757EfbModelReader
 {
@@ -33,15 +35,27 @@ public sealed class Bbs757EfbModelReader
     private static readonly HashSet<string> ContentApps = new(StringComparer.Ordinal)
         { "AIRCRAFT", "NAVIGATION", "SYSTEMS", "CHECKLIST", "SETTINGS", "SIGN IN" };
 
-    /// <summary>The current page as the window's model; null when the EFB is not reachable (not located yet).</summary>
-    public Bbs757EfbScreenModel? Read() => Read(_memory.ReadFrontApps());
+    /// <summary>The current page as the window's model, with BlueBird's notifications; null when the EFB is not reachable (not located
+    /// yet).</summary>
+    public Bbs757EfbScreenModel? Read() => Read(_memory.ReadFrontApps(), _memory.ReadNotices());
 
-    /// <summary>The page the front apps show, as the window's model; null when none is drawn. Pure, for the tests.</summary>
-    public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    /// <summary>The page the front apps show, as the window's model, with no notifications; null when none is drawn. Pure, for the tests.</summary>
+    public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps) => Read(apps, Array.Empty<Bbs757EfbNoticeRecord>());
+
+    /// <summary>The page the front apps show, as the window's model, with the status bar (<see cref="StatusBarOf"/>), BlueBird's
+    /// notifications <paramref name="notices"/> (<see cref="Bbs757EfbNotices.From"/>) and the dialog over the page
+    /// (<see cref="QuestionOf"/>); null when no page is drawn. Pure, for the tests.</summary>
+    public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps, IReadOnlyList<Bbs757EfbNoticeRecord> notices)
     {
         if (apps.Count == 0) return null;
         apps = ImagesAsOther(apps);
+        return PageOf(apps) is { } page
+            ? page with { TopBar = StatusBarOf(apps), Notices = Bbs757EfbNotices.From(notices), Question = QuestionOf(apps), Keyboard = KeyboardOf(apps) }
+            : null;
+    }
 
+    private static Bbs757EfbScreenModel? PageOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
         // The content app: the front content app with the most visible controls (the one drawn on top).
         var content = apps
             .Where(a => ContentApps.Contains(a.Class) && Count(a.Controls) > 0)
@@ -51,7 +65,7 @@ public sealed class Bbs757EfbModelReader
         if (content is null)
         {
             var home = apps.FirstOrDefault(a => a.Class == "HOME" && Count(a.Controls) > 0);
-            return home is null ? null : HomeModel(home) with { Keyboard = KeyboardOf(apps) };
+            return home is null ? null : HomeModel(home);
         }
 
         var grammar = new Grammar(content);
@@ -64,7 +78,6 @@ public sealed class Bbs757EfbModelReader
         {
             Scrollable = scroller is not null,
             Viewport = scroller is null ? Bbs757EfbScreen.ContentArea : Within(Box(scroller), Bbs757EfbScreen.ContentArea),
-            Keyboard = KeyboardOf(apps),
         };
     }
 
@@ -72,7 +85,7 @@ public sealed class Bbs757EfbModelReader
     /// unless the page rules give its file a state, which joins the button in its box: the chocks, R10). Text boxes, multi-line text
     /// boxes and drop-downs keep their kinds (<see cref="EmitNode"/>). The top bar's and the dialog's apps
     /// (<see cref="Bbs757EfbMemory.TopBarClass"/>, <see cref="Bbs757EfbMemory.DialogClass"/>) are no content app, home screen or
-    /// keyboard app, so the reader passes them by until plan 21's Task 6 reads them.</summary>
+    /// keyboard app: they are read apart (<see cref="StatusBarOf"/>, <see cref="QuestionOf"/>).</summary>
     private static IReadOnlyList<Bbs757EfbMemory.App> ImagesAsOther(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
         apps.Select(a => a with { Controls = a.Controls.Select(ImageAsOther).ToList() }).ToList();
 
@@ -96,6 +109,84 @@ public sealed class Bbs757EfbModelReader
                 : new Bbs757EfbKey(k.Name, "", "", "", Hit(k)));
         }
         return new Bbs757EfbKeyboard(Box(grid), keys);
+    }
+
+    // ---- the status bar and the dialog (plan 21, Task 6) ------------------------
+
+    /// <summary>
+    /// The status bar: the top bar app's (<see cref="Bbs757EfbMemory.TopBarClass"/>, read on every page) visible labels with words, in
+    /// tree order, each a read-out in BlueBird's words as presented, keyed by its control name (<see cref="Bbs757EfbTopBar.KeyFor"/>) so
+    /// its key stays as its words change: the time line ("Sat, 7th Nov 2026 | 20:28L | 02:28Z | OAT 6 C", <c>time_label</c>), the
+    /// departure label when it shows (<c>etd_label</c>), and KEYBOARD LOCKED while BlueBird writes it (<c>keyboard_locked_label</c>, under
+    /// the fuel input dialog). A label of marks alone (the "|" before the departure label) is a separator, no line. The boarding control and
+    /// the notification button are drawn by the top bar app from its own fields, not controls: none is read here (not measured, plan 21).
+    /// </summary>
+    private static IReadOnlyList<Bbs757EfbItem> StatusBarOf(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
+        apps.Where(a => a.Class == Bbs757EfbMemory.TopBarClass)
+            .SelectMany(a => Flatten(a.Controls))
+            .Where(n => n.Kind == "label" && n.Text.Any(char.IsLetterOrDigit) && !IsNoise(n))
+            .Select(n => new Bbs757EfbItem(Bbs757EfbKind.Text, n.Text, Box(n), Hit(n), false, Bbs757EfbTopBar.KeyFor(n.Name), Name: n.Name))
+            .ToList();
+
+    /// <summary>
+    /// The dialog over the page: the dialog app (<see cref="Bbs757EfbMemory.DialogClass"/>), which the walk returns only while BBOS's
+    /// dialog byte says one is up (a closed dialog keeps its page and visible bytes, measured 2026-11-07), as a question; null when it
+    /// is not there or shows nothing. Its words are its labels with words, in tree order, their lines and runs of spaces read as one
+    /// space (<c>text_label</c>, the fuel input dialog's <c>fuel_input_prompt_label</c>; an empty label, an image's path, a separator and
+    /// a text box's unit are none). Its answers are the buttons under its <c>btn_grid</c> (YES and NO, OK, CANCEL and INSERT), keyed
+    /// <c>q:</c> and their words (<c>q:YES</c>), each tapped at the middle of its drawn rectangle. A text box in it is a row
+    /// (<see cref="Bbs757EfbQuestion.Rows"/>): a field named by its own name's words (<see cref="OwnName"/>: <c>fuel_input_textbox</c> is
+    /// FUEL) holding its text, with the unit beside it (the label whose name is the box's with <c>unit</c>: <c>fuel_input_unit_label</c>
+    /// "Gal").
+    /// </summary>
+    private static Bbs757EfbQuestion? QuestionOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
+        var dialog = apps.FirstOrDefault(a => a.Class == Bbs757EfbMemory.DialogClass && a.Controls.Count > 0);
+        if (dialog is null) return null;
+        var all = Flatten(dialog.Controls).ToList();
+        var labels = all.Where(n => n.Kind == "label" && n.Text.Any(char.IsLetterOrDigit) && !IsNoise(n)).ToList();
+        var units = new HashSet<Bbs757EfbMemory.Node>(ReferenceEqualityComparer.Instance);
+        var rows = new List<Bbs757EfbItem>();
+        foreach (var box in all.Where(n => n.Kind == "textbox"))
+        {
+            var unit = labels.FirstOrDefault(l => !units.Contains(l) && IsUnitOf(l, box));
+            if (unit is not null) units.Add(unit);
+            string value = box.Text.Length > 0 && unit is not null ? box.Text + " " + unit.Text : box.Text;
+            rows.Add(new Bbs757EfbItem(Bbs757EfbKind.Field, OwnName(box.Name), Box(box), Hit(box), true, box.Name, Value: value, Name: box.Name));
+        }
+        var answerGrid = all.FirstOrDefault(n => n.Name == "btn_grid");
+        var answers = answerGrid is null ? new List<Bbs757EfbItem>() : Descendants(answerGrid)
+            .Where(b => b.Kind == "button" && b.Text.Any(char.IsLetterOrDigit))
+            .Select(b => new Bbs757EfbItem(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(OneLine(b.Text)), Box(b), Hit(b), true,
+                "q:" + OneLine(b.Text).ToUpperInvariant(), Name: b.Name))
+            .ToList();
+        var inAnswers = answerGrid is null ? new HashSet<Bbs757EfbMemory.Node>(ReferenceEqualityComparer.Instance)
+            : new HashSet<Bbs757EfbMemory.Node>(Descendants(answerGrid), ReferenceEqualityComparer.Instance);
+        string words = string.Join(' ', labels.Where(l => !units.Contains(l) && !inAnswers.Contains(l)).Select(l => OneLine(l.Text)));
+        if (words.Length == 0 && rows.Count == 0 && answers.Count == 0) return null;
+        return new Bbs757EfbQuestion(words, answers) { Rows = rows };
+    }
+
+    /// <summary>Whether <paramref name="label"/> is the unit BlueBird draws beside the text box <paramref name="box"/>: its name holds
+    /// <c>unit</c>, and without it, its role and control words is the box's (<c>fuel_input_unit_label</c> and <c>fuel_input_textbox</c>
+    /// are both FUEL).</summary>
+    private static bool IsUnitOf(Bbs757EfbMemory.Node label, Bbs757EfbMemory.Node box)
+    {
+        if (!Bbs757EfbPageRules.NameParts(label.Name).Contains("unit")) return false;
+        string own = string.Join(' ', Bbs757EfbPageRules.ControlKey(label.Name).Split(' ').Where(p => p != "unit"));
+        return own.Length > 0 && own == Bbs757EfbPageRules.ControlKey(box.Name);
+    }
+
+    /// <summary>A text's lines and runs of spaces as one space each, trimmed.</summary>
+    private static string OneLine(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>A control's name from its own control name, for a slider, text box or drop-down no label names (R11): its parts
+    /// without the control words, upper-cased (<c>planning_charts_zoom_slider</c> is PLANNING CHARTS ZOOM, <c>map_provider_dropdown</c>
+    /// MAP PROVIDER); the whole name when nothing is left.</summary>
+    private static string OwnName(string name)
+    {
+        string own = string.Join(' ', Bbs757EfbPageRules.NameParts(name).Where(p => !Bbs757EfbPageRules.ControlWords.Contains(p))).ToUpperInvariant();
+        return own.Length > 0 ? own : name;
     }
 
     // ---- the home screen -----------------------------------------------------
@@ -271,7 +362,7 @@ public sealed class Bbs757EfbModelReader
             return;
         }
         string word = MenuWord(app, n.Text);
-        if (word == "RESET ALL") // the checklist's RESET ALL is a button, not a section
+        if (IsChecklistReset(app, n)) // the checklist's RESET ALL is a button, not a section
         {
             items.Add(new Bbs757EfbItem(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(word), Box(n), Hit(n), true, "btn:RESET ALL"));
             return;
@@ -279,6 +370,10 @@ public sealed class Bbs757EfbModelReader
         bool selected = ReferenceEquals(n, g.CurrentEntry);
         menu.Add(new Bbs757EfbItem(Bbs757EfbKind.Menu, Bbs757EfbVocabulary.Pretty(word), Box(n), Hit(n), true, "menu:" + word, Selected: selected));
     }
+
+    /// <summary>Whether a left-column control is the checklist's RESET ALL: a button in the side column, read selected (measured
+    /// 2026-11-07), but no section. The one test of it, so the menu and the current entry never disagree on which control it is.</summary>
+    private static bool IsChecklistReset(string app, Bbs757EfbMemory.Node n) => MenuWord(app, n.Text) == "RESET ALL";
 
     /// <summary>A page button or tile: keyed <c>btn:|words@x,y</c> so the press runner reads
     /// its words (<see cref="Bbs757EfbScreen.KeyWords"/>) and a ground-service tile is found (<see cref="Bbs757GroundServices.ForTile"/>).
@@ -569,7 +664,7 @@ public sealed class Bbs757EfbModelReader
             var parentOf = new Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node>(ReferenceEqualityComparer.Instance);
             foreach (var n in all) foreach (var c in n.Children) parentOf[c] = n;
             // The checklist's RESET ALL sits in the side column and reads selected (measured 2026-11-07), but is no section.
-            CurrentEntry = TheOneSelected(all.Where(n => n.Kind == "button" && !IsChrome(n) && IsMenu(n, _app) && MenuWord(_app, n.Text) != "RESET ALL"));
+            CurrentEntry = TheOneSelected(all.Where(n => n.Kind == "button" && !IsChrome(n) && IsMenu(n, _app) && !IsChecklistReset(_app, n)));
 
             foreach (var b in all)
                 if (b.Kind == "button" && b.Text.Length == 0 && !IsChrome(b) && Descendants(b).Count(IsReadable) == 1)
@@ -816,15 +911,6 @@ public sealed class Bbs757EfbModelReader
                     (text, shown) = (count.Groups[1].Value, count.Groups[2].Value);
                 _sliderOf[s] = (text, shown);
             }
-        }
-
-        /// <summary>A control's name from its own control name, for a slider, text box or drop-down no label names (R11): its parts
-        /// without the control words, upper-cased (<c>planning_charts_zoom_slider</c> is PLANNING CHARTS ZOOM, <c>map_provider_dropdown</c>
-        /// MAP PROVIDER); the whole name when nothing is left.</summary>
-        private static string OwnName(string name)
-        {
-            string own = string.Join(' ', Bbs757EfbPageRules.NameParts(name).Where(p => !Bbs757EfbPageRules.ControlWords.Contains(p))).ToUpperInvariant();
-            return own.Length > 0 ? own : name;
         }
 
         /// <summary>A title and the count it shows after a dash: "BUSINESS PAX - 16/16" is BUSINESS PAX, 16/16.</summary>

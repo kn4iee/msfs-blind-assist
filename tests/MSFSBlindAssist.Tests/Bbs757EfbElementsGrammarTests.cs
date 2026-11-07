@@ -40,7 +40,7 @@ public class Bbs757EfbElementsGrammarTests
         var page = Page("AIRCRAFT", "FUEL", new[] { Make(Bbs757EfbKind.Heading, "Tanks", "h:tanks"), Make(Bbs757EfbKind.Row, "Center", "row:c", "14%") }) with
         {
             TopBar = new[] { Make(Bbs757EfbKind.Button, "Notifications", Bbs757EfbTopBar.NotificationsKey) },
-            Notices = new[] { new Bbs757EfbNotice("GPU connected.", "14:17Z") },
+            Notices = new[] { new Bbs757EfbNotice(1, "GPU connected.", "14:17Z") },
         };
         var extras = new[] { new Bbs757EfbExtraElement("extra:code", "Navigraph code: ABCD-1234", false) };
 
