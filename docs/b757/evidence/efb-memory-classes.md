@@ -242,11 +242,43 @@ the defuel question's `fuel_icon` "./data/efb/icons/bbs_icon_fuel1.png"; PERF ca
 - Tapping a page's text box (PERF calc's airport) did not bring the keyboard up (the keyboard app took no tap after
   it); whether the keyboard shows stays plan 22's.
 
-## START BOARDING and DEP: not measured
+## The boarding box: decoded from the code, read live (2026-11-07)
 
-Automatic boarding off (Settings, Aircraft) changed nothing in the overlay but its clocks: no START BOARDING in this
-post-flight state (it likely needs a fresh OFP; an OFP fetch was not among the approved changes). Turned back on. The
-departure countdown and the boarding control stay unmeasured: the layout has no field for them.
+Automatic boarding off (Settings, Aircraft) changed nothing in the overlay but its clocks in the post-flight state of the
+first measurement. On 2026-11-07 the owner reloaded the 757 with automatic boarding off and imported a fresh OFP; the window
+offered no START BOARDING. The box is no control (the overlay's roots hold `reset_points_button`, `overlay_grid` >
+`time_label`, `keyboard_locked_label` and the two hidden `etd` labels, nothing else), so it was found in the code: the tablet
+was off screen, so nothing was tapped or seen.
+
+- **Who draws it.** "START BOARDING" is at 0xc79fc in the data; `i32.const 0xc79fc` is in one function, 56545 (12,605
+  instructions), the top bar app's draw. Its neighbors in the data are the box's other words: 0xc79bb "DEBOARDING PAUSED",
+  0xc79cd "DEBOARDING...", 0xc79db "BOARDING PAUSED", 0xc79eb "START DEBOARDING"; "BOARDING...", "BOARDING... " and
+  " MIN" (0xc7c47, 0xc7c53, 0xc7c60) are in 56561, which the draw calls for a running boarding.
+- **Where the box is.** The draw reads its app's BBOS pointer (overlay +0xc4, 0x2918f0 live) and decides whether to draw the
+  box; when it does, it lays the box out (width 176, 8 px left of its neighbor) and copies the rectangle (16 bytes) to its
+  app's **+0x214**; when it does not, it copies a zeroed rectangle there (a constructor of four 0s, function 49373). So the
+  rectangle's width is above 0 exactly while the box shows. Live: [1144,4 176x24] (x 1144 to 1320, y 4 to 28), the same
+  box BA's scripted START BOARDING tap at (1231,24) lands in.
+- **What it says.** All from BBOS's loading record at **BBOS + 0x9160** (`i32.const 0x9160` in 16 functions, its methods):
+  an int state at +0 (**0x9160**), a byte at +4 (**0x9164**), a byte at +7 (**0x9167**) and three 64-bit times at +0x118
+  (**0x9278**, 0x9280, 0x9288). Its writers: start boarding (65532) writes +4 = 0 and the state 1; start deboarding (65533)
+  +4 = 1 and 1; pause (65547) 3; resume (65548) 2; cancel (65554) 0 and +4 = 0; the tick (65594) 1 (automatic boarding),
+  2, 4 (done), and at a deboarding's end 0, +4 = 0, +6 = 1, +7 = 0; 65694 writes +7 = 1 and +6 = 0 (in flight). So the state
+  is 0 idle, 1 started, 2 running, 3 paused, 4 done; +4 says the loading is a deboarding; +7 that the aircraft has flown since
+  its boarding.
+- **The draw's choice** (in its order): running = state 1, 2 or 3. A running deboarding (+4 set): "DEBOARDING PAUSED" at
+  state 3, else "DEBOARDING...". A running boarding (state 1 or 2): "BOARDING... " + N + " MIN", N the largest of the three
+  times rounded up to minutes (56557: ceil(t / 60)), or "BOARDING..." when none is above 0 (56561). State 3: "BOARDING
+  PAUSED". Otherwise the offer: "START DEBOARDING" when BlueBird's deboarding check holds (65505: +7 set, nothing running,
+  stopped on the ground, and further simulator checks), else "START BOARDING". The box shows while running, or while either
+  offer's check holds (65501 for boarding: nothing running, state not 4, stopped on the ground, a further check).
+- **Not decoded:** the simulator checks inside both offers (BBOS + 0x2c0 and its neighbors). The window names the offer from
+  +7 alone: START DEBOARDING when it is set. That is wrong only when +7 is set with the state 0 (flown without a completed
+  boarding) and BlueBird's other deboarding checks fail while its boarding ones hold; the press still does what the tablet's
+  tap would.
+- **Live, read only:** the owner's state (automatic boarding off, fresh OFP, at the gate): the rectangle [1144,4 176x24],
+  the state 0, +4 0, +7 0, the three times 0: START BOARDING, which the window now offers as a button. The running, paused
+  and done states are read from the code, not yet seen live.
 
 ## What the layout carries (plan 21, Task 2)
 
@@ -267,6 +299,9 @@ departure countdown and the boarding control stay unmeasured: the layout has no 
 | `OverlayPanelShown`, `OverlayListOpen` | 0x1fc, 0x1fd | the top bar app's bytes: a notification pop-up or the list shows; the full list is open (added by plan 21's final review) |
 | `OverlayPanelRect`, `OverlayPanelHeight` | 0x234, 0x240 | the panel's x, y and width floats, and its height float (the rectangle's fourth): [1039.75,38 349.25x118] under a pop-up, 480 tall with the list open, 0 closed |
 | `OverlayFlightTimeText` | 0x1b4 | the top bar app's flight-time text (std::string): "DEP 00:06" at 13:53L, "DEP 00:28" at 14:16L (it counts up from the scheduled departure; "DEP -00:46" before it); "ETA 0000Z" with size 0 after a flight (empty shows nothing). Not a label: `etd_label` stays hidden and empty (measured 2026-11-07) |
+| `OverlayBoardingRect` | 0x214 | the top bar app's boarding box rectangle (x, y, w, h floats), zeroed on every frame without the box ("The boarding box") |
+| `BbosLoadState`, `BbosLoadDeboarding`, `BbosLoadFlown` | 0x9160, 0x9164, 0x9167 | BBOS's loading state int (0 idle, 1 started, 2 running, 3 paused, 4 done), its deboarding byte and its flown byte |
+| `BbosLoadRemaining` | 0x9278 | BBOS's three remaining loading times, 64-bit seconds 8 bytes apart: the box's minutes are the largest, rounded up |
 
 The class kinds `textbox`, `multiline`, `pulldown`, `image`, `overlay` (the top bar's app) and `modal` (the dialog app)
 join the class list, derived by RTTI.
@@ -275,6 +310,6 @@ join the class list, derived by RTTI.
 
 Whether a tap on an open list's face closes it; an open list under a scrolled page (no drop-down read sits
 in a scrollbox: the reader takes the page's scroll off the list and its rows as for any control inside a scrollbox, logic
-only); the toast, START BOARDING and the departure countdown;
+only); the toast; the boarding box's running, paused and done states live (read from the code only);
 the notification list's order; overlay +0x2ac, +0x20c and +0x210, record +0x36, BBOS +0x9348 and +0x9368; the OFP's
 line pitch; list boxes (none reachable); Settings, General's class sweep.

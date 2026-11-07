@@ -63,7 +63,15 @@ public sealed class Bbs757EfbMemory
     /// <summary>One EFB app that is currently drawn (its front flag set, the top bar always, the dialog while one is up), with
     /// the controls of its roots and its current page; the top bar's app also with its notification panel (<see cref="Panel"/>,
     /// null for every other app and when its fields cannot be read).</summary>
-    public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls, NoticePanel? Panel = null, string FlightTime = "");
+    public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls, NoticePanel? Panel = null, string FlightTime = "",
+        BoardingBox? Boarding = null);
+
+    /// <summary>The top bar's boarding box while BlueBird draws it (null otherwise), and what decides its words (decoded from BBS752.wasm's
+    /// top bar draw, 2026-11-07): the box's rectangle in tablet pixels ([1144,4 176x24] offering START BOARDING); BBOS's loading
+    /// <c>State</c> (0 idle, 1 just started, 2 running, 3 paused, 4 done); whether the loading is a <c>Deboarding</c>; whether the aircraft
+    /// has <c>Flown</c> since its boarding (START DEBOARDING rather than START BOARDING); and the largest of the three remaining loading times,
+    /// in seconds. <see cref="Bbs757EfbTopBar.BoardingWords"/> turns it into the words BlueBird draws.</summary>
+    public sealed record BoardingBox(float X, float Y, float W, float H, int State, bool Deboarding, bool Flown, long RemainingSeconds);
 
     /// <summary>BlueBird's notification panel as the top bar's app keeps it (measured live 2026-11-07): <c>Shown</c> while a new
     /// notification's pop-up (about 10 s) or the notification list shows, <c>ListOpen</c> while the full list is open, and the panel's
@@ -91,9 +99,36 @@ public sealed class Bbs757EfbMemory
                 foreach (uint root in Vector(page + (uint)_l.PageChildren)) AddVisible(root, controls, walk);
             bool bar = cls == TopBarClass;
             apps.Add(new App(key, cls, controls, bar ? ReadPanel(app) : null,
-                bar ? _m.ReadStdString(app + (uint)_l.OverlayFlightTimeText) ?? "" : ""));
+                bar ? _m.ReadStdString(app + (uint)_l.OverlayFlightTimeText) ?? "" : "",
+                bar ? ReadBoarding(app, bbos) : null));
         }
         return apps;
+    }
+
+    /// <summary>The most seconds believed for a remaining loading time (a day): a torn or foreign word cannot make a count of minutes.</summary>
+    private const long MaxRemainingSeconds = 86_400;
+
+    /// <summary>The top bar's boarding box (<see cref="BoardingBox"/>): null when BlueBird does not draw it (its rectangle at the layout's
+    /// <c>OverlayBoardingRect</c>, which BlueBird zeros on every frame without the box, is not a real one) or a field cannot be read. A
+    /// remaining time outside 0 to <see cref="MaxRemainingSeconds"/> counts as none.</summary>
+    private BoardingBox? ReadBoarding(uint app, uint bbos)
+    {
+        uint rect = app + (uint)_l.OverlayBoardingRect;
+        float x = _m.ReadFloat(rect), y = _m.ReadFloat(rect + 4), w = _m.ReadFloat(rect + 8), h = _m.ReadFloat(rect + 12);
+        if (!(w > 0 && h > 0 && w < 2000 && h < 2000) || !float.IsFinite(x) || !float.IsFinite(y)) return null;
+        if (!_m.TryReadInt(bbos + (uint)_l.BbosLoadState, out int state)
+            || !_m.TryReadByte(bbos + (uint)_l.BbosLoadDeboarding, out byte deboarding)
+            || !_m.TryReadByte(bbos + (uint)_l.BbosLoadFlown, out byte flown)) return null;
+        long remaining = 0;
+        for (uint i = 0; i < 3; i++)
+        {
+            uint at = bbos + (uint)_l.BbosLoadRemaining + 8 * i;
+            if (!_m.TryReadInt(at, out int lo) || !_m.TryReadInt(at + 4, out int hi)) return null;
+            long seconds = (long)(uint)lo | ((long)hi << 32);
+            if (seconds > 0 && seconds <= MaxRemainingSeconds) remaining = Math.Max(remaining, seconds);
+        }
+        // BlueBird tests each byte's low bit (load8_u, and 1).
+        return new BoardingBox(x, y, w, h, state, (deboarding & 1) == 1, (flown & 1) == 1, remaining);
     }
 
     // The top bar app's FlightTime (above) is its flight-time std::string at the layout's OverlayFlightTimeText: "DEP 00:28" around

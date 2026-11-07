@@ -144,8 +144,10 @@ public sealed class Bbs757EfbModelReader
     /// tree order, each a read-out in BlueBird's words as presented, keyed by its control name (<see cref="Bbs757EfbTopBar.KeyFor"/>) so
     /// its key stays as its words change: the time line ("Sat, 7th Nov 2026 | 20:28L | 02:28Z | OAT 6 C", <c>time_label</c>), the
     /// departure label when it shows (<c>etd_label</c>), and KEYBOARD LOCKED while BlueBird writes it (<c>keyboard_locked_label</c>, under
-    /// the fuel input dialog). A label of marks alone (the "|" before the departure label) is a separator, no line. The boarding control and
-    /// the notification button are drawn by the top bar app from its own fields, not controls: none is read here (not measured, plan 21).
+    /// the fuel input dialog). A label of marks alone (the "|" before the departure label) is a separator, no line. Then what the top bar
+    /// app draws from its own fields, not controls: the departure countdown and the boarding box (<see cref="Bbs757EfbMemory.BoardingBox"/>,
+    /// in the words <see cref="Bbs757EfbTopBar.BoardingWords"/> gives). The notification button is not read here (its notifications are
+    /// read from their records).
     /// </summary>
     private static IReadOnlyList<Bbs757EfbItem> StatusBarOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
     {
@@ -164,6 +166,14 @@ public sealed class Bbs757EfbModelReader
             items.Add(new Bbs757EfbItem(Bbs757EfbKind.Text, dep ?? flight, Rectangle.Empty, Point.Empty, false,
                 dep != null ? Bbs757EfbTopBar.DepartureKey : Bbs757EfbTopBar.FlightTimeKey));
         }
+        // The boarding box is no control either: the top bar app draws it from its own rectangle and BBOS's loading state (decoded
+        // 2026-11-07), right of the countdown. Read in BlueBird's words: a button while it offers to start, tapped at its middle; text
+        // while a loading runs or is paused.
+        var box = bar.Select(a => a.Boarding).FirstOrDefault(b => b is not null);
+        if (box is not null && Bbs757EfbTopBar.BoardingText(Bbs757EfbTopBar.BoardingWords(box)) is var (isButton, text))
+            items.Add(new Bbs757EfbItem(isButton ? Bbs757EfbKind.Button : Bbs757EfbKind.Text, text,
+                new Rectangle((int)box.X, (int)box.Y, (int)box.W, (int)box.H), new Point((int)(box.X + box.W / 2), (int)(box.Y + box.H / 2)),
+                isButton, Bbs757EfbTopBar.BoardingKey));
         return items;
     }
 

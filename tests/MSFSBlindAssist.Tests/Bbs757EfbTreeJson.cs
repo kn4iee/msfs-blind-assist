@@ -37,6 +37,12 @@ internal static class Bbs757EfbTreeJson
                     ["shown"] = p.Shown, ["list"] = p.ListOpen, ["x"] = Number(p.X), ["y"] = Number(p.Y), ["w"] = Number(p.W), ["h"] = Number(p.H),
                 };
             if (app.FlightTime.Length > 0) o["flightTime"] = app.FlightTime;
+            if (app.Boarding is { } b)
+                o["boarding"] = new JsonObject
+                {
+                    ["x"] = Number(b.X), ["y"] = Number(b.Y), ["w"] = Number(b.W), ["h"] = Number(b.H), ["state"] = b.State,
+                    ["deboarding"] = b.Deboarding, ["flown"] = b.Flown, ["remaining"] = b.RemainingSeconds,
+                };
             o["controls"] = new JsonArray(app.Controls.Select(n => (JsonNode?)NodeToJson(n)).ToArray());
             array.Add(o);
         }
@@ -66,7 +72,12 @@ internal static class Bbs757EfbTreeJson
                 ? new Bbs757EfbMemory.NoticePanel(p["shown"]!.GetValue<bool>(), p["list"]!.GetValue<bool>(), p["x"]!.GetValue<float>(),
                     p["y"]!.GetValue<float>(), p["w"]!.GetValue<float>(), p["h"]!.GetValue<float>())
                 : null,
-            a["flightTime"]?.GetValue<string>() ?? "")).ToList();
+            a["flightTime"]?.GetValue<string>() ?? "",
+            a["boarding"] is { } b
+                ? new Bbs757EfbMemory.BoardingBox(b["x"]!.GetValue<float>(), b["y"]!.GetValue<float>(), b["w"]!.GetValue<float>(),
+                    b["h"]!.GetValue<float>(), b["state"]!.GetValue<int>(), b["deboarding"]!.GetValue<bool>(), b["flown"]!.GetValue<bool>(),
+                    b["remaining"]!.GetValue<long>())
+                : null)).ToList();
     }
 
     /// <summary>The notifications a capture holds; none for a root array (every tree captured before plan 21).</summary>
@@ -190,6 +201,11 @@ internal static class Bbs757EfbTreeJson
     /// string at the layout's <c>OverlayFlightTimeText</c>, measured 2026-11-07); no committed tree carries it.</summary>
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithFlightTime(IReadOnlyList<Bbs757EfbMemory.App> apps, string text) =>
         apps.Select(a => a.Class == Bbs757EfbMemory.TopBarClass ? a with { FlightTime = text } : a).ToList();
+
+    /// <summary>The trees with the top bar app's boarding box set to <paramref name="box"/> (as the walk reads it from the layout's
+    /// <c>OverlayBoardingRect</c> and BBOS's loading fields, decoded and read live 2026-11-07); no committed tree carries it.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithBoarding(IReadOnlyList<Bbs757EfbMemory.App> apps, Bbs757EfbMemory.BoardingBox? box) =>
+        apps.Select(a => a.Class == Bbs757EfbMemory.TopBarClass ? a with { Boarding = box } : a).ToList();
 
     /// <summary>The trees with every button's selected state taken off, as a read that marks no side-menu entry or tab (a mid-update
     /// read, or a torn one) gives them: no section and no current tab.</summary>

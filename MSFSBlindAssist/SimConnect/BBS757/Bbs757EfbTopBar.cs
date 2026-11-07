@@ -10,8 +10,10 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// <see cref="DepartureText"/>, <see cref="BoardingText"/>) are kept for when they are measured in memory. The departure countdown is now
 /// measured (2026-11-07): the top bar app keeps "DEP 00:28" as a string of its own (the layout's <c>OverlayFlightTimeText</c>), no label,
 /// and the model's status bar reads it after the time line under <see cref="DepartureKey"/> (other words, "ETA 1234Z", as written under
-/// <see cref="FlightTimeKey"/>). The top bar app draws the boarding control and the notification button from its own fields, not as
-/// controls, and START BOARDING was not seen live (plan 21, Task 1), so the memory reader feeds neither yet. The keys stay the same whatever the words, so the window keeps the
+/// <see cref="FlightTimeKey"/>). The boarding box is measured too (2026-11-07): the top bar app draws it from its own fields, not as a
+/// control, and the model reads it after the countdown under <see cref="BoardingKey"/>, in the words BlueBird draws
+/// (<see cref="BoardingWords"/>): a button while it offers to start, text while a loading runs or is paused. The notification button is
+/// still not fed (BlueBird's notifications are read from their records). The keys stay the same whatever the words, so the window keeps the
 /// screen reader's focus on an item while it changes. Pure.
 /// </summary>
 public static class Bbs757EfbTopBar
@@ -39,6 +41,24 @@ public static class Bbs757EfbTopBar
         if (!m.Success) return null;
         string sign = m.Groups[1].Value switch { "" => "", "+" => "+", _ => "-" };
         return "DEP " + sign + m.Groups[2].Value;
+    }
+
+    /// <summary>
+    /// The words BlueBird draws in its boarding box, as its top bar draw chooses them (decoded from BBS752.wasm, 2026-11-07): a running or
+    /// paused deboarding "DEBOARDING..." or "DEBOARDING PAUSED"; a running boarding "BOARDING... N MIN", N the largest remaining time rounded
+    /// up to whole minutes, or "BOARDING..." with none left; a paused one "BOARDING PAUSED"; otherwise the offer, "START DEBOARDING" once the
+    /// aircraft has flown since its boarding and "START BOARDING" before. <see cref="BoardingText"/> makes them the window's item.
+    /// </summary>
+    internal static string BoardingWords(Bbs757EfbMemory.BoardingBox box)
+    {
+        bool running = box.State is 1 or 2 or 3;
+        if (box.Deboarding && running) return box.State == 3 ? "DEBOARDING PAUSED" : "DEBOARDING...";
+        if (box.State is 1 or 2)
+            return box.RemainingSeconds > 0
+                ? "BOARDING... " + ((box.RemainingSeconds + 59) / 60).ToString(System.Globalization.CultureInfo.InvariantCulture) + " MIN"
+                : "BOARDING...";
+        if (box.State == 3) return "BOARDING PAUSED";
+        return box.Flown ? "START DEBOARDING" : "START BOARDING";
     }
 
     private static readonly Regex Minutes = new(@"^(\d+)\s*MIN$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);

@@ -44,6 +44,7 @@ public class Bbs757EfbMemoryTests
         BbosModalOpen: 0x1d8, BbosNotices: 0x9334, NoticeStride: 0x3c, NoticeId: 0x00, NoticeTitle: 0x04,
         NoticeText: 0x10, NoticeTime: 0x1c, NoticeUnread: 0x34,
         OverlayPanelShown: 0x1fc, OverlayListOpen: 0x1fd, OverlayPanelRect: 0x234, OverlayPanelHeight: 0x240, OverlayFlightTimeText: 0x1b4,
+        OverlayBoardingRect: 0x214, BbosLoadState: 0x9160, BbosLoadDeboarding: 0x9164, BbosLoadFlown: 0x9167, BbosLoadRemaining: 0x9278,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),
@@ -671,6 +672,49 @@ public class Bbs757EfbMemoryTests
         var back = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(apps));
         Assert.Equal("DEP 00:28", back.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).FlightTime);
         Assert.DoesNotContain("flightTime", Bbs757EfbTreeJson.Write(empty), StringComparison.Ordinal);
+    }
+
+    private void I64(uint at, long v) => BinaryPrimitives.WriteInt64LittleEndian(_b.AsSpan((int)at), v);
+
+    /// <summary>The boarding box as BlueBird's draw leaves it: its rectangle in the top bar's app, BBOS's loading state, its two bytes and
+    /// its three remaining times (seconds).</summary>
+    private void BoardingBox(float w, int state, byte deboarding, byte flown, long r0, long r1, long r2)
+    {
+        uint rect = BarApp + (uint)Layout.OverlayBoardingRect;
+        F32(rect, 1144); F32(rect + 4, 4); F32(rect + 8, w); F32(rect + 12, w > 0 ? 24 : 0);
+        Ptr(Bbos + (uint)Layout.BbosLoadState, (uint)state);
+        _b[Bbos + (uint)Layout.BbosLoadDeboarding] = deboarding;
+        _b[Bbos + (uint)Layout.BbosLoadFlown] = flown;
+        I64(Bbos + (uint)Layout.BbosLoadRemaining, r0); I64(Bbos + (uint)Layout.BbosLoadRemaining + 8, r1); I64(Bbos + (uint)Layout.BbosLoadRemaining + 16, r2);
+    }
+
+    [Fact]
+    public void The_top_bar_app_reads_its_boarding_box()
+    {
+        // Decoded from BBS752.wasm and read live 2026-11-07: the top bar's draw writes the box's rectangle at +0x214 of its app on every
+        // frame it draws the box and zeros it otherwise; the words come from BBOS's loading state (+0x9160), its deboarding and flown bytes
+        // (+0x9164, +0x9167) and the largest of its three remaining times (+0x9278, 64-bit seconds). Only the top bar's app carries one.
+        var apps = Build(() => { TopBarAndDialog(dialogOpen: false); BoardingBox(176, 0, 0, 0, 0, 0, 0); }).ReadFrontApps();
+        Assert.Equal(new Bbs757EfbMemory.BoardingBox(1144, 4, 176, 24, 0, false, false, 0),
+            Assert.Single(apps, a => a.Class == Bbs757EfbMemory.TopBarClass).Boarding);
+        Assert.All(apps.Where(a => a.Class != Bbs757EfbMemory.TopBarClass), a => Assert.Null(a.Boarding));
+
+        // Boarding: the largest remaining time; a byte's low bit is its flag (BlueBird tests it so).
+        var running = Build(() => { TopBarAndDialog(dialogOpen: false); BoardingBox(176, 2, 0x02, 0x03, 540, 961, 120); }).ReadFrontApps();
+        Assert.Equal(new Bbs757EfbMemory.BoardingBox(1144, 4, 176, 24, 2, false, true, 961), running.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Boarding);
+
+        // A remaining time past a day or below 0 is a torn word, none; the others still count.
+        var torn = Build(() => { TopBarAndDialog(dialogOpen: false); BoardingBox(176, 1, 1, 0, -5, 86_401, 300); }).ReadFrontApps();
+        Assert.Equal(new Bbs757EfbMemory.BoardingBox(1144, 4, 176, 24, 1, true, false, 300), torn.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Boarding);
+
+        // No box drawn: the rectangle zeroed, so none is read whatever the state says.
+        var none = Build(() => { TopBarAndDialog(dialogOpen: false); BoardingBox(0, 4, 0, 0, 0, 0, 0); }).ReadFrontApps();
+        Assert.Null(none.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Boarding);
+
+        // The tree format carries it (optional: a tree without it reads none).
+        var back = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(running));
+        Assert.Equal(new Bbs757EfbMemory.BoardingBox(1144, 4, 176, 24, 2, false, true, 961), back.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Boarding);
+        Assert.DoesNotContain("\"boarding\"", Bbs757EfbTreeJson.Write(none), StringComparison.Ordinal);
     }
 
     [Fact]

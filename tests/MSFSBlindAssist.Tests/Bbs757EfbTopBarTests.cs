@@ -6,10 +6,10 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The tablet's top bar. From memory (plan 21, Task 6): the status bar is the top bar app's visible labels, the time line as BlueBird
-/// writes it. Plan 18's captures (Task 1, 2026-10-29, page models) carry the departure countdown, the boarding control and the
-/// notification control as plan 18's reader made them; the memory reader feeds none of the three yet (not measured), so their tests
-/// pin <see cref="Bbs757EfbTopBar"/>'s keys and words on those models. The keys are what keeps the screen reader's focus on an item
-/// while its words change, so they are pinned as strings.
+/// writes it, then the departure countdown and the boarding box (measured and decoded 2026-11-07). Plan 18's captures (Task 1,
+/// 2026-10-29, page models) carry the departure countdown, the boarding control and the notification control as plan 18's reader made
+/// them; the memory reader does not feed the notification control, so its tests pin <see cref="Bbs757EfbTopBar"/>'s keys and words on
+/// those models. The keys are what keeps the screen reader's focus on an item while its words change, so they are pinned as strings.
 /// </summary>
 public class Bbs757EfbTopBarTests
 {
@@ -34,6 +34,73 @@ public class Bbs757EfbTopBarTests
         // Empty, or none: nothing is added.
         Assert.Single(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithFlightTime(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"), ""))!.TopBar);
         Assert.Single(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"))!.TopBar);
+    }
+
+    /// <summary>The boarding box as read live on 2026-11-07 with automatic boarding off and a fresh OFP: [1144,4 176x24], idle.</summary>
+    private static Bbs757EfbMemory.BoardingBox Box(int state = 0, bool deboarding = false, bool flown = false, long remaining = 0) =>
+        new(1144, 4, 176, 24, state, deboarding, flown, remaining);
+
+    private static Bbs757EfbScreenModel WithBox(Bbs757EfbMemory.BoardingBox? box, string flightTime = "") =>
+        Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithBoarding(
+            Bbs757EfbTreeJson.WithFlightTime(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"), flightTime), box))!;
+
+    [Fact]
+    public void The_status_bar_offers_start_boarding_as_a_button_after_the_countdown()
+    {
+        // Automatic boarding off and a fresh OFP: BlueBird draws START BOARDING in its top bar (no control: the top bar app's own
+        // rectangle and BBOS's loading state, decoded 2026-11-07). The window offers it where BlueBird draws it, after the countdown.
+        var m = WithBox(Box(), "DEP 00:42");
+        Assert.Equal(new[] { "top:time_label", "top:dep", "top:boarding" }, m.TopBar.Select(i => i.Key));
+        var start = m.TopBar[2];
+        Assert.Equal(Bbs757EfbKind.Button, start.Kind);
+        Assert.Equal("Start boarding", start.Text);
+        Assert.True(start.Clickable);
+        Assert.Equal(new Rectangle(1144, 4, 176, 24), start.Box);
+        Assert.Equal(new Point(1232, 16), start.Hit);
+        // Pressing it is BlueBird's START BOARDING: the load watch starts as when the pilot taps it on the tablet.
+        Assert.Equal(Bbs757EfbHook.StartBoarding, Bbs757EfbExtras.HookFor(m.PageName, start));
+    }
+
+    [Theory]
+    [InlineData(1, false, false, 960L, "Boarding… 16 min", false)]
+    [InlineData(2, false, false, 961L, "Boarding… 17 min", false)]
+    [InlineData(2, false, false, 0L, "Boarding...", false)]
+    [InlineData(3, false, false, 600L, "Boarding paused", false)]
+    [InlineData(4, false, true, 0L, "Start deboarding", true)]
+    [InlineData(0, false, true, 0L, "Start deboarding", true)]
+    [InlineData(2, true, true, 300L, "Deboarding...", false)]
+    [InlineData(3, true, true, 300L, "Deboarding paused", false)]
+    public void The_boarding_box_reads_as_BlueBird_draws_it(int state, bool deboarding, bool flown, long remaining, string said, bool button)
+    {
+        // A running or paused loading is a status (text); an offer to start is a button. The minutes are the largest remaining time
+        // rounded up, as BlueBird's draw rounds them.
+        var item = Assert.Single(WithBox(Box(state, deboarding, flown, remaining)).TopBar, i => i.Key == Bbs757EfbTopBar.BoardingKey);
+        Assert.Equal(said, item.Text);
+        Assert.Equal(button, item.Clickable);
+        Assert.Equal(button ? Bbs757EfbKind.Button : Bbs757EfbKind.Text, item.Kind);
+        Assert.Equal(new Rectangle(1144, 4, 176, 24), item.Box);
+    }
+
+    [Fact]
+    public void No_box_adds_nothing_to_the_status_bar()
+    {
+        // BlueBird zeros the rectangle on every frame it draws no box: the walk reads none, and the status bar has no boarding item.
+        Assert.Equal(new[] { "top:time_label" }, WithBox(null).TopBar.Select(i => i.Key));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_boarding_minutes_read_the_same_under_a_comma_decimal_culture(string culture)
+    {
+        var before = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            Assert.Equal("BOARDING... 1440 MIN", Bbs757EfbTopBar.BoardingWords(Box(2, remaining: 86_400)));
+            Assert.Equal("Boarding… 16 min", Assert.Single(WithBox(Box(2, remaining: 960)).TopBar, i => i.Key == Bbs757EfbTopBar.BoardingKey).Text);
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = before; }
     }
 
     private static Bbs757EfbMemory.Node Leaf(string kind, string name, string text, float x, float y, float w, float h) =>
