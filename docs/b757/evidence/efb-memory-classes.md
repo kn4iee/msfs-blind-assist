@@ -87,8 +87,15 @@ Also seen live, already read as other kinds or "other": stack 0x30d60, canvas 0x
   is min(n × 38, the int at drop-down +0x194) when that int is above 0, else n × 38 (runway 6 / 380 → 228; flap 4 / 150 →
   150; surface 6 / 180 → 180; antiice 3 / 120 → 114; the two-entry ones 96 → 76; tora 6 / 0 → 228; charts 2 / 814 → 76;
   map 4 / 190 → 152; `pb_menu1` 4 / 200 → 152).
-- **A list taller than its cap scrolls** inside `item_scrollbox`, whose content offset is +0x134 as any scrollbox's
-  (B757-26): surface 6 × 38 = 228 > 180, flap 4 × 38 = 152 > 150. Not exercised: no drag was made in an open list.
+- **A list taller than its cap does not scroll** (measured 2026-11-07 for plan 21's Task 7 fix round, the owner's go-ahead, each
+  choice put back): surface 6 × 38 = 228 > 180, flap 4 × 38 = 152 > 150. On PERF calc's Surface drop-down (face
+  [977.9,324.2 150x34]; open, its list box [977.9,357.2 150x180] and its rows [977.9, 357.2 + 38 i, 130x38]), a 60 px eased
+  drag inside the open list and one on its scrollbar strip left `item_scrollbox`'s content offset (+0x134, B757-26) at 0, the
+  list open and its face Dry: neither release chose a row. One wheel turn (deltaY 100) left it at 0 too. Its scrollbar's fields
+  are never laid out (x -11.7, height -15). So an open list scrolls by no input measured, and a row past its box (Wet's, drawn
+  547.2 to 585.2) cannot be shown: a tap on it (y 566) closed the list without choosing, as the box clips the rows past it.
+  Snow's row, of which 28 px show (509.2 to 537.2), took a tap in that strip: the list closed and the face read Snow. Dry was
+  chosen back. The press runner never drags in a list (B757-27).
 - Other words: +0x14c an id per drop-down (0x13ee to 0x14fd); +0x148 on runway points at `tora_dropdown` (unknown);
   +0x144 the page.
 
@@ -263,7 +270,7 @@ join the class list, derived by RTTI.
 
 ## Not settled
 
-The open list's scrolling (no drag in an open list was made); an open list under a scrolled page (no drop-down read sits
+Whether a tap on an open list's face closes it; an open list under a scrolled page (no drop-down read sits
 in a scrollbox: the reader takes the page's scroll off the list and its rows as for any control inside a scrollbox, logic
 only); the toast, START BOARDING and the departure countdown;
 the notification list's order; overlay +0x2ac, +0x20c and +0x210, record +0x36, BBOS +0x9348 and +0x9368; the OFP's
