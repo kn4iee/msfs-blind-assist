@@ -2672,21 +2672,33 @@ public class Bbs757EfbBridgeTests
     [Fact]
     public void Sets_settle_per_element_and_keep_the_window_order()
     {
-        // A set for another element is its own; a click is never held but behind a set before it; a newer set for an element takes the
-        // older one's place, where it was sent.
+        // A set for another element is its own; a click is never held but behind a set before it, and is a barrier: a set before it is
+        // never replaced by one after it (the re-review's N1), so each settles in its own place.
         var queue = new Bbs757EfbCommandQueue();
         queue.Add(Set("12", "RW07R", at: 0));
         queue.Add(Click("40", at: 50));
         queue.Add(Set("12", "RW08", at: 100));
         queue.Add(Set("13", "15", at: 120));
 
-        Assert.Equal("click_display_element", queue.Next(100, 0, out _)!.Name);   // RW07R gave way to RW08
-        Assert.Null(queue.Next(100, 0, out int wait));
-        Assert.Equal(300, wait);
+        Assert.Null(queue.Next(100, 0, out int wait));   // RW07R settles: the click behind it waits too
+        Assert.Equal(200, wait);
+        Assert.Equal("RW07R", queue.Next(300, 0, out _)!.Payload!["value"]);
+        Assert.Equal("click_display_element", queue.Next(300, 0, out _)!.Name);
+        Assert.Null(queue.Next(300, 0, out wait));
+        Assert.Equal(100, wait);
         Assert.Equal("RW08", queue.Next(400, 0, out _)!.Payload!["value"]);
         Assert.Null(queue.Next(400, 0, out wait));
         Assert.Equal(20, wait);
         Assert.Equal("15", queue.Next(420, 0, out _)!.Payload!["value"]);
+
+        // Only another kind of command is a barrier: a set for another element between two of one element's leaves them neighbors, and
+        // the newer of the two takes the older one's place.
+        queue.Add(Set("12", "RW25L", at: 500));
+        queue.Add(Set("13", "20", at: 510));
+        queue.Add(Set("12", "RW25R", at: 520));
+        Assert.Equal("20", queue.Next(900, 0, out _)!.Payload!["value"]);
+        Assert.Equal("RW25R", queue.Next(900, 0, out _)!.Payload!["value"]);
+        Assert.Equal(0, queue.Count);
 
         // A set that settled while the loop was busy (a press running) is handed out at once; two that came meanwhile, only the last.
         queue.Add(Set("12", "RW25L", at: 1000));
@@ -2698,6 +2710,25 @@ public class Bbs757EfbBridgeTests
         queue.Add(Set("12", "RW26", at: 6000, showing: 0));
         Assert.Null(queue.Next(7000, 1, out wait));
         Assert.Equal((0, 0), (wait, queue.Count));
+    }
+
+    [Fact]
+    public void A_click_between_two_sets_of_one_element_keeps_both_in_order()
+    {
+        // The re-review's N1: while a press runs, the pilot picks Runway RW07R, presses Calculate, then picks RW08. Merged across the click,
+        // RW07R would be dropped and Calculate run on the runway the tablet still showed. A click is a barrier: the three run in the order
+        // the window sent them, Calculate on RW07R.
+        var queue = new Bbs757EfbCommandQueue();
+        queue.Add(Set("12", "RW07R", at: 0));
+        queue.Add(Click("40", at: 50));
+        queue.Add(Set("12", "RW08", at: 100));
+
+        var ran = new List<string>();
+        while (queue.Next(5000, 0, out _) is { } command)
+            ran.Add(command.Name == "set_element_value" ? command.Payload!["value"] : "click " + command.Payload!["index"]);
+
+        Assert.Equal(new[] { "RW07R", "click 40", "RW08" }, ran);
+        Assert.Equal(0, queue.Count);
     }
 
     [Fact]

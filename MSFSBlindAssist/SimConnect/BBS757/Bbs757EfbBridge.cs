@@ -528,8 +528,10 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 /// on the way, each rerunning BlueBird's runway inputs. The 757's panel combos act 300 ms after the last row arrowed onto for the same
 /// reason (<c>docs/b757.md</c>, "How it writes"). Every set waits so (choice lists, two-choice lists, sliders and check boxes alike); a
 /// click never waits but behind a set before it, and a set that settled while the loop was busy (a press running) is handed out at once
-/// unless a newer one for its element came meanwhile. A command sent in an earlier showing of the window is dropped. Pure; on the bridge's
-/// loop only.
+/// unless a newer one for its element came meanwhile. Any command but a set is a barrier (the re-review's N1): a set sent before it is
+/// never replaced by one sent after it, so RW07R, Calculate, RW08 run in that order and Calculate runs on RW07R; sets settle only among
+/// neighboring sets (sets for other elements between them included). A command sent in an earlier showing of the window is dropped.
+/// Pure; on the bridge's loop only.
 /// </summary>
 public sealed class Bbs757EfbCommandQueue
 {
@@ -559,7 +561,7 @@ public sealed class Bbs757EfbCommandQueue
     /// The next command to handle at <paramref name="nowMs"/> in the window's showing <paramref name="showing"/>, taken out; null when none
     /// is ready. <paramref name="waitMs"/> is then how long the first command, a set still settling, has to wait (at most
     /// <see cref="SetSettleMs"/>), or 0 when nothing is taken. Dropped on the way: a command of an earlier showing, and a set a newer set for
-    /// the same element replaces.
+    /// the same element replaces, sent before any other command after it.
     /// </summary>
     public Command? Next(long nowMs, int showing, out int waitMs)
     {
@@ -575,9 +577,11 @@ public sealed class Bbs757EfbCommandQueue
             }
             if (ElementSet(head) is { } element)
             {
-                if (_queued.Skip(1).Any(c => ElementSet(c) == element))
+                // A newer set for the same element takes its place, the last winning, but only among the sets sent before the next
+                // other command: a click is a barrier, so an element's change never moves past a press the pilot made after it.
+                if (_queued.Skip(1).TakeWhile(c => c.Name == SetCommand).Any(c => ElementSet(c) == element))
                 {
-                    _queued.RemoveAt(0);   // a newer set for the same element takes its place: the last wins
+                    _queued.RemoveAt(0);
                     continue;
                 }
                 long due = head.AtMs + SetSettleMs;
@@ -593,7 +597,9 @@ public sealed class Bbs757EfbCommandQueue
         return null;
     }
 
+    private const string SetCommand = "set_element_value";
+
     /// <summary>The element a set names (its push's number, as the window sent it); null for any other command.</summary>
     private static string? ElementSet(Command c) =>
-        c.Name == "set_element_value" && c.Payload != null && c.Payload.TryGetValue("index", out var index) ? index : null;
+        c.Name == SetCommand && c.Payload != null && c.Payload.TryGetValue("index", out var index) ? index : null;
 }
