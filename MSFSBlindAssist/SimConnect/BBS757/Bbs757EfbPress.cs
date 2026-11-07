@@ -76,6 +76,7 @@ public static class Bbs757EfbPress
             .Append('|').Append(i.Slider is { KnobRead: true } s
                 ? Math.Round(s.PercentOf(s.KnobX)).ToString(System.Globalization.CultureInfo.InvariantCulture) : "");
         if (i.Entries is { } entries) sb.Append("|entries|").Append(string.Join('\u001f', entries));
+        if (i.Unit.Length > 0) sb.Append("|unit|").Append(i.Unit);   // a dialog box's unit: its name says it (plan 22)
         return sb.Append('\n').ToString();
     }
 
@@ -458,7 +459,7 @@ public static class Bbs757EfbPress
     public static string NoKeyText(string name, char character) => name + ": the tablet's keyboard has no " + character.ToString() + ".";
 
     /// <summary>A field that reads the typed text (case aside: PERF calc's Airport box upper-cases it) once it was typed: the one
-    /// confirmation of a typing (CORE-7: the screen reader said only the pilot's own keys).</summary>
+    /// confirmation of a typing (CORE-7: the screen reader said the pilot's keys in the window's edit box, never what the tablet took).</summary>
     public static string TypedText(string name, string value) => name + ": " + value;
 
     /// <summary>A field that reads another text than the one typed (BlueBird's boxes filter what they take, and a full box drops keys).</summary>

@@ -1214,8 +1214,14 @@ public class Bbs757EfbPressTests
         /// <summary>The box the keyboard comes up typing into, when another than this one, and whether that box opens the keypad.</summary>
         public string? UpFor { get; init; }
         public bool UpForKeypad { get; init; }
-        /// <summary>The box's caret, length and keypad flag read only while the keyboard is up (a read before the tap cannot tell).</summary>
-        public bool TextStateUnreadWhileDown { get; init; }
+        /// <summary>The keyboard's keys read only while it is up (a torn read before the tap cannot tell which characters have a key).</summary>
+        public bool KeysUnreadWhileDown { get; init; }
+        /// <summary>A value box (fuel_left_qty_box): a field with no caret, maximum length or keypad flag in any read.</summary>
+        public bool ValueBox { get; init; }
+        /// <summary>The unit BlueBird draws beside a dialog's box ("Gal"), "" for none.</summary>
+        public string Unit { get; init; } = "";
+        /// <summary>After this many runs of typing taps the keyboard goes down (the pilot's own mouse, or BlueBird), null for never.</summary>
+        public int? DownAfterRuns { get; init; }
         private bool KeypadUp => UpFor != null ? UpForKeypad : Keypad;
         public bool RunsGoOut { get; init; } = true;
         public int ContentY { get; init; } = 156;
@@ -1251,7 +1257,7 @@ public class Bbs757EfbPressTests
             int y = (int)Math.Round(ContentY - Offset);
             var box = new Rectangle(289, y, 150, 34);
             return new Bbs757EfbItem(Bbs757EfbKind.Field, Label, box, new Point(box.Left + 75, y + 17), true, Name, Value: Text, Name: Name,
-                TextState: TextStateUnreadWhileDown && !Shown ? null : new Bbs757EfbTextState(Caret, MaxLength, Keypad));
+                TextState: ValueBox ? null : new Bbs757EfbTextState(Caret, MaxLength, Keypad), Unit: Unit);
         }
 
         public Point FieldHit => Field().Hit;
@@ -1266,7 +1272,7 @@ public class Bbs757EfbPressTests
                 : PageOf("AIRCRAFT", "FUEL");
             return page with
             {
-                Keyboard = Kb,
+                Keyboard = KeysUnreadWhileDown && !Shown ? null : Kb,
                 KeyboardState = new Bbs757EfbKeyboardState(Shown, Ready, KeypadUp, Target, Numeric, Shift, Caps, Shown ? KeypadAt : FuelKeypad),
                 Scrollable = Scrollable,
                 Viewport = Bbs757EfbScreen.ContentArea,
@@ -1306,6 +1312,7 @@ public class Bbs757EfbPressTests
                     Land(p);
                     Now += gap;
                 }
+                if (Runs.Count == DownAfterRuns) Down();
                 return Task.FromResult(true);
             },
             Drag = (x, y0, y1, _) =>
@@ -1520,9 +1527,9 @@ public class Bbs757EfbPressTests
     [Fact]
     public async Task A_missing_key_the_first_read_cannot_tell_closes_the_keyboard()
     {
-        // The safety net: the box's state not read before the tap, so the read that shows the keyboard up finds the missing character; the
-        // keyboard is put down again with nothing typed.
-        var tablet = new TypingTablet { Text = "KSEA", TextStateUnreadWhileDown = true };
+        // The safety net: the keyboard's keys not read before the tap, so the read that shows the keyboard up finds the missing character;
+        // the keyboard is put down again with nothing typed. (A box whose own state was not read is never typed: Task 5.)
+        var tablet = new TypingTablet { Text = "KSEA", KeysUnreadWhileDown = true };
 
         await tablet.Runner().TypeAsync(tablet.Pressed(), "KSé", CancellationToken.None);
 
@@ -1705,18 +1712,66 @@ public class Bbs757EfbPressTests
     public async Task A_dialogs_box_is_typed_under_its_question_and_its_keypad_closed_with_OK(string culture)
     {
         // The fuel input dialog's box, a question's row, with the keypad up for it: found again under the same question, typed on its keypad,
-        // and the keypad's OK closes the keypad alone (INSERT stays the pilot's answer: measured).
+        // and the keypad's OK closes the keypad alone (INSERT stays the pilot's answer: measured). The box holds its own text, its unit
+        // apart (Task 5): read back as typed, under its name as the window shows it, the unit after it.
         var tablet = new TypingTablet
         {
-            Label = "FUEL", Name = "fuel_input_textbox", Text = "2176", Keypad = true, MaxLength = 8, KeypadAt = FuelKeypad, InQuestion = true,
-            ReadyAfterMs = 100,
+            Label = "FUEL", Name = "fuel_input_textbox", Text = "2176", Unit = "Gal", Keypad = true, MaxLength = 8, KeypadAt = FuelKeypad,
+            InQuestion = true, ReadyAfterMs = 100,
         };
 
         await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "2000", CancellationToken.None));
 
         Assert.Equal("2000", tablet.Text);
         Assert.Equal(new[] { tablet.FieldHit, new Point(895, 735) }, tablet.Taps);
-        Assert.Equal(new[] { "Fuel: 2000" }, tablet.Alerts);
+        Assert.Equal(new[] { "Fuel (Gal): 2000" }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_dialogs_box_holding_the_text_already_taps_nothing()
+    {
+        // With the unit apart from its text, the box holding the text typed is found so on the first read: nothing tapped, nothing said.
+        var tablet = new TypingTablet { Label = "FUEL", Name = "fuel_input_textbox", Text = "2176", Unit = "Gal", Keypad = true, InQuestion = true };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "2176", CancellationToken.None);
+
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_field_with_no_text_state_is_never_typed(string culture)
+    {
+        // A value box (fuel_left_qty_box: no caret in any read) is no text box: its tap would open BlueBird's fuel input dialog, so nothing
+        // is tapped or dragged, and "not typed" is said (Task 3's review).
+        var tablet = new TypingTablet
+        {
+            Label = "QUANTITY", Name = "fuel_left_qty_box", Text = "1539", ValueBox = true, ContentY = 1300, Scrollable = true,
+        };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "1000", CancellationToken.None));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Runs);
+        Assert.Equal(new[] { "Quantity not typed." }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_keyboard_that_went_down_between_runs_types_no_more(string culture)
+    {
+        // A long text goes in runs; before each run after the first the tablet is read again, and a keyboard no longer up for the field (the
+        // pilot's own mouse put it down) takes no second run: a key's place is the page's then. Nothing to close; "not typed" is said.
+        var tablet = new TypingTablet { Text = "x", DownAfterRuns = 1 };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), new string('a', 45), CancellationToken.None));
+
+        Assert.Single(tablet.Runs);
+        Assert.Equal(new[] { tablet.FieldHit }, tablet.Taps);   // no close tap
+        Assert.Equal(0, tablet.KeysOnThePage);
+        Assert.Equal(new[] { "Airport not typed." }, tablet.Alerts);
     }
 
     [Fact]

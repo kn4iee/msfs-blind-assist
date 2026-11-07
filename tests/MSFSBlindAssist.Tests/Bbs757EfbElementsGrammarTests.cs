@@ -186,9 +186,9 @@ public class Bbs757EfbElementsGrammarTests
     [MemberData(nameof(Cultures))]
     public void A_text_box_is_a_line_with_what_it_holds(string culture)
     {
-        // The coordinator's ruling of 2026-11-07: until plan 22 types into the tablet (B757-23), a text box is a line, its name and what
+        // A text box whose caret was not read (no TextState: a torn read, or a tree captured before plan 22) is a line, its name and what
         // it holds as the tablet writes it (a decimal point under every culture), as a value box is; an empty one is its name alone. No
-        // edit box, so no typing that goes nowhere and no "Set Pressure to ..." for nothing typed; nothing to press.
+        // edit box, since the typing needs the caret; nothing to press. One whose caret was read is an edit box (Bbs757EfbElementsTests).
         var page = Page("NAVIGATION", "PERF CALC", new[]
         {
             Make(Bbs757EfbKind.Field, "Pressure (inHg)", "planning_perf_calc_press", "30.01"), Make(Bbs757EfbKind.Field, "Wind", "planning_perf_calc_wind"),

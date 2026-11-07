@@ -702,9 +702,11 @@ public sealed class Bbs757EfbPressRunner
     /// keyboard or numeric keypad as a sighted pilot types it (plan 22; measured 2026-11-07, docs/b757/evidence/efb-typing.md), through the
     /// runner's discipline (B757-18: a fresh read, the field relocated and brought into view, a tap or nothing):
     /// <list type="number">
-    /// <item>The first fresh read, before any drag or tap (<see cref="TypingWanted"/>): the field holding the text exactly (ordinal), nothing
-    /// tapped, nothing said; a character of the text on no key of what the field opens, keyboard or keypad (<see cref="MissingKey"/>), no
-    /// tap of any kind and "{name}: the tablet's keyboard has no {character}." (plan 22's Global Constraints).</item>
+    /// <item>The first fresh read, before any drag or tap (<see cref="TypingWanted"/>): a field with no caret read
+    /// (<see cref="Bbs757EfbItem.TextState"/> null: a value box, whose tap would open BlueBird's dialog, or a torn read) is never typed,
+    /// nothing tapped, "{name} not typed."; the field holding the text exactly (ordinal), nothing tapped, nothing said; a character of the
+    /// text on no key of what the field opens, keyboard or keypad (<see cref="MissingKey"/>), no tap of any kind and "{name}: the tablet's
+    /// keyboard has no {character}." (plan 22's Global Constraints).</item>
     /// <item>The field is tapped (<see cref="TapAsync"/>, as any control), and the tablet read until its keyboard is up, settled and typing
     /// into it (<see cref="KeyboardUpFor"/>, at most <see cref="KeyboardReadyMaxMs"/>; up for another box counts as not): never a key before
     /// (B757-23). Not in time: a keyboard that the last read shows up and settled for another box is put down (its down key, or the keypad's
@@ -714,21 +716,25 @@ public sealed class Bbs757EfbPressRunner
     /// <item>The taps are planned from that read (<see cref="Bbs757EfbTyping"/>): a box that opens the keypad
     /// (<see cref="Bbs757EfbTextState.Keypad"/>) on the keypad where that read draws it (it moves with its box); any other on the keyboard,
     /// from its layer and the caret the tap put, clearing the old text around it. A character no key carries, which the read before the tap
-    /// could not tell (the box's state not read then): the keyboard put down again, nothing typed, "{name}: the tablet's keyboard has no
+    /// could not tell (the keyboard's keys not read then): the keyboard put down again, nothing typed, "{name}: the tablet's keyboard has no
     /// {character}."; nothing to plan with (the box's state, the keys or the keypad not read): put down, "{name} not typed."</item>
     /// <item>The taps go in runs of at most <see cref="Bbs757EfbTyping.MaxTapsPerRun"/>, <see cref="Bbs757EfbTyping.TapGapMs"/> apart, one
     /// agent run each (<see cref="Bbs757EfbPressIo.TapRun"/>). A run that does not go out stops the typing: the keyboard put down when it is
-    /// still up, and "{name} not typed." (what the field reads is not said; the window shows it).</item>
+    /// still up, and "{name} not typed." (what the field reads is not said; the window shows it). Before each run after the first the
+    /// tablet is read again (B757-18): a keyboard no longer up for the field (the pilot's own mouse put it down) takes no more keys, since
+    /// a key's place is then the page's: "{name} not typed.", nothing to close.</item>
     /// <item>The keyboard put down with its down key (it keeps the text), a keypad box finished with the keypad's OK (it commits a box with no
     /// dialog, and in the fuel and weight dialog closes only the keypad: INSERT stays the pilot's answer), each only while the read before it
     /// shows the keyboard up for the field (with it down, the key's place is the page's).</item>
     /// <item>The tablet read until the field's text changes from what it held, or reads the text (at most <see cref="ChangeMaxMs"/>), and
-    /// said once (CORE-7: the screen reader said only the pilot's own keys): "{name}: {value}" when it reads the text, case aside (PERF calc's
-    /// Airport box upper-cases it); else "{name} reads {value}." (BlueBird's boxes filter what they take, and a full box drops keys); a field
-    /// that reads empty (emptied as asked, or every key dropped): "{name} is empty."; the field gone: "{name} is no longer on the tablet."</item>
+    /// said once (CORE-7: the screen reader said the pilot's keys in the window's edit box, never what the tablet took): "{name}: {value}"
+    /// when it reads the text, case aside (PERF calc's Airport box upper-cases it); else "{name} reads {value}." (BlueBird's boxes filter
+    /// what they take, and a full box drops keys); a field that reads empty (emptied as asked, or every key dropped): "{name} is empty.";
+    /// the field gone: "{name} is no longer on the tablet."</item>
     /// </list>
     /// The text goes as typed: no trimming, no case change, no number parsing (BlueBird validates it). The text and the field's value are
-    /// never logged: a log line names the field alone (D2).
+    /// never logged, nor anything that gives away their length (the taps, the runs, whether it read back as typed): a log line names the
+    /// field alone, with a time at most (D2).
     /// </summary>
     public async Task TypeAsync(Bbs757EfbPressed pressed, string text, CancellationToken ct)
     {
@@ -782,11 +788,21 @@ public sealed class Bbs757EfbPressRunner
         }
 
         var runs = Bbs757EfbTyping.Runs(plan);
-        Log.Debug("BBS757", $"EFB typing: {field.Name}: keyboard up {(_io.NowMs() - tappedAt).ToString(CultureInfo.InvariantCulture)} ms after the tap; "
-            + $"{plan.Taps.Count.ToString(CultureInfo.InvariantCulture)} taps in {runs.Count.ToString(CultureInfo.InvariantCulture)} run(s)");
-        foreach (var run in runs)
+        Log.Debug("BBS757", $"EFB typing: {field.Name}: keyboard up {(_io.NowMs() - tappedAt).ToString(CultureInfo.InvariantCulture)} ms after the tap");
+        for (int r = 0; r < runs.Count; r++)
         {
-            if (await _io.TapRun(run, Bbs757EfbTyping.TapGapMs, ct)) continue;
+            if (r > 0)
+            {
+                // A fresh read before each run after the first (B757-18): a keyboard put down meanwhile takes no more keys.
+                if (await _io.Read(ct) is not { } now) return;   // nothing read: the window says why
+                if (!KeyboardUpFor(now, field))
+                {
+                    Log.Debug("BBS757", $"EFB typing: {field.Name}: the keyboard is no longer up for it; stopped");
+                    _io.Alert(Bbs757EfbPress.NotTypedText(name));
+                    return;
+                }
+            }
+            if (await _io.TapRun(runs[r], Bbs757EfbTyping.TapGapMs, ct)) continue;
             if (ct.IsCancellationRequested) return;   // the window hid or the bridge stopped: nothing said
             Log.Debug("BBS757", $"EFB typing: {field.Name}: a run of taps did not go out; stopped");
             await CloseKeyboardAsync(field, keypad, ct);
@@ -823,12 +839,19 @@ public sealed class Bbs757EfbPressRunner
 
     /// <summary>
     /// Whether a typing goes on from the first fresh read of the field (<paramref name="field"/> on <paramref name="page"/>), before any
-    /// drag or tap: not when the field holds the text already (nothing said), and not when a character of the text is on no key of what the
+    /// drag or tap: not when the read has no caret for it (a value box, whose tap opens BlueBird's dialog: "{name} not typed."; Task 3's
+    /// review), not when the field holds the text already (nothing said), and not when a character of the text is on no key of what the
     /// field opens (<see cref="MissingKey"/>): "{name}: the tablet's keyboard has no {character}." with no tap of any kind (plan 22's Global
     /// Constraints).
     /// </summary>
     private bool TypingWanted(Bbs757EfbScreenModel page, Bbs757EfbItem field, string text)
     {
+        if (field.TextState is null)
+        {
+            Log.Debug("BBS757", $"EFB typing: {field.Name}: no caret read, no text box to type into; nothing tapped");
+            _io.Alert(Bbs757EfbPress.NotTypedText(Bbs757EfbPress.SpokenName(page, field)));
+            return false;
+        }
         if (string.Equals(field.Value, text, StringComparison.Ordinal)) return false;
         if (MissingKey(page, field, text) is not char missing) return true;
         Log.Debug("BBS757", $"EFB typing: {field.Name}: a character on no key; nothing tapped");
@@ -875,8 +898,8 @@ public sealed class Bbs757EfbPressRunner
             return;
         }
         bool asTyped = ReadsAsTyped(shown, text);
-        Log.Debug("BBS757", $"EFB typing: {box.Name}: read back {(_io.NowMs() - start).ToString(CultureInfo.InvariantCulture)} ms after the keyboard's close, "
-            + (shown.Value.Length == 0 ? "empty" : asTyped ? "as typed" : "another text"));
+        Log.Debug("BBS757",
+            $"EFB typing: {box.Name}: read back {(_io.NowMs() - start).ToString(CultureInfo.InvariantCulture)} ms after the keyboard's close");
         // An empty field says so ("Airport: " would end on nothing): emptied as asked, or every key dropped.
         _io.Alert(shown.Value.Length == 0 ? Bbs757EfbPress.EmptyText(name)
             : asTyped ? Bbs757EfbPress.TypedText(name, shown.Value) : Bbs757EfbPress.TypedOtherText(name, shown.Value));

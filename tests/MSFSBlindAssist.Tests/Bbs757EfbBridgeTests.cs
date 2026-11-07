@@ -1314,8 +1314,8 @@ public class Bbs757EfbBridgeTests
     {
         // The window shows a drop-down as a choice list, and a choice in it is made on the tablet (plan 21, Task 7): the harness has no
         // tablet to tap, so the face's tap ends "cannot be reached", the proof a tap was tried. That push shows the tablet's entry again
-        // (Task 5's review, M3): the window's list returns to RW07L, not the RW26 the pilot picked. A text box is a line until plan 22
-        // types (B757-23): nothing to set.
+        // (Task 5's review, M3): the window's list returns to RW07L, not the RW26 the pilot picked. A text box whose caret was not read (the
+        // capture predates plan 22) is a line: nothing to set.
         var page = PerfCalc();
         using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(page, null) };
         h.Bridge.TakeRead(page);
@@ -1331,6 +1331,60 @@ public class Bbs757EfbBridgeTests
         var after = h.Pushes[^1];
         Assert.Equal(("alert", Bbs757EfbPress.UnreachableText), (after["items.0.kind"], after["items.0.text"]));
         Assert.Equal(("select", "RW07L"), (after[$"items.{IndexOf(after, "Runway")}.type"], after[$"items.{IndexOf(after, "Runway")}.value"]));
+    }
+
+    // ---- edit boxes (plan 22, Task 5) ------------------------------------------------------------------------------------
+
+    /// <summary>The window's set on the element named <paramref name="name"/> of the last push, as the shared window sends it on Enter,
+    /// taken through the command queue (B757-28's settle passes the one set through) and handled; the alert it left, or null.</summary>
+    private static async Task<string?> SetOnEnterAsync(BridgeHarness h, string name, string text)
+    {
+        var push = h.Pushes[^1];
+        h.Bridge.EnqueueCommand("set_element_value", new Dictionary<string, string>
+        {
+            ["index"] = push[$"items.{IndexOf(push, name)}.aidx"], ["value"] = text, ["controlType"] = "text",
+        });
+        Assert.True(await h.Bridge.HandleNextCommandAsync(CancellationToken.None));
+        Assert.False(await h.Bridge.HandleNextCommandAsync(CancellationToken.None));   // the one set, run once
+        var last = h.Pushes[^1];
+        return last.TryGetValue("items.0.kind", out var kind) && kind == "alert" ? last["items.0.text"] : null;
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_set_on_an_edit_box_types_it(string culture)
+    {
+        // PERF calc's Airport box with its caret read: an edit box whose set (the pilot's Enter) is typed on the tablet (TypeAsync). The
+        // harness has no tablet to tap: a character on no key is said before any tap, the proof the text reached the typing; a text it can
+        // type taps the field first, which ends "cannot be reached"; the text the box holds already taps nothing and says nothing.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithTextState(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"),
+            "planning_perf_calc_airport_input", 4, 4, false))!;
+        using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(page, null) };
+        h.Bridge.TakeRead(page);
+        int airport = IndexOf(h.Pushes[^1], "Airport");
+        Assert.Equal(("text", "KSEA", "enter"),
+            (h.Pushes[^1][$"items.{airport}.type"], h.Pushes[^1][$"items.{airport}.value"], h.Pushes[^1][$"items.{airport}.commit"]));
+
+        await TestCulture.Run(culture, async () =>
+        {
+            Assert.Equal("Airport: the tablet's keyboard has no é.", await SetOnEnterAsync(h, "Airport", "KSé"));
+            Assert.Equal(Bbs757EfbPress.UnreachableText, await SetOnEnterAsync(h, "Airport", "KPDX"));
+            Assert.Null(await SetOnEnterAsync(h, "Airport", "KSEA"));
+        });
+    }
+
+    [Fact]
+    public async Task A_set_on_a_dialogs_edit_box_types_it_under_its_question()
+    {
+        // The fuel input dialog's box (11c, its caret read): the edit box named with its unit, its set typed on the keypad. A letter is on
+        // no key of the keypad, said before any tap under the box's name as the window shows it; digits tap the box (no tablet here).
+        var dialog = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithTextState(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog"),
+            "fuel_input_textbox", 3, 8, true))!;
+        using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(dialog, null) };
+        h.Bridge.TakeRead(dialog);
+
+        Assert.Equal("Fuel (Gal): the tablet's keyboard has no a.", await SetOnEnterAsync(h, "Fuel (Gal)", "20a0"));
+        Assert.Equal(Bbs757EfbPress.UnreachableText, await SetOnEnterAsync(h, "Fuel (Gal)", "2000"));
     }
 
     // ---- choosing from a drop-down (plan 21, Task 7) ---------------------------------------------------------------------

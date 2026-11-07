@@ -106,6 +106,9 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
 /// list not read). Neither is in the page's fingerprint: the window shows a drop-down as a choice list, open or not.
 /// <see cref="TextState"/> is a <see cref="Bbs757EfbKind.Field"/>'s caret, maximum length and keypad flag when it is one of BlueBird's
 /// text boxes and all three were read (plan 22), null otherwise; not in the fingerprint either, as the caret moves while the pilot types.
+/// <see cref="Unit"/> is the unit BlueBird draws beside a dialog's text box ("Gal" beside the fuel input dialog's box), "" for any other
+/// item: the box's <see cref="Value"/> is its own text alone ("752"), so a typing compares and reads back what the box holds, and the window
+/// names it with the unit after its name ("Fuel (Gal)", plan 22, Task 5).
 /// </summary>
 public sealed record Bbs757EfbItem(
     Bbs757EfbKind Kind,
@@ -126,7 +129,8 @@ public sealed record Bbs757EfbItem(
     IReadOnlyList<string>? Entries = null,
     bool Open = false,
     Bbs757EfbOpenList? List = null,
-    Bbs757EfbTextState? TextState = null);
+    Bbs757EfbTextState? TextState = null,
+    string Unit = "");
 
 /// <summary>
 /// One of BlueBird's text boxes as the keyboard types into it (plan 22, measured live 2026-11-07, docs/b757/evidence/efb-typing.md):
@@ -239,7 +243,8 @@ public sealed record Bbs757EfbKey(string Name, string Lower, string Upper, strin
 
 /// <summary>A box the tablet shows over its page (BlueBird's dialog) with words and its answers (YES and NO, OK, CANCEL and INSERT): the
 /// words, then the answers as buttons, left to right. <see cref="Rows"/> are the text boxes it holds (the fuel input dialog's quantity),
-/// each a <see cref="Bbs757EfbKind.Field"/> holding its text, read as a line until plan 22 types into the tablet (B757-23).</summary>
+/// each a <see cref="Bbs757EfbKind.Field"/> holding its text, with the unit beside it as its <see cref="Bbs757EfbItem.Unit"/>; the window
+/// shows one whose caret was read as an edit box the pilot types into (plan 22).</summary>
 public sealed record Bbs757EfbQuestion(string Text, IReadOnlyList<Bbs757EfbItem> Buttons)
 {
     /// <summary>The dialog's text boxes, in its reading order; none for a question of words and answers alone.</summary>

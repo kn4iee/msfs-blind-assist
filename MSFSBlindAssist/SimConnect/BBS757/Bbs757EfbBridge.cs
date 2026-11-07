@@ -361,6 +361,10 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             // said by the runner as an alert, which pushes the page the runner read last: the window's list shows the tablet's entry
             // again, not the pilot's pick (Task 5's review, M3).
             await _press.ChooseAsync(pressed, value, ct);
+        else if (item.Kind == Bbs757EfbKind.Field)
+            // An edit box (controlType "text", plan 22): the window sends the pilot's text on Enter alone, one set per Enter, which the
+            // queue's settle passes through (B757-28); it is typed on the tablet's keyboard or keypad and read back by the runner.
+            await _press.TypeAsync(pressed, value, ct);
     }
 
     /// <summary>The index of the word a two-choice switch is set to among its two words; null when the switch has no two words or

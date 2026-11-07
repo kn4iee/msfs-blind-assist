@@ -1171,8 +1171,8 @@ public class Bbs757EfbModelReaderTests
     public void A_text_box_is_a_field_named_by_its_title()
     {
         // PERF calc's airport box (plan 21, recaptured 2026-11-07, the scrub's KSEA in it): BlueBird's text box class, named by the title
-        // naming it as plan 20 named the input it could not read. A line with what it holds, as the tablet writes it, not an edit box:
-        // nothing types into the tablet until plan 22 (B757-23), so an edit box would take typing that goes nowhere.
+        // naming it as plan 20 named the input it could not read. Its caret not read (the tree predates plan 22), a line with what it
+        // holds, as the tablet writes it, not an edit box: only a box whose caret was read is typed into (plan 22, Task 5).
         var apps = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
 
         var items = Bbs757EfbModelReader.Read(apps)!.Items;
@@ -1373,14 +1373,15 @@ public class Bbs757EfbModelReaderTests
     public void A_dialog_reads_its_words_and_answers()
     {
         // The fuel input dialog (11c, captured live 2026-11-07 with BBOS's dialog byte 1): its prompt is its words, its text box a row
-        // with the unit BlueBird draws beside it (fuel_input_unit_label shares the box's name), and CANCEL and INSERT under btn_grid
-        // its answers, each tapped at the middle of its drawn rectangle. Its icon and its empty error label are no words.
+        // holding its own text, with the unit BlueBird draws beside it (fuel_input_unit_label shares the box's name) apart from it (plan
+        // 22, Task 5: the typing compares and reads back what the box holds), and CANCEL and INSERT under btn_grid its answers, each
+        // tapped at the middle of its drawn rectangle. Its icon and its empty error label are no words.
         var m = ReadCapture("11c-aircraft-fuel-input-dialog");
 
         var q = Assert.IsType<Bbs757EfbQuestion>(m.Question);
         Assert.Equal("Insert desired fuel level (0-2176 Gal)", q.Text);
         var row = Assert.Single(q.Rows);
-        Assert.Equal((Bbs757EfbKind.Field, "FUEL", "752 Gal", "fuel_input_textbox"), (row.Kind, row.Text, row.Value, row.Key));
+        Assert.Equal((Bbs757EfbKind.Field, "FUEL", "752", "Gal", "fuel_input_textbox"), (row.Kind, row.Text, row.Value, row.Unit, row.Key));
         Assert.Equal(new[] { ("Cancel", "q:CANCEL"), ("Insert", "q:INSERT") }, q.Buttons.Select(b => (b.Text, b.Key)));
         Assert.All(q.Buttons, b => Assert.Equal((Bbs757EfbKind.Button, true), (b.Kind, b.Clickable)));
         Assert.Equal((new System.Drawing.Rectangle(354, 380, 140, 48), new System.Drawing.Point(424, 404)), (q.Buttons[0].Box, q.Buttons[0].Hit));
@@ -1403,7 +1404,7 @@ public class Bbs757EfbModelReaderTests
     {
         var q = TestCulture.Run(culture, () => ReadCapture("11c-aircraft-fuel-input-dialog")).Question!;
 
-        Assert.Equal(("Insert desired fuel level (0-2176 Gal)", "752 Gal"), (q.Text, q.Rows[0].Value));
+        Assert.Equal(("Insert desired fuel level (0-2176 Gal)", "752", "Gal"), (q.Text, q.Rows[0].Value, q.Rows[0].Unit));
         Assert.Equal(new[] { "q:CANCEL", "q:INSERT" }, q.Buttons.Select(b => b.Key));
     }
 
@@ -1595,9 +1596,10 @@ public class Bbs757EfbModelReaderTests
             Assert.Null(Assert.Single(partial.Items, i => i.Name == "planning_perf_calc_airport_input").TextState);
         }
 
-        // Nothing is said or shown differently.
+        // The page says the same (the caret moves as the pilot types); the window shows the box as an edit box (Task 5), the rest as before.
         Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(model));
-        Assert.Equal(ListingOf(page), ListingOf(apps));
+        Assert.Equal(ListingOf(page).Replace("text  Airport: KSEA\n", "edit [KSEA]  Airport\n", StringComparison.Ordinal), ListingOf(apps));
+        Assert.NotEqual(ListingOf(page), ListingOf(apps));
     }
 
     [Fact]
@@ -1607,7 +1609,7 @@ public class Bbs757EfbModelReaderTests
         var page = Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog");
         var apps = Bbs757EfbTreeJson.WithTextState(page, "fuel_input_textbox", 3, 8, true);
         var row = Assert.Single(Bbs757EfbModelReader.Read(apps)!.Question!.Rows);
-        Assert.Equal(("fuel_input_textbox", "752 Gal"), (row.Name, row.Value));
+        Assert.Equal(("fuel_input_textbox", "752", "Gal"), (row.Name, row.Value, row.Unit));
         Assert.Equal(new Bbs757EfbTextState(3, 8, true), row.TextState);
         Assert.Null(Assert.Single(Bbs757EfbModelReader.Read(page)!.Question!.Rows).TextState);
         Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(apps)!));

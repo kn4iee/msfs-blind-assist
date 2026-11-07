@@ -205,8 +205,9 @@ public sealed class Bbs757EfbModelReader
     /// a text box's unit are none). Its answers are the buttons under its <c>btn_grid</c> (YES and NO, OK, CANCEL and INSERT), keyed
     /// <c>q:</c> and their words (<c>q:YES</c>), each tapped at the middle of its drawn rectangle. A text box in it is a row
     /// (<see cref="Bbs757EfbQuestion.Rows"/>): a field named by its own name's words (<see cref="OwnName"/>: <c>fuel_input_textbox</c> is
-    /// FUEL) holding its text, with the unit beside it (the label whose name is the box's with <c>unit</c>: <c>fuel_input_unit_label</c>
-    /// "Gal").
+    /// FUEL) holding its own text ("752"), with the unit beside it as its <see cref="Bbs757EfbItem.Unit"/> (the label whose name is the
+    /// box's with <c>unit</c>: <c>fuel_input_unit_label</c> "Gal"), kept apart so a typing compares and reads back what the box holds
+    /// (plan 22, Task 5).
     /// </summary>
     private static Bbs757EfbQuestion? QuestionOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
     {
@@ -220,9 +221,8 @@ public sealed class Bbs757EfbModelReader
         {
             var unit = labels.FirstOrDefault(l => !units.Contains(l) && IsUnitOf(l, box));
             if (unit is not null) units.Add(unit);
-            string value = box.Text.Length > 0 && unit is not null ? box.Text + " " + unit.Text : box.Text;
-            rows.Add(new Bbs757EfbItem(Bbs757EfbKind.Field, OwnName(box.Name), Box(box), Hit(box), true, box.Name, Value: value, Name: box.Name,
-                TextState: TextStateOf(box)));
+            rows.Add(new Bbs757EfbItem(Bbs757EfbKind.Field, OwnName(box.Name), Box(box), Hit(box), true, box.Name, Value: box.Text, Name: box.Name,
+                TextState: TextStateOf(box), Unit: unit?.Text ?? ""));
         }
         var answerGrid = all.FirstOrDefault(n => n.Name == "btn_grid");
         var answers = answerGrid is null ? new List<Bbs757EfbItem>() : Descendants(answerGrid)
@@ -310,10 +310,14 @@ public sealed class Bbs757EfbModelReader
     {
         if (IsChrome(n)) return; // the home button and the page title: the window adds its own Home and shows the page name
 
-        // A settings row: a grid that directly holds a toggle or slider, with its label and value beside it.
+        // A settings row: a grid that directly holds a toggle or slider, with its label and value beside it; then a text box the row shows
+        // beside its switch (TOD pause's distance, shown while the switch is on: plan 22, measured 2026-11-07), named by the row's label.
         if (n.Kind == "grid" && n.Children.FirstOrDefault(c => c.Kind is "toggle" or "slider") is { } control)
         {
-            items.Add(Row(n, control));
+            var row = Row(n, control);
+            items.Add(row);
+            foreach (var box in Descendants(n).Where(c => c.Kind == "textbox"))
+                items.Add(g.InputItem(box, row.Text));
             return;
         }
 

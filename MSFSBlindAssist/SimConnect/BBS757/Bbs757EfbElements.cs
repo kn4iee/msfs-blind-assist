@@ -16,7 +16,9 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// tested. The window (FbwEfbForm) renders headings, buttons, check boxes, choice lists and sliders from the push's "items.N.*" keys
 /// (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx. A drop-down is a choice
 /// list of its entries (plan 21), whose set the press runner chooses on the tablet (<see cref="Bbs757EfbPressRunner.ChooseAsync"/>,
-/// B757-27); a text box is a line with what it holds until typing is built (plan 22, B757-23).
+/// B757-27); a text box whose caret was read is an Enter-only edit box (plan 22: its set, sent on Enter alone, is typed on the tablet's
+/// keyboard by <see cref="Bbs757EfbPressRunner.TypeAsync"/>), and any other field (a value box, whose tap opens BlueBird's dialog, or a
+/// text box whose caret was not read) a line with what it holds.
 ///
 /// Every control the reader offers can be pressed (the owner's ruling of 2026-10-29): a button, tile, switch, check box, slider and tab
 /// is clickable whatever the reader's <see cref="Bbs757EfbItem.Clickable"/> says, and nothing here refuses a press. The one exception
@@ -25,8 +27,8 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// offered as a control at all, by the owner's ruling of 2026-10-30: the EFB colors theme, whose place holds a note
 /// (<see cref="ThemeNoteFor"/>, B757-21).
 ///
-/// The order the pilot meets (plan 20, D1): the alert; the tablet's question (its words as text, its text boxes as lines, then its
-/// answers); the page; the app's extras; "Status bar" with the top bar, then BlueBird's notifications, newest first, under a heading;
+/// The order the pilot meets (plan 20, D1): the alert; the tablet's question (its words as text, its text boxes, then its answers); the
+/// page; the app's extras; "Status bar" with the top bar, then BlueBird's notifications, newest first, under a heading;
 /// "Sections" with the side menu; and Home
 /// last. The window speaks only its first alert and remembers one text, so the question is no alert here: the bridge says a
 /// question once, through its own alert, when a read first shows it (plan 18, Task 8), and the page keeps its words first. The window's
@@ -73,7 +75,7 @@ public static class Bbs757EfbElements
         void Add(string text, string kind = "", string controlType = "", bool clickable = false, int level = 0,
             string value = "", string key = "", IReadOnlyList<string>? options = null,
             string live = "", double? min = null, double? max = null, double? step = null, Action? action = null,
-            string? of = null)
+            string? of = null, string commit = "")
         {
             int i = n++;
             string identity = (key.Length > 0 ? key : "text|" + text) + (of != null ? "|" + of : "");
@@ -95,6 +97,7 @@ public static class Bbs757EfbElements
             if (min is double mn) data[$"items.{i}.min"] = mn.ToString(CultureInfo.InvariantCulture);
             if (max is double mx) data[$"items.{i}.max"] = mx.ToString(CultureInfo.InvariantCulture);
             if (step is double sp) data[$"items.{i}.step"] = sp.ToString(CultureInfo.InvariantCulture);
+            if (commit.Length > 0) data[$"items.{i}.commit"] = commit;
             if (action != null) actions[aidx] = action;
         }
 
@@ -110,9 +113,10 @@ public static class Bbs757EfbElements
             {
                 // Text: an alert here would be said again whenever another alert went (see the class summary).
                 if (question.Text.Length > 0) Add(question.Text, key: "question");
-                // A text box in it (the fuel input dialog's quantity): its name and what it holds, a line until plan 22 types (B757-23).
+                // A text box in it (the fuel input dialog's quantity): an edit box, its unit after its name ("Fuel (Gal)"); the dialog's
+                // answers stay its own (INSERT is the pilot's to press once it is typed).
                 foreach (var row in question.Rows)
-                    Add(Named(Bbs757EfbVocabulary.Pretty(row.Text), row.Value), key: row.Key);
+                    AddField(row);
                 // Each answer is its question's: the next question's YES is another element, under the same key.
                 string asked = Bbs757EfbPress.QuestionIdentity(question);
                 foreach (var answer in question.Buttons)
@@ -166,6 +170,20 @@ public static class Bbs757EfbElements
         }
         return new Built(data, actions, n);
 
+        // A field. A text box whose caret was read (plan 22): an Enter-only edit box holding the box's own text exactly as the tablet shows it
+        // (D2: a credential too), named as the window names it (NameOf), its set typed on the tablet's keyboard or keypad
+        // (Bbs757EfbPressRunner.TypeAsync); the shared window posts it on Enter alone and says "<name> not changed" when the pilot leaves it
+        // with other text (Task 4). Any other field (a value box, whose tap opens BlueBird's dialog; a text box whose caret was not read):
+        // a line of its name and what it holds ("Quantity: 1539 Gal", "Airport: KPHX"); an empty one, or an input not read, its name alone.
+        void AddField(Bbs757EfbItem it)
+        {
+            if (it.TextState != null)
+                Add(NameOf(it), controlType: "text", clickable: true, value: it.Value, key: it.Key, commit: "enter",
+                    action: new Action(ActionKind.Tap, it));
+            else
+                Add(FieldLine(it), key: it.Key);
+        }
+
         // The top bar stays lit above a question's dimming: its buttons press whatever the page does.
         void AddTopBar(Bbs757EfbItem it)
         {
@@ -198,10 +216,7 @@ public static class Bbs757EfbElements
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     break;
                 case Bbs757EfbKind.Field:
-                    // A value box or a text box: its name and what it holds ("Quantity: 1539 Gal", "Airport: KPHX"); an empty one, or an
-                    // input not read, is just its name. A line, not an edit box, until plan 22 types into the tablet (B757-23): an
-                    // edit box would take typing that goes nowhere.
-                    Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
+                    AddField(it);
                     break;
                 case Bbs757EfbKind.Choice:
                     // A drop-down: a choice list of its entries valued by the one it shows, chosen from by tapping the tablet
@@ -285,6 +300,9 @@ public static class Bbs757EfbElements
                 case Bbs757EfbKind.Choice:
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     return true;
+                case Bbs757EfbKind.Field:
+                    Add(FieldLine(it), key: it.Key);
+                    return true;
                 default:
                     return false;
             }
@@ -351,16 +369,23 @@ public static class Bbs757EfbElements
 
     /// <summary>
     /// The name the window gives a page control, in sentence case as it says it, without the "(current)" of a tab: a button's or tab's
-    /// words after the label that names it ("Left FWD: Open", "Latest cycle: Remove"), a slider's label or words, any other control's
-    /// words. What the press runner says of a control names it so too (<see cref="Bbs757EfbPress.SpokenName"/>).
+    /// words after the label that names it ("Left FWD: Open", "Latest cycle: Remove"), a slider's label or words, a field with a unit
+    /// beside it its words and the unit as BlueBird writes it in parentheses ("Fuel (Gal)", plan 22), any other control's words. What
+    /// the press runner says of a control names it so too (<see cref="Bbs757EfbPress.SpokenName"/>).
     /// </summary>
     internal static string NameOf(Bbs757EfbItem it) => it.Kind switch
     {
         Bbs757EfbKind.Slider => SliderName(it),
         Bbs757EfbKind.Button or Bbs757EfbKind.Tab when it.Label.Length > 0 =>
             Named(Bbs757EfbVocabulary.Pretty(it.Label), Bbs757EfbVocabulary.Pretty(it.Text)),
+        Bbs757EfbKind.Field when it.Unit.Length > 0 => Bbs757EfbVocabulary.Pretty(it.Text) + " (" + it.Unit + ")",
         _ => Bbs757EfbVocabulary.Pretty(it.Text),
     };
+
+    /// <summary>A field as a line: its name and what it holds, a dialog box's unit after its text as the tablet draws it ("Fuel: 752
+    /// Gal"); an empty one is its name alone.</summary>
+    private static string FieldLine(Bbs757EfbItem it) =>
+        Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Unit.Length > 0 && it.Value.Length > 0 ? it.Value + " " + it.Unit : it.Value);
 
     /// <summary>A slider's name: its label when the page grammar gave one, else its words, in sentence case.</summary>
     private static string SliderName(Bbs757EfbItem it) => Bbs757EfbVocabulary.Pretty(it.Label.Length > 0 ? it.Label : it.Text);

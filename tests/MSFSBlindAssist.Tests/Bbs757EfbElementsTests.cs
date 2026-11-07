@@ -711,6 +711,185 @@ public class Bbs757EfbElementsTests
         AssertText(built, "Sign in to Navigraph.");
     }
 
+    // ---- plan 22, Task 5: the tablet's fields are edit boxes -------------------------------------------------------------
+    // No committed tree carries a text box's caret, maximum length and keypad flag (all were captured before plan 22 read them), so these
+    // pages are given them as the walk reads them now (Bbs757EfbTreeJson.WithTextState). A maximum length plays no part in what the window
+    // shows; the measured ones are used where there is one (docs/b757/evidence/efb-typing.md: Airport 4, runway length 5, Charts 4, the
+    // fuel dialog 8, TOD 3, SimBrief 8, Hoppie 24, SayIntentions 64).
+
+    private static Bbs757EfbElements.Built BuildRead(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
+        Bbs757EfbElements.Build(Bbs757EfbModelReader.Read(apps), null, NoExtras);
+
+    /// <summary>An Enter-only edit box (the shared window's opt-in, plan 22 Task 4): type "text", its value the box's own text, its set
+    /// sent on Enter alone, pressable, keyed by the box's node name, and a tap on the tablet field it was read from.</summary>
+    private static Bbs757EfbItem AssertEditBox(Bbs757EfbElements.Built b, string name, string value, string key)
+    {
+        int at = Keys(b).IndexOf(key);   // by its key: a row's switch and its box can share the row's name (TOD pause)
+        Assert.True(at >= 0, $"No element keyed '{key}': " + string.Join(" | ", Texts(b)));
+        Assert.Equal((name, "text", value, "enter", "true"),
+            (Field(b, at, "text"), Field(b, at, "type"), Field(b, at, "value"), Field(b, at, "commit"), Field(b, at, "clickable")));
+        var action = ActionAt(b, at);
+        Assert.NotNull(action);
+        Assert.Equal(Bbs757EfbElements.ActionKind.Tap, action!.Kind);
+        Assert.Equal((Bbs757EfbKind.Field, key), (action.Item!.Kind, action.Item.Key));
+        return action.Item;
+    }
+
+    /// <summary>A line of text that holds no commit either (a value box, or a text box whose caret was not read).</summary>
+    private static void AssertLine(Bbs757EfbElements.Built b, string text)
+    {
+        AssertText(b, text);
+        Assert.Equal("", Field(b, IndexOf(b, text), "commit"));
+    }
+
+    /// <summary>The trees with <paramref name="child"/> added as the last child of the control named <paramref name="parent"/>: a control
+    /// BlueBird shows only in a state no committed tree was captured in.</summary>
+    private static IReadOnlyList<Bbs757EfbMemory.App> WithChild(IReadOnlyList<Bbs757EfbMemory.App> apps, string parent, Bbs757EfbMemory.Node child)
+    {
+        Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n)
+        {
+            var kids = n.Children.Select(Walk).ToList();
+            if (n.Name == parent) kids.Add(child);
+            return n with { Children = kids };
+        }
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
+    /// <summary>The trees with the control named <paramref name="name"/> replaced by <paramref name="by"/>.</summary>
+    private static IReadOnlyList<Bbs757EfbMemory.App> Replaced(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, Bbs757EfbMemory.Node by)
+    {
+        Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) => n.Name == name ? by : n with { Children = n.Children.Select(Walk).ToList() };
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
+    private static Bbs757EfbMemory.Node TextBox(string name, string text, float x, float y, float w, float h, int maxLength, bool keypad) =>
+        new("textbox", name, text, x, y, w, h, 0, Array.Empty<Bbs757EfbMemory.Node>(), Caret: text.Length, MaxLength: maxLength, Keypad: keypad);
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void A_text_box_is_an_enter_only_edit_box(string culture)
+    {
+        // PERF calc (25b, the scrub's made-up flight in its boxes) and Charts (23) with their boxes' carets read: each box an edit box
+        // holding its own text as the tablet writes it (a decimal point under every culture), named as its line was, typed on the tablet
+        // when the pilot presses Enter. The window's label is the name alone: the screen reader says it is an edit box.
+        var perf = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
+        perf = Bbs757EfbTreeJson.WithTextState(perf, "planning_perf_calc_airport_input", 4, 4, false);
+        perf = Bbs757EfbTreeJson.WithTextState(perf, "planning_perf_calc_runway_length_input", 5, 5, false);
+        perf = Bbs757EfbTreeJson.WithTextState(perf, "planning_perf_calc_press", 5, 5, false);
+        var charts = Bbs757EfbTreeJson.WithTextState(Bbs757EfbTreeJson.Load("23-navigation-charts"), "planning_charts_request_input", 4, 4, false);
+
+        var (b, c) = TestCulture.Run(culture, () => (BuildRead(perf), BuildRead(charts)));
+
+        AssertEditBox(b, "Airport", "KSEA", "planning_perf_calc_airport_input");
+        AssertEditBox(b, "Length (FT)", "11900", "planning_perf_calc_runway_length_input");
+        AssertEditBox(b, "Pressure (inHg)", "30.01", "planning_perf_calc_press");
+        AssertEditBox(c, "Planning charts request", "KIGM", "planning_charts_request_input");
+        string listing = Bbs757EfbListing.Of(b);
+        Assert.Contains("button  Landing\nedit [KSEA]  Airport\ncombo [RW07L] {RW07L|RW07R|RW08|RW25L|RW25R|RW26}  Runway\n", listing);
+        Assert.Contains("edit [11900]  Length (FT)\n", listing);
+        Assert.Contains("text  Temperature: 15\nedit [30.01]  Pressure (inHg)\n", listing);   // a box whose caret was not read stays a line
+        Assert.Contains("text  KINGMAN, UNITED STATES\nedit [KIGM]  Planning charts request\nbutton  STAR\n", Bbs757EfbListing.Of(c));
+    }
+
+    [Fact]
+    public void A_value_box_that_opens_no_keyboard_stays_a_line()
+    {
+        // The Fuel page's value boxes (fuel_left_qty_box and the rest: BlueBird's buttons that open its fuel input dialog, measured) carry no
+        // caret: lines of their name and what they hold, nothing to type, as before. So does a text box whose caret was not read (every
+        // committed tree's), and the fuel input dialog's box with its unit after its value, as it read before.
+        var fuel = BuildRead(Bbs757EfbTreeJson.Load("11-aircraft-fuel"));
+        foreach (var line in new[] { "Quantity: 1539 Gal", "Weight: 10308 Lbs", "Quantity: 3077 Gal" })
+            AssertLine(fuel, line);
+        Assert.DoesNotContain(Enumerable.Range(0, fuel.Count), i => Field(fuel, i, "type") == "text");
+
+        var perf = BuildRead(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"));
+        foreach (var line in new[] { "Airport: KSEA", "Takeoff Weight (LB): 180000", "Pressure (inHg): 30.01" })
+            AssertLine(perf, line);
+
+        AssertLine(BuildRead(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog")), "Fuel: 752 Gal");
+    }
+
+    [Fact]
+    public void A_questions_text_box_is_an_edit_box_holding_its_own_text_with_its_unit_in_its_name()
+    {
+        // The fuel input dialog's box (11c, pre-filled 752, the keypad's): the edit box holds the box's own text, so the typing compares and
+        // reads back what the box holds, and its name carries the unit BlueBird draws beside it, after it in parentheses. The dialog's
+        // answers stay its answers (INSERT is the pilot's to press); the page under it stays dimmed text.
+        var apps = Bbs757EfbTreeJson.WithTextState(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog"), "fuel_input_textbox", 3, 8, true);
+        var model = Bbs757EfbModelReader.Read(apps)!;
+
+        var b = Bbs757EfbElements.Build(model, null, NoExtras);
+
+        Assert.Same(Assert.Single(model.Question!.Rows), AssertEditBox(b, "Fuel (Gal)", "752", "fuel_input_textbox"));
+        Assert.Equal("Fuel (Gal)", Bbs757EfbElements.NameOf(model.Question.Rows[0]));
+        Assert.StartsWith("title: Aircraft, Fuel\ntext  Insert desired fuel level (0-2176 Gal)\nedit [752]  Fuel (Gal)\n"
+            + "button  Cancel\nbutton  Insert\nheading 2  Left\ntext  Left: 34%\ntext  Quantity: 752 Gal\n", Bbs757EfbListing.Of(b));
+    }
+
+    [Fact]
+    public void Under_a_question_a_pages_edit_box_is_a_line()
+    {
+        // The tablet dims its page under a question and takes no tap on it: a page's text box reads as its line until it is answered.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithTextState(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"),
+            "planning_perf_calc_airport_input", 4, 4, false))!;
+        var asked = page with { Question = new Bbs757EfbQuestion("Are you sure?", new[] { Answer("YES") }) };
+
+        AssertEditBox(Bbs757EfbElements.Build(page, null, NoExtras), "Airport", "KSEA", "planning_perf_calc_airport_input");
+        AssertLine(Bbs757EfbElements.Build(asked, null, NoExtras), "Airport: KSEA");
+    }
+
+    [Fact]
+    public void The_saved_simbrief_id_is_a_line_and_logout()
+    {
+        // As the tablet shows it with an ID saved (55 and 55b, the scrub's made-up 123456): its value line, then the row's LOGOUT, named by
+        // the row as the tablet's own label reads (SIMBRIEF ID NUMBER). Its text box is hidden while an ID is saved, so nothing is typed.
+        foreach (var name in new[] { "55-settings-airac-data", "55b-settings-airac-data-navigraph-signed-out" })
+        {
+            var b = BuildRead(Bbs757EfbTreeJson.Load(name));
+            AssertLine(b, "SIMBRIEF ID number: 123456");
+            AssertPressable(b, "SIMBRIEF ID number: Logout");
+            Assert.Equal(IndexOf(b, "SIMBRIEF ID number: 123456") + 1, IndexOf(b, "SIMBRIEF ID number: Logout"));
+            Assert.Contains("text  SIMBRIEF ID number: 123456\nbutton  SIMBRIEF ID number: Logout\n", Bbs757EfbListing.Of(b));
+        }
+
+        // The Hoppie and SayIntentions boxes read as BlueBird's text box class (the committed trees predate it), each holding the scrub's
+        // made-up code with its caret: edit boxes named by their rows, the code shown as the tablet holds it (D2); the value labels beside
+        // them stay lines.
+        var airac = Bbs757EfbTreeJson.Load("55-settings-airac-data");
+        airac = Bbs757EfbTreeJson.WithKind(airac, "hoppie_logon_code_textbox", "textbox", "MADEUP");
+        airac = Bbs757EfbTreeJson.WithKind(airac, "sayintentions_acars_key_textbox", "textbox", "MADEUP");
+        airac = Bbs757EfbTreeJson.WithTextState(airac, "hoppie_logon_code_textbox", 6, 24, false);
+        airac = Bbs757EfbTreeJson.WithTextState(airac, "sayintentions_acars_key_textbox", 6, 64, false);
+        var codes = BuildRead(airac);
+        AssertEditBox(codes, "Hoppie logon code", "MADEUP", "hoppie_logon_code_textbox");
+        AssertEditBox(codes, "Sayintentions ACARS key", "MADEUP", "sayintentions_acars_key_textbox");
+        AssertLine(codes, "Hoppie logon code: ------");
+        AssertLine(codes, "SIMBRIEF ID number: 123456");
+
+        // After LOGOUT the input cell shows the empty box instead of the saved ID ([763.5,95 170x44], the keypad's, at most 8: measured):
+        // an edit box like any other, named by its row. (How the action cell reads then was not captured.)
+        var loggedOut = Replaced(Bbs757EfbTreeJson.Load("55-settings-airac-data"), "simbrief_id_saved_label",
+            TextBox("simbrief_id_textbox", "", 763.5f, 95, 170, 44, 8, keypad: true));
+        AssertEditBox(BuildRead(loggedOut), "SIMBRIEF ID number", "", "simbrief_id_textbox");
+    }
+
+    [Fact]
+    public void The_TOD_pause_box_shown_while_its_switch_is_on_is_an_edit_box()
+    {
+        // Settings, Aircraft with TOD pause on (measured 2026-11-07): its switch's byte reads on and tod_pause_textbox shows "40" in the row
+        // ([1202,210 100x44], the keypad's, at most 3). The row's box is an edit box after the switch, named by the row's label as the switch
+        // is; with the switch off the box is hidden and the row reads as before.
+        var off = Bbs757EfbTreeJson.Load("51-settings-aircraft");
+        var on = WithChild(Bbs757EfbTreeJson.WithToggleOn(off, "tod_pause_toggle", true), "tod_pause_setting_grid",
+            TextBox("tod_pause_textbox", "40", 1202, 210, 100, 44, 3, keypad: true));
+
+        var b = BuildRead(on);
+
+        AssertEditBox(b, "TOD pause distance (NM)", "40", "tod_pause_textbox");
+        Assert.Contains("checkbox checked  TOD pause distance (NM)\nedit [40]  TOD pause distance (NM)\n", Bbs757EfbListing.Of(b));
+        Assert.Contains("checkbox not checked  TOD pause distance (NM)\ncombo [Disabled]", Bbs757EfbListing.Of(BuildRead(off)));
+    }
+
     // ---- the same in any culture ----------------------------------------------------------------------------------------
 
     [Theory]
