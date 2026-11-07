@@ -48,6 +48,14 @@ public sealed class Bbs757EfbBridgeIo
     /// <summary>Opens / ends plan 07's ground power echo around a GPU tap.</summary>
     public required Action ArmGroundPowerEcho { get; init; }
     public required Action<double?> SettleGroundPowerEcho { get; init; }
+
+    /// <summary>The clock the window's commands are timed by, in milliseconds (<see cref="Bbs757EfbCommandQueue"/>): the system's by
+    /// default; the tests give their own.</summary>
+    public Func<long> NowMs { get; init; } = () => Environment.TickCount64;
+
+    /// <summary>Waits the given milliseconds for a set to settle, or less when the window sends another command; null (the default) waits
+    /// on the bridge's own wake, which each command releases. The tests move their clock instead.</summary>
+    public Func<int, CancellationToken, Task>? WaitForCommand { get; init; }
 }
 
 /// <summary>
@@ -63,7 +71,9 @@ public sealed class Bbs757EfbBridgeIo
 ///
 /// Presses (the owner's ruling of 2026-10-29: nothing refuses a press) queue on the command channel and run one at a time on the
 /// loop, through <see cref="Bbs757EfbPressRunner"/>: a press names the element of the push it was made on, so it is judged against the
-/// page the pilot pressed on, and is tapped where the control is now in a fresh memory read, or not at all when it is gone. The AIRAC
+/// page the pilot pressed on, and is tapped where the control is now in a fresh memory read, or not at all when it is gone. A set (a
+/// choice list's entry, a slider's value, a check box's state) waits <see cref="Bbs757EfbCommandQueue.SetSettleMs"/> for a newer one for
+/// the same element, which replaces it, so arrowing through a choice list chooses only the entry it stops on. The AIRAC
 /// page carries the app's extras (the Navigraph sign-in while signed out, and its code line), and a press that starts one of the app's
 /// hooks tells MainForm on the UI thread. Speech follows CORE-7: the screen reader reads the control; a pressed control the tablet
 /// gave other words is said once in its new words, by the press runner; a failure is said as an alert.
@@ -83,9 +93,12 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private readonly Bbs757EfbBridgeIo _io;
     private readonly Bbs757EfbPressRunner _press;
     private readonly SynchronizationContext? _sync;
-    /// <summary>The window's commands, each with the showing it was sent in (<see cref="_showing"/>).</summary>
-    private readonly System.Threading.Channels.Channel<(string Command, Dictionary<string, string>? Payload, int Showing)> _commands =
-        System.Threading.Channels.Channel.CreateUnbounded<(string, Dictionary<string, string>?, int)>();
+    /// <summary>The window's commands, each with the showing it was sent in (<see cref="_showing"/>) and when it was sent; the loop takes
+    /// them into <see cref="_queue"/>.</summary>
+    private readonly System.Threading.Channels.Channel<Bbs757EfbCommandQueue.Command> _commands =
+        System.Threading.Channels.Channel.CreateUnbounded<Bbs757EfbCommandQueue.Command>();
+    /// <summary>The commands taken from the window, in order, a set held until it settles (the final review's I3). On the loop only.</summary>
+    private readonly Bbs757EfbCommandQueue _queue = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _wake = new(0, int.MaxValue);
     /// <summary>The pushes the window may still press on, with the pages they showed. On the loop only.</summary>
@@ -142,7 +155,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     public void EnqueueCommand(string command, Dictionary<string, string>? payload = null)
     {
-        _commands.Writer.TryWrite((command, payload, Volatile.Read(ref _showing)));
+        _commands.Writer.TryWrite(new Bbs757EfbCommandQueue.Command(command, payload, Volatile.Read(ref _showing), _io.NowMs()));
         _wake.Release();
     }
 
@@ -247,27 +260,31 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
 
     /// <summary>
     /// The next command the window sent, handled; false when none waits. A command sent before the window last hid is dropped
-    /// unhandled. On the loop only; internal for the tests.
+    /// unhandled. A set (<c>set_element_value</c>) is handled only once <see cref="Bbs757EfbCommandQueue.SetSettleMs"/> have passed with
+    /// no newer set for the same element, the newer one taking its place (<see cref="Bbs757EfbCommandQueue"/>, the final review's I3:
+    /// arrowing through a choice list sends a set per entry), so the loop waits that out here, or until the window sends another command.
+    /// On the loop only; internal for the tests.
     /// </summary>
     internal async Task<bool> HandleNextCommandAsync(CancellationToken ct)
     {
-        while (_commands.Reader.TryRead(out var cmd))
+        while (true)
         {
-            if (cmd.Showing != Volatile.Read(ref _showing))
+            while (_commands.Reader.TryRead(out var sent)) _queue.Add(sent);
+            if (_queue.Next(_io.NowMs(), Volatile.Read(ref _showing), out int waitMs) is { } cmd)
             {
-                Log.Debug("BBS757", $"EFB reader: {cmd.Command} sent before the window hid, dropped.");
-                continue;
+                await HandleAsync(cmd.Name, cmd.Payload, ct);
+                return true;
             }
-            await HandleAsync(cmd.Command, cmd.Payload, ct);
-            return true;
+            if (waitMs <= 0) return false;
+            if (_io.WaitForCommand is { } wait) await wait(waitMs, ct);
+            else await _wake.WaitAsync(waitMs, ct);
         }
-        return false;
     }
 
     /// <summary>The window hid: what it sent before is dropped, so nothing it asked for runs at the next showing.</summary>
     private void DropQueuedCommands()
     {
-        int dropped = 0;
+        int dropped = _queue.Clear();
         while (_commands.Reader.TryRead(out _)) dropped++;
         if (dropped > 0) Log.Debug("BBS757", $"EFB reader: {dropped.ToString(CultureInfo.InvariantCulture)} command(s) dropped as the window hid.");
     }
@@ -499,4 +516,84 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         try { _loop?.Wait(1500); } catch { }
         _cts.Dispose();
     }
+}
+
+/// <summary>
+/// The tablet window's commands as the bridge's loop takes them, in the order the window sent them, but for a set (the final review of
+/// plan 21, I3): a <c>set_element_value</c> is handed out only once <see cref="SetSettleMs"/> have passed since it was sent with no newer
+/// set for the same element (the push's number it names, which an element keeps while it stays: <see cref="Bbs757EfbPushes"/>), and a newer
+/// one takes its place, so the last wins. In WebView2 a closed choice list sends a set on every Up or Down arrow, as the pilot listens
+/// through its entries (B757-21's evidence measured it in this window), and each set handled is a whole press on the tablet: a drop-down's
+/// face and row and their waits, a slider's or two-choice list's tap. Arrowing from RW07L down to RW26 chose RW07R, RW08, RW25L and RW25R
+/// on the way, each rerunning BlueBird's runway inputs. The 757's panel combos act 300 ms after the last row arrowed onto for the same
+/// reason (<c>docs/b757.md</c>, "How it writes"). Every set waits so (choice lists, two-choice lists, sliders and check boxes alike); a
+/// click never waits but behind a set before it, and a set that settled while the loop was busy (a press running) is handed out at once
+/// unless a newer one for its element came meanwhile. A command sent in an earlier showing of the window is dropped. Pure; on the bridge's
+/// loop only.
+/// </summary>
+public sealed class Bbs757EfbCommandQueue
+{
+    /// <summary>How long a set waits for a newer one for the same element: the 757 panel combos' pick settle (300 ms).</summary>
+    public const int SetSettleMs = 300;
+
+    /// <summary>One command of the window's: its name, its payload, the showing it was sent in and when (the bridge's clock, ms).</summary>
+    public sealed record Command(string Name, Dictionary<string, string>? Payload, int Showing, long AtMs);
+
+    private readonly List<Command> _queued = new();
+
+    /// <summary>The commands taken and not yet handed out.</summary>
+    public int Count => _queued.Count;
+
+    /// <summary>A command the window sent, taken in its order.</summary>
+    public void Add(Command command) => _queued.Add(command);
+
+    /// <summary>Drops every command taken (the window hid); how many there were.</summary>
+    public int Clear()
+    {
+        int count = _queued.Count;
+        _queued.Clear();
+        return count;
+    }
+
+    /// <summary>
+    /// The next command to handle at <paramref name="nowMs"/> in the window's showing <paramref name="showing"/>, taken out; null when none
+    /// is ready. <paramref name="waitMs"/> is then how long the first command, a set still settling, has to wait (at most
+    /// <see cref="SetSettleMs"/>), or 0 when nothing is taken. Dropped on the way: a command of an earlier showing, and a set a newer set for
+    /// the same element replaces.
+    /// </summary>
+    public Command? Next(long nowMs, int showing, out int waitMs)
+    {
+        waitMs = 0;
+        while (_queued.Count > 0)
+        {
+            var head = _queued[0];
+            if (head.Showing != showing)
+            {
+                _queued.RemoveAt(0);
+                Log.Debug("BBS757", $"EFB reader: {head.Name} sent before the window hid, dropped.");
+                continue;
+            }
+            if (ElementSet(head) is { } element)
+            {
+                if (_queued.Skip(1).Any(c => ElementSet(c) == element))
+                {
+                    _queued.RemoveAt(0);   // a newer set for the same element takes its place: the last wins
+                    continue;
+                }
+                long due = head.AtMs + SetSettleMs;
+                if (nowMs < due)
+                {
+                    waitMs = (int)Math.Min(due - nowMs, SetSettleMs);
+                    return null;
+                }
+            }
+            _queued.RemoveAt(0);
+            return head;
+        }
+        return null;
+    }
+
+    /// <summary>The element a set names (its push's number, as the window sent it); null for any other command.</summary>
+    private static string? ElementSet(Command c) =>
+        c.Name == "set_element_value" && c.Payload != null && c.Payload.TryGetValue("index", out var index) ? index : null;
 }

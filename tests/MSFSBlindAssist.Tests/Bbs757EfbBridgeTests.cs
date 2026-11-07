@@ -2487,6 +2487,8 @@ public class Bbs757EfbBridgeTests
                     SettleServiceEcho = (_, _) => { },
                     ArmGroundPowerEcho = () => { },
                     SettleGroundPowerEcho = _ => { },
+                    NowMs = () => Now,
+                    WaitForCommand = (ms, _) => { Now += ms; return Task.CompletedTask; },
                 });
             }
             finally
@@ -2498,6 +2500,8 @@ public class Bbs757EfbBridgeTests
         }
 
         public Bbs757EfbBridge Bridge { get; }
+        /// <summary>The clock the window's commands are timed by; a wait for a set to settle moves it.</summary>
+        public long Now { get; set; }
         public bool? SignedInAnswer { get; set; }
         public int SignedInReads { get; private set; }
         public Func<Bbs757EfbModelRead> ModelRead { get; set; } = () => new Bbs757EfbModelRead(null, "no simulator in this test");
@@ -2636,6 +2640,106 @@ public class Bbs757EfbBridgeTests
         h.Bridge.EnqueueCommand("click_display_element", press);
         Assert.True(await h.Bridge.HandleNextCommandAsync(CancellationToken.None));
         Assert.Equal(1, signIns);
+    }
+
+    // ---- the window's sets settle (the final review's I3) ------------------------------------------------------------------
+
+    private static Bbs757EfbCommandQueue.Command Set(string index, string value, long at, int showing = 0) =>
+        new("set_element_value", new Dictionary<string, string> { ["index"] = index, ["value"] = value }, showing, at);
+
+    private static Bbs757EfbCommandQueue.Command Click(string index, long at, int showing = 0) =>
+        new("click_display_element", new Dictionary<string, string> { ["index"] = index }, showing, at);
+
+    [Fact]
+    public void Five_sets_for_one_element_within_300_ms_make_one_the_last()
+    {
+        // In WebView2 a closed choice list sends a set on every arrow: the pilot arrows from RW07L down to RW26, five sets 50 ms apart. Only
+        // the last is handed out, 300 ms after it was sent (as the 757's panel combos act), so the tablet chooses RW26 alone.
+        var queue = new Bbs757EfbCommandQueue();
+        string[] runways = { "RW07R", "RW08", "RW25L", "RW25R", "RW26" };
+        for (int i = 0; i < runways.Length; i++) queue.Add(Set("12", runways[i], at: 50 * i));
+
+        Assert.Null(queue.Next(200, 0, out int wait));
+        Assert.Equal(300, wait);
+        Assert.Null(queue.Next(499, 0, out wait));
+        Assert.Equal(1, wait);
+        var chosen = queue.Next(500, 0, out _);
+        Assert.Equal("RW26", chosen!.Payload!["value"]);
+        Assert.Null(queue.Next(10_000, 0, out wait));
+        Assert.Equal(0, wait);
+    }
+
+    [Fact]
+    public void Sets_settle_per_element_and_keep_the_window_order()
+    {
+        // A set for another element is its own; a click is never held but behind a set before it; a newer set for an element takes the
+        // older one's place, where it was sent.
+        var queue = new Bbs757EfbCommandQueue();
+        queue.Add(Set("12", "RW07R", at: 0));
+        queue.Add(Click("40", at: 50));
+        queue.Add(Set("12", "RW08", at: 100));
+        queue.Add(Set("13", "15", at: 120));
+
+        Assert.Equal("click_display_element", queue.Next(100, 0, out _)!.Name);   // RW07R gave way to RW08
+        Assert.Null(queue.Next(100, 0, out int wait));
+        Assert.Equal(300, wait);
+        Assert.Equal("RW08", queue.Next(400, 0, out _)!.Payload!["value"]);
+        Assert.Null(queue.Next(400, 0, out wait));
+        Assert.Equal(20, wait);
+        Assert.Equal("15", queue.Next(420, 0, out _)!.Payload!["value"]);
+
+        // A set that settled while the loop was busy (a press running) is handed out at once; two that came meanwhile, only the last.
+        queue.Add(Set("12", "RW25L", at: 1000));
+        queue.Add(Set("12", "RW25R", at: 1100));
+        Assert.Equal("RW25R", queue.Next(5000, 0, out _)!.Payload!["value"]);
+        Assert.Equal(0, queue.Count);
+
+        // A command of an earlier showing of the window is dropped.
+        queue.Add(Set("12", "RW26", at: 6000, showing: 0));
+        Assert.Null(queue.Next(7000, 1, out wait));
+        Assert.Equal((0, 0), (wait, queue.Count));
+    }
+
+    [Fact]
+    public async Task Arrowing_through_a_choice_list_chooses_only_the_entry_it_stops_on()
+    {
+        // Through the bridge, on PERF calc as captured (25b): five sets 50 ms apart on the Runway drop-down make one press, 300 ms after
+        // the last. The harness has no tablet to tap: the press reads the tablet once and its face's tap ends "cannot be reached".
+        var page = PerfCalc();
+        int reads = 0;
+        using var h = new BridgeHarness { ModelRead = () => { reads++; return new Bbs757EfbModelRead(page, null); } };
+        h.Bridge.TakeRead(page);
+        var push = h.Pushes[^1];
+        string runway = push[$"items.{IndexOf(push, "Runway")}.aidx"];
+        string[] entries = { "RW07R", "RW08", "RW25L", "RW25R", "RW26" };
+        for (int i = 0; i < entries.Length; i++)
+        {
+            h.Now = 50 * i;
+            h.Bridge.EnqueueCommand("set_element_value", new Dictionary<string, string> { ["index"] = runway, ["value"] = entries[i] });
+        }
+
+        Assert.True(await h.Bridge.HandleNextCommandAsync(CancellationToken.None));
+
+        Assert.Equal(1, reads);    // one press: one fresh read
+        Assert.Equal(500, h.Now);  // 300 ms after the last set
+        Assert.Equal(Bbs757EfbPress.UnreachableText, h.Pushes[^1]["items.0.text"]);
+        Assert.False(await h.Bridge.HandleNextCommandAsync(CancellationToken.None));
+
+        // The one made is the last: arrowing back up to RW07L, the entry shown, ends in no tap at all (four earlier entries would each have
+        // tried one and said "cannot be reached").
+        using var back = new BridgeHarness { ModelRead = () => { reads++; return new Bbs757EfbModelRead(page, null); } };
+        await back.Bridge.ReadNowAsync(CancellationToken.None, asked: false);   // the window's first read: connected, the page pushed
+        reads = 0;
+        int pushes = back.Pushes.Count;
+        string again = back.Pushes[^1][$"items.{IndexOf(back.Pushes[^1], "Runway")}.aidx"];
+        foreach (string entry in new[] { "RW25R", "RW25L", "RW08", "RW07R", "RW07L" })
+        {
+            back.Now += 50;
+            back.Bridge.EnqueueCommand("set_element_value", new Dictionary<string, string> { ["index"] = again, ["value"] = entry });
+        }
+        Assert.True(await back.Bridge.HandleNextCommandAsync(CancellationToken.None));
+        Assert.Equal(1, reads);
+        Assert.Equal(pushes, back.Pushes.Count);   // nothing tapped, nothing said
     }
 
     [Theory]
