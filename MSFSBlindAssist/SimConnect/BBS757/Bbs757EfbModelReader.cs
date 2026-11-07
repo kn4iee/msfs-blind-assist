@@ -56,9 +56,24 @@ public sealed class Bbs757EfbModelReader
             {
                 TopBar = StatusBarOf(apps), Notices = Bbs757EfbNotices.From(notices ?? Array.Empty<Bbs757EfbNoticeRecord>()),
                 NoticesWhole = notices is not null, Question = QuestionOf(apps), Keyboard = KeyboardOf(apps),
-                NoticePanel = NoticePanelOf(apps),
+                KeyboardState = KeyboardStateOf(apps), NoticePanel = NoticePanelOf(apps),
             }
             : null;
+    }
+
+    /// <summary>
+    /// The keyboard's state (<see cref="Bbs757EfbScreenModel.KeyboardState"/>) from the keyboard app's (<see cref="Bbs757EfbMemory.KeyboardState"/>),
+    /// its keypad's rectangle truncated to whole pixels as every box the reader gives (<see cref="Box"/>), or empty for one that is not
+    /// finite, lies past <see cref="MaxPanelPx"/> (a torn read) or has a negative size; null when none was read.
+    /// </summary>
+    private static Bbs757EfbKeyboardState? KeyboardStateOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
+        if (apps.Select(a => a.Keyboard).FirstOrDefault(k => k is not null) is not { } k) return null;
+        static bool Sane(float v) => float.IsFinite(v) && Math.Abs(v) <= MaxPanelPx;
+        var keypad = Sane(k.KeypadX) && Sane(k.KeypadY) && Sane(k.KeypadW) && Sane(k.KeypadH) && k.KeypadW >= 0 && k.KeypadH >= 0
+            ? new Rectangle((int)k.KeypadX, (int)k.KeypadY, (int)k.KeypadW, (int)k.KeypadH)
+            : Rectangle.Empty;
+        return new Bbs757EfbKeyboardState(k.Shown, k.Ready, k.Keypad, k.Target, k.Numeric, k.Shift, k.Caps, keypad);
     }
 
     /// <summary>
@@ -76,7 +91,7 @@ public sealed class Bbs757EfbModelReader
         return Rectangle.FromLTRB(left, top, (int)Math.Ceiling(p.X + p.W), (int)Math.Ceiling(p.Y + p.H));
     }
 
-    /// <summary>The farthest a notification panel's float is believed from 0, in tablet pixels (the tablet is 1397x1058).</summary>
+    /// <summary>The farthest a notification panel's or the keypad's float is believed from 0, in tablet pixels (the tablet is 1397x1058).</summary>
     private const float MaxPanelPx = 100_000f;
 
     private static Bbs757EfbScreenModel? PageOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
@@ -118,13 +133,16 @@ public sealed class Bbs757EfbModelReader
     private static Bbs757EfbMemory.Node ImageAsOther(Bbs757EfbMemory.Node n) =>
         n with { Kind = n.Kind == "image" ? "other" : n.Kind, Children = n.Children.Select(ImageAsOther).ToList() };
 
-    /// <summary>BlueBird's keyboard from the shell app's <c>kb_grid</c>: its box and its keys in tree order. A <c>char_btn_</c> key
+    /// <summary>BlueBird's keyboard from the keyboard app's <c>kb_grid</c>: its box and its keys in tree order. A <c>char_btn_</c> key
     /// (and the comma and period keys, whose words are <c>,|,|!</c> and <c>.|.|?</c>) carries three layers split on <c>|</c>; a
     /// <c>btn_*</c> command key keeps its name and empty layers. Null without a <c>kb_grid</c>. The grid reads visible whether the
-    /// keyboard shows or not, so this says where the keys are, never that the keyboard is up.</summary>
+    /// keyboard shows or not, so this says where the keys are, never that the keyboard is up (<see cref="KeyboardStateOf"/> does). The
+    /// keyboard app is <see cref="Bbs757EfbMemory.KeyboardClass"/> under a layout that knows its class (plan 22), the fallback class
+    /// <see cref="Bbs757EfbMemory.UnknownAppClass"/> under one that does not and in every tree captured before.</summary>
     private static Bbs757EfbKeyboard? KeyboardOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
     {
-        var grid = apps.Where(a => a.Class == "app").SelectMany(a => Flatten(a.Controls)).FirstOrDefault(n => n.Name == "kb_grid");
+        var grid = apps.Where(a => a.Class is Bbs757EfbMemory.KeyboardClass or Bbs757EfbMemory.UnknownAppClass).SelectMany(a => Flatten(a.Controls))
+            .FirstOrDefault(n => n.Name == "kb_grid");
         if (grid is null) return null;
         var keys = new List<Bbs757EfbKey>();
         foreach (var k in Descendants(grid).Where(n => n.Kind == "button"))
@@ -201,7 +219,8 @@ public sealed class Bbs757EfbModelReader
             var unit = labels.FirstOrDefault(l => !units.Contains(l) && IsUnitOf(l, box));
             if (unit is not null) units.Add(unit);
             string value = box.Text.Length > 0 && unit is not null ? box.Text + " " + unit.Text : box.Text;
-            rows.Add(new Bbs757EfbItem(Bbs757EfbKind.Field, OwnName(box.Name), Box(box), Hit(box), true, box.Name, Value: value, Name: box.Name));
+            rows.Add(new Bbs757EfbItem(Bbs757EfbKind.Field, OwnName(box.Name), Box(box), Hit(box), true, box.Name, Value: value, Name: box.Name,
+                TextState: TextStateOf(box)));
         }
         var answerGrid = all.FirstOrDefault(n => n.Name == "btn_grid");
         var answers = answerGrid is null ? new List<Bbs757EfbItem>() : Descendants(answerGrid)
@@ -225,6 +244,11 @@ public sealed class Bbs757EfbModelReader
         string own = string.Join(' ', Bbs757EfbPageRules.ControlKey(label.Name).Split(' ').Where(p => p != "unit"));
         return own.Length > 0 && own == Bbs757EfbPageRules.ControlKey(box.Name);
     }
+
+    /// <summary>A text box's caret, maximum length and keypad flag as a field carries them (<see cref="Bbs757EfbItem.TextState"/>): all
+    /// three the walk read (<see cref="Bbs757EfbMemory.Node"/>), or none.</summary>
+    private static Bbs757EfbTextState? TextStateOf(Bbs757EfbMemory.Node box) =>
+        box.Caret is int caret && box.MaxLength is int maxLength && box.Keypad is bool keypad ? new Bbs757EfbTextState(caret, maxLength, keypad) : null;
 
     /// <summary>A text's lines and runs of spaces as one space each, trimmed.</summary>
     private static string OneLine(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
@@ -1113,14 +1137,16 @@ public sealed class Bbs757EfbModelReader
 
         /// <summary>An input as an item named <paramref name="name"/>: a drop-down a <see cref="Bbs757EfbKind.Choice"/> of its entries,
         /// valued by the one it shows (by its face's words when no entry was read: the face is then a value, not a prompt), open or not,
-        /// with its open list as drawn (<see cref="OpenListOf"/>); a text box a <see cref="Bbs757EfbKind.Field"/> holding its text; an
-        /// input the reader cannot read a field with no value. Keyed by its control name.</summary>
+        /// with its open list as drawn (<see cref="OpenListOf"/>); a text box a <see cref="Bbs757EfbKind.Field"/> holding its text, with
+        /// its caret, maximum length and keypad flag when the walk read them (<see cref="TextStateOf"/>); an input the reader cannot read a
+        /// field with no value. Keyed by its control name.</summary>
         public Bbs757EfbItem InputItem(Bbs757EfbMemory.Node input, string name) => input.Kind switch
         {
             "pulldown" => new Bbs757EfbItem(Bbs757EfbKind.Choice, name, Box(input), Hit(input), true, input.Name,
                 Value: input.Entries is { Count: > 0 } ? input.Value : input.Text, Name: input.Name,
                 Entries: input.Entries ?? Array.Empty<string>(), Open: input.Open, List: OpenListOf(input)),
-            "textbox" => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Value: input.Text, Name: input.Name),
+            "textbox" => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Value: input.Text, Name: input.Name,
+                TextState: TextStateOf(input)),
             _ => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Name: input.Name),
         };
 

@@ -19,7 +19,11 @@ public class Bbs757EfbMemoryTests
         SliderVptr = 0x30c48;
     // The fake's own vptrs for plan 21's kinds; a stack is no kind the layout names, so it reads "other".
     private const uint TextboxVptr = 0x30d00, MultilineVptr = 0x30500, PulldownVptr = 0x30700, ImageVptr = 0x30300,
-        OverlayVptr = 0x28c00, ModalVptr = 0x27d00, StackVptr = 0x30d60;
+        OverlayVptr = 0x28c00, ModalVptr = 0x27d00, StackVptr = 0x30d60, KeyboardVptr = 0x26f00;
+    // The keyboard app (key 2) beside the page's app in the map, with its kb_grid and one key; an object whose fields past +0x1a0 lie
+    // past the fake's memory (a torn read).
+    private const uint KbNode = 0x15000, KbAppVec = 0x15080, KbApp = 0x15100, KbRoots = 0x15400, KbGrid = 0x15600, KbGridVec = 0x15800,
+        KbKey = 0x15A00, EdgeObject = 0x1B0000 - 0x1a0;
     private const uint Outside = 0xA000, InnerVec = 0xA200, Inner = 0xA300;
     // A text box's label, a drop-down's face, list, stack and entries, the entry buttons and records.
     private const uint TextLabel = 0xD000, Face = 0xD200, List = 0xD400, ListVec = 0xD600, Stack = 0xD700, StackVec = 0xD900,
@@ -55,6 +59,7 @@ public class Bbs757EfbMemoryTests
             new Bbs757EfbClassVptr("textbox", TextboxVptr), new Bbs757EfbClassVptr("multiline", MultilineVptr),
             new Bbs757EfbClassVptr("pulldown", PulldownVptr), new Bbs757EfbClassVptr("image", ImageVptr),
             new Bbs757EfbClassVptr("overlay", OverlayVptr), new Bbs757EfbClassVptr("modal", ModalVptr),
+            new Bbs757EfbClassVptr("keyboard", KeyboardVptr),
         });
 
     private readonly byte[] _b = new byte[0x1B0000];
@@ -356,6 +361,119 @@ public class Bbs757EfbMemoryTests
         // No label: no text, never the box's other fields.
         var bare = FirstChild(() => { Ptr(Button, TextboxVptr); Ptr(Button + (uint)Layout.TextboxLabel, 0); });
         Assert.Equal("", bare.Text);
+    }
+
+    // ---- a text box's caret, maximum length and keypad flag (plan 22, measured 2026-11-07: docs/b757/evidence/efb-typing.md) ----
+
+    /// <summary>The grid's first child made a text box holding <paramref name="text"/> (its text label's), with its caret, maximum length
+    /// and keypad ints where the layout keeps them.</summary>
+    private void TextBox(string text, int caret, int maxLength, int keypad)
+    {
+        Ptr(Button, TextboxVptr); Ptr(Button + (uint)Layout.TextboxLabel, TextLabel);
+        Control(TextLabel, LabelVptr, "text_label", true); Rect(TextLabel, 1, 203, 248, 58);
+        Str(TextLabel + (uint)Layout.CtrlLabelText, text);
+        Ptr(Button + (uint)Layout.TextboxCaret, (uint)caret);
+        Ptr(Button + (uint)Layout.TextboxMaxLength, (uint)maxLength);
+        Ptr(Button + (uint)Layout.TextboxKeypad, (uint)keypad);
+    }
+
+    [Fact]
+    public void A_text_box_reads_its_caret_maximum_length_and_keypad_flag()
+    {
+        // PERF calc's Airport box "EDDF", tapped at x 360: the caret 2 (+0x1ac), its maximum length 4 (+0x1bc), the QWERTY keyboard
+        // (+0x1cc 0); the fuel dialog's box, pre-filled, its maximum length 8, opens the numeric keypad (+0x1cc 1).
+        var airport = FirstChild(() => TextBox("EDDF", caret: 2, maxLength: 4, keypad: 0));
+        Assert.Equal(("textbox", "EDDF"), (airport.Kind, airport.Text));
+        Assert.Equal(((int?)2, (int?)4, (bool?)false), (airport.Caret, airport.MaxLength, airport.Keypad));
+        var fuel = FirstChild(() => TextBox("2176", caret: 4, maxLength: 8, keypad: 1));
+        Assert.Equal(((int?)4, (int?)8, (bool?)true), (fuel.Caret, fuel.MaxLength, fuel.Keypad));
+
+        // The caret at either end of the text, an empty box's at 0; the maximum length 1 to 1,000 (SayIntentions' 64 is the most measured).
+        Assert.Equal(0, FirstChild(() => TextBox("EDDF", 0, 4, 0)).Caret);
+        Assert.Equal(0, FirstChild(() => TextBox("", 0, 64, 0)).Caret);
+        Assert.Equal(1, FirstChild(() => TextBox("", 0, 1, 0)).MaxLength);
+        Assert.Equal(1000, FirstChild(() => TextBox("", 0, 1000, 0)).MaxLength);
+    }
+
+    [Theory]
+    [InlineData(5)]             // past the end of "EDDF"
+    [InlineData(-1)]
+    [InlineData(int.MaxValue)]
+    public void A_caret_outside_the_text_reads_none(int caret)
+    {
+        // A torn read: the caret is a boundary of the text, 0 to its length. The other fields still read.
+        var box = FirstChild(() => TextBox("EDDF", caret, 4, 1));
+        Assert.Null(box.Caret);
+        Assert.Equal(((int?)4, (bool?)true), (box.MaxLength, box.Keypad));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-4)]
+    [InlineData(1001)]
+    public void A_maximum_length_outside_1_to_1000_reads_none(int maxLength)
+    {
+        var box = FirstChild(() => TextBox("EDDF", 4, maxLength, 0));
+        Assert.Null(box.MaxLength);
+        Assert.Equal(((int?)4, (bool?)false), (box.Caret, box.Keypad));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(-1)]
+    [InlineData(0x100)]
+    public void A_keypad_flag_neither_0_nor_1_reads_none(int keypad)
+    {
+        // The int is 0 or 1 (measured on eleven boxes); any other word is a torn read, never a guess either way.
+        var box = FirstChild(() => TextBox("EDDF", 4, 4, keypad));
+        Assert.Null(box.Keypad);
+        Assert.Equal(((int?)4, (int?)4), (box.Caret, box.MaxLength));
+    }
+
+    [Fact]
+    public void Only_a_text_box_has_a_caret()
+    {
+        // A button with the same ints at those offsets: none, nor for a label.
+        void Ints() { Ptr(Button + (uint)Layout.TextboxCaret, 2); Ptr(Button + (uint)Layout.TextboxMaxLength, 4); Ptr(Button + (uint)Layout.TextboxKeypad, 1); }
+        var button = FirstChild(Ints);
+        Assert.Equal("button", button.Kind);
+        Assert.Equal(((int?)null, (int?)null, (bool?)null), (button.Caret, button.MaxLength, button.Keypad));
+        var label = FirstChild(() => { Ints(); Ptr(Button, LabelVptr); });
+        Assert.Equal(((int?)null, (int?)null, (bool?)null), (label.Caret, label.MaxLength, label.Keypad));
+    }
+
+    [Fact]
+    public void A_text_box_whose_ints_cannot_be_read_has_none()
+    {
+        // A text box at the end of the module's memory: its name, rectangle and label read, its ints (from +0x1ac) lie past the end.
+        var box = FirstChild(() =>
+        {
+            Children(Grid, GridChildrenVec, EdgeObject);
+            Control(EdgeObject, TextboxVptr, "edge_textbox", true); Rect(EdgeObject, 300, 200, 150, 34);
+            Ptr(EdgeObject + (uint)Layout.TextboxLabel, TextLabel);
+            Control(TextLabel, LabelVptr, "text_label", true); Str(TextLabel + (uint)Layout.CtrlLabelText, "EDDF");
+        });
+        Assert.Equal(("textbox", "edge_textbox", "EDDF"), (box.Kind, box.Name, box.Text));
+        Assert.Equal(((int?)null, (int?)null, (bool?)null), (box.Caret, box.MaxLength, box.Keypad));
+    }
+
+    [Fact]
+    public void The_tree_format_carries_a_text_boxs_typing_fields()
+    {
+        // Optional, as every field added after the first trees: written only when the walk read them, so a node without them (and
+        // every committed tree) writes as before.
+        var apps = Build(() => TextBox("EDDF", 2, 4, 1)).ReadFrontApps();
+        string json = Bbs757EfbTreeJson.Write(apps);
+        var box = Assert.Single(Bbs757EfbTreeJson.Read(json)).Controls[0].Children[0];
+        Assert.Equal(((int?)2, (int?)4, (bool?)true), (box.Caret, box.MaxLength, box.Keypad));
+
+        var torn = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(Build(() => TextBox("EDDF", 9, 4, 0)).ReadFrontApps()));
+        var tornBox = Assert.Single(torn).Controls[0].Children[0];
+        Assert.Equal(((int?)null, (int?)4, (bool?)false), (tornBox.Caret, tornBox.MaxLength, tornBox.Keypad));
+
+        string bare = Bbs757EfbTreeJson.Write(Build().ReadFrontApps());
+        foreach (string field in new[] { "caret", "maxLength", "keypad" })
+            Assert.DoesNotContain($"\"{field}\"", bare, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -717,6 +835,130 @@ public class Bbs757EfbMemoryTests
         var back = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(running));
         Assert.Equal(new Bbs757EfbMemory.BoardingBox(1144, 4, 176, 24, 2, false, true, 961), back.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Boarding);
         Assert.DoesNotContain("\"boarding\"", Bbs757EfbTreeJson.Write(none), StringComparison.Ordinal);
+    }
+
+    // ---- the keyboard app (plan 22, measured 2026-11-07: docs/b757/evidence/efb-typing.md) ----
+
+    /// <summary>The map gains the keyboard app at <paramref name="app"/> (key 2, BlueBird's app_keyboard: its front flag 1, as measured),
+    /// its roots holding <c>kb_grid</c> with one key.</summary>
+    private void KeyboardApp(uint app = KbApp)
+    {
+        Ptr(Bbos + 0x238 + 8, 2);
+        Ptr(MapNode, KbNode);
+        Ptr(KbNode + 0x10, 2); Ptr(KbNode + 0x14, KbAppVec); Ptr(KbNode + 0x18, KbAppVec + 8); Ptr(KbAppVec, app);
+        Ptr(app, KeyboardVptr); Ptr(app + 0x140, 1); Ptr(app + 0x144, 0);
+        Ptr(app + 0x17c, KbRoots); Ptr(app + 0x180, KbRoots + 8); Ptr(KbRoots, KbGrid);
+        Control(KbGrid, GridVptr, "kb_grid", true); Rect(KbGrid, 0, 648, 1397, 400);
+        Children(KbGrid, KbGridVec, KbKey);
+        Control(KbKey, ButtonVptr, "char_btn_q|Q|1", true); Rect(KbKey, 150, 720, 106, 60); Str(KbKey + (uint)Layout.CtrlButtonText, "q|Q|1");
+    }
+
+    /// <summary>The keyboard app's state as BlueBird keeps it: its shown, ready and keypad bytes, its pointer to the text box typed into,
+    /// the keypad's rectangle (under the fuel input dialog, as measured) and its layer bytes.</summary>
+    private void KeyboardState(byte shown, byte ready, byte keypad, uint target, byte numeric = 0, byte shift = 0, byte caps = 0)
+    {
+        _b[KbApp + (uint)Layout.KeyboardShown] = shown;
+        _b[KbApp + (uint)Layout.KeyboardReady] = ready;
+        _b[KbApp + (uint)Layout.KeyboardKeypad] = keypad;
+        Ptr(KbApp + (uint)Layout.KeyboardTarget, target);
+        uint rect = KbApp + (uint)Layout.KeypadRect;
+        F32(rect, 595.5f); F32(rect + 4, 348); F32(rect + 8, 360); F32(rect + 12, 430);
+        _b[KbApp + (uint)Layout.KeyboardNumeric] = numeric;
+        _b[KbApp + (uint)Layout.KeyboardShift] = shift;
+        _b[KbApp + (uint)Layout.KeyboardCaps] = caps;
+    }
+
+    /// <summary>The page's first control made PERF calc's Airport box, the box the keyboard types into.</summary>
+    private void AirportBox() => Control(Button, TextboxVptr, "planning_perf_calc_airport_input", true);
+
+    private static Bbs757EfbMemory.App KeyboardOf(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
+        Assert.Single(apps, a => a.Class == Bbs757EfbMemory.KeyboardClass);
+
+    [Fact]
+    public void The_keyboard_app_reads_its_state()
+    {
+        // The Airport box tapped and the keyboard settled: the keyboard app's +0x1ac and +0x1ad are 1, +0x1ec points at the box (its name
+        // read), the keypad's rectangle is at +0x1d8; the one-shot shift (+0x1e9) on. The keyboard app is a class of its own now, no
+        // longer the fallback "app", and its front flag set keeps it drawn: its kb_grid reads as before. Only it carries a state.
+        var apps = Build(() => { AirportBox(); KeyboardApp(); KeyboardState(1, 1, 0, Button, shift: 1); }).ReadFrontApps();
+        var kb = KeyboardOf(apps);
+        Assert.Equal(2, kb.Key);
+        Assert.Equal(new Bbs757EfbMemory.KeyboardState(true, true, false, "planning_perf_calc_airport_input", false, true, false, 595.5f, 348, 360, 430),
+            kb.Keyboard);
+        Assert.Equal("kb_grid", Assert.Single(kb.Controls).Name);
+        Assert.Equal("char_btn_q|Q|1", Assert.Single(kb.Controls[0].Children).Name);
+        Assert.All(apps.Where(a => a.Class != Bbs757EfbMemory.KeyboardClass), a => Assert.Null(a.Keyboard));
+        Assert.DoesNotContain(apps, a => a.Class == "app");
+
+        // Up, not yet settled (a key tapped now lands on the page); the numeric keypad for a keypad box; the third layer and caps lock.
+        Assert.Equal((true, false), Shown(KeyboardOf(Build(() => { AirportBox(); KeyboardApp(); KeyboardState(1, 0, 0, Button); }).ReadFrontApps())));
+        var keypad = KeyboardOf(Build(() => { AirportBox(); KeyboardApp(); KeyboardState(1, 1, 1, Button, numeric: 1, caps: 1); }).ReadFrontApps()).Keyboard!;
+        Assert.Equal((true, true, false, true), (keypad.Keypad, keypad.Numeric, keypad.Shift, keypad.Caps));
+
+        static (bool, bool) Shown(Bbs757EfbMemory.App app) => (app.Keyboard!.Shown, app.Keyboard.Ready);
+    }
+
+    [Fact]
+    public void The_keyboard_down_reads_no_target()
+    {
+        // Down: its bytes 0 and its target pointer 0, so no box is typed into (""), never a stale name.
+        var down = KeyboardOf(Build(() => { AirportBox(); KeyboardApp(); KeyboardState(0, 0, 0, 0); }).ReadFrontApps()).Keyboard;
+        Assert.Equal(new Bbs757EfbMemory.KeyboardState(false, false, false, "", false, false, false, 595.5f, 348, 360, 430), down);
+
+        // A target whose name is not a readable string, or that lies outside the module: "" as well, the state still read.
+        Assert.Equal("", KeyboardOf(Build(() => { KeyboardApp(); KeyboardState(1, 1, 0, 0x0100_0000); }).ReadFrontApps()).Keyboard!.Target);
+        var garbled = KeyboardOf(Build(() =>
+        {
+            AirportBox();
+            _b.AsSpan((int)Button + 0x1c, 12).Fill(0x01);   // its name's bytes no printable string
+            KeyboardApp(); KeyboardState(1, 1, 0, Button);
+        }).ReadFrontApps()).Keyboard!;
+        Assert.Equal(("", true), (garbled.Target, garbled.Shown));
+    }
+
+    [Fact]
+    public void A_keyboard_byte_is_its_low_bit()
+    {
+        // As BlueBird's other flags: 0x02 is off, 0x03 on.
+        var kb = KeyboardOf(Build(() => { AirportBox(); KeyboardApp(); KeyboardState(0x03, 0x02, 0x02, Button, 0x03, 0x02, 0x03); }).ReadFrontApps()).Keyboard!;
+        Assert.Equal((true, false, false, true, false, true), (kb.Shown, kb.Ready, kb.Keypad, kb.Numeric, kb.Shift, kb.Caps));
+    }
+
+    [Fact]
+    public void A_keypad_float_that_is_no_number_reads_0()
+    {
+        // As a scrollbox's offset: a float that is no number (a torn read) reads 0, never NaN into the model or the tree format.
+        var kb = KeyboardOf(Build(() =>
+        {
+            KeyboardApp(); KeyboardState(1, 1, 1, 0);
+            F32(KbApp + (uint)Layout.KeypadRect, float.NaN); F32(KbApp + (uint)Layout.KeypadRect + 12, float.PositiveInfinity);
+        }).ReadFrontApps()).Keyboard!;
+        Assert.Equal((0f, 348f, 360f, 0f), (kb.KeypadX, kb.KeypadY, kb.KeypadW, kb.KeypadH));
+    }
+
+    [Fact]
+    public void A_keyboard_app_whose_bytes_cannot_be_read_has_no_state()
+    {
+        // The keyboard app at the end of the module's memory: its class, front flag and roots read (its kb_grid among them), its state's
+        // bytes (from +0x1ac) lie past the end: no state, never one of zeros.
+        var kb = KeyboardOf(Build(() => KeyboardApp(EdgeObject)).ReadFrontApps());
+        Assert.Null(kb.Keyboard);
+        Assert.Equal("kb_grid", Assert.Single(kb.Controls).Name);
+    }
+
+    [Fact]
+    public void The_tree_format_carries_the_keyboards_state()
+    {
+        var apps = Build(() => { AirportBox(); KeyboardApp(); KeyboardState(1, 1, 1, Button, numeric: 1); }).ReadFrontApps();
+        var back = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(apps));
+        Assert.Equal(new Bbs757EfbMemory.KeyboardState(true, true, true, "planning_perf_calc_airport_input", true, false, false, 595.5f, 348, 360, 430),
+            KeyboardOf(back).Keyboard);
+
+        // Optional: an app without one writes none, and reads none.
+        var none = Build(() => KeyboardApp(EdgeObject)).ReadFrontApps();
+        string json = Bbs757EfbTreeJson.Write(none);
+        Assert.DoesNotContain("\"keyboard\":", json, StringComparison.Ordinal);
+        Assert.Null(KeyboardOf(Bbs757EfbTreeJson.Read(json)).Keyboard);
     }
 
     [Fact]

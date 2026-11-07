@@ -69,14 +69,21 @@ internal static class Bbs757EfbTreeScrub
     internal static string MadeUpFlight(string name) =>
         MadeUpFlightValues.TryGetValue(name, out string? v) ? v : Zero;
 
-    private static Bbs757EfbMemory.Node ScrubNode(Bbs757EfbMemory.Node n) =>
-        n with
+    /// <summary>A node with its text scrubbed, and so its children, rows and open list. A text box whose text is made up has its caret
+    /// (plan 22) at the made-up text's end, where typing leaves it: the real caret could tell where the real text ends, and could lie
+    /// past the made-up text's end.</summary>
+    private static Bbs757EfbMemory.Node ScrubNode(Bbs757EfbMemory.Node n)
+    {
+        string text = ScrubText(n.Kind, n.Name, n.Text);
+        return n with
         {
-            Text = ScrubText(n.Kind, n.Name, n.Text),
+            Text = text,
+            Caret = n.Caret is int && !string.Equals(text, n.Text, StringComparison.Ordinal) ? text.Length : n.Caret,
             Children = n.Children.Select(ScrubNode).ToList(),
             Rows = n.Rows?.Select(ScrubNode).ToList(),
             OpenList = n.OpenList is { } list ? ScrubNode(list) : null,
         };
+    }
 
     /// <summary>The nodes holding the Hoppie logon code or the SayIntentions ACARS key, saved and in the AIRAC page's text boxes, by their
     /// exact names (B757-24): a name ending in <c>_textbox</c> alone is no credential (Settings > Livery options' VNAV takeoff help text,

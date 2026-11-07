@@ -104,6 +104,8 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
 /// <see cref="Entries"/> are a <see cref="Bbs757EfbKind.Choice"/>'s entries, in BlueBird's order, null for any other kind;
 /// <see cref="Open"/> says its list is shown, and <see cref="List"/> is that list as drawn (null while it is closed, or open with its
 /// list not read). Neither is in the page's fingerprint: the window shows a drop-down as a choice list, open or not.
+/// <see cref="TextState"/> is a <see cref="Bbs757EfbKind.Field"/>'s caret, maximum length and keypad flag when it is one of BlueBird's
+/// text boxes and all three were read (plan 22), null otherwise; not in the fingerprint either, as the caret moves while the pilot types.
 /// </summary>
 public sealed record Bbs757EfbItem(
     Bbs757EfbKind Kind,
@@ -123,7 +125,30 @@ public sealed record Bbs757EfbItem(
     Rectangle Clip = default,
     IReadOnlyList<string>? Entries = null,
     bool Open = false,
-    Bbs757EfbOpenList? List = null);
+    Bbs757EfbOpenList? List = null,
+    Bbs757EfbTextState? TextState = null);
+
+/// <summary>
+/// One of BlueBird's text boxes as the keyboard types into it (plan 22, measured live 2026-11-07, docs/b757/evidence/efb-typing.md):
+/// <see cref="Caret"/>, the character boundary a typed character goes in at (0 to the text's length; a tap puts it at the nearest
+/// boundary, a typed character then at the end; backspace deletes before it, <c>btn_delete</c> after); <see cref="MaxLength"/>, the most
+/// characters it takes (a key tapped on a full box is dropped: Airport 4, the fuel dialog 8, SayIntentions 64); and <see cref="Keypad"/>,
+/// whether it opens the numeric keypad rather than the QWERTY keyboard.
+/// </summary>
+public sealed record Bbs757EfbTextState(int Caret, int MaxLength, bool Keypad);
+
+/// <summary>
+/// BlueBird's keyboard as its app keeps it (plan 22, measured live 2026-11-07, docs/b757/evidence/efb-typing.md), beside
+/// <see cref="Bbs757EfbScreenModel.Keyboard"/>, which says only where its keys are: <see cref="Shown"/> from a text box's tap until it goes
+/// down; <see cref="Ready"/> once it has settled, 1.12 to 1.16 s after the tap (a key tapped before lands on the page beneath);
+/// <see cref="Keypad"/> when the numeric keypad shows instead of the QWERTY keyboard (meaningful only while <see cref="Shown"/>: BlueBird
+/// leaves it set after the keypad closes); <see cref="Target"/>, BlueBird's name for the text
+/// box it types into ("" while down); <see cref="Numeric"/>, <see cref="Shift"/> and <see cref="Caps"/>, the third layer, the one-shot
+/// shift and caps lock; and <see cref="KeypadBox"/>, where the numeric keypad is drawn (it has no controls in any tree), empty when its
+/// rectangle read is no box on the tablet.
+/// </summary>
+public sealed record Bbs757EfbKeyboardState(bool Shown, bool Ready, bool Keypad, string Target, bool Numeric, bool Shift, bool Caps,
+    Rectangle KeypadBox);
 
 /// <summary>
 /// A drop-down's list while it is open (plan 21, Task 7; measured 2026-11-07, <c>docs/b757/evidence/efb-memory-classes.md</c>): the part
@@ -180,8 +205,14 @@ public sealed record Bbs757EfbScreenModel(
     public Rectangle Viewport { get; init; } = Bbs757EfbScreen.ContentArea;
 
     /// <summary>Where BlueBird's QWERTY keyboard keys are, null when the reader found none. BlueBird's keyboard tree reads
-    /// visible whether it shows or not (measured 2026-11-06), so this is only where the keys are, never "the keyboard is up".</summary>
+    /// visible whether it shows or not (measured 2026-11-06), so this is only where the keys are, never "the keyboard is up"
+    /// (that is <see cref="KeyboardState"/>).</summary>
     public Bbs757EfbKeyboard? Keyboard { get; init; }
+
+    /// <summary>Whether BlueBird's keyboard is up and ready, which text box it types into, and its layer (<see cref="Bbs757EfbKeyboardState"/>),
+    /// from the keyboard app's own fields; null when none was read (a layout without the keyboard's fields, or a torn read). Not in the
+    /// fingerprint: nothing on the page reads differently while the keyboard is up.</summary>
+    public Bbs757EfbKeyboardState? KeyboardState { get; init; }
 
     /// <summary>"Aircraft, Ground services" / "Home".</summary>
     public string PageName =>

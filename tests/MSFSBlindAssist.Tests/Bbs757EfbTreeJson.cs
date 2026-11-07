@@ -9,9 +9,10 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The test-side file format of the tablet's live memory trees (<c>Fixtures/bbs757-efb-memory/&lt;name&gt;.tree.json</c>).
 /// Each node keeps kind, name, text, rectangle and children, and, only when the walk read them (optional: absent reads as
-/// none), a scrollbox's offset, a slider's knob, a button's selected state, and a drop-down's value, entries, open state, rows
-/// and open list; each app keeps
-/// key, class and controls, and the top bar's app its notification panel when the walk read it (optional: absent reads as none). The
+/// none), a scrollbox's offset, a slider's knob, a button's selected state, a drop-down's value, entries, open state, rows
+/// and open list, and a text box's caret, maximum length and keypad flag; each app keeps
+/// key, class and controls, the top bar's app its notification panel, flight-time text and boarding box, and the keyboard app its
+/// state, when the walk read them (optional: absent reads as none). The
 /// file's root is the array of apps, or, for a capture with BlueBird's notifications, an object
 /// <c>{ "apps": [...], "notices": [...] }</c>; a root array reads as no notices. The node's address is not written and reads
 /// back as 0. Numbers are invariant and the output is indented so a diff reads.
@@ -42,6 +43,13 @@ internal static class Bbs757EfbTreeJson
                 {
                     ["x"] = Number(b.X), ["y"] = Number(b.Y), ["w"] = Number(b.W), ["h"] = Number(b.H), ["state"] = b.State,
                     ["deboarding"] = b.Deboarding, ["flown"] = b.Flown, ["remaining"] = b.RemainingSeconds,
+                };
+            if (app.Keyboard is { } k)
+                o["keyboard"] = new JsonObject
+                {
+                    ["shown"] = k.Shown, ["ready"] = k.Ready, ["keypad"] = k.Keypad, ["target"] = k.Target, ["numeric"] = k.Numeric,
+                    ["shift"] = k.Shift, ["caps"] = k.Caps,
+                    ["x"] = Number(k.KeypadX), ["y"] = Number(k.KeypadY), ["w"] = Number(k.KeypadW), ["h"] = Number(k.KeypadH),
                 };
             o["controls"] = new JsonArray(app.Controls.Select(n => (JsonNode?)NodeToJson(n)).ToArray());
             array.Add(o);
@@ -77,6 +85,11 @@ internal static class Bbs757EfbTreeJson
                 ? new Bbs757EfbMemory.BoardingBox(b["x"]!.GetValue<float>(), b["y"]!.GetValue<float>(), b["w"]!.GetValue<float>(),
                     b["h"]!.GetValue<float>(), b["state"]!.GetValue<int>(), b["deboarding"]!.GetValue<bool>(), b["flown"]!.GetValue<bool>(),
                     b["remaining"]!.GetValue<long>())
+                : null,
+            a["keyboard"] is { } k
+                ? new Bbs757EfbMemory.KeyboardState(k["shown"]!.GetValue<bool>(), k["ready"]!.GetValue<bool>(), k["keypad"]!.GetValue<bool>(),
+                    k["target"]!.GetValue<string>(), k["numeric"]!.GetValue<bool>(), k["shift"]!.GetValue<bool>(), k["caps"]!.GetValue<bool>(),
+                    k["x"]!.GetValue<float>(), k["y"]!.GetValue<float>(), k["w"]!.GetValue<float>(), k["h"]!.GetValue<float>())
                 : null)).ToList();
     }
 
@@ -95,6 +108,14 @@ internal static class Bbs757EfbTreeJson
     internal static IReadOnlyList<Bbs757EfbNoticeRecord> LoadNotices(string name) => ReadNotices(File.ReadAllText(PathOf(name)));
 
     private static string PathOf(string name) => Path.Combine(FixtureDir(), name + ".tree.json");
+
+    /// <summary>The names of the committed trees (<c>Fixtures/bbs757-efb-memory/&lt;name&gt;.tree.json</c>), in ordinal order.</summary>
+    internal static IReadOnlyList<string> CommittedNames() =>
+        Directory.GetFiles(FixtureDir(), "*.tree.json").Select(p => Path.GetFileName(p)[..^".tree.json".Length])
+            .OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+    /// <summary>The text of the committed tree <paramref name="name"/>, as checked out.</summary>
+    internal static string TextOf(string name) => File.ReadAllText(PathOf(name));
 
     /// <summary>
     /// The trees as the memory walk reads them with the scrollbox named <paramref name="scrollbox"/> scrolled by
@@ -207,6 +228,23 @@ internal static class Bbs757EfbTreeJson
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithBoarding(IReadOnlyList<Bbs757EfbMemory.App> apps, Bbs757EfbMemory.BoardingBox? box) =>
         apps.Select(a => a.Class == Bbs757EfbMemory.TopBarClass ? a with { Boarding = box } : a).ToList();
 
+    /// <summary>The trees as the walk reads them with the layout's keyboard class (plan 22, Task 1b): the keyboard app, the one holding
+    /// <c>kb_grid</c> (class "app" in every tree captured before the class was known), reads as <see cref="Bbs757EfbMemory.KeyboardClass"/>
+    /// with its state set to <paramref name="state"/> (null: a keyboard app whose bytes could not be read). No committed tree carries
+    /// one.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithKeyboard(IReadOnlyList<Bbs757EfbMemory.App> apps, Bbs757EfbMemory.KeyboardState? state)
+    {
+        static bool HoldsKbGrid(Bbs757EfbMemory.Node n) => n.Name == "kb_grid" || n.Children.Any(HoldsKbGrid);
+        return apps.Select(a => a.Class == Bbs757EfbMemory.KeyboardClass || (a.Class == "app" && a.Controls.Any(HoldsKbGrid))
+            ? a with { Class = Bbs757EfbMemory.KeyboardClass, Keyboard = state } : a).ToList();
+    }
+
+    /// <summary>The trees with the text box named <paramref name="name"/> carrying its caret, maximum length and keypad flag as the
+    /// walk reads them (plan 22, Task 1b; null: not read, as a torn word reads); no committed tree carries them.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithTextState(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, int? caret,
+        int? maxLength, bool? keypad) =>
+        Change(apps, name, n => n with { Caret = caret, MaxLength = maxLength, Keypad = keypad });
+
     /// <summary>The trees with every button's selected state taken off, as a read that marks no side-menu entry or tab (a mid-update
     /// read, or a torn one) gives them: no section and no current tab.</summary>
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithoutSelected(IReadOnlyList<Bbs757EfbMemory.App> apps)
@@ -259,12 +297,15 @@ internal static class Bbs757EfbTreeJson
         if (n.Open) o["open"] = true;
         if (n.Rows is { } rows) o["rows"] = new JsonArray(rows.Select(r => (JsonNode?)NodeToJson(r)).ToArray());
         if (n.OpenList is { } list) o["list"] = NodeToJson(list);
+        if (n.Caret is int caret) o["caret"] = caret;
+        if (n.MaxLength is int maxLength) o["maxLength"] = maxLength;
+        if (n.Keypad is bool keypad) o["keypad"] = keypad;
         o["children"] = new JsonArray(n.Children.Select(c => (JsonNode?)NodeToJson(c)).ToArray());
         return o;
     }
 
-    /// <summary>A node from JSON; the scroll, knob, selected, value, entries, open, rows and list fields are optional (absent:
-    /// none).</summary>
+    /// <summary>A node from JSON; the scroll, knob, selected, value, entries, open, rows and list fields, and a text box's caret,
+    /// maximum length and keypad flag, are optional (absent: none).</summary>
     private static Bbs757EfbMemory.Node NodeFromJson(JsonNode j) => new(
         j["kind"]!.GetValue<string>(), j["name"]!.GetValue<string>(), j["text"]!.GetValue<string>(),
         j["x"]!.GetValue<float>(), j["y"]!.GetValue<float>(), j["w"]!.GetValue<float>(), j["h"]!.GetValue<float>(),
@@ -274,7 +315,8 @@ internal static class Bbs757EfbTreeJson
         Selected: j["selected"]?.GetValue<bool>(), Value: j["value"]?.GetValue<string>() ?? "",
         Entries: j["entries"]?.AsArray().Select(e => e!.GetValue<string>()).ToList(), Open: j["open"]?.GetValue<bool>() ?? false,
         Rows: j["rows"]?.AsArray().Select(r => NodeFromJson(r!)).ToList(),
-        OpenList: j["list"] is { } list ? NodeFromJson(list) : null);
+        OpenList: j["list"] is { } list ? NodeFromJson(list) : null,
+        Caret: j["caret"]?.GetValue<int>(), MaxLength: j["maxLength"]?.GetValue<int>(), Keypad: j["keypad"]?.GetValue<bool>());
 
     // A float widened to a double would print noise digits (12.300000190734863); write its shortest round-trip text.
     private static JsonNode Number(float v) =>

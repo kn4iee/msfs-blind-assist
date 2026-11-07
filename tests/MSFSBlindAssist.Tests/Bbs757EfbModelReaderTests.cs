@@ -1518,6 +1518,98 @@ public class Bbs757EfbModelReaderTests
         Assert.Null(Bbs757EfbModelReader.Read(apps)!.Keyboard);
     }
 
+    // ---- plan 22, Task 1b: the keyboard's state and a text box's caret ----
+
+    /// <summary>The Airport box tapped and the keyboard settled, as the walk reads the keyboard app (measured 2026-11-07,
+    /// docs/b757/evidence/efb-typing.md): up, ready, the QWERTY keyboard, typing into the Airport box, the one-shot shift on.</summary>
+    private static readonly Bbs757EfbMemory.KeyboardState AirportTyping =
+        new(true, true, false, "planning_perf_calc_airport_input", false, true, false, 595.5f, 348, 360, 430);
+
+    [Fact]
+    public void The_keyboard_app_of_its_own_class_gives_the_keys_as_before()
+    {
+        // The layout knows the keyboard app's class now (N3bbs12app_keyboardE), so the walk reads it as "keyboard", no longer the fallback
+        // "app": its kb_grid gives the same keys, and a tree captured before (class "app") still gives its own.
+        var before = Bbs757EfbTreeJson.Load("25-navigation-perf-calc");
+        var now = Bbs757EfbTreeJson.WithKeyboard(before, null);
+        Assert.Contains(now, a => a.Class == Bbs757EfbMemory.KeyboardClass && a.Key == 2);
+        Assert.DoesNotContain(now, a => a.Class == "app");
+        var old = Bbs757EfbModelReader.Read(before)!.Keyboard!;
+        var read = Bbs757EfbModelReader.Read(now)!.Keyboard!;
+        Assert.Equal(old.Box, read.Box);
+        Assert.Equal(old.Keys, read.Keys);
+        Assert.True(read.Keys.Count > 26, $"{read.Keys.Count} keys");
+    }
+
+    [Fact]
+    public void The_model_carries_the_keyboards_state()
+    {
+        var page = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithKeyboard(page, AirportTyping))!;
+        Assert.Equal(new Bbs757EfbKeyboardState(true, true, false, "planning_perf_calc_airport_input", false, true, false,
+            new System.Drawing.Rectangle(595, 348, 360, 430)), model.KeyboardState);
+
+        // Down: no target. None read (a tree captured before plan 22, or a keyboard app whose bytes were torn): none.
+        var down = new Bbs757EfbMemory.KeyboardState(false, false, false, "", false, false, false, 595.5f, 348, 360, 430);
+        Assert.Equal((false, false, ""), Down(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithKeyboard(page, down))!.KeyboardState!));
+        Assert.Null(Bbs757EfbModelReader.Read(page)!.KeyboardState);
+        Assert.Null(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithKeyboard(page, null))!.KeyboardState);
+
+        // A keypad rectangle that is no number, or lies far off the tablet, is no box; the rest of the state still reads.
+        foreach (var torn in new[] { AirportTyping with { KeypadX = float.NaN }, AirportTyping with { KeypadH = float.PositiveInfinity },
+                     AirportTyping with { KeypadW = -360 }, AirportTyping with { KeypadY = 1e9f } })
+        {
+            var state = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithKeyboard(page, torn))!.KeyboardState!;
+            Assert.Equal((System.Drawing.Rectangle.Empty, true, "planning_perf_calc_airport_input"), (state.KeypadBox, state.Ready, state.Target));
+        }
+
+        // Nothing is said or shown differently: the page reads as it did without the state.
+        Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(model));
+        Assert.Equal(ListingOf(page), ListingOf(Bbs757EfbTreeJson.WithKeyboard(page, AirportTyping)));
+
+        static (bool, bool, string) Down(Bbs757EfbKeyboardState s) => (s.Shown, s.Ready, s.Target);
+    }
+
+    [Fact]
+    public void A_text_box_field_carries_its_caret_maximum_length_and_keypad_flag()
+    {
+        // PERF calc's Airport box ("KSEA" in the scrubbed tree), the caret tapped to 2, its maximum length 4, the QWERTY keyboard.
+        var page = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
+        var apps = Bbs757EfbTreeJson.WithTextState(page, "planning_perf_calc_airport_input", 2, 4, false);
+        var model = Bbs757EfbModelReader.Read(apps)!;
+        var airport = Assert.Single(model.Items, i => i.Name == "planning_perf_calc_airport_input");
+        Assert.Equal((Bbs757EfbKind.Field, "KSEA"), (airport.Kind, airport.Value));
+        Assert.Equal(new Bbs757EfbTextState(2, 4, false), airport.TextState);
+
+        // The other text boxes carry none (their nodes have none), nor does any item that is no text box.
+        Assert.All(model.Items.Concat(model.Menu).Concat(model.TopBar).Where(i => i.Name != "planning_perf_calc_airport_input"),
+            i => Assert.Null(i.TextState));
+
+        // A node missing any one of the three gives none: the state is all three or nothing.
+        foreach (var (caret, max, keypad) in new (int?, int?, bool?)[] { (null, 4, false), (2, null, false), (2, 4, null) })
+        {
+            var partial = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithTextState(page, "planning_perf_calc_airport_input", caret, max, keypad))!;
+            Assert.Null(Assert.Single(partial.Items, i => i.Name == "planning_perf_calc_airport_input").TextState);
+        }
+
+        // Nothing is said or shown differently.
+        Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(model));
+        Assert.Equal(ListingOf(page), ListingOf(apps));
+    }
+
+    [Fact]
+    public void A_questions_text_box_carries_its_caret_maximum_length_and_keypad_flag()
+    {
+        // The fuel input dialog's box, pre-filled "752" with the caret at its end, its maximum length 8, opening the numeric keypad.
+        var page = Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog");
+        var apps = Bbs757EfbTreeJson.WithTextState(page, "fuel_input_textbox", 3, 8, true);
+        var row = Assert.Single(Bbs757EfbModelReader.Read(apps)!.Question!.Rows);
+        Assert.Equal(("fuel_input_textbox", "752 Gal"), (row.Name, row.Value));
+        Assert.Equal(new Bbs757EfbTextState(3, 8, true), row.TextState);
+        Assert.Null(Assert.Single(Bbs757EfbModelReader.Read(page)!.Question!.Rows).TextState);
+        Assert.Equal(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(apps)!));
+    }
+
     [Fact]
     public void The_viewport_is_the_content_scrollbox()
     {

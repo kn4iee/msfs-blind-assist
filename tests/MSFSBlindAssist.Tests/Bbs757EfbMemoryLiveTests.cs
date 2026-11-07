@@ -60,6 +60,8 @@ public class Bbs757EfbMemoryLiveTests
             new Bbs757EfbClassVptr("SIGN IN", 0x2e3d0),
             // the top bar's app and the dialog app, found by their class (never shown as a token)
             new Bbs757EfbClassVptr("overlay", 0x28c84), new Bbs757EfbClassVptr("modal", 0x27df0),
+            // the keyboard app (N3bbs12app_keyboardE, map key 2), its state read from its own fields (measured live 2026-11-07)
+            new Bbs757EfbClassVptr("keyboard", 0x26f18),
         });
 
     [Fact]

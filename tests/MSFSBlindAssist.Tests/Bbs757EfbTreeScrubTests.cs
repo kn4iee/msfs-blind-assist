@@ -135,6 +135,24 @@ public class Bbs757EfbTreeScrubTests
         new("textbox", name, text, 1.5f, 2.25f, 30, 40, 0x1234, Array.Empty<Bbs757EfbMemory.Node>());
 
     [Fact]
+    public void A_made_up_text_boxs_caret_is_at_its_end()
+    {
+        // Plan 22 reads a text box's caret. Where the scrub makes the text up, the real caret would tell where the real text ends (a
+        // credential's length) and could lie past the made-up text's end, which no caret does: it is put at the made-up text's end, where
+        // typing leaves it. A text the scrub keeps keeps its caret; the maximum length and keypad flag are kept either way.
+        var scrubbed = Bbs757EfbTreeScrub.Scrub(App(
+            Box("hoppie_logon_code_textbox", "REALCODE1234") with { Caret = 12, MaxLength = 24, Keypad = false },
+            Box("planning_perf_calc_airport_input", "KPHX") with { Caret = 1, MaxLength = 4, Keypad = false },
+            Box("planning_charts_request_input", "EDDF") with { Caret = 2, MaxLength = 4, Keypad = false },
+            Box("simbrief_id_textbox", "") with { Caret = 0, MaxLength = 8, Keypad = true },
+            Box("hoppie_logon_code_textbox", "REALCODE") with { MaxLength = 24 }))[0].Controls;
+        Assert.Equal(new (string, int?)[] { ("MADEUP", 6), ("KSEA", 4), ("EDDF", 2), ("", 0), ("MADEUP", null) },
+            scrubbed.Select(c => (c.Text, c.Caret)));
+        Assert.Equal(new int?[] { 24, 4, 4, 8, 24 }, scrubbed.Select(c => c.MaxLength));
+        Assert.Equal(new bool?[] { false, false, false, true, null }, scrubbed.Select(c => c.Keypad));
+    }
+
+    [Fact]
     public void An_update_or_other_name_containing_date_or_time_is_kept()
     {
         var scrubbed = Bbs757EfbTreeScrub.Scrub(App(N("update_label", "UPDATE"), N("planning_time_label", "Time")));
@@ -302,6 +320,23 @@ public class Bbs757EfbTreeScrubTests
     {
         static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
         return apps.SelectMany(a => a.Controls).SelectMany(Flat);
+    }
+
+    [Fact]
+    public void Every_committed_tree_writes_back_as_it_is()
+    {
+        // A tree's optional fields are written only when the walk read them (plan 22's keyboard state and a text box's caret among
+        // them), so every committed tree, captured before they were read, reads and writes back to its own text: adding a field leaves
+        // the committed fixtures as they are. Line ends aside: git may check a tree out with CRLF.
+        var names = Bbs757EfbTreeJson.CommittedNames();
+        Assert.True(names.Count >= 32, $"only {names.Count} trees found");
+        foreach (string name in names)
+        {
+            string text = Bbs757EfbTreeJson.TextOf(name).Replace("\r\n", "\n", StringComparison.Ordinal);
+            var apps = Bbs757EfbTreeJson.Read(text);
+            string again = text.StartsWith('{') ? Bbs757EfbTreeJson.Write(apps, Bbs757EfbTreeJson.ReadNotices(text)) : Bbs757EfbTreeJson.Write(apps);
+            Assert.True(text == again.Replace("\r\n", "\n", StringComparison.Ordinal), name);
+        }
     }
 
     [Fact]

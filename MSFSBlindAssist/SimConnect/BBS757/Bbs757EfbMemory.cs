@@ -9,7 +9,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// visibility and tap rectangles and no screen capture. Reaches the EFB object through the gauge manager, then BBOS,
 /// then its app map; walks each drawn app's roots and current page (the top bar's and an open dialog's among them),
 /// keeping the controls whose own visible byte (and whose ancestors') is set, with the top bar's notification panel
-/// (<see cref="NoticePanel"/>); and reads BBOS's notifications (<see cref="ReadNotices"/>). Pure over an <see cref="IEfbMemory"/> so it runs against a fake or the live
+/// (<see cref="NoticePanel"/>) and the keyboard app's state (<see cref="KeyboardState"/>); and reads BBOS's notifications (<see cref="ReadNotices"/>). Pure over an <see cref="IEfbMemory"/> so it runs against a fake or the live
 /// simulator. The std::map/std::vector/std::string shapes it reads are the Emscripten libc++ ABI, stable across
 /// BlueBird builds; only the BlueBird-specific field offsets come from the layout.
 /// </summary>
@@ -39,17 +39,29 @@ public sealed class Bbs757EfbMemory
     /// buttons where they are drawn (their rectangles less the list's and its ancestors' scroll offsets), and <c>OpenList</c>:
     /// the list's scrollbox itself, where it is drawn and with its own <c>Scroll</c>, the viewport a row shows in, without
     /// children (its rows are <c>Rows</c>); both null closed. The face, the list and a text box's label are in no children
-    /// vector, so they are never <c>Children</c>.</para></summary>
+    /// vector, so they are never <c>Children</c>.</para>
+    /// <para>A <c>textbox</c> has <c>Caret</c> (the character boundary a typed character goes in at, 0 to its text's length),
+    /// <c>MaxLength</c> (the most characters it takes, 1 to <see cref="MaxTextboxLength"/>) and <c>Keypad</c> (whether it opens the
+    /// numeric keypad rather than the QWERTY keyboard), each null when unreadable or out of its range (a torn read), and null for every
+    /// other kind (<see cref="WithTyping"/>; plan 22, measured 2026-11-07).</para></summary>
     public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children,
         float Scroll = 0f, float? Knob = null, float KnobSpan = 0f,
         bool? Selected = null, string Value = "", IReadOnlyList<string>? Entries = null, bool Open = false, IReadOnlyList<Node>? Rows = null,
-        Node? OpenList = null);
+        Node? OpenList = null, int? Caret = null, int? MaxLength = null, bool? Keypad = null);
 
     /// <summary>The class of the top bar's app (BlueBird's <c>app_overlay</c>), read on every page whatever its front flag.</summary>
     public const string TopBarClass = "overlay";
 
     /// <summary>The class of the dialog app (BlueBird's <c>app_modaldialog</c>), read only while BBOS's dialog byte is 1.</summary>
     public const string DialogClass = "modal";
+
+    /// <summary>The class of the keyboard app (BlueBird's <c>app_keyboard</c>, BBOS app map key 2), which holds <c>kb_grid</c> and the
+    /// keyboard's state (<see cref="KeyboardState"/>). Drawn by its front flag as any app (it reads 1, measured 2026-11-07). A layout
+    /// without the class reads it as the fallback <see cref="UnknownAppClass"/>, as every tree captured before plan 22 holds it.</summary>
+    public const string KeyboardClass = "keyboard";
+
+    /// <summary>The class of an app whose vtable the layout names no class for (or whose vtable cannot be read).</summary>
+    public const string UnknownAppClass = "app";
 
     /// <summary>The cap of every std::string read but a multi-line box's text: past it a string reads as none.</summary>
     public const int TextCap = 4096;
@@ -62,9 +74,20 @@ public sealed class Bbs757EfbMemory
 
     /// <summary>One EFB app that is currently drawn (its front flag set, the top bar always, the dialog while one is up), with
     /// the controls of its roots and its current page; the top bar's app also with its notification panel (<see cref="Panel"/>,
-    /// null for every other app and when its fields cannot be read).</summary>
+    /// null for every other app and when its fields cannot be read), and the keyboard app with its state (<see cref="Keyboard"/>, null
+    /// for every other app and when a byte of it cannot be read).</summary>
     public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls, NoticePanel? Panel = null, string FlightTime = "",
-        BoardingBox? Boarding = null);
+        BoardingBox? Boarding = null, KeyboardState? Keyboard = null);
+
+    /// <summary>BlueBird's keyboard as the keyboard app keeps it (measured live 2026-11-07, docs/b757/evidence/efb-typing.md): <c>Shown</c>
+    /// from a text box's tap until the keyboard goes down; <c>Ready</c> once it has settled, 1.12 to 1.16 s after the tap (a key tapped
+    /// before lands on the page beneath); <c>Keypad</c> when the numeric keypad shows instead of the QWERTY keyboard (BlueBird leaves it 1
+    /// after the keypad closes, until the QWERTY keyboard next opens: it says which shows only while <c>Shown</c>); <c>Target</c>, the
+    /// name of the text box it types into ("" while down, or when its name cannot be read); the layer bytes <c>Numeric</c> (the third
+    /// layer), <c>Shift</c> (the one-shot shift) and <c>Caps</c> (caps lock); and the numeric keypad's rectangle in tablet pixels
+    /// ([595.5,348 360x430] under the fuel input dialog; it has no controls in any tree).</summary>
+    public sealed record KeyboardState(bool Shown, bool Ready, bool Keypad, string Target, bool Numeric, bool Shift, bool Caps,
+        float KeypadX, float KeypadY, float KeypadW, float KeypadH);
 
     /// <summary>The top bar's boarding box while BlueBird draws it (null otherwise), and what decides its words (decoded from BBS752.wasm's
     /// top bar draw, 2026-11-07): the box's rectangle in tablet pixels ([1144,4 176x24] offering START BOARDING); BBOS's loading
@@ -100,9 +123,29 @@ public sealed class Bbs757EfbMemory
             bool bar = cls == TopBarClass;
             apps.Add(new App(key, cls, controls, bar ? ReadPanel(app) : null,
                 bar ? _m.ReadStdString(app + (uint)_l.OverlayFlightTimeText) ?? "" : "",
-                bar ? ReadBoarding(app, bbos) : null));
+                bar ? ReadBoarding(app, bbos) : null,
+                cls == KeyboardClass ? ReadKeyboard(app) : null));
         }
         return apps;
+    }
+
+    /// <summary>The keyboard app's state (<see cref="KeyboardState"/>): its bytes at the layout's <c>KeyboardShown</c>, <c>KeyboardReady</c>,
+    /// <c>KeyboardKeypad</c>, <c>KeyboardNumeric</c>, <c>KeyboardShift</c> and <c>KeyboardCaps</c>, each its low bit (as BlueBird tests its
+    /// flags); the name of the control its <c>KeyboardTarget</c> pointer points at ("" for 0 or a name that is no readable string); the
+    /// keypad's four floats at <c>KeypadRect</c>, one that is no number read as 0 (as a scrollbox's offset). Null when a byte or the
+    /// pointer cannot be read, never a state of zeros.</summary>
+    private KeyboardState? ReadKeyboard(uint app)
+    {
+        if (!_m.TryReadByte(app + (uint)_l.KeyboardShown, out byte shown) || !_m.TryReadByte(app + (uint)_l.KeyboardReady, out byte ready)
+            || !_m.TryReadByte(app + (uint)_l.KeyboardKeypad, out byte keypad) || !_m.TryReadByte(app + (uint)_l.KeyboardNumeric, out byte numeric)
+            || !_m.TryReadByte(app + (uint)_l.KeyboardShift, out byte shift) || !_m.TryReadByte(app + (uint)_l.KeyboardCaps, out byte caps)
+            || !_m.TryReadPtr(app + (uint)_l.KeyboardTarget, out uint target)) return null;
+        string name = target == 0 ? "" : _m.ReadStdString(target + (uint)_l.CtrlName) ?? "";
+        uint rect = app + (uint)_l.KeypadRect;
+        static float Finite(float v) => float.IsFinite(v) ? v : 0f;
+        return new KeyboardState((shown & 1) == 1, (ready & 1) == 1, (keypad & 1) == 1, name, (numeric & 1) == 1, (shift & 1) == 1,
+            (caps & 1) == 1, Finite(_m.ReadFloat(rect)), Finite(_m.ReadFloat(rect + 4)), Finite(_m.ReadFloat(rect + 8)),
+            Finite(_m.ReadFloat(rect + 12)));
     }
 
     /// <summary>The most seconds believed for a remaining loading time (a day): a torn or foreign word cannot make a count of minutes.</summary>
@@ -245,8 +288,25 @@ public sealed class Bbs757EfbMemory
         {
             "button" => node with { Selected = ReadSelected(ctrl) },
             "pulldown" => WithEntries(node, ctrl, walk, ancestorScroll, depth),
+            "textbox" => WithTyping(node, ctrl),
             _ => node,
         });
+    }
+
+    /// <summary>The longest maximum length believed for a text box (SayIntentions' ACARS key box, 64, is the longest measured): a torn
+    /// or foreign word past it reads as none.</summary>
+    internal const int MaxTextboxLength = 1000;
+
+    /// <summary>A text box with its caret, maximum length and keypad flag (<see cref="Node"/>): the ints at the layout's
+    /// <c>TextboxCaret</c>, <c>TextboxMaxLength</c> and <c>TextboxKeypad</c> (measured live 2026-11-07, docs/b757/evidence/efb-typing.md).
+    /// Each is null when it cannot be read or lies outside its range, a torn read: a caret outside 0 to the text's length, a maximum length
+    /// outside 1 to <see cref="MaxTextboxLength"/>, a keypad int other than 0 (the QWERTY keyboard) or 1 (the numeric keypad).</summary>
+    private Node WithTyping(Node node, uint ctrl)
+    {
+        int? caret = _m.TryReadInt(ctrl + (uint)_l.TextboxCaret, out int c) && c >= 0 && c <= node.Text.Length ? c : null;
+        int? maxLength = _m.TryReadInt(ctrl + (uint)_l.TextboxMaxLength, out int m) && m is >= 1 and <= MaxTextboxLength ? m : null;
+        bool? keypad = _m.TryReadInt(ctrl + (uint)_l.TextboxKeypad, out int k) && k is 0 or 1 ? k == 1 : null;
+        return node with { Caret = caret, MaxLength = maxLength, Keypad = keypad };
     }
 
     private string KindOf(uint ctrl) =>
@@ -349,7 +409,7 @@ public sealed class Bbs757EfbMemory
     private static string? NonEmpty(string? s) => string.IsNullOrEmpty(s) ? null : s;
 
     private string ClassName(uint obj) =>
-        _m.TryReadPtr(obj, out uint vptr) ? _l.KindFor(vptr) ?? "app" : "app";
+        _m.TryReadPtr(obj, out uint vptr) ? _l.KindFor(vptr) ?? UnknownAppClass : UnknownAppClass;
 
     // ---- BBOS app map (libc++ std::map<int, std::vector<app*>>) --------------
 
