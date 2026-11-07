@@ -597,6 +597,30 @@ public class Bbs757EfbElementsTests
         Assert.Null(Note(slider with { Kind = Bbs757EfbKind.Heading }));
     }
 
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_colors_theme_row_stays_a_note_on_a_settings_read_with_no_section(string culture)
+    {
+        // The final review's M1: the section rests on BlueBird's selected state alone (B757-22), and a read that marks no side-menu entry,
+        // or two (a mid-update read right after a side-menu tap), names none: the page reads "Settings". The theme row is matched by its
+        // label all the same, so it is never offered as a percent slider (B757-21). Settings, General as captured, the selection taken off.
+        var stripped = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithoutSelected(Bbs757EfbTreeJson.Load("50-settings-general")))!;
+        Assert.Equal("Settings", stripped.PageName);
+        var theme = stripped.Items.Single(i => i.Key == "theme_slider");
+        Assert.Equal(Bbs757EfbKind.Slider, theme.Kind);
+
+        var b = TestCulture.Run(culture, () => Bbs757EfbElements.Build(stripped, null, NoExtras));
+
+        AssertText(b, ThemeNoteDarkBlue);
+        Assert.Equal("theme_slider", Field(b, IndexOf(b, ThemeNoteDarkBlue), "key"));
+        Assert.DoesNotContain(b.Actions.Values, a => a.Item?.Key == "theme_slider");
+        Assert.DoesNotContain(Enumerable.Range(0, b.Count), i => Field(b, i, "type") == "range" && Field(b, i, "text").StartsWith("EFB colors theme", StringComparison.Ordinal));
+
+        // The same label on another app's page with no section, or a misread one, is no theme row.
+        Assert.Null(Bbs757EfbElements.ThemeNoteFor(theme, "Aircraft"));
+        Assert.Null(Bbs757EfbElements.ThemeNoteFor(theme with { Text = "EFB colors thme" }, "Settings"));
+    }
+
     [Fact]
     public void The_colors_theme_note_stays_under_a_question()
     {

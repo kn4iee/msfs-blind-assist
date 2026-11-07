@@ -299,14 +299,35 @@ public static class Bbs757EfbElements
     /// is the way back, with the simulator closed). The row is the one
     /// <see cref="Bbs757EfbSettingsMatch.SettingFor"/> matches to the catalog's theme, whatever kind the reader gave it (a slider
     /// under the default theme, a row under a light one); its choice is the catalog's word for the one read, or none when the
-    /// reader read none of them. Internal for the tests.
+    /// reader read none of them. On a Settings read that names no section (<see cref="SectionlessSettings"/>: no side-menu entry read
+    /// selected, or two, as a read mid-update may give: B757-22) the row is matched by its label to the theme's all the same, since the
+    /// section rests on the selected state alone and such a read would otherwise offer the theme as a percent slider (the final review
+    /// of plan 21, M1). Internal for the tests.
     /// </summary>
     internal static string? ThemeNoteFor(Bbs757EfbItem it, string pageName)
     {
-        if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is not { Path: Bbs757EfbSettings.ThemePath } theme) return null;
+        if (ThemeSettingOf(it, pageName) is not { } theme) return null;
         int read = Bbs757EfbSettingsMatch.ChoiceIndex(theme, it.Value);
         return Bbs757EfbSettings.ThemeNote(read >= 0 ? theme.Choices[read].Word : null);
     }
+
+    /// <summary>The catalog's EFB colors theme when <paramref name="it"/> is its row: the setting <see cref="Bbs757EfbSettingsMatch.SettingFor"/>
+    /// matches on the page, or, on a Settings read that names no section, the one its label matches on Settings, General, the theme's own
+    /// page; null for any other row.</summary>
+    private static Bbs757Setting? ThemeSettingOf(Bbs757EfbItem it, string pageName)
+    {
+        if (Bbs757EfbSettingsMatch.SettingFor(pageName, it) is { Path: Bbs757EfbSettings.ThemePath } theme) return theme;
+        return string.Equals(pageName, SectionlessSettings, StringComparison.Ordinal)
+            && Bbs757EfbSettingsMatch.SettingFor(ThemePage, it) is { Path: Bbs757EfbSettings.ThemePath } byLabel
+            ? byLabel
+            : null;
+    }
+
+    /// <summary>The name of a Settings page whose section was not read (<see cref="Bbs757EfbScreenModel.PageName"/>: the app alone).</summary>
+    private static readonly string SectionlessSettings = Bbs757EfbVocabulary.Pretty("SETTINGS");
+
+    /// <summary>The page the EFB colors theme is on, as <see cref="Bbs757EfbSettingsMatch.SectionFor"/> names it.</summary>
+    private const string ThemePage = "Settings, General";
 
     /// <summary>A name and its value as one line with one colon: a name the tablet writes with its own colon ("Airport:") gets no
     /// second, and one it ends with a sentence's period loses that one period before the colon (signed out of Navigraph, the AIRAC
