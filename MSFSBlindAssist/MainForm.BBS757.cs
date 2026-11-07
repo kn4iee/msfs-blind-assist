@@ -221,30 +221,28 @@ public partial class MainForm
                 m.Build.Layout<Services.BBS757.Bbs757EfbMemLayout>(DisplayLayouts.Bbs757Module.Efb) is not null);
             if (module is null)
             {
-                string reason = location.Failure
-                    ?? (location.Found.Count > 0 ? Services.BBS757.Bbs757DisplayReasons.FileNotRecognised : Services.BBS757.Bbs757DisplayReasons.MemoryNotFound);
-                return new Bbs757EfbModelRead(null, TabletStatus(reason));
+                // The session's reasons are worded for the PMDG 737; the window says the 757's own.
+                string reason = location.Failure is { } failure
+                    ? Services.BBS757.Bbs757DisplayReasons.FromSession(failure)
+                    : location.Found.Count > 0 ? Services.BBS757.Bbs757DisplayReasons.FileNotRecognised : Services.BBS757.Bbs757DisplayReasons.MemoryNotFound;
+                return Bbs757EfbModelRead.Unreadable(reason);
             }
             var layout = module.Build.Layout<Services.BBS757.Bbs757EfbMemLayout>(DisplayLayouts.Bbs757Module.Efb)!;
             using var lease = module.AcquireLease();
             var memory = new Bbs757EfbMemory(new ModuleEfbMemory(module.Memory), layout);
             var model = new Bbs757EfbModelReader(memory).Read();
-            return new Bbs757EfbModelRead(model, model is null ? TabletStatus(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound) : null);
+            return model is null ? Bbs757EfbModelRead.Unreadable(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound) : new Bbs757EfbModelRead(model, null);
         }
         catch (ObjectDisposedException)
         {
-            return new Bbs757EfbModelRead(null, TabletStatus(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound));
+            return Bbs757EfbModelRead.Unreadable(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound);
         }
         catch (Exception ex)
         {
             Log.Warn("BBS757", "EFB memory read failed: " + ex.Message);
-            return new Bbs757EfbModelRead(null, TabletStatus(Services.BBS757.Bbs757DisplayReasons.InternalError));
+            return Bbs757EfbModelRead.Unreadable(Services.BBS757.Bbs757DisplayReasons.InternalError);
         }
     }
-
-    /// <summary>The window's status line for a reason the tablet could not be read: the reason, then how to retry.</summary>
-    private static string TabletStatus(string reason) =>
-        "The BlueBird tablet could not be read: " + reason + ". Is the 757 loaded? Press F5 to try again.";
 
     /// <summary>
     /// Whether the pilot is signed in to Navigraph, read fresh through the tablet client: true, false, or null when the helper

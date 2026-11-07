@@ -1,3 +1,5 @@
+using MSFSBlindAssist.Services.PMDG;
+
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>The spoken reasons a 757 display reader is unavailable or stopped (the 757's own list; the PMDG
@@ -11,6 +13,16 @@ public static class Bbs757DisplayReasons
     public const string Mismatch = "values do not match the simulator";
     public const string UnexpectedValues = "unexpected values";
     public const string InternalError = "internal error, see the log";
+
+    /// <summary>The 757's reason for a failure the shared module session gave. The session words its reasons for the PMDG
+    /// 737 (<see cref="FmaReasons"/>) whatever the module, so a 757 reader passing one on as it is would tell the pilot
+    /// "PMDG file not recognised" (found 2026-11-07). A reason worded alike in both lists passes through.</summary>
+    public static string FromSession(string failure) => failure switch
+    {
+        FmaReasons.FileNotRecognised => FileNotRecognised,
+        FmaReasons.FilesNotFound => FilesNotFound,
+        _ => failure,
+    };
 }
 
 /// <summary>

@@ -6,7 +6,18 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>One read of the tablet from the module's memory: the page, or the reason it could not be read (shown as the window's
 /// status). Exactly one of the two is set.</summary>
-public sealed record Bbs757EfbModelRead(Bbs757EfbScreenModel? Model, string? Status);
+public sealed record Bbs757EfbModelRead(Bbs757EfbScreenModel? Model, string? Status)
+{
+    /// <summary>
+    /// The read when the tablet could not be read, for one of <see cref="Services.BBS757.Bbs757DisplayReasons"/>: the reason, then
+    /// what the pilot can do. A build with no layout is not cured by F5 or by loading the 757 (the module session keeps the
+    /// analysis until the 757's windows are disposed), so it says a newer app is needed; every other reason asks whether the 757 is
+    /// loaded and offers F5.
+    /// </summary>
+    public static Bbs757EfbModelRead Unreadable(string reason) => new(null, reason == Services.BBS757.Bbs757DisplayReasons.FileNotRecognised
+        ? "The BlueBird tablet could not be read: " + reason + ". This copy of MSFS Blind Assist cannot read this version of the 757; check for an update."
+        : "The BlueBird tablet could not be read: " + reason + ". Is the 757 loaded? Press F5 to try again.");
+}
 
 /// <summary>What the 757 EFB bridge needs from the app, as delegates (MainForm builds it).</summary>
 public sealed class Bbs757EfbBridgeIo
