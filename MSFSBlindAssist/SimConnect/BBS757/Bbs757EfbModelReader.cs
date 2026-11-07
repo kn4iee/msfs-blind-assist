@@ -955,13 +955,15 @@ public sealed class Bbs757EfbModelReader
         }
 
         /// <summary>A value box as a field: named by the page rules' table, else its label, else its control name; its value is the
-        /// number it holds with its unit.</summary>
+        /// number it holds with its unit. Marked <see cref="Bbs757EfbItem.ValueBox"/>: it is BlueBird's button, whose tap opens its
+        /// dialog (plan 22).</summary>
         public Bbs757EfbItem FieldItem(Bbs757EfbMemory.Node box)
         {
             var inner = _fieldLabel[box];
             _labelOf.TryGetValue(box, out var label);
             string name = Bbs757EfbPageRules.FieldName(box.Name) ?? label ?? Bbs757EfbPageRules.NameFromParts(box.Name) ?? box.Name;
-            return new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(box), Hit(box), true, box.Name, Value: WithUnit(inner), Name: box.Name);
+            return new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(box), Hit(box), true, box.Name, Value: WithUnit(inner), Name: box.Name,
+                ValueBox: true);
         }
 
         // ---- R8: sliders ----------------------------------------------------------

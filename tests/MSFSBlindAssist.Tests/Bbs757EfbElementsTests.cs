@@ -792,21 +792,43 @@ public class Bbs757EfbElementsTests
     }
 
     [Fact]
-    public void A_value_box_that_opens_no_keyboard_stays_a_line()
+    public void A_value_box_is_a_button_with_its_lines_words()
     {
-        // The Fuel page's value boxes (fuel_left_qty_box and the rest: BlueBird's buttons that open its fuel input dialog, measured) carry no
-        // caret: lines of their name and what they hold, nothing to type, as before. So does a text box whose caret was not read (every
-        // committed tree's), and the fuel input dialog's box with its unit after its value, as it read before.
+        // The Fuel page's value boxes (fuel_left_qty_box and its siblings) and Weight & balance's (the passenger weights and the cargo
+        // values) are BlueBird's buttons: a tap opens its fuel input dialog (measured 2026-11-07), whose box is the edit box. Each is a
+        // button pressing it on the tablet, in the words its line read: the pilot hears the same name and value. No caret: never typed.
         var fuel = BuildRead(Bbs757EfbTreeJson.Load("11-aircraft-fuel"));
-        foreach (var line in new[] { "Quantity: 1539 Gal", "Weight: 10308 Lbs", "Quantity: 3077 Gal" })
-            AssertLine(fuel, line);
-        Assert.DoesNotContain(Enumerable.Range(0, fuel.Count), i => Field(fuel, i, "type") == "text");
+        var left = AssertPressable(fuel, "Quantity: 1539 Gal").Item!;
+        Assert.Equal((Bbs757EfbKind.Field, "fuel_left_qty_box", true, (Bbs757EfbTextState?)null), (left.Kind, left.Key, left.ValueBox, left.TextState));
+        Assert.Equal(("button", "", ""), (Field(fuel, IndexOf(fuel, "Quantity: 1539 Gal"), "kind"), Field(fuel, IndexOf(fuel, "Quantity: 1539 Gal"), "type"),
+            Field(fuel, IndexOf(fuel, "Quantity: 1539 Gal"), "commit")));
+        AssertPressable(fuel, "Weight: 10308 Lbs");
+        AssertPressable(fuel, "Quantity: 3077 Gal");
+        Assert.Contains("slider 70  Left (70%)\nslider 0  Center (0%)\nslider 70  Right (70%)\nbutton  Quantity: 1539 Gal\nbutton  Weight: 10308 Lbs\n",
+            Bbs757EfbListing.Of(fuel));
+
+        var balance = BuildRead(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"));
+        Assert.Equal("wb_pax_business_weight_box", AssertPressable(balance, "Weight: 2960 Lbs").Item!.Key);
+        Assert.Contains("slider 100  Business pax (16/16)\nbutton  Weight: 2960 Lbs\n", Bbs757EfbListing.Of(balance));
+    }
+
+    [Fact]
+    public void A_value_label_that_is_no_button_stays_a_line()
+    {
+        // Weight & balance's figures in no button (wb_empty_weight_title_box and the rest are BlueBird's plain boxes) take no tap: lines.
+        // So does a text box whose caret was not read (every committed tree's), the fuel input dialog's box read so (its unit after its
+        // value, as before), and a value box under the dialog, where the tablet takes no tap on its page.
+        var balance = BuildRead(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"));
+        foreach (var line in new[] { "Empty: 136940 Lbs", "ZFW: 176060 Lbs", "Gross weight: 186272 Lbs" })
+            AssertLine(balance, line);
 
         var perf = BuildRead(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"));
         foreach (var line in new[] { "Airport: KSEA", "Takeoff Weight (LB): 180000", "Pressure (inHg): 30.01" })
             AssertLine(perf, line);
 
-        AssertLine(BuildRead(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog")), "Fuel: 752 Gal");
+        var dialog = BuildRead(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog"));
+        AssertLine(dialog, "Fuel: 752 Gal");
+        AssertLine(dialog, "Quantity: 752 Gal");
     }
 
     [Fact]

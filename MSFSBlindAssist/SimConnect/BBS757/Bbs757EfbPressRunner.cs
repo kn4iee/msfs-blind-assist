@@ -142,9 +142,11 @@ public sealed class Bbs757EfbPressRunner
     // ------------------------------------------------------------------ buttons, tiles, menus
 
     /// <summary>
-    /// A button, tile, side-menu entry, tab, top bar control or question answer pressed. A switch or check box clicked is set to
-    /// the other state (<see cref="SwitchAsync"/>); a slider, a drop-down or a field clicked does nothing (the window sets it: a
-    /// drop-down's choice is <see cref="ChooseAsync"/>, a field's text <see cref="TypeAsync"/>).
+    /// A button, tile, side-menu entry, tab, top bar control, value box or question answer pressed. A switch or check box clicked is set
+    /// to the other state (<see cref="SwitchAsync"/>); a slider, a drop-down or a text box clicked does nothing (the window sets it: a
+    /// drop-down's choice is <see cref="ChooseAsync"/>, a text box's text <see cref="TypeAsync"/>). A value box
+    /// (<see cref="Bbs757EfbItem.ValueBox"/>) is BlueBird's button and is tapped as one: BlueBird opens its dialog over the page, which the
+    /// read that finds it says.
     /// </summary>
     public async Task ClickAsync(Bbs757EfbPressed pressed, CancellationToken ct)
     {
@@ -153,8 +155,9 @@ public sealed class Bbs757EfbPressRunner
             case Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox:
                 await SwitchAsync(pressed, pressed.Item.On != true, ct);
                 return;
-            // A field is typed into (TypeAsync): a tap alone would bring the keyboard up with nothing to type.
-            case Bbs757EfbKind.Slider or Bbs757EfbKind.Choice or Bbs757EfbKind.Field:
+            // A text box is typed into (TypeAsync): a tap alone would bring the keyboard up with nothing to type.
+            case Bbs757EfbKind.Slider or Bbs757EfbKind.Choice:
+            case Bbs757EfbKind.Field when !pressed.Item.ValueBox:
                 return;
         }
 

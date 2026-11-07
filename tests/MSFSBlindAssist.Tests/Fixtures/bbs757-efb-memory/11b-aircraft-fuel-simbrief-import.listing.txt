@@ -1,20 +1,20 @@
 title: Aircraft, Fuel
 heading 2  Left
 slider 35  Left (34%)
-text  Quantity: 752 Gal
-text  Weight: 5037 Lbs
+button  Quantity: 752 Gal
+button  Weight: 5037 Lbs
 heading 2  Center
 slider 0  Center (0%)
-text  Quantity: 12 Gal
-text  Weight: 80 Lbs
+button  Quantity: 12 Gal
+button  Weight: 80 Lbs
 heading 2  Right
 slider 35  Right (34%)
-text  Quantity: 761 Gal
-text  Weight: 5095 Lbs
+button  Quantity: 761 Gal
+button  Weight: 5095 Lbs
 heading 2  Total fuel
 slider 13  Total fuel (13%)
-text  Quantity: 1524 Gal
-text  Weight: 10212 Lbs
+button  Quantity: 1524 Gal
+button  Weight: 10212 Lbs
 button  Import from SIMBRIEF
 heading 2  Status bar
 text  Sat, 7th Nov 2026 | 23:03L | 05:03Z | OAT 4 C

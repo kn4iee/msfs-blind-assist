@@ -273,6 +273,40 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
+    public async Task A_value_box_press_taps_it_and_its_dialog_comes_up()
+    {
+        // The Fuel page (11b): its left quantity box, BlueBird's button, pressed in the window is tapped at its tap point, as a sighted pilot
+        // taps it, and the fuel input dialog comes up over the page (11c, captured with it up). The press says nothing: the read that finds
+        // the question says it (Bbs757EfbReadNews), and the dialog's box and answers are then the window's.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"))!;
+        var box = Assert.Single(page.Items, i => i.Key == "fuel_left_qty_box");
+        Assert.True(box.ValueBox);
+        var tablet = new FakeTablet(page);
+        tablet.OnTap = _ => tablet.Show(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog"))!);
+
+        await tablet.Runner().ClickAsync(tablet.Press(box), CancellationToken.None);
+
+        Assert.Equal(new[] { box.Hit }, tablet.Taps);
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Alerts);
+        Assert.NotNull(tablet.Page.Question);
+    }
+
+    [Fact]
+    public async Task A_value_box_press_that_changes_nothing_says_so()
+    {
+        // A tap BlueBird answered with no dialog (the page as it was): said once, as any button's press that changed nothing.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"))!;
+        var box = Assert.Single(page.Items, i => i.Key == "fuel_left_qty_box");
+        var tablet = new FakeTablet(page);
+
+        await tablet.Runner().ClickAsync(tablet.Press(box), CancellationToken.None);
+
+        Assert.Equal(new[] { box.Hit }, tablet.Taps);
+        Assert.Equal(new[] { "Quantity: no change on the tablet." }, tablet.Alerts);
+    }
+
+    [Fact]
     public async Task A_yes_pressed_on_one_question_is_never_tapped_on_another()
     {
         var tablet = new FakeTablet(FuelAsked(DefuelQuestion, YesAnswer));

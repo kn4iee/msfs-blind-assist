@@ -17,8 +17,8 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 /// (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx. A drop-down is a choice
 /// list of its entries (plan 21), whose set the press runner chooses on the tablet (<see cref="Bbs757EfbPressRunner.ChooseAsync"/>,
 /// B757-27); a text box whose caret was read is an Enter-only edit box (plan 22: its set, sent on Enter alone, is typed on the tablet's
-/// keyboard by <see cref="Bbs757EfbPressRunner.TypeAsync"/>), and any other field (a value box, whose tap opens BlueBird's dialog, or a
-/// text box whose caret was not read) a line with what it holds.
+/// keyboard by <see cref="Bbs757EfbPressRunner.TypeAsync"/>), a value box a button that taps it (BlueBird opens its dialog), and any
+/// other field (a text box whose caret was not read) a line with what it holds.
 ///
 /// Every control the reader offers can be pressed (the owner's ruling of 2026-10-29): a button, tile, switch, check box, slider and tab
 /// is clickable whatever the reader's <see cref="Bbs757EfbItem.Clickable"/> says, and nothing here refuses a press. The one exception
@@ -173,13 +173,17 @@ public static class Bbs757EfbElements
         // A field. A text box whose caret was read (plan 22): an Enter-only edit box holding the box's own text exactly as the tablet shows it
         // (D2: a credential too), named as the window names it (NameOf), its set typed on the tablet's keyboard or keypad
         // (Bbs757EfbPressRunner.TypeAsync); the shared window posts it on Enter alone and says "<name> not changed" when the pilot leaves it
-        // with other text (Task 4). Any other field (a value box, whose tap opens BlueBird's dialog; a text box whose caret was not read):
-        // a line of its name and what it holds ("Quantity: 1539 Gal", "Airport: KPHX"); an empty one, or an input not read, its name alone.
+        // with other text (Task 4). A value box (BlueBird's button holding a number, Bbs757EfbItem.ValueBox): a button in its line's words
+        // ("Quantity: 1539 Gal"), tapped on the tablet as any button, which opens BlueBird's dialog for it (the fuel input dialog, whose
+        // box is then the edit box). Any other field (a text box whose caret was not read, an input not read): a line of its name and
+        // what it holds ("Airport: KPHX"); an empty one its name alone.
         void AddField(Bbs757EfbItem it)
         {
             if (it.TextState != null)
                 Add(NameOf(it), controlType: "text", clickable: true, value: it.Value, key: it.Key, commit: "enter",
                     action: new Action(ActionKind.Tap, it));
+            else if (it.ValueBox)
+                Add(FieldLine(it), kind: "button", clickable: true, key: it.Key, action: new Action(ActionKind.Tap, it));
             else
                 Add(FieldLine(it), key: it.Key);
         }

@@ -6,13 +6,13 @@ text  Blk fuel: 10212 Lbs
 text  Take-off: 207322 Lbs
 text  Landing: 188060 Lbs
 slider 100  Business pax (16/16)
-text  Weight: 2960 Lbs
+button  Weight: 2960 Lbs
 slider 100  Economy pax (160/160)
-text  Weight: 29600 Lbs
+button  Weight: 29600 Lbs
 slider 60  Forward cargo
-text  Weight: 6160 Lbs
+button  Weight: 6160 Lbs
 slider 0  AFT cargo
-text  Weight: 0 Lbs
+button  Weight: 0 Lbs
 text  Gross weight: 186272 Lbs
 text  Center of gravity: 23.8 %
 heading 2  Status bar
