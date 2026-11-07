@@ -277,8 +277,10 @@ was off screen, so nothing was tapped or seen.
   boarding) and BlueBird's other deboarding checks fail while its boarding ones hold; the press still does what the tablet's
   tap would.
 - **Live, read only:** the owner's state (automatic boarding off, fresh OFP, at the gate): the rectangle [1144,4 176x24],
-  the state 0, +4 0, +7 0, the three times 0: START BOARDING, which the window now offers as a button. The running, paused
-  and done states are read from the code, not yet seen live.
+  the state 0, +4 0, +7 0, the three times 0: START BOARDING, which the window now offers as a button. The owner pressed it
+  from the window (build 5989c117d) and boarding started; at 16:34 local the box read state 2, +4 0, +7 0, the largest time
+  662 s ("Boarding… 12 min"), the countdown "DEP -00:04". The paused and done states are read from the code, not yet seen
+  live.
 
 ## What the layout carries (plan 21, Task 2)
 
@@ -310,6 +312,6 @@ join the class list, derived by RTTI.
 
 Whether a tap on an open list's face closes it; an open list under a scrolled page (no drop-down read sits
 in a scrollbox: the reader takes the page's scroll off the list and its rows as for any control inside a scrollbox, logic
-only); the toast; the boarding box's running, paused and done states live (read from the code only);
+only); the toast; the boarding box's paused and done states live (read from the code only);
 the notification list's order; overlay +0x2ac, +0x20c and +0x210, record +0x36, BBOS +0x9348 and +0x9368; the OFP's
 line pitch; list boxes (none reachable); Settings, General's class sweep.
