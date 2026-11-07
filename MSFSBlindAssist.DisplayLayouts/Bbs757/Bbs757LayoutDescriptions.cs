@@ -51,7 +51,8 @@ public static class Bbs757LayoutDescriptions
             $"noticeId {l.NoticeId}, noticeTitle {l.NoticeTitle}, noticeText {l.NoticeText}, noticeTime {l.NoticeTime}, " +
             $"noticeUnread {l.NoticeUnread}",
             $"file analysis: {l.SourceFile}: EFB notification panel: overlayPanelShown {l.OverlayPanelShown}, " +
-            $"overlayListOpen {l.OverlayListOpen}, overlayPanelRect {l.OverlayPanelRect}, overlayPanelHeight {l.OverlayPanelHeight}",
+            $"overlayListOpen {l.OverlayListOpen}, overlayPanelRect {l.OverlayPanelRect}, overlayPanelHeight {l.OverlayPanelHeight}, " +
+            $"overlayFlightTimeText {l.OverlayFlightTimeText}",
             $"file analysis: {l.SourceFile}: EFB classes: {classes}",
         };
     }

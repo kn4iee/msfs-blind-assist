@@ -90,6 +90,8 @@ public class Bbs757LayoutFileTests
         OverlayListOpen: 0x1fd,
         OverlayPanelRect: 0x234,
         OverlayPanelHeight: 0x240,
+        // The top bar's flight-time text (a std::string, "DEP 00:28"), measured live 2026-11-07.
+        OverlayFlightTimeText: 0x1b4,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("scrollbox", 0x30400),
@@ -116,6 +118,7 @@ public class Bbs757LayoutFileTests
     private static readonly (string Name, int Value)[] PanelFields =
     {
         ("overlayPanelShown", 0x1fc), ("overlayListOpen", 0x1fd), ("overlayPanelRect", 0x234), ("overlayPanelHeight", 0x240),
+        ("overlayFlightTimeText", 0x1b4),
     };
 
     private static string WithoutField(string text, string name, int value) =>
@@ -287,14 +290,15 @@ public class Bbs757LayoutFileTests
         var loaded = (Bbs757EfbMemLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Efb).Layout!;
         Assert.Equal(SampleEfbLayout() with { SourceFile = "" }, loaded);
         Assert.Equal(text, LayoutFileFormat.Write(Module, file));
-        Assert.Equal((0x1fc, 0x1fd, 0x234, 0x240), (loaded.OverlayPanelShown, loaded.OverlayListOpen, loaded.OverlayPanelRect, loaded.OverlayPanelHeight));
+        Assert.Equal((0x1fc, 0x1fd, 0x234, 0x240, 0x1b4), (loaded.OverlayPanelShown, loaded.OverlayListOpen, loaded.OverlayPanelRect, loaded.OverlayPanelHeight, loaded.OverlayFlightTimeText));
+        Assert.True(text.IndexOf("\"overlayPanelHeight\"", StringComparison.Ordinal) < text.IndexOf("\"overlayFlightTimeText\"", StringComparison.Ordinal));
         Assert.True(text.IndexOf("\"noticeUnread\"", StringComparison.Ordinal) < text.IndexOf("\"overlayPanelShown\"", StringComparison.Ordinal));
 
         var sample = SampleEfbLayout();
         foreach (var changed in new[]
                  {
                      sample with { OverlayPanelShown = 1 }, sample with { OverlayListOpen = 1 }, sample with { OverlayPanelRect = 1 },
-                     sample with { OverlayPanelHeight = 1 },
+                     sample with { OverlayPanelHeight = 1 }, sample with { OverlayFlightTimeText = 1 },
                  })
         {
             Assert.NotEqual(sample, changed);
@@ -302,7 +306,7 @@ public class Bbs757LayoutFileTests
         }
 
         string described = string.Join("\n", Bbs757LayoutDescriptions.DescribeEfb(loaded));
-        foreach (string part in new[] { "overlayPanelShown 508", "overlayListOpen 509", "overlayPanelRect 564", "overlayPanelHeight 576" })
+        foreach (string part in new[] { "overlayPanelShown 508", "overlayListOpen 509", "overlayPanelRect 564", "overlayPanelHeight 576", "overlayFlightTimeText 436" })
             Assert.Contains(part, described, StringComparison.Ordinal);
     }
 

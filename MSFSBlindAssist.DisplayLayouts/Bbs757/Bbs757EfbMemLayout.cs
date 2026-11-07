@@ -57,6 +57,9 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// 349.25 wide] for both the pop-up and the list.</param>
 /// <param name="OverlayPanelHeight">The panel's height, a float (0x240, the rectangle's fourth float in this build): 118 under the
 /// pop-up, 480 with the list open, 0 closed.</param>
+/// <param name="OverlayFlightTimeText">The top bar's flight-time text, a std::string in the top bar app (0x1b4): "DEP ±hh:mm" around
+/// departure ("DEP 00:28" at 14:16L, counting up from the scheduled departure); "ETA hhmmZ" seen in its stale bytes after a flight,
+/// empty (size 0) when it shows nothing.</param>
 public sealed record Bbs757EfbMemLayout(
     string SourceFile,
     uint AnchorAddress,
@@ -100,6 +103,7 @@ public sealed record Bbs757EfbMemLayout(
     int OverlayListOpen,
     int OverlayPanelRect,
     int OverlayPanelHeight,
+    int OverlayFlightTimeText,
     IReadOnlyList<Bbs757EfbClassVptr> ClassVptrs)
 {
     public bool Equals(Bbs757EfbMemLayout? other) =>
@@ -124,6 +128,7 @@ public sealed record Bbs757EfbMemLayout(
         && NoticeText == other.NoticeText && NoticeTime == other.NoticeTime && NoticeUnread == other.NoticeUnread
         && OverlayPanelShown == other.OverlayPanelShown && OverlayListOpen == other.OverlayListOpen
         && OverlayPanelRect == other.OverlayPanelRect && OverlayPanelHeight == other.OverlayPanelHeight
+        && OverlayFlightTimeText == other.OverlayFlightTimeText
         && ClassVptrs.SequenceEqual(other.ClassVptrs);
 
     public override int GetHashCode()
@@ -140,6 +145,7 @@ public sealed record Bbs757EfbMemLayout(
         h.Add(ButtonSelectable); h.Add(ButtonUnselected); h.Add(BbosModalOpen); h.Add(BbosNotices);
         h.Add(NoticeStride); h.Add(NoticeId); h.Add(NoticeTitle); h.Add(NoticeText); h.Add(NoticeTime); h.Add(NoticeUnread);
         h.Add(OverlayPanelShown); h.Add(OverlayListOpen); h.Add(OverlayPanelRect); h.Add(OverlayPanelHeight);
+        h.Add(OverlayFlightTimeText);
         foreach (var c in ClassVptrs) h.Add(c);
         return h.ToHashCode();
     }

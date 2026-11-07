@@ -266,6 +266,7 @@ departure countdown and the boarding control stay unmeasured: the layout has no 
 | `NoticeId`, `NoticeTitle`, `NoticeText`, `NoticeTime`, `NoticeUnread` | 0x00, 0x04, 0x10, 0x1c, 0x34 | a record's id (int), title, text, time (std::strings), unread byte |
 | `OverlayPanelShown`, `OverlayListOpen` | 0x1fc, 0x1fd | the top bar app's bytes: a notification pop-up or the list shows; the full list is open (added by plan 21's final review) |
 | `OverlayPanelRect`, `OverlayPanelHeight` | 0x234, 0x240 | the panel's x, y and width floats, and its height float (the rectangle's fourth): [1039.75,38 349.25x118] under a pop-up, 480 tall with the list open, 0 closed |
+| `OverlayFlightTimeText` | 0x1b4 | the top bar app's flight-time text (std::string): "DEP 00:06" at 13:53L, "DEP 00:28" at 14:16L (it counts up from the scheduled departure; "DEP -00:46" before it); "ETA 0000Z" with size 0 after a flight (empty shows nothing). Not a label: `etd_label` stays hidden and empty (measured 2026-11-07) |
 
 The class kinds `textbox`, `multiline`, `pulldown`, `image`, `overlay` (the top bar's app) and `modal` (the dialog app)
 join the class list, derived by RTTI.
