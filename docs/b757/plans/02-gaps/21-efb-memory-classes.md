@@ -141,10 +141,10 @@
 
 ## Execution record
 
-- **Status:** not claimed
-- **Claimed by:**
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** Robin Kipp (robin24), 2026-11-07
+- **Worked by:** Robin Kipp with Claude (subagent-driven development)
+- **Started:** 2026-11-07, stacked on plan 20's branch `B757-p20-efb-page-grammar` (not yet landed; the owner's ear checks for both plans run together)
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
