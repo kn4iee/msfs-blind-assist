@@ -20,6 +20,9 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// no index: its current entry is the one whose text is its face's); a button's two bytes that mark the current side-menu entry
 /// or tab; BBOS's dialog byte; and BBOS's vector of notification records with each record's fields. Every std::string is
 /// libc++'s, every vector (begin, end, capacity).</para>
+/// <para>Then the top bar app's notification panel (measured live 2026-11-07, the evidence's "The top bar"): BlueBird draws its
+/// notification pop-up and its notification list from the overlay app's own fields, not as controls, over the top right of the page:
+/// the byte that says one shows, the byte that says the full list is open, and the panel's rectangle.</para>
 /// </summary>
 /// <param name="TextboxLabel">A text box's pointer to its <c>text_label</c>, a label outside every children vector whose
 /// <see cref="CtrlLabelText"/> is the box's text (0x128 in this build).</param>
@@ -47,6 +50,13 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// <param name="NoticeText">A record's text, a std::string (0x10).</param>
 /// <param name="NoticeTime">A record's time, a std::string such as "21:37Z" (0x1c).</param>
 /// <param name="NoticeUnread">A record's byte, 1 until the pilot has opened the notification list (0x34).</param>
+/// <param name="OverlayPanelShown">The top bar app's byte, 1 while BlueBird's notification pop-up or its notification list shows
+/// (0x1fc): a new notification's pop-up sets it for about 10 s, and opening the list sets it too.</param>
+/// <param name="OverlayListOpen">The top bar app's byte, 1 while the full notification list is open (0x1fd); 0 under a pop-up.</param>
+/// <param name="OverlayPanelRect">The top bar app's panel rectangle, the x, y and width floats (0x234), in tablet pixels: [1039.75,38
+/// 349.25 wide] for both the pop-up and the list.</param>
+/// <param name="OverlayPanelHeight">The panel's height, a float (0x240, the rectangle's fourth float in this build): 118 under the
+/// pop-up, 480 with the list open, 0 closed.</param>
 public sealed record Bbs757EfbMemLayout(
     string SourceFile,
     uint AnchorAddress,
@@ -86,6 +96,10 @@ public sealed record Bbs757EfbMemLayout(
     int NoticeText,
     int NoticeTime,
     int NoticeUnread,
+    int OverlayPanelShown,
+    int OverlayListOpen,
+    int OverlayPanelRect,
+    int OverlayPanelHeight,
     IReadOnlyList<Bbs757EfbClassVptr> ClassVptrs)
 {
     public bool Equals(Bbs757EfbMemLayout? other) =>
@@ -108,6 +122,8 @@ public sealed record Bbs757EfbMemLayout(
         && BbosModalOpen == other.BbosModalOpen && BbosNotices == other.BbosNotices
         && NoticeStride == other.NoticeStride && NoticeId == other.NoticeId && NoticeTitle == other.NoticeTitle
         && NoticeText == other.NoticeText && NoticeTime == other.NoticeTime && NoticeUnread == other.NoticeUnread
+        && OverlayPanelShown == other.OverlayPanelShown && OverlayListOpen == other.OverlayListOpen
+        && OverlayPanelRect == other.OverlayPanelRect && OverlayPanelHeight == other.OverlayPanelHeight
         && ClassVptrs.SequenceEqual(other.ClassVptrs);
 
     public override int GetHashCode()
@@ -123,6 +139,7 @@ public sealed record Bbs757EfbMemLayout(
         h.Add(PulldownFace); h.Add(PulldownList); h.Add(PulldownEntries); h.Add(PulldownEntryText); h.Add(PulldownOpen);
         h.Add(ButtonSelectable); h.Add(ButtonUnselected); h.Add(BbosModalOpen); h.Add(BbosNotices);
         h.Add(NoticeStride); h.Add(NoticeId); h.Add(NoticeTitle); h.Add(NoticeText); h.Add(NoticeTime); h.Add(NoticeUnread);
+        h.Add(OverlayPanelShown); h.Add(OverlayListOpen); h.Add(OverlayPanelRect); h.Add(OverlayPanelHeight);
         foreach (var c in ClassVptrs) h.Add(c);
         return h.ToHashCode();
     }

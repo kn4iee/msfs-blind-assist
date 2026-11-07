@@ -85,6 +85,11 @@ public class Bbs757LayoutFileTests
         NoticeText: 0x10,
         NoticeTime: 0x1c,
         NoticeUnread: 0x34,
+        // The top bar app's notification panel, measured live 2026-11-07 (the evidence's "The top bar").
+        OverlayPanelShown: 0x1fc,
+        OverlayListOpen: 0x1fd,
+        OverlayPanelRect: 0x234,
+        OverlayPanelHeight: 0x240,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("scrollbox", 0x30400),
@@ -105,6 +110,12 @@ public class Bbs757LayoutFileTests
         ("buttonSelectable", 0x140), ("buttonUnselected", 0x143), ("bbosModalOpen", 0x1d8), ("bbosNotices", 0x9334),
         ("noticeStride", 0x3c), ("noticeId", 0x00), ("noticeTitle", 0x04), ("noticeText", 0x10), ("noticeTime", 0x1c),
         ("noticeUnread", 0x34),
+    };
+
+    /// <summary>The notification panel's fields as the file writes them, in the record's order.</summary>
+    private static readonly (string Name, int Value)[] PanelFields =
+    {
+        ("overlayPanelShown", 0x1fc), ("overlayListOpen", 0x1fd), ("overlayPanelRect", 0x234), ("overlayPanelHeight", 0x240),
     };
 
     private static string WithoutField(string text, string name, int value) =>
@@ -256,6 +267,56 @@ public class Bbs757LayoutFileTests
 
         // Nor is a file that lacks any one of them.
         foreach (var (name, value) in Phase2Fields)
+        {
+            string damaged = WithoutField(text, name, value);
+            Assert.NotEqual(text, damaged);
+            Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? one), name);
+            Assert.False(string.IsNullOrEmpty(one), name);
+        }
+    }
+
+    [Fact]
+    public void The_efb_layout_with_the_notification_panel_round_trips()
+    {
+        // BlueBird draws its notification pop-up and list from the top bar app's own fields (measured live 2026-11-07): the shown byte,
+        // the list byte, the panel's rectangle and its height.
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        foreach (var (name, value) in PanelFields)
+            Assert.Contains($"\"{name}\": {value.ToString(CultureInfo.InvariantCulture)}", text);
+        Assert.True(LayoutFileFormat.TryRead(Module, text, out var file, out string? failure), failure);
+        var loaded = (Bbs757EfbMemLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Efb).Layout!;
+        Assert.Equal(SampleEfbLayout() with { SourceFile = "" }, loaded);
+        Assert.Equal(text, LayoutFileFormat.Write(Module, file));
+        Assert.Equal((0x1fc, 0x1fd, 0x234, 0x240), (loaded.OverlayPanelShown, loaded.OverlayListOpen, loaded.OverlayPanelRect, loaded.OverlayPanelHeight));
+        Assert.True(text.IndexOf("\"noticeUnread\"", StringComparison.Ordinal) < text.IndexOf("\"overlayPanelShown\"", StringComparison.Ordinal));
+
+        var sample = SampleEfbLayout();
+        foreach (var changed in new[]
+                 {
+                     sample with { OverlayPanelShown = 1 }, sample with { OverlayListOpen = 1 }, sample with { OverlayPanelRect = 1 },
+                     sample with { OverlayPanelHeight = 1 },
+                 })
+        {
+            Assert.NotEqual(sample, changed);
+            Assert.NotEqual(sample.GetHashCode(), changed.GetHashCode());
+        }
+
+        string described = string.Join("\n", Bbs757LayoutDescriptions.DescribeEfb(loaded));
+        foreach (string part in new[] { "overlayPanelShown 508", "overlayListOpen 509", "overlayPanelRect 564", "overlayPanelHeight 576" })
+            Assert.Contains(part, described, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_layout_without_the_notification_panel_reads_as_missing()
+    {
+        // The v3 file (plan 21 before the final review) has none of them: refused, never read with zeros (WASM-26); each alone too.
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        string old = text;
+        foreach (var (name, value) in PanelFields) old = WithoutField(old, name, value);
+        Assert.Contains("\"noticeUnread\": 52", old, StringComparison.Ordinal);
+        Assert.False(LayoutFileFormat.TryRead(Module, old, out _, out string? failure));
+        Assert.False(string.IsNullOrEmpty(failure));
+        foreach (var (name, value) in PanelFields)
         {
             string damaged = WithoutField(text, name, value);
             Assert.NotEqual(text, damaged);

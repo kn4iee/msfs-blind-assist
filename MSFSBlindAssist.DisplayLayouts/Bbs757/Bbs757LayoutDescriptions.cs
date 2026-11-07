@@ -50,6 +50,8 @@ public static class Bbs757LayoutDescriptions
             $"file analysis: {l.SourceFile}: EFB notices: bbosNotices {l.BbosNotices}, noticeStride {l.NoticeStride}, " +
             $"noticeId {l.NoticeId}, noticeTitle {l.NoticeTitle}, noticeText {l.NoticeText}, noticeTime {l.NoticeTime}, " +
             $"noticeUnread {l.NoticeUnread}",
+            $"file analysis: {l.SourceFile}: EFB notification panel: overlayPanelShown {l.OverlayPanelShown}, " +
+            $"overlayListOpen {l.OverlayListOpen}, overlayPanelRect {l.OverlayPanelRect}, overlayPanelHeight {l.OverlayPanelHeight}",
             $"file analysis: {l.SourceFile}: EFB classes: {classes}",
         };
     }
