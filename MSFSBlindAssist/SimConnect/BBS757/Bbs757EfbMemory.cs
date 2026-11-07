@@ -109,24 +109,25 @@ public sealed class Bbs757EfbMemory
 
     /// <summary>
     /// BlueBird's notifications, oldest record first: BBOS's std::vector (begin, end) at the layout's <c>BbosNotices</c>, records
-    /// <c>NoticeStride</c> bytes apart, each its id, title, text, time and unread byte. Empty when the module is not reachable, and
-    /// none at all from a torn vector: no buffer, its end before its start or not a whole number of records from it, or more
-    /// than <see cref="MaxNotices"/> records, or a record whose id or unread byte cannot be read. A string that is not a
-    /// readable one reads "".
+    /// <c>NoticeStride</c> bytes apart, each its id, title, text, time and unread byte. An empty list when BBOS holds none (a whole
+    /// vector with no record, or one never allocated: begin and end both 0, as a fresh BBOS starts). Null, not read, when the module is
+    /// not reachable and from a torn vector: no buffer under an end, its end before its start or not a whole number of records from it,
+    /// more than <see cref="MaxNotices"/> records, or a record whose id or unread byte cannot be read; so a reader can tell "BlueBird has
+    /// none" from "none could be read" (<see cref="Bbs757EfbScreenModel.NoticesWhole"/>). A string that is not a readable one reads "".
     /// </summary>
-    public IReadOnlyList<Bbs757EfbNoticeRecord> ReadNotices()
+    public IReadOnlyList<Bbs757EfbNoticeRecord>? ReadNotices()
     {
-        var none = Array.Empty<Bbs757EfbNoticeRecord>();
-        if (!TryBbos(out uint bbos)) return none;
+        if (!TryBbos(out uint bbos) || _l.NoticeStride <= 0) return null;
         uint vec = bbos + (uint)_l.BbosNotices;
-        if (!_m.TryReadPtr(vec, out uint begin) || !_m.TryReadPtr(vec + 4, out uint end)) return none;
-        if (begin == 0 || end < begin || _l.NoticeStride <= 0) return none;
+        if (!_m.TryReadPtr(vec, out uint begin) || !_m.TryReadPtr(vec + 4, out uint end)) return null;
+        if (begin == 0 && end == 0) return Array.Empty<Bbs757EfbNoticeRecord>();
+        if (begin == 0 || end < begin) return null;
         uint stride = (uint)_l.NoticeStride, bytes = end - begin;
-        if (bytes % stride != 0 || bytes / stride > MaxNotices) return none;
+        if (bytes % stride != 0 || bytes / stride > MaxNotices) return null;
         var notices = new List<Bbs757EfbNoticeRecord>();
         for (uint r = begin; r < end; r += stride)
         {
-            if (!_m.TryReadInt(r + (uint)_l.NoticeId, out int id) || !_m.TryReadByte(r + (uint)_l.NoticeUnread, out byte unread)) return none;
+            if (!_m.TryReadInt(r + (uint)_l.NoticeId, out int id) || !_m.TryReadByte(r + (uint)_l.NoticeUnread, out byte unread)) return null;
             notices.Add(new Bbs757EfbNoticeRecord(id, _m.ReadStdString(r + (uint)_l.NoticeTitle) ?? "",
                 _m.ReadStdString(r + (uint)_l.NoticeText) ?? "", _m.ReadStdString(r + (uint)_l.NoticeTime) ?? "", unread == 1));
         }

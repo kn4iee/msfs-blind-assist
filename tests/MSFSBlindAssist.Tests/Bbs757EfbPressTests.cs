@@ -576,6 +576,25 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
+    public void Wordless_dialogs_are_told_apart_by_their_answers()
+    {
+        // Every question's answers are keyed alike (q:OK): a question is the same question by its words, and one with none (none was
+        // measured) by its text boxes' names and its answers' words, so an OK pressed on one is never tapped on another.
+        static Bbs757EfbItem Answer(string text) => Item(Bbs757EfbKind.Button, text, "q:" + text.ToUpperInvariant(), new Rectangle(608, 589, 180, 60));
+        var ok = new Bbs757EfbQuestion("", new[] { Answer("OK") });
+        var insert = new Bbs757EfbQuestion("", new[] { Answer("Cancel"), Answer("Insert") });
+        var fuel = insert with { Rows = new[] { Item(Bbs757EfbKind.Field, "FUEL", "fuel_input_textbox", new Rectangle(595, 284, 250, 52)) } };
+
+        Assert.False(Bbs757EfbPress.SameQuestion(ok, insert));
+        Assert.False(Bbs757EfbPress.SameQuestion(insert, fuel));
+        Assert.True(Bbs757EfbPress.SameQuestion(ok, ok with { }));
+        // Words decide whenever there are any, however the answers read.
+        Assert.True(Bbs757EfbPress.SameQuestion(new Bbs757EfbQuestion("Are you sure?", new[] { Answer("Yes") }),
+            new Bbs757EfbQuestion("Are you sure ?", new[] { Answer("OK") })));
+        Assert.False(Bbs757EfbPress.SameQuestion(ok, new Bbs757EfbQuestion("OK", new[] { Answer("OK") })));
+    }
+
+    [Fact]
     public void The_fingerprint_covers_the_top_bar_the_notices_and_the_question()
     {
         var page = Ground(ReqFuelTruck());

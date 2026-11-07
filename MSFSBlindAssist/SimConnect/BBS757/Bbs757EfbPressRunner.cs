@@ -423,7 +423,8 @@ public sealed class Bbs757EfbPressRunner
     /// <summary>
     /// A slider set to <paramref name="value"/>: one of its choices (<see cref="Bbs757EfbElements.OptionsFor"/>'s words), or else a
     /// percent along its track. A choice: the choice's place tapped (<see cref="Bbs757EfbPress.ChoiceX"/>), read back, and stepped
-    /// toward it, at most <see cref="Bbs757EfbPress.MaxSliderTaps"/> taps; then judged by BlueBird's file when the row is one of its
+    /// toward it, at most <see cref="Bbs757EfbPress.MaxSliderTaps"/> taps, none once a question came up over the page (then nothing more
+    /// is said); then judged by BlueBird's file when the row is one of its
     /// settings, else by the page. A percent: one tap at its place (along a vertical track for a slider taller than wide; along the
     /// range of the knob's center for a slider whose knob BlueBird's memory gives, <see cref="Bbs757EfbSlider.KnobRead"/>), judged by
     /// where that knob is after the tap when the fresh read has it, else by the part of the track its value shows ("50%", "8/16") when
@@ -457,6 +458,9 @@ public sealed class Bbs757EfbPressRunner
         {
             if (!await TapAsync(row, target, ct, new Point(x, y))) return;
             if (await WaitForChangeAsync(page, ct) is not { } after) return;   // nothing read: the window says why
+            // A question that came up since takes no tap on the page under it (B757-18): no next step, and nothing more said (the read
+            // that found the question said it).
+            if (after.Question != null && !Bbs757EfbPress.SameQuestion(page.Question, after.Question)) return;
             var now = Bbs757EfbPress.Relocate(page, after, row);
             read = now == null ? -1 : Bbs757EfbElements.CurrentChoice(now, after.PageName, options);
             if (read == wanted || Bbs757EfbPress.NextChoiceX(track, x, wanted, read, options.Count, taps) is not int next) break;

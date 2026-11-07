@@ -215,10 +215,19 @@ public static class Bbs757EfbPress
     /// compared the same way (<see cref="NewChoiceWord"/>).</summary>
     public static string QuestionWords(string text) => string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
 
-    /// <summary>Whether two questions are the same question: both there, and their words the same (<see cref="QuestionWords"/>).
+    /// <summary>Whether two questions are the same question: both there, and their identities the same (<see cref="QuestionIdentity"/>).
     /// Every question's answers are keyed alike (q:YES, q:NO), so an answer is the one pressed only under the same question.</summary>
     public static bool SameQuestion(Bbs757EfbQuestion? a, Bbs757EfbQuestion? b) =>
-        a != null && b != null && QuestionWords(a.Text) == QuestionWords(b.Text);
+        a != null && b != null && QuestionIdentity(a) == QuestionIdentity(b);
+
+    /// <summary>What tells a question from another: its words (<see cref="QuestionWords"/>); for one with none (no dialog measured is
+    /// wordless), its text boxes' names and its answers' words, marked so they never equal any words (a lone OK is not the question
+    /// "OK").</summary>
+    public static string QuestionIdentity(Bbs757EfbQuestion q)
+    {
+        string words = QuestionWords(q.Text);
+        return words.Length > 0 ? words : "|" + string.Join('|', q.Rows.Concat(q.Buttons).Select(i => QuestionWords(i.Text)));
+    }
 
     // ------------------------------------------------------------------ a switch
 

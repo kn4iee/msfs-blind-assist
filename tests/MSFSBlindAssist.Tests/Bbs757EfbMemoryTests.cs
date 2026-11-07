@@ -543,10 +543,11 @@ public class Bbs757EfbMemoryTests
     }
 
     [Fact]
-    public void No_notification_reads_none()
+    public void No_notification_reads_an_empty_list()
     {
-        Assert.Empty(Build(() => Notices()).ReadNotices());
-        Assert.Empty(Build().ReadNotices()); // a vector never allocated
+        // A whole vector with no record, and one never allocated (begin and end both 0, as a fresh BBOS starts): read, and empty.
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<Bbs757EfbNoticeRecord>>(Build(() => Notices()).ReadNotices()));
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<Bbs757EfbNoticeRecord>>(Build().ReadNotices()));
     }
 
     [Theory]
@@ -554,14 +555,22 @@ public class Bbs757EfbMemoryTests
     [InlineData(NoticeRecords, NoticeRecords + 0x3c + 7)]         // not a whole record
     [InlineData(0u, 0x3cu)]                                      // no buffer
     [InlineData(NoticeRecords, NoticeRecords + 257 * 0x3c)]       // more records than any BlueBird keeps
-    public void A_torn_notices_vector_reads_none(uint begin, uint end)
+    public void A_torn_notices_vector_is_not_read(uint begin, uint end)
     {
+        // Not read (null), never an empty list: the window tells "BlueBird has none" from "none could be read".
         var reader = Build(() =>
         {
             Notices((45, "", "CHOCKS REMOVED.", "21:37Z", false), (50, "", "AFT CARGO DOOR OPENED.", "03:15Z", true));
             Ptr(Bbos + (uint)Layout.BbosNotices, begin); Ptr(Bbos + (uint)Layout.BbosNotices + 4, end);
         });
-        Assert.Empty(reader.ReadNotices());
+        Assert.Null(reader.ReadNotices());
+    }
+
+    [Fact]
+    public void Notifications_are_not_read_while_the_module_is_not_reachable()
+    {
+        var reader = Build(() => Ptr(Efb, 0));   // the gauge manager's object is no EFB: BBOS not found
+        Assert.Null(reader.ReadNotices());
     }
 
     // ---- the top bar and the dialog: apps found by their class ----

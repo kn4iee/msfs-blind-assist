@@ -882,6 +882,28 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { "IRS alignment time could not be set to 2 min." }, tablet.Alerts);
     }
 
+    [Fact]
+    public async Task A_question_raised_by_a_choice_step_stops_the_steps()
+    {
+        // B757-18: a question that came up over the page since the read takes no tap on the page under it. A choice slider's first tap
+        // brings up a dialog (BlueBird routes every tap to it while it is up): no next step lands in it, and nothing more is said (the
+        // read that found the question said it).
+        var irs = new Bbs757EfbItem(Bbs757EfbKind.Slider, "IRS alignment time", new Rectangle(273, 513, 255, 33), new Point(1190, 529), true,
+            "sld:IRS ALIGNMENT TIME", Value: "Full (7 min+)", Slider: new Bbs757EfbSlider(895, 1190, 1190));
+        var tablet = new FakeTablet(PageOf("SETTINGS", "AIRCRAFT", irs));
+        tablet.File["irs_align_time"] = Bbs757Value.Of(9L);
+        var press = tablet.Press(irs);
+        tablet.OnTap = _ => tablet.Show(PageOf("SETTINGS", "AIRCRAFT", irs) with
+        {
+            Question = new Bbs757EfbQuestion("Something went wrong.", new[] { Tile("OK", "q:OK", new Rectangle(608, 589, 180, 60)) }),
+        });
+
+        await tablet.Runner().SliderAsync(press, "2 min", CancellationToken.None);
+
+        Assert.Single(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
     [Theory]
     [MemberData(nameof(Cultures))]
     public async Task A_number_slider_is_tapped_at_its_place_and_judged_by_the_knob(string culture)
@@ -1761,6 +1783,114 @@ public class Bbs757EfbBridgeTests
     private static Bbs757EfbScreenModel Captured(string fixture, IReadOnlyList<Bbs757EfbNoticeRecord>? notices = null) =>
         Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture), notices ?? Bbs757EfbTreeJson.LoadNotices(fixture))!;
 
+    /// <summary>The page <paramref name="fixture"/> read while BBOS's notification vector was torn (the walk read none of it).</summary>
+    private static Bbs757EfbScreenModel Torn(string fixture) => Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture), null)!;
+
+    [Fact]
+    public void Notifications_that_came_while_the_window_was_hidden_are_listed_not_said()
+    {
+        // The window read Cabin & doors (up to id 51), was closed while the door and the chocks changed (52-55), and is shown again:
+        // that read did not see them appear, so it lists them and says none, as the window's first read does; the next new one is said.
+        using var h = new BridgeHarness();
+        h.Bridge.TakeRead(Captured("14-aircraft-cabin-doors"));
+        h.Bridge.SetActive(false);
+        h.Bridge.SetActive(true);
+
+        h.Bridge.TakeRead(Captured("25c-navigation-perf-calc-runway-open"));
+
+        Assert.DoesNotContain(h.Pushes[^1], kv => kv.Key.EndsWith(".kind", StringComparison.Ordinal) && kv.Value == "alert");
+        Assert.Contains("05:06Z Chocks removed.", Texts(h.Pushes[^1]));
+        var again = Bbs757EfbTreeJson.LoadNotices("25c-navigation-perf-calc-runway-open")
+            .Append(new Bbs757EfbNoticeRecord(56, "", "CHOCKS ATTACHED.", "05:09Z", true)).ToList();
+        h.Bridge.TakeRead(Captured("25c-navigation-perf-calc-runway-open", again));
+        Assert.Equal(("alert", "Chocks attached."), (h.Pushes[^1]["items.0.kind"], h.Pushes[^1]["items.0.text"]));
+    }
+
+    [Fact]
+    public void A_dialog_still_up_when_the_window_is_shown_again_is_said_again()
+    {
+        // The same Shift+T does the same every time: a dialog up when the window is shown is said once, as at its first showing.
+        using var h = new BridgeHarness();
+        var dialog = Captured("11c-aircraft-fuel-input-dialog");
+        h.Bridge.TakeRead(dialog);
+        Assert.Equal("Insert desired fuel level (0-2176 Gal)", h.Pushes[^1]["items.0.text"]);
+        int pushes = h.Pushes.Count;
+        h.Bridge.TakeRead(dialog);
+        Assert.Equal(pushes, h.Pushes.Count);   // read again while shown: not said again
+
+        h.Bridge.SetActive(false);
+        h.Bridge.SetActive(true);
+        h.Bridge.TakeRead(dialog);
+
+        Assert.Equal(pushes + 1, h.Pushes.Count);
+        Assert.Equal(("alert", "Insert desired fuel level (0-2176 Gal)"), (h.Pushes[^1]["items.0.kind"], h.Pushes[^1]["items.0.text"]));
+    }
+
+    [Fact]
+    public void The_first_notification_after_BlueBird_starts_over_is_said()
+    {
+        // A flight reload with the app running: BlueBird's new session starts with no notification (read whole and empty), then its ids
+        // start again at 1. The empty list is what the next read is compared with, so its first notification is said.
+        var news = new Bbs757EfbReadNews();
+        var ground = Captured("13-aircraft-ground-services", Array.Empty<Bbs757EfbNoticeRecord>());
+
+        var said = new[]
+        {
+            news.After(Captured("25c-navigation-perf-calc-runway-open"), long.MaxValue),
+            news.After(ground, long.MaxValue),
+            news.After(Captured("13-aircraft-ground-services", new[] { new Bbs757EfbNoticeRecord(1, "", "GPU CONNECTED.", "06:00Z", true) }), long.MaxValue),
+        };
+
+        Assert.Equal(new[] { null, null, "GPU connected." }, said);
+        // Clear all (the list emptied, its ids going on) is the same: the next one is said.
+        var cleared = new Bbs757EfbReadNews();
+        cleared.After(Captured("25c-navigation-perf-calc-runway-open"), long.MaxValue);
+        cleared.After(ground, long.MaxValue);
+        Assert.Equal("Chocks attached.", cleared.After(Captured("13-aircraft-ground-services",
+            new[] { new Bbs757EfbNoticeRecord(56, "", "CHOCKS ATTACHED.", "05:09Z", true) }), long.MaxValue));
+    }
+
+    [Fact]
+    public void A_torn_first_read_does_not_make_the_backlog_spoken()
+    {
+        // The window's first read found BBOS's notification vector torn: there is nothing to compare with yet, so the next whole read is
+        // the backlog, listed and not said; only what comes after it is.
+        var news = new Bbs757EfbReadNews();
+
+        var said = new[]
+        {
+            news.After(Torn("13-aircraft-ground-services"), long.MaxValue),
+            news.After(Captured("13-aircraft-ground-services"), long.MaxValue),
+            news.After(Captured("25c-navigation-perf-calc-runway-open"), long.MaxValue),
+        };
+
+        Assert.Equal(new[] { null, null, "Chocks removed." }, said);
+        Assert.False(Torn("13-aircraft-ground-services").NoticesWhole);
+        Assert.Empty(Torn("13-aircraft-ground-services").Notices);
+        Assert.True(Captured("13-aircraft-ground-services").NoticesWhole);
+    }
+
+    [Fact]
+    public void A_dialog_with_no_words_is_not_said_as_an_empty_alert()
+    {
+        // A dialog of a text box and answers alone (none measured: every one carries words) shows them first, and says nothing: an
+        // alert with no words is none.
+        var page = Ground(ReqFuelTruck());
+        var wordless = page with
+        {
+            Question = new Bbs757EfbQuestion("", new[] { Tile("OK", "q:OK", new Rectangle(608, 589, 180, 60)) }),
+        };
+        var news = new Bbs757EfbReadNews();
+
+        Assert.Null(news.After(page, long.MaxValue));
+        Assert.Null(news.After(wordless, long.MaxValue));
+        using var h = new BridgeHarness();
+        h.Bridge.TakeRead(page);
+        h.Bridge.TakeRead(wordless);
+        Assert.DoesNotContain(h.Pushes[^1], kv => kv.Key.EndsWith(".kind", StringComparison.Ordinal) && kv.Value == "alert");
+        Assert.Equal("OK", h.Pushes[^1]["items.0.text"]);
+    }
+
     [Theory]
     [MemberData(nameof(Cultures))]
     public void New_notifications_are_spoken_once_and_the_backlog_is_not(string culture)
@@ -1775,7 +1905,7 @@ public class Bbs757EfbBridgeTests
         {
             news.After(Captured("14-aircraft-cabin-doors"), long.MaxValue),
             news.After(moving, long.MaxValue),
-            news.After(moving with { Notices = Array.Empty<Bbs757EfbNotice>() }, long.MaxValue),
+            news.After(Torn("14b-aircraft-cabin-doors-door-moving"), long.MaxValue),
             news.After(Captured("13-aircraft-ground-services"), long.MaxValue),
             news.After(Captured("25c-navigation-perf-calc-runway-open"), long.MaxValue),
             news.After(Captured("51b-settings-aircraft-scrolled"), long.MaxValue),

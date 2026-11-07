@@ -106,8 +106,9 @@ public class Bbs757EfbMemoryLiveTests
         var apps = reader.ReadFrontApps();
         Assert.NotEmpty(apps);
         var notices = reader.ReadNotices();
-        File.WriteAllText(outFile, Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(apps), Bbs757EfbTreeScrub.Scrub(notices)));
-        _out.WriteLine($"wrote {apps.Count} app(s), {apps.Sum(a => Count(a.Controls))} controls, {notices.Count} notification(s)");
+        Assert.True(notices is not null, "BBOS's notification vector read torn: capture again");
+        File.WriteAllText(outFile, Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(apps), Bbs757EfbTreeScrub.Scrub(notices!)));
+        _out.WriteLine($"wrote {apps.Count} app(s), {apps.Sum(a => Count(a.Controls))} controls, {notices!.Count} notification(s)");
     }
 
     private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));

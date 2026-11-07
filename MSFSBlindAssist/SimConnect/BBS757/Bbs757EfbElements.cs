@@ -58,8 +58,8 @@ public static class Bbs757EfbElements
     /// <param name="alert">A word the window speaks at once and shows first (a status, or the outcome of a press); null for none.</param>
     /// <param name="extras">What the app adds to the page, in order (the bridge decides, by page).</param>
     /// <param name="numberFor">The number (aidx) of an element, from its identity on the page: its key, else its words, and which of
-    /// the page's elements with that identity it is ("btn:HOME#1"); a question's answer also carries its question's words
-    /// (<see cref="Bbs757EfbPress.QuestionWords"/>), as every question's answers are keyed alike. The bridge keeps an element's number
+    /// the page's elements with that identity it is ("btn:HOME#1"); a question's answer also carries its question's identity, its words
+    /// (<see cref="Bbs757EfbPress.QuestionIdentity"/>), as every question's answers are keyed alike. The bridge keeps an element's number
     /// while the element stays and never gives one number to two elements (<see cref="Bbs757EfbPushes"/>), so a press the window
     /// sends names the element it was made on, even after a later push. Null numbers the elements 1, 2, 3 and so on.</param>
     public static Built Build(Bbs757EfbScreenModel? model, string? alert, IReadOnlyList<Bbs757EfbExtraElement> extras,
@@ -114,7 +114,7 @@ public static class Bbs757EfbElements
                 foreach (var row in question.Rows)
                     Add(Named(Bbs757EfbVocabulary.Pretty(row.Text), row.Value), key: row.Key);
                 // Each answer is its question's: the next question's YES is another element, under the same key.
-                string asked = Bbs757EfbPress.QuestionWords(question.Text);
+                string asked = Bbs757EfbPress.QuestionIdentity(question);
                 foreach (var answer in question.Buttons)
                     Add(answer.Text, kind: "button", clickable: true, key: answer.Key, action: new Action(ActionKind.Tap, answer), of: asked);
             }

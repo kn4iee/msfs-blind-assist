@@ -31,17 +31,17 @@ public static class Bbs757EfbNotices
     }
 
     /// <summary>
-    /// What to say of the notifications in <paramref name="now"/> against <paramref name="before"/> (the last read that held any): the
-    /// words of each whose id is newer than every id before, oldest first (as they came), joined with spaces; null when there are
-    /// none or the pilot's own press was less than <see cref="QuietAfterPressMs"/> ago. The same words twice (a second CHOCKS
-    /// ATTACHED. in the same minute) are two ids, so two appearances. A list whose newest id is older than the newest before (BlueBird's
-    /// list started over, or its newest was deleted) holds no new appearance.
+    /// What to say of the notifications in <paramref name="now"/> against <paramref name="before"/> (the last whole read,
+    /// <see cref="Bbs757EfbReadNews"/>): the words of each whose id is newer than every id before, oldest first (as they came), joined
+    /// with spaces; null when there are none or the pilot's own press was less than <see cref="QuietAfterPressMs"/> ago. The same words
+    /// twice (a second CHOCKS ATTACHED. in the same minute) are two ids, so two appearances. After an empty list (a fresh BlueBird
+    /// session, Clear all) every id is new; a list whose newest id is older than the newest before (BlueBird's list started over between
+    /// two reads, or its newest was deleted) holds no new appearance, and is what the next read is compared with.
     /// </summary>
     public static string? ToSpeak(IReadOnlyList<Bbs757EfbNotice> before, IReadOnlyList<Bbs757EfbNotice> now, long msSinceOwnPress)
     {
         if (msSinceOwnPress < QuietAfterPressMs || now.Count == 0) return null;
         int newest = before.Count == 0 ? int.MinValue : before.Max(n => n.Id);
-        if (now.Max(n => n.Id) < newest) return null;
         var fresh = now.Where(n => n.Id > newest).OrderBy(n => n.Id).Select(n => n.Text).ToList();
         return fresh.Count == 0 ? null : string.Join(" ", fresh);
     }

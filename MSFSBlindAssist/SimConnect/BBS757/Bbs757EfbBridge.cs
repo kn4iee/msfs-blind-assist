@@ -95,6 +95,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private volatile bool _active;
     /// <summary>Counts the times the window hid (UI thread; read on the loop): a command sent in an earlier showing is dropped.</summary>
     private int _showing;
+    /// <summary>The showing the last read was taken in (on the loop): a read in a later one is the first of its showing.</summary>
+    private int _readShowing;
     private bool _everRead;
     private string? _lastFingerprint;
     /// <summary>The page the window shows, with the read it was built from; null while a status stands in its place.</summary>
@@ -205,12 +207,20 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// <summary>
     /// A read taken as what the tablet shows. What the read says by itself is said (<see cref="Bbs757EfbReadNews"/>: a question or
     /// BlueBird's notifications that were not in the read before, unless the pilot's own tap was under four seconds ago); and it is
-    /// pushed when it says something the window does not show yet (its fingerprint changed), kept for the presses made on it. The
+    /// pushed when it says something the window does not show yet (its fingerprint changed), kept for the presses made on it. The first
+    /// read after the window was hidden starts what is said over (<see cref="Bbs757EfbReadNews.Reset"/>): what came while it was hidden
+    /// is listed, not said, and a question up is said once, as at the window's first showing, so every showing reads alike. The
     /// AIRAC page has the Navigraph sign-in read again when it is newly shown or read because a read was asked for
     /// (<paramref name="asked"/>). On the loop only; internal for the tests.
     /// </summary>
     internal void TakeRead(Bbs757EfbScreenModel model, bool asked = false)
     {
+        int showing = Volatile.Read(ref _showing);
+        if (showing != _readShowing)
+        {
+            _readShowing = showing;
+            _news.Reset();
+        }
         _lastRead = model;
         string? said = _news.After(model, Environment.TickCount64 - _lastOwnTapMs);
         string fp = Bbs757EfbPress.Fingerprint(model);

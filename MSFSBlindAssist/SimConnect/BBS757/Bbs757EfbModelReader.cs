@@ -43,14 +43,19 @@ public sealed class Bbs757EfbModelReader
     public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps) => Read(apps, Array.Empty<Bbs757EfbNoticeRecord>());
 
     /// <summary>The page the front apps show, as the window's model, with the status bar (<see cref="StatusBarOf"/>), BlueBird's
-    /// notifications <paramref name="notices"/> (<see cref="Bbs757EfbNotices.From"/>) and the dialog over the page
-    /// (<see cref="QuestionOf"/>); null when no page is drawn. Pure, for the tests.</summary>
-    public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps, IReadOnlyList<Bbs757EfbNoticeRecord> notices)
+    /// notifications <paramref name="notices"/> (<see cref="Bbs757EfbNotices.From"/>; null when they could not be read, a torn vector:
+    /// none, and <see cref="Bbs757EfbScreenModel.NoticesWhole"/> false) and the dialog over the page (<see cref="QuestionOf"/>); null
+    /// when no page is drawn. Pure, for the tests.</summary>
+    public static Bbs757EfbScreenModel? Read(IReadOnlyList<Bbs757EfbMemory.App> apps, IReadOnlyList<Bbs757EfbNoticeRecord>? notices)
     {
         if (apps.Count == 0) return null;
         apps = ImagesAsOther(apps);
         return PageOf(apps) is { } page
-            ? page with { TopBar = StatusBarOf(apps), Notices = Bbs757EfbNotices.From(notices), Question = QuestionOf(apps), Keyboard = KeyboardOf(apps) }
+            ? page with
+            {
+                TopBar = StatusBarOf(apps), Notices = Bbs757EfbNotices.From(notices ?? Array.Empty<Bbs757EfbNoticeRecord>()),
+                NoticesWhole = notices is not null, Question = QuestionOf(apps), Keyboard = KeyboardOf(apps),
+            }
             : null;
     }
 

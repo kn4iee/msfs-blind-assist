@@ -75,25 +75,40 @@ public sealed class Bbs757EfbPushes
 /// What a read of the tablet says by itself (plan 18, Task 8), against the reads before it: a question that was not in the read before,
 /// and BlueBird's notifications whose ids are new (<see cref="Bbs757EfbNotices.ToSpeak"/>, quiet for
 /// <see cref="Bbs757EfbNotices.QuietAfterPressMs"/> after the pilot's own press, whose outcome says enough). The window speaks one alert
-/// at a time, so the two are one text, the question first. A question is the same question when its words are (case, spaces and
-/// punctuation ignored): a reread of it is not said again, and one asked again after a read without it is. The first read takes
-/// BlueBird's notifications as they are, the backlog listed and not said: it did not see them appear. A read with no notifications
-/// (none read, as a torn vector reads, or the list cleared) leaves the last ones it had to compare with, so the next whole read says only
-/// what is new, never the backlog again. On the bridge's loop only.
+/// at a time, so the two are one text, the question first. A question is the same question as <see cref="Bbs757EfbPress.SameQuestion"/>
+/// says: a reread of it is not said again, one asked again after a read without it is, and one with no words is shown, never said as
+/// an empty alert. The first read of a showing (<see cref="Reset"/>) takes BlueBird's notifications as they are, the backlog listed and
+/// not said: it did not see them appear. A whole read is what the next is compared with, an empty one too (a fresh BlueBird session,
+/// Clear all), so the next notification is said whatever its id; a torn one (<see cref="Bbs757EfbScreenModel.NoticesWhole"/> false)
+/// says nothing and leaves the read before it to compare with, so the next whole read says only what is new: never the backlog, a torn
+/// first read included. On the bridge's loop only.
 /// </summary>
 public sealed class Bbs757EfbReadNews
 {
     private IReadOnlyList<Bbs757EfbNotice>? _notices;
     private string? _question;
 
+    /// <summary>The window starts reading again after it was hidden: the next read is a first read, its notifications the backlog (listed,
+    /// not said) and a question up then said once, as at the window's first showing.</summary>
+    public void Reset()
+    {
+        _notices = null;
+        _question = null;
+    }
+
     /// <summary>What to say of <paramref name="read"/>, or null when it says nothing new.</summary>
     public string? After(Bbs757EfbScreenModel read, long msSinceOwnPress)
     {
-        string? question = read.Question is { } q && Bbs757EfbPress.QuestionWords(q.Text) != _question ? q.Text : null;
-        _question = read.Question is { } now ? Bbs757EfbPress.QuestionWords(now.Text) : null;
+        string? asked = read.Question is { } now ? Bbs757EfbPress.QuestionIdentity(now) : null;
+        string? question = read.Question is { } q && asked != _question && Bbs757EfbPress.QuestionWords(q.Text).Length > 0 ? q.Text : null;
+        _question = asked;
 
-        string? notices = _notices == null ? null : Bbs757EfbNotices.ToSpeak(_notices, read.Notices, msSinceOwnPress);
-        if (_notices == null || read.Notices.Count > 0) _notices = read.Notices;
+        string? notices = null;
+        if (read.NoticesWhole)
+        {
+            if (_notices != null) notices = Bbs757EfbNotices.ToSpeak(_notices, read.Notices, msSinceOwnPress);
+            _notices = read.Notices;
+        }
 
         if (question == null) return notices;
         return notices == null ? question : question + " " + notices;

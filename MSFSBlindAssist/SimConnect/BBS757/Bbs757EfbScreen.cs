@@ -138,8 +138,13 @@ public sealed record Bbs757EfbScreenModel(
     /// <see cref="Bbs757EfbTopBar"/>). Empty when none shows.</summary>
     public IReadOnlyList<Bbs757EfbItem> TopBar { get; init; } = Array.Empty<Bbs757EfbItem>();
 
-    /// <summary>BlueBird's notifications, newest first (<see cref="Bbs757EfbNotice"/>, by id); empty when none is read.</summary>
+    /// <summary>BlueBird's notifications, newest first (<see cref="Bbs757EfbNotice"/>, by id); empty when it has none, or when none could
+    /// be read (<see cref="NoticesWhole"/>).</summary>
     public IReadOnlyList<Bbs757EfbNotice> Notices { get; init; } = Array.Empty<Bbs757EfbNotice>();
+
+    /// <summary>Whether <see cref="Notices"/> is BlueBird's whole list: false when BBOS's vector read torn
+    /// (<see cref="Bbs757EfbMemory.ReadNotices"/> gave none), so an empty <see cref="Notices"/> says nothing of what BlueBird holds.</summary>
+    public bool NoticesWhole { get; init; } = true;
 
     /// <summary>A question the tablet shows over the page (BlueBird's dialog), with its answers (not in <see cref="Items"/>); null when
     /// none is up.</summary>
