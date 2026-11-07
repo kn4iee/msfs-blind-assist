@@ -45,6 +45,8 @@ public class Bbs757EfbMemoryTests
         NoticeText: 0x10, NoticeTime: 0x1c, NoticeUnread: 0x34,
         OverlayPanelShown: 0x1fc, OverlayListOpen: 0x1fd, OverlayPanelRect: 0x234, OverlayPanelHeight: 0x240, OverlayFlightTimeText: 0x1b4,
         OverlayBoardingRect: 0x214, BbosLoadState: 0x9160, BbosLoadDeboarding: 0x9164, BbosLoadFlown: 0x9167, BbosLoadRemaining: 0x9278,
+        KeyboardShown: 0x1ac, KeyboardReady: 0x1ad, KeyboardKeypad: 0x1ae, KeyboardTarget: 0x1ec, KeypadRect: 0x1d8,
+        KeyboardNumeric: 0x1e8, KeyboardShift: 0x1e9, KeyboardCaps: 0x1ea, TextboxCaret: 0x1ac, TextboxMaxLength: 0x1bc, TextboxKeypad: 0x1cc,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),

@@ -122,6 +122,19 @@ exact.
   080/05, 6, 30.24 and "Manual!" by 17:20): the pace runs passed through valid codes (KSEA, KSET, LOWI, LOWG, EDDM), each
   looked up. A controlled EDDF, EDDM, EDDF edit left those boxes alone, so the cause is not isolated. Left as they are.
 
+## What the layout carries (plan 22, Task 1b)
+
+| Field | Value | What it holds |
+|---|---|---|
+| `KeyboardShown`, `KeyboardReady`, `KeyboardKeypad` | 0x1ac, 0x1ad, 0x1ae | the keyboard app's bytes: up, settled, the numeric keypad instead of the QWERTY keyboard |
+| `KeyboardTarget` | 0x1ec | the keyboard app's pointer to the text box being typed into, 0 when down |
+| `KeypadRect` | 0x1d8 | the keyboard app's four floats: the keypad's x, y, w, h |
+| `KeyboardNumeric`, `KeyboardShift`, `KeyboardCaps` | 0x1e8, 0x1e9, 0x1ea | the keyboard app's bytes: the third layer, the one-shot shift, caps lock |
+| `TextboxCaret`, `TextboxMaxLength`, `TextboxKeypad` | 0x1ac, 0x1bc, 0x1cc | a text box's ints: the caret, its maximum length, 1 when it opens the keypad |
+
+The keyboard app (`N3bbs12app_keyboardE`, vptr 0x26f18) joins the class list as `keyboard`, derived by RTTI; before, it read as
+the fallback class `app`.
+
 ## Not settled
 
 - Enter on the Charts, Hoppie and SayIntentions boxes; the keypad's OK; how the empty SimBrief row saves; a space,

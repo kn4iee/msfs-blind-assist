@@ -23,6 +23,10 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// <para>Then the top bar app's notification panel (measured live 2026-11-07, the evidence's "The top bar"): BlueBird draws its
 /// notification pop-up and its notification list from the overlay app's own fields, not as controls, over the top right of the page:
 /// the byte that says one shows, the byte that says the full list is open, and the panel's rectangle.</para>
+/// <para>Then the keyboard's state and a text box's typing fields (plan 22, measured live 2026-11-07,
+/// docs/b757/evidence/efb-typing.md): the keyboard app (its class <c>keyboard</c>) keeps whether the keyboard is up and settled, whether
+/// the numeric keypad shows instead and where, which text box it types into, and its layer bytes; a text box keeps its caret, its
+/// maximum length and whether it opens the keypad.</para>
 /// </summary>
 /// <param name="TextboxLabel">A text box's pointer to its <c>text_label</c>, a label outside every children vector whose
 /// <see cref="CtrlLabelText"/> is the box's text (0x128 in this build).</param>
@@ -71,6 +75,25 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// the top bar offers START DEBOARDING rather than START BOARDING while it is set.</param>
 /// <param name="BbosLoadRemaining">BBOS's three remaining loading times, 64-bit seconds 8 bytes apart (0x9278): the box reads
 /// "BOARDING... N MIN" with N the largest rounded up to whole minutes, and "BOARDING..." when none is above 0.</param>
+/// <param name="KeyboardShown">The keyboard app's byte (BlueBird's <c>app_keyboard</c>, BBOS app map key 2), 1 from a text box's tap
+/// until the keyboard goes down (<c>btn_keyboard_down</c>), 0 down (0x1ac; measured live 2026-11-07, docs/b757/evidence/efb-typing.md).
+/// The keyboard's controls read visible either way, so this byte is what says it is up.</param>
+/// <param name="KeyboardReady">The keyboard app's byte, 1 once the keyboard has settled, 1.12 to 1.16 s after the tap, and 0 at once on
+/// down (0x1ad): a key tapped before it is 1 lands on the page beneath, the box losing focus.</param>
+/// <param name="KeyboardKeypad">The keyboard app's byte, 1 when the numeric keypad shows instead of the QWERTY keyboard (0x1ae).</param>
+/// <param name="KeyboardTarget">The keyboard app's pointer to the text box being typed into, 0 while the keyboard is down (0x1ec).</param>
+/// <param name="KeypadRect">The keyboard app's four floats, the numeric keypad's x, y, width and height in tablet pixels (0x1d8): [595.5,348
+/// 360x430] under the fuel input dialog. The keypad has no controls in any tree; its keys are placed from this rectangle.</param>
+/// <param name="KeyboardNumeric">The keyboard app's byte, 1 while the third layer (digits and marks) shows (0x1e8);
+/// <c>btn_numeric_switch</c> toggles it, and it holds.</param>
+/// <param name="KeyboardShift">The keyboard app's byte, the one-shot shift (0x1e9): set by <c>btn_shift</c>, cleared by the next character
+/// key or backspace; caps lock sets it too.</param>
+/// <param name="KeyboardCaps">The keyboard app's byte, caps lock (0x1ea): <c>btn_double_shift</c> sets it until tapped again.</param>
+/// <param name="TextboxCaret">A text box's int, its caret: the character boundary a typed character goes in at, 0 to the text's length
+/// (0x1ac; +0x1b0 and +0x1b4 always equal it). A tap puts it at the nearest boundary; a typed character then moves it to the end.</param>
+/// <param name="TextboxMaxLength">A text box's int, the most characters it takes (0x1bc): Airport 4, the fuel dialog 8, Hoppie 24,
+/// SayIntentions 64; a key tapped on a full box is dropped.</param>
+/// <param name="TextboxKeypad">A text box's int, 1 when it opens the numeric keypad, 0 the QWERTY keyboard (0x1cc).</param>
 public sealed record Bbs757EfbMemLayout(
     string SourceFile,
     uint AnchorAddress,
@@ -120,6 +143,17 @@ public sealed record Bbs757EfbMemLayout(
     int BbosLoadDeboarding,
     int BbosLoadFlown,
     int BbosLoadRemaining,
+    int KeyboardShown,
+    int KeyboardReady,
+    int KeyboardKeypad,
+    int KeyboardTarget,
+    int KeypadRect,
+    int KeyboardNumeric,
+    int KeyboardShift,
+    int KeyboardCaps,
+    int TextboxCaret,
+    int TextboxMaxLength,
+    int TextboxKeypad,
     IReadOnlyList<Bbs757EfbClassVptr> ClassVptrs)
 {
     public bool Equals(Bbs757EfbMemLayout? other) =>
@@ -148,6 +182,10 @@ public sealed record Bbs757EfbMemLayout(
         && OverlayBoardingRect == other.OverlayBoardingRect && BbosLoadState == other.BbosLoadState
         && BbosLoadDeboarding == other.BbosLoadDeboarding && BbosLoadFlown == other.BbosLoadFlown
         && BbosLoadRemaining == other.BbosLoadRemaining
+        && KeyboardShown == other.KeyboardShown && KeyboardReady == other.KeyboardReady && KeyboardKeypad == other.KeyboardKeypad
+        && KeyboardTarget == other.KeyboardTarget && KeypadRect == other.KeypadRect && KeyboardNumeric == other.KeyboardNumeric
+        && KeyboardShift == other.KeyboardShift && KeyboardCaps == other.KeyboardCaps
+        && TextboxCaret == other.TextboxCaret && TextboxMaxLength == other.TextboxMaxLength && TextboxKeypad == other.TextboxKeypad
         && ClassVptrs.SequenceEqual(other.ClassVptrs);
 
     public override int GetHashCode()
@@ -166,6 +204,9 @@ public sealed record Bbs757EfbMemLayout(
         h.Add(OverlayPanelShown); h.Add(OverlayListOpen); h.Add(OverlayPanelRect); h.Add(OverlayPanelHeight);
         h.Add(OverlayFlightTimeText);
         h.Add(OverlayBoardingRect); h.Add(BbosLoadState); h.Add(BbosLoadDeboarding); h.Add(BbosLoadFlown); h.Add(BbosLoadRemaining);
+        h.Add(KeyboardShown); h.Add(KeyboardReady); h.Add(KeyboardKeypad); h.Add(KeyboardTarget); h.Add(KeypadRect);
+        h.Add(KeyboardNumeric); h.Add(KeyboardShift); h.Add(KeyboardCaps);
+        h.Add(TextboxCaret); h.Add(TextboxMaxLength); h.Add(TextboxKeypad);
         foreach (var c in ClassVptrs) h.Add(c);
         return h.ToHashCode();
     }

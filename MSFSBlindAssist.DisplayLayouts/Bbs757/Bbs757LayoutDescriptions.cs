@@ -55,6 +55,10 @@ public static class Bbs757LayoutDescriptions
             $"overlayFlightTimeText {l.OverlayFlightTimeText}",
             $"file analysis: {l.SourceFile}: EFB boarding box: overlayBoardingRect {l.OverlayBoardingRect}, bbosLoadState {l.BbosLoadState}, " +
             $"bbosLoadDeboarding {l.BbosLoadDeboarding}, bbosLoadFlown {l.BbosLoadFlown}, bbosLoadRemaining {l.BbosLoadRemaining}",
+            $"file analysis: {l.SourceFile}: EFB keyboard: keyboardShown {l.KeyboardShown}, keyboardReady {l.KeyboardReady}, " +
+            $"keyboardKeypad {l.KeyboardKeypad}, keyboardTarget {l.KeyboardTarget}, keypadRect {l.KeypadRect}, " +
+            $"keyboardNumeric {l.KeyboardNumeric}, keyboardShift {l.KeyboardShift}, keyboardCaps {l.KeyboardCaps}, " +
+            $"textboxCaret {l.TextboxCaret}, textboxMaxLength {l.TextboxMaxLength}, textboxKeypad {l.TextboxKeypad}",
             $"file analysis: {l.SourceFile}: EFB classes: {classes}",
         };
     }

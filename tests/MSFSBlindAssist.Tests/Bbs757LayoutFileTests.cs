@@ -98,6 +98,19 @@ public class Bbs757LayoutFileTests
         BbosLoadDeboarding: 0x9164,
         BbosLoadFlown: 0x9167,
         BbosLoadRemaining: 0x9278,
+        // The keyboard app's state and a text box's caret, maximum length and keypad flag, measured live 2026-11-07
+        // (docs/b757/evidence/efb-typing.md).
+        KeyboardShown: 0x1ac,
+        KeyboardReady: 0x1ad,
+        KeyboardKeypad: 0x1ae,
+        KeyboardTarget: 0x1ec,
+        KeypadRect: 0x1d8,
+        KeyboardNumeric: 0x1e8,
+        KeyboardShift: 0x1e9,
+        KeyboardCaps: 0x1ea,
+        TextboxCaret: 0x1ac,
+        TextboxMaxLength: 0x1bc,
+        TextboxKeypad: 0x1cc,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("scrollbox", 0x30400),
@@ -108,6 +121,7 @@ public class Bbs757LayoutFileTests
             new Bbs757EfbClassVptr("pulldown", 0x307a0), new Bbs757EfbClassVptr("image", 0x303ac),
             new Bbs757EfbClassVptr("HOME", 0x27bdc), new Bbs757EfbClassVptr("SETTINGS", 0x2c860),
             new Bbs757EfbClassVptr("overlay", 0x28c84), new Bbs757EfbClassVptr("modal", 0x27df0),
+            new Bbs757EfbClassVptr("keyboard", 0x26f18),
         });
 
     /// <summary>The phase 2 fields as the file writes them (camelCase name, decimal value), in the record's order.</summary>
@@ -126,6 +140,14 @@ public class Bbs757LayoutFileTests
         ("overlayPanelShown", 0x1fc), ("overlayListOpen", 0x1fd), ("overlayPanelRect", 0x234), ("overlayPanelHeight", 0x240),
         ("overlayFlightTimeText", 0x1b4), ("overlayBoardingRect", 0x214), ("bbosLoadState", 0x9160), ("bbosLoadDeboarding", 0x9164),
         ("bbosLoadFlown", 0x9167), ("bbosLoadRemaining", 0x9278),
+    };
+
+    /// <summary>The keyboard app's fields and a text box's typing fields as the file writes them, in the record's order.</summary>
+    private static readonly (string Name, int Value)[] KeyboardFields =
+    {
+        ("keyboardShown", 0x1ac), ("keyboardReady", 0x1ad), ("keyboardKeypad", 0x1ae), ("keyboardTarget", 0x1ec),
+        ("keypadRect", 0x1d8), ("keyboardNumeric", 0x1e8), ("keyboardShift", 0x1e9), ("keyboardCaps", 0x1ea),
+        ("textboxCaret", 0x1ac), ("textboxMaxLength", 0x1bc), ("textboxKeypad", 0x1cc),
     };
 
     private static string WithoutField(string text, string name, int value) =>
@@ -335,6 +357,75 @@ public class Bbs757LayoutFileTests
         Assert.False(LayoutFileFormat.TryRead(Module, old, out _, out string? failure));
         Assert.False(string.IsNullOrEmpty(failure));
         foreach (var (name, value) in PanelFields)
+        {
+            string damaged = WithoutField(text, name, value);
+            Assert.NotEqual(text, damaged);
+            Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? one), name);
+            Assert.False(string.IsNullOrEmpty(one), name);
+        }
+    }
+
+    [Fact]
+    public void The_efb_layout_with_the_keyboard_fields_round_trips()
+    {
+        // The keyboard app's state (shown, ready, keypad, target, the keypad's rectangle, its three layer bytes) and a text box's
+        // caret, maximum length and keypad flag, measured live 2026-11-07 (docs/b757/evidence/efb-typing.md); the keyboard app is
+        // a class of its own (N3bbs12app_keyboardE).
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        foreach (var (name, value) in KeyboardFields)
+            Assert.Contains($"\"{name}\": {value.ToString(CultureInfo.InvariantCulture)}", text);
+        Assert.True(LayoutFileFormat.TryRead(Module, text, out var file, out string? failure), failure);
+        var loaded = (Bbs757EfbMemLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Efb).Layout!;
+        Assert.Equal(SampleEfbLayout() with { SourceFile = "" }, loaded);
+        Assert.Equal(text, LayoutFileFormat.Write(Module, file));
+        Assert.Equal((0x1ac, 0x1ad, 0x1ae, 0x1ec, 0x1d8, 0x1e8, 0x1e9, 0x1ea),
+            (loaded.KeyboardShown, loaded.KeyboardReady, loaded.KeyboardKeypad, loaded.KeyboardTarget, loaded.KeypadRect,
+                loaded.KeyboardNumeric, loaded.KeyboardShift, loaded.KeyboardCaps));
+        Assert.Equal((0x1ac, 0x1bc, 0x1cc), (loaded.TextboxCaret, loaded.TextboxMaxLength, loaded.TextboxKeypad));
+        Assert.Equal("keyboard", loaded.KindFor(0x26f18));
+        Assert.Equal("keyboard", loaded.ClassVptrs[^1].Kind); // after modal
+        Assert.Equal("modal", loaded.ClassVptrs[^2].Kind);
+        // In the record's order, after BBOS's loading record.
+        Assert.True(text.IndexOf("\"bbosLoadRemaining\"", StringComparison.Ordinal) < text.IndexOf("\"keyboardShown\"", StringComparison.Ordinal));
+        for (int i = 1; i < KeyboardFields.Length; i++)
+            Assert.True(text.IndexOf($"\"{KeyboardFields[i - 1].Name}\"", StringComparison.Ordinal)
+                < text.IndexOf($"\"{KeyboardFields[i].Name}\"", StringComparison.Ordinal), KeyboardFields[i].Name);
+        Assert.True(text.IndexOf("\"textboxKeypad\"", StringComparison.Ordinal) < text.IndexOf("\"classVptrs\"", StringComparison.Ordinal));
+
+        // Equality and the hash see every keyboard field.
+        var sample = SampleEfbLayout();
+        foreach (var changed in new[]
+                 {
+                     sample with { KeyboardShown = 1 }, sample with { KeyboardReady = 1 }, sample with { KeyboardKeypad = 1 },
+                     sample with { KeyboardTarget = 1 }, sample with { KeypadRect = 1 }, sample with { KeyboardNumeric = 1 },
+                     sample with { KeyboardShift = 1 }, sample with { KeyboardCaps = 1 }, sample with { TextboxCaret = 1 },
+                     sample with { TextboxMaxLength = 1 }, sample with { TextboxKeypad = 1 },
+                 })
+        {
+            Assert.NotEqual(sample, changed);
+            Assert.NotEqual(sample.GetHashCode(), changed.GetHashCode());
+        }
+
+        var line = Assert.Single(Bbs757LayoutDescriptions.DescribeEfb(loaded), l => l.Contains("EFB keyboard:", StringComparison.Ordinal));
+        foreach (string part in new[] { "keyboardShown 428", "keyboardReady 429", "keyboardKeypad 430", "keyboardTarget 492", "keypadRect 472",
+                     "keyboardNumeric 488", "keyboardShift 489", "keyboardCaps 490", "textboxCaret 428", "textboxMaxLength 444", "textboxKeypad 460" })
+            Assert.Contains(part, line, StringComparison.Ordinal);
+        Assert.Contains("keyboard=0x26f18", string.Join("\n", Bbs757LayoutDescriptions.DescribeEfb(loaded)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_layout_without_the_keyboard_fields_reads_as_missing()
+    {
+        // The file plan 21's generator wrote has none of them: refused, never read with zeros (WASM-26); each alone too.
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        string old = text;
+        foreach (var (name, value) in KeyboardFields) old = WithoutField(old, name, value);
+        Assert.DoesNotContain("\"keyboardShown\"", old, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"textboxKeypad\"", old, StringComparison.Ordinal);
+        Assert.Contains("\"bbosLoadRemaining\": 37496", old, StringComparison.Ordinal);
+        Assert.False(LayoutFileFormat.TryRead(Module, old, out _, out string? failure));
+        Assert.False(string.IsNullOrEmpty(failure));
+        foreach (var (name, value) in KeyboardFields)
         {
             string damaged = WithoutField(text, name, value);
             Assert.NotEqual(text, damaged);
