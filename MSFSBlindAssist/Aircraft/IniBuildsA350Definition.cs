@@ -303,7 +303,6 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         GlideslopeAltitudeBiasFt = 53.0,
         FlareAltitudeBiasFt = 15.0,
         FlareTriggerWheelHeightFt = 40.0,
-        FlareTargetPitchDeg = 5.0,
     };
 
     public override FCUControlType GetAltitudeControlType() => FCUControlType.SetValue;

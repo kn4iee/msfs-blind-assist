@@ -84,14 +84,14 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** landed, waiting on the owner (Task 1's released-aircraft flights)
+- **Status:** superseded by the visual guidance overhaul, oasis1701/msfs-blind-assist#345 (2026-11-07): its `NavigationCalculator.LandingThreshold` is Part A's landing threshold (with a guard for an offset that reaches the far end), so `RunwayGlidepathOrigin`, `GlidepathAltitudeErrorFt`, this plan's VG-20 and `RunwayGlidepathOriginTests` were removed when the branch took #345; the ILS cross-check lives on as `VisualGuidanceDisplacedThresholdTests` on #345's path. The measured biases (Task 6) stand: #345 measures from the same threshold.
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03; Part A from `origin/main` 8eb77a5b4
 - **Landed:** 2026-11-03
 - **Tests at landing:** `RunwayGlidepathOriginTests` 10/10, `A350VisualGuidanceProfileTests` 2/2; the suite without `ClaudeRulesHookTests` 16,864 on Part A's branch
 - **Tasks:** Part A Tasks 2-4 on `fix/visual-guidance-threshold` (a4895b983) and, at the owner's word (2026-11-03), on this branch (2274cd9d5); Task 4: no bias changed on `main`'s aircraft (the doc lists each); Task 5 needs no PR now (the fix rides this branch); Task 6 done: the A350's bias from the threshold 53 (three coupled ILS approaches: OMDB 12L 52 and 53, VCBI 04 54, `docs/a350/evidence/18-visual-guidance-threshold.md`)
-- **Waiting on the owner:** Task 1, a coupled ILS to a displaced and to a non-displaced threshold on a released aircraft, for the shared fix's record; Task 6 Step 2's displaced half with the fixed guidance's tone (OMDB 12L)
+- **Waiting on the owner:** nothing for this plan since #345; its flights belong to #345 now
 - **In-sim results:** `docs/a350/evidence/18-visual-guidance-threshold.md`
 - **Changed from the plan:** the owner moved Part A onto this branch instead of a separate pull request off `main`; Tasks 2 and 3 are one commit; the glidepath's altitude error moved into `VisualGuidanceManager.GlidepathAltitudeErrorFt` so a test pins the formula the guidance flies; rule VG-20 added
 - **Rulings made while working:** the 5/3/1-mile call-outs and the debug distances moved to the threshold with the glidepath; `IsBehindRunway` and the extending phase's "behind threshold" count keep the pavement start; cross-track keeps the start (same centerline, within 2 ft); the A350's bias is the three approaches' middle, 53 (cost if wrong: 1 ft)

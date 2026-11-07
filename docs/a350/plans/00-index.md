@@ -46,7 +46,7 @@ someone else, that is Robin Kipp.
 | 15 | `15-manual-anf-to-hud.md`: PDF pages 64-80 | audit | — |
 | 16 | `16-manual-ecam-checklists.md`: PDF pages 81-86 and 124-128 | audit | — |
 | 17 | `17-manual-walkthrough.md`: PDF pages 87-123, flown as one SimBrief flight | audit | 02-11 |
-| 18 | `18-visual-guidance-threshold.md`: glidepath distance from the displaced threshold (pull request off `main`); then the A350's biases | shared | — |
+| 18 | `18-visual-guidance-threshold.md`: glidepath distance from the displaced threshold (pull request off `main`); then the A350's biases. Superseded by #345 (2026-11-07) | shared | — |
 | 19 | `19-fo-flaps-other-airbus.md`: the A350's flap margin, landing gate and go-around signature for the A380, A320 and A330 (one pull request off `main`) | shared | 05 |
 | 20 | `20-tools-portable.md`: `tools/A350Probe` and `tools/a350-probe` portable and documented | later | 03 |
 | 21 | `21-integration.md`: handoffs, guide, rules, hotkey guide, changelog, the 1.2.8 "do not chase" list, a regression flight, the pull request, delete `docs/a350/` | last | all |
