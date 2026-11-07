@@ -658,7 +658,13 @@ public class Bbs757EfbMemoryTests
         var apps = Build(() => { TopBarAndDialog(dialogOpen: false); Str(BarApp + (uint)Layout.OverlayFlightTimeText, "DEP 00:28"); }).ReadFrontApps();
         Assert.Equal("DEP 00:28", Assert.Single(apps, a => a.Class == Bbs757EfbMemory.TopBarClass).FlightTime);
         Assert.All(apps.Where(a => a.Class != Bbs757EfbMemory.TopBarClass), a => Assert.Equal("", a.FlightTime));
-        var empty = Build(() => TopBarAndDialog(dialogOpen: false)).ReadFrontApps();
+        // (the fake's image is the same one: the string cleared, as size 0 over the stale bytes of "ETA 0000Z")
+        var empty = Build(() =>
+        {
+            TopBarAndDialog(dialogOpen: false);
+            Str(BarApp + (uint)Layout.OverlayFlightTimeText, "ETA 0000Z");
+            _b[BarApp + (uint)Layout.OverlayFlightTimeText + 11] = 0;
+        }).ReadFrontApps();
         Assert.Equal("", empty.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).FlightTime);
 
         // The tree format carries it (optional: a tree without it reads as "").
