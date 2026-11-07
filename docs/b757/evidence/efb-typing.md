@@ -122,6 +122,37 @@ exact.
   080/05, 6, 30.24 and "Manual!" by 17:20): the pace runs passed through valid codes (KSEA, KSET, LOWI, LOWG, EDDM), each
   looked up. A controlled EDDF, EDDM, EDDF edit left those boxes alone, so the cause is not isolated. Left as they are.
 
+## Follow-up (17:44 to 17:56 local)
+
+- **The Charts request box acts at the first valid code**, without Enter: typing "EDDM" (backspace four times, SHIFT e,
+  CAPS d d m) showed MUNICH's labels and its 62 charts, and BlueBird wrote `charts_manual_icao` EDDM, before any Enter
+  ("EDD", "EDD1", "EDDf" changed nothing). Typing EDDF back requested Frankfurt again and reset the page's view: the type
+  tab went to SID and the chart list to its first entry.
+- **Enter depends on the box:** on the Charts box `btn_enter` closed the keyboard (shown, ready and the target cleared,
+  the box's focus byte 0, the layers reset) and did nothing else; on PERF calc's Airport box it does nothing. So a typed
+  field is finished with `btn_keyboard_down`, which keeps the text on both.
+- **A space is dropped** by the Charts box ("EDD" stayed "EDD"), as it drops `-`, `@` and `?`.
+- **The keypad's OK in `fuel_input_dialog` closes only the keypad:** the target cleared at once, the box kept "2176", the
+  dialog stayed up (BBOS +0x1d8 still 1) and nothing was inserted (no new notification); INSERT is still the dialog's
+  commit, and one CANCEL closed it with no change.
+- **The TOD pause keypad** (Settings, Aircraft): with `tod_pause_toggle` on, `tod_pause_textbox` [1202,210 100x44] shows
+  "40" (BlueBird wrote `tod_pause_distance` 40); its tap brings the keypad up with no dialog, at [1037,266 360x430]: 12 px
+  below the box and pushed against the tablet's right edge, so **the keypad moves with its box** (read +0x1d8 every time).
+  Its OK closed the keypad and BlueBird wrote the value (40, unchanged): OK commits a keypad box with no dialog. The
+  toggle turned off again: the box hidden, `tod_pause_distance` -1, Settings, Aircraft's listing as before.
+- **A toggle's state is its byte +0x188** (1 on, 0 off; the only word that changed in a stable diff of `tod_pause_toggle`;
+  across the page's 16 toggles it matches every state the listing shows; +0x189 read 1 on all). The window reads a
+  settings row's state from the row's value label, and the TOD row has none, so it said "not checked" while TOD pause was
+  on.
+- **The layers reset whenever the keyboard closes** (by its down key or by Enter): it always comes up on the lower layer
+  (numeric, shift and caps 0, polled through each come-up, three cycles). The keypad byte +0x1ae keeps its 1 after the
+  keypad closes and clears when the QWERTY keyboard next opens: read it only while +0x1ac is 1.
+- **The settle time varies:** three come-ups settled 1.095, 1.163 and 1.112 s after the tap; one took more than 1.94 s.
+  Poll the ready byte with a timeout of a few seconds, never a fixed wait.
+- Side effects: the Charts page shows its first TAXI chart (EDDF101P) instead of the one shown before (entry 23; putting it
+  back is a drop-down choice), and `chart_view_states` gained that chart's view; `display_brightness` follows the
+  automatic brightness again. Everything else in `efb_settings.json` equals its copy from before, the credentials by hash.
+
 ## What the layout carries (plan 22, Task 1b)
 
 | Field | Value | What it holds |
@@ -137,6 +168,6 @@ the fallback class `app`.
 
 ## Not settled
 
-- Enter on the Charts, Hoppie and SayIntentions boxes; the keypad's OK; how the empty SimBrief row saves; a space,
-  `btn_tab` and `btn_home`; the TOD keypad (hidden while its toggle is off); whether KEYBOARD LOCKED depends on LOCK
-  KEYBOARD TO EFB; where a tap puts the caret in text wider than its box.
+- Enter on the Hoppie and SayIntentions boxes (never needed: the down key keeps the text); how the empty SimBrief row
+  saves (the keypad's OK, presumably, as on TOD: the owner's in-sim check); `btn_tab` and `btn_home`; whether KEYBOARD
+  LOCKED depends on LOCK KEYBOARD TO EFB; where a tap puts the caret in text wider than its box.
