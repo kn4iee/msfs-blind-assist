@@ -605,6 +605,20 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
+    public void A_drop_downs_entries_changing_is_a_new_page_to_push()
+    {
+        // Plan 21: the window's choice list offers a drop-down's entries, so a read in which only they changed (another airport's
+        // runways, the same first one shown) is pushed; the same entries in a new list are no change.
+        var box = new Rectangle(519, 156, 150, 34);
+        Bbs757EfbScreenModel Runways(params string[] entries) => Ground(Item(Bbs757EfbKind.Choice, "Runway", "planning_perf_calc_runway_dropdown", box)
+            with { Value = "RW07L", Entries = entries });
+
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(Runways("RW07L", "RW25R")), Bbs757EfbPress.Fingerprint(Runways("RW07L", "RW26")));
+        Assert.True(Bbs757EfbPress.PageUnchanged(Runways("RW07L", "RW26"), Runways("RW07L", "RW26")));
+        Assert.False(Bbs757EfbPress.PageUnchanged(Runways("RW07L"), Runways("RW07L", "RW26")));
+    }
+
+    [Fact]
     public void The_keyboard_coming_up_is_no_page_change()
     {
         var page = Ground(ReqFuelTruck());

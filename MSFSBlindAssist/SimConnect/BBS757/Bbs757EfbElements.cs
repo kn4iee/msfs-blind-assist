@@ -13,8 +13,10 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 
 /// <summary>
 /// A read tablet page (<see cref="Bbs757EfbScreenModel"/>) as the shared EFB window's elements, and what pressing each does. Pure:
-/// tested. The window (FbwEfbForm) renders headings, buttons, check boxes, choice lists and sliders from the push's "items.N.*" keys
-/// (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx.
+/// tested. The window (FbwEfbForm) renders headings, buttons, check boxes, choice lists, sliders and edit boxes from the push's
+/// "items.N.*" keys (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx. A
+/// text box is an edit box holding its text and a drop-down a choice list of its entries (plan 21); the bridge taps nothing for a set
+/// of either until choosing (plan 21, Task 7) and typing (plan 22, B757-23) are built.
 ///
 /// Every control the reader offers can be pressed (the owner's ruling of 2026-10-29): a button, tile, switch, check box, slider and tab
 /// is clickable whatever the reader's <see cref="Bbs757EfbItem.Clickable"/> says, and nothing here refuses a press. The one exception
@@ -190,9 +192,22 @@ public static class Bbs757EfbElements
                 case Bbs757EfbKind.Row:
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     break;
+                case Bbs757EfbKind.Field when it.TextBox:
+                    // A text box: an edit box named for it, holding what it holds as the tablet writes it. Its set taps and types
+                    // nothing until plan 22 (B757-23): the bridge sets no field.
+                    Add(Bbs757EfbVocabulary.Pretty(it.Text), controlType: "text", clickable: true, value: it.Value, key: it.Key,
+                        action: new Action(ActionKind.Tap, it));
+                    break;
                 case Bbs757EfbKind.Field:
                     // A value box: its name and what it holds ("Quantity: 1539 Gal"); an input not read yet is just its name.
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
+                    break;
+                case Bbs757EfbKind.Choice:
+                    // A drop-down: a choice list of its entries valued by the one it shows (choosing is plan 21 Task 7's: until then the
+                    // bridge taps nothing for it). One that shows none of them (Systems' SELECT) starts with an empty choice, so the list
+                    // never reads an entry as chosen.
+                    Add(Bbs757EfbVocabulary.Pretty(it.Text), controlType: "select", clickable: true, value: it.Value, key: it.Key,
+                        options: ChoiceOptions(it), action: new Action(ActionKind.Tap, it));
                     break;
                 case Bbs757EfbKind.LongText:
                     Add(it.Text, controlType: "pre", key: it.Key);
@@ -265,6 +280,10 @@ public static class Bbs757EfbElements
                     return true;
                 case Bbs757EfbKind.Slider:
                     Add(SliderStateText(it, pageName), key: it.Key);
+                    return true;
+                case Bbs757EfbKind.Field when it.TextBox:
+                case Bbs757EfbKind.Choice:
+                    Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     return true;
                 default:
                     return false;
@@ -339,6 +358,13 @@ public static class Bbs757EfbElements
     internal static bool ShowsAsChoiceList(Bbs757EfbItem it, string pageName) =>
         it.Kind == Bbs757EfbKind.Toggle && TwoChoicesFor(it, pageName) != null
         && Bbs757EfbSettingsMatch.ChoiceIndex(Bbs757EfbSettingsMatch.SettingFor(pageName, it)!, it.Value) >= 0;
+
+    /// <summary>A drop-down's choices: its entries in BlueBird's order, after an empty one when it shows none of them.</summary>
+    private static IReadOnlyList<string> ChoiceOptions(Bbs757EfbItem it)
+    {
+        var entries = it.Entries ?? Array.Empty<string>();
+        return it.Value.Length == 0 ? new[] { "" }.Concat(entries).ToList() : entries;
+    }
 
     /// <summary>A side-menu entry's words, "(current page)" after them on the entry of the page shown (a tab says "(current)",
     /// <see cref="Labelled"/>).</summary>

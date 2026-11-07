@@ -27,7 +27,9 @@ internal static class Bbs757EfbPageRules
     /// <summary>The apps whose pages have sections (Systems and Checklist read as their app alone).</summary>
     internal static bool HasSections(string app) => app is "AIRCRAFT" or "NAVIGATION" or "SETTINGS";
 
-    /// <summary>The section the table gives the page, from the control names it draws; null when no entry matches.</summary>
+    /// <summary>The section the table gives the page, from the control names it draws; null when no entry matches. Only for a read
+    /// that carries no selected state (a tree captured before plan 21): a read with it takes the side-menu entry BlueBird marks
+    /// (<see cref="Bbs757EfbModelReader"/>).</summary>
     internal static string? SectionFromTable(string app, IEnumerable<string> names)
     {
         var all = names as IReadOnlyCollection<string> ?? names.ToList();
@@ -151,7 +153,8 @@ internal static class Bbs757EfbPageRules
         string.Join(' ', label.Core.Where(p => !ControlWords.Contains(p)).OrderBy(p => p, StringComparer.Ordinal));
 
     /// <summary>Whether a name is an input the reader cannot read: a box the tablet types into or picks from, named
-    /// <c>*_input</c>, <c>*_dropdown</c> or <c>*_textbox</c>, or PERF calc's four bare field names.</summary>
+    /// <c>*_input</c>, <c>*_dropdown</c> or <c>*_textbox</c>, or PERF calc's four bare field names. Only for a control read as "other"
+    /// (a tree captured before plan 21 read the text box and drop-down classes): one read by its class is a text box or a drop-down.</summary>
     internal static bool IsUnreadInputName(string name) =>
         name.EndsWith("_input", StringComparison.Ordinal) || name.EndsWith("_dropdown", StringComparison.Ordinal)
         || name.EndsWith("_textbox", StringComparison.Ordinal)

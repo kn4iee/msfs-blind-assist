@@ -95,6 +95,9 @@ internal static class Bbs757EfbModelJson
             ["slider"] = i.Slider is null ? null
                 : new JsonArray(i.Slider.TrackLeft, i.Slider.TrackRight, i.Slider.KnobX),
         };
+        // A drop-down's entries and a text box's mark only when set, so every model written before plan 21 reads the same.
+        if (i.Entries is { } entries) o["entries"] = new JsonArray(entries.Select(e => (JsonNode?)e).ToArray());
+        if (i.TextBox) o["textBox"] = true;
         return o;
     }
 
@@ -119,7 +122,9 @@ internal static class Bbs757EfbModelJson
                 slider,
                 o["level"]?.GetValue<int>() ?? 0,
                 Str(o, "label"),
-                Str(o, "name"));
+                Str(o, "name"),
+                Entries: o["entries"]?.AsArray().Select(e => e!.GetValue<string>()).ToList(),
+                TextBox: o["textBox"]?.GetValue<bool>() ?? false);
         }).ToList();
     }
 

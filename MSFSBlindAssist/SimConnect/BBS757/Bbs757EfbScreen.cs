@@ -21,12 +21,15 @@ public enum Bbs757EfbKind
     Checkbox,
     /// <summary>A settings row with neither (a read-only value or a text field).</summary>
     Row,
-    /// <summary>A value box: Text is its name, Value its value.</summary>
+    /// <summary>A value box, or a text box (<see cref="Bbs757EfbItem.TextBox"/>): Text is its name, Value its value.</summary>
     Field,
     /// <summary>A tab of a page; Selected is the current one.</summary>
     Tab,
     /// <summary>A long text: Text is the whole text, its lines separated by <c>\n</c>.</summary>
     LongText,
+    /// <summary>A drop-down: Text is its name, Value its current entry ("" when it shows none of them, as Systems' SELECT), and
+    /// <see cref="Bbs757EfbItem.Entries"/> its entries in BlueBird's order.</summary>
+    Choice,
 }
 
 /// <summary>The color of a box: on BlueBird's tablet the color IS the state of a tile.</summary>
@@ -98,6 +101,10 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
 /// any scrollbox above that one), the part of the tablet it can show in: the reader sets <see cref="Bbs757EfbScreen.ContentArea"/>
 /// for a control in no scrollbox, and an item built with none (the default) is read as the content area too
 /// (<see cref="Bbs757EfbPress.ClipOf"/>).
+/// <see cref="Entries"/> are a <see cref="Bbs757EfbKind.Choice"/>'s entries, in BlueBird's order, null for any other kind.
+/// <see cref="TextBox"/> marks a <see cref="Bbs757EfbKind.Field"/> that is one of BlueBird's text boxes, its Value the text it
+/// holds: the window shows it as an edit box, which nothing types into until plan 22 (B757-23); any other field is a value box, or
+/// an input the reader could not read, shown as a line.
 /// </summary>
 public sealed record Bbs757EfbItem(
     Bbs757EfbKind Kind,
@@ -114,7 +121,9 @@ public sealed record Bbs757EfbItem(
     int Level = 0,
     string Label = "",
     string Name = "",
-    Rectangle Clip = default);
+    Rectangle Clip = default,
+    IReadOnlyList<string>? Entries = null,
+    bool TextBox = false);
 
 /// <summary>A parsed tablet page: which app and menu entry, then its elements in reading order.</summary>
 public sealed record Bbs757EfbScreenModel(
@@ -190,8 +199,9 @@ public static class Bbs757EfbScreen
     /// <summary>The words a tile's text ends in that say its state, not its name ("FUEL TRUCK OFF" is FUEL TRUCK): the
     /// key strips them so a press that changes a tile's state keeps its key, and <see cref="Bbs757EfbPress.Relocate"/>
     /// leaves them out when it compares a tile's words with another's. "IN PLACE" is the chocks tile's other state (the picture's, joined to
-    /// the tile's words by <see cref="Bbs757EfbPageRules.PictureState"/>).</summary>
-    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED", "UNAVAIL", "IN PLACE" };
+    /// the tile's words by <see cref="Bbs757EfbPageRules.PictureState"/>). "MOVING" is a door button's state while the door moves
+    /// (measured 2026-11-07: Cabin &amp; doors' AFT cargo between CLOSED and OPEN), so the button keeps its key and its label.</summary>
+    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED", "UNAVAIL", "IN PLACE", "MOVING" };
 
     /// <summary>The words that make a control's own words an action, not its name (plan 20, R5): such a control is named by a label
     /// (<see cref="Bbs757EfbItem.Label"/>), as one whose words are a state word is.</summary>

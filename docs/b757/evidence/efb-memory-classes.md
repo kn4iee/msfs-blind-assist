@@ -185,7 +185,11 @@ the defuel question's `fuel_icon` "./data/efb/icons/bbs_icon_fuel1.png"; PERF ca
   01:16Z, so the list looks sorted by time of day (the newest at the bottom after Zulu midnight). Unproven.
 - Opening the list marked 41 to 49 read (BlueBird's own behavior).
 - While a door moves, its button reads "MOVING" (BlueBird ignores taps then); the window read that row as
-  `text  AFT CARGO` with no button, though a sighted pilot sees MOVING (plan 20's reader drops it; cause not found yet).
+  `text  AFT CARGO`, though a sighted pilot sees MOVING. The cause (plan 21, Task 5, reproduced on the committed Cabin & doors
+  tree with the button's text set to MOVING): MOVING was none of `Bbs757EfbScreen.StateWords`, so the button did not wait for a
+  name (R5) and kept its bare words, `button  Moving`, in the doors' tree order, while its label AFT CARGO, naming nothing, read
+  as a line of its own after the door buttons. MOVING is a state word since: the row reads `button  AFT cargo: Moving`, and the
+  button keeps the key it has closed.
 
 ## Questions and dialogs: BBOS byte +0x1d8
 
@@ -257,5 +261,4 @@ The open list's scrolling (no drag in an open list was made); an open list under
 in a scrollbox: the reader takes the page's scroll off the list and its rows as for any control inside a scrollbox, logic
 only); the toast, START BOARDING and the departure countdown;
 the notification list's order; overlay +0x2ac, +0x20c and +0x210, record +0x36, BBOS +0x9348 and +0x9368; the OFP's
-line pitch; list boxes (none reachable); Settings, General's class sweep; why a door's MOVING button drops out of the
-window.
+line pitch; list boxes (none reachable); Settings, General's class sweep.

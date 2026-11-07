@@ -179,6 +179,59 @@ public class Bbs757EfbElementsGrammarTests
         Assert.Contains("GPU: On", texts);
     }
 
+    private static readonly Bbs757EfbQuestion Defuel = new("Are you sure you want to defuel?",
+        new[] { Make(Bbs757EfbKind.Button, "YES", "q:YES"), Make(Bbs757EfbKind.Button, "NO", "q:NO") });
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void A_text_box_is_an_edit_box_holding_its_text(string culture)
+    {
+        // Plan 21: a text box shows what it holds in an edit box, its value as the tablet writes it (a decimal point under every
+        // culture); nothing types into it until plan 22 (B757-23). A value box stays a line.
+        var press = Make(Bbs757EfbKind.Field, "Pressure (inHg)", "planning_perf_calc_press", "30.01") with { TextBox = true };
+        var page = Page("NAVIGATION", "PERF CALC", new[] { press, Make(Bbs757EfbKind.Field, "QUANTITY", "fuel_left_qty_box", "1539 Gal") });
+
+        var b = TestCulture.Run(culture, () => Bbs757EfbElements.Build(page, null, NoExtras));
+
+        int at = IndexOf(b, "Pressure (inHg)");
+        Assert.Equal(("text", "30.01", "planning_perf_calc_press"), (F(b, at, "type"), F(b, at, "value"), F(b, at, "key")));
+        Assert.Equal(Bbs757EfbElements.ActionKind.Tap, b.Actions[int.Parse(F(b, at, "aidx"))].Kind);
+        Assert.Equal("", F(b, IndexOf(b, "Quantity: 1539 Gal"), "type"));
+        Assert.Contains("edit [30.01]  Pressure (inHg)\ntext  Quantity: 1539 Gal\n", Bbs757EfbListing.Of(b));
+
+        // Behind a question the page takes no tap: the box is a line with what it holds.
+        var dimmed = TestCulture.Run(culture, () => Bbs757EfbElements.Build(page with { Question = Defuel }, null, NoExtras));
+        int line = IndexOf(dimmed, "Pressure (inHg): 30.01");
+        Assert.Equal(("", "false"), (F(dimmed, line, "type"), F(dimmed, line, "clickable")));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void A_drop_down_is_a_choice_list_of_its_entries(string culture)
+    {
+        // Plan 21: a drop-down is a choice list of its entries, valued by the one it shows; one that shows none of them (Systems'
+        // SELECT) starts its list with an empty choice, so no entry reads as chosen. Choosing from it is Task 7's.
+        var runway = Make(Bbs757EfbKind.Choice, "Runway", "planning_perf_calc_runway_dropdown", "RW07L") with { Entries = new[] { "RW07L", "RW07R", "RW26" } };
+        var menu = Make(Bbs757EfbKind.Choice, "ELECTRICAL", "pb_menu1") with { Entries = new[] { "24 - ELECTRICAL", "28 - FUEL" } };
+        var page = Page("NAVIGATION", "PERF CALC", new[] { runway, menu });
+
+        var b = TestCulture.Run(culture, () => Bbs757EfbElements.Build(page, null, NoExtras));
+
+        int at = IndexOf(b, "Runway");
+        Assert.Equal(("select", "RW07L", "true", "planning_perf_calc_runway_dropdown"), (F(b, at, "type"), F(b, at, "value"), F(b, at, "clickable"), F(b, at, "key")));
+        Assert.Equal(new[] { "RW07L", "RW07R", "RW26" }, F(b, at, "options").Split((char)0x1f));
+        Assert.Equal(Bbs757EfbElements.ActionKind.Tap, b.Actions[int.Parse(F(b, at, "aidx"))].Kind);
+        int none = IndexOf(b, "Electrical");
+        Assert.Equal(("select", ""), (F(b, none, "type"), F(b, none, "value")));
+        Assert.Equal(new[] { "", "24 - ELECTRICAL", "28 - FUEL" }, F(b, none, "options").Split((char)0x1f));
+        Assert.Contains("combo [RW07L] {RW07L|RW07R|RW26}  Runway\ncombo [] {|24 - ELECTRICAL|28 - FUEL}  Electrical\n", Bbs757EfbListing.Of(b));
+
+        // Behind a question: a line with the entry it shows, or its name alone.
+        var dimmed = Texts(TestCulture.Run(culture, () => Bbs757EfbElements.Build(page with { Question = Defuel }, null, NoExtras)));
+        Assert.Contains("Runway: RW07L", dimmed);
+        Assert.Contains("Electrical", dimmed);
+    }
+
     [Fact]
     public void Long_text_is_a_pre_block()
     {

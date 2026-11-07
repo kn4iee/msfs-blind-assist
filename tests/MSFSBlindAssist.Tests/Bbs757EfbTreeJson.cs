@@ -109,10 +109,48 @@ internal static class Bbs757EfbTreeJson
 
     /// <summary>The trees with the control named <paramref name="name"/> showing <paramref name="text"/>: the tablet after a tap that
     /// changed one label.</summary>
-    internal static IReadOnlyList<Bbs757EfbMemory.App> WithText(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, string text)
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithText(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, string text) =>
+        Change(apps, name, n => n with { Text = text });
+
+    /// <summary>The trees with the control named <paramref name="name"/> read as BlueBird's class <paramref name="kind"/>
+    /// (<c>textbox</c>, <c>multiline</c>, <c>pulldown</c>, <c>image</c>) holding <paramref name="text"/>: the memory walk of a layout that
+    /// knows the class, on a tree captured before it did (where the control reads "other", and a text box's or a long text's words read
+    /// none).</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithKind(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, string kind, string text) =>
+        Change(apps, name, n => n with { Kind = kind, Text = text });
+
+    /// <summary>The trees with the control named <paramref name="name"/> a drop-down whose face shows <paramref name="face"/> and whose
+    /// entries are <paramref name="entries"/>, closed: its value the entry the face shows, "" when it shows none of them (Systems'
+    /// SELECT), as the memory walk reads it (<see cref="Bbs757EfbMemory"/>).</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> AsDropDown(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, string face,
+        params string[] entries) =>
+        Change(apps, name, n => n with { Kind = "pulldown", Text = face, Value = entries.Contains(face) ? face : "", Entries = entries });
+
+    /// <summary>The trees as the memory walk reads BlueBird's selected state: each button named in <paramref name="selected"/> the
+    /// current one of its row (Selected true), the other buttons with words beside it in its parent not (false), every other control
+    /// none (null), as only a side menu's and a tab row's buttons are selectable (measured 2026-11-07).</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithSelected(IReadOnlyList<Bbs757EfbMemory.App> apps, params string[] selected)
+    {
+        Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n)
+        {
+            bool row = n.Children.Any(c => selected.Contains(c.Name));
+            return n with
+            {
+                Children = n.Children.Select(c => Walk(c) with
+                {
+                    Selected = selected.Contains(c.Name) ? true : row && c.Kind == "button" && c.Text.Length > 0 ? false : c.Selected,
+                }).ToList(),
+            };
+        }
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
+    /// <summary>The trees with <paramref name="change"/> made to every control named <paramref name="name"/>.</summary>
+    private static IReadOnlyList<Bbs757EfbMemory.App> Change(IReadOnlyList<Bbs757EfbMemory.App> apps, string name,
+        Func<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> change)
     {
         Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) =>
-            (n.Name == name ? n with { Text = text } : n) with { Children = n.Children.Select(Walk).ToList() };
+            (n.Name == name ? change(n) : n) with { Children = n.Children.Select(Walk).ToList() };
         return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
     }
 

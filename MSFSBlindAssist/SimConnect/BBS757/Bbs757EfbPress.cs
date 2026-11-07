@@ -27,7 +27,8 @@ public static class Bbs757EfbPress
 
     /// <summary>
     /// What a page says, as one string: two reads that say the same thing give the same one. It covers the page's name, its menu
-    /// and controls (kind, key, words, value, state, selection, and the place of a slider's knob read from memory, in whole percent),
+    /// and controls (kind, key, words, value, state, selection, the place of a slider's knob read from memory, in whole percent, and a
+    /// drop-down's entries),
     /// the question over it, the top bar and the notifications; not where anything is, so a pixel of wobble changes nothing. The bridge pushes a read only when this moved, so a notification or a
     /// question appearing over a page that did not change counts as a change.
     /// </summary>
@@ -63,13 +64,17 @@ public static class Bbs757EfbPress
     /// <summary>One control as the fingerprint says it: what the pilot would hear change. A slider whose knob BlueBird's memory gives
     /// (<see cref="Bbs757EfbSlider.KnobRead"/>) adds its place, in whole percent as the window shows it, so a knob moved alone (a zoom
     /// button's tap, a set with no value shown, BlueBird moving a reservoir's level) is a change; a pixel of wobble within the same
-    /// percent is none. Any other slider's knob comes from its value, which the line has already.</summary>
-    private static string Line(Bbs757EfbItem i) =>
-        new StringBuilder().Append(i.Kind).Append('|').Append(i.Key).Append('|').Append(i.Text).Append('|')
+    /// percent is none. Any other slider's knob comes from its value, which the line has already. A drop-down adds its entries, which
+    /// its choice list offers (another airport's runways under the same first one shown are a change).</summary>
+    private static string Line(Bbs757EfbItem i)
+    {
+        var sb = new StringBuilder().Append(i.Kind).Append('|').Append(i.Key).Append('|').Append(i.Text).Append('|')
             .Append(i.Label).Append('|').Append(i.Level).Append('|').Append(i.Value).Append('|').Append(i.On).Append('|').Append(i.Selected)
             .Append('|').Append(i.Slider is { KnobRead: true } s
-                ? Math.Round(s.PercentOf(s.KnobX)).ToString(System.Globalization.CultureInfo.InvariantCulture) : "")
-            .Append('\n').ToString();
+                ? Math.Round(s.PercentOf(s.KnobX)).ToString(System.Globalization.CultureInfo.InvariantCulture) : "");
+        if (i.Entries is { } entries) sb.Append("|entries|").Append(string.Join('\u001f', entries));
+        return sb.Append('\n').ToString();
+    }
 
     // ------------------------------------------------------------------ finding a pressed control again
 

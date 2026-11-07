@@ -4,9 +4,9 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The only way a tablet tree reaches a fixture file: the SimBrief ID, the Hoppie logon code, the SayIntentions
-/// ACARS key (saved, and in the AIRAC page's text boxes), the flight plan data (the Operating FP's whole text among it) and
-/// PERF calc's text boxes are replaced by made-up values. Works by node NAME only (and a node's kind, never its text), on
-/// every node, a drop-down's rows included.
+/// ACARS key (saved, and in the AIRAC page's text boxes, by their exact names), the flight plan data (the Operating FP's whole
+/// text among it) and PERF calc's text boxes are replaced by made-up values. Works by node NAME only (and a node's kind, never
+/// its text), on every node, a drop-down's rows included.
 /// </summary>
 internal static class Bbs757EfbTreeScrub
 {
@@ -78,14 +78,20 @@ internal static class Bbs757EfbTreeScrub
             OpenList = n.OpenList is { } list ? ScrubNode(list) : null,
         };
 
+    /// <summary>The nodes holding the Hoppie logon code or the SayIntentions ACARS key, saved and in the AIRAC page's text boxes, by their
+    /// exact names (B757-24): a name ending in <c>_textbox</c> alone is no credential (Settings > Livery options' VNAV takeoff help text,
+    /// <c>vnav_takeoff_help_textbox</c>, which plan 20's suffix rule made up).</summary>
+    private static readonly HashSet<string> CodeNodes = new(StringComparer.Ordinal)
+    {
+        "hoppie_logon_code_value_label", "sayintentions_acars_key_value_label", "hoppie_logon_code_textbox", "sayintentions_acars_key_textbox",
+    };
+
     private static string ScrubText(string kind, string name, string text)
     {
         if (name == "simbrief_id_saved_label") return MadeUpSimbriefId;
         // From here an empty value stays empty, as an empty code does: "0" there would read as a value the tablet never showed.
         if (name == "simbrief_id_textbox") return text.Length == 0 ? text : MadeUpSimbriefId;
-        if (name == "hoppie_logon_code_value_label" || name == "sayintentions_acars_key_value_label"
-            || name.EndsWith("_textbox", StringComparison.Ordinal))
-            return text.Length == 0 || text == EmptyCode ? text : MadeUpCode;
+        if (CodeNodes.Contains(name)) return text.Length == 0 || text == EmptyCode ? text : MadeUpCode;
         if (IsFlightPlanValue(name)) return text.Length == 0 ? text : MadeUpFlight(name);
         if (MadeUpPerfCalcBoxes.TryGetValue(name, out string? box)) return text.Length == 0 ? text : box;
         if (kind == "textbox" && name.StartsWith("planning_perf_calc_", StringComparison.Ordinal)) return text.Length == 0 ? text : Zero;

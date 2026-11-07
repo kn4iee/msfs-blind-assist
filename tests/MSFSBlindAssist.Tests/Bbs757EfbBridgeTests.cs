@@ -1250,6 +1250,30 @@ public class Bbs757EfbBridgeTests
         Assert.DoesNotContain(Bbs757EfbPress.UnreachableText, Texts(h.Pushes[^1]));   // no tap was tried
     }
 
+    // ---- drop-downs and text boxes (plan 21) ----------------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_set_on_a_drop_down_or_a_text_box_taps_nothing()
+    {
+        // The window shows a drop-down as a choice list and a text box as an edit box; choosing is plan 21 Task 7's and typing plan 22's
+        // (B757-23), so a set the window sends for either taps nothing and says nothing: a tap tried would end "cannot be reached".
+        var runway = new Bbs757EfbItem(Bbs757EfbKind.Choice, "Runway", new Rectangle(519, 156, 150, 34), new Point(594, 173), true,
+            "planning_perf_calc_runway_dropdown", Value: "RW07L", Entries: new[] { "RW07L", "RW26" });
+        var airport = new Bbs757EfbItem(Bbs757EfbKind.Field, "Airport", new Rectangle(289, 156, 150, 34), new Point(364, 173), true,
+            "planning_perf_calc_airport_input", Value: "KSEA", TextBox: true);
+        var page = PageOf("NAVIGATION", "PERF CALC", runway, airport);
+        using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(page, null) };
+        h.Bridge.TakeRead(page);
+        var push = h.Pushes[^1];
+        int pushes = h.Pushes.Count;
+
+        foreach (var (text, value) in new[] { ("Runway", "RW26"), ("Airport", "KPDX") })
+            await h.Bridge.HandleAsync("set_element_value",
+                new Dictionary<string, string> { ["index"] = push[$"items.{IndexOf(push, text)}.aidx"], ["value"] = value }, CancellationToken.None);
+
+        Assert.Equal(pushes, h.Pushes.Count);
+    }
+
     // ---- scrolling into view --------------------------------------------------------------------------------------------
 
     /// <summary>A scrolled page: rows at content positions inside a viewport of 250,82 1147x966, drawn at content less the offset;
