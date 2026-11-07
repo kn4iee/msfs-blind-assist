@@ -141,13 +141,42 @@
 
 ## Execution record
 
-- **Status:** claimed
+- **Status:** done (2026-11-07): landed on `kn4iee/B757` at the owner's word, together with plan 20; the owner's in-sim checks passed, and the three follow-ups he asked for at them
 - **Claimed by:** Robin Kipp (robin24), 2026-11-07
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
-- **Started:** 2026-11-07, stacked on plan 20's branch `B757-p20-efb-page-grammar` (not yet landed; the owner's ear checks for both plans run together)
-- **Landed:**
-- **Tests at landing:**
+- **Started:** 2026-11-07, stacked on plan 20's branch `B757-p20-efb-page-grammar` (not yet landed; the owner's ear checks for both plans run together); claim 4e60754cc, merged into the branch at 09d53a65d
+- **Landed:** 2026-11-07, as a fast-forward of `B757` 4e60754cc, plan 20 under it; the last code commit `fix(b757): the status bar offers START BOARDING when BlueBird shows it` (5989c117d), the evidence after it (461d79edf) and the record in the commit that carries this line; `git log --grep "^Plan: 21"` lists the plan's commits
+- **Tests at landing:** 2026-11-07, on 461d79edf (only the two records after it): full suite 21,428 passed, 0 failed (21,220 at plan 20's end); the private toolkit 481 passed (17722a87)
 - **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+  - 0 done: the claim (4e60754cc), pushed before any work.
+  - 1 done: read-only measuring by an opus agent, the aircraft-changing parts by the controller with the owner's go-ahead (each undone); evidence `docs/b757/evidence/efb-memory-classes.md` (f238f3c36).
+  - 2 and 3 done: the layout record and file (9273087a6), the recipe (private 8a950b51), reviewed.
+  - 4 to 7 done, each reviewed: 4 the walk (dff740c1e, 4f280e32c, c152157f6), 5 the model, after the controller's live recapture of every page (b6cbdada7, f37841b32), 6 the status bar, notifications and questions (bb575aa2f, a9d3d6e8c, cd4cd7343, two fix rounds), 7 choosing from a drop-down, with Task 8's rules folded in (353ed1349, dbd6e8dd6, e28087024, 28d87041d).
+  - The whole-branch review (opus): 3 Important, minors; its fix wave (9b6418511, 1d0247df2, bce1ee853, 5dd890b04, cdb5a5dbf, 7801e1fbb; private f9a6c922, 3c6dca7d), B757-28 (5a7f1dd4f), a second round (1e660a53c), verdict Ready; the live pop-up capture 14c (9c31e533b).
+  - 9 done: the live checks; deployed to `C:\MSFSBA-B757` as 9c31e533b, then 57a182bf4 and 5989c117d after the follow-ups below, each with its regenerated layout in `%APPDATA%\MSFSBlindAssist\layouts\bbs757\` (v4, v5, v6: one file name, GeneratorVersion 2).
+  - Follow-ups from the in-sim checks, each at the owner's request: an opened door read "Opened" alone (467a8e0de); the departure countdown in the status bar (1a4c3d7bf, 3572cafc6, 57a182bf4; private afd4e8ed); START BOARDING in the status bar (d0af8847a, 5989c117d, 461d79edf; private 17722a87).
+- **Waiting on the owner:** Task 9 step 3, publishing the layout and pushing the private `feature/b757-displays` (at its head 17722a87, local), at his word.
+- **In-sim results:** 2026-11-07, EDDF, the owner by ear; every check passed:
+  - 1: Navigation, Operating FP read line by line with the arrow keys ("Read well").
+  - 2: a question: the defuel question did not come (BlueBird hides the Fuel page's IMPORT FROM SIMBRIEF during boarding); a live units question did (an OFP in KG with the aircraft in Imperial): heard, YES and NO, the owner's YES took.
+  - 3: PERF calc's Runway choice list: another runway and back, each chosen once after the arrows settled, silent ("Worked, silent").
+  - A door pressed from the window (AFT cargo): BlueBird's notification spoken, which the owner is fine with; the button then read "Opened" without its name, fixed in 467a8e0de and heard right after the redeploy.
+  - The departure countdown read after the time line ("DEP 00:16", counting up from the scheduled departure).
+  - START BOARDING (automatic boarding off, a reload, a fresh OFP): offered in the status bar and the press started boarding ("Worked"); read live while it ran: "Boarding… 12 min" (662 s).
 - **Changed from the plan:**
+  - **Stacked on plan 20**, which had not landed (the plan's Task 0 wanted it landed); both landed in one push.
+  - **Overtaken by plan 20:** the slider knob (`SliderKnob`) was measured and added there.
+  - **List boxes dropped:** none is reachable in this build (only FM TUNING, outside the app map).
+  - **Rules renumbered:** the drop-down rule is B757-27 (B757-25 and B757-26 were plan 20's); B757-28 added (a set acts once it settles, 300 ms; a click is a barrier).
+  - **An open list never scrolls** (drag, scrollbar and wheel all measured): no drag inside a list; a row is tapped in its shown strip of at least `MinShownPx`, else not chosen. PERF calc's Surface: Wet is unreachable (BlueBird).
+  - **A question is up only while BBOS's byte +0x1d8 is 1:** the dialog app keeps a closed dialog's page and visible bytes for hours (a defuel question answered at 19:36Z still read "front").
+  - **Notifications:** BBOS's vector at BBOS + 0x9334 (heap, not static); the top bar's notification pop-up and list are the overlay's own fields, and a press under them is held back (a precision check, B757-19).
+  - **The status bar** was extended past the plan at the owner's request: the countdown (`OverlayFlightTimeText`) and the boarding box (`OverlayBoardingRect` and BBOS's loading record, decoded from BBS752.wasm's top bar draw: evidence "The boarding box").
+  - **Questions** were built on the live fuel input dialog and the stale defuel dialog's layout (an import would change the fuel), then proved on the live units question.
+- **Open at landing (later work, none blocking):**
+  - A notification list opened with the mouse holds back presses under it; the window cannot close it (closing it by its arrow is a later fix).
+  - The boarding box: running and paused loadings are text, so the window cannot pause or resume a boarding (plan 18's grammar); START DEBOARDING is named from BlueBird's flown byte alone, so after a flight with no completed boarding and BlueBird's deboarding checks failing it would say "Start deboarding" where the tablet says START BOARDING; the paused and done states are read from the code only.
+  - Wording the owner may adjust: Systems' page menu reads "Select" (its face matches no entry); text boxes read as lines until plan 22.
+  - The shared WebView2 shell keeps a failed choice on screen (the failure is spoken).
+  - GeneratorVersion stays 2 for the 757 until its layout is first published.
+- **Rulings made while working:** in the SDD ledger (git-ignored, `.superpowers/sdd/21-efb-memory-classes/progress.md`) and the commit messages; the owner's: "Yes, each undone" for the aircraft-changing measurements, "Countdown first", the notification on a door press is fine as it is.
