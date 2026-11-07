@@ -129,17 +129,19 @@ internal static class Bbs757EfbTreeJson
     /// <summary>The trees with the drop-down named <paramref name="name"/> open as the memory walk reads an open list
     /// (<see cref="Bbs757EfbMemory"/>): its list a scrollbox at the face's x and width from <paramref name="top"/>, <paramref name="height"/>
     /// tall and scrolled by <paramref name="scroll"/>, and one row per entry, 38 px apart from <paramref name="top"/> (as measured on the
-    /// runway list, 2026-11-07), drawn <paramref name="scroll"/> higher. Stands in for a capture of a list that scrolls (none was made: no
-    /// drag was made in an open list) or of a drop-down no capture shows open.</summary>
+    /// runway list, 2026-11-07), drawn <paramref name="scroll"/> higher, each <paramref name="rowWidth"/> wide (the face's width when not
+    /// given; the Surface list's rows measured 130 in its 150 px box), or, with <paramref name="rowsAt"/>, every row still where a closed list
+    /// leaves it (50x38, measured at [0,0]). Stands in for a capture of a drop-down no capture shows open.</summary>
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithOpenList(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, float top, float height,
-        float scroll = 0f) =>
+        float scroll = 0f, float? rowWidth = null, System.Drawing.PointF? rowsAt = null) =>
         Change(apps, name, n => n with
         {
             Open = true,
             OpenList = new Bbs757EfbMemory.Node("scrollbox", "item_scrollbox", "", n.X, top, n.W, height, 0, Array.Empty<Bbs757EfbMemory.Node>(),
                 Scroll: scroll),
             Rows = (n.Entries ?? Array.Empty<string>()).Select((entry, i) => new Bbs757EfbMemory.Node("button", "item_btn_" + i.ToString(CultureInfo.InvariantCulture),
-                entry, n.X, top + 38 * i - scroll, n.W, 38, 0, Array.Empty<Bbs757EfbMemory.Node>())).ToList(),
+                entry, rowsAt?.X ?? n.X, rowsAt?.Y ?? top + 38 * i - scroll, rowsAt is null ? rowWidth ?? n.W : 50, 38, 0,
+                Array.Empty<Bbs757EfbMemory.Node>())).ToList(),
         });
 
     /// <summary>The trees as the memory walk reads BlueBird's selected state: each button named in <paramref name="selected"/> the

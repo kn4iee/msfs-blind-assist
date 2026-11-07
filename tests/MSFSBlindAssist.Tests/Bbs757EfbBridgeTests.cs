@@ -75,6 +75,8 @@ public class Bbs757EfbBridgeTests
         public int? Cycle { get; set; }
         public Action<Point>? OnTap { get; set; }
         public Action<int, int, int>? OnDrag { get; set; }
+        /// <summary>Runs at each memory read, before the page is returned: the tablet changing between two reads with no tap.</summary>
+        public Action? OnRead { get; set; }
         public bool DragReachable { get; set; } = true;
         public List<(int X, int Y0, int Y1)> Drags { get; } = new();
         public Dictionary<string, Bbs757Value> File { get; } = new(StringComparer.Ordinal);
@@ -98,7 +100,7 @@ public class Bbs757EfbBridgeTests
         public Bbs757EfbPressRunner Runner() => new(new Bbs757EfbPressIo
         {
             ReadInstalledCycle = () => { Events.Add("cycle"); return Cycle; },
-            Read = _ => { Events.Add("read"); return Task.FromResult<Bbs757EfbScreenModel?>(Page); },
+            Read = _ => { Events.Add("read"); OnRead?.Invoke(); return Task.FromResult<Bbs757EfbScreenModel?>(Page); },
             Tap = (p, _) =>
             {
                 Events.Add($"tap {p.X},{p.Y}");
@@ -1381,67 +1383,60 @@ public class Bbs757EfbBridgeTests
         Assert.Empty(tablet.Alerts);
     }
 
-    /// <summary>PERF calc with the runway list open, four of its six rows shown (152 px from 189) and scrolled by <see cref="Offset"/>; a
-    /// drag in it moves the offset by y0 - y1, kept between 0 and the six rows less the four shown (76), as a scrollbox's does (about 1:1,
-    /// B757-26); <see cref="Inert"/>, a drag moves nothing.</summary>
-    private sealed class ScrolledList
+    private const string SurfaceDropDown = "planning_perf_calc_surface_dropdown";
+    private static readonly string[] Surfaces = { "Dry", "Frost", "Ice", "Slush", "Snow", "Wet" };
+
+    /// <summary>PERF calc with the Surface Condition list open as measured live (2026-11-07, the coordinator's "Task 7 live"): its list
+    /// box [977.9,357.2 150x180] showing four and a half of its six rows, [977.9, 357.2 + 38 i, 130x38]; Snow's drawn 509.2-547.2, of
+    /// which 28 px show (to the box's bottom, 537.2), and Wet's 547.2-585.2, none.</summary>
+    private static Bbs757EfbScreenModel SurfaceOpen() => Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithOpenList(
+        Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"), SurfaceDropDown, 357.2f, 180, rowWidth: 130))!;
+
+    private static Bbs757EfbScreenModel SurfaceShowing(string face) =>
+        Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.AsDropDown(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"), SurfaceDropDown, face, Surfaces))!;
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_drop_down_entry_out_of_view_is_not_chosen_and_a_strip_of_it_is_tapped(string culture)
     {
-        public const int ShownPx = 152, MaxOffset = 6 * 38 - ShownPx;
-        public static readonly Rectangle View = new(519, 189, 150, ShownPx);
+        // Measured live on the Surface list (2026-11-07): an open list scrolls by no input (an eased drag in it, a drag on its scrollbar
+        // strip and a wheel turn all left its content offset at 0), and a tap on a row below its box closed it without choosing. So nothing
+        // is ever dragged in a list. Snow's 28 px strip took a tap (the face then read Snow): tapped in the middle of the strip that shows.
+        var snow = new FakeTablet(SurfaceOpen());
+        snow.OnTap = _ => snow.Show(SurfaceShowing("Snow"));
 
-        public ScrolledList(double offset, bool inert = false)
-        {
-            Offset = offset;
-            Tablet = new FakeTablet(PageAt());
-            if (!inert)
-                Tablet.OnDrag = (_, y0, y1) =>
-                {
-                    Offset = Math.Clamp(Offset + (y0 - y1), 0, MaxOffset);
-                    Tablet.Show(PageAt());
-                };
-        }
+        Assert.True(await TestCulture.Run(culture, () => snow.Runner().ChooseAsync(snow.Press(Named(snow.Page, SurfaceDropDown)), "Snow", CancellationToken.None)));
 
-        public double Offset { get; private set; }
-        public FakeTablet Tablet { get; }
+        Assert.Equal(new[] { new Point(1042, 523) }, snow.Taps);   // 509-537 shows: its middle; x the 130 px row's middle
+        Assert.Empty(snow.Drags);
+        Assert.Empty(snow.Alerts);
 
-        public Bbs757EfbScreenModel PageAt() => Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithOpenList(
-            Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"), RunwayDropDown, 189, ShownPx, (float)Offset))!;
+        // Wet shows none of itself: not chosen at once, nothing tapped, nothing dragged, the list left open.
+        var wet = new FakeTablet(SurfaceOpen());
+        Assert.False(await TestCulture.Run(culture, () => wet.Runner().ChooseAsync(wet.Press(Named(wet.Page, SurfaceDropDown)), "Wet", CancellationToken.None)));
+        Assert.Empty(wet.Taps);
+        Assert.Empty(wet.Drags);
+        Assert.Equal(new[] { "Surface Condition could not be set to Wet." }, wet.Alerts);
     }
 
     [Fact]
-    public async Task A_drop_down_entry_out_of_view_is_dragged_to_or_not_chosen()
+    public async Task A_row_is_tapped_only_once_the_open_list_has_laid_it_out()
     {
-        // RW26 is the sixth row, under the four the list shows (341-379, the list's bottom 341): one drag inside the list, at its x
-        // middle and a row in from its edges, brings it whole into view (303-341), and it is tapped there.
-        var s = new ScrolledList(0);
-        s.Tablet.OnTap = _ => s.Tablet.Show(PerfCalc(face: "RW26"));
+        // Closed, BlueBird leaves a list's rows at [0,0 50x38] (measured): a read that shows the list open before its rows are laid out is
+        // waited past, so the row is tapped where the next read draws it, not judged from where it lay closed.
+        var closed = PerfCalc();
+        var unlaid = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithOpenList(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"),
+            RunwayDropDown, 189, 228, rowsAt: new System.Drawing.PointF(0, 0)))!;
+        var tablet = new FakeTablet(closed);
+        int unlaidReads = 0;
+        tablet.OnRead = () => { if (ReferenceEquals(tablet.Page, unlaid) && ++unlaidReads > 1) tablet.Show(PerfCalc(open: true)); };
+        tablet.OnTap = _ => tablet.Show(tablet.Taps.Count == 1 ? unlaid : PerfCalc(face: "RW26"));
 
-        Assert.True(await s.Tablet.Runner().ChooseAsync(s.Tablet.Press(Named(s.PageAt(), RunwayDropDown)), "RW26", CancellationToken.None));
+        Assert.True(await tablet.Runner().ChooseAsync(tablet.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None));
 
-        var drag = Assert.Single(s.Tablet.Drags);
-        Assert.Equal((594, 303, 227), drag);   // the content moves up: 76 px, the list's height less two rows
-        Assert.Equal(new[] { new Point(594, 322) }, s.Tablet.Taps);
-        Assert.Empty(s.Tablet.Alerts);
-        Assert.True(s.Tablet.Flow.FindIndex(e => e.StartsWith("drag")) < s.Tablet.Flow.FindIndex(e => e.StartsWith("tap")));
-
-        // A list that does not move: the drag leaves the row where it was, none of it shows, nothing is tapped and the list stays open.
-        var stuck = new ScrolledList(0, inert: true);
-        Assert.False(await stuck.Tablet.Runner().ChooseAsync(stuck.Tablet.Press(Named(stuck.PageAt(), RunwayDropDown)), "RW26", CancellationToken.None));
-        Assert.Single(stuck.Tablet.Drags);
-        Assert.Empty(stuck.Tablet.Taps);
-        Assert.Equal(new[] { "Runway could not be set to RW26." }, stuck.Tablet.Alerts);
-
-        // One that does not move with 20 px of the row shown (321-341): tapped in that strip, as a page control is (MinShownPx).
-        var strip = new ScrolledList(58, inert: true);
-        strip.Tablet.OnTap = _ => strip.Tablet.Show(PerfCalc(face: "RW26"));
-        Assert.True(await strip.Tablet.Runner().ChooseAsync(strip.Tablet.Press(Named(strip.PageAt(), RunwayDropDown)), "RW26", CancellationToken.None));
-        Assert.Equal(new[] { new Point(594, 331) }, strip.Tablet.Taps);
-        Assert.All(s.Tablet.Drags.Concat(stuck.Tablet.Drags).Concat(strip.Tablet.Drags), d =>
-        {
-            Assert.Equal(594, d.X);
-            Assert.InRange(d.Y0, ScrolledList.View.Top, ScrolledList.View.Bottom);
-            Assert.InRange(d.Y1, ScrolledList.View.Top, ScrolledList.View.Bottom);
-        });
+        Assert.Equal(new[] { Named(closed, RunwayDropDown).Hit, Rw26Row }, tablet.Taps);
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Alerts);
     }
 
     [Fact]
@@ -1512,10 +1507,11 @@ public class Bbs757EfbBridgeTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
-    public async Task A_prompt_drop_down_is_judged_by_its_page(string culture)
+    public async Task A_prompt_drop_down_is_judged_by_its_list_closing(string culture)
     {
-        // Systems' page menu always shows SELECT, none of its entries (30-systems): choosing 28 - FUEL changes the page, not the face, so
-        // the choice is judged by the list closing and the page changing. Its list opens below its face (82, four rows: 152 px).
+        // Systems' page menu always shows SELECT, none of its entries (30-systems): choosing an entry changes the page, not the face, so the
+        // choice is judged by its list closing after the row's tap (the coordinator's ruling of the fix round). Its list opens below its
+        // face (82, four rows: 152 px).
         var apps = Bbs757EfbTreeJson.Load("30-systems");
         var systems = Bbs757EfbModelReader.Read(apps)!;
         var menu = Named(systems, "pb_menu1");
@@ -1529,11 +1525,34 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { new Point(1247, 57), new Point(1247, 139) }, tablet.Taps);   // the face, then the second row (120-158)
         Assert.Empty(tablet.Alerts);
 
-        // The list closed over a page that did not change: not chosen.
+        // The system shown already (ELECTRICAL) chosen: the list closes over the page as it was. That took: nothing said.
         var same = new FakeTablet(systems);
         same.OnTap = _ => same.Show(same.Taps.Count == 1 ? opened : systems);
-        Assert.False(await TestCulture.Run(culture, () => same.Runner().ChooseAsync(same.Press(menu), "28 - FUEL", CancellationToken.None)));
-        Assert.Equal(new[] { "Select could not be set to 28 - FUEL." }, same.Alerts);
+        Assert.True(await TestCulture.Run(culture, () => same.Runner().ChooseAsync(same.Press(menu), "24 - ELECTRICAL", CancellationToken.None)));
+        Assert.Equal(new[] { new Point(1247, 57), new Point(1247, 101) }, same.Taps);
+        Assert.Empty(same.Alerts);
+
+        // The row tapped and the list left open: not chosen.
+        var open = new FakeTablet(opened);
+        Assert.False(await TestCulture.Run(culture, () => open.Runner().ChooseAsync(open.Press(Named(opened, "pb_menu1")), "28 - FUEL", CancellationToken.None)));
+        Assert.Equal(new[] { new Point(1247, 139) }, open.Taps);
+        Assert.Equal(new[] { "Select could not be set to 28 - FUEL." }, open.Alerts);
+    }
+
+    [Fact]
+    public async Task A_question_raised_after_the_row_tap_holds_back_any_further_step()
+    {
+        // The review's Minor 4: a question that comes up after the row's tap ends the choice with nothing more tapped and nothing said
+        // (B757-18: the read that found it said it), and no "could not be set" over it.
+        var closed = PerfCalc();
+        var asked = new Bbs757EfbQuestion("Insert desired fuel level (0-2176 Gal)", new[] { Tile("Cancel", "q:CANCEL", new Rectangle(608, 589, 180, 60)) });
+        var tablet = new FakeTablet(closed);
+        tablet.OnTap = _ => tablet.Show(tablet.Taps.Count == 1 ? PerfCalc(open: true) : PerfCalc(open: true) with { Question = asked });
+
+        Assert.False(await tablet.Runner().ChooseAsync(tablet.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None));
+
+        Assert.Equal(new[] { Named(closed, RunwayDropDown).Hit, Rw26Row }, tablet.Taps);
+        Assert.Empty(tablet.Alerts);
     }
 
     [Fact]
@@ -1570,6 +1589,52 @@ public class Bbs757EfbBridgeTests
 
         Assert.Empty(tablet.Taps);
         Assert.Equal(new[] { "Flap Setting is under the open Runway list, not pressed." }, tablet.Alerts);
+    }
+
+    /// <summary>A drop-down whose list is open over <paramref name="list"/>, for a page that needs one where no capture has it.</summary>
+    private static Bbs757EfbItem OpenDropDown(Rectangle list) =>
+        new(Bbs757EfbKind.Choice, "Runway", new Rectangle(list.X, list.Y - 34, list.Width, 34), new Point(list.X + list.Width / 2, list.Y - 17), true,
+            RunwayDropDown, Value: "RW07L", Entries: new[] { "RW07L" }, Open: true,
+            List: new Bbs757EfbOpenList(list, new[] { new Bbs757EfbListRow("RW07L", list with { Height = 38 }) }));
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task The_point_a_slider_is_tapped_at_is_checked_against_an_open_list(string culture)
+    {
+        // The review's Minor 2: a slider is tapped at its percent's place, not at its middle. A list open over its left end leaves the
+        // middle (500,515) clear, but 0 % is tapped at the track's start (300,515), under the list: nothing tapped.
+        var zoom = new Bbs757EfbItem(Bbs757EfbKind.Slider, "Zoom", new Rectangle(300, 500, 400, 30), new Point(500, 515), true, "sld:ZOOM",
+            Slider: new Bbs757EfbSlider(300, 700, 500));
+        var page = PageOf("NAVIGATION", "PERF CALC", OpenDropDown(new Rectangle(250, 450, 100, 200)), zoom);
+        var tablet = new FakeTablet(page);
+
+        await TestCulture.Run(culture, () => tablet.Runner().SliderAsync(tablet.Press(zoom), "0", CancellationToken.None));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Zoom is under the open Runway list, not pressed." }, tablet.Alerts);
+
+        // At 50 % the tap is at its middle, clear of the list: tapped.
+        var clear = new FakeTablet(page);
+        await TestCulture.Run(culture, () => clear.Runner().SliderAsync(clear.Press(zoom), "50", CancellationToken.None));
+        Assert.Equal(new[] { new Point(500, 515) }, clear.Taps);
+    }
+
+    [Fact]
+    public async Task A_page_drag_that_would_press_on_an_open_list_is_not_made()
+    {
+        // The review's Minor 2: a page drag presses at the viewport's x + 250 (500); a list open there would take the press. Dirty panel
+        // states (content 1202) is dragged from y 899: with a list open over (500, 899), nothing is dragged and nothing tapped.
+        var row = new Bbs757EfbItem(Bbs757EfbKind.Button, "Dirty panel states", new Rectangle(273, 1202, 600, 60), new Point(573, 1232), true, "btn:DIRTY");
+        var page = PageOf("SETTINGS", "AIRCRAFT", row, OpenDropDown(new Rectangle(450, 850, 100, 100)))
+            with { Scrollable = true, Viewport = new Rectangle(250, 82, 1147, 966) };
+        Assert.Equal((500, 899, 232), Bbs757EfbPress.DragFor(page, row)!.Value);
+        var tablet = new FakeTablet(page);
+
+        await tablet.Runner().ClickAsync(tablet.Press(row), CancellationToken.None);
+
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Dirty panel states is under the open Runway list, not pressed." }, tablet.Alerts);
     }
 
     // ---- scrolling into view --------------------------------------------------------------------------------------------

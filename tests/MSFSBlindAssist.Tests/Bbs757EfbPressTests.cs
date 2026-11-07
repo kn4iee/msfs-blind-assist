@@ -163,25 +163,16 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
-    public void A_drag_in_an_open_list_stays_inside_it_and_moves_the_row_toward_its_middle()
+    public void The_surface_lists_rows_are_tapped_in_the_strip_that_shows_and_none_past_its_box()
     {
-        // A list of four rows shown (152 px) holding six: a drag at the list's x middle, at most the list's height less two rows (76 px)
-        // in one drag, every point of it at least a row inside the list.
-        var view = RunwayList with { Height = 152 };   // middle 265
+        // Measured live 2026-11-07 (the coordinator's "Task 7 live"): the Surface list box [977.9,357.2 150x180] shows four and a half of
+        // its six 130 px rows. Snow's 28 px strip (509.2-537.2) took a tap and chose Snow; a tap on Wet's row below the box closed the list
+        // without choosing (rows past the box are clipped). An open list scrolls by no input, so no row is ever dragged into view.
+        var view = new Rectangle(977, 357, 150, 180);   // as the reader boxes it
 
-        var down = Bbs757EfbPress.ListDragFor(view, RunwayRow(5))!.Value;     // the row's middle is 398: 133 below
-        Assert.Equal(594, down.X);
-        Assert.Equal(76, down.Y0 - down.Y1);                                  // the content moves up, capped at 76
-        var near = Bbs757EfbPress.ListDragFor(view, RunwayRow(4, scroll: 20))!.Value;   // middle 340: 75 below, under the cap
-        Assert.Equal(75, near.Y0 - near.Y1);
-        var up = Bbs757EfbPress.ListDragFor(view, RunwayRow(0, scroll: 76))!.Value;     // middle 132: 133 above
-        Assert.Equal(-76, up.Y0 - up.Y1);                                     // the content moves down
-        foreach (var d in new[] { down, near, up })
-        {
-            Assert.InRange(d.Y0, view.Top + 38, view.Bottom - 38);
-            Assert.InRange(d.Y1, view.Top + 38, view.Bottom - 38);
-        }
-        Assert.Null(Bbs757EfbPress.ListDragFor(view, RunwayRow(2)));          // it shows whole: no drag
+        Assert.Equal(new Point(1042, 376), Bbs757EfbPress.RowTapPoint(view, new Rectangle(977, 357, 130, 38)));   // Dry, whole
+        Assert.Equal(new Point(1042, 523), Bbs757EfbPress.RowTapPoint(view, new Rectangle(977, 509, 130, 38)));   // Snow, 509-537 shows
+        Assert.Null(Bbs757EfbPress.RowTapPoint(view, new Rectangle(977, 547, 130, 38)));                          // Wet, none shows
     }
 
     [Fact]

@@ -9,8 +9,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// from the reads lives here, where it is tested without a tablet: finding the control the pilot pressed again in a fresh read
 /// (<see cref="Relocate"/>), whether a switch still needs its tap (<see cref="NeedsTap"/>), which new word a switch of two choices
 /// shows (<see cref="NewChoiceWord"/>), where to tap a slider with choices and where to tap next (<see cref="ChoiceX"/>,
-/// <see cref="NextChoiceX"/>), where an open drop-down's row is tapped and how its list is dragged (<see cref="RowTapPoint"/>,
-/// <see cref="ListDragFor"/>), whether a press changed the page (<see cref="PageUnchanged"/>), what a button press says
+/// <see cref="NextChoiceX"/>), where an open drop-down's row is tapped and whether an open list covers a press (<see cref="RowTapPoint"/>,
+/// <see cref="CoveringList"/>), whether a press changed the page (<see cref="PageUnchanged"/>), what a button press says
 /// (<see cref="ButtonOutcome"/>: the pressed control's new words, or that nothing changed), and the words said when a press did
 /// not go through or a switch of two choices went to its other choice. Nothing here
 /// refuses a press (the owner's ruling of 2026-10-29): a decision says where a control is now, whether its tap is still wanted,
@@ -232,9 +232,14 @@ public static class Bbs757EfbPress
     /// <summary>Whether all of <paramref name="row"/> shows in <paramref name="view"/>, top and bottom.</summary>
     public static bool RowShowsWhole(Rectangle view, Rectangle row) => row.Top >= view.Top && row.Bottom <= view.Bottom;
 
-    /// <summary>Where to tap an open list's row: its middle when it shows whole in <paramref name="view"/>, else the middle of the strip of
-    /// it that shows when at least <see cref="MinShownPx"/> does (as <see cref="TapPoint"/> taps a page control); null when less shows. x is
-    /// the row's middle.</summary>
+    /// <summary>
+    /// Where to tap an open list's row: its middle when it shows whole in <paramref name="view"/>, else the middle of the strip of it that
+    /// shows when at least <see cref="MinShownPx"/> does (as <see cref="TapPoint"/> taps a page control); null when less shows. x is the
+    /// row's middle. Measured live 2026-11-07 on PERF calc's Surface list: Snow's 28 px strip took a tap (the face then read Snow), and a tap
+    /// on Wet's row below the list's box closed the list without choosing, since the box clips the rows past it. An open list scrolls by no
+    /// input (a drag in it, a drag on its scrollbar strip and a wheel turn all left its content offset at 0), so a row that shows less than
+    /// <see cref="MinShownPx"/> cannot be chosen on the tablet at all (B757-27).
+    /// </summary>
     public static Point? RowTapPoint(Rectangle view, Rectangle row)
     {
         int top = Math.Max(row.Top, view.Top), bottom = Math.Min(row.Bottom, view.Bottom);
@@ -243,30 +248,20 @@ public static class Bbs757EfbPress
         return RowShowsWhole(view, row) ? new Point(x, row.Top + row.Height / 2) : new Point(x, top + (bottom - top) / 2);
     }
 
-    /// <summary>
-    /// One drag inside an open list that moves <paramref name="row"/> toward the middle of the list's <paramref name="view"/>: at the
-    /// list's x middle, from y0 to y1 so that y0 - y1 is how far the row's middle has to go (positive: it is below, the list's content moves
-    /// up), at most the list's height less two rows in one drag, so every point of the drag lies a row inside the list and none outside it
-    /// (BlueBird's scrollbox scrolls on a drag, B757-26; the agent eases it out, B757-25). Null when the row shows whole.
-    /// </summary>
-    public static (int X, int Y0, int Y1)? ListDragFor(Rectangle view, Rectangle row)
-    {
-        if (RowShowsWhole(view, row)) return null;
-        int mid = view.Top + view.Height / 2;
-        int delta = row.Top + row.Height / 2 - mid;
-        int distance = Math.Clamp(Math.Abs(delta), 1, Math.Max(1, view.Height - 2 * row.Height));
-        int start = mid - distance / 2;
-        int x = view.Left + view.Width / 2;
-        return delta > 0 ? (x, start + distance, start) : (x, start, start + distance);
-    }
+    /// <summary>Whether an open list's rows are laid out: at least one, each inside the list's x span. Closed, BlueBird leaves them at
+    /// [0,0 50x38] (measured), so a read that shows the list open before it laid them out has none to tap yet.</summary>
+    public static bool RowsLaidOut(Bbs757EfbOpenList list) =>
+        list.Rows.Count > 0 && list.Rows.All(r => r.Box.Left >= list.Viewport.Left && r.Box.Right <= list.Viewport.Right);
 
     /// <summary>
-    /// The drop-down whose open list covers <paramref name="at"/>, where <paramref name="item"/> of the page <paramref name="m"/> would be
-    /// tapped: BlueBird draws an open list over the page, so the tap would land on one of its rows and choose that entry (the runway list
-    /// of 25c covers the Flap Setting drop-down's face). Null when none does; a drop-down's own list never covers it.
+    /// The drop-down whose open list covers <paramref name="at"/>, a point of the page <paramref name="m"/> a press would put the mouse
+    /// down on: where <paramref name="item"/> is tapped (its tap point, a slider's choice or percent place), or, with no item, where a page
+    /// drag presses. BlueBird draws an open list over the page, so the press would land on one of its rows and choose that entry (the runway
+    /// list of 25c covers the Flap Setting drop-down's face). Null when none does, and for an item that is no page control (the side menu,
+    /// the top bar, a question's answers); a drop-down's own list never covers it.
     /// </summary>
-    public static Bbs757EfbItem? CoveringList(Bbs757EfbScreenModel m, Bbs757EfbItem item, Point at) =>
-        m.Items.Contains(item)
+    public static Bbs757EfbItem? CoveringList(Bbs757EfbScreenModel m, Bbs757EfbItem? item, Point at) =>
+        item == null || m.Items.Contains(item)
             ? m.Items.FirstOrDefault(i => !ReferenceEquals(i, item) && i.Kind == Bbs757EfbKind.Choice && ListViewOf(i) is { } view && view.Contains(at))
             : null;
 
