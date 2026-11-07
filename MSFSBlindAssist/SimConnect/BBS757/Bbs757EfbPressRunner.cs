@@ -1167,7 +1167,8 @@ public sealed class Bbs757EfbPressRunner
             if (await _io.Read(ct) is not { } next) return null;
             now = next;
         }
-        if (now.KeyboardState is not { Shown: true, Ready: true } k || ClosePoint(now, k.Keypad) is not { } close)
+        if (now.KeyboardState is not { Shown: true } k) return now;   // it went down meanwhile: nothing to put down
+        if (!k.Ready || ClosePoint(now, k.Keypad) is not { } close)
         {
             Log.Debug("BBS757", "EFB reader: BlueBird's keyboard over a press was not put down (not settled, or no close key read)");
             return now;
