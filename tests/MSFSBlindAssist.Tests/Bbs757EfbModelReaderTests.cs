@@ -750,6 +750,24 @@ public class Bbs757EfbModelReaderTests
     }
 
     [Fact]
+    public void An_opened_door_reads_opened_under_its_name()
+    {
+        // The owner's in-sim check of 2026-11-07: once the AFT cargo door had opened, its button read "OPENED" and the window said
+        // "Opened" alone: OPENED was no state word (as MOVING had been), so the button lost the label that names it.
+        var doors = Bbs757EfbTreeJson.Load("14-aircraft-cabin-doors");
+        var apps = Bbs757EfbTreeJson.WithText(doors, "btn_aft_cargo_door", "OPENED");
+
+        var model = Bbs757EfbModelReader.Read(apps)!;
+        string listing = Bbs757EfbListing.Of(Bbs757EfbElements.Build(model, null, Array.Empty<Bbs757EfbExtraElement>()));
+
+        Assert.Contains("button  FWD cargo: Closed\nbutton  AFT cargo: Opened\nbutton  Close all\n", listing);
+        Assert.DoesNotContain("AFT CARGO", listing);
+        var door = Assert.Single(model.Items, i => i.Name == "btn_aft_cargo_door");
+        Assert.Equal((Bbs757EfbKind.Button, "Opened", "AFT CARGO"), (door.Kind, door.Text, door.Label));
+        Assert.Equal(Bbs757EfbModelReader.Read(doors)!.Items.Single(i => i.Name == "btn_aft_cargo_door").Key, door.Key);
+    }
+
+    [Fact]
     public void A_button_two_labels_touch_keeps_its_own_words()
     {
         var items = ItemsOf(Btn("btn_gate_door", "CLOSED", 300, 200, 100, 40), Lbl("below", "ONE", 310, 240, 60), Lbl("beside", "TWO", 200, 205, 95));

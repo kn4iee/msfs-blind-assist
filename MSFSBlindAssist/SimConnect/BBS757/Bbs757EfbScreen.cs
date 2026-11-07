@@ -239,8 +239,9 @@ public static class Bbs757EfbScreen
     /// key strips them so a press that changes a tile's state keeps its key, and <see cref="Bbs757EfbPress.Relocate"/>
     /// leaves them out when it compares a tile's words with another's. "IN PLACE" is the chocks tile's other state (the picture's, joined to
     /// the tile's words by <see cref="Bbs757EfbPageRules.PictureState"/>). "MOVING" is a door button's state while the door moves
-    /// (measured 2026-11-07: Cabin &amp; doors' AFT cargo between CLOSED and OPEN), so the button keeps its key and its label.</summary>
-    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "CLOSED", "ATTACHED", "UNAVAIL", "IN PLACE", "MOVING" };
+    /// (measured 2026-11-07: Cabin &amp; doors' AFT cargo between CLOSED and OPENED), so the button keeps its key and its label; "OPENED"
+    /// is the door's state once open (the owner's in-sim check, 2026-11-07: without it the button read "Opened" alone).</summary>
+    internal static readonly string[] StateWords = { "OFF", "ON", "REMOVED", "CONNECTED", "OPEN", "OPENED", "CLOSED", "ATTACHED", "UNAVAIL", "IN PLACE", "MOVING" };
 
     /// <summary>The words that make a control's own words an action, not its name (plan 20, R5): such a control is named by a label
     /// (<see cref="Bbs757EfbItem.Label"/>), as one whose words are a state word is.</summary>
