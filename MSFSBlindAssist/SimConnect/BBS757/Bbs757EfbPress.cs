@@ -455,8 +455,46 @@ public static class Bbs757EfbPress
     /// <summary>A field whose tap did not bring BlueBird's keyboard up, settled, typing into it, in time: nothing was typed.</summary>
     public static string NoKeyboardText(string name) => name + ": the tablet's keyboard did not come up.";
 
-    /// <summary>A text with a character no key of the keyboard (or the keypad) carries: nothing was typed.</summary>
-    public static string NoKeyText(string name, char character) => name + ": the tablet's keyboard has no " + character.ToString() + ".";
+    /// <summary>A text with a character no key of the keyboard (or the keypad) carries: nothing was typed. The character is said as
+    /// <see cref="CharacterName"/> names it.</summary>
+    public static string NoKeyText(string name, char character) => name + ": the tablet's keyboard has no " + CharacterName(character) + ".";
+
+    /// <summary>
+    /// A character as the no-key alert says it (the final review's M3): a space, a tab, a no-break space and every ASCII symbol NVDA does
+    /// not speak at its default punctuation level ("some") in words, since the raw character would be heard as nothing ("has no  .", a
+    /// comma, an underscore); anything else as it is: a letter, a digit, and the symbols NVDA speaks at that level (% &amp; * + . / = @).
+    /// </summary>
+    private static string CharacterName(char c) => c switch
+    {
+        ' ' => "space",
+        '\t' => "tab",
+        ' ' => "no-break space",
+        '!' => "exclamation mark",
+        '"' => "quotation mark",
+        '#' => "number sign",
+        '$' => "dollar sign",
+        '\'' => "apostrophe",
+        '(' => "left parenthesis",
+        ')' => "right parenthesis",
+        ',' => "comma",
+        '-' => "hyphen",
+        ':' => "colon",
+        ';' => "semicolon",
+        '<' => "less-than sign",
+        '>' => "greater-than sign",
+        '?' => "question mark",
+        '[' => "left bracket",
+        '\\' => "backslash",
+        ']' => "right bracket",
+        '^' => "caret",
+        '_' => "underscore",
+        '`' => "backtick",
+        '{' => "left brace",
+        '|' => "vertical bar",
+        '}' => "right brace",
+        '~' => "tilde",
+        _ => c.ToString(),
+    };
 
     /// <summary>A field that reads the typed text (case aside: PERF calc's Airport box upper-cases it) once it was typed: the one
     /// confirmation of a typing (CORE-7: the screen reader said the pilot's keys in the window's edit box, never what the tablet took).</summary>

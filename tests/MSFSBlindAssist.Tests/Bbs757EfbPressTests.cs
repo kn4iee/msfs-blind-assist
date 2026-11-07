@@ -1826,4 +1826,57 @@ public class Bbs757EfbPressTests
             "Airport is empty.",
         }, texts);
     }
+
+    public static TheoryData<string, char, string> NamedCharacters
+    {
+        get
+        {
+            // The final review's M3: the alert gave the raw character, so a space read "has no  ." and, at NVDA's default punctuation
+            // level, a comma or an underscore was not spoken at all. A space and every symbol NVDA does not speak at that level are named;
+            // letters, digits and the symbols it does speak (% & * + . / = @) stay as they are.
+            var data = new TheoryData<string, char, string>();
+            foreach (var culture in new[] { "en-US", "de-DE", "sv-SE" })
+            {
+                data.Add(culture, ' ', "space");
+                data.Add(culture, ',', "comma");                    // the keypad's: a decimal comma typed into the TOD distance
+                data.Add(culture, '_', "underscore");
+                data.Add(culture, '\t', "tab");
+                data.Add(culture, ' ', "no-break space");
+                data.Add(culture, '<', "less-than sign");
+                data.Add(culture, '~', "tilde");
+                data.Add(culture, '\'', "apostrophe");
+                data.Add(culture, 'é', "é");
+                data.Add(culture, 'a', "a");
+                data.Add(culture, '/', "/");
+                data.Add(culture, '@', "@");
+            }
+            return data;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(NamedCharacters))]
+    public void A_character_no_key_carries_is_named_where_the_screen_reader_would_say_nothing(string culture, char character, string said)
+    {
+        Assert.Equal("Airport: the tablet's keyboard has no " + said + ".",
+            TestCulture.Run(culture, () => Bbs757EfbPress.NoKeyText("Airport", character)));
+    }
+
+    [Fact]
+    public void Every_ascii_symbol_is_named_or_one_the_screen_reader_says_at_its_default_level()
+    {
+        // NVDA's default punctuation level ("some") speaks % & * + . / = @ (its symbol dictionary); every other ASCII symbol is named in
+        // words, each with its own name.
+        var kept = "%&*+./=@";
+        var names = new Dictionary<string, char>();
+        for (char c = '!'; c <= '~'; c++)
+        {
+            if (char.IsLetterOrDigit(c)) continue;
+            string text = Bbs757EfbPress.NoKeyText("Airport", c);
+            string name = text["Airport: the tablet's keyboard has no ".Length..^1];
+            if (kept.Contains(c)) { Assert.Equal(c.ToString(), name); continue; }
+            Assert.True(name.Length > 1 && name.All(ch => char.IsLetter(ch) || ch is ' ' or '-'), $"'{c}' is said as '{name}'");
+            Assert.True(names.TryAdd(name, c), $"'{c}' and '{names.GetValueOrDefault(name)}' are both said as '{name}'");
+        }
+    }
 }
