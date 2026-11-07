@@ -149,6 +149,9 @@ exact.
   keypad closes and clears when the QWERTY keyboard next opens: read it only while +0x1ac is 1.
 - **The settle time varies:** three come-ups settled 1.095, 1.163 and 1.112 s after the tap; one took more than 1.94 s.
   Poll the ready byte with a timeout of a few seconds, never a fixed wait.
+- **The keypad sets the ready byte too:** on TOD pause the keypad came up with the keyboard app's +0x1ac, +0x1ad and +0x1ae
+  all 1 (no dialog), and in the fuel dialog the keypad's OK cleared +0x1ac and +0x1ad from 1. So a keypad box is typed only
+  once +0x1ad reads 1, as a QWERTY box is.
 - Side effects: the Charts page shows its first TAXI chart (EDDF101P) instead of the one shown before (entry 23; putting it
   back is a drop-down choice), and `chart_view_states` gained that chart's view; `display_brightness` follows the
   automatic brightness again. Everything else in `efb_settings.json` equals its copy from before, the credentials by hash.
