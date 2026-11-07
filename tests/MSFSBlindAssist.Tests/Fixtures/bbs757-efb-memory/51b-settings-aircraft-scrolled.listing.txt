@@ -1,0 +1,28 @@
+title: Settings, Aircraft
+checkbox not checked  Adaptive handling assist
+combo [Automatic] {Automatic|Manual}  Adaptive cockpit lighting
+checkbox not checked  TOD pause distance (NM)
+combo [Disabled] {Enabled|Disabled}  Automatic step climbs master option: (experimental)
+text  Automatic step climb status: OFF
+combo [Rudder] {Realistic|Rudder}  Nosewheel steering
+checkbox checked  Throttle lockout
+combo [Realistic] {Realistic|Fast}  Displays bootup speed
+checkbox checked  Sync barometers
+combo [Open] {Open|Closed}  Initial cockpit door
+combo [Realistic] {Realistic|Easy}  Parking brake mode
+combo [Full (7 min+)] {Instant|1 min|2 min|5 min|Full (7 min+)}  IRS alignment time
+combo [Instant] {Realistic|Standard|Quick|Instant}  Boarding & load rate
+checkbox checked  Automatic boarding
+checkbox checked  Automatic GPU/jetway
+checkbox not checked  Hoppie ACARS
+combo [Hoppie] {Hoppie|SayIntentions}  CPDLC network
+checkbox checked  Initial chocks in place
+checkbox not checked  Dirty panel states
+heading 2  Sections
+button  General
+button  Aircraft (current page)
+button  Livery options
+button  Callouts
+button  Cabin audio
+button  AIRAC data
+button  Home

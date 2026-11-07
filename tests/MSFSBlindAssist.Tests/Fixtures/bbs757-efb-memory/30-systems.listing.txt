@@ -1,7 +1,7 @@
 title: Systems
 heading 2  Electrical
 button  Elec zoom in
-slider 0  Elec zoom
+slider 11  Elec zoom
 button  Elec zoom out
 button  Elec zoom reset
 heading 2  Sections

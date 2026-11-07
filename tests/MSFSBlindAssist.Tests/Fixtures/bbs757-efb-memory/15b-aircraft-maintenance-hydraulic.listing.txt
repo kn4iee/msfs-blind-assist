@@ -4,9 +4,9 @@ button  Hydraulic (current)
 button  Oxygen
 button  Fire protect
 button  APU
-slider 0  Maintenance hyd res left
-slider 0  Maintenance hyd res center
-slider 0  Maintenance hyd res right
+slider 78  Maintenance hyd res left
+slider 77  Maintenance hyd res center
+slider 78  Maintenance hyd res right
 heading 2  Ram air turbine
 pre
     RAT stowed.

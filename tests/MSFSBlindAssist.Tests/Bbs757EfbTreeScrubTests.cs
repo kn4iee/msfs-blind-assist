@@ -126,18 +126,40 @@ public class Bbs757EfbTreeScrubTests
     }
 
     [Fact]
-    public void A_node_without_a_knob_writes_none_and_a_committed_tree_reads_none()
+    public void A_node_without_a_knob_writes_none_and_a_tree_without_knobs_reads_none()
     {
+        // The knob fields are optional, so a tree captured before the layout had the slider knob still loads (as one without knobs).
         string json = Bbs757EfbTreeJson.Write(App(N("a", "x")));
         Assert.DoesNotContain("knob", json, StringComparison.OrdinalIgnoreCase);
         Assert.Null(Bbs757EfbTreeJson.Read(json)[0].Controls[0].Knob);
 
-        var cargo = Bbs757EfbTreeJson.Load("12-aircraft-weight-balance").SelectMany(a => a.Controls).SelectMany(Flat)
-            .Single(n => n.Name == "wb_baggage_fwd_slider");
-        Assert.Null(cargo.Knob);
-        Assert.Equal(0f, cargo.KnobSpan);
+        const string slider = "[{\"key\": 3, \"class\": \"AIRCRAFT\", \"controls\": [{\"kind\": \"slider\", \"name\": \"wb_baggage_fwd_slider\", "
+            + "\"text\": \"\", \"x\": 1162.5, \"y\": 462, \"w\": 188, \"h\": 18, \"children\": []}]}]";
+        var read = Bbs757EfbTreeJson.Read(slider)[0].Controls[0];
+        Assert.Equal("slider", read.Kind);
+        Assert.Null(read.Knob);
+        Assert.Equal(0f, read.KnobSpan);
+    }
 
+    [Fact]
+    public void The_recaptured_weight_and_balance_tree_carries_its_knobs()
+    {
+        // Captured live 2026-11-07 with the slider knob in the layout: forward cargo at 59.8 %, its knob 12 px wide.
+        var apps = Bbs757EfbTreeJson.Load("12-aircraft-weight-balance");
+        var cargo = AllNodes(apps).Single(n => n.Name == "wb_baggage_fwd_slider");
+        Assert.Equal(0.598f, cargo.Knob!.Value, 3);
+        Assert.Equal(12f, cargo.KnobSpan);
+
+        // WithoutKnobs gives the same tree as a layout without the slider knob reads it.
+        var bare = AllNodes(Bbs757EfbTreeJson.WithoutKnobs(apps)).ToList();
+        Assert.All(bare, n => { Assert.Null(n.Knob); Assert.Equal(0f, n.KnobSpan); });
+        Assert.Equal(AllNodes(apps).Count(), bare.Count);
+    }
+
+    private static IEnumerable<Bbs757EfbMemory.Node> AllNodes(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
         static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
+        return apps.SelectMany(a => a.Controls).SelectMany(Flat);
     }
 
     [Fact]

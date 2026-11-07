@@ -10,8 +10,18 @@
     "controls": []
   },
   {
+    "key": 10,
+    "class": "CHECKLIST",
+    "controls": []
+  },
+  {
     "key": 12,
     "class": "SETTINGS",
+    "controls": []
+  },
+  {
+    "key": 9,
+    "class": "SYSTEMS",
     "controls": []
   },
   {
@@ -348,6 +358,8 @@
                         "y": 755,
                         "w": 200,
                         "h": 20,
+                        "knob": 0.34546322,
+                        "knobSpan": 12,
                         "children": []
                       },
                       {
@@ -358,6 +370,8 @@
                         "y": 755,
                         "w": 200,
                         "h": 20,
+                        "knob": 0.0017265157,
+                        "knobSpan": 12,
                         "children": []
                       },
                       {
@@ -368,6 +382,8 @@
                         "y": 755,
                         "w": 200,
                         "h": 20,
+                        "knob": 0.34950224,
+                        "knobSpan": 12,
                         "children": []
                       },
                       {
@@ -512,6 +528,8 @@
                         "y": 889,
                         "w": 200,
                         "h": 20,
+                        "knob": 0.1351721,
+                        "knobSpan": 12,
                         "children": []
                       },
                       {

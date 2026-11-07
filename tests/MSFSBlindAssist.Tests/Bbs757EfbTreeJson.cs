@@ -66,6 +66,15 @@ internal static class Bbs757EfbTreeJson
         return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
     }
 
+    /// <summary>The trees with no slider's knob: the memory walk of a layout without the slider knob, so a test pins the fallback a
+    /// slider with no knob read takes (its rectangle's track, a knob placed from its value, the page's judgment) on a real page.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithoutKnobs(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
+        static Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) =>
+            n with { Knob = null, KnobSpan = 0f, Children = n.Children.Select(Walk).ToList() };
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
     /// <summary>The trees with the control named <paramref name="name"/> showing <paramref name="text"/>: the tablet after a tap that
     /// changed one label.</summary>
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithText(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, string text)

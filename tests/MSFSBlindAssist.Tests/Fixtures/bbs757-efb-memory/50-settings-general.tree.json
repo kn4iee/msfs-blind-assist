@@ -212,7 +212,7 @@
                 "h": 966,
                 "children": [
                   {
-                    "kind": "other",
+                    "kind": "scrollbox",
                     "name": "general_scrollbox",
                     "text": "",
                     "x": 250,
@@ -401,6 +401,8 @@
                                 "y": 277,
                                 "w": 300,
                                 "h": 30,
+                                "knob": 0,
+                                "knobSpan": 15,
                                 "children": []
                               },
                               {
@@ -526,6 +528,8 @@
                                 "y": 397,
                                 "w": 300,
                                 "h": 30,
+                                "knob": 0.25,
+                                "knobSpan": 15,
                                 "children": []
                               },
                               {
@@ -567,6 +571,8 @@
                                 "y": 457,
                                 "w": 300,
                                 "h": 30,
+                                "knob": 0,
+                                "knobSpan": 15,
                                 "children": []
                               },
                               {
@@ -1145,6 +1151,107 @@
                         "y": 968,
                         "w": 164.24997,
                         "h": 75,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": 3,
+    "class": "app",
+    "controls": [
+      {
+        "kind": "grid",
+        "name": "main_grid",
+        "text": "",
+        "x": 0,
+        "y": 32,
+        "w": 1397,
+        "h": 1016,
+        "children": [
+          {
+            "kind": "other",
+            "name": "colorbox1",
+            "text": "",
+            "x": 318.5,
+            "y": 415,
+            "w": 760,
+            "h": 250,
+            "children": [
+              {
+                "kind": "grid",
+                "name": "dialog_grid",
+                "text": "",
+                "x": 334.5,
+                "y": 431,
+                "w": 728,
+                "h": 218,
+                "children": [
+                  {
+                    "kind": "grid",
+                    "name": "message_grid",
+                    "text": "",
+                    "x": 334.5,
+                    "y": 431,
+                    "w": 728,
+                    "h": 158,
+                    "children": [
+                      {
+                        "kind": "other",
+                        "name": "fuel_icon",
+                        "text": "./data/efb/icons/bbs_icon_fuel1.png",
+                        "x": 350.5,
+                        "y": 478,
+                        "w": 64,
+                        "h": 64,
+                        "children": []
+                      },
+                      {
+                        "kind": "label",
+                        "name": "text_label",
+                        "text": "Current fuel exceeds the flight plan fuel.\nAre you sure you want to defuel?",
+                        "x": 435.5,
+                        "y": 436,
+                        "w": 622,
+                        "h": 148,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "grid",
+                    "name": "btn_grid",
+                    "text": "",
+                    "x": 334.5,
+                    "y": 589,
+                    "w": 728,
+                    "h": 60,
+                    "children": [
+                      {
+                        "kind": "button",
+                        "name": "yes_btn",
+                        "text": "YES",
+                        "x": 334.5,
+                        "y": 589,
+                        "w": 180,
+                        "h": 60,
+                        "children": []
+                      },
+                      {
+                        "kind": "button",
+                        "name": "no_btn",
+                        "text": "NO",
+                        "x": 882.5,
+                        "y": 589,
+                        "w": 180,
+                        "h": 60,
                         "children": []
                       }
                     ]

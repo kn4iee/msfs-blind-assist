@@ -1051,18 +1051,21 @@ public class Bbs757EfbModelReaderTests
     [Fact]
     public void The_listing_reads_a_sliders_place_from_its_knob()
     {
-        // The knob places it (BUSINESS PAX's title count and the reservoirs' missing values name them as before).
+        // The real pages (captured live with their knobs, 2026-11-07): the knob places a slider (BUSINESS PAX's title count and the
+        // reservoirs' missing values name them as before). Without the knob, a slider whose value shows nowhere sits at its start.
         static string Listing(IReadOnlyList<App> apps) =>
             Bbs757EfbListing.Of(Bbs757EfbElements.Build(Bbs757EfbModelReader.Read(apps), null, Array.Empty<Bbs757EfbExtraElement>()));
-        var wb = Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"), "wb_baggage_fwd_slider", 0.598f, 12);
-        wb = Bbs757EfbTreeJson.WithKnob(wb, "wb_pax_business_slider", 1f, 12);
-        var hyd = Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("15b-aircraft-maintenance-hydraulic"), "maintenance_hyd_res_left_slider", 0.781f, 12);
+        var wb = Bbs757EfbTreeJson.Load("12-aircraft-weight-balance");
+        var hyd = Bbs757EfbTreeJson.Load("15b-aircraft-maintenance-hydraulic");
 
         string weights = Listing(wb), reservoirs = Listing(hyd);
 
         Assert.Contains("slider 60  Forward cargo\n", weights);
         Assert.Contains("slider 100  Business pax (16/16)\n", weights);
         Assert.Contains("slider 78  Maintenance hyd res left\n", reservoirs);
+        Assert.Contains("slider 0  Forward cargo\n", Listing(Bbs757EfbTreeJson.WithoutKnobs(wb)));
+        Assert.Contains("slider 100  Business pax (16/16)\n", Listing(Bbs757EfbTreeJson.WithoutKnobs(wb)));   // its count places it
+        Assert.Contains("slider 0  Maintenance hyd res left\n", Listing(Bbs757EfbTreeJson.WithoutKnobs(hyd)));
     }
 
     [Fact]

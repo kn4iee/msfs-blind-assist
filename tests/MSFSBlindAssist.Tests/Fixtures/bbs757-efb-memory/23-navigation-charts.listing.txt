@@ -2,14 +2,14 @@ title: Navigation, Charts
 button  Departure
 button  Arrival
 button  Manual
-text  SEATTLE-TACOMA INTL
-text  SEATTLE, UNITED STATES
+text  KINGMAN
+text  KINGMAN, UNITED STATES
 button  STAR
 button  App
 button  Taxi
 button  SID
 button  Ref
-button  Day
+button  Night
 button  Planning charts zoom out
 slider 0  Planning charts zoom
 button  Planning charts zoom in

@@ -277,6 +277,8 @@
                             "y": 246,
                             "w": 188,
                             "h": 18,
+                            "knob": 1,
+                            "knobSpan": 12,
                             "children": []
                           },
                           {
@@ -328,6 +330,8 @@
                             "y": 354,
                             "w": 188,
                             "h": 18,
+                            "knob": 1,
+                            "knobSpan": 12,
                             "children": []
                           },
                           {
@@ -379,6 +383,8 @@
                             "y": 462,
                             "w": 188,
                             "h": 18,
+                            "knob": 0.5980585,
+                            "knobSpan": 12,
                             "children": []
                           },
                           {
@@ -430,6 +436,8 @@
                             "y": 570,
                             "w": 188,
                             "h": 18,
+                            "knob": 0,
+                            "knobSpan": 12,
                             "children": []
                           },
                           {
@@ -485,7 +493,7 @@
                               {
                                 "kind": "label",
                                 "name": "wb_gross_weight_value",
-                                "text": "196677 Lbs",
+                                "text": "186272 Lbs",
                                 "x": 1193.5,
                                 "y": 780,
                                 "w": 127,
@@ -505,7 +513,7 @@
                               {
                                 "kind": "label",
                                 "name": "wb_center_of_gravity_value",
-                                "text": "25.1 %",
+                                "text": "23.8 %",
                                 "x": 1221,
                                 "y": 844,
                                 "w": 72,
@@ -631,10 +639,10 @@
                           {
                             "kind": "label",
                             "name": "wb_block_fuel_value",
-                            "text": "20617 Lbs",
-                            "x": 728,
+                            "text": "10212 Lbs",
+                            "x": 728.5,
                             "y": 134,
-                            "w": 89,
+                            "w": 88,
                             "h": 22,
                             "children": []
                           }
@@ -662,10 +670,10 @@
                           {
                             "kind": "label",
                             "name": "wb_takeoff_weight_value",
-                            "text": "195977 Lbs",
-                            "x": 836,
+                            "text": "207322 Lbs",
+                            "x": 835.5,
                             "y": 134,
-                            "w": 99,
+                            "w": 100,
                             "h": 22,
                             "children": []
                           }
@@ -693,7 +701,7 @@
                           {
                             "kind": "label",
                             "name": "wb_landing_weight_value",
-                            "text": "184399 Lbs",
+                            "text": "188060 Lbs",
                             "x": 949,
                             "y": 134,
                             "w": 99,
@@ -1254,6 +1262,107 @@
                         "y": 968,
                         "w": 164.24997,
                         "h": 75,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "key": 3,
+    "class": "app",
+    "controls": [
+      {
+        "kind": "grid",
+        "name": "main_grid",
+        "text": "",
+        "x": 0,
+        "y": 32,
+        "w": 1397,
+        "h": 1016,
+        "children": [
+          {
+            "kind": "other",
+            "name": "colorbox1",
+            "text": "",
+            "x": 318.5,
+            "y": 415,
+            "w": 760,
+            "h": 250,
+            "children": [
+              {
+                "kind": "grid",
+                "name": "dialog_grid",
+                "text": "",
+                "x": 334.5,
+                "y": 431,
+                "w": 728,
+                "h": 218,
+                "children": [
+                  {
+                    "kind": "grid",
+                    "name": "message_grid",
+                    "text": "",
+                    "x": 334.5,
+                    "y": 431,
+                    "w": 728,
+                    "h": 158,
+                    "children": [
+                      {
+                        "kind": "other",
+                        "name": "fuel_icon",
+                        "text": "./data/efb/icons/bbs_icon_fuel1.png",
+                        "x": 350.5,
+                        "y": 478,
+                        "w": 64,
+                        "h": 64,
+                        "children": []
+                      },
+                      {
+                        "kind": "label",
+                        "name": "text_label",
+                        "text": "Current fuel exceeds the flight plan fuel.\nAre you sure you want to defuel?",
+                        "x": 435.5,
+                        "y": 436,
+                        "w": 622,
+                        "h": 148,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "grid",
+                    "name": "btn_grid",
+                    "text": "",
+                    "x": 334.5,
+                    "y": 589,
+                    "w": 728,
+                    "h": 60,
+                    "children": [
+                      {
+                        "kind": "button",
+                        "name": "yes_btn",
+                        "text": "YES",
+                        "x": 334.5,
+                        "y": 589,
+                        "w": 180,
+                        "h": 60,
+                        "children": []
+                      },
+                      {
+                        "kind": "button",
+                        "name": "no_btn",
+                        "text": "NO",
+                        "x": 882.5,
+                        "y": 589,
+                        "w": 180,
+                        "h": 60,
                         "children": []
                       }
                     ]

@@ -990,9 +990,17 @@ public class Bbs757EfbPressTests
         Assert.Equal(new[] { "Realistic", "Standard", "Quick", "Instant" }, options, StringComparer.OrdinalIgnoreCase);
 
         var track = Assert.IsType<Bbs757EfbSlider>(boarding.Slider);
-        Assert.Equal((897, 1197), (track.TrackLeft, track.TrackRight));
+        // The committed page has BlueBird's 15 px knob (captured 2026-11-07), and a tap centers the knob on the tap point (measured), so
+        // the track is the knob center's range, 897 + 7.5 to 1197 - 7.5: the choices sit at the knob centers, the last one inside the box.
+        Assert.True(track.KnobRead);
+        Assert.Equal((904, 1189), (track.TrackLeft, track.TrackRight));
         // The 2026-10-27 measurement: x 1095 set QUICK and x 945 set REALISTIC; each choice is 100 px wide, so the tap lands within half of that.
         Assert.InRange(Bbs757EfbPress.ChoiceX(track, 2, options.Count), 1095 - 50, 1095 + 50);
         Assert.InRange(Bbs757EfbPress.ChoiceX(track, 0, options.Count), 945 - 50, 945 + 50);
+
+        // With no knob read (a layout without the slider knob), the track is the slider's box, as before.
+        var bare = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithoutKnobs(Bbs757EfbTreeJson.Load("51-settings-aircraft")))!;
+        var fallback = Assert.Single(bare.Items, i => i.Text == "BOARDING & LOAD RATE").Slider!;
+        Assert.Equal((897, 1197, false), (fallback.TrackLeft, fallback.TrackRight, fallback.KnobRead));
     }
 }

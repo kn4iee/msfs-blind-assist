@@ -1,6 +1,6 @@
 title: Aircraft, Fuel
 heading 2  Left
-slider 34  Left (34%)
+slider 35  Left (34%)
 text  Quantity: 752 Gal
 text  Weight: 5037 Lbs
 heading 2  Center
@@ -8,7 +8,7 @@ slider 0  Center (0%)
 text  Quantity: 12 Gal
 text  Weight: 80 Lbs
 heading 2  Right
-slider 34  Right (34%)
+slider 35  Right (34%)
 text  Quantity: 761 Gal
 text  Weight: 5095 Lbs
 heading 2  Total fuel

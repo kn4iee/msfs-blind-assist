@@ -930,9 +930,18 @@ public class Bbs757EfbBridgeTests
 
     // ---- I3, I4: sliders whose value shows elsewhere, or nowhere, and vertical ones -----------------------------------------
 
-    private static Bbs757EfbScreenModel WeightBalance(string? businessTitle = null, string? forwardCargo = null)
+    /// <summary>
+    /// Weight &amp; balance from its committed tree (captured live with its knobs, 2026-11-07: forward cargo at 59.8 %, the passengers'
+    /// knobs at their ends), or, with <paramref name="knobs"/> false, as a layout without the slider knob reads it, which pins the
+    /// fallback on the real page: a knob placed from the count a title shows, a slider judged by its count or by the page. The business
+    /// title and the forward cargo's weight box show what is given, and the forward cargo's knob sits at <paramref name="cargoKnob"/>
+    /// when given (0 to 1).
+    /// </summary>
+    private static Bbs757EfbScreenModel WeightBalance(bool knobs, string? businessTitle = null, string? forwardCargo = null, float? cargoKnob = null)
     {
         var apps = Bbs757EfbTreeJson.Load("12-aircraft-weight-balance");
+        if (!knobs) apps = Bbs757EfbTreeJson.WithoutKnobs(apps);
+        if (cargoKnob is float place) apps = Bbs757EfbTreeJson.WithKnob(apps, "wb_baggage_fwd_slider", place, 12);
         if (businessTitle != null) apps = Bbs757EfbTreeJson.WithText(apps, "wb_pax_business_title", businessTitle);
         if (forwardCargo != null) apps = Bbs757EfbTreeJson.WithText(apps, "wb_baggage_fwd_value", forwardCargo);
         return Bbs757EfbModelReader.Read(apps)!;
@@ -941,24 +950,32 @@ public class Bbs757EfbBridgeTests
     [Fact]
     public void A_passenger_slider_is_named_by_its_title_and_placed_by_its_count()
     {
-        var page = WeightBalance();
+        // The real page: named by its title, its count the value, and BlueBird's knob at the end, where 16 of 16 put it.
+        var page = WeightBalance(knobs: true);
         var pax = Assert.Single(page.Items, i => i.Name == "wb_pax_business_slider");
-
         Assert.Equal("BUSINESS PAX", pax.Text);
         Assert.Equal("16/16", pax.Value);
-        Assert.Equal(pax.Slider!.TrackRight, pax.Slider.KnobX);   // 16 of 16 boarded: the knob at the end
-        Assert.Equal(pax.Slider.At(50), WeightBalance("BUSINESS PAX - 8/16").Items.Single(i => i.Name == "wb_pax_business_slider").Slider!.KnobX);
+        Assert.True(pax.Slider!.KnobRead);
+        Assert.Equal(pax.Slider.TrackRight, pax.Slider.KnobX);
         Assert.DoesNotContain(page.Items, i => i.Kind == Bbs757EfbKind.Heading && i.Text.StartsWith("BUSINESS PAX", StringComparison.Ordinal));
+
+        // With no knob read, the title's count places the knob: 16 of 16 at the end, 8 of 16 halfway.
+        var bare = Assert.Single(WeightBalance(knobs: false).Items, i => i.Name == "wb_pax_business_slider");
+        Assert.False(bare.Slider!.KnobRead);
+        Assert.Equal(bare.Slider.TrackRight, bare.Slider.KnobX);
+        Assert.Equal(bare.Slider.At(50),
+            WeightBalance(knobs: false, "BUSINESS PAX - 8/16").Items.Single(i => i.Name == "wb_pax_business_slider").Slider!.KnobX);
     }
 
     [Theory]
     [MemberData(nameof(Cultures))]
     public async Task A_passenger_slider_is_judged_by_the_count_its_title_shows_after_the_tap(string culture)
     {
-        var page = WeightBalance();
+        // The fallback with no knob read (so the title's count edited here is the slider's whole state): the count judges.
+        var page = WeightBalance(knobs: false);
         var pax = Assert.Single(page.Items, i => i.Name == "wb_pax_business_slider");
         var set = new FakeTablet(page);
-        set.OnTap = _ => set.Show(WeightBalance("BUSINESS PAX - 8/16"));
+        set.OnTap = _ => set.Show(WeightBalance(knobs: false, "BUSINESS PAX - 8/16"));
 
         await TestCulture.Run(culture, () => set.Runner().SliderAsync(set.Press(pax), "50", CancellationToken.None));
 
@@ -966,7 +983,7 @@ public class Bbs757EfbBridgeTests
         Assert.Empty(set.Alerts);
 
         var wrong = new FakeTablet(page);
-        wrong.OnTap = _ => wrong.Show(WeightBalance("BUSINESS PAX - 15/16"));
+        wrong.OnTap = _ => wrong.Show(WeightBalance(knobs: false, "BUSINESS PAX - 15/16"));
         await TestCulture.Run(culture, () => wrong.Runner().SliderAsync(wrong.Press(pax), "50", CancellationToken.None));
         Assert.Equal(new[] { "Business pax could not be set to 50 percent." }, wrong.Alerts);
     }
@@ -975,12 +992,13 @@ public class Bbs757EfbBridgeTests
     [MemberData(nameof(Cultures))]
     public async Task A_slider_whose_value_shows_nowhere_is_judged_by_its_page(string culture)
     {
-        // The cargo slider shows no value of its own: its weight box beside it is what the tap changes.
-        var page = WeightBalance();
+        // The fallback with no knob read: the cargo slider shows no value of its own, and its weight box beside it is what the tap
+        // changes.
+        var page = WeightBalance(knobs: false);
         var cargo = Assert.Single(page.Items, i => i.Name == "wb_baggage_fwd_slider");
         Assert.Equal("", cargo.Value);
         var followed = new FakeTablet(page);
-        followed.OnTap = _ => followed.Show(WeightBalance(forwardCargo: "3080"));
+        followed.OnTap = _ => followed.Show(WeightBalance(knobs: false, forwardCargo: "3080"));
 
         await TestCulture.Run(culture, () => followed.Runner().SliderAsync(followed.Press(cargo), "50", CancellationToken.None));
 
@@ -993,14 +1011,20 @@ public class Bbs757EfbBridgeTests
     }
 
     [Theory]
-    [InlineData("15b-aircraft-maintenance-hydraulic", "maintenance_hyd_res_left_slider")]
-    [InlineData("30-systems", "elec_zoom_slider")]
-    public async Task A_vertical_slider_is_set_along_its_height(string fixture, string name)
+    [InlineData("15b-aircraft-maintenance-hydraulic", "maintenance_hyd_res_left_slider", true)]
+    [InlineData("30-systems", "elec_zoom_slider", true)]
+    [InlineData("15b-aircraft-maintenance-hydraulic", "maintenance_hyd_res_left_slider", false)]
+    [InlineData("30-systems", "elec_zoom_slider", false)]
+    public async Task A_vertical_slider_is_set_along_its_height(string fixture, string name, bool knobs)
     {
-        // A slider taller than wide runs bottom (0, measured 2026-11-07) to top, and is tapped at its x middle.
-        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!;
+        // A slider taller than wide runs bottom (0, measured 2026-11-07) to top, and is tapped at its x middle. With BlueBird's knob read
+        // (both 12 px tall, the committed pages) along its knob center's range, the box less half the knob at each end; with none (the
+        // fallback) along its box.
+        var apps = Bbs757EfbTreeJson.Load(fixture);
+        var page = Bbs757EfbModelReader.Read(knobs ? apps : Bbs757EfbTreeJson.WithoutKnobs(apps))!;
         var slider = Assert.Single(page.Items, i => i.Name == name);
         Assert.True(slider.Slider!.Vertical);
+        Assert.Equal(knobs, slider.Slider.KnobRead);
         var taps = new List<Point>();
         foreach (var percent in new[] { "10", "90" })
         {
@@ -1012,50 +1036,47 @@ public class Bbs757EfbBridgeTests
         Assert.All(taps, t => Assert.Equal(slider.Box.Left + slider.Box.Width / 2, t.X));
         Assert.All(taps, t => Assert.InRange(t.Y, slider.Box.Top, slider.Box.Bottom - 1));
         Assert.True(taps[0].Y > taps[1].Y, $"10 percent at {taps[0]} should be below 90 percent at {taps[1]}");
-        Assert.InRange(taps[0].Y, slider.Box.Bottom - slider.Box.Height / 10 - 2, slider.Box.Bottom - slider.Box.Height / 10 + 2);
+        double half = knobs ? 6 : 0, run = slider.Box.Height - 2 * half;
+        Assert.InRange(taps[0].Y, slider.Box.Bottom - half - run / 10 - 2, slider.Box.Bottom - half - run / 10 + 2);
+        Assert.InRange(taps[1].Y, slider.Box.Top + half + run / 10 - 2, slider.Box.Top + half + run / 10 + 2);
     }
 
     // ---- sliders whose knob BlueBird's memory gives (plan 20, Task 13) --------------------------------------------------------
-
-    /// <summary>Weight &amp; balance from its committed tree with the forward cargo slider's knob read at <paramref name="place"/>, and
-    /// the cargo's weight box showing <paramref name="forwardCargo"/> when given.</summary>
-    private static Bbs757EfbScreenModel WeightBalanceKnob(float place, string? forwardCargo = null)
-    {
-        var apps = Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"), "wb_baggage_fwd_slider", place, 12);
-        if (forwardCargo != null) apps = Bbs757EfbTreeJson.WithText(apps, "wb_baggage_fwd_value", forwardCargo);
-        return Bbs757EfbModelReader.Read(apps)!;
-    }
 
     [Theory]
     [MemberData(nameof(Cultures))]
     public async Task A_slider_with_bluebirds_knob_is_judged_by_where_its_knob_went(string culture)
     {
-        // The knob-center track of the 188 px slider at 1162.5 with its 12 px knob: 1168 to 1344. 50 is tapped at 1256.
-        var page = WeightBalanceKnob(0f);
+        // The real page: forward cargo's knob at 59.8 % (6,160 lbs). The knob-center track of the 188 px slider at 1162.5 with its 12 px
+        // knob runs 1168 to 1344, so 20 is tapped at 1203; the knob then sits there, and the weight box reads about 20 % of the hold.
+        var page = WeightBalance(knobs: true);
         var cargo = Assert.Single(page.Items, i => i.Name == "wb_baggage_fwd_slider");
         Assert.True(cargo.Slider!.KnobRead);
+        Assert.Equal(60, Math.Round(cargo.Slider.PercentOf(cargo.Slider.KnobX)));
         var set = new FakeTablet(page);
-        set.OnTap = p => set.Show(WeightBalanceKnob((p.X - 1168) / 176f, "3080"));
+        set.OnTap = p => set.Show(WeightBalance(knobs: true, forwardCargo: "2060", cargoKnob: (p.X - 1168) / 176f));
 
-        await TestCulture.Run(culture, () => set.Runner().SliderAsync(set.Press(cargo), "50", CancellationToken.None));
+        await TestCulture.Run(culture, () => set.Runner().SliderAsync(set.Press(cargo), "20", CancellationToken.None));
 
-        Assert.Equal(new[] { new Point(1256, cargo.Hit.Y) }, set.Taps);
+        Assert.Equal(new[] { new Point(1203, cargo.Hit.Y) }, set.Taps);
         Assert.Empty(set.Alerts);
 
-        // The weight box changed, but the knob stayed: the knob judges, so it was not set.
+        // Deliberately not a state the tablet makes: the weight box changed but the knob stayed at 59.8 %. The knob judges before the
+        // page, so it was not set.
         var stuck = new FakeTablet(page);
-        stuck.OnTap = _ => stuck.Show(WeightBalanceKnob(0f, "3080"));
-        await TestCulture.Run(culture, () => stuck.Runner().SliderAsync(stuck.Press(cargo), "50", CancellationToken.None));
+        stuck.OnTap = _ => stuck.Show(WeightBalance(knobs: true, forwardCargo: "2060"));
+        await TestCulture.Run(culture, () => stuck.Runner().SliderAsync(stuck.Press(cargo), "20", CancellationToken.None));
         Assert.Single(stuck.Taps);
-        Assert.Equal(new[] { "Forward cargo could not be set to 50 percent." }, stuck.Alerts);
+        Assert.Equal(new[] { "Forward cargo could not be set to 20 percent." }, stuck.Alerts);
     }
 
     [Fact]
     public async Task An_upright_slider_with_bluebirds_knob_is_tapped_along_its_knobs_center()
     {
         // Measured 2026-11-07 on Systems' zoom: a tap at y 260 put the knob's center at 259.5, 25.7 % from the bottom. Its knob-center
-        // track runs from 296 (0) up to 154 (100), so 25 is tapped at y 260, at the track's x middle, inside the box.
-        var apps = Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("30-systems"), "elec_zoom_slider", 0.104f, 12);
+        // track runs from 296 (0) up to 154 (100), so 25 is tapped at y 260, at the track's x middle, inside the box. The committed page
+        // has the zoom at 10.4 %.
+        var apps = Bbs757EfbTreeJson.Load("30-systems");
         var page = Bbs757EfbModelReader.Read(apps)!;
         var zoom = Assert.Single(page.Items, i => i.Name == "elec_zoom_slider");
         var tablet = new FakeTablet(page);
@@ -1077,14 +1098,14 @@ public class Bbs757EfbBridgeTests
     [MemberData(nameof(Cultures))]
     public async Task A_sliders_knob_judges_it_before_the_percent_it_shows(string culture)
     {
-        // The review's M1: Fuel's left tank shows "34%" with its knob at 34.5 %. After the tap the label reads "50%", but the knob stayed:
-        // the knob judges first, so it was not set.
-        IReadOnlyList<Bbs757EfbMemory.App> Fuel(string shown) => Bbs757EfbTreeJson.WithKnob(
-            Bbs757EfbTreeJson.WithText(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"), "fuel_left_tank_label", shown),
-            "fuel_slider_left", 0.345f, 12);
+        // The review's M1: the real page's left tank shows "34%" with its knob at 34.5 %. After the tap the label reads "50%", but the knob
+        // stayed (deliberately not a state the tablet makes): the knob judges first, so it was not set.
+        IReadOnlyList<Bbs757EfbMemory.App> Fuel(string shown) =>
+            Bbs757EfbTreeJson.WithText(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"), "fuel_left_tank_label", shown);
         var page = Bbs757EfbModelReader.Read(Fuel("34%"))!;
         var left = Assert.Single(page.Items, i => i.Name == "fuel_slider_left");
         Assert.Equal("34%", left.Value);
+        Assert.True(left.Slider!.KnobRead);
         var tablet = new FakeTablet(page);
         tablet.OnTap = _ => tablet.Show(Bbs757EfbModelReader.Read(Fuel("50%"))!);
 
@@ -1094,7 +1115,8 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { "Left could not be set to 50 percent." }, tablet.Alerts);
     }
 
-    /// <summary>Systems from its committed tree with Electrical's zoom slider's knob read at <paramref name="place"/>.</summary>
+    /// <summary>Systems from its committed tree with Electrical's zoom slider's knob read at <paramref name="place"/> (the committed
+    /// page has it at 0.104).</summary>
     private static Bbs757EfbScreenModel SystemsZoom(float place) =>
         Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("30-systems"), "elec_zoom_slider", place, 12))!;
 
