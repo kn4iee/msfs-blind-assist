@@ -9,7 +9,8 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The test-side file format of the tablet's live memory trees (<c>Fixtures/bbs757-efb-memory/&lt;name&gt;.tree.json</c>).
 /// Each node keeps kind, name, text, rectangle and children, and, only when the walk read them (optional: absent reads as
-/// none), a slider's knob, a button's selected state, and a drop-down's value, entries, open state and rows; each app keeps
+/// none), a scrollbox's offset, a slider's knob, a button's selected state, and a drop-down's value, entries, open state, rows
+/// and open list; each app keeps
 /// key, class and controls. The file's root is the array of apps, or, for a capture with BlueBird's notifications, an object
 /// <c>{ "apps": [...], "notices": [...] }</c>; a root array reads as no notices. The node's address is not written and reads
 /// back as 0. Numbers are invariant and the output is indented so a diff reads.
@@ -76,8 +77,11 @@ internal static class Bbs757EfbTreeJson
     /// </summary>
     internal static IReadOnlyList<Bbs757EfbMemory.App> Scrolled(IReadOnlyList<Bbs757EfbMemory.App> apps, string scrollbox, float offset)
     {
-        static Bbs757EfbMemory.Node Up(Bbs757EfbMemory.Node n, float by) =>
-            n with { Y = n.Y - by, Children = n.Children.Select(c => Up(c, by)).ToList(), Rows = n.Rows?.Select(r => Up(r, by)).ToList() };
+        static Bbs757EfbMemory.Node Up(Bbs757EfbMemory.Node n, float by) => n with
+        {
+            Y = n.Y - by, Children = n.Children.Select(c => Up(c, by)).ToList(), Rows = n.Rows?.Select(r => Up(r, by)).ToList(),
+            OpenList = n.OpenList is { } list ? Up(list, by) : null,
+        };
         Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) => n.Name == scrollbox
             ? n with { Scroll = offset, Children = n.Children.Select(c => Up(c, offset)).ToList() }
             : n with { Children = n.Children.Select(Walk).ToList() };
@@ -120,9 +124,9 @@ internal static class Bbs757EfbTreeJson
         return Path.Combine(dir!.FullName, "tests", "MSFSBlindAssist.Tests", "Fixtures", "bbs757-efb-memory");
     }
 
-    /// <summary>A node as JSON; a slider's knob (its place and its size along the track), a button's selected state and a
-    /// drop-down's value, entries, open state and rows only when the walk read them, so a node without them, and every tree
-    /// committed before they were read, reads the same.</summary>
+    /// <summary>A node as JSON; a scrollbox's offset when not 0, a slider's knob (its place and its size along the track), a
+    /// button's selected state and a drop-down's value, entries, open state, rows and open list only when the walk read them, so a
+    /// node without them, and every tree committed before they were read, reads the same.</summary>
     private static JsonObject NodeToJson(Bbs757EfbMemory.Node n)
     {
         var o = new JsonObject
@@ -135,6 +139,7 @@ internal static class Bbs757EfbTreeJson
             ["w"] = Number(n.W),
             ["h"] = Number(n.H),
         };
+        if (n.Scroll != 0) o["scroll"] = Number(n.Scroll);
         if (n.Knob is float knob)
         {
             o["knob"] = Number(knob);
@@ -145,19 +150,23 @@ internal static class Bbs757EfbTreeJson
         if (n.Entries is { } entries) o["entries"] = new JsonArray(entries.Select(e => (JsonNode?)e).ToArray());
         if (n.Open) o["open"] = true;
         if (n.Rows is { } rows) o["rows"] = new JsonArray(rows.Select(r => (JsonNode?)NodeToJson(r)).ToArray());
+        if (n.OpenList is { } list) o["list"] = NodeToJson(list);
         o["children"] = new JsonArray(n.Children.Select(c => (JsonNode?)NodeToJson(c)).ToArray());
         return o;
     }
 
-    /// <summary>A node from JSON; the knob, selected, value, entries, open and rows fields are optional (absent: none).</summary>
+    /// <summary>A node from JSON; the scroll, knob, selected, value, entries, open, rows and list fields are optional (absent:
+    /// none).</summary>
     private static Bbs757EfbMemory.Node NodeFromJson(JsonNode j) => new(
         j["kind"]!.GetValue<string>(), j["name"]!.GetValue<string>(), j["text"]!.GetValue<string>(),
         j["x"]!.GetValue<float>(), j["y"]!.GetValue<float>(), j["w"]!.GetValue<float>(), j["h"]!.GetValue<float>(),
         0, j["children"]!.AsArray().Select(c => NodeFromJson(c!)).ToList(),
+        Scroll: j["scroll"]?.GetValue<float>() ?? 0f,
         Knob: j["knob"]?.GetValue<float>(), KnobSpan: j["knobSpan"]?.GetValue<float>() ?? 0f,
         Selected: j["selected"]?.GetValue<bool>(), Value: j["value"]?.GetValue<string>() ?? "",
         Entries: j["entries"]?.AsArray().Select(e => e!.GetValue<string>()).ToList(), Open: j["open"]?.GetValue<bool>() ?? false,
-        Rows: j["rows"]?.AsArray().Select(r => NodeFromJson(r!)).ToList());
+        Rows: j["rows"]?.AsArray().Select(r => NodeFromJson(r!)).ToList(),
+        OpenList: j["list"] is { } list ? NodeFromJson(list) : null);
 
     // A float widened to a double would print noise digits (12.300000190734863); write its shortest round-trip text.
     private static JsonNode Number(float v) =>

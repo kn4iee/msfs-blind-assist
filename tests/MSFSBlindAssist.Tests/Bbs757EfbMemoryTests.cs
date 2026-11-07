@@ -29,7 +29,9 @@ public class Bbs757EfbMemoryTests
         TimeLabel = 0x12400, ResetButton = 0x12600;
     private const uint DialogNode = 0xE800, DialogAppVec = 0xE880, DialogApp = 0xE900, DialogPage = 0x13000, DialogPageVec = 0x13400,
         DialogGrid = 0x13600, DialogGridVec = 0x13800, Prompt = 0x13A00, YesButton = 0x13C00;
-    private const uint NoticeRecords = 0x14000, Heap = 0x18000;
+    private const uint NoticeRecords = 0x14000, Heap = 0x18000, HeapEnd = 0x40000;
+    // A text past the long cap (1 MiB and a byte); then a wide or deep tree of distinct controls.
+    private const uint BigText = 0x40000, TreeBase = 0x150000;
 
     private static readonly Bbs757EfbMemLayout Layout = new(
         SourceFile: "", AnchorAddress: 0x400, Anchor: new byte[] { 1 },
@@ -51,7 +53,7 @@ public class Bbs757EfbMemoryTests
             new Bbs757EfbClassVptr("overlay", OverlayVptr), new Bbs757EfbClassVptr("modal", ModalVptr),
         });
 
-    private readonly byte[] _b = new byte[0x20000];
+    private readonly byte[] _b = new byte[0x1B0000];
     private uint _heap = Heap;
     private void Ptr(uint at, uint v) => BinaryPrimitives.WriteUInt32LittleEndian(_b.AsSpan((int)at), v);
     private void F32(uint at, float v) => BinaryPrimitives.WriteSingleLittleEndian(_b.AsSpan((int)at), v);
@@ -61,10 +63,14 @@ public class Bbs757EfbMemoryTests
     private void LongStr(uint at, string s)
     {
         uint data = _heap;
+        Assert.True(data + (uint)s.Length + 1 <= HeapEnd, "the fake's heap is full");
         Encoding.ASCII.GetBytes(s).CopyTo(_b.AsSpan((int)data));
         _heap += (uint)s.Length + 1;
-        Ptr(at, data); Ptr(at + 4, (uint)s.Length); Ptr(at + 8, 0x80000000u | (uint)(s.Length + 1));
+        LongHeader(at, data, s.Length);
     }
+
+    /// <summary>A long-form string's 12 bytes alone: the pointer, the size word and the capacity with the long flag.</summary>
+    private void LongHeader(uint at, uint data, int size) { Ptr(at, data); Ptr(at + 4, (uint)size); Ptr(at + 8, 0x80000000u | (uint)(size + 1)); }
 
     /// <summary>A std::string in the form libc++ keeps it: short up to 10 characters, long past that.</summary>
     private void Str(uint at, string s) { if (s.Length <= 10) ShortStr(at, s); else LongStr(at, s); }
@@ -104,8 +110,30 @@ public class Bbs757EfbMemoryTests
         mutate?.Invoke();
 
         var src = new FakeProcessMemory().Add(new MemoryRegion(B, B, (ulong)_b.Length, true, true, true), _b);
-        return new Bbs757EfbMemory(new ModuleEfbMemory(new ModuleMemory(src, B)), Layout);
+        return new Bbs757EfbMemory(new ReadBudget(new ModuleEfbMemory(new ModuleMemory(src, B)), MaxReads), Layout);
     }
+
+    /// <summary>More reads than any test's walk needs (the node budget's test needs about 300,000): a walk past it did not end.</summary>
+    private const long MaxReads = 2_000_000;
+
+    /// <summary>The fake's memory with a read budget, so a walk that would not end fails the test instead of hanging the run.</summary>
+    private sealed class ReadBudget : IEfbMemory
+    {
+        private readonly IEfbMemory _m;
+        private long _left;
+        public ReadBudget(IEfbMemory m, long reads) { _m = m; _left = reads; }
+        private void Spend() { if (--_left < 0) throw new InvalidOperationException("the walk read past its budget: it would not have ended"); }
+        public bool TryReadInt(uint a, out int v) { Spend(); return _m.TryReadInt(a, out v); }
+        public bool TryReadByte(uint a, out byte v) { Spend(); return _m.TryReadByte(a, out v); }
+        public float ReadFloat(uint a) { Spend(); return _m.ReadFloat(a); }
+        public bool TryReadPtr(uint a, out uint v) { Spend(); return _m.TryReadPtr(a, out v); }
+        public string? ReadStdString(uint a, int maxLength = Bbs757EfbMemory.TextCap) { Spend(); return _m.ReadStdString(a, maxLength); }
+    }
+
+    private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));
+
+    private static IEnumerable<Bbs757EfbMemory.Node> Flat(IEnumerable<Bbs757EfbMemory.Node> ns) =>
+        ns.SelectMany(n => new[] { n }.Concat(Flat(n.Children)));
 
     [Fact]
     public void Walks_the_front_app_page_tree_with_text_and_rects()
@@ -345,6 +373,33 @@ public class Bbs757EfbMemoryTests
         Assert.Equal("", label.Text);
     }
 
+    [Fact]
+    public void A_multiline_box_reads_the_operating_fps_length()
+    {
+        // The Operating FP measured 91,869 characters: 100,000 read whole.
+        string text = string.Concat(Enumerable.Repeat("KSEA DCT BTG DCT KPDX FL350 0:35 120000\n", 2500));
+        Assert.Equal(100_000, text.Length);
+        var fp = FirstChild(() => { Ptr(Button, MultilineVptr); LongStr(Button + (uint)Layout.MultilineText, text); });
+        Assert.Equal(text, fp.Text);
+    }
+
+    [Fact]
+    public void A_multiline_text_past_the_long_cap_reads_none()
+    {
+        // The cap is 1 MiB: a size word of exactly that reads whole; one more reads "", though every byte of it is there to read.
+        // Numbers, not the constant, so a cap moved either way fails here.
+        uint at = Button + (uint)Layout.MultilineText;
+        Assert.Equal(1_048_576, Big(1_048_576).Length);
+        Assert.Equal("", Big(1_048_577));
+
+        string Big(int size) => FirstChild(() =>
+        {
+            Ptr(Button, MultilineVptr);
+            _b.AsSpan((int)BigText, 1_048_577).Fill((byte)'A');
+            LongHeader(at, BigText, size);
+        }).Text;
+    }
+
     /// <summary>The grid's first child made a drop-down, as PERF calc's runway one was read: its face (a button showing
     /// <paramref name="face"/>), its entry records, and its list (a scrollbox below the face holding a stack of one button per
     /// entry, 38 px apart while open, [0,0 50x38] while closed), scrolled by <paramref name="scroll"/>.</summary>
@@ -385,6 +440,7 @@ public class Bbs757EfbMemoryTests
         Assert.Equal(new[] { "15", "20", "5", "Optimum" }, flap.Entries);
         Assert.False(flap.Open);
         Assert.Null(flap.Rows);
+        Assert.Null(flap.OpenList);
         Assert.Empty(flap.Children); // the face and the list are in no children vector
     }
 
@@ -413,6 +469,24 @@ public class Bbs757EfbMemoryTests
         Assert.Equal(Enumerable.Range(0, 6).Select(i => 189f + 38 * i - 38), rows.Select(r => r.Y));
         Assert.Equal((519.1f, 150f, 38f), (rows[0].X, rows[0].W, rows[0].H));
         Assert.Empty(runway.Children);
+
+        // The list's own viewport, for a choice to tell a row in view from one scrolled out of it: within its 189 to 369, row 0
+        // (drawn at 151) is scrolled out above and row 5 (341 to 379) runs past its bottom.
+        var list = runway.OpenList!;
+        Assert.Equal(("scrollbox", "item_scrollbox", 519.1f, 189f, 150f, 180f, 38f), (list.Kind, list.Name, list.X, list.Y, list.W, list.H, list.Scroll));
+        Assert.Empty(list.Children); // its rows are Rows
+    }
+
+    [Fact]
+    public void An_open_drop_down_under_a_scrolled_page_takes_the_pages_scroll_off_its_rows()
+    {
+        // Logic only, not measured: no drop-down read so far sits in a scrollbox. The list is drawn under its drop-down, so it is
+        // read as any control inside the page's scrollbox: it and its rows drawn the page's offset higher, the rows its own too.
+        string[] runways = { "RW07L", "RW07R", "RW08", "RW25L", "RW25R", "RW26" };
+        var runway = FirstChild(() => { ScrolledGrid(100); DropDown("RW07L", runways, open: true, scroll: 38); });
+        Assert.Equal(156f - 100, runway.Y);
+        Assert.Equal((189f - 100, 38f), (runway.OpenList!.Y, runway.OpenList.Scroll));
+        Assert.Equal(Enumerable.Range(0, 6).Select(i => 189f + 38 * i - 38 - 100), runway.Rows!.Select(r => r.Y));
     }
 
     private bool? Selection(byte selectable, byte unselected) => FirstChild(() =>
@@ -549,6 +623,80 @@ public class Bbs757EfbMemoryTests
         var grid = Assert.Single(dialog.Controls);
         Assert.Equal(new[] { "Power off the EFB?", "YES" }, grid.Children.Select(c => c.Text));
         Assert.Equal(3, apps.Count);
+    }
+
+    // ---- a torn tree: each control read once, a node budget per reading, a depth guard ----
+
+    [Fact]
+    public void A_control_listing_itself_twice_is_read_once()
+    {
+        // The review's case: with only the depth guard, two back-edges made about 2^65 walks.
+        var apps = Build(() => Children(Grid, GridChildrenVec, Grid, Grid)).ReadFrontApps();
+        var grid = Assert.Single(Assert.Single(apps).Controls);
+        Assert.Equal("page_grid", grid.Name);
+        Assert.Empty(grid.Children);
+    }
+
+    [Fact]
+    public void A_two_control_cycle_reads_each_once()
+    {
+        var apps = Build(() => { Children(Grid, GridChildrenVec, Button); Children(Button, InnerVec, Grid); }).ReadFrontApps();
+        Assert.Equal(new[] { "page_grid", "btn_fuel" }, Flat(Assert.Single(apps).Controls).Select(n => n.Name));
+    }
+
+    [Fact]
+    public void A_drop_down_whose_list_points_back_up_the_tree_reads_no_rows()
+    {
+        var apps = Build(() => { DropDown("A", new[] { "A" }, open: true); Ptr(Button + (uint)Layout.PulldownList, Grid); }).ReadFrontApps();
+        var grid = Assert.Single(Assert.Single(apps).Controls);
+        var dropDown = grid.Children[0];
+        Assert.True(dropDown.Open);
+        Assert.Empty(dropDown.Rows!);
+        Assert.Null(dropDown.OpenList);
+        Assert.Single(Flat(new[] { grid }), n => n.Name == "page_grid");
+    }
+
+    [Fact]
+    public void A_reading_walks_at_most_its_node_budget()
+    {
+        // Eleven grids of 2,048 distinct controls each (a children vector's cap) under the page: 22,539 controls, past the budget.
+        const int Parents = 11, Each = 2048;
+        var apps = Build(() =>
+        {
+            uint wide = TreeBase, vecs = TreeBase + 0x18000, parents = TreeBase + 0x46000, page = TreeBase + 0x48000;
+            // Controls 4 bytes apart in bytes of 0x01: each visible, of no known kind, with no name, text or children.
+            _b.AsSpan((int)wide, Parents * Each * 4 + 0x150).Fill(1);
+            for (int k = 0; k < Parents; k++)
+            {
+                uint parent = parents + (uint)k * 0x200, vec = vecs + (uint)k * 0x4000;
+                Control(parent, GridVptr, "p" + k, true);
+                Ptr(parent + 0xf4, vec); Ptr(parent + 0xf8, vec + 8 * Each);
+                for (int j = 0; j < Each; j++) Ptr(vec + 8 * (uint)j, wide + 4 * (uint)(k * Each + j));
+                Ptr(page + 8 * (uint)k, parent);
+            }
+            Ptr(Page + 0x4c, page); Ptr(Page + 0x50, page + 8 * Parents);
+        }).ReadFrontApps();
+        Assert.Equal(Bbs757EfbMemory.MaxNodes, Count(Assert.Single(apps).Controls));
+    }
+
+    [Fact]
+    public void A_chain_deeper_than_the_depth_guard_stops_there()
+    {
+        // Seventy distinct controls each inside the one before: the walk reads the first MaxDepth + 1 levels.
+        const int Links = 70;
+        var apps = Build(() =>
+        {
+            for (int i = 0; i < Links; i++)
+            {
+                uint link = TreeBase + (uint)i * 0x200;
+                Control(link, GridVptr, "c" + i, true);
+                if (i + 1 < Links) Children(link, link + 0x100, link + 0x200);
+            }
+            Ptr(PageVec, TreeBase);
+        }).ReadFrontApps();
+        int depth = 0;
+        for (var level = Assert.Single(apps).Controls; level.Count > 0; level = level[0].Children) depth++;
+        Assert.Equal(Bbs757EfbMemory.MaxDepth + 1, depth);
     }
 
     [Fact]

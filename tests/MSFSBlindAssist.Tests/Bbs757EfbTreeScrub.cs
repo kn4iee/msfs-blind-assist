@@ -59,6 +59,11 @@ internal static class Bbs757EfbTreeScrub
     internal static IReadOnlyList<Bbs757EfbMemory.App> Scrub(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
         apps.Select(a => a with { Controls = a.Controls.Select(ScrubNode).ToList() }).ToList();
 
+    /// <summary>BlueBird's notifications, as read: they are event texts ("GPU CONNECTED.", "AFT CARGO DOOR OPENED.", "TARGET 4.5 |
+    /// ACTUAL 4.5 ft/s2") and Zulu times, and no credential or flight plan field was measured in one (plan 21, 2026-11-07). A
+    /// capture's notices still go through here, so a field found to hold one is made up in one place.</summary>
+    internal static IReadOnlyList<Bbs757EfbNoticeRecord> Scrub(IReadOnlyList<Bbs757EfbNoticeRecord> notices) => notices;
+
     /// <summary>The made-up flight's value for a flight plan value node: the mapped one for a name in the table,
     /// "0" for every other flight plan value. An empty one is kept empty (<see cref="Scrub"/>).</summary>
     internal static string MadeUpFlight(string name) =>
@@ -70,6 +75,7 @@ internal static class Bbs757EfbTreeScrub
             Text = ScrubText(n.Kind, n.Name, n.Text),
             Children = n.Children.Select(ScrubNode).ToList(),
             Rows = n.Rows?.Select(ScrubNode).ToList(),
+            OpenList = n.OpenList is { } list ? ScrubNode(list) : null,
         };
 
     private static string ScrubText(string kind, string name, string text)

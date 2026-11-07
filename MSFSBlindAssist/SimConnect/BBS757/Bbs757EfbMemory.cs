@@ -36,11 +36,14 @@ public sealed class Bbs757EfbMemory
     /// of a menu or tab row, null for a button that is neither (its selectable byte not 1) and for every other kind. A
     /// <c>pulldown</c> has <c>Entries</c> (its entries' texts in BlueBird's order), <c>Value</c> (the entry whose text is its
     /// face's, "" when none is, as Systems' "SELECT"), <c>Open</c> (its list shown) and, open, <c>Rows</c>: its list's entry
-    /// buttons where they are drawn (their rectangles less the list's and its ancestors' scroll offsets), null closed. The face,
-    /// the list and a text box's label are in no children vector, so they are never <c>Children</c>.</para></summary>
+    /// buttons where they are drawn (their rectangles less the list's and its ancestors' scroll offsets), and <c>OpenList</c>:
+    /// the list's scrollbox itself, where it is drawn and with its own <c>Scroll</c>, the viewport a row shows in, without
+    /// children (its rows are <c>Rows</c>); both null closed. The face, the list and a text box's label are in no children
+    /// vector, so they are never <c>Children</c>.</para></summary>
     public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children,
         float Scroll = 0f, float? Knob = null, float KnobSpan = 0f,
-        bool? Selected = null, string Value = "", IReadOnlyList<string>? Entries = null, bool Open = false, IReadOnlyList<Node>? Rows = null);
+        bool? Selected = null, string Value = "", IReadOnlyList<string>? Entries = null, bool Open = false, IReadOnlyList<Node>? Rows = null,
+        Node? OpenList = null);
 
     /// <summary>The class of the top bar's app (BlueBird's <c>app_overlay</c>), read on every page whatever its front flag.</summary>
     public const string TopBarClass = "overlay";
@@ -70,17 +73,31 @@ public sealed class Bbs757EfbMemory
     {
         if (!TryBbos(out uint bbos)) return Array.Empty<App>();
         var apps = new List<App>();
+        var walk = new Walk();
         foreach (var (key, app) in AppMapEntries(bbos))
         {
             string cls = ClassName(app);
             if (!Drawn(app, cls, bbos)) continue;
             var controls = new List<Node>();
-            foreach (uint root in Vector(app + (uint)_l.AppRoots)) AddVisible(root, controls);
+            foreach (uint root in Vector(app + (uint)_l.AppRoots)) AddVisible(root, controls, walk);
             if (_m.TryReadPtr(app + (uint)_l.AppPage, out uint page) && page != 0)
-                foreach (uint root in Vector(page + (uint)_l.PageChildren)) AddVisible(root, controls);
+                foreach (uint root in Vector(page + (uint)_l.PageChildren)) AddVisible(root, controls, walk);
             apps.Add(new App(key, cls, controls));
         }
         return apps;
+    }
+
+    /// <summary>One reading's walk: the controls it has entered. A torn or hostile tree cannot make it loop or blow up: a control
+    /// is entered once per reading however many vectors list it (a children vector listing its own control twice made about 2^65
+    /// walks under the depth guard alone), and no more than <see cref="MaxNodes"/> controls are entered.</summary>
+    private sealed class Walk
+    {
+        private readonly HashSet<uint> _entered = new();
+
+        public bool Spent => _entered.Count >= MaxNodes;
+
+        /// <summary>True the first time a control is met in this reading while the budget lasts; false for one met before.</summary>
+        public bool Enter(uint ctrl) => !Spent && _entered.Add(ctrl);
     }
 
     private bool Drawn(uint app, string cls, uint bbos) => cls switch
@@ -140,24 +157,35 @@ public sealed class Bbs757EfbMemory
     /// <summary>The largest scroll offset believed: a torn or foreign float cannot move a page by more.</summary>
     private const float MaxScroll = 100_000f;
 
-    /// <summary>The deepest a walk goes (the tablet's trees are about 15 deep): a torn pointer that loops ends here, not in a
-    /// stack overflow.</summary>
-    private const int MaxDepth = 64;
+    /// <summary>The deepest a walk goes (the tablet's trees are about 15 deep): a torn chain of distinct controls ends here, not
+    /// in a stack overflow.</summary>
+    internal const int MaxDepth = 64;
 
+    /// <summary>The most controls one reading enters, hidden ones included (the largest committed reading has 230 visible ones:
+    /// Settings, Callouts, with the keyboard's 53): a torn tree wide past it is cut there.</summary>
+    internal const int MaxNodes = 20_000;
+
+    /// <summary>Adds the control, with its visible descendants, when it and its own visible byte are readable and set; once per
+    /// reading (<see cref="Walk"/>) and no deeper than <see cref="MaxDepth"/>.</summary>
     /// <param name="ancestorScroll">The sum of the offsets of the scrollboxes above this control; its rectangle
     /// never moves, but it is drawn that much higher.</param>
-    private void AddVisible(uint ctrl, List<Node> into, float ancestorScroll = 0f, int depth = 0)
+    private void AddVisible(uint ctrl, List<Node> into, Walk walk, float ancestorScroll = 0f, int depth = 0)
     {
-        if (depth > MaxDepth || ctrl == 0 || !_m.TryReadByte(ctrl + (uint)_l.CtrlVisible, out byte vis) || (vis & 1) == 0) return;
+        if (depth > MaxDepth || ctrl == 0 || !walk.Enter(ctrl)) return;
+        if (!_m.TryReadByte(ctrl + (uint)_l.CtrlVisible, out byte vis) || (vis & 1) == 0) return;
         string kind = KindOf(ctrl);
         float scroll = kind == "scrollbox" ? ReadScroll(ctrl) : 0f;
         var children = new List<Node>();
-        foreach (uint ch in Vector(ctrl + (uint)_l.CtrlChildren)) AddVisible(ch, children, ancestorScroll + scroll, depth + 1);
+        foreach (uint ch in Vector(ctrl + (uint)_l.CtrlChildren))
+        {
+            if (walk.Spent) break;
+            AddVisible(ch, children, walk, ancestorScroll + scroll, depth + 1);
+        }
         var node = ReadNode(ctrl, kind, children, ancestorScroll, scroll);
         into.Add(kind switch
         {
             "button" => node with { Selected = ReadSelected(ctrl) },
-            "pulldown" => WithEntries(node, ctrl, ancestorScroll, depth),
+            "pulldown" => WithEntries(node, ctrl, walk, ancestorScroll, depth),
             _ => node,
         });
     }
@@ -209,23 +237,28 @@ public sealed class Bbs757EfbMemory
     /// <summary>
     /// A drop-down with its entries' texts (its vector of entry records, in BlueBird's order: the list's drawn order), its value
     /// (the entry whose text is the face's; it has no index field) and whether its list is open. Open, its rows are the entry
-    /// buttons of its list (a scrollbox) > its stack > the buttons, read as any control inside a scrollbox is: drawn its own offset
-    /// and the drop-down's ancestors' higher. Closed, BlueBird leaves them at [0,0 50x38], so none are read.
+    /// buttons of its list (a scrollbox) > its stack > the buttons, and its open list the scrollbox itself (its drawn rectangle and
+    /// own offset, the rows' viewport). Both are read as any control inside a scrollbox is: the rows drawn the list's offset and
+    /// the drop-down's ancestors' higher, the list its ancestors' (the page's scroll taken off them is logic only: no drop-down read
+    /// so far sits in a scrollbox). The list is entered once per reading, as every control is, so a list that points back up
+    /// the tree reads none. Closed, BlueBird leaves the rows at [0,0 50x38], so none are read.
     /// </summary>
-    private Node WithEntries(Node node, uint ctrl, float ancestorScroll, int depth)
+    private Node WithEntries(Node node, uint ctrl, Walk walk, float ancestorScroll, int depth)
     {
         var entries = new List<string>();
         foreach (uint record in Vector(ctrl + (uint)_l.PulldownEntries))
             entries.Add(_m.ReadStdString(record + (uint)_l.PulldownEntryText) ?? "");
         bool open = _m.TryReadByte(ctrl + (uint)_l.PulldownOpen, out byte b) && b == 1;
         List<Node>? rows = null;
+        Node? openList = null;
         if (open)
         {
             var list = new List<Node>();
-            if (_m.TryReadPtr(ctrl + (uint)_l.PulldownList, out uint scrollbox)) AddVisible(scrollbox, list, ancestorScroll, depth + 1);
+            if (_m.TryReadPtr(ctrl + (uint)_l.PulldownList, out uint scrollbox)) AddVisible(scrollbox, list, walk, ancestorScroll, depth + 1);
             rows = list.SelectMany(l => l.Children).SelectMany(stack => stack.Children).Where(r => r.Kind == "button").ToList();
+            if (list.Count == 1) openList = list[0] with { Children = Array.Empty<Node>() };
         }
-        return node with { Value = entries.Contains(node.Text) ? node.Text : "", Entries = entries, Open = open, Rows = rows };
+        return node with { Value = entries.Contains(node.Text) ? node.Text : "", Entries = entries, Open = open, Rows = rows, OpenList = openList };
     }
 
     /// <summary>The slack a knob's place may sit past either end of its track and still be read (then as that end).</summary>

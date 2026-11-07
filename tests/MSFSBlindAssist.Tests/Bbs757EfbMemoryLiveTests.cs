@@ -106,7 +106,7 @@ public class Bbs757EfbMemoryLiveTests
         var apps = reader.ReadFrontApps();
         Assert.NotEmpty(apps);
         var notices = reader.ReadNotices();
-        File.WriteAllText(outFile, Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(apps), notices));
+        File.WriteAllText(outFile, Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(apps), Bbs757EfbTreeScrub.Scrub(notices)));
         _out.WriteLine($"wrote {apps.Count} app(s), {apps.Sum(a => Count(a.Controls))} controls, {notices.Count} notification(s)");
     }
 

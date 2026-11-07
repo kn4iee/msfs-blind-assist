@@ -253,7 +253,9 @@ join the class list, derived by RTTI.
 
 ## Not settled
 
-The open list's scrolling (no drag in an open list was made); the toast, START BOARDING and the departure countdown;
+The open list's scrolling (no drag in an open list was made); an open list under a scrolled page (no drop-down read sits
+in a scrollbox: the reader takes the page's scroll off the list and its rows as for any control inside a scrollbox, logic
+only); the toast, START BOARDING and the departure countdown;
 the notification list's order; overlay +0x2ac, +0x20c and +0x210, record +0x36, BBOS +0x9348 and +0x9368; the OFP's
 line pitch; list boxes (none reachable); Settings, General's class sweep; why a door's MOVING button drops out of the
 window.

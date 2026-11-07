@@ -198,8 +198,11 @@ public class Bbs757EfbTreeScrubTests
         // box's text; each written only when set, so a node without them writes as before.
         var row = new Bbs757EfbMemory.Node("button", "item_btn_0", "RW07L", 519.1f, 151, 150, 38, 0, Array.Empty<Bbs757EfbMemory.Node>(),
             Selected: false);
+        var list = new Bbs757EfbMemory.Node("scrollbox", "item_scrollbox", "", 519.1f, 189, 150, 76, 0, Array.Empty<Bbs757EfbMemory.Node>(),
+            Scroll: 38);
         var dropDown = new Bbs757EfbMemory.Node("pulldown", "planning_perf_calc_runway_dropdown", "RW07L", 519.1f, 156, 150, 34, 0x99,
-            Array.Empty<Bbs757EfbMemory.Node>(), Value: "RW07L", Entries: new[] { "RW07L", "RW26" }, Open: true, Rows: new[] { row });
+            Array.Empty<Bbs757EfbMemory.Node>(), Value: "RW07L", Entries: new[] { "RW07L", "RW26" }, Open: true, Rows: new[] { row },
+            OpenList: list);
         var tab = new Bbs757EfbMemory.Node("button", "planning_perf_calc_tab_button_0", "TAKE OFF", 300, 100, 120, 40, 0,
             Array.Empty<Bbs757EfbMemory.Node>(), Selected: true);
         var closed = new Bbs757EfbMemory.Node("pulldown", "planning_perf_calc_flap_dropdown", "SELECT", 0, 0, 150, 34, 0,
@@ -213,19 +216,35 @@ public class Bbs757EfbTreeScrubTests
             Assert.Equal(new[] { "RW07L", "RW26" }, back[0].Entries);
             var r = Assert.Single(back[0].Rows!);
             Assert.Equal(("item_btn_0", "RW07L", 519.1f, 151f, 150f, 38f, (bool?)false), (r.Name, r.Text, r.X, r.Y, r.W, r.H, r.Selected));
+            var l = back[0].OpenList!;
+            Assert.Equal(("scrollbox", "item_scrollbox", 519.1f, 189f, 150f, 76f, 38f), (l.Kind, l.Name, l.X, l.Y, l.W, l.H, l.Scroll));
             Assert.True(back[1].Selected);
             Assert.Equal(("", false, 0), (back[2].Value, back[2].Open, back[2].Entries!.Count));
             Assert.Null(back[2].Rows);
+            Assert.Null(back[2].OpenList);
             var plain = back[3];
             Assert.Equal(((bool?)null, "", false), (plain.Selected, plain.Value, plain.Open));
             Assert.Null(plain.Entries);
             Assert.Null(plain.Rows);
+            Assert.Equal(0f, plain.Scroll);
         }
 
         // A node without them writes none of their names.
         string bare = Bbs757EfbTreeJson.Write(App(N("a", "x")));
-        foreach (string field in new[] { "selected", "value", "entries", "open", "rows" })
+        foreach (string field in new[] { "selected", "value", "entries", "open", "rows", "list", "scroll" })
             Assert.DoesNotContain($"\"{field}\"", bare);
+    }
+
+    [Fact]
+    public void The_notices_pass_the_scrub_as_read()
+    {
+        // BlueBird's notifications are event texts and Zulu times: no credential or flight plan field was measured in one.
+        var notices = new[]
+        {
+            new Bbs757EfbNoticeRecord(45, "", "CHOCKS REMOVED.", "21:37Z", false),
+            new Bbs757EfbNoticeRecord(52, "AUTOBRAKE 1", "TARGET 4.5 | ACTUAL 4.5 ft/s2", "03:20Z", true),
+        };
+        Assert.Equal(notices, Bbs757EfbTreeScrub.Scrub(notices));
     }
 
     [Fact]

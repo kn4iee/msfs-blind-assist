@@ -67,9 +67,11 @@ public sealed class Bbs757EfbModelReader
     }
 
     /// <summary>The kinds plan 21's layout added for BlueBird's text box, multi-line text box, drop-down and image classes. Until
-    /// the model maps them (plan 21, Tasks 5 and 6) it reads them as it read them before the layout knew their classes, as "other";
-    /// the top bar's and the dialog's apps (<see cref="Bbs757EfbMemory.TopBarClass"/>, <see cref="Bbs757EfbMemory.DialogClass"/>)
-    /// are no content app, home screen or keyboard app, so it passes them by.</summary>
+    /// the model maps them (plan 21, Tasks 5 and 6) it reads them as "other", with the text plan 21 now reads (a text box's, a
+    /// drop-down's face's, a multi-line box's whole text), where the walk before the layout knew their classes read none for the
+    /// first two and none past 4,096 characters for the third: a live page reads that text as text, the committed trees as
+    /// before. The top bar's and the dialog's apps (<see cref="Bbs757EfbMemory.TopBarClass"/>,
+    /// <see cref="Bbs757EfbMemory.DialogClass"/>) are no content app, home screen or keyboard app, so it passes them by.</summary>
     private static readonly HashSet<string> UnmappedKinds = new(StringComparer.Ordinal) { "textbox", "multiline", "pulldown", "image" };
 
     private static IReadOnlyList<Bbs757EfbMemory.App> AsOther(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
