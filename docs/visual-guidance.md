@@ -181,7 +181,7 @@ VG measures altitude as the SimConnect **reference datum** (`PLANE ALTITUDE − 
 
 `GlideslopeAltitudeBiasFt` fixes (1): `idealAltitudeAGL = distance·tan(3°) + GlideslopeAltitudeBiasFt`. `FlareAltitudeBiasFt` fixes (2): `wheelHeightAGL = measuredAltitude − FlareAltitudeBiasFt`, and the flare (30 ft) and touchdown (5 ft) phase thresholds test `wheelHeightAGL`. The two are applied in **different code paths** and were measured separately (on the beam vs. near the ground, different attitudes) — they are deliberately **not** one shared constant. Set either to `0` to disable that correction.
 
-The 777 numbers are measured against a coupled ILS autoland; the A320 numbers are estimates (≈50 ft TCH + a smaller datum offset) pending in-sim calibration.
+The 777 numbers are measured against a coupled ILS autoland; the A320 numbers are estimates (≈50 ft TCH + a smaller datum offset) pending in-sim calibration. The iniBuilds A350's glidepath bias is measured: `PLANE ALTITUDE − threshold elevation − distance·tan(3°)`, the distance from the landing threshold, had a median of 52 and 53 ft on two coupled ILS approaches to OMDB 12L (2026-10-30, threshold displaced 1493 ft) and 54 ft on one to VCBI 04 (2026-11-03, no displacement), so `GlideslopeAltitudeBiasFt` 53. Its `FlareAltitudeBiasFt` 18 comes from the flight model's gear geometry (main gear contact 17.63 ft aft of and 16.45 ft below the datum: 17.9 ft at +5° flare pitch, struts extended; 15.3 ft parked), pending a landing (docs/inibuilds-a350.md).
 
 Override pattern:
 
