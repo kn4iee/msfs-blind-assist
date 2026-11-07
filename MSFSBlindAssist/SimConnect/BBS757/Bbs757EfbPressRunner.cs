@@ -80,8 +80,10 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// "Boarding… 10 min"), or an answer whose question was answered meanwhile: nothing tapped, "{label} is no longer on the tablet."
 /// Under a question that came up meanwhile, an answer to another question included (every question's YES is keyed alike): nothing
 /// tapped and nothing said. A side-menu entry or a home-screen app whose page the tablet shows already (pressed twice), and the
-/// window's own Home on the home screen: nothing tapped, nothing said. A page control another drop-down's open list covers (the tap
-/// would choose one of its rows): nothing tapped, "{name} is under the open {list} list, not pressed."</item>
+/// window's own Home on the home screen: nothing tapped, nothing said. A page control BlueBird's notification pop-up or list covers
+/// (the tap would land on the notification): nothing tapped, "{name} is under a BlueBird notification, not pressed." A page control
+/// another drop-down's open list covers (the tap would choose one of its rows): nothing tapped, "{name} is under the open {list} list,
+/// not pressed."</item>
 /// <item>Whether: a switch or check box only when its state read differs from the wish (<see cref="Bbs757EfbPress.NeedsTap"/>), a
 /// slider only when it does not read the choice asked for.</item>
 /// <item>The tap, and right after it the press's hook (<see cref="Bbs757EfbExtras.HookFor"/>); then the page re-read until it changes
@@ -644,7 +646,13 @@ public sealed class Bbs757EfbPressRunner
             // Outside its clip (or showing under MinShownPx): dragged toward the viewport's middle, read again, found again where it is
             // drawn now. Only a control of the scrollbox that scrolls has a drag (DragFor); any other is not brought into view.
             if (steps >= MaxScrollSteps || Bbs757EfbPress.DragFor(now, found) is not { } drag) break;
-            // A drag presses where it starts: on an open list that press would land on one of its rows (the review's Minor 2).
+            // A drag presses where it starts: on BlueBird's notification panel that press would land on the notification, and on an
+            // open list on one of its rows (the review's Minor 2).
+            if (Bbs757EfbPress.UnderNotice(now, null, new Point(drag.X, drag.Y0)))
+            {
+                _io.Alert(Bbs757EfbPress.UnderNoticeText(Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item)));
+                return null;
+            }
             if (Bbs757EfbPress.CoveringList(now, null, new Point(drag.X, drag.Y0)) is { } covering)
             {
                 _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item), Bbs757EfbPress.SpokenName(now, covering)));
@@ -717,14 +725,22 @@ public sealed class Bbs757EfbPressRunner
 
     /// <summary>
     /// The tap at <paramref name="item"/>'s point (<paramref name="at"/>, else the target's), and, once it went out, the press's hook; false,
-    /// said, when nothing was tapped. A point another drop-down's open list covers on the page <paramref name="on"/> (the target's when not
-    /// given) is not tapped: the tap would land on one of its rows and choose that entry (plan 21, Task 7), so "{name} is under the open
-    /// {list} list, not pressed." is said. Checked here, at the point the tap goes to, so a slider's choice or percent place is checked as
-    /// a control's middle is (the review's Minor 2). A nav data press reads the cycle installed BEFORE its tap and hands it over with its hook.
+    /// said, when nothing was tapped. A page point BlueBird's notification pop-up or list covers on the page <paramref name="on"/> (the
+    /// target's when not given) is not tapped: the tap would land on the notification, which the fresh read cannot hide the control under
+    /// (plan 21, the final review's I1), so "{name} is under a BlueBird notification, not pressed." is said. A point another drop-down's open
+    /// list covers is not tapped either: the tap would land on one of its rows and choose that entry (plan 21, Task 7), so "{name} is under
+    /// the open {list} list, not pressed." is said. The notification is drawn over the page and its lists, so it is checked first. Both are
+    /// checked here, at the point the tap goes to, so a slider's choice or percent place is checked as a control's middle is (the review's
+    /// Minor 2). A nav data press reads the cycle installed BEFORE its tap and hands it over with its hook.
     /// </summary>
     private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct, Point? at = null, Bbs757EfbScreenModel? on = null)
     {
         var page = on ?? target.Page;
+        if (Bbs757EfbPress.UnderNotice(page, item, at ?? target.At))
+        {
+            _io.Alert(Bbs757EfbPress.UnderNoticeText(Bbs757EfbPress.SpokenName(page, item)));
+            return false;
+        }
         if (Bbs757EfbPress.CoveringList(page, item, at ?? target.At) is { } covering)
         {
             _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(page, item), Bbs757EfbPress.SpokenName(page, covering)));

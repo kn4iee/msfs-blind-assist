@@ -9,8 +9,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// from the reads lives here, where it is tested without a tablet: finding the control the pilot pressed again in a fresh read
 /// (<see cref="Relocate"/>), whether a switch still needs its tap (<see cref="NeedsTap"/>), which new word a switch of two choices
 /// shows (<see cref="NewChoiceWord"/>), where to tap a slider with choices and where to tap next (<see cref="ChoiceX"/>,
-/// <see cref="NextChoiceX"/>), where an open drop-down's row is tapped and whether an open list covers a press (<see cref="RowTapPoint"/>,
-/// <see cref="CoveringList"/>), whether a press changed the page (<see cref="PageUnchanged"/>), what a button press says
+/// <see cref="NextChoiceX"/>), where an open drop-down's row is tapped and whether an open list or BlueBird's notification panel covers a
+/// press (<see cref="RowTapPoint"/>, <see cref="CoveringList"/>, <see cref="UnderNotice"/>), whether a press changed the page (<see cref="PageUnchanged"/>), what a button press says
 /// (<see cref="ButtonOutcome"/>: the pressed control's new words, or that nothing changed), and the words said when a press did
 /// not go through or a switch of two choices went to its other choice. Nothing here
 /// refuses a press (the owner's ruling of 2026-10-29): a decision says where a control is now, whether its tap is still wanted,
@@ -83,8 +83,8 @@ public static class Bbs757EfbPress
 
     /// <summary>
     /// The control the pilot pressed, found again in <paramref name="now"/>, a fresh read of the tablet taken after the page
-    /// <paramref name="before"/> was read and the press was chosen from it; null when it is not there (a notification covers it, or
-    /// the page changed under the pilot). Searched in <paramref name="now"/>'s menu, controls, top bar and question buttons, by the
+    /// <paramref name="before"/> was read and the press was chosen from it; null when it is not there (the page changed under the
+    /// pilot). A notification over it does not hide it: memory still holds it (<see cref="UnderNotice"/> says so). Searched in <paramref name="now"/>'s menu, controls, top bar and question buttons, by the
     /// first rule that finds one:
     /// <list type="number">
     /// <item>none, when the two reads are of different pages;</item>
@@ -265,6 +265,19 @@ public static class Bbs757EfbPress
             ? m.Items.FirstOrDefault(i => !ReferenceEquals(i, item) && i.Kind == Bbs757EfbKind.Choice && ListViewOf(i) is { } view && view.Contains(at))
             : null;
 
+    // ------------------------------------------------------------------ BlueBird's notification panel (plan 21, the final review's I1)
+
+    /// <summary>
+    /// Whether BlueBird's notification pop-up or notification list covers <paramref name="at"/>, a point of the page <paramref name="m"/> a
+    /// press would put the mouse down on: where <paramref name="item"/> is tapped, or, with no item, where a page drag presses. The top bar
+    /// app draws the panel over the top right of the page from its own fields (<see cref="Bbs757EfbScreenModel.NoticePanel"/>, about
+    /// 1039,38 350x118 for 10 s after a new notification: measured 2026-11-07), not as controls, so a fresh read still finds every control
+    /// under it and the press would land on the notification. False while no panel shows, and for an item that is no page control (the side
+    /// menu, the top bar, a question's answers), as <see cref="CoveringList"/>.
+    /// </summary>
+    public static bool UnderNotice(Bbs757EfbScreenModel m, Bbs757EfbItem? item, Point at) =>
+        (item == null || m.Items.Contains(item)) && m.NoticePanel is { } panel && panel.Contains(at);
+
     // ------------------------------------------------------------------ a question
 
     /// <summary>A question's words as two reads compare them: its letters and digits, upper-cased invariantly. Case, spaces and
@@ -427,4 +440,7 @@ public static class Bbs757EfbPress
 
     /// <summary>A control another drop-down's open list covers (<see cref="CoveringList"/>), so it was not tapped.</summary>
     public static string CoveredText(string name, string list) => name + " is under the open " + list + " list, not pressed.";
+
+    /// <summary>A control BlueBird's notification pop-up or list covers (<see cref="UnderNotice"/>), so it was not tapped.</summary>
+    public static string UnderNoticeText(string name) => name + " is under a BlueBird notification, not pressed.";
 }

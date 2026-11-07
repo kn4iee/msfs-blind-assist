@@ -18,7 +18,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// <see cref="SectionOf"/>); a read that marks none (a tree captured before plan 21) names no section and no current tab. Whether the
 /// page scrolls, and its viewport, come from the one scrollbox holding a taller stackbox, and each item is clipped to the scrollbox it
 /// sits in. Beside the page (plan 21, Task 6): the top bar app's labels are the status bar, BBOS's notification records the
-/// notifications, and the dialog app, while one is up, the question over the page. Pure over the walk
+/// notifications, the dialog app, while one is up, the question over the page, and the top bar app's notification panel, while it
+/// shows, the part of the tablet a notification covers (<see cref="Bbs757EfbScreenModel.NoticePanel"/>). Pure over the walk
 /// (<see cref="Read(IReadOnlyList{Bbs757EfbMemory.App}, IReadOnlyList{Bbs757EfbNoticeRecord})"/>): tested against synthetic trees and
 /// the committed trees.
 /// </summary>
@@ -55,9 +56,28 @@ public sealed class Bbs757EfbModelReader
             {
                 TopBar = StatusBarOf(apps), Notices = Bbs757EfbNotices.From(notices ?? Array.Empty<Bbs757EfbNoticeRecord>()),
                 NoticesWhole = notices is not null, Question = QuestionOf(apps), Keyboard = KeyboardOf(apps),
+                NoticePanel = NoticePanelOf(apps),
             }
             : null;
     }
+
+    /// <summary>
+    /// The part of the tablet BlueBird's notification panel covers (<see cref="Bbs757EfbScreenModel.NoticePanel"/>): the top bar app's
+    /// panel rectangle while its shown byte is 1 (a pop-up or the list), rounded outward to whole pixels so no point the panel touches is
+    /// left out; null while it is not shown, when it was not read, and for a rectangle that is not finite, lies past
+    /// <see cref="MaxPanelPx"/> (a torn read) or has no area (closed, its height reads 0).
+    /// </summary>
+    private static Rectangle? NoticePanelOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
+        if (apps.FirstOrDefault(a => a.Class == Bbs757EfbMemory.TopBarClass)?.Panel is not { Shown: true } p) return null;
+        static bool Sane(float v) => float.IsFinite(v) && Math.Abs(v) <= MaxPanelPx;
+        if (!Sane(p.X) || !Sane(p.Y) || !Sane(p.W) || !Sane(p.H) || p.W <= 0 || p.H <= 0) return null;
+        int left = (int)Math.Floor(p.X), top = (int)Math.Floor(p.Y);
+        return Rectangle.FromLTRB(left, top, (int)Math.Ceiling(p.X + p.W), (int)Math.Ceiling(p.Y + p.H));
+    }
+
+    /// <summary>The farthest a notification panel's float is believed from 0, in tablet pixels (the tablet is 1397x1058).</summary>
+    private const float MaxPanelPx = 100_000f;
 
     private static Bbs757EfbScreenModel? PageOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
     {

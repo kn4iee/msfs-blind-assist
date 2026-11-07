@@ -11,7 +11,8 @@ namespace MSFSBlindAssist.Tests;
 /// Each node keeps kind, name, text, rectangle and children, and, only when the walk read them (optional: absent reads as
 /// none), a scrollbox's offset, a slider's knob, a button's selected state, and a drop-down's value, entries, open state, rows
 /// and open list; each app keeps
-/// key, class and controls. The file's root is the array of apps, or, for a capture with BlueBird's notifications, an object
+/// key, class and controls, and the top bar's app its notification panel when the walk read it (optional: absent reads as none). The
+/// file's root is the array of apps, or, for a capture with BlueBird's notifications, an object
 /// <c>{ "apps": [...], "notices": [...] }</c>; a root array reads as no notices. The node's address is not written and reads
 /// back as 0. Numbers are invariant and the output is indented so a diff reads.
 /// </summary>
@@ -24,12 +25,20 @@ internal static class Bbs757EfbTreeJson
     {
         var array = new JsonArray();
         foreach (var app in apps)
-            array.Add(new JsonObject
+        {
+            var o = new JsonObject
             {
                 ["key"] = app.Key,
                 ["class"] = app.Class,
-                ["controls"] = new JsonArray(app.Controls.Select(n => (JsonNode?)NodeToJson(n)).ToArray()),
-            });
+            };
+            if (app.Panel is { } p)
+                o["panel"] = new JsonObject
+                {
+                    ["shown"] = p.Shown, ["list"] = p.ListOpen, ["x"] = Number(p.X), ["y"] = Number(p.Y), ["w"] = Number(p.W), ["h"] = Number(p.H),
+                };
+            o["controls"] = new JsonArray(app.Controls.Select(n => (JsonNode?)NodeToJson(n)).ToArray());
+            array.Add(o);
+        }
         if (notices is null) return array.ToJsonString(Indented);
         return new JsonObject
         {
@@ -51,7 +60,11 @@ internal static class Bbs757EfbTreeJson
         var array = root is JsonObject o ? o["apps"]!.AsArray() : root.AsArray();
         return array.Select(a => new Bbs757EfbMemory.App(
             a!["key"]!.GetValue<int>(), a["class"]!.GetValue<string>(),
-            a["controls"]!.AsArray().Select(n => NodeFromJson(n!)).ToList())).ToList();
+            a["controls"]!.AsArray().Select(n => NodeFromJson(n!)).ToList(),
+            a["panel"] is { } p
+                ? new Bbs757EfbMemory.NoticePanel(p["shown"]!.GetValue<bool>(), p["list"]!.GetValue<bool>(), p["x"]!.GetValue<float>(),
+                    p["y"]!.GetValue<float>(), p["w"]!.GetValue<float>(), p["h"]!.GetValue<float>())
+                : null)).ToList();
     }
 
     /// <summary>The notifications a capture holds; none for a root array (every tree captured before plan 21).</summary>
@@ -160,6 +173,22 @@ internal static class Bbs757EfbTreeJson
                 }).ToList(),
             };
         }
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
+    /// <summary>The trees with BlueBird's notification panel up over <paramref name="x"/>, <paramref name="y"/>, <paramref name="w"/> by
+    /// <paramref name="h"/> on the top bar's app (<see cref="Bbs757EfbMemory.TopBarClass"/>), as the walk reads the overlay's fields while a
+    /// pop-up shows (<paramref name="list"/> false: [1039.75,38 349.25x118], measured 2026-11-07) or the full list is open (true, 480 tall).
+    /// Stands in for a capture with a notification up, which no committed tree has; a tree with no top bar app is returned as it is.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithNoticePanel(IReadOnlyList<Bbs757EfbMemory.App> apps, float x = 1039.75f, float y = 38,
+        float w = 349.25f, float h = 118, bool list = false) =>
+        apps.Select(a => a.Class == Bbs757EfbMemory.TopBarClass ? a with { Panel = new Bbs757EfbMemory.NoticePanel(true, list, x, y, w, h) } : a).ToList();
+
+    /// <summary>The trees with every button's selected state taken off, as a read that marks no side-menu entry or tab (a mid-update
+    /// read, or a torn one) gives them: no section and no current tab.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithoutSelected(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
+        static Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) => n with { Selected = null, Children = n.Children.Select(Walk).ToList() };
         return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
     }
 

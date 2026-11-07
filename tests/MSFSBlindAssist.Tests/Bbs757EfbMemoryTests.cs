@@ -616,6 +616,41 @@ public class Bbs757EfbMemoryTests
     }
 
     [Fact]
+    public void The_top_bar_app_reads_its_notification_panel()
+    {
+        // Measured 2026-11-07: under a new notification's pop-up the overlay's byte +0x1fc is 1 (+0x1fd, the full list, 0), its panel's x,
+        // y and width the floats at +0x234 and its height the float at +0x240 (118). BlueBird draws the panel from these fields, not as a
+        // control: only the top bar's app carries one.
+        var apps = Build(() =>
+        {
+            TopBarAndDialog(dialogOpen: true);
+            _b[BarApp + (uint)Layout.OverlayPanelShown] = 1;
+            uint rect = BarApp + (uint)Layout.OverlayPanelRect;
+            F32(rect, 1039.75f); F32(rect + 4, 38); F32(rect + 8, 349.25f); F32(BarApp + (uint)Layout.OverlayPanelHeight, 118);
+        }).ReadFrontApps();
+        var bar = Assert.Single(apps, a => a.Class == Bbs757EfbMemory.TopBarClass);
+        Assert.Equal(new Bbs757EfbMemory.NoticePanel(true, false, 1039.75f, 38, 349.25f, 118), bar.Panel);
+        Assert.All(apps.Where(a => a.Class != Bbs757EfbMemory.TopBarClass), a => Assert.Null(a.Panel));
+
+        // The list open: both bytes 1, 480 tall (the fake's image is the same one, its rectangle kept). Closed: both 0, no height.
+        var listed = Build(() =>
+        {
+            TopBarAndDialog(dialogOpen: false);
+            _b[BarApp + (uint)Layout.OverlayListOpen] = 1;
+            F32(BarApp + (uint)Layout.OverlayPanelHeight, 480);
+        }).ReadFrontApps();
+        Assert.Equal(new Bbs757EfbMemory.NoticePanel(true, true, 1039.75f, 38, 349.25f, 480), listed.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Panel);
+        var closed = Build(() =>
+        {
+            TopBarAndDialog(dialogOpen: false);
+            _b[BarApp + (uint)Layout.OverlayPanelShown] = 0;
+            _b[BarApp + (uint)Layout.OverlayListOpen] = 0;
+            F32(BarApp + (uint)Layout.OverlayPanelHeight, 0);
+        }).ReadFrontApps();
+        Assert.Equal(new Bbs757EfbMemory.NoticePanel(false, false, 1039.75f, 38, 349.25f, 0), closed.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Panel);
+    }
+
+    [Fact]
     public void A_closed_dialog_is_not_read()
     {
         // BlueBird left an answered defuel question "front" for hours, its page set; only BBOS's dialog byte said it was gone.

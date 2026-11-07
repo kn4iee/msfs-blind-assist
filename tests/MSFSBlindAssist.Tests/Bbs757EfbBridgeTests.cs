@@ -1637,6 +1637,84 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { "Dirty panel states is under the open Runway list, not pressed." }, tablet.Alerts);
     }
 
+    // ---- BlueBird's notification panel (plan 21, the final review's I1) ---------------------------------------------------
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_control_under_a_BlueBird_notification_is_not_tapped(string culture)
+    {
+        // A new notification's pop-up covers the top right of the page for about 10 s ([1039.75,38 349.25x118], measured 2026-11-07). The
+        // top bar app draws it from its own fields, so the fresh read still finds Livery options' first switch under it, and a tap there
+        // would land on the notification. Nothing is tapped, and the pilot is told why (a precision check, B757-19).
+        var apps = Bbs757EfbTreeJson.Load("52-settings-livery-options");
+        var page = Bbs757EfbModelReader.Read(apps)!;
+        var units = page.Items.Single(i => i.Key == "weight_units_toggle");
+        var tablet = new FakeTablet(page);
+        var press = tablet.Press(units);
+        tablet.Show(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(apps))!);
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Units is under a BlueBird notification, not pressed." }, tablet.Alerts);
+
+        // The switch below the pop-up (EHSI up reference, its middle at y 172, the panel's bottom 156) is tapped, and so is the first one
+        // once the pop-up has gone.
+        var ehsi = page.Items.Single(i => i.Key == "ehsi_up_reference_toggle");
+        var below = new FakeTablet(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(apps))!);
+        await below.Runner().ClickAsync(below.Press(ehsi), CancellationToken.None);
+        Assert.Equal(new[] { ehsi.Hit }, below.Taps);
+        var gone = new FakeTablet(page);
+        await gone.Runner().ClickAsync(gone.Press(units), CancellationToken.None);
+        Assert.Equal(new[] { units.Hit }, gone.Taps);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_drop_down_under_a_BlueBird_notification_is_not_opened(string culture)
+    {
+        // Systems' page menu (1097,32 300x50) lies inside the pop-up: its face is not tapped, so no page is chosen under the notification.
+        var apps = Bbs757EfbTreeJson.Load("30-systems");
+        var systems = Bbs757EfbModelReader.Read(apps)!;
+        var tablet = new FakeTablet(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(apps))!);
+
+        Assert.False(await TestCulture.Run(culture, () => tablet.Runner().ChooseAsync(tablet.Press(Named(systems, "pb_menu1")), "28 - FUEL", CancellationToken.None)));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Select is under a BlueBird notification, not pressed." }, tablet.Alerts);
+
+        // The full list (480 tall) covers PERF calc's Surface drop-down (its middle at 1052,341), which the pop-up alone leaves clear.
+        var perf = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
+        var listed = new FakeTablet(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(perf, h: 480, list: true))!);
+        Assert.False(await TestCulture.Run(culture, () => listed.Runner().ChooseAsync(listed.Press(Named(listed.Page, SurfaceDropDown)), "Snow", CancellationToken.None)));
+        Assert.Empty(listed.Taps);
+        Assert.Equal(new[] { "Surface Condition is under a BlueBird notification, not pressed." }, listed.Alerts);
+
+        var popped = new FakeTablet(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(perf))!);
+        await popped.Runner().ChooseAsync(popped.Press(Named(popped.Page, SurfaceDropDown)), "Snow", CancellationToken.None);
+        Assert.Equal(new[] { Named(popped.Page, SurfaceDropDown).Hit }, popped.Taps.Take(1));
+    }
+
+    [Fact]
+    public async Task A_page_drag_that_would_press_on_a_BlueBird_notification_is_not_made()
+    {
+        // A page drag presses at the viewport's x + 250 (500): a notification panel there would take the press. Dirty panel states (content
+        // 1202) is dragged from y 899; with a panel over (500, 899), nothing is dragged and nothing tapped.
+        var row = new Bbs757EfbItem(Bbs757EfbKind.Button, "Dirty panel states", new Rectangle(273, 1202, 600, 60), new Point(573, 1232), true, "btn:DIRTY");
+        var page = PageOf("SETTINGS", "AIRCRAFT", row) with
+        {
+            Scrollable = true, Viewport = new Rectangle(250, 82, 1147, 966), NoticePanel = new Rectangle(450, 850, 100, 100),
+        };
+        Assert.Equal((500, 899, 232), Bbs757EfbPress.DragFor(page, row)!.Value);
+        var tablet = new FakeTablet(page);
+
+        await tablet.Runner().ClickAsync(tablet.Press(row), CancellationToken.None);
+
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Dirty panel states is under a BlueBird notification, not pressed." }, tablet.Alerts);
+    }
+
     // ---- scrolling into view --------------------------------------------------------------------------------------------
 
     /// <summary>A scrolled page: rows at content positions inside a viewport of 250,82 1147x966, drawn at content less the offset;

@@ -216,6 +216,57 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
+    public void The_notification_panel_is_read_while_it_shows_and_covers_what_lies_under_it()
+    {
+        // BlueBird's pop-up after a new notification ([1039.75,38 349.25x118], measured 2026-11-07) is drawn from the top bar app's own
+        // fields, so the fresh read still finds Livery options' first switch under it (the final review's I1). The panel is the part of the
+        // tablet it covers, rounded outward; the switch below its bottom (156), and every control with no panel up, are clear.
+        var apps = Bbs757EfbTreeJson.Load("52-settings-livery-options");
+        var popped = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(apps))!;
+        Assert.Equal(new Rectangle(1039, 38, 350, 118), popped.NoticePanel);
+        var units = popped.Items.Single(i => i.Key == "weight_units_toggle");
+        var ehsi = popped.Items.Single(i => i.Key == "ehsi_up_reference_toggle");
+        Assert.True(Bbs757EfbPress.UnderNotice(popped, units, Bbs757EfbPress.TapPoint(popped, units)!.Value));
+        Assert.False(Bbs757EfbPress.UnderNotice(popped, ehsi, Bbs757EfbPress.TapPoint(popped, ehsi)!.Value));
+        Assert.True(Bbs757EfbPress.UnderNotice(popped, null, new Point(1300, 120)));   // a page drag's press point
+
+        // A control that is no page control (the top bar, a question's answer) is never held back by it.
+        var bar = new Bbs757EfbItem(Bbs757EfbKind.Button, "Start boarding", new Rectangle(1142, 3, 180, 28), new Point(1231, 17), true, "top:boarding");
+        Assert.False(Bbs757EfbPress.UnderNotice(popped with { TopBar = new[] { bar } }, bar, new Point(1300, 120)));
+
+        // With no panel up, or none read (every committed tree), nothing is covered.
+        var quiet = Bbs757EfbModelReader.Read(apps)!;
+        Assert.Null(quiet.NoticePanel);
+        Assert.False(Bbs757EfbPress.UnderNotice(quiet, quiet.Items.Single(i => i.Key == "weight_units_toggle"), new Point(1167, 112)));
+        var hidden = apps.Select(a => a.Class == Bbs757EfbMemory.TopBarClass
+            ? a with { Panel = new Bbs757EfbMemory.NoticePanel(false, false, 1039.75f, 38, 349.25f, 118) } : a).ToList();
+        Assert.Null(Bbs757EfbModelReader.Read(hidden)!.NoticePanel);
+        Assert.Null(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(apps, h: 0))!.NoticePanel);   // closed, its height 0
+        Assert.Null(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(apps, x: float.NaN))!.NoticePanel);
+        Assert.Null(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(apps, y: 3e9f))!.NoticePanel);
+
+        // The full list open: 480 tall, over PERF calc's Surface drop-down (977.9,324.2 150x34, its middle at x 1052) too.
+        var listed = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithNoticePanel(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"), h: 480, list: true))!;
+        Assert.Equal(new Rectangle(1039, 38, 350, 480), listed.NoticePanel);
+        var surface = listed.Items.Single(i => i.Name == "planning_perf_calc_surface_dropdown");
+        Assert.True(Bbs757EfbPress.UnderNotice(listed, surface, Bbs757EfbPress.TapPoint(listed, surface)!.Value));
+    }
+
+    [Fact]
+    public void The_notification_panel_round_trips_through_the_tree_format_and_is_no_page_change()
+    {
+        var apps = Bbs757EfbTreeJson.WithNoticePanel(Bbs757EfbTreeJson.Load("52-settings-livery-options"), list: true, h: 480);
+        var again = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(apps));
+        Assert.Equal(new Bbs757EfbMemory.NoticePanel(true, true, 1039.75f, 38, 349.25f, 480), again.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).Panel);
+        Assert.All(again.Where(a => a.Class != Bbs757EfbMemory.TopBarClass), a => Assert.Null(a.Panel));
+
+        // A pop-up comes and goes over any page, as the notifications do: not in the fingerprint.
+        var quiet = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("52-settings-livery-options"))!;
+        var popped = Bbs757EfbModelReader.Read(apps)!;
+        Assert.Equal(Bbs757EfbPress.Fingerprint(quiet), Bbs757EfbPress.Fingerprint(popped));
+    }
+
+    [Fact]
     public void The_systems_page_menu_in_the_title_row_is_tapped_where_it_is_drawn()
     {
         // Systems keeps its page menu in the app's title row (1097,32 300x50), above the content area (82): a control in no scrollbox

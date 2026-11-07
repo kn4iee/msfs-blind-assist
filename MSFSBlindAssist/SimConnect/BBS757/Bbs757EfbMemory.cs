@@ -8,8 +8,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// (<see cref="Bbs757EfbMemLayout"/>), so the text is BlueBird's own, with
 /// visibility and tap rectangles and no screen capture. Reaches the EFB object through the gauge manager, then BBOS,
 /// then its app map; walks each drawn app's roots and current page (the top bar's and an open dialog's among them),
-/// keeping the controls whose own visible byte (and whose ancestors') is set; and reads BBOS's notifications
-/// (<see cref="ReadNotices"/>). Pure over an <see cref="IEfbMemory"/> so it runs against a fake or the live
+/// keeping the controls whose own visible byte (and whose ancestors') is set, with the top bar's notification panel
+/// (<see cref="NoticePanel"/>); and reads BBOS's notifications (<see cref="ReadNotices"/>). Pure over an <see cref="IEfbMemory"/> so it runs against a fake or the live
 /// simulator. The std::map/std::vector/std::string shapes it reads are the Emscripten libc++ ABI, stable across
 /// BlueBird builds; only the BlueBird-specific field offsets come from the layout.
 /// </summary>
@@ -61,8 +61,15 @@ public sealed class Bbs757EfbMemory
     private const int MaxNotices = 256;
 
     /// <summary>One EFB app that is currently drawn (its front flag set, the top bar always, the dialog while one is up), with
-    /// the controls of its roots and its current page.</summary>
-    public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls);
+    /// the controls of its roots and its current page; the top bar's app also with its notification panel (<see cref="Panel"/>,
+    /// null for every other app and when its fields cannot be read).</summary>
+    public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls, NoticePanel? Panel = null);
+
+    /// <summary>BlueBird's notification panel as the top bar's app keeps it (measured live 2026-11-07): <c>Shown</c> while a new
+    /// notification's pop-up (about 10 s) or the notification list shows, <c>ListOpen</c> while the full list is open, and the panel's
+    /// rectangle in tablet pixels ([1039.75,38 349.25x118] under a pop-up, 480 tall with the list open, 0 tall closed). The top bar app
+    /// draws it from these fields, over the top right of the page: it is no control, so the controls under it still read.</summary>
+    public sealed record NoticePanel(bool Shown, bool ListOpen, float X, float Y, float W, float H);
 
     /// <summary>The drawn apps in the map's walk order, each with its visible control tree; empty when the module is not
     /// reachable (not located, or BBOS/app map not where the layout says). An app is drawn while its front flag is set, but
@@ -82,9 +89,20 @@ public sealed class Bbs757EfbMemory
             foreach (uint root in Vector(app + (uint)_l.AppRoots)) AddVisible(root, controls, walk);
             if (_m.TryReadPtr(app + (uint)_l.AppPage, out uint page) && page != 0)
                 foreach (uint root in Vector(page + (uint)_l.PageChildren)) AddVisible(root, controls, walk);
-            apps.Add(new App(key, cls, controls));
+            apps.Add(new App(key, cls, controls, cls == TopBarClass ? ReadPanel(app) : null));
         }
         return apps;
+    }
+
+    /// <summary>The top bar app's notification panel (<see cref="NoticePanel"/>): its two bytes and its rectangle's floats (x, y and
+    /// width at the layout's <c>OverlayPanelRect</c>, the height at <c>OverlayPanelHeight</c>); null when a byte cannot be read.</summary>
+    private NoticePanel? ReadPanel(uint app)
+    {
+        if (!_m.TryReadByte(app + (uint)_l.OverlayPanelShown, out byte shown) || !_m.TryReadByte(app + (uint)_l.OverlayListOpen, out byte list))
+            return null;
+        uint rect = app + (uint)_l.OverlayPanelRect;
+        return new NoticePanel(shown == 1, list == 1, _m.ReadFloat(rect), _m.ReadFloat(rect + 4), _m.ReadFloat(rect + 8),
+            _m.ReadFloat(app + (uint)_l.OverlayPanelHeight));
     }
 
     /// <summary>One reading's walk: the controls it has entered. A torn or hostile tree cannot make it loop or blow up: a control

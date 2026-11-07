@@ -165,6 +165,13 @@ public sealed record Bbs757EfbScreenModel(
     /// none is up.</summary>
     public Bbs757EfbQuestion? Question { get; init; }
 
+    /// <summary>The part of the tablet BlueBird's notification pop-up or notification list covers while it shows, in tablet pixels
+    /// (the top bar app's panel, <see cref="Bbs757EfbMemory.NoticePanel"/>: about 1039,38 350x118 under a pop-up, 480 tall with the list
+    /// open); null while none shows or none was read. BlueBird draws it over the page from its own fields, so the controls under it still
+    /// read: a press there would land on the notification (<see cref="Bbs757EfbPress.UnderNotice"/>). Not in the fingerprint: it comes and
+    /// goes over any page, as the notifications do.</summary>
+    public Rectangle? NoticePanel { get; init; }
+
     /// <summary>The part of the tablet the page scrolls in, in tablet pixels: the drawn rectangle of the one scrollbox that scrolls
     /// (<see cref="Scrollable"/>), else the content area. Each control is shown, and tapped, within its own <see cref="Bbs757EfbItem.Clip"/>;
     /// only a control whose clip is this rectangle is dragged into view.</summary>
