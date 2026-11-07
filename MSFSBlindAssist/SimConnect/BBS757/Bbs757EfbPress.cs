@@ -464,6 +464,9 @@ public static class Bbs757EfbPress
     /// <summary>A field that reads another text than the one typed (BlueBird's boxes filter what they take, and a full box drops keys).</summary>
     public static string TypedOtherText(string name, string value) => name + " reads " + value + ".";
 
+    /// <summary>A field that reads empty once typed: emptied as the pilot asked, or every key it was typed dropped.</summary>
+    public static string EmptyText(string name) => name + " is empty.";
+
     /// <summary>A typing that stopped because a run of its taps did not go out: what the field reads is not said.</summary>
     public static string NotTypedText(string name) => name + " not typed.";
 }

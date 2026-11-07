@@ -1211,8 +1211,12 @@ public class Bbs757EfbPressTests
         public int TapCaret { get; init; } = int.MaxValue;
         public int ReadyAfterMs { get; init; } = 1200;
         public bool OpensKeyboard { get; init; } = true;
-        /// <summary>The box the keyboard comes up typing into, when another than this one.</summary>
+        /// <summary>The box the keyboard comes up typing into, when another than this one, and whether that box opens the keypad.</summary>
         public string? UpFor { get; init; }
+        public bool UpForKeypad { get; init; }
+        /// <summary>The box's caret, length and keypad flag read only while the keyboard is up (a read before the tap cannot tell).</summary>
+        public bool TextStateUnreadWhileDown { get; init; }
+        private bool KeypadUp => UpFor != null ? UpForKeypad : Keypad;
         public bool RunsGoOut { get; init; } = true;
         public int ContentY { get; init; } = 156;
         public bool Scrollable { get; init; }
@@ -1247,7 +1251,7 @@ public class Bbs757EfbPressTests
             int y = (int)Math.Round(ContentY - Offset);
             var box = new Rectangle(289, y, 150, 34);
             return new Bbs757EfbItem(Bbs757EfbKind.Field, Label, box, new Point(box.Left + 75, y + 17), true, Name, Value: Text, Name: Name,
-                TextState: new Bbs757EfbTextState(Caret, MaxLength, Keypad));
+                TextState: TextStateUnreadWhileDown && !Shown ? null : new Bbs757EfbTextState(Caret, MaxLength, Keypad));
         }
 
         public Point FieldHit => Field().Hit;
@@ -1263,7 +1267,7 @@ public class Bbs757EfbPressTests
             return page with
             {
                 Keyboard = Kb,
-                KeyboardState = new Bbs757EfbKeyboardState(Shown, Ready, Keypad, Target, Numeric, Shift, Caps, Shown ? KeypadAt : FuelKeypad),
+                KeyboardState = new Bbs757EfbKeyboardState(Shown, Ready, KeypadUp, Target, Numeric, Shift, Caps, Shown ? KeypadAt : FuelKeypad),
                 Scrollable = Scrollable,
                 Viewport = Bbs757EfbScreen.ContentArea,
             };
@@ -1338,7 +1342,12 @@ public class Bbs757EfbPressTests
             }
             if (!Shown) { Events.Add("page tap"); return; }
             if (!Ready) { KeysOnThePage++; Down(); return; }   // before it settled: on the page beneath, and the keyboard slides away
-            if (Target != Name) return;
+            if (Target != Name)
+            {
+                // Up for another box: only its close is modeled.
+                if (KeypadUp ? p == Bbs757EfbTyping.KeypadOk(KeypadAt) : p == KeyAt("btn_keyboard_down")) Down();
+                return;
+            }
             if (Keypad) KeypadKey(p);
             else Key(p);
         }
@@ -1430,17 +1439,47 @@ public class Bbs757EfbPressTests
         Assert.InRange(tablet.Now, Bbs757EfbPressRunner.KeyboardReadyMaxMs, Bbs757EfbPressRunner.KeyboardReadyMaxMs + 200);
     }
 
-    [Fact]
-    public async Task A_keyboard_up_for_another_box_is_not_ready()
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_keyboard_up_for_another_box_is_not_ready_and_is_put_down(string culture)
     {
-        // Shown and settled, but typing into another box: no key is tapped, and the keyboard is not closed (it is not this box's).
+        // Shown and settled, but typing into another box: no key is typed, and once the wait is out the keyboard is put down with its down
+        // key, so it never stays over the page.
         var tablet = new TypingTablet { Text = "KSEA", UpFor = "planning_perf_calc_runway_length_input" };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None));
+
+        Assert.Empty(tablet.Runs);
+        Assert.Equal(new[] { tablet.FieldHit, KeyAt("btn_keyboard_down") }, tablet.Taps);
+        Assert.False(tablet.Shown);
+        Assert.Equal("KSEA", tablet.Text);
+        Assert.Equal(new[] { "Airport: the tablet's keyboard did not come up." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_keypad_up_for_another_box_is_put_down_with_its_OK()
+    {
+        // The keypad up for the fuel input dialog's box (the read says the keypad shows, where it is drawn): put down with its OK.
+        var tablet = new TypingTablet { Text = "KSEA", UpFor = "fuel_input_textbox", UpForKeypad = true, KeypadAt = FuelKeypad };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None);
+
+        Assert.Empty(tablet.Runs);
+        Assert.Equal(new[] { tablet.FieldHit, new Point(895, 735) }, tablet.Taps);
+        Assert.False(tablet.Shown);
+        Assert.Equal(new[] { "Airport: the tablet's keyboard did not come up." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_keyboard_that_never_settles_is_not_tapped()
+    {
+        // Shown but still sliding when the wait is out: a tap on its down key's place would land on the page beneath (measured), so none.
+        var tablet = new TypingTablet { Text = "KSEA", ReadyAfterMs = 10_000 };
 
         await tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None);
 
         Assert.Equal(new[] { tablet.FieldHit }, tablet.Taps);
-        Assert.Empty(tablet.Runs);
-        Assert.True(tablet.Shown);
+        Assert.Equal(0, tablet.KeysOnThePage);
         Assert.Equal(new[] { "Airport: the tablet's keyboard did not come up." }, tablet.Alerts);
     }
 
@@ -1463,11 +1502,29 @@ public class Bbs757EfbPressTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
-    public async Task A_missing_key_types_nothing_and_closes_the_keyboard(string culture)
+    public async Task A_missing_key_types_nothing_and_taps_nothing(string culture)
     {
-        var tablet = new TypingTablet { Text = "KSEA" };
+        // Found on the first fresh read, before any tap (plan 22's Global Constraints): the field below the viewport is not even dragged to.
+        var tablet = new TypingTablet { Text = "KSEA", ContentY = 1300, Scrollable = true };
 
         await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "KSé", CancellationToken.None));
+
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Runs);
+        Assert.False(tablet.Shown);
+        Assert.Equal("KSEA", tablet.Text);
+        Assert.Equal(new[] { "Airport: the tablet's keyboard has no é." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_missing_key_the_first_read_cannot_tell_closes_the_keyboard()
+    {
+        // The safety net: the box's state not read before the tap, so the read that shows the keyboard up finds the missing character; the
+        // keyboard is put down again with nothing typed.
+        var tablet = new TypingTablet { Text = "KSEA", TextStateUnreadWhileDown = true };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KSé", CancellationToken.None);
 
         Assert.Empty(tablet.Runs);
         Assert.Equal("KSEA", tablet.Text);
@@ -1564,17 +1621,55 @@ public class Bbs757EfbPressTests
         Assert.Equal(new[] { "TOD pause: 120" }, tablet.Alerts);
     }
 
-    [Fact]
-    public async Task A_letter_for_a_keypad_box_types_nothing_and_closes_the_keypad()
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_letter_for_a_keypad_box_taps_nothing(string culture)
     {
+        // The box opens the keypad (its state on the first fresh read), which has no letter: nothing tapped at all, the box not even tapped.
         var tablet = new TypingTablet { Label = "TOD PAUSE", Name = "tod_pause_textbox", Text = "40", Keypad = true, ReadyAfterMs = 100 };
 
-        await tablet.Runner().TypeAsync(tablet.Pressed(), "1a", CancellationToken.None);
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "1a", CancellationToken.None));
 
+        Assert.Empty(tablet.Taps);
         Assert.Empty(tablet.Runs);
         Assert.Equal("40", tablet.Text);
-        Assert.Equal(new[] { tablet.FieldHit, new Point(1337, 653) }, tablet.Taps);
         Assert.Equal(new[] { "TOD pause: the tablet's keyboard has no a." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task The_text_already_there_below_the_viewport_drags_nothing()
+    {
+        var tablet = new TypingTablet { Text = "KSEA", ContentY = 1300, Scrollable = true };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KSEA", CancellationToken.None);
+
+        Assert.Empty(tablet.Drags);
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task Emptying_a_field_says_it_is_empty(string culture)
+    {
+        var tablet = new TypingTablet { Text = "KSEA" };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "", CancellationToken.None));
+
+        Assert.Equal("", tablet.Text);
+        Assert.Equal(new[] { "Airport is empty." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_field_that_takes_none_of_the_text_says_it_is_empty()
+    {
+        // The Airport box drops digits: "123" leaves it empty, said so rather than "Airport reads ."
+        var tablet = new TypingTablet { Text = "KSEA", MaxLength = 4, Takes = AirportTakes };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "123", CancellationToken.None);
+
+        Assert.Equal("", tablet.Text);
+        Assert.Equal(new[] { "Airport is empty." }, tablet.Alerts);
     }
 
     [Theory]
@@ -1662,6 +1757,7 @@ public class Bbs757EfbPressTests
             Bbs757EfbPress.TypedText("Pressure (inHg)", "29.92"),
             Bbs757EfbPress.TypedOtherText("Airport", "KPD"),
             Bbs757EfbPress.NotTypedText("Airport"),
+            Bbs757EfbPress.EmptyText("Airport"),
         });
 
         Assert.Equal(new[]
@@ -1672,6 +1768,7 @@ public class Bbs757EfbPressTests
             "Pressure (inHg): 29.92",
             "Airport reads KPD.",
             "Airport not typed.",
+            "Airport is empty.",
         }, texts);
     }
 }
