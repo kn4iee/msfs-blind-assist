@@ -163,8 +163,9 @@ public class Bbs757EfbMemoryTests
     [Fact]
     public void An_across_sliders_place_is_its_knobs_left_along_the_track()
     {
-        // Weight & balance's forward cargo, measured 2026-11-07: 59.8 % of the way, the 12 px knob's left at X + 0.598 (W - 12).
-        var cargo = FirstChild(() => Slider(1162.5f, 462, 188, 18, 1162.5f + 0.598f * 176, 465, 12, 12));
+        // Weight & balance's forward cargo, measured 2026-11-07: 59.8 % of the way, the 12 px knob's left at X + 0.598 (W - 12). Its y
+        // is off the slider's middle, so a place taken from y (an across slider read as upright) would differ.
+        var cargo = FirstChild(() => Slider(1162.5f, 462, 188, 18, 1162.5f + 0.598f * 176, 463, 12, 12));
 
         Assert.Equal("slider", cargo.Kind);
         Assert.Equal(0.598f, cargo.Knob!.Value, 3);
@@ -184,19 +185,50 @@ public class Bbs757EfbMemoryTests
     }
 
     [Fact]
+    public void An_upright_sliders_span_is_its_knobs_height()
+    {
+        // A knob wider than tall on an upright slider: its height is what runs along the track (a width taken as the span reads 0.77).
+        var reservoir = FirstChild(() => Slider(423, 279, 24, 190, 425, 279 + 0.219f * 178, 20, 12));
+        Assert.Equal(0.781f, reservoir.Knob!.Value, 3);
+        Assert.Equal(12f, reservoir.KnobSpan);
+
+        // A knob as tall as its upright slider has no track to run along.
+        var tall = FirstChild(() => Slider(423, 279, 24, 190, 429, 279, 12, 190));
+        Assert.Null(tall.Knob);
+        Assert.Equal(0f, tall.KnobSpan);
+    }
+
+    [Fact]
     public void A_scroll_moves_a_slider_but_not_its_place()
     {
         // Settings, Aircraft scrolled, measured 2026-11-07: Boarding & load rate's knob y 864.5 is its rectangle's 857 + 7.5 while the
-        // slider is drawn 113 px higher. The knob is in the rectangle's own coordinates, so its place is the same.
+        // slider is drawn 113 px higher. The knob is in the rectangle's own coordinates, so its place is the same. The knob's y here is
+        // off the slider's middle (861): an across slider's place never comes from it.
         var rate = FirstChild(() =>
         {
             ScrolledGrid(113);
-            Slider(897, 857, 300, 30, 897 + 285, 864.5f, 15, 15);
+            Slider(897, 857, 300, 30, 897 + 285, 861, 15, 15);
         });
 
         Assert.Equal(857f - 113f, rate.Y);
         Assert.Equal(1f, rate.Knob);
         Assert.Equal(15f, rate.KnobSpan);
+    }
+
+    [Fact]
+    public void A_scroll_moves_an_upright_slider_but_not_its_place()
+    {
+        // The review's I1: the left reservoir under a scroll of 113. Its place comes from the knob against the rectangle as stored (279),
+        // not as drawn (166): against the drawn one it would read 0.146, inside the range, and list as 15.
+        var reservoir = FirstChild(() =>
+        {
+            ScrolledGrid(113);
+            Slider(423, 279, 24, 190, 429, 279 + 0.219f * 178, 12, 12);
+        });
+
+        Assert.Equal(166f, reservoir.Y);
+        Assert.Equal(0.781f, reservoir.Knob!.Value, 3);
+        Assert.Equal(12f, reservoir.KnobSpan);
     }
 
     [Theory]

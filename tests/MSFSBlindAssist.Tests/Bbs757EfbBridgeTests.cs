@@ -1067,6 +1067,67 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new Point(37, 260), tap);
         Assert.InRange(tap.Y, zoom.Box.Top, zoom.Box.Bottom - 1);
         Assert.Empty(tablet.Alerts);
+        // The review's I2: the knob moving alone is a change of the page, seen by the first read after the tap (the press's own read
+        // and that one), never after the whole ChangeMaxMs.
+        Assert.Equal(2, tablet.Events.Count(e => e == "read"));
+        Assert.True(tablet.Now < Bbs757EfbPressRunner.ChangeMaxMs, $"waited {tablet.Now} ms for a change");
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_sliders_knob_judges_it_before_the_percent_it_shows(string culture)
+    {
+        // The review's M1: Fuel's left tank shows "34%" with its knob at 34.5 %. After the tap the label reads "50%", but the knob stayed:
+        // the knob judges first, so it was not set.
+        IReadOnlyList<Bbs757EfbMemory.App> Fuel(string shown) => Bbs757EfbTreeJson.WithKnob(
+            Bbs757EfbTreeJson.WithText(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"), "fuel_left_tank_label", shown),
+            "fuel_slider_left", 0.345f, 12);
+        var page = Bbs757EfbModelReader.Read(Fuel("34%"))!;
+        var left = Assert.Single(page.Items, i => i.Name == "fuel_slider_left");
+        Assert.Equal("34%", left.Value);
+        var tablet = new FakeTablet(page);
+        tablet.OnTap = _ => tablet.Show(Bbs757EfbModelReader.Read(Fuel("50%"))!);
+
+        await TestCulture.Run(culture, () => tablet.Runner().SliderAsync(tablet.Press(left), "50", CancellationToken.None));
+
+        Assert.Single(tablet.Taps);
+        Assert.Equal(new[] { "Left could not be set to 50 percent." }, tablet.Alerts);
+    }
+
+    /// <summary>Systems from its committed tree with Electrical's zoom slider's knob read at <paramref name="place"/>.</summary>
+    private static Bbs757EfbScreenModel SystemsZoom(float place) =>
+        Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("30-systems"), "elec_zoom_slider", place, 12))!;
+
+    [Fact]
+    public async Task A_button_that_moves_only_a_knob_changed_the_tablet()
+    {
+        // The review's I2: "Elec zoom in" moves the zoom's knob up (measured) and nothing else on the page; that is a change, never
+        // "Elec zoom in: no change on the tablet."
+        var page = SystemsZoom(0.104f);
+        var zoomIn = page.Items.First(i => i.Clickable && i.Name.Contains("elec_zoom_in", StringComparison.Ordinal));
+        var tablet = new FakeTablet(page);
+        tablet.OnTap = _ => tablet.Show(SystemsZoom(0.2f));
+
+        await tablet.Runner().ClickAsync(tablet.Press(zoomIn), CancellationToken.None);
+
+        Assert.Single(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Fact]
+    public void A_read_in_which_only_a_knob_moved_is_pushed()
+    {
+        // The review's I2: the window's slider value comes from the knob, so a read in which BlueBird moved only the knob is pushed.
+        using var h = new BridgeHarness();
+        h.Bridge.TakeRead(SystemsZoom(0.104f));
+        int pushes = h.Pushes.Count;
+        string before = h.Pushes[^1][$"items.{IndexOf(h.Pushes[^1], "Elec zoom")}.value"];
+
+        h.Bridge.TakeRead(SystemsZoom(0.5f));
+
+        Assert.Equal(pushes + 1, h.Pushes.Count);
+        // 10.4 % on the 142 px knob-center track is pixel 15 of it: 11 in whole percent.
+        Assert.Equal(("11", "50"), (before, h.Pushes[^1][$"items.{IndexOf(h.Pushes[^1], "Elec zoom")}.value"]));
     }
 
     // ---- two-choice switches --------------------------------------------------------------------------------------------

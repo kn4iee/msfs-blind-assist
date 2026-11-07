@@ -656,6 +656,33 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
+    public void A_knob_bluebird_moved_is_a_change_of_the_page_in_whole_percent()
+    {
+        // The review's I2: the window's slider value is the knob's place, so two reads that differ only in BlueBird's knob are two pages
+        // (the bridge pushes the second, a press sees its change). In whole percent, as the window shows it, so a pixel of wobble that
+        // stays at the same percent is none.
+        static Bbs757EfbScreenModel At(int knobX, bool read = true) => PageOf("AIRCRAFT", "WEIGHT & BALANCE",
+            Item(Bbs757EfbKind.Slider, "FORWARD CARGO", "wb_baggage_fwd_slider", new Rectangle(1162, 462, 188, 18))
+                with { Slider = new Bbs757EfbSlider(1168, 1344, knobX) { KnobRead = read } });
+
+        Assert.False(Bbs757EfbPress.PageUnchanged(At(1273), At(1300)));                     // 60 % and 75 %
+        Assert.NotEqual(Bbs757EfbPress.Fingerprint(At(1273)), Bbs757EfbPress.Fingerprint(At(1300)));
+        Assert.True(Bbs757EfbPress.PageUnchanged(At(1273), At(1274)));                      // 59.66 % and 60.23 %: both 60
+        // A knob placed from the value shown (not BlueBird's) moves only with that value, which the page already compares.
+        Assert.True(Bbs757EfbPress.PageUnchanged(At(1273, read: false), At(1300, read: false)));
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void A_knobs_place_in_the_fingerprint_is_the_same_in_any_culture(string culture)
+    {
+        var page = PageOf("SYSTEMS", "", Item(Bbs757EfbKind.Slider, "ELEC ZOOM", "elec_zoom_slider", new Rectangle(16, 148, 42, 154))
+            with { Slider = new Bbs757EfbSlider(296, 154, 281) { Vertical = true, AcrossX = 37, KnobRead = true } });
+        Assert.Equal(TestCulture.Run("en-US", () => Bbs757EfbPress.Fingerprint(page)), TestCulture.Run(culture, () => Bbs757EfbPress.Fingerprint(page)));
+        Assert.Contains("|11\n", Bbs757EfbPress.Fingerprint(page));
+    }
+
+    [Fact]
     public void A_question_appearing_is_a_change_of_the_page()
     {
         var before = Ground(ReqFuelTruck());
