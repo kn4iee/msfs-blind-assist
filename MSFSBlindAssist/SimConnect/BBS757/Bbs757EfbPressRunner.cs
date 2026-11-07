@@ -118,7 +118,8 @@ public sealed class Bbs757EfbPressRunner
 
     private const int ChangePollMs = 100, NavigatePollMs = 500, FollowPollMs = 300, FilePollMs = 250;
 
-    /// <summary>How far a slider with no choices may sit from the percent asked for and still be set.</summary>
+    /// <summary>How far a slider with no choices may sit from the percent asked for and still be set: by its knob's place when the read
+    /// has BlueBird's knob, else by the value it shows.</summary>
     private const double PercentSlack = 10;
 
     /// <summary>The window's own Home button (<see cref="Bbs757EfbElements"/>), on every app page.</summary>
@@ -423,9 +424,10 @@ public sealed class Bbs757EfbPressRunner
     /// A slider set to <paramref name="value"/>: one of its choices (<see cref="Bbs757EfbElements.OptionsFor"/>'s words), or else a
     /// percent along its track. A choice: the choice's place tapped (<see cref="Bbs757EfbPress.ChoiceX"/>), read back, and stepped
     /// toward it, at most <see cref="Bbs757EfbPress.MaxSliderTaps"/> taps; then judged by BlueBird's file when the row is one of its
-    /// settings, else by the page. A percent: one tap at its place (along a vertical track for a slider taller than wide), judged by
-    /// the part of the track its value shows ("50%", "8/16") when it shows one, else by whether the tap changed the page or the
-    /// slider's words. Not set: "{label} could not be set to {value}."
+    /// settings, else by the page. A percent: one tap at its place (along a vertical track for a slider taller than wide; along the
+    /// range of the knob's center for a slider whose knob BlueBird's memory gives, <see cref="Bbs757EfbSlider.KnobRead"/>), judged by
+    /// where that knob is after the tap when the fresh read has it, else by the part of the track its value shows ("50%", "8/16") when
+    /// it shows one, else by whether the tap changed the page or the slider's words. Not set: "{label} could not be set to {value}."
     /// </summary>
     public async Task SliderAsync(Bbs757EfbPressed pressed, string value, CancellationToken ct)
     {
@@ -487,11 +489,14 @@ public sealed class Bbs757EfbPressRunner
         if (!await TapAsync(target.Item, target, ct, PercentPoint(target, track, percent))) return;
         if (await WaitForChangeAsync(target.Page, ct) is not { } after) return;   // nothing read: the window says why
 
-        // Judged by the value the slider shows now when it shows a part of its track (a percent, a count of its most: within the
-        // slack); else by whether the tap changed anything: the page (the weight beside a cargo slider), or the slider's own words.
-        // A value that shows nowhere ("") never judges it alone: it stays "" whatever the tap did.
+        // Judged by where BlueBird's knob is now when the fresh read has it (within the slack: the weight beside a cargo slider may change
+        // while its knob stays); else by the value the slider shows now when it shows a part of its track (a percent, a count of its
+        // most: within the slack); else by whether the tap changed anything: the page (the weight beside a cargo slider), or the
+        // slider's own words. A value that shows nowhere ("") never judges it alone: it stays "" whatever the tap did.
         if (Bbs757EfbPress.Relocate(target.Page, after, target.Item) is { } now
-            && (Bbs757EfbSlider.PercentShown(now.Value) is double shown
+            && (now.Slider is { KnobRead: true } knob
+                ? Math.Abs(knob.PercentOf(knob.KnobX) - percent) <= PercentSlack
+                : Bbs757EfbSlider.PercentShown(now.Value) is double shown
                 ? Math.Abs(shown - percent) <= PercentSlack
                 : !Bbs757EfbPress.PageUnchanged(target.Page, after)
                   || !string.Equals(now.Value, target.Item.Value, StringComparison.Ordinal)
@@ -502,7 +507,8 @@ public sealed class Bbs757EfbPressRunner
     }
 
     /// <summary>Where a set to <paramref name="percent"/> taps a slider: along a horizontal track on the row's tap point, along a
-    /// vertical one at its x middle, kept inside the part of its box that shows, so no tap lands outside the control's clip.</summary>
+    /// vertical one at its x middle, kept inside the part of its box that shows, so no tap lands outside the control's clip. With
+    /// BlueBird's knob read the track is its center's range, inside the box, so the tap is where the knob's center is to go.</summary>
     private static Point PercentPoint(Target target, Bbs757EfbSlider track, double percent)
     {
         if (!track.Vertical) return new Point(track.At(percent), target.At.Y);

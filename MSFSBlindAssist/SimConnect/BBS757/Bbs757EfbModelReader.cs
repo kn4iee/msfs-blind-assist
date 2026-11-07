@@ -355,13 +355,28 @@ public sealed class Bbs757EfbModelReader
             Slider: kind == Bbs757EfbKind.Slider ? SliderOf(control, value) : null);
     }
 
-    /// <summary>A slider's track from its rectangle, left to right, or bottom to top for a box taller than wide (the hydraulic reservoirs,
-    /// Systems' zoom; the direction is provisional until measured), and its knob: at the part of the track its value reads as (a percent,
-    /// "70%", or a count of its most, "16/16"), else at the start (the choices of a settings slider are told by the catalog, not by the
-    /// knob; a slider whose value shows nowhere keeps R8's start).</summary>
+    /// <summary>
+    /// A slider's track, left to right, or bottom to top for a box taller than wide (the hydraulic reservoirs, Systems' zoom; bottom is 0,
+    /// measured 2026-11-07), and its knob. A slider whose knob the walk read (<see cref="Bbs757EfbMemory.Node.Knob"/>) runs along the
+    /// range of its knob's center, X + kw/2 to X + W - kw/2 (upright: from Y + H - kh/2 up to Y + kh/2, as drawn), since a tap centers
+    /// the knob on the tap point (measured: Charts' zoom, tap x 1204, knob center 1204.5), and its knob is at the place read, marked as
+    /// BlueBird's own. Any other runs along its rectangle, its knob at the part of the track its value reads as (a percent, "70%", or a
+    /// count of its most, "16/16"), else at the start (the choices of a settings slider are told by the catalog, not by the knob; a
+    /// slider whose value shows nowhere keeps R8's start). The value the tablet shows names the slider either way.
+    /// </summary>
     private static Bbs757EfbSlider SliderOf(Bbs757EfbMemory.Node slider, string value)
     {
         bool vertical = slider.H > slider.W;
+        int acrossX = vertical ? (int)(slider.X + slider.W / 2) : 0;
+        if (slider.Knob is float place)
+        {
+            float half = slider.KnobSpan / 2;
+            var (from, to) = vertical
+                ? ((int)(slider.Y + slider.H - half), (int)(slider.Y + half))
+                : ((int)(slider.X + half), (int)(slider.X + slider.W - half));
+            var read = new Bbs757EfbSlider(from, to, from) { Vertical = vertical, AcrossX = acrossX, KnobRead = true };
+            return read with { KnobX = read.At(place * 100.0) };
+        }
         int start, end;
         if (vertical)
         {
@@ -373,7 +388,7 @@ public sealed class Bbs757EfbModelReader
             int left = (int)slider.X;
             (start, end) = (left, left + (int)slider.W);
         }
-        var track = new Bbs757EfbSlider(start, end, start) { Vertical = vertical, AcrossX = vertical ? (int)(slider.X + slider.W / 2) : 0 };
+        var track = new Bbs757EfbSlider(start, end, start) { Vertical = vertical, AcrossX = acrossX };
         // Only a value that is a percent or a count places the knob: a bare number on a settings slider is one of its choices.
         double? shown = value.EndsWith('%') || value.Contains('/') ? Bbs757EfbSlider.PercentShown(value) : null;
         return shown is double percent ? track with { KnobX = track.At(percent) } : track;

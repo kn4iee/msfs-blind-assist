@@ -112,6 +112,35 @@ public class Bbs757EfbTreeScrubTests
     }
 
     [Fact]
+    public void A_sliders_knob_round_trips_and_the_scrub_keeps_it()
+    {
+        var slider = new Bbs757EfbMemory.Node("slider", "wb_baggage_fwd_slider", "", 1162.5f, 462, 188, 18, 0x1234,
+            Array.Empty<Bbs757EfbMemory.Node>(), Knob: 0.598f, KnobSpan: 12);
+        foreach (var culture in new[] { "en-US", "de-DE", "sv-SE" })
+        {
+            string json = TestCulture.Run(culture, () => Bbs757EfbTreeJson.Write(Bbs757EfbTreeScrub.Scrub(App(slider))));
+            Assert.Contains("\"knob\": 0.598", json);
+            var back = TestCulture.Run(culture, () => Bbs757EfbTreeJson.Read(json))[0].Controls[0];
+            Assert.Equal((0.598f, 12f), (back.Knob, back.KnobSpan));
+        }
+    }
+
+    [Fact]
+    public void A_node_without_a_knob_writes_none_and_a_committed_tree_reads_none()
+    {
+        string json = Bbs757EfbTreeJson.Write(App(N("a", "x")));
+        Assert.DoesNotContain("knob", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(Bbs757EfbTreeJson.Read(json)[0].Controls[0].Knob);
+
+        var cargo = Bbs757EfbTreeJson.Load("12-aircraft-weight-balance").SelectMany(a => a.Controls).SelectMany(Flat)
+            .Single(n => n.Name == "wb_baggage_fwd_slider");
+        Assert.Null(cargo.Knob);
+        Assert.Equal(0f, cargo.KnobSpan);
+
+        static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
+    }
+
+    [Fact]
     public void The_json_uses_invariant_numbers_under_a_comma_decimal_culture()
     {
         foreach (var culture in new[] { "de-DE", "sv-SE" })

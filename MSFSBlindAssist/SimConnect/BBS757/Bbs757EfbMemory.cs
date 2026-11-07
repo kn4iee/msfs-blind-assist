@@ -25,8 +25,12 @@ public sealed class Bbs757EfbMemory
 
     /// <summary>One control read from memory: its class kind, name, text, rectangle, and child controls. <c>Y</c> is
     /// where the control is DRAWN (its rectangle less its scrollbox ancestors' offsets); <c>Scroll</c> is a
-    /// scrollbox's own offset, 0 for any other control.</summary>
-    public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children, float Scroll = 0f);
+    /// scrollbox's own offset (its content offset, B757-26), 0 for any other control. <c>Knob</c> is a slider's place along
+    /// its track, 0 to 1, from BlueBird's knob (<see cref="ReadKnob"/>): across a slider at least as wide as tall from its left,
+    /// up an upright one from its bottom; null for a slider whose knob is unreadable and for every other kind. <c>KnobSpan</c>
+    /// is the knob's size along the track in tablet pixels, 0 with no <c>Knob</c>.</summary>
+    public sealed record Node(string Kind, string Name, string Text, float X, float Y, float W, float H, uint Address, IReadOnlyList<Node> Children,
+        float Scroll = 0f, float? Knob = null, float KnobSpan = 0f);
 
     /// <summary>One EFB app that is currently drawn (its front flag set), with the controls of its roots and its
     /// current page.</summary>
@@ -99,7 +103,34 @@ public sealed class Bbs757EfbMemory
             ?? NonEmpty(_m.ReadStdString(ctrl + (uint)_l.CtrlLabelText)) ?? "";
         float X = _m.ReadFloat(ctrl + (uint)_l.CtrlRect), Y = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 4);
         float W = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 8), H = _m.ReadFloat(ctrl + (uint)_l.CtrlRect + 12);
-        return new Node(kind, name, text, X, Y - ancestorScroll, W, H, ctrl, children, scroll);
+        var (knob, span) = kind == "slider" ? ReadKnob(ctrl, X, Y, W, H) : (null, 0f);
+        return new Node(kind, name, text, X, Y - ancestorScroll, W, H, ctrl, children, scroll, knob, span);
+    }
+
+    /// <summary>The slack a knob's place may sit past either end of its track and still be read (then as that end).</summary>
+    private const float KnobSlack = 0.01f;
+
+    /// <summary>
+    /// A slider's place along its track, 0 to 1, from its knob's rectangle (four floats at the layout's <c>SliderKnob</c>: x, y,
+    /// width, height, in the slider rectangle's own coordinates, so a scroll moves neither), and the knob's size along the track.
+    /// Across a slider at least as wide as tall: (knob x - X) / (W - knob width). Upright: 1 - (knob y - Y) / (H - knob height),
+    /// its bottom 0 (measured 2026-11-07: Systems' zoom "+" moves the knob up). <paramref name="x"/>..<paramref name="h"/> are the
+    /// slider's rectangle as stored, before any scroll. No place (null, 0) when a float is not finite, when the knob is not
+    /// smaller than the slider along its track or of negative size, or when the place is more than <see cref="KnobSlack"/> past
+    /// either end; within that, the end.
+    /// </summary>
+    private (float? Place, float Span) ReadKnob(uint ctrl, float x, float y, float w, float h)
+    {
+        uint at = ctrl + (uint)_l.SliderKnob;
+        float kx = _m.ReadFloat(at), ky = _m.ReadFloat(at + 4), kw = _m.ReadFloat(at + 8), kh = _m.ReadFloat(at + 12);
+        if (!float.IsFinite(kx) || !float.IsFinite(ky) || !float.IsFinite(kw) || !float.IsFinite(kh)
+            || !float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(w) || !float.IsFinite(h)) return (null, 0f);
+        bool upright = h > w;
+        float span = upright ? kh : kw, track = (upright ? h : w) - span;
+        if (span < 0 || track <= 0) return (null, 0f);
+        float place = upright ? 1 - (ky - y) / track : (kx - x) / track;
+        if (!float.IsFinite(place) || place < -KnobSlack || place > 1 + KnobSlack) return (null, 0f);
+        return (Math.Clamp(place, 0f, 1f), span);
     }
 
     private static string? NonEmpty(string? s) => string.IsNullOrEmpty(s) ? null : s;

@@ -27,7 +27,8 @@ public class Bbs757EfbMemoryLiveTests
         AppFront: 0x140, AppPage: 0x144, AppRoots: 0x17c, PageChildren: 0x4c,
         CtrlName: 0x1c, CtrlRect: 0x38, CtrlVisible: 0x8c, CtrlChildren: 0xf4, CtrlParent: 0xe8,
         // The scroll is the scrollbox's content offset at +0x134 (B757-26), never the scrollbar thumb at +0x158.
-        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134,
+        // A slider keeps its knob's rectangle at +0x184 (x, y, w, h; measured 2026-11-07).
+        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134, SliderKnob: 0x184,
         ClassVptrs: new[]
         {
             // N3bbs22bbos_control_scrollboxE's vtable is at 0x30bb0 (its typeinfo at 0x30c34): read live, 2026-11-07.
@@ -102,7 +103,8 @@ public class Bbs757EfbMemoryLiveTests
     private void Print(Bbs757EfbMemory.Node n, int depth)
     {
         string text = n.Text.Length > 0 ? $" \"{n.Text}\"" : "";
-        _out.WriteLine($"{new string(' ', depth * 2)}{n.Kind,-8} {n.Name,-28} [{n.X:0},{n.Y:0} {n.W:0}x{n.H:0}]{text}");
+        string knob = n.Knob is float place ? FormattableString.Invariant($" knob {place:0.000} ({n.KnobSpan:0.#} px)") : "";
+        _out.WriteLine($"{new string(' ', depth * 2)}{n.Kind,-8} {n.Name,-28} [{n.X:0},{n.Y:0} {n.W:0}x{n.H:0}]{text}{knob}");
         foreach (var c in n.Children) Print(c, depth + 1);
     }
 }

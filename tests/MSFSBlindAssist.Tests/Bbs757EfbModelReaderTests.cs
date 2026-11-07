@@ -989,6 +989,82 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal(new Bbs757EfbSlider(897, 1197, 1047), items.Single(i => i.Text == "LEVEL").Slider);
     }
 
+    // ---- a slider's place from BlueBird's knob (plan 20, Task 13) ----
+
+    /// <summary>A slider whose knob the memory walk read at <paramref name="place"/> (0 to 1), the knob <paramref name="span"/> px along
+    /// its track.</summary>
+    private static Node Knobbed(Node slider, float place, float span) => slider with { Knob = place, KnobSpan = span };
+
+    [Fact]
+    public void A_slider_with_its_knob_runs_along_the_knobs_center()
+    {
+        // Measured 2026-11-07: a tap centers the knob on the tap point (Charts' zoom: tap x 1204, knob center 1204.5), so the track a
+        // set taps along is the knob center's range, X + kw/2 to X + W - kw/2. Forward cargo's knob at 59.8 %, 12 px wide.
+        var cargo = Assert.Single(ItemsOf(Knobbed(N("slider", "wb_baggage_fwd_slider", "", 0, 462, 188, 18) with { X = 1162.5f }, 0.598f, 12)));
+
+        Assert.Equal(new Bbs757EfbSlider(1168, 1344, 1273) { KnobRead = true }, cargo.Slider);
+        Assert.Equal(60, Math.Round(cargo.Slider!.PercentOf(cargo.Slider.KnobX)));
+    }
+
+    [Fact]
+    public void An_upright_slider_with_its_knob_runs_from_its_bottom()
+    {
+        // Measured 2026-11-07: bottom is 0 (Systems' zoom "+" moves the knob up); the left reservoir's knob at 78.1 %, 12 px tall.
+        var reservoir = Assert.Single(ItemsOf(Knobbed(N("slider", "maintenance_hyd_res_left_slider", "", 423, 279, 24, 190), 0.781f, 12)));
+
+        Assert.Equal(new Bbs757EfbSlider(463, 285, 324) { Vertical = true, AcrossX = 435, KnobRead = true }, reservoir.Slider);
+    }
+
+    [Fact]
+    public void A_value_the_tablet_shows_still_names_a_slider_whose_place_is_its_knobs()
+    {
+        // Fuel's left tank, measured 2026-11-07: the knob at 34.5 %, the label reading 34%. The label names it; only the place is the knob's.
+        var fuel = ItemsOf(Lbl("fuel_left_slider_title", "LEFT", 453, 723, 48),
+            Knobbed(N("slider", "fuel_slider_left", "", 377, 755, 200, 20), 0.345f, 12), Lbl("fuel_left_tank_label", "34%", 474, 410, 49));
+        var left = Assert.Single(fuel, i => i.Kind == Bbs757EfbKind.Slider);
+
+        Assert.Equal(("LEFT", "34%"), (left.Text, left.Value));
+        Assert.Equal(new Bbs757EfbSlider(383, 571, 448) { KnobRead = true }, left.Slider);   // At(34.5); the label's 34 would be 447
+    }
+
+    [Fact]
+    public void A_settings_slider_with_its_knob_runs_along_the_knobs_center()
+    {
+        // Settings, Aircraft's Boarding & load rate, measured 2026-11-07: its 15 px knob at the end (its last choice).
+        var app = SettingsApp("aircraft_scrollbox", 600,
+            N("grid", "loading_speed_grid", "", 250, 842, 1147, 60,
+                N("other", "loading_speed_label", "BOARDING & LOAD RATE", 280, 842, 647, 60),
+                Knobbed(N("slider", "loading_speed_slider", "", 897, 857, 300, 30), 1f, 15)));
+
+        var rate = Bbs757EfbModelReader.Read(new[] { app })!.Items.Single(i => i.Text == "BOARDING & LOAD RATE");
+
+        Assert.Equal(new Bbs757EfbSlider(904, 1189, 1189) { KnobRead = true }, rate.Slider);
+    }
+
+    [Fact]
+    public void A_slider_without_a_knob_is_not_marked_as_bluebirds()
+    {
+        var zoom = Assert.Single(ItemsOf(N("slider", "planning_charts_zoom_slider", "", 1165, 202, 154, 42)));
+        Assert.False(zoom.Slider!.KnobRead);
+    }
+
+    [Fact]
+    public void The_listing_reads_a_sliders_place_from_its_knob()
+    {
+        // The knob places it (BUSINESS PAX's title count and the reservoirs' missing values name them as before).
+        static string Listing(IReadOnlyList<App> apps) =>
+            Bbs757EfbListing.Of(Bbs757EfbElements.Build(Bbs757EfbModelReader.Read(apps), null, Array.Empty<Bbs757EfbExtraElement>()));
+        var wb = Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("12-aircraft-weight-balance"), "wb_baggage_fwd_slider", 0.598f, 12);
+        wb = Bbs757EfbTreeJson.WithKnob(wb, "wb_pax_business_slider", 1f, 12);
+        var hyd = Bbs757EfbTreeJson.WithKnob(Bbs757EfbTreeJson.Load("15b-aircraft-maintenance-hydraulic"), "maintenance_hyd_res_left_slider", 0.781f, 12);
+
+        string weights = Listing(wb), reservoirs = Listing(hyd);
+
+        Assert.Contains("slider 60  Forward cargo\n", weights);
+        Assert.Contains("slider 100  Business pax (16/16)\n", weights);
+        Assert.Contains("slider 78  Maintenance hyd res left\n", reservoirs);
+    }
+
     [Fact]
     public void An_icon_button_is_named_from_its_control_name()
     {

@@ -15,7 +15,8 @@ public class Bbs757EfbMemoryTests
     private const uint Manager = 0x1000, Efb = 0x2000, Bbos = 0x3000, MapNode = 0x3400, AppVec = 0x3480,
         App = 0x4000, RootsVec = 0x4400, Page = 0x5000, PageVec = 0x5400,
         Grid = 0x6000, GridChildrenVec = 0x6400, Button = 0x7000, ValueLabel = 0x8000, HiddenBtn = 0x9000;
-    private const uint EfbVptr = 0x13128, ButtonVptr = 0x30164, LabelVptr = 0x30cd4, GridVptr = 0x30320, ScrollboxVptr = 0x30400;
+    private const uint EfbVptr = 0x13128, ButtonVptr = 0x30164, LabelVptr = 0x30cd4, GridVptr = 0x30320, ScrollboxVptr = 0x30400,
+        SliderVptr = 0x30c48;
     private const uint Outside = 0xA000, InnerVec = 0xA200, Inner = 0xA300;
 
     private static readonly Bbs757EfbMemLayout Layout = new(
@@ -23,11 +24,12 @@ public class Bbs757EfbMemoryTests
         ManagerBase: Manager, ManagerSpan: 0x100, EfbVptr: EfbVptr, EfbToBbos: 132, BbosToAppMap: 0x238,
         AppFront: 0x140, AppPage: 0x144, AppRoots: 0x17c, PageChildren: 0x4c,
         CtrlName: 0x1c, CtrlRect: 0x38, CtrlVisible: 0x8c, CtrlChildren: 0xf4, CtrlParent: 0xe8,
-        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134,
+        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134, SliderKnob: 0x184,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),
             new Bbs757EfbClassVptr("grid", GridVptr), new Bbs757EfbClassVptr("scrollbox", ScrollboxVptr),
+            new Bbs757EfbClassVptr("slider", SliderVptr),
         });
 
     private readonly byte[] _b = new byte[0x10000];
@@ -142,6 +144,93 @@ public class Bbs757EfbMemoryTests
         var grid = Assert.Single(Assert.Single(Build(() => ScrolledGrid(stored)).ReadFrontApps()).Controls);
         Assert.Equal(expected, grid.Scroll);
         Assert.Equal(1202f - expected, grid.Children[0].Y);
+    }
+
+    // ---- a slider's knob ----
+
+    /// <summary>The grid's first child made a slider at <paramref name="x"/>,<paramref name="y"/> <paramref name="w"/>x<paramref name="h"/>
+    /// with its knob's rectangle written where the layout keeps it, in the slider rectangle's own coordinates.</summary>
+    private void Slider(float x, float y, float w, float h, float kx, float ky, float kw, float kh)
+    {
+        Ptr(Button, SliderVptr); Rect(Button, x, y, w, h);
+        uint knob = Button + (uint)Layout.SliderKnob;
+        F32(knob, kx); F32(knob + 4, ky); F32(knob + 8, kw); F32(knob + 12, kh);
+    }
+
+    private Bbs757EfbMemory.Node FirstChild(Action mutate) =>
+        Assert.Single(Assert.Single(Build(mutate).ReadFrontApps()).Controls).Children[0];
+
+    [Fact]
+    public void An_across_sliders_place_is_its_knobs_left_along_the_track()
+    {
+        // Weight & balance's forward cargo, measured 2026-11-07: 59.8 % of the way, the 12 px knob's left at X + 0.598 (W - 12).
+        var cargo = FirstChild(() => Slider(1162.5f, 462, 188, 18, 1162.5f + 0.598f * 176, 465, 12, 12));
+
+        Assert.Equal("slider", cargo.Kind);
+        Assert.Equal(0.598f, cargo.Knob!.Value, 3);
+        Assert.Equal(12f, cargo.KnobSpan);
+    }
+
+    [Fact]
+    public void An_upright_sliders_place_counts_from_its_bottom()
+    {
+        // The left hydraulic reservoir, measured 2026-11-07: 78.1 %, the knob's top at Y + (1 - 0.781) (H - 12); bottom is 0.
+        var reservoir = FirstChild(() => Slider(423, 279, 24, 190, 429, 279 + 0.219f * 178, 12, 12));
+
+        Assert.Equal(0.781f, reservoir.Knob!.Value, 3);
+        Assert.Equal(12f, reservoir.KnobSpan);
+        Assert.Equal(0f, FirstChild(() => Slider(423, 279, 24, 190, 429, 279 + 178, 12, 12)).Knob);   // at the bottom
+        Assert.Equal(1f, FirstChild(() => Slider(423, 279, 24, 190, 429, 279, 12, 12)).Knob);         // at the top
+    }
+
+    [Fact]
+    public void A_scroll_moves_a_slider_but_not_its_place()
+    {
+        // Settings, Aircraft scrolled, measured 2026-11-07: Boarding & load rate's knob y 864.5 is its rectangle's 857 + 7.5 while the
+        // slider is drawn 113 px higher. The knob is in the rectangle's own coordinates, so its place is the same.
+        var rate = FirstChild(() =>
+        {
+            ScrolledGrid(113);
+            Slider(897, 857, 300, 30, 897 + 285, 864.5f, 15, 15);
+        });
+
+        Assert.Equal(857f - 113f, rate.Y);
+        Assert.Equal(1f, rate.Knob);
+        Assert.Equal(15f, rate.KnobSpan);
+    }
+
+    [Theory]
+    [InlineData(float.NaN, 465f, 12f, 12f)]                  // a float that is no number
+    [InlineData(1200f, float.PositiveInfinity, 12f, 12f)]
+    [InlineData(1200f, 465f, 188f, 12f)]                     // the knob as wide as the slider along its track
+    [InlineData(1200f, 465f, -12f, 12f)]                     // a knob of negative size
+    [InlineData(1162.5f + 1.02f * 176, 465f, 12f, 12f)]      // past the track's end
+    [InlineData(1162.5f - 0.02f * 176, 465f, 12f, 12f)]      // before its start
+    public void An_unreadable_knob_gives_no_place(float kx, float ky, float kw, float kh)
+    {
+        var cargo = FirstChild(() => Slider(1162.5f, 462, 188, 18, kx, ky, kw, kh));
+        Assert.Null(cargo.Knob);
+        Assert.Equal(0f, cargo.KnobSpan);
+    }
+
+    [Theory]
+    [InlineData(1.005f, 1f)]
+    [InlineData(-0.005f, 0f)]
+    public void A_place_just_past_an_end_is_that_end(float place, float expected)
+    {
+        Assert.Equal(expected, FirstChild(() => Slider(1162.5f, 462, 188, 18, 1162.5f + place * 176, 465, 12, 12)).Knob);
+    }
+
+    [Fact]
+    public void Only_a_slider_has_a_knob()
+    {
+        var button = FirstChild(() =>
+        {
+            uint knob = Button + (uint)Layout.SliderKnob;
+            F32(knob, 100); F32(knob + 4, 210); F32(knob + 8, 12); F32(knob + 12, 12);
+        });
+        Assert.Equal("button", button.Kind);
+        Assert.Null(button.Knob);
     }
 
     [Fact]

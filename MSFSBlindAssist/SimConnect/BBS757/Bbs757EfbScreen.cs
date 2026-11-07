@@ -36,13 +36,18 @@ public enum Bbs757EfbTint { None, Blue, Red, Green, Grey, Other }
 /// A slider's geometry, in tablet pixels: where its track runs and where its knob is. A track runs from <see cref="TrackLeft"/>, its
 /// 0 end, to <see cref="TrackRight"/>, its 100 end, and <see cref="KnobX"/> is the knob's place along it: x left to right for a
 /// slider wider than tall (every settings slider, the cabin lights, Weight &amp; balance), and y for a <see cref="Vertical"/> one (the
-/// hydraulic reservoirs, Systems' zoom), whose 0 end is its bottom (provisional: Task 13 measures the direction) and which is tapped
-/// at <see cref="AcrossX"/>, its track's x middle.
+/// hydraulic reservoirs, Systems' zoom), whose 0 end is its bottom (measured 2026-11-07: Systems' zoom "+" moves the knob up, and a
+/// tap 25% from the bottom set 25.7%) and which is tapped at <see cref="AcrossX"/>, its track's x middle. When the knob is BlueBird's
+/// own (<see cref="KnobRead"/>), the track is the range of the knob's center, since a tap centers the knob on the tap point (measured).
 /// </summary>
 public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
 {
     /// <summary>Whether the track runs up and down (the slider's box is taller than wide).</summary>
     public bool Vertical { get; init; }
+
+    /// <summary>Whether <see cref="KnobX"/> is where BlueBird's knob is, read from its memory, and the track the range of the knob's
+    /// center; false when the knob is placed from the value the tablet shows (or at the start), on the track the slider's box spans.</summary>
+    public bool KnobRead { get; init; }
 
     /// <summary>A vertical track's x middle, where it is tapped; 0 for a horizontal one.</summary>
     public int AcrossX { get; init; }

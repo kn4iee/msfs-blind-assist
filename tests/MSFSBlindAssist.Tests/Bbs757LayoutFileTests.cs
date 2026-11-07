@@ -66,6 +66,7 @@ public class Bbs757LayoutFileTests
         CtrlLabelText: 0x128,
         CtrlButtonText: 0x144,
         ScrollboxOffset: 0x134,
+        SliderKnob: 0x184,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("scrollbox", 0x30400),
@@ -122,6 +123,29 @@ public class Bbs757LayoutFileTests
     {
         string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
         string damaged = System.Text.RegularExpressions.Regex.Replace(text, "\\s*\"scrollboxOffset\": 308,?", "");
+        Assert.NotEqual(text, damaged);
+        Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? failure));
+        Assert.False(string.IsNullOrEmpty(failure));
+    }
+
+    [Fact]
+    public void The_efb_layout_with_the_slider_knob_round_trips()
+    {
+        // A slider keeps its knob's rectangle at +0x184 (four floats, measured live 2026-11-07).
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        Assert.Contains("\"sliderKnob\": 388", text);
+        Assert.True(LayoutFileFormat.TryRead(Module, text, out var file, out string? failure), failure);
+        var loaded = (Bbs757EfbMemLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Efb).Layout!;
+        Assert.Equal(0x184, loaded.SliderKnob);
+        Assert.NotEqual(SampleEfbLayout(), SampleEfbLayout() with { SliderKnob = 0x188 });
+        Assert.Contains(Bbs757LayoutDescriptions.DescribeEfb(loaded), line => line.Contains("sliderKnob 388", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_layout_without_the_slider_knob_reads_as_missing()
+    {
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        string damaged = System.Text.RegularExpressions.Regex.Replace(text, "\\s*\"sliderKnob\": 388,?", "");
         Assert.NotEqual(text, damaged);
         Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? failure));
         Assert.False(string.IsNullOrEmpty(failure));
