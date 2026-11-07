@@ -150,6 +150,8 @@
 
 Task 1 found that a control's rectangle never moves when its page scrolls: BlueBird keeps the scroll as a float at the scrollbox's +0x158 (0 at the top), draws every control inside the scrollbox at its rectangle's y less that offset, and in this build scrolls on a drag but not reliably on the wheel (`docs/b757/evidence/efb-memory-pages.md`, "Scrolling"). A tap from a rectangle is right only at offset 0, so the offset is read, and the page is scrolled by dragging.
 
+> **Corrected by Task 13 (measured live, 2026-11-07):** +0x158 is the scrollbar THUMB's offset along its track (it stops at 175.19 on Settings, Aircraft); the content offset, in tablet pixels, is at +0x134 (214 at that page's end), and the layout's `ScrollboxOffset` is 0x134 ([B757-26]). The drag below also eases out ([B757-25]): even steps flung the page about 25% past the drag. Where this task says 0x158, read 0x134.
+
 **Files:**
 - Modify: `MSFSBlindAssist.DisplayLayouts/Bbs757/Bbs757EfbMemLayout.cs`, `Bbs757LayoutDescriptions.cs`, `Bbs757Module.cs`; `MSFSBlindAssist/SimConnect/BBS757/Bbs757EfbMemory.cs`; `MSFSBlindAssist/Resources/coherent-bbs757-efb-agent.js`; `MSFSBlindAssist/SimConnect/BBS757/CoherentBbs757EfbClient.cs`; `tools/Bbs757EfbProbe/Program.cs` (its `wheel` command becomes `drag x y0 y1`)
 - Test: `tests/MSFSBlindAssist.Tests/Bbs757LayoutFileTests.cs`, `Bbs757EfbMemoryTests.cs`, `Bbs757EfbMemoryLiveTests.cs` (its `Layout` gains the two fields), the agent's own checks if any

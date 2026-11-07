@@ -57,8 +57,8 @@ internal static class Bbs757EfbTreeJson
     }
 
     /// <summary>The trees with the slider named <paramref name="name"/> holding its knob at <paramref name="place"/> (0 to 1), the knob
-    /// <paramref name="span"/> px along its track: the memory walk of a build whose layout has the slider knob. Stands in for a capture
-    /// with knobs (the committed trees have none).</summary>
+    /// <paramref name="span"/> px along its track: the memory walk of a build whose layout has the slider knob, for a knob where a test
+    /// needs one (the slider pages recaptured on 2026-11-07 carry BlueBird's own; 11-aircraft-fuel is kept from before, with none).</summary>
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithKnob(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, float place, float span)
     {
         Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) =>
