@@ -448,4 +448,22 @@ public static class Bbs757EfbPress
 
     /// <summary>A control BlueBird's notification pop-up or list covers (<see cref="UnderNotice"/>), so it was not tapped.</summary>
     public static string UnderNoticeText(string name) => name + " is under a BlueBird notification, not pressed.";
+
+    // Typing into a field (plan 22, Bbs757EfbPressRunner.TypeAsync). The value is the tablet's own text, said as it reads.
+
+    /// <summary>A field whose tap did not bring BlueBird's keyboard up, settled, typing into it, in time: nothing was typed.</summary>
+    public static string NoKeyboardText(string name) => name + ": the tablet's keyboard did not come up.";
+
+    /// <summary>A text with a character no key of the keyboard (or the keypad) carries: nothing was typed.</summary>
+    public static string NoKeyText(string name, char character) => name + ": the tablet's keyboard has no " + character.ToString() + ".";
+
+    /// <summary>A field that reads the typed text (case aside: PERF calc's Airport box upper-cases it) once it was typed: the one
+    /// confirmation of a typing (CORE-7: the screen reader said only the pilot's own keys).</summary>
+    public static string TypedText(string name, string value) => name + ": " + value;
+
+    /// <summary>A field that reads another text than the one typed (BlueBird's boxes filter what they take, and a full box drops keys).</summary>
+    public static string TypedOtherText(string name, string value) => name + " reads " + value + ".";
+
+    /// <summary>A typing that stopped because a run of its taps did not go out: what the field reads is not said.</summary>
+    public static string NotTypedText(string name) => name + " not typed.";
 }

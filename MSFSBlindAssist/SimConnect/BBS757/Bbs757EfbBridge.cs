@@ -388,6 +388,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     {
         Read = ct => ReadNowAsync(ct, asked: true),
         Tap = TapAsync,
+        TapRun = TapRunAsync,
         Drag = (x, y0, y1, ct) => _client.DragAsync(x, y0, y1, ct),
         ReadInstalledCycle = () => Bbs757WorkFolder.Find() is { } folder ? Bbs757WorkFolder.ReadInstalledCycle(folder) : null,
         ReadVar = ReadVarAsync,
@@ -413,6 +414,20 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
         if (tapped) _lastOwnTapMs = at;
         if (run != Bbs757EfbRunResult.Done) Log.Debug("BBS757", $"EFB reader: a tap ended {run}{(tapped ? ", and may have clicked" : "")}.");
         return tapped;
+    }
+
+    /// <summary>A run of typing taps through the EFB agent, <paramref name="gapMs"/> after each (the agent takes at most 40 steps a run,
+    /// each delay at most 10,000 ms; <see cref="Bbs757EfbTyping.Runs"/> keeps to them): true only when the run was done, every tap made;
+    /// one cut short or not started is false, and the press runner stops the typing (a partial run leaves the layer unknown). A run that
+    /// may have clicked is the pilot's own press, as a tap is. The points are keys, so nothing typed is logged.</summary>
+    private async Task<bool> TapRunAsync(IReadOnlyList<Point> points, int gapMs, CancellationToken ct)
+    {
+        long at = Environment.TickCount64;
+        var run = await _client.RunAsync(points.Select(p => (new EfbPoint(p.X, p.Y), gapMs)).ToList(), ct);
+        if (run == Bbs757EfbRunResult.Done || _client.LastRunMayHaveClicked) _lastOwnTapMs = at;
+        if (run != Bbs757EfbRunResult.Done)
+            Log.Debug("BBS757", $"EFB reader: a typing run ended {run}{(_client.LastRunMayHaveClicked ? ", and may have clicked" : "")}.");
+        return run == Bbs757EfbRunResult.Done;
     }
 
     private async Task<double?> ReadVarAsync(string name, CancellationToken ct)

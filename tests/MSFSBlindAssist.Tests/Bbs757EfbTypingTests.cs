@@ -109,7 +109,7 @@ public class Bbs757EfbTypingTests
     [Fact]
     public void The_keypad_clears_with_DEL_then_taps_each_digit()
     {
-        // centers 655.5 / 435.5 truncate to 655 / 435 (the live key was measured at 895,735)
+        // centers 655.5 / 435.5 truncate to 655 / 435; DEL is row 4, column 1 (775,735)
         var plan = Bbs757EfbTyping.PlanKeypad(new Rectangle(595, 348, 360, 430), "70", out var missing)!;
         Assert.Null(missing);
         Assert.Equal(new[] { new Point(775, 735), new Point(655, 435), new Point(775, 660) }, plan.Taps);
@@ -135,6 +135,31 @@ public class Bbs757EfbTypingTests
         Assert.Null(Bbs757EfbTyping.PlanKeypad(Rectangle.Empty, "1", out var missing));
         Assert.Null(missing);
     }
+
+    [Fact]
+    public void The_keypads_OK_is_row_four_column_two()
+    {
+        // The live OK key was measured at 895,735 under the fuel input dialog's keypad [595.5,348 360x430] (the reader truncates to 595).
+        Assert.Equal(new Point(895, 735), Bbs757EfbTyping.KeypadOk(new Rectangle(595, 348, 360, 430)));
+        Assert.Equal(new Point(1337, 653), Bbs757EfbTyping.KeypadOk(new Rectangle(1037, 266, 360, 430)));   // the TOD pause keypad
+        Assert.Null(Bbs757EfbTyping.KeypadOk(Rectangle.Empty));
+    }
+
+    [Fact]
+    public void A_digit_between_letters_switches_the_layer_and_back() =>
+        Assert.Equal(new[]
+        {
+            Lower("a"), Named("btn_numeric_switch"), Third("1"), Named("btn_numeric_switch"), Named("btn_shift"), Upper("B"),
+        }, Taps("a1B"));
+
+    [Fact]
+    public void Shift_on_at_the_start_is_turned_off_before_a_lower_letter() =>
+        Assert.Equal(new[] { Named("btn_shift"), Lower("a") }, Taps("a", state: Rest with { Shift = true }));
+
+    [Fact]
+    public void A_backspace_clears_the_shift_so_no_shift_tap_comes_before_a_lower_letter() =>
+        Assert.Equal(new[] { Named("btn_backspace"), Named("btn_backspace"), Lower("a") },
+            Taps("a", caret: 2, length: 2, state: Rest with { Shift = true }));
 
     [Fact]
     public void The_pace_is_the_measured_one() => Assert.Equal(100, Bbs757EfbTyping.TapGapMs);

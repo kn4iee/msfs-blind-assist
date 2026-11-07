@@ -1175,4 +1175,503 @@ public class Bbs757EfbPressTests
         var fallback = Assert.Single(bare.Items, i => i.Text == "BOARDING & LOAD RATE").Slider!;
         Assert.Equal((897, 1197, false), (fallback.TrackLeft, fallback.TrackRight, fallback.KnobRead));
     }
+
+    // ---- plan 22, Task 3: typing into a field on BlueBird's keyboard (TypeAsync) ----------------------------------------------
+
+    /// <summary>BlueBird's keyboard where the reader finds it on PERF calc (25): its keys are where they are whether it shows or not.</summary>
+    private static readonly Bbs757EfbKeyboard Kb = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"))!.Keyboard!;
+
+    private static Point KeyAt(string name) => Kb.Keys.First(k => k.Name == name).Hit;
+
+    /// <summary>The TOD pause box's keypad where it was measured (Settings, Aircraft, 2026-11-07) and the fuel input dialog's: the keypad
+    /// moves with its box.</summary>
+    private static readonly Rectangle TodKeypad = new(1037, 266, 360, 430), FuelKeypad = new(595, 348, 360, 430);
+
+    /// <summary>PERF calc's Airport box takes letters only and upper-cases them (measured).</summary>
+    private static char? AirportTakes(char c) => char.IsLetter(c) ? char.ToUpperInvariant(c) : null;
+
+    /// <summary>
+    /// One of BlueBird's text boxes behind the press runner, typed as the tablet types it (docs/b757/evidence/efb-typing.md). The box's tap
+    /// brings the keyboard up for it, shown at once and settled <see cref="ReadyAfterMs"/> later, and puts the caret at
+    /// <see cref="TapCaret"/>; a key tapped before it settled lands on the page beneath and the keyboard goes down
+    /// (<see cref="KeysOnThePage"/>). A character key types its shown layer at the caret, then the caret goes to the end; backspace
+    /// deletes before the caret, delete after it; the shift is one-shot; the box takes what <see cref="Takes"/> gives, and drops a key
+    /// once full. The keypad's DEL clears the text and its OK closes it; it shows at <see cref="KeypadAt"/> while up, and its rectangle
+    /// reads where it was last while down. A box below the viewport is drawn higher by each drag.
+    /// </summary>
+    private sealed class TypingTablet
+    {
+        public string Label { get; init; } = "AIRPORT";
+        public string Name { get; init; } = "planning_perf_calc_airport_input";
+        public string Text { get; set; } = "";
+        public int MaxLength { get; init; } = 64;
+        public bool Keypad { get; init; }
+        public Rectangle KeypadAt { get; init; } = TodKeypad;
+        public Func<char, char?> Takes { get; init; } = c => c;
+        public int TapCaret { get; init; } = int.MaxValue;
+        public int ReadyAfterMs { get; init; } = 1200;
+        public bool OpensKeyboard { get; init; } = true;
+        /// <summary>The box the keyboard comes up typing into, when another than this one.</summary>
+        public string? UpFor { get; init; }
+        public bool RunsGoOut { get; init; } = true;
+        public int ContentY { get; init; } = 156;
+        public bool Scrollable { get; init; }
+        /// <summary>The box is a dialog's (the fuel input dialog's), shown while <see cref="DialogUp"/>.</summary>
+        public bool InQuestion { get; init; }
+        public bool DialogUp { get; set; } = true;
+
+        public int Caret { get; private set; }
+        public double Offset { get; private set; }
+        public bool Shown { get; private set; }
+        public bool Ready { get; private set; }
+        public string Target { get; private set; } = "";
+        public bool Numeric { get; private set; }
+        public bool Shift { get; private set; }
+        public bool Caps { get; private set; }
+        public long Now { get; private set; }
+        public int KeysOnThePage { get; private set; }
+        public long ClosedAt { get; private set; } = -1;
+        public List<string> Events { get; } = new();
+        public List<Point> Taps { get; } = new();
+        public List<IReadOnlyList<Point>> Runs { get; } = new();
+        public List<int> Gaps { get; } = new();
+        public List<(int X, int Y0, int Y1)> Drags { get; } = new();
+        public List<string> Alerts { get; } = new();
+        private long _upAt;
+
+        private static readonly Bbs757EfbItem Cancel = new(Bbs757EfbKind.Button, "Cancel", new Rectangle(336, 381, 177, 46), new Point(424, 404), true, "q:CANCEL");
+        private static readonly Bbs757EfbItem Insert = new(Bbs757EfbKind.Button, "Insert", new Rectangle(523, 381, 177, 46), new Point(611, 404), true, "q:INSERT");
+
+        public Bbs757EfbItem Field()
+        {
+            int y = (int)Math.Round(ContentY - Offset);
+            var box = new Rectangle(289, y, 150, 34);
+            return new Bbs757EfbItem(Bbs757EfbKind.Field, Label, box, new Point(box.Left + 75, y + 17), true, Name, Value: Text, Name: Name,
+                TextState: new Bbs757EfbTextState(Caret, MaxLength, Keypad));
+        }
+
+        public Point FieldHit => Field().Hit;
+
+        public Bbs757EfbScreenModel Page()
+        {
+            var page = !InQuestion ? PageOf("NAVIGATION", "PERF CALC", Field())
+                : DialogUp ? PageOf("AIRCRAFT", "FUEL") with
+                {
+                    Question = new Bbs757EfbQuestion("Insert desired fuel level (0-2176 Gal)", new[] { Cancel, Insert }) { Rows = new[] { Field() } },
+                }
+                : PageOf("AIRCRAFT", "FUEL");
+            return page with
+            {
+                Keyboard = Kb,
+                KeyboardState = new Bbs757EfbKeyboardState(Shown, Ready, Keypad, Target, Numeric, Shift, Caps, Shown ? KeypadAt : FuelKeypad),
+                Scrollable = Scrollable,
+                Viewport = Bbs757EfbScreen.ContentArea,
+            };
+        }
+
+        /// <summary>A press on the box as the window shows it now.</summary>
+        public Bbs757EfbPressed Pressed()
+        {
+            var page = Page();
+            return new(InQuestion ? page.Question!.Rows[0] : page.Items[0], page);
+        }
+
+        public Bbs757EfbPressRunner Runner() => new(new Bbs757EfbPressIo
+        {
+            Read = _ =>
+            {
+                Events.Add("read");
+                if (Shown && !Ready && Now - _upAt >= ReadyAfterMs) Ready = true;
+                return Task.FromResult<Bbs757EfbScreenModel?>(Page());
+            },
+            Tap = (p, _) =>
+            {
+                Events.Add($"tap {p.X},{p.Y}");
+                Taps.Add(p);
+                Land(p);
+                return Task.FromResult(true);
+            },
+            TapRun = (points, gap, _) =>
+            {
+                Events.Add($"run {points.Count}");
+                if (!RunsGoOut) return Task.FromResult(false);
+                Runs.Add(points.ToList());
+                Gaps.Add(gap);
+                foreach (var p in points)
+                {
+                    Land(p);
+                    Now += gap;
+                }
+                return Task.FromResult(true);
+            },
+            Drag = (x, y0, y1, _) =>
+            {
+                Events.Add("drag");
+                Drags.Add((x, y0, y1));
+                Offset = Math.Clamp(Offset + (y0 - y1), 0, 1000);
+                return Task.FromResult(true);
+            },
+            ReadInstalledCycle = () => null,
+            ReadVar = (_, _) => Task.FromResult<double?>(null),
+            ReadRegistered = (_, _) => Task.FromResult<double?>(null),
+            ReadSetting = (_, _) => Task.FromResult<Bbs757Value?>(null),
+            Alert = text => { Alerts.Add(text); Events.Add("alert " + text); },
+            Delay = (ms, ct) => { ct.ThrowIfCancellationRequested(); Now += ms; return Task.CompletedTask; },
+            NowMs = () => Now,
+            ArmServiceEcho = _ => { },
+            SettleServiceEcho = (_, _) => { },
+            ArmGroundPowerEcho = () => { },
+            SettleGroundPowerEcho = _ => { },
+            Hooked = (_, _) => { },
+        });
+
+        /// <summary>A tap landing on the tablet.</summary>
+        private void Land(Point p)
+        {
+            if ((!InQuestion || DialogUp) && Field().Box.Contains(p))
+            {
+                if (!OpensKeyboard) return;
+                if (!Shown) { Shown = true; Ready = false; _upAt = Now; }
+                Target = UpFor ?? Name;
+                Caret = Math.Min(TapCaret, Text.Length);
+                return;
+            }
+            if (!Shown) { Events.Add("page tap"); return; }
+            if (!Ready) { KeysOnThePage++; Down(); return; }   // before it settled: on the page beneath, and the keyboard slides away
+            if (Target != Name) return;
+            if (Keypad) KeypadKey(p);
+            else Key(p);
+        }
+
+        private void Key(Point p)
+        {
+            var key = Kb.Keys.FirstOrDefault(k => k.Hit == p);
+            switch (key?.Name)
+            {
+                case null: Events.Add("off the keys"); break;
+                case "btn_backspace": Backspace(); break;
+                case "btn_delete": if (Caret < Text.Length) Text = Text.Remove(Caret, 1); break;
+                case "btn_shift": Shift = !Shift; if (Shift) Numeric = false; break;
+                case "btn_double_shift": Caps = !Caps; break;
+                case "btn_numeric_switch": Numeric = !Numeric; if (Numeric) Shift = false; break;
+                case "btn_space": Type(' '); break;
+                case "btn_keyboard_down": Down(); break;
+                default:
+                    string layer = Numeric ? key.Third : Shift || Caps ? key.Upper : key.Lower;
+                    if (layer.Length == 1) Type(layer[0]);
+                    Shift = false;
+                    break;
+            }
+        }
+
+        private void KeypadKey(Point p)
+        {
+            string[] rows = { "789", "456", "123", "-0." };
+            int column = (p.X - KeypadAt.X) / 120, row = (int)Math.Floor((p.Y - KeypadAt.Y - 50) / 75.0);
+            if (row is >= 0 and < 4 && column is >= 0 and < 3) Type(rows[row][column]);
+            else if (row == 4 && column == 0) Backspace();
+            else if (row == 4 && column == 1) { Text = ""; Caret = 0; }
+            else if (row == 4 && column == 2) Down();
+            else Events.Add("off the keypad");
+        }
+
+        private void Backspace()
+        {
+            if (Caret > 0) { Text = Text.Remove(Caret - 1, 1); Caret--; }
+            Shift = false;
+        }
+
+        private void Type(char c)
+        {
+            if (Takes(c) is not char taken || Text.Length >= MaxLength) return;
+            Text = Text.Insert(Caret, taken.ToString());
+            Caret = Text.Length;
+        }
+
+        private void Down()
+        {
+            Shown = Ready = Numeric = Shift = Caps = false;
+            Target = "";
+            ClosedAt = Now;
+        }
+    }
+
+    [Fact]
+    public async Task Typing_replaces_the_whole_old_text()
+    {
+        // KSEA typed over KSEA1, the field's tap putting the caret after "KS": two backspaces clear before it, three deletes after it, read
+        // from the box on the read that shows the keyboard up (before the tap it read 0, which would leave "KS").
+        var tablet = new TypingTablet { Text = "KSEA1", TapCaret = 2 };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KSEA", CancellationToken.None);
+
+        Assert.Equal("KSEA", tablet.Text);
+        var run = Assert.Single(tablet.Runs);
+        Assert.Equal(new[] { KeyAt("btn_backspace"), KeyAt("btn_backspace"), KeyAt("btn_delete"), KeyAt("btn_delete"), KeyAt("btn_delete") }, run.Take(5));
+        Assert.Equal(Bbs757EfbTyping.TapGapMs, Assert.Single(tablet.Gaps));
+        Assert.Equal(new[] { tablet.FieldHit, KeyAt("btn_keyboard_down") }, tablet.Taps);   // the box, then the keyboard's down key
+        Assert.False(tablet.Shown);
+        Assert.Equal(new[] { "Airport: KSEA" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task No_keyboard_types_nothing(string culture)
+    {
+        // BlueBird took the box's tap elsewhere: the keyboard never reads up, and after KeyboardReadyMaxMs nothing more is tapped.
+        var tablet = new TypingTablet { Text = "KSEA", OpensKeyboard = false };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None));
+
+        Assert.Equal(new[] { tablet.FieldHit }, tablet.Taps);
+        Assert.Empty(tablet.Runs);
+        Assert.Equal("KSEA", tablet.Text);
+        Assert.Equal(new[] { "Airport: the tablet's keyboard did not come up." }, tablet.Alerts);
+        Assert.InRange(tablet.Now, Bbs757EfbPressRunner.KeyboardReadyMaxMs, Bbs757EfbPressRunner.KeyboardReadyMaxMs + 200);
+    }
+
+    [Fact]
+    public async Task A_keyboard_up_for_another_box_is_not_ready()
+    {
+        // Shown and settled, but typing into another box: no key is tapped, and the keyboard is not closed (it is not this box's).
+        var tablet = new TypingTablet { Text = "KSEA", UpFor = "planning_perf_calc_runway_length_input" };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None);
+
+        Assert.Equal(new[] { tablet.FieldHit }, tablet.Taps);
+        Assert.Empty(tablet.Runs);
+        Assert.True(tablet.Shown);
+        Assert.Equal(new[] { "Airport: the tablet's keyboard did not come up." }, tablet.Alerts);
+    }
+
+    [Theory]
+    [InlineData(1100)]
+    [InlineData(1940)]
+    [InlineData(4900)]
+    public async Task A_key_is_never_tapped_before_the_keyboard_is_ready(int settleMs)
+    {
+        // The keyboard reads shown from the box's tap and settled 1.1 to more than 1.9 s later (measured); a key tapped before then lands on
+        // the page beneath and the keyboard slides away.
+        var tablet = new TypingTablet { Text = "KSEA", ReadyAfterMs = settleMs };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None);
+
+        Assert.Equal(0, tablet.KeysOnThePage);
+        Assert.Equal("KPDX", tablet.Text);
+        Assert.Equal(new[] { "Airport: KPDX" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_missing_key_types_nothing_and_closes_the_keyboard(string culture)
+    {
+        var tablet = new TypingTablet { Text = "KSEA" };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "KSé", CancellationToken.None));
+
+        Assert.Empty(tablet.Runs);
+        Assert.Equal("KSEA", tablet.Text);
+        Assert.Equal(new[] { tablet.FieldHit, KeyAt("btn_keyboard_down") }, tablet.Taps);
+        Assert.False(tablet.Shown);
+        Assert.Equal(new[] { "Airport: the tablet's keyboard has no é." }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task The_field_reading_the_text_is_said_once(string culture)
+    {
+        // The Airport box upper-cases what it takes: "kpdx" reads KPDX, the text as typed but for case.
+        var tablet = new TypingTablet { Text = "KSEA", MaxLength = 4, Takes = AirportTakes };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "kpdx", CancellationToken.None));
+
+        Assert.Equal("KPDX", tablet.Text);
+        Assert.Equal(new[] { "Airport: KPDX" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task The_field_reading_other_text_says_what_it_reads(string culture)
+    {
+        // The Airport box drops digits: "KPD1" reads KPD.
+        var tablet = new TypingTablet { Text = "KSEA", MaxLength = 4, Takes = AirportTakes };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "KPD1", CancellationToken.None));
+
+        Assert.Equal("KPD", tablet.Text);
+        Assert.Equal(new[] { "Airport reads KPD." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task Typing_the_text_already_there_taps_nothing()
+    {
+        var tablet = new TypingTablet { Text = "KSEA" };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KSEA", CancellationToken.None);
+
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Runs);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task The_text_already_there_in_another_case_is_typed_and_said_from_the_first_read()
+    {
+        // Not the same text (ordinal), so it is typed; the box upper-cases it back to what it held, and the first read that shows it reading
+        // the text says so, without waiting out ChangeMaxMs for a change.
+        var tablet = new TypingTablet { Text = "KSEA", MaxLength = 4, Takes = AirportTakes };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "ksea", CancellationToken.None);
+
+        Assert.Single(tablet.Runs);
+        Assert.Equal(new[] { "Airport: KSEA" }, tablet.Alerts);
+        Assert.InRange(tablet.Now - tablet.ClosedAt, 0, 500);
+    }
+
+    [Fact]
+    public async Task A_field_below_the_viewport_is_scrolled_to_first()
+    {
+        var tablet = new TypingTablet { Text = "KSEA", ContentY = 1300, Scrollable = true };
+        var pressed = tablet.Pressed();
+        Assert.Null(Bbs757EfbPress.TapPoint(pressed.Page, pressed.Item));   // drawn below the viewport's bottom (1048)
+
+        await tablet.Runner().TypeAsync(pressed, "KPDX", CancellationToken.None);
+
+        Assert.NotEmpty(tablet.Drags);
+        Assert.All(tablet.Drags, d => Assert.True(d.Y0 > d.Y1));   // the content moves up
+        Assert.Equal(tablet.FieldHit, tablet.Taps[0]);              // tapped where it is drawn now
+        Assert.True(Bbs757EfbScreen.ContentArea.Contains(tablet.Taps[0]));
+        Assert.True(tablet.Events.IndexOf("drag") < tablet.Events.FindIndex(e => e.StartsWith("tap", StringComparison.Ordinal)));
+        Assert.Equal("KPDX", tablet.Text);
+        Assert.Equal(new[] { "Airport: KPDX" }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_keypad_box_is_typed_on_the_keypad_where_it_shows_and_closed_with_its_OK(string culture)
+    {
+        // The TOD pause box opens BlueBird's numeric keypad below it ([1037,266 360x430] measured); the keypad moves with its box, so the
+        // read that shows it up says where (down, its rectangle reads where it was last): its DEL clears the text, then the digits, then its
+        // OK commits the box.
+        var tablet = new TypingTablet { Label = "TOD PAUSE", Name = "tod_pause_textbox", Text = "40", Keypad = true, MaxLength = 3, ReadyAfterMs = 100 };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "120", CancellationToken.None));
+
+        Assert.Equal("120", tablet.Text);
+        Assert.Equal(Bbs757EfbTyping.PlanKeypad(TodKeypad, "120", out _)!.Taps, Assert.Single(tablet.Runs));
+        Assert.Equal(new[] { tablet.FieldHit, new Point(1337, 653) }, tablet.Taps);   // the box, then the keypad's OK (row 4, column 2)
+        Assert.False(tablet.Shown);
+        Assert.Equal(new[] { "TOD pause: 120" }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_letter_for_a_keypad_box_types_nothing_and_closes_the_keypad()
+    {
+        var tablet = new TypingTablet { Label = "TOD PAUSE", Name = "tod_pause_textbox", Text = "40", Keypad = true, ReadyAfterMs = 100 };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "1a", CancellationToken.None);
+
+        Assert.Empty(tablet.Runs);
+        Assert.Equal("40", tablet.Text);
+        Assert.Equal(new[] { tablet.FieldHit, new Point(1337, 653) }, tablet.Taps);
+        Assert.Equal(new[] { "TOD pause: the tablet's keyboard has no a." }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_run_that_does_not_go_out_stops_the_typing_and_closes_the_keyboard(string culture)
+    {
+        var tablet = new TypingTablet { Text = "KSEA", RunsGoOut = false };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None));
+
+        Assert.Single(tablet.Events, e => e.StartsWith("run", StringComparison.Ordinal));   // no second run, no read-back
+        Assert.Equal(new[] { tablet.FieldHit, KeyAt("btn_keyboard_down") }, tablet.Taps);
+        Assert.False(tablet.Shown);
+        Assert.Equal(new[] { "Airport not typed." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_long_text_goes_in_runs_of_at_most_forty_taps()
+    {
+        string text = new string('a', 45);
+        var tablet = new TypingTablet { Text = "x" };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), text, CancellationToken.None);
+
+        Assert.Equal(2, tablet.Runs.Count);
+        Assert.All(tablet.Runs, r => Assert.InRange(r.Count, 1, Bbs757EfbTyping.MaxTapsPerRun));
+        Assert.Equal(text, tablet.Text);
+        Assert.Equal(new[] { "Airport: " + text }, tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_dialogs_box_is_typed_under_its_question_and_its_keypad_closed_with_OK(string culture)
+    {
+        // The fuel input dialog's box, a question's row, with the keypad up for it: found again under the same question, typed on its keypad,
+        // and the keypad's OK closes the keypad alone (INSERT stays the pilot's answer: measured).
+        var tablet = new TypingTablet
+        {
+            Label = "FUEL", Name = "fuel_input_textbox", Text = "2176", Keypad = true, MaxLength = 8, KeypadAt = FuelKeypad, InQuestion = true,
+            ReadyAfterMs = 100,
+        };
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(tablet.Pressed(), "2000", CancellationToken.None));
+
+        Assert.Equal("2000", tablet.Text);
+        Assert.Equal(new[] { tablet.FieldHit, new Point(895, 735) }, tablet.Taps);
+        Assert.Equal(new[] { "Fuel: 2000" }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_dialogs_box_whose_dialog_closed_is_no_longer_on_the_tablet()
+    {
+        var tablet = new TypingTablet { Label = "FUEL", Name = "fuel_input_textbox", Text = "2176", Keypad = true, KeypadAt = FuelKeypad, InQuestion = true };
+        var pressed = tablet.Pressed();
+        tablet.DialogUp = false;
+
+        await tablet.Runner().TypeAsync(pressed, "2000", CancellationToken.None);
+
+        Assert.Empty(tablet.Taps);
+        Assert.Equal(new[] { "Fuel is no longer on the tablet." }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_click_on_a_field_taps_nothing()
+    {
+        // A field is typed into (TypeAsync), never clicked: a tap would bring the keyboard up with nothing to type.
+        var tablet = new TypingTablet { Text = "KSEA" };
+
+        await tablet.Runner().ClickAsync(tablet.Pressed(), CancellationToken.None);
+
+        Assert.Empty(tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_typing_texts_are_the_same_in_any_Windows_culture(string culture)
+    {
+        // Plain words joined: the value is the tablet's own text, said as it reads ("29.92" stays 29.92 under de-DE and sv-SE).
+        var texts = TestCulture.Run(culture, () => new[]
+        {
+            Bbs757EfbPress.NoKeyboardText("Airport"),
+            Bbs757EfbPress.NoKeyText("Airport", 'é'),
+            Bbs757EfbPress.TypedText("Airport", "KPDX"),
+            Bbs757EfbPress.TypedText("Pressure (inHg)", "29.92"),
+            Bbs757EfbPress.TypedOtherText("Airport", "KPD"),
+            Bbs757EfbPress.NotTypedText("Airport"),
+        });
+
+        Assert.Equal(new[]
+        {
+            "Airport: the tablet's keyboard did not come up.",
+            "Airport: the tablet's keyboard has no é.",
+            "Airport: KPDX",
+            "Pressure (inHg): 29.92",
+            "Airport reads KPD.",
+            "Airport not typed.",
+        }, texts);
+    }
 }

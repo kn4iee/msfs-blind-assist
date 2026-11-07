@@ -109,6 +109,11 @@ public class Bbs757EfbBridgeTests
                 OnTap?.Invoke(p);
                 return Task.FromResult(true);
             },
+            TapRun = (points, _, _) =>
+            {
+                Events.Add($"run {points.Count}");
+                return Task.FromResult(Reachable);
+            },
             Drag = (x, y0, y1, _) =>
             {
                 Events.Add($"drag {x},{y0},{y1}");
@@ -2066,6 +2071,7 @@ public class Bbs757EfbBridgeTests
                 return Task.FromResult(true);
             },
             Tap = (p, _) => { s.Tablet.Taps.Add(p); return Task.FromResult(true); },
+            TapRun = (_, _, _) => Task.FromResult(true),
             ReadInstalledCycle = () => null,
             ReadVar = (_, _) => Task.FromResult<double?>(null),
             ReadRegistered = (_, _) => Task.FromResult<double?>(null),

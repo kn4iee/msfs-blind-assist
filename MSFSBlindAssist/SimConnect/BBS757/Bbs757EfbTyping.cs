@@ -119,18 +119,27 @@ public static class Bbs757EfbTyping
         foreach (char c in text)
             if (c is not ((>= '0' and <= '9') or '-' or '.')) { missing = c; return null; }
 
-        Point Center(int row, int column) =>
-            new((int)(keypad.X + 60 + 120.0 * column), (int)(keypad.Y + 87.5 + 75.0 * row));
-
-        var taps = new List<Point> { Center(4, 1) };   // DEL
+        var taps = new List<Point> { KeypadKey(keypad, 4, 1) };   // DEL
         foreach (char c in text)
             for (int r = 0; r < KeypadRows.Length; r++)
             {
                 int col = KeypadRows[r].IndexOf(c);
-                if (col >= 0) { taps.Add(Center(r, col)); break; }
+                if (col >= 0) { taps.Add(KeypadKey(keypad, r, col)); break; }
             }
         return new Bbs757EfbTypingPlan(taps);
     }
+
+    /// <summary>
+    /// The numeric keypad's OK at <paramref name="keypad"/> (row 4, column 2; measured at 895,735 under the fuel input dialog's keypad):
+    /// it commits a box with no dialog (TOD pause) and closes only the keypad inside the fuel and weight dialog, whose INSERT stays the
+    /// pilot's answer. The runner taps it to finish a keypad box. Null when the rectangle is empty.
+    /// </summary>
+    public static Point? KeypadOk(Rectangle keypad) =>
+        keypad.Width <= 0 || keypad.Height <= 0 ? null : KeypadKey(keypad, 4, 2);
+
+    /// <summary>A keypad key's center, x0 + 60 + 120 column and y0 + 87.5 + 75 row, truncated as the model reader converts.</summary>
+    private static Point KeypadKey(Rectangle keypad, int row, int column) =>
+        new((int)(keypad.X + 60 + 120.0 * column), (int)(keypad.Y + 87.5 + 75.0 * row));
 
     /// <summary>The plan's taps in consecutive slices of at most <see cref="MaxTapsPerRun"/>; none for an empty plan.</summary>
     public static IReadOnlyList<IReadOnlyList<Point>> Runs(Bbs757EfbTypingPlan plan)

@@ -26,6 +26,11 @@ public sealed class Bbs757EfbPressIo
     /// <summary>One tap at a tablet point: true when it went out (it may have landed), false when nothing was tapped.</summary>
     public required Func<Point, CancellationToken, Task<bool>> Tap { get; init; }
 
+    /// <summary>A run of taps typing on BlueBird's keyboard (<see cref="Bbs757EfbTyping.Runs"/>: at most
+    /// <see cref="Bbs757EfbTyping.MaxTapsPerRun"/>), the given milliseconds after each, as one agent run: true when every tap of it went
+    /// out, false when it did not run or not all of it did.</summary>
+    public required Func<IReadOnlyList<Point>, int, CancellationToken, Task<bool>> TapRun { get; init; }
+
     /// <summary>The nav data cycle BlueBird has installed now (<c>NavigationData\cycle.json</c>), read before a nav data press's tap;
     /// null when none is installed or it cannot be read.</summary>
     public required Func<int?> ReadInstalledCycle { get; init; }
@@ -99,7 +104,8 @@ public sealed record Bbs757EfbPressed(Bbs757EfbItem Item, Bbs757EfbScreenModel P
 /// <see cref="ChooseAsync"/>, its list opened and its row tapped, and says nothing once it landed either.</item>
 /// </list>
 /// A tile of a ground service or the GPU opens the definition's echo for its row before the tap and ends it with the state read
-/// after (CORE-7). Everything said is an alert, in plain words that no Windows culture changes.
+/// after (CORE-7). A field's text is typed on BlueBird's own keyboard or keypad and read back by <see cref="TypeAsync"/> (plan 22).
+/// Everything said is an alert, in plain words that no Windows culture changes.
 /// </summary>
 public sealed class Bbs757EfbPressRunner
 {
@@ -137,8 +143,8 @@ public sealed class Bbs757EfbPressRunner
 
     /// <summary>
     /// A button, tile, side-menu entry, tab, top bar control or question answer pressed. A switch or check box clicked is set to
-    /// the other state (<see cref="SwitchAsync"/>); a slider or a drop-down clicked does nothing (the window sets it: a drop-down's
-    /// choice is <see cref="ChooseAsync"/>).
+    /// the other state (<see cref="SwitchAsync"/>); a slider, a drop-down or a field clicked does nothing (the window sets it: a
+    /// drop-down's choice is <see cref="ChooseAsync"/>, a field's text <see cref="TypeAsync"/>).
     /// </summary>
     public async Task ClickAsync(Bbs757EfbPressed pressed, CancellationToken ct)
     {
@@ -147,7 +153,8 @@ public sealed class Bbs757EfbPressRunner
             case Bbs757EfbKind.Toggle or Bbs757EfbKind.Checkbox:
                 await SwitchAsync(pressed, pressed.Item.On != true, ct);
                 return;
-            case Bbs757EfbKind.Slider or Bbs757EfbKind.Choice:
+            // A field is typed into (TypeAsync): a tap alone would bring the keyboard up with nothing to type.
+            case Bbs757EfbKind.Slider or Bbs757EfbKind.Choice or Bbs757EfbKind.Field:
                 return;
         }
 
@@ -680,6 +687,172 @@ public sealed class Bbs757EfbPressRunner
         }
     }
 
+    // ------------------------------------------------------------------ typing into a field (plan 22, Task 3)
+
+    /// <summary>After a field's tap, the longest wait for BlueBird's keyboard to read up and settled typing into it. Measured 2026-11-07
+    /// (docs/b757/evidence/efb-typing.md): it settled 1.1 to more than 1.9 s after the tap, and a key tapped before lands on the page
+    /// beneath (the box loses focus and the keyboard slides away).</summary>
+    public const int KeyboardReadyMaxMs = 5000;
+
+    /// <summary>BlueBird's key that puts the keyboard down; it keeps the text on every box measured (Enter differs from box to box).</summary>
+    private const string KeyboardDownKey = "btn_keyboard_down";
+
+    /// <summary>
+    /// A field (one of BlueBird's text boxes, on the page or a dialog's row) set to <paramref name="text"/>, typed on BlueBird's own
+    /// keyboard or numeric keypad as a sighted pilot types it (plan 22; measured 2026-11-07, docs/b757/evidence/efb-typing.md), through the
+    /// runner's discipline (B757-18: a fresh read, the field relocated and brought into view, a tap or nothing):
+    /// <list type="number">
+    /// <item>The fresh read shows the field holding the text exactly (ordinal): nothing tapped, nothing said.</item>
+    /// <item>The field is tapped (<see cref="TapAsync"/>, as any control), and the tablet read until its keyboard is up, settled and typing
+    /// into it (<see cref="KeyboardUpFor"/>, at most <see cref="KeyboardReadyMaxMs"/>; up for another box counts as not): never a key before
+    /// (B757-23). Not in time: "{name}: the tablet's keyboard did not come up." and nothing more tapped. A question that came up over the
+    /// page meanwhile: nothing more tapped or said (the read that found it said it).</item>
+    /// <item>The taps are planned from that read (<see cref="Bbs757EfbTyping"/>): a box that opens the keypad
+    /// (<see cref="Bbs757EfbTextState.Keypad"/>) on the keypad where that read draws it (it moves with its box); any other on the keyboard,
+    /// from its layer and the caret the tap put, clearing the old text around it. A character no key carries: the keyboard put down again,
+    /// nothing typed, "{name}: the tablet's keyboard has no {character}."; nothing to plan with (the box's state, the keys or the keypad not
+    /// read): put down, "{name} not typed."</item>
+    /// <item>The taps go in runs of at most <see cref="Bbs757EfbTyping.MaxTapsPerRun"/>, <see cref="Bbs757EfbTyping.TapGapMs"/> apart, one
+    /// agent run each (<see cref="Bbs757EfbPressIo.TapRun"/>). A run that does not go out stops the typing: the keyboard put down when it is
+    /// still up, and "{name} not typed." (what the field reads is not said; the window shows it).</item>
+    /// <item>The keyboard put down with its down key (it keeps the text), a keypad box finished with the keypad's OK (it commits a box with no
+    /// dialog, and in the fuel and weight dialog closes only the keypad: INSERT stays the pilot's answer), each only while the read before it
+    /// shows the keyboard up for the field (with it down, the key's place is the page's).</item>
+    /// <item>The tablet read until the field's text changes from what it held, or reads the text (at most <see cref="ChangeMaxMs"/>), and
+    /// said once (CORE-7: the screen reader said only the pilot's own keys): "{name}: {value}" when it reads the text, case aside (PERF calc's
+    /// Airport box upper-cases it); else "{name} reads {value}." (BlueBird's boxes filter what they take, and a full box drops keys); the
+    /// field gone: "{name} is no longer on the tablet."</item>
+    /// </list>
+    /// The text goes as typed: no trimming, no case change, no number parsing (BlueBird validates it). The text and the field's value are
+    /// never logged: a log line names the field alone (D2).
+    /// </summary>
+    public async Task TypeAsync(Bbs757EfbPressed pressed, string text, CancellationToken ct)
+    {
+        if (pressed.Item.Kind != Bbs757EfbKind.Field) return;
+        var target = await LocateAsync(pressed, ct);
+        if (target == null) return;
+        var field = target.Item;
+        string name = Bbs757EfbPress.SpokenName(target.Page, field);
+        if (string.Equals(field.Value, text, StringComparison.Ordinal)) return;   // it holds the text already
+
+        if (!await TapAsync(field, target, ct)) return;
+        long tappedAt = _io.NowMs();
+        Bbs757EfbScreenModel up;
+        while (true)
+        {
+            await _io.Delay(ChangePollMs, ct);
+            if (await _io.Read(ct) is not { } now) return;   // nothing read: the window says why
+            // A question that came up over the page takes no key (B757-18); the read that found it said it.
+            if (now.Question != null && !Bbs757EfbPress.SameQuestion(target.Page.Question, now.Question)) return;
+            if (KeyboardUpFor(now, field))
+            {
+                up = now;
+                break;
+            }
+            if (_io.NowMs() - tappedAt < KeyboardReadyMaxMs) continue;
+            Log.Debug("BBS757", $"EFB typing: {field.Name}: the keyboard did not come up in {KeyboardReadyMaxMs.ToString(CultureInfo.InvariantCulture)} ms");
+            _io.Alert(Bbs757EfbPress.NoKeyboardText(name));
+            return;
+        }
+
+        // The box as the read that shows the keyboard up has it: the caret the tap put, whether it opens the keypad, the text it holds.
+        var box = FieldIn(target.Page, up, field);
+        var state = box?.TextState;
+        bool keypad = state?.Keypad ?? up.KeyboardState!.Keypad;
+        char? missing = null;
+        Bbs757EfbTypingPlan? plan = null;
+        if (box != null && state != null)
+        {
+            if (state.Keypad) plan = Bbs757EfbTyping.PlanKeypad(up.KeyboardState!.KeypadBox, text, out missing);
+            else if (up.Keyboard is { } keyboard) plan = Bbs757EfbTyping.Plan(keyboard, up.KeyboardState!, text, state.Caret, box.Value.Length, out missing);
+        }
+        if (plan == null)
+        {
+            Log.Debug("BBS757", $"EFB typing: {field.Name}: {(missing != null ? "a character on no key" : "nothing to plan with")}; nothing typed");
+            await CloseKeyboardAsync(field, keypad, ct);
+            _io.Alert(missing is char ch ? Bbs757EfbPress.NoKeyText(name, ch) : Bbs757EfbPress.NotTypedText(name));
+            return;
+        }
+
+        var runs = Bbs757EfbTyping.Runs(plan);
+        Log.Debug("BBS757", $"EFB typing: {field.Name}: keyboard up {(_io.NowMs() - tappedAt).ToString(CultureInfo.InvariantCulture)} ms after the tap; "
+            + $"{plan.Taps.Count.ToString(CultureInfo.InvariantCulture)} taps in {runs.Count.ToString(CultureInfo.InvariantCulture)} run(s)");
+        foreach (var run in runs)
+        {
+            if (await _io.TapRun(run, Bbs757EfbTyping.TapGapMs, ct)) continue;
+            if (ct.IsCancellationRequested) return;   // the window hid or the bridge stopped: nothing said
+            Log.Debug("BBS757", $"EFB typing: {field.Name}: a run of taps did not go out; stopped");
+            await CloseKeyboardAsync(field, keypad, ct);
+            _io.Alert(Bbs757EfbPress.NotTypedText(name));
+            return;
+        }
+        await CloseKeyboardAsync(field, keypad, ct);
+        await ReadBackAsync(up, box!, text, name, ct);
+    }
+
+    /// <summary>Whether a read shows BlueBird's keyboard up, settled and typing into <paramref name="field"/> (its node name the keyboard's
+    /// target). The keyboard's fields are read one at a time, so shown, ready and the target are needed together.</summary>
+    private static bool KeyboardUpFor(Bbs757EfbScreenModel m, Bbs757EfbItem field) =>
+        m.KeyboardState is { Shown: true, Ready: true } k && k.Target.Length > 0 && string.Equals(k.Target, field.Name, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Puts BlueBird's keyboard down after a typing, the text kept: the tablet read again, and while it shows the keyboard up for
+    /// <paramref name="field"/>, one tap on its down key, or on the keypad's OK for a keypad box (where that read draws the keypad). Up for
+    /// another box, going down, or not read: nothing tapped, since with the keyboard down a key's place is the page's.
+    /// </summary>
+    private async Task CloseKeyboardAsync(Bbs757EfbItem field, bool keypad, CancellationToken ct)
+    {
+        if (await _io.Read(ct) is not { } now || !KeyboardUpFor(now, field)) return;
+        Point? close = keypad
+            ? Bbs757EfbTyping.KeypadOk(now.KeyboardState!.KeypadBox)
+            : now.Keyboard?.Keys.FirstOrDefault(k => k.Name == KeyboardDownKey)?.Hit;
+        if (close is { } at && !await _io.Tap(at, ct))
+            Log.Debug("BBS757", $"EFB typing: {field.Name}: the keyboard's close tap did not go out");
+    }
+
+    /// <summary>The field read back after its typing (<paramref name="box"/>, as the read <paramref name="up"/> showed it before the keys):
+    /// read until its text changed or reads <paramref name="text"/>, at most <see cref="ChangeMaxMs"/>, and said once.</summary>
+    private async Task ReadBackAsync(Bbs757EfbScreenModel up, Bbs757EfbItem box, string text, string name, CancellationToken ct)
+    {
+        long start = _io.NowMs();
+        Bbs757EfbItem? shown;
+        while (true)
+        {
+            await _io.Delay(ChangePollMs, ct);
+            if (await _io.Read(ct) is not { } now) return;   // nothing read: the window says why
+            shown = FieldIn(up, now, box);
+            if (shown != null && (!string.Equals(shown.Value, box.Value, StringComparison.Ordinal) || ReadsAsTyped(shown, text))) break;
+            if (_io.NowMs() - start >= ChangeMaxMs) break;
+        }
+        if (shown == null)
+        {
+            _io.Alert(Bbs757EfbPress.GoneText(name));
+            return;
+        }
+        bool asTyped = ReadsAsTyped(shown, text);
+        Log.Debug("BBS757", $"EFB typing: {box.Name}: read back {(_io.NowMs() - start).ToString(CultureInfo.InvariantCulture)} ms after the keyboard's close, "
+            + (asTyped ? "as typed" : "another text"));
+        _io.Alert(asTyped ? Bbs757EfbPress.TypedText(name, shown.Value) : Bbs757EfbPress.TypedOtherText(name, shown.Value));
+    }
+
+    /// <summary>Whether a field reads the typed text, case aside: PERF calc's Airport box upper-cases what it takes, the Charts box keeps
+    /// case (measured).</summary>
+    private static bool ReadsAsTyped(Bbs757EfbItem field, string text) => string.Equals(field.Value, text, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A field of <paramref name="before"/> found in <paramref name="now"/>: a dialog's row under the same question
+    /// (<see cref="RowIn"/>), a page field by <see cref="Bbs757EfbPress.Relocate"/>; null when it is not there, or no longer a field.</summary>
+    private static Bbs757EfbItem? FieldIn(Bbs757EfbScreenModel before, Bbs757EfbScreenModel now, Bbs757EfbItem field) =>
+        before.Question?.Rows.Contains(field) == true
+            ? RowIn(before, now, field)
+            : Bbs757EfbPress.Relocate(before, now, field) is { Kind: Bbs757EfbKind.Field } found ? found : null;
+
+    /// <summary>A dialog's row of <paramref name="before"/> in <paramref name="now"/>: the row with its key (its box's node name) under the
+    /// same question; null when the question went or is another.</summary>
+    private static Bbs757EfbItem? RowIn(Bbs757EfbScreenModel before, Bbs757EfbScreenModel now, Bbs757EfbItem row) =>
+        Bbs757EfbPress.SameQuestion(before.Question, now.Question)
+            ? now.Question!.Rows.FirstOrDefault(r => string.Equals(r.Key, row.Key, StringComparison.Ordinal))
+            : null;
+
     // ------------------------------------------------------------------ where, and the tap
 
     /// <summary>A control where it is to be tapped: the control and the page it is on in the fresh read.</summary>
@@ -755,9 +928,18 @@ public sealed class Bbs757EfbPressRunner
             return gone ? null : answer;
         }
 
+        // A dialog's text box (the fuel input dialog's) is its row, found again as an answer is: only under the same question.
+        if (pressed.Page.Question?.Rows.Contains(item) == true)
+        {
+            if (now.Question != null && !Bbs757EfbPress.SameQuestion(pressed.Page.Question, now.Question)) return null;
+            var row = RowIn(pressed.Page, now, item);
+            gone = row == null;
+            return row;
+        }
+
         var found = Bbs757EfbPress.Relocate(pressed.Page, now, item);
         if (found == null || found.Kind is not (Bbs757EfbKind.Button or Bbs757EfbKind.Tab or Bbs757EfbKind.Menu or Bbs757EfbKind.Toggle
-                or Bbs757EfbKind.Checkbox or Bbs757EfbKind.Slider or Bbs757EfbKind.Choice))
+                or Bbs757EfbKind.Checkbox or Bbs757EfbKind.Slider or Bbs757EfbKind.Choice or Bbs757EfbKind.Field))
         {
             gone = true;
             return null;
