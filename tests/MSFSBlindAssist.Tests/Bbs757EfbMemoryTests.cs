@@ -651,6 +651,23 @@ public class Bbs757EfbMemoryTests
     }
 
     [Fact]
+    public void The_top_bar_app_reads_its_flight_time_text()
+    {
+        // Measured 2026-11-07: the departure countdown is a std::string at +0x1b4 of the top bar's app ("DEP 00:28"), no label; empty
+        // after a flight. Only the top bar's app carries one.
+        var apps = Build(() => { TopBarAndDialog(dialogOpen: false); Str(BarApp + (uint)Layout.OverlayFlightTimeText, "DEP 00:28"); }).ReadFrontApps();
+        Assert.Equal("DEP 00:28", Assert.Single(apps, a => a.Class == Bbs757EfbMemory.TopBarClass).FlightTime);
+        Assert.All(apps.Where(a => a.Class != Bbs757EfbMemory.TopBarClass), a => Assert.Equal("", a.FlightTime));
+        var empty = Build(() => TopBarAndDialog(dialogOpen: false)).ReadFrontApps();
+        Assert.Equal("", empty.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).FlightTime);
+
+        // The tree format carries it (optional: a tree without it reads as "").
+        var back = Bbs757EfbTreeJson.Read(Bbs757EfbTreeJson.Write(apps));
+        Assert.Equal("DEP 00:28", back.Single(a => a.Class == Bbs757EfbMemory.TopBarClass).FlightTime);
+        Assert.DoesNotContain("flightTime", Bbs757EfbTreeJson.Write(empty), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_closed_dialog_is_not_read()
     {
         // BlueBird left an answered defuel question "front" for hours, its page set; only BBOS's dialog byte said it was gone.

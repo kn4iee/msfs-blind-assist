@@ -63,7 +63,7 @@ public sealed class Bbs757EfbMemory
     /// <summary>One EFB app that is currently drawn (its front flag set, the top bar always, the dialog while one is up), with
     /// the controls of its roots and its current page; the top bar's app also with its notification panel (<see cref="Panel"/>,
     /// null for every other app and when its fields cannot be read).</summary>
-    public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls, NoticePanel? Panel = null);
+    public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls, NoticePanel? Panel = null, string FlightTime = "");
 
     /// <summary>BlueBird's notification panel as the top bar's app keeps it (measured live 2026-11-07): <c>Shown</c> while a new
     /// notification's pop-up (about 10 s) or the notification list shows, <c>ListOpen</c> while the full list is open, and the panel's
@@ -89,10 +89,15 @@ public sealed class Bbs757EfbMemory
             foreach (uint root in Vector(app + (uint)_l.AppRoots)) AddVisible(root, controls, walk);
             if (_m.TryReadPtr(app + (uint)_l.AppPage, out uint page) && page != 0)
                 foreach (uint root in Vector(page + (uint)_l.PageChildren)) AddVisible(root, controls, walk);
-            apps.Add(new App(key, cls, controls, cls == TopBarClass ? ReadPanel(app) : null));
+            bool bar = cls == TopBarClass;
+            apps.Add(new App(key, cls, controls, bar ? ReadPanel(app) : null,
+                bar ? _m.ReadStdString(app + (uint)_l.OverlayFlightTimeText) ?? "" : ""));
         }
         return apps;
     }
+
+    // The top bar app's FlightTime (above) is its flight-time std::string at the layout's OverlayFlightTimeText: "DEP 00:28" around
+    // departure (measured live 2026-11-07), "" when it shows nothing; read with the normal text cap.
 
     /// <summary>The top bar app's notification panel (<see cref="NoticePanel"/>): its two bytes and its rectangle's floats (x, y and
     /// width at the layout's <c>OverlayPanelRect</c>, the height at <c>OverlayPanelHeight</c>); null when a byte cannot be read.</summary>

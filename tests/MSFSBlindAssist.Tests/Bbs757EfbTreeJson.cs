@@ -36,6 +36,7 @@ internal static class Bbs757EfbTreeJson
                 {
                     ["shown"] = p.Shown, ["list"] = p.ListOpen, ["x"] = Number(p.X), ["y"] = Number(p.Y), ["w"] = Number(p.W), ["h"] = Number(p.H),
                 };
+            if (app.FlightTime.Length > 0) o["flightTime"] = app.FlightTime;
             o["controls"] = new JsonArray(app.Controls.Select(n => (JsonNode?)NodeToJson(n)).ToArray());
             array.Add(o);
         }
@@ -64,7 +65,8 @@ internal static class Bbs757EfbTreeJson
             a["panel"] is { } p
                 ? new Bbs757EfbMemory.NoticePanel(p["shown"]!.GetValue<bool>(), p["list"]!.GetValue<bool>(), p["x"]!.GetValue<float>(),
                     p["y"]!.GetValue<float>(), p["w"]!.GetValue<float>(), p["h"]!.GetValue<float>())
-                : null)).ToList();
+                : null,
+            a["flightTime"]?.GetValue<string>() ?? "")).ToList();
     }
 
     /// <summary>The notifications a capture holds; none for a root array (every tree captured before plan 21).</summary>
@@ -183,6 +185,11 @@ internal static class Bbs757EfbTreeJson
     internal static IReadOnlyList<Bbs757EfbMemory.App> WithNoticePanel(IReadOnlyList<Bbs757EfbMemory.App> apps, float x = 1039.75f, float y = 38,
         float w = 349.25f, float h = 118, bool list = false) =>
         apps.Select(a => a.Class == Bbs757EfbMemory.TopBarClass ? a with { Panel = new Bbs757EfbMemory.NoticePanel(true, list, x, y, w, h) } : a).ToList();
+
+    /// <summary>The trees with the top bar app's flight-time text set to <paramref name="text"/> ("DEP 00:28", as the walk reads the
+    /// string at the layout's <c>OverlayFlightTimeText</c>, measured 2026-11-07); no committed tree carries it.</summary>
+    internal static IReadOnlyList<Bbs757EfbMemory.App> WithFlightTime(IReadOnlyList<Bbs757EfbMemory.App> apps, string text) =>
+        apps.Select(a => a.Class == Bbs757EfbMemory.TopBarClass ? a with { FlightTime = text } : a).ToList();
 
     /// <summary>The trees with every button's selected state taken off, as a read that marks no side-menu entry or tab (a mid-update
     /// read, or a torn one) gives them: no section and no current tab.</summary>

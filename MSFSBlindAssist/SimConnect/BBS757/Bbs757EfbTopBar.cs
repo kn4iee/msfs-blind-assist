@@ -7,14 +7,19 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// bar app's visible labels, each keyed by its control name (<see cref="KeyFor"/>): the time line, and the departure label when it shows
 /// (<see cref="Bbs757EfbModelReader"/>). Plan 18's keys and words for the departure countdown, the boarding control and the
 /// notification control (<see cref="DepartureKey"/>, <see cref="BoardingKey"/>, <see cref="NotificationsKey"/>,
-/// <see cref="DepartureText"/>, <see cref="BoardingText"/>) are kept for when they are measured in memory: the top bar app draws the
-/// boarding control and the notification button from its own fields, not as controls, and START BOARDING and DEP were not seen live
-/// (plan 21, Task 1), so the memory reader feeds none of them yet. The keys stay the same whatever the words, so the window keeps the
+/// <see cref="DepartureText"/>, <see cref="BoardingText"/>) are kept for when they are measured in memory. The departure countdown is now
+/// measured (2026-11-07): the top bar app keeps "DEP 00:28" as a string of its own (the layout's <c>OverlayFlightTimeText</c>), no label,
+/// and the model's status bar reads it after the time line under <see cref="DepartureKey"/> (other words, "ETA 1234Z", as written under
+/// <see cref="FlightTimeKey"/>). The top bar app draws the boarding control and the notification button from its own fields, not as
+/// controls, and START BOARDING was not seen live (plan 21, Task 1), so the memory reader feeds neither yet. The keys stay the same whatever the words, so the window keeps the
 /// screen reader's focus on an item while it changes. Pure.
 /// </summary>
 public static class Bbs757EfbTopBar
 {
     public const string DepartureKey = "top:dep", BoardingKey = "top:boarding", NotificationsKey = "top:notifications";
+
+    /// <summary>The key of the flight-time text when it is no departure countdown ("ETA 1234Z"): shown as written.</summary>
+    public const string FlightTimeKey = "top:flight_time";
 
     /// <summary>The key of the top bar label named <paramref name="controlName"/> (<c>time_label</c> is <c>top:time_label</c>): stable
     /// while its words change (the clock ticks).</summary>

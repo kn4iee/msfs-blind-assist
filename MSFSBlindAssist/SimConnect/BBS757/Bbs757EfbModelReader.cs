@@ -147,12 +147,25 @@ public sealed class Bbs757EfbModelReader
     /// the fuel input dialog). A label of marks alone (the "|" before the departure label) is a separator, no line. The boarding control and
     /// the notification button are drawn by the top bar app from its own fields, not controls: none is read here (not measured, plan 21).
     /// </summary>
-    private static IReadOnlyList<Bbs757EfbItem> StatusBarOf(IReadOnlyList<Bbs757EfbMemory.App> apps) =>
-        apps.Where(a => a.Class == Bbs757EfbMemory.TopBarClass)
+    private static IReadOnlyList<Bbs757EfbItem> StatusBarOf(IReadOnlyList<Bbs757EfbMemory.App> apps)
+    {
+        var bar = apps.Where(a => a.Class == Bbs757EfbMemory.TopBarClass).ToList();
+        var items = bar
             .SelectMany(a => Flatten(a.Controls))
             .Where(n => n.Kind == "label" && n.Text.Any(char.IsLetterOrDigit) && !IsNoise(n))
             .Select(n => new Bbs757EfbItem(Bbs757EfbKind.Text, n.Text, Box(n), Hit(n), false, Bbs757EfbTopBar.KeyFor(n.Name), Name: n.Name))
             .ToList();
+        // The departure countdown is no label: the top bar app keeps it as a string of its own (measured 2026-11-07), read after the
+        // time line. "DEP 00:28" is plan 18's departure item (its words, the sign kept), any other words as written; empty adds nothing.
+        string flight = bar.Select(a => a.FlightTime.Trim()).FirstOrDefault(t => t.Length > 0) ?? "";
+        if (flight.Length > 0)
+        {
+            string? dep = Bbs757EfbTopBar.DepartureText(flight);
+            items.Add(new Bbs757EfbItem(Bbs757EfbKind.Text, dep ?? flight, Rectangle.Empty, Point.Empty, false,
+                dep != null ? Bbs757EfbTopBar.DepartureKey : Bbs757EfbTopBar.FlightTimeKey));
+        }
+        return items;
+    }
 
     /// <summary>
     /// The dialog over the page: the dialog app (<see cref="Bbs757EfbMemory.DialogClass"/>), which the walk returns only while BBOS's

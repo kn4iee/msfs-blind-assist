@@ -20,6 +20,22 @@ public class Bbs757EfbTopBarTests
 
     // ---- the status bar from memory (plan 21, Task 6) ----
 
+    [Theory]
+    [InlineData("DEP 00:28", "DEP 00:28", "top:dep")]
+    [InlineData("DEP -00:46", "DEP -00:46", "top:dep")]
+    [InlineData("ETA 1234Z", "ETA 1234Z", "top:flight_time")]
+    public void The_status_bar_reads_the_departure_countdown_after_the_time_line(string read, string said, string key)
+    {
+        // The countdown is the top bar app's own string (measured 2026-11-07), no label: read after the time line.
+        var m = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithFlightTime(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"), read))!;
+        Assert.Equal(new[] { "top:time_label", key }, m.TopBar.Select(i => i.Key));
+        Assert.Equal(said, m.TopBar[1].Text);
+        Assert.False(m.TopBar[1].Clickable);
+        // Empty, or none: nothing is added.
+        Assert.Single(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithFlightTime(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"), ""))!.TopBar);
+        Assert.Single(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("13-aircraft-ground-services"))!.TopBar);
+    }
+
     private static Bbs757EfbMemory.Node Leaf(string kind, string name, string text, float x, float y, float w, float h) =>
         new(kind, name, text, x, y, w, h, 0, Array.Empty<Bbs757EfbMemory.Node>());
 
