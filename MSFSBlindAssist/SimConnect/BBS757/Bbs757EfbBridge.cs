@@ -60,9 +60,15 @@ public sealed class Bbs757EfbBridgeIo
     public required Action ArmGroundPowerEcho { get; init; }
     public required Action<double?> SettleGroundPowerEcho { get; init; }
 
-    /// <summary>The clock the window's commands are timed by, in milliseconds (<see cref="Bbs757EfbCommandQueue"/>): the system's by
-    /// default; the tests give their own.</summary>
+    /// <summary>The clock the window's commands are timed by, in milliseconds (<see cref="Bbs757EfbCommandQueue"/>), and the pilot's own
+    /// taps, after which BlueBird's notifications are not said for a while (<see cref="Bbs757EfbNotices.QuietAfterPressMs"/>): the
+    /// system's by default; the tests give their own.</summary>
     public Func<long> NowMs { get; init; } = () => Environment.TickCount64;
+
+    /// <summary>A run of taps through the EFB agent: how it ended, and whether it may have clicked although it did not finish. Null (the
+    /// default) runs it through the bridge's client (<see cref="CoherentBbs757EfbClient.RunAsync"/>,
+    /// <see cref="CoherentBbs757EfbClient.LastRunMayHaveClicked"/>); the tests give their own.</summary>
+    public Func<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>, CancellationToken, Task<(Bbs757EfbRunResult Result, bool MayHaveClicked)>>? Run { get; init; }
 
     /// <summary>Waits the given milliseconds for a set to settle, or less when the window sends another command; null (the default) waits
     /// on the bridge's own wake, which each command releases. The tests move their clock instead.</summary>
@@ -250,7 +256,7 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
             _news.Reset();
         }
         _lastRead = model;
-        string? said = shown ? _news.After(model, Environment.TickCount64 - _lastOwnTapMs) : null;
+        string? said = shown ? _news.After(model, _io.NowMs() - _lastOwnTapMs) : null;
         string fp = Bbs757EfbPress.Fingerprint(model);
         bool fresh = fp != _lastFingerprint;
         if (IsAiracPage(model.PageName) && (fresh || asked)) _signInStale = true;
@@ -412,9 +418,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// own press, after which BlueBird's notifications are not said for a while.</summary>
     private async Task<bool> TapAsync(Point p, CancellationToken ct)
     {
-        long at = Environment.TickCount64;
-        var run = await _client.RunAsync(new[] { (new EfbPoint(p.X, p.Y), 250) }, ct);
-        bool tapped = run == Bbs757EfbRunResult.Done || _client.LastRunMayHaveClicked;
+        long at = _io.NowMs();
+        var (run, mayHaveClicked) = await RunAsync(new[] { (new EfbPoint(p.X, p.Y), 250) }, ct);
+        bool tapped = run == Bbs757EfbRunResult.Done || mayHaveClicked;
         if (tapped) _lastOwnTapMs = at;
         if (run != Bbs757EfbRunResult.Done) Log.Debug("BBS757", $"EFB reader: a tap ended {run}{(tapped ? ", and may have clicked" : "")}.");
         return tapped;
@@ -423,15 +429,25 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// <summary>A run of typing taps through the EFB agent, <paramref name="gapMs"/> after each (the agent takes at most 40 steps a run,
     /// each delay at most 10,000 ms; <see cref="Bbs757EfbTyping.Runs"/> keeps to them): true only when the run was done, every tap made;
     /// one cut short or not started is false, and the press runner stops the typing (a partial run leaves the layer unknown). A run that
-    /// may have clicked is the pilot's own press, as a tap is. The points are keys, so nothing typed is logged.</summary>
-    private async Task<bool> TapRunAsync(IReadOnlyList<Point> points, int gapMs, CancellationToken ct)
+    /// may have clicked is the pilot's own press, as a tap is, from its end: 40 taps at <see cref="Bbs757EfbTyping.TapGapMs"/> last
+    /// about 4 s, as long as <see cref="Bbs757EfbNotices.QuietAfterPressMs"/>, so counted from its start the quiet window was over by its
+    /// last tap (the final review's M2). The points are keys, so nothing typed is logged. Internal for the tests.</summary>
+    internal async Task<bool> TapRunAsync(IReadOnlyList<Point> points, int gapMs, CancellationToken ct)
     {
-        long at = Environment.TickCount64;
-        var run = await _client.RunAsync(points.Select(p => (new EfbPoint(p.X, p.Y), gapMs)).ToList(), ct);
-        if (run == Bbs757EfbRunResult.Done || _client.LastRunMayHaveClicked) _lastOwnTapMs = at;
+        var (run, mayHaveClicked) = await RunAsync(points.Select(p => (new EfbPoint(p.X, p.Y), gapMs)).ToList(), ct);
+        if (run == Bbs757EfbRunResult.Done || mayHaveClicked) _lastOwnTapMs = _io.NowMs();
         if (run != Bbs757EfbRunResult.Done)
-            Log.Debug("BBS757", $"EFB reader: a typing run ended {run}{(_client.LastRunMayHaveClicked ? ", and may have clicked" : "")}.");
+            Log.Debug("BBS757", $"EFB reader: a typing run ended {run}{(mayHaveClicked ? ", and may have clicked" : "")}.");
         return run == Bbs757EfbRunResult.Done;
+    }
+
+    /// <summary>A run of taps through the io's seam (<see cref="Bbs757EfbBridgeIo.Run"/>), else the client.</summary>
+    private async Task<(Bbs757EfbRunResult Result, bool MayHaveClicked)> RunAsync(IReadOnlyList<(EfbPoint Point, int DelayAfterMs)> seq,
+        CancellationToken ct)
+    {
+        if (_io.Run is { } run) return await run(seq, ct);
+        var result = await _client.RunAsync(seq, ct);
+        return (result, _client.LastRunMayHaveClicked);
     }
 
     private async Task<double?> ReadVarAsync(string name, CancellationToken ct)

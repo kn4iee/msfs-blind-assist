@@ -2528,6 +2528,37 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
+    public async Task A_typing_run_keeps_the_notifications_quiet_from_its_last_tap()
+    {
+        // The final review's M2: a run of 40 typing taps at Bbs757EfbTyping.TapGapMs lasts 4 s, as long as QuietAfterPressMs. Counted from
+        // the run's start, the quiet window had run out by its last tap, and the notification its typing raised (Charts acts at the first
+        // valid code) was said over the typing's own read-back. It counts from the run's end.
+        using var h = new BridgeHarness();
+        h.RunTaps = (seq, _) =>
+        {
+            h.Now += seq.Sum(s => s.DelayAfterMs);   // the run lasts its taps' gaps
+            return Task.FromResult((Bbs757EfbRunResult.Done, false));
+        };
+        var quiet = Ground(ReqFuelTruck());
+        h.Bridge.TakeRead(quiet);
+
+        var keys = Enumerable.Repeat(new Point(40, 750), Bbs757EfbTyping.MaxTapsPerRun).ToList();
+        Assert.True(await h.Bridge.TapRunAsync(keys, Bbs757EfbTyping.TapGapMs, CancellationToken.None));
+        Assert.True(h.Now >= Bbs757EfbNotices.QuietAfterPressMs);
+
+        h.Bridge.TakeRead(quiet with { Notices = new[] { new Bbs757EfbNotice(1, "MUNICH charts received.", "14:17Z") } });
+        Assert.DoesNotContain(h.Pushes[^1], kv => kv.Key.EndsWith(".kind", StringComparison.Ordinal) && kv.Value == "alert");
+
+        // Once the quiet window has passed, a new notification is said as before.
+        h.Now += Bbs757EfbNotices.QuietAfterPressMs;
+        h.Bridge.TakeRead(quiet with
+        {
+            Notices = new[] { new Bbs757EfbNotice(2, "GPU connected.", "14:18Z"), new Bbs757EfbNotice(1, "MUNICH charts received.", "14:17Z") },
+        });
+        Assert.Equal(("alert", "GPU connected."), (h.Pushes[^1]["items.0.kind"], h.Pushes[^1]["items.0.text"]));
+    }
+
+    [Fact]
     public void A_notification_right_after_the_pilots_own_press_is_not_said()
     {
         var news = new Bbs757EfbReadNews();
@@ -2583,6 +2614,7 @@ public class Bbs757EfbBridgeTests
                     SettleGroundPowerEcho = _ => { },
                     NowMs = () => Now,
                     WaitForCommand = (ms, _) => { Now += ms; return Task.CompletedTask; },
+                    Run = (seq, ct) => RunTaps?.Invoke(seq, ct) ?? Task.FromResult((Bbs757EfbRunResult.Unreachable, false)),
                 });
             }
             finally
@@ -2600,6 +2632,9 @@ public class Bbs757EfbBridgeTests
         public int SignedInReads { get; private set; }
         public Func<Bbs757EfbModelRead> ModelRead { get; set; } = () => new Bbs757EfbModelRead(null, "no simulator in this test");
         public Func<CancellationToken, Task<string>> SignInFlow { get; set; } = _ => Task.FromResult("");
+        /// <summary>The EFB agent's runs of taps: how one ended and whether it may have clicked; null, none reaches the tablet (Unreachable),
+        /// as with the harness's client, which never connects.</summary>
+        public Func<IReadOnlyList<(EfbPoint Point, int DelayAfterMs)>, CancellationToken, Task<(Bbs757EfbRunResult, bool)>>? RunTaps { get; set; }
         public List<Bbs757EfbHook> Hooks { get; } = new();
         public List<Dictionary<string, string>> Pushes { get; } = new();
 
