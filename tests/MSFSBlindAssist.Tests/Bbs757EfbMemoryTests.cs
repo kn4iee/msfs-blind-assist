@@ -25,6 +25,10 @@ public class Bbs757EfbMemoryTests
         AppFront: 0x140, AppPage: 0x144, AppRoots: 0x17c, PageChildren: 0x4c,
         CtrlName: 0x1c, CtrlRect: 0x38, CtrlVisible: 0x8c, CtrlChildren: 0xf4, CtrlParent: 0xe8,
         CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134, SliderKnob: 0x184,
+        TextboxLabel: 0x128, MultilineText: 0x128, PulldownFace: 0x128, PulldownList: 0x130, PulldownEntries: 0x138,
+        PulldownEntryText: 0x0c, PulldownOpen: 0x154, ButtonSelectable: 0x140, ButtonUnselected: 0x143,
+        BbosModalOpen: 0x1d8, BbosNotices: 0x9334, NoticeStride: 0x3c, NoticeId: 0x00, NoticeTitle: 0x04,
+        NoticeText: 0x10, NoticeTime: 0x1c, NoticeUnread: 0x34,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),

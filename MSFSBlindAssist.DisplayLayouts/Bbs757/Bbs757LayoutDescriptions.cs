@@ -43,6 +43,13 @@ public static class Bbs757LayoutDescriptions
             $"file analysis: {l.SourceFile}: EFB control fields: name {l.CtrlName}, rect {l.CtrlRect}, visible {l.CtrlVisible}, " +
             $"children {l.CtrlChildren}, parent {l.CtrlParent}, labelText {l.CtrlLabelText}, buttonText {l.CtrlButtonText}, scrollboxOffset {l.ScrollboxOffset}, " +
             $"sliderKnob {l.SliderKnob}",
+            $"file analysis: {l.SourceFile}: EFB phase 2 fields: textboxLabel {l.TextboxLabel}, multilineText {l.MultilineText}, " +
+            $"pulldownFace {l.PulldownFace}, pulldownList {l.PulldownList}, pulldownEntries {l.PulldownEntries}, " +
+            $"pulldownEntryText {l.PulldownEntryText}, pulldownOpen {l.PulldownOpen}, buttonSelectable {l.ButtonSelectable}, " +
+            $"buttonUnselected {l.ButtonUnselected}, bbosModalOpen {l.BbosModalOpen}",
+            $"file analysis: {l.SourceFile}: EFB notices: bbosNotices {l.BbosNotices}, noticeStride {l.NoticeStride}, " +
+            $"noticeId {l.NoticeId}, noticeTitle {l.NoticeTitle}, noticeText {l.NoticeText}, noticeTime {l.NoticeTime}, " +
+            $"noticeUnread {l.NoticeUnread}",
             $"file analysis: {l.SourceFile}: EFB classes: {classes}",
         };
     }

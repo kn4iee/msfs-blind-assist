@@ -29,6 +29,13 @@ public class Bbs757EfbMemoryLiveTests
         // The scroll is the scrollbox's content offset at +0x134 (B757-26), never the scrollbar thumb at +0x158.
         // A slider keeps its knob's rectangle at +0x184 (x, y, w, h; measured 2026-11-07).
         CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134, SliderKnob: 0x184,
+        // The phase 2 fields, measured live 2026-11-07 (docs/b757/evidence/efb-memory-classes.md): a text box's label
+        // pointer, a multi-line box's text, a drop-down's face, list, entries (text +0x0c) and open byte, the selected
+        // entry's two button bytes, BBOS's dialog byte and its notification vector (BBOS + 0x9334, 0x3c-byte records).
+        TextboxLabel: 0x128, MultilineText: 0x128, PulldownFace: 0x128, PulldownList: 0x130, PulldownEntries: 0x138,
+        PulldownEntryText: 0x0c, PulldownOpen: 0x154, ButtonSelectable: 0x140, ButtonUnselected: 0x143,
+        BbosModalOpen: 0x1d8, BbosNotices: 0x9334, NoticeStride: 0x3c, NoticeId: 0x00, NoticeTitle: 0x04,
+        NoticeText: 0x10, NoticeTime: 0x1c, NoticeUnread: 0x34,
         ClassVptrs: new[]
         {
             // N3bbs22bbos_control_scrollboxE's vtable is at 0x30bb0 (its typeinfo at 0x30c34): read live, 2026-11-07.
@@ -36,11 +43,15 @@ public class Bbs757EfbMemoryLiveTests
             new Bbs757EfbClassVptr("button", 0x30164), new Bbs757EfbClassVptr("label", 0x30cd4),
             new Bbs757EfbClassVptr("toggle", 0x30e7c), new Bbs757EfbClassVptr("slider", 0x30c48),
             new Bbs757EfbClassVptr("grid", 0x30320),
+            new Bbs757EfbClassVptr("textbox", 0x30dec), new Bbs757EfbClassVptr("multiline", 0x305e4),
+            new Bbs757EfbClassVptr("pulldown", 0x307a0), new Bbs757EfbClassVptr("image", 0x303ac),
             // app classes, keyed by the token the model reader shows
             new Bbs757EfbClassVptr("HOME", 0x27bdc), new Bbs757EfbClassVptr("AIRCRAFT", 0x381c4),
             new Bbs757EfbClassVptr("NAVIGATION", 0x28d10), new Bbs757EfbClassVptr("SYSTEMS", 0x2e530),
             new Bbs757EfbClassVptr("CHECKLIST", 0x253f4), new Bbs757EfbClassVptr("SETTINGS", 0x2c860),
             new Bbs757EfbClassVptr("SIGN IN", 0x2e3d0),
+            // the top bar's app and the dialog app, found by their class (never shown as a token)
+            new Bbs757EfbClassVptr("overlay", 0x28c84), new Bbs757EfbClassVptr("modal", 0x27df0),
         });
 
     [Fact]
