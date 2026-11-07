@@ -812,8 +812,8 @@ public sealed class Bbs757EfbPressRunner
             _io.Alert(Bbs757EfbPress.NotTypedText(name));
             return;
         }
-        await CloseKeyboardAsync(field, keypad, ct);
-        await ReadBackAsync(up, box!, text, name, ct);
+        bool closed = await CloseKeyboardAsync(field, keypad, ct);
+        await ReadBackAsync(up, box!, text, name, closed, ct);
     }
 
     /// <summary>Whether a read shows BlueBird's keyboard up, settled and typing into <paramref name="field"/> (its node name the keyboard's
@@ -824,13 +824,15 @@ public sealed class Bbs757EfbPressRunner
     /// <summary>
     /// Puts BlueBird's keyboard down after a typing, the text kept: the tablet read again, and while it shows the keyboard up for
     /// <paramref name="field"/>, one tap on its down key, or on the keypad's OK for a keypad box (where that read draws the keypad). Up for
-    /// another box, going down, or not read: nothing tapped, since with the keyboard down a key's place is the page's.
+    /// another box, going down, or not read: nothing tapped, since with the keyboard down a key's place is the page's. True when the close
+    /// tap went out.
     /// </summary>
-    private async Task CloseKeyboardAsync(Bbs757EfbItem field, bool keypad, CancellationToken ct)
+    private async Task<bool> CloseKeyboardAsync(Bbs757EfbItem field, bool keypad, CancellationToken ct)
     {
-        if (await _io.Read(ct) is not { } now || !KeyboardUpFor(now, field)) return;
-        if (ClosePoint(now, keypad) is { } at && !await _io.Tap(at, ct))
-            Log.Debug("BBS757", $"EFB typing: {field.Name}: the keyboard's close tap did not go out");
+        if (await _io.Read(ct) is not { } now || !KeyboardUpFor(now, field) || ClosePoint(now, keypad) is not { } at) return false;
+        if (await _io.Tap(at, ct)) return true;
+        Log.Debug("BBS757", $"EFB typing: {field.Name}: the keyboard's close tap did not go out");
+        return false;
     }
 
     /// <summary>Where the read <paramref name="m"/> puts the keyboard's close: the keypad's OK (<paramref name="keypad"/>, where that read
@@ -881,31 +883,60 @@ public sealed class Bbs757EfbPressRunner
 
     private static readonly Bbs757EfbKeyboardState RestingKeyboard = new(false, false, false, "", false, false, false, Rectangle.Empty);
 
-    /// <summary>The field read back after its typing (<paramref name="box"/>, as the read <paramref name="up"/> showed it before the keys):
-    /// read until its text changed or reads <paramref name="text"/>, at most <see cref="ChangeMaxMs"/>, and said once.</summary>
-    private async Task ReadBackAsync(Bbs757EfbScreenModel up, Bbs757EfbItem box, string text, string name, CancellationToken ct)
+    /// <summary>
+    /// The field read back after its typing (<paramref name="box"/>, as the read <paramref name="up"/> showed it before the keys): read
+    /// until its text changed or reads <paramref name="text"/>, at most <see cref="ChangeMaxMs"/>, and said once. A page field gone from a
+    /// read after a typing whose close went out (<paramref name="closed"/>) is read back from the line its row shows in that read
+    /// (<see cref="LineFor"/>; the final review's I3: the empty SimBrief row saves on the keypad's OK, which hides its box, and the row then
+    /// shows the saved ID's line), as soon as that line reads other words than the row showed before the typing, or the text; "{name} is no
+    /// longer on the tablet." only when no read in the wait showed the field or such a line.
+    /// </summary>
+    private async Task ReadBackAsync(Bbs757EfbScreenModel up, Bbs757EfbItem box, string text, string name, bool closed, CancellationToken ct)
     {
         long start = _io.NowMs();
-        Bbs757EfbItem? shown;
+        // What the row showed beside its box before the typing (Hoppie's and SayIntentions' value lines), else the box's own text: a line
+        // still reading it is not yet the read-back.
+        string before = LineFor(up, up, box)?.Value ?? box.Value;
+        Bbs757EfbItem? shown, line = null;
         while (true)
         {
             await _io.Delay(ChangePollMs, ct);
             if (await _io.Read(ct) is not { } now) return;   // nothing read: the window says why
             shown = FieldIn(up, now, box);
             if (shown != null && (!string.Equals(shown.Value, box.Value, StringComparison.Ordinal) || ReadsAsTyped(shown, text))) break;
+            if (shown == null && closed && LineFor(up, now, box) is { } found)
+            {
+                line = found;
+                if (!string.Equals(found.Value, before, StringComparison.Ordinal) || ReadsAsTyped(found, text)) break;
+            }
             if (_io.NowMs() - start >= ChangeMaxMs) break;
         }
-        if (shown == null)
+        if ((shown ?? line) is not { } said)
         {
             _io.Alert(Bbs757EfbPress.GoneText(name));
             return;
         }
-        bool asTyped = ReadsAsTyped(shown, text);
+        bool asTyped = ReadsAsTyped(said, text);
         Log.Debug("BBS757",
-            $"EFB typing: {box.Name}: read back {(_io.NowMs() - start).ToString(CultureInfo.InvariantCulture)} ms after the keyboard's close");
+            $"EFB typing: {box.Name}: read back {(_io.NowMs() - start).ToString(CultureInfo.InvariantCulture)} ms after the keyboard's close"
+            + (shown == null ? ", from its row's line" : ""));
         // An empty field says so ("Airport: " would end on nothing): emptied as asked, or every key dropped.
-        _io.Alert(shown.Value.Length == 0 ? Bbs757EfbPress.EmptyText(name)
-            : asTyped ? Bbs757EfbPress.TypedText(name, shown.Value) : Bbs757EfbPress.TypedOtherText(name, shown.Value));
+        _io.Alert(said.Value.Length == 0 ? Bbs757EfbPress.EmptyText(name)
+            : asTyped ? Bbs757EfbPress.TypedText(name, said.Value) : Bbs757EfbPress.TypedOtherText(name, said.Value));
+    }
+
+    /// <summary>
+    /// The line a page field's row shows in <paramref name="now"/> (the field <paramref name="box"/> as the read <paramref name="up"/> has
+    /// it): the one value line (<see cref="Bbs757EfbKind.Row"/>) named exactly as the field is, by the structural name the reader gave it
+    /// (B757-22: its row's label, or its own name), on the same page; never by its place or a word guessed. Null for a dialog's box, on
+    /// another page, and when no such line, or more than one, shows.
+    /// </summary>
+    private static Bbs757EfbItem? LineFor(Bbs757EfbScreenModel up, Bbs757EfbScreenModel now, Bbs757EfbItem box)
+    {
+        if (box.Text.Length == 0 || up.Question?.Rows.Contains(box) == true || !string.Equals(up.PageName, now.PageName, StringComparison.Ordinal))
+            return null;
+        var lines = now.Items.Where(i => i.Kind == Bbs757EfbKind.Row && string.Equals(i.Text, box.Text, StringComparison.Ordinal)).Take(2).ToList();
+        return lines.Count == 1 ? lines[0] : null;
     }
 
     /// <summary>Whether a field reads the typed text, case aside: PERF calc's Airport box upper-cases what it takes, the Charts box keeps

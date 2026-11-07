@@ -1245,6 +1245,13 @@ public class Bbs757EfbPressTests
         /// <summary>The box is a dialog's (the fuel input dialog's), shown while <see cref="DialogUp"/>.</summary>
         public bool InQuestion { get; init; }
         public bool DialogUp { get; set; } = true;
+        /// <summary>The page the box is on, built from this tablet's state (the box's text and caret, <see cref="Saved"/>) in place of
+        /// PERF calc's one box: a capture's page (the AIRAC page's SimBrief row). The box is found in it by <see cref="Name"/>. Null:
+        /// PERF calc's.</summary>
+        public Func<TypingTablet, Bbs757EfbScreenModel>? PageFrom { get; init; }
+        /// <summary>The keypad's OK saves the box, as it commits TOD pause's: <see cref="Saved"/> from then on.</summary>
+        public bool OkSaves { get; init; }
+        public bool Saved { get; private set; }
 
         public int Caret { get; private set; }
         public double Offset { get; private set; }
@@ -1280,7 +1287,8 @@ public class Bbs757EfbPressTests
 
         public Bbs757EfbScreenModel Page()
         {
-            var page = !InQuestion ? PageOf("NAVIGATION", "PERF CALC", Field())
+            var page = PageFrom != null ? PageFrom(this)
+                : !InQuestion ? PageOf("NAVIGATION", "PERF CALC", Field())
                 : DialogUp ? PageOf("AIRCRAFT", "FUEL") with
                 {
                     Question = new Bbs757EfbQuestion("Insert desired fuel level (0-2176 Gal)", new[] { Cancel, Insert }) { Rows = new[] { Field() } },
@@ -1299,8 +1307,11 @@ public class Bbs757EfbPressTests
         public Bbs757EfbPressed Pressed()
         {
             var page = Page();
-            return new(InQuestion ? page.Question!.Rows[0] : page.Items[0], page);
+            return new(InQuestion ? page.Question!.Rows[0] : page.Items.First(i => i.Name == Name), page);
         }
+
+        /// <summary>Where the box is drawn now; null when the page shows it no more.</summary>
+        private Rectangle? FieldBox() => PageFrom == null ? Field().Box : PageFrom(this).Items.FirstOrDefault(i => i.Name == Name)?.Box;
 
         public Bbs757EfbPressRunner Runner() => new(new Bbs757EfbPressIo
         {
@@ -1355,7 +1366,7 @@ public class Bbs757EfbPressTests
         /// <summary>A tap landing on the tablet.</summary>
         private void Land(Point p)
         {
-            if ((!InQuestion || DialogUp) && Field().Box.Contains(p))
+            if ((!InQuestion || DialogUp) && FieldBox() is { } box && box.Contains(p))
             {
                 if (!OpensKeyboard) return;
                 if (!Shown) { Shown = true; Ready = false; _upAt = Now; }
@@ -1403,7 +1414,7 @@ public class Bbs757EfbPressTests
             if (row is >= 0 and < 4 && column is >= 0 and < 3) Type(rows[row][column]);
             else if (row == 4 && column == 0) Backspace();
             else if (row == 4 && column == 1) { Text = ""; Caret = 0; }
-            else if (row == 4 && column == 2) Down();
+            else if (row == 4 && column == 2) { Saved |= OkSaves; Down(); }
             else Events.Add("off the keypad");
         }
 
@@ -1801,6 +1812,71 @@ public class Bbs757EfbPressTests
 
         Assert.Empty(tablet.Taps);
         Assert.Equal(new[] { "Fuel is no longer on the tablet." }, tablet.Alerts);
+    }
+
+    /// <summary>The trees with the control named <paramref name="name"/> replaced by <paramref name="by"/>.</summary>
+    private static IReadOnlyList<Bbs757EfbMemory.App> ReplacedNode(IReadOnlyList<Bbs757EfbMemory.App> apps, string name, Bbs757EfbMemory.Node by)
+    {
+        Bbs757EfbMemory.Node Walk(Bbs757EfbMemory.Node n) => n.Name == name ? by : n with { Children = n.Children.Select(Walk).ToList() };
+        return apps.Select(a => a with { Controls = a.Controls.Select(Walk).ToList() }).ToList();
+    }
+
+    /// <summary>
+    /// The AIRAC page (55, the scrub's made-up values: B757-24) with its SimBrief row as the tablet shows it. With no ID saved, its input
+    /// cell holds the empty text box (<c>simbrief_id_textbox</c>, [763.5,95 170x44], the keypad's, at most 8: measured), named by the row's
+    /// label. Once the keypad's OK saved it, the box is hidden and the cell shows <c>simbrief_id_saved_label</c> holding the ID typed
+    /// (<paramref name="savedLine"/>), or nothing at all (false: no line takes the box's place).
+    /// </summary>
+    private static Bbs757EfbScreenModel SimBriefRow(TypingTablet t, bool savedLine = true)
+    {
+        var apps = Bbs757EfbTreeJson.Load("55-settings-airac-data");
+        apps = !t.Saved
+            ? ReplacedNode(apps, "simbrief_id_saved_label", new Bbs757EfbMemory.Node("textbox", "simbrief_id_textbox", t.Text, 763.5f, 95, 170, 44, 0,
+                Array.Empty<Bbs757EfbMemory.Node>(), Caret: t.Caret, MaxLength: 8, Keypad: true))
+            : savedLine ? Bbs757EfbTreeJson.WithText(apps, "simbrief_id_saved_label", t.Text)
+            : ReplacedNode(apps, "simbrief_id_saved_label", new Bbs757EfbMemory.Node("other", "simbrief_id_saved_label", "", 763.5f, 104, 170, 26, 0,
+                Array.Empty<Bbs757EfbMemory.Node>()));
+        return Bbs757EfbModelReader.Read(apps)!;
+    }
+
+    private static TypingTablet SimBriefTablet(bool savedLine = true) => new()
+    {
+        Name = "simbrief_id_textbox", Text = "", Keypad = true, MaxLength = 8, ReadyAfterMs = 100, OkSaves = true,
+        PageFrom = t => SimBriefRow(t, savedLine),
+    };
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_field_its_typing_hid_is_read_back_from_the_line_its_row_shows(string culture)
+    {
+        // The final review's I3: the empty SimBrief row saves on the keypad's OK (as TOD's OK commits), which hides its box, and the row then
+        // shows the saved ID's line. Found again by the row's label the box was named by (B757-22), the line is the read-back, said as soon
+        // as it shows, where "is no longer on the tablet" after a typing that worked sounded like a failure. The ID is the scrub's 123456.
+        var tablet = SimBriefTablet();
+        var pressed = tablet.Pressed();
+        Assert.Equal("SIMBRIEF ID number", Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item));
+
+        await TestCulture.Run(culture, () => tablet.Runner().TypeAsync(pressed, "123456", CancellationToken.None));
+
+        Assert.True(tablet.Saved);
+        Assert.DoesNotContain(tablet.Page().Items, i => i.Name == "simbrief_id_textbox");
+        Assert.Contains(tablet.Page().Items, i => i.Kind == Bbs757EfbKind.Row && i.Text == pressed.Item.Text && i.Value == "123456");
+        Assert.Equal(new[] { pressed.Item.Hit, Bbs757EfbTyping.KeypadOk(TodKeypad)!.Value }, tablet.Taps);   // the box, then the keypad's OK
+        Assert.Equal(new[] { "SIMBRIEF ID number: 123456" }, tablet.Alerts);
+        Assert.InRange(tablet.Now - tablet.ClosedAt, 0, 500);   // at its first read, not after ChangeMaxMs
+    }
+
+    [Fact]
+    public async Task A_field_gone_after_its_typing_with_no_line_in_its_place_is_no_longer_on_the_tablet()
+    {
+        // With no line of its row in the box's place, the read-back waits it out (ChangeMaxMs) and says the field is gone, as before.
+        var tablet = SimBriefTablet(savedLine: false);
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "123456", CancellationToken.None);
+
+        Assert.True(tablet.Saved);
+        Assert.Equal(new[] { "SIMBRIEF ID number is no longer on the tablet." }, tablet.Alerts);
+        Assert.True(tablet.Now - tablet.ClosedAt >= Bbs757EfbPressRunner.ChangeMaxMs);
     }
 
     [Fact]
