@@ -532,19 +532,24 @@ public sealed class Bbs757EfbPressRunner
     /// <summary>
     /// A drop-down set to its entry <paramref name="entry"/> (the words the window's choice list sends), on the tablet as a sighted pilot
     /// chooses (B757-27), through the runner's discipline (B757-18: a fresh read, the control relocated and brought into view, a tap or
-    /// nothing). The fresh read shows it with the entry already: nothing tapped, nothing said. An entry it does not list: nothing tapped,
+    /// nothing). The fresh read shows it with the entry already: nothing tapped, nothing said; but with its list open (the pilot's own mouse
+    /// left it so, or a choice that failed), the entry's row is tapped, which closes the list with nothing changed (measured on the runway
+    /// list, 2026-11-07), and judged as a choice is (Task 7's concern 2, the final review's I2). An entry it does not list: nothing tapped,
     /// "{name} could not be set to {entry}." Closed, its face is tapped and the tablet read until its list is open with its rows laid out
-    /// (at most <see cref="ChangeMaxMs"/>); open already (the pilot's own mouse left it so), it is never tapped open again. The entry's row is
+    /// (at most <see cref="ChangeMaxMs"/>); open already, it is never tapped open again. The entry's row is
     /// the fresh read's (<see cref="Bbs757EfbPress.RowOf"/>), tapped in the middle of the part of it the list shows when at least
     /// <see cref="Bbs757EfbPress.MinShownPx"/> does (<see cref="Bbs757EfbPress.RowTapPoint"/>). It is never dragged into view: an open list
-    /// scrolls by no input (measured live 2026-11-07 on PERF calc's Surface list), so a row that shows less is "{name} could not be set to
-    /// {entry}." at once, nothing tapped and the list left as it is. After the tap the tablet is read until the list is closed and the face
+    /// scrolls by no input (measured live 2026-11-07 on PERF calc's Surface list), so a row the list does not show, or shows less of, is
+    /// "{name} could not be set to {entry}: the tablet's list does not show it." at once (<see cref="Bbs757EfbPress.NotShownInListText"/>, the
+    /// final review's M3), the row not tapped. After the tap the tablet is read until the list is closed and the face
     /// shows the entry (at most <see cref="ChangeMaxMs"/>): then nothing is said (the owner's ruling of 2026-11-07 for choice lists: the screen
     /// reader said the entry as the pilot picked it, CORE-7, as B757-20's two-choice rows); otherwise "{name} could not be set to {entry}."
-    /// once. A drop-down whose face is a prompt (it matches none of its entries: Systems' SELECT) is judged by its list closing alone: its
-    /// face never shows a choice, and the page shown already, chosen again, changes nothing. A question up over the page, or one raised by a
-    /// tap, holds the choice back with nothing more tapped and nothing said (the read that found it said it). True when the tablet shows the
-    /// entry chosen at the end (or showed it already); false otherwise, the window then shown what the tablet shows.
+    /// once. A list the runner opened itself and then could not choose from is closed again after that one alert, by its current entry's row
+    /// when that row shows (<see cref="CloseListAsync"/>), so no page control is left under it (the final review's I2). A drop-down whose face
+    /// is a prompt (it matches none of its entries: Systems' SELECT) is judged by its list closing alone: its face never shows a choice, and
+    /// the page shown already, chosen again, changes nothing; it has no current entry, so its list is never closed by one. A question up over
+    /// the page, or one raised by a tap, holds the choice back with nothing more tapped and nothing said (the read that found it said it). True
+    /// when the tablet shows the entry chosen at the end (or showed it already); false otherwise, the window then shown what the tablet shows.
     /// </summary>
     public async Task<bool> ChooseAsync(Bbs757EfbPressed pressed, string entry, CancellationToken ct)
     {
@@ -554,17 +559,21 @@ public sealed class Bbs757EfbPressRunner
         var page = target.Page;
         var dropDown = target.Item;
         string name = Bbs757EfbPress.SpokenName(page, dropDown);
-        if (string.Equals(dropDown.Value, entry, StringComparison.Ordinal)) return true;   // it shows the wish already
-        if (dropDown.Entries?.Contains(entry, StringComparer.Ordinal) != true) return CouldNotChoose(name, entry);
         bool prompt = dropDown.Value.Length == 0;   // its face shows none of its entries: the face cannot tell the choice
+        if (string.Equals(dropDown.Value, entry, StringComparison.Ordinal))
+            // It shows the wish already; with its list open, the entry's row closes it with nothing changed.
+            return !dropDown.Open || prompt || await CloseOnShownEntryAsync(page, dropDown, name, entry, ct);
+        if (dropDown.Entries?.Contains(entry, StringComparer.Ordinal) != true) return CouldNotChoose(name, entry);
 
-        if (!dropDown.Open && !await TapAsync(dropDown, target, ct)) return false;
+        bool openedHere = !dropDown.Open;   // the runner opens the list itself: one it then cannot choose from, it closes again
+        if (openedHere && !await TapAsync(dropDown, target, ct)) return false;
         if (!ShowsRows(dropDown))
         {
             // Read until the list is open with its rows laid out (closed, BlueBird leaves them at [0,0 50x38]), at most ChangeMaxMs.
             var (seen, opened, found) = await WatchAsync(page, dropDown, (_, shownNow) => ShowsRows(shownNow), ct);
             if (seen is Seen.Unread or Seen.Asked) return false;   // the window says why; the question was said by the read that found it
-            // Not open in time (or its rows not read): the face's tap did not open it, and nothing more is tapped.
+            // Not open in time (or its rows not read): the face's tap did not open it, and nothing more is tapped (no row laid out to
+            // close it by either).
             if (seen != Seen.Holds) return CouldNotChoose(name, entry);
             page = opened;
             dropDown = found!;
@@ -572,16 +581,62 @@ public sealed class Bbs757EfbPressRunner
 
         // The entry's row where the open list draws it, tapped in the part of it that shows. Never dragged into view: an open list scrolls
         // by no input (measured live 2026-11-07), and a drag's release over a row is a press nobody asked for. A row that shows less than
-        // MinShownPx cannot be chosen on the tablet: nothing is tapped and the list is left as it is.
+        // MinShownPx cannot be chosen on the tablet: it is not tapped, and a list the runner opened is closed again.
         if (Bbs757EfbPress.ListViewOf(dropDown) is not { } view || Bbs757EfbPress.RowOf(dropDown, entry) is not { } row
             || Bbs757EfbPress.RowTapPoint(view, row.Box) is not { } at)
-            return CouldNotChoose(name, entry);
+        {
+            _io.Alert(Bbs757EfbPress.NotShownInListText(name, entry));
+            if (openedHere) await CloseListAsync(page, dropDown, ct);
+            return false;
+        }
 
         if (!await TapAsync(dropDown, new Target(dropDown, page, at), ct, at)) return false;
-        var (outcome, _, _) = await WatchAsync(page, dropDown, (_, found) => Chose(found, entry, prompt), ct);
+        var (outcome, after, left) = await WatchAsync(page, dropDown, (_, found) => Chose(found, entry, prompt), ct);
         if (outcome is Seen.Unread or Seen.Asked) return false;   // a question raised by the tap holds back any further step
+        if (outcome == Seen.Holds) return true;
+        CouldNotChoose(name, entry);
+        if (openedHere) await CloseListAsync(after, left, ct);   // the row's tap left the list the runner opened open
+        return false;
+    }
+
+    /// <summary>The entry the drop-down shows already picked while its list is open (<paramref name="dropDown"/>, the fresh read's): its row
+    /// tapped (<see cref="CurrentRowPoint"/>), which closes the list with nothing changed (measured), and the tablet read until the list is
+    /// closed showing the entry (<see cref="Chose"/>, at most <see cref="ChangeMaxMs"/>). True once it is, nothing said, and when the row cannot
+    /// be tapped (not laid out yet, or showing less than <see cref="Bbs757EfbPress.MinShownPx"/>: the face shows the wish, nothing to choose);
+    /// "{name} could not be set to {entry}." when the list stayed open; false, silent, under a question raised meanwhile or with nothing read,
+    /// and false, said by the tap, when the row is under a notification or another list.</summary>
+    private async Task<bool> CloseOnShownEntryAsync(Bbs757EfbScreenModel page, Bbs757EfbItem dropDown, string name, string entry, CancellationToken ct)
+    {
+        if (CurrentRowPoint(dropDown) is not { } at) return true;
+        if (!await TapAsync(dropDown, new Target(dropDown, page, at), ct, at)) return false;
+        var (outcome, _, _) = await WatchAsync(page, dropDown, (_, found) => Chose(found, entry, prompt: false), ct);
+        if (outcome is Seen.Unread or Seen.Asked) return false;
         return outcome == Seen.Holds || CouldNotChoose(name, entry);
     }
+
+    /// <summary>
+    /// Closes a list <see cref="ChooseAsync"/> opened itself and then could not choose from (the final review's I2: left open, it covered the
+    /// page controls under it, and the window had no way to close it), after the choice's one alert: the drop-down's current entry's row is
+    /// tapped (<see cref="CurrentRowPoint"/>; measured on the runway list, 2026-11-07: tapping the entry shown closes the list with nothing
+    /// changed) and the tablet read until the list is closed (at most <see cref="ChangeMaxMs"/>, so the next press finds it so). Nothing is
+    /// said: the choice's failure was. Nothing is tapped when <paramref name="dropDown"/>, the last read's, is no longer open, when its rows
+    /// are not laid out, for a prompt drop-down (no current entry), when the current entry's row shows less than
+    /// <see cref="Bbs757EfbPress.MinShownPx"/>, and when the row lies under a notification or another list (<see cref="TapAsync"/>, quiet).
+    /// </summary>
+    private async Task CloseListAsync(Bbs757EfbScreenModel page, Bbs757EfbItem? dropDown, CancellationToken ct)
+    {
+        if (dropDown is not { Open: true } || CurrentRowPoint(dropDown) is not { } at) return;
+        if (!await TapAsync(dropDown, new Target(dropDown, page, at), ct, at, speak: false)) return;
+        await WatchAsync(page, dropDown, (_, found) => found?.Open != true, ct);
+    }
+
+    /// <summary>Where an open drop-down's current entry's row is tapped (<see cref="Bbs757EfbPress.RowTapPoint"/>); null when its rows are not
+    /// laid out, when it shows no entry (a prompt), and when that row shows less than <see cref="Bbs757EfbPress.MinShownPx"/>.</summary>
+    private static Point? CurrentRowPoint(Bbs757EfbItem dropDown) =>
+        dropDown.Value.Length > 0 && ShowsRows(dropDown) && Bbs757EfbPress.ListViewOf(dropDown) is { } view
+            && Bbs757EfbPress.RowOf(dropDown, dropDown.Value) is { } row
+            ? Bbs757EfbPress.RowTapPoint(view, row.Box)
+            : null;
 
     /// <summary>Whether a read shows the drop-down open with its list's rows laid out (<see cref="Bbs757EfbPress.RowsLaidOut"/>).</summary>
     private static bool ShowsRows(Bbs757EfbItem? dropDown) => dropDown is { Open: true, List: { } list } && Bbs757EfbPress.RowsLaidOut(list);
@@ -731,26 +786,28 @@ public sealed class Bbs757EfbPressRunner
     /// list covers is not tapped either: the tap would land on one of its rows and choose that entry (plan 21, Task 7), so "{name} is under
     /// the open {list} list, not pressed." is said. The notification is drawn over the page and its lists, so it is checked first. Both are
     /// checked here, at the point the tap goes to, so a slider's choice or percent place is checked as a control's middle is (the review's
-    /// Minor 2). A nav data press reads the cycle installed BEFORE its tap and hands it over with its hook.
+    /// Minor 2). A nav data press reads the cycle installed BEFORE its tap and hands it over with its hook. With <paramref name="speak"/>
+    /// false (the runner's own tap that closes a list it opened, after the choice's alert) a tap not made says nothing.
     /// </summary>
-    private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct, Point? at = null, Bbs757EfbScreenModel? on = null)
+    private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct, Point? at = null, Bbs757EfbScreenModel? on = null,
+        bool speak = true)
     {
         var page = on ?? target.Page;
         if (Bbs757EfbPress.UnderNotice(page, item, at ?? target.At))
         {
-            _io.Alert(Bbs757EfbPress.UnderNoticeText(Bbs757EfbPress.SpokenName(page, item)));
+            if (speak) _io.Alert(Bbs757EfbPress.UnderNoticeText(Bbs757EfbPress.SpokenName(page, item)));
             return false;
         }
         if (Bbs757EfbPress.CoveringList(page, item, at ?? target.At) is { } covering)
         {
-            _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(page, item), Bbs757EfbPress.SpokenName(page, covering)));
+            if (speak) _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(page, item), Bbs757EfbPress.SpokenName(page, covering)));
             return false;
         }
         var hook = Bbs757EfbExtras.HookFor(target.Page.PageName, item);
         int? cycleBefore = hook is Bbs757EfbHook.NavDataUpdate or Bbs757EfbHook.NavDataRemove ? _io.ReadInstalledCycle() : null;
         if (!await _io.Tap(at ?? target.At, ct))
         {
-            _io.Alert(Bbs757EfbPress.UnreachableText);
+            if (speak) _io.Alert(Bbs757EfbPress.UnreachableText);
             return false;
         }
         if (hook != Bbs757EfbHook.None) _io.Hooked(hook, cycleBefore);

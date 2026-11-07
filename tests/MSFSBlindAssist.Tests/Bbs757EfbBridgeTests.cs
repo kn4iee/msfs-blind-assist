@@ -1411,12 +1411,89 @@ public class Bbs757EfbBridgeTests
         Assert.Empty(snow.Drags);
         Assert.Empty(snow.Alerts);
 
-        // Wet shows none of itself: not chosen at once, nothing tapped, nothing dragged, the list left open.
+        // Wet shows none of itself: not chosen at once, nothing tapped, nothing dragged, and the list, open before the press (the pilot's
+        // own mouse), left open. The pilot is told why, in the tablet's terms (the final review's M3).
         var wet = new FakeTablet(SurfaceOpen());
         Assert.False(await TestCulture.Run(culture, () => wet.Runner().ChooseAsync(wet.Press(Named(wet.Page, SurfaceDropDown)), "Wet", CancellationToken.None)));
         Assert.Empty(wet.Taps);
         Assert.Empty(wet.Drags);
-        Assert.Equal(new[] { "Surface Condition could not be set to Wet." }, wet.Alerts);
+        Assert.Equal(new[] { "Surface Condition could not be set to Wet: the tablet's list does not show it." }, wet.Alerts);
+    }
+
+    /// <summary>Where RW07L's row is drawn in the runway list open (25c): [519,189 150x38], its middle. Tapping the entry shown closes the
+    /// list with nothing changed (measured 2026-11-07).</summary>
+    private static readonly Point Rw07LRow = new(594, 208);
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_list_the_runner_opened_is_closed_by_its_current_row_when_the_choice_fails(string culture)
+    {
+        // The final review's I2: Surface Condition closed on Dry, Wet picked. The face is tapped and the list opens over the page as measured
+        // (its box 357-537); Wet's row shows none of itself, so it is not chosen, said once, and the list the runner opened is closed again by
+        // Dry's row (977,357 130x38, its middle 1042,376), which closes it with nothing changed. No page control is left under it.
+        var dry = SurfaceShowing("Dry");
+        var surface = Named(dry, SurfaceDropDown);
+        var tablet = new FakeTablet(dry);
+        tablet.OnTap = _ => tablet.Show(tablet.Taps.Count == 1 ? SurfaceOpen() : dry);
+
+        Assert.False(await TestCulture.Run(culture, () => tablet.Runner().ChooseAsync(tablet.Press(surface), "Wet", CancellationToken.None)));
+
+        Assert.Equal(new[] { surface.Hit, new Point(1042, 376) }, tablet.Taps);
+        Assert.Equal(new[] { "Surface Condition could not be set to Wet: the tablet's list does not show it." }, tablet.Alerts);
+        Assert.True(tablet.Flow.IndexOf("alert " + tablet.Alerts[0]) < tablet.Flow.IndexOf("tap 1042,376"));   // said before the closing tap
+
+        // The runway list (25b closed on RW07L) opened shorter than its rows (152 px from 189: RW26's row, 379-417, past its box): RW26 is
+        // not chosen and RW07L's row closes the list.
+        var closed = PerfCalc();
+        var clipped = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithOpenList(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"), RunwayDropDown, 189, 152))!;
+        var runway = new FakeTablet(closed);
+        runway.OnTap = _ => runway.Show(runway.Taps.Count == 1 ? clipped : closed);
+        Assert.False(await TestCulture.Run(culture, () => runway.Runner().ChooseAsync(runway.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None)));
+        Assert.Equal(new[] { Named(closed, RunwayDropDown).Hit, Rw07LRow }, runway.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW26: the tablet's list does not show it." }, runway.Alerts);
+
+        // The row tapped and the list the runner opened left open (25c, face RW07L): said once, then closed by RW07L's row.
+        var stuck = new FakeTablet(closed);
+        stuck.OnTap = _ => stuck.Show(stuck.Taps.Count < 3 ? PerfCalc(open: true) : closed);
+        Assert.False(await TestCulture.Run(culture, () => stuck.Runner().ChooseAsync(stuck.Press(Named(closed, RunwayDropDown)), "RW26", CancellationToken.None)));
+        Assert.Equal(new[] { Named(closed, RunwayDropDown).Hit, Rw26Row, Rw07LRow }, stuck.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW26." }, stuck.Alerts);
+
+        // A prompt drop-down (Systems' SELECT) has no current entry: a list it opened and could not choose from stays as it is.
+        var apps = Bbs757EfbTreeJson.Load("30-systems");
+        var systems = Bbs757EfbModelReader.Read(apps)!;
+        var opened = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithOpenList(apps, "pb_menu1", 82, 152))!;
+        var menu = new FakeTablet(systems);
+        menu.OnTap = _ => menu.Show(opened);
+        Assert.False(await TestCulture.Run(culture, () => menu.Runner().ChooseAsync(menu.Press(Named(systems, "pb_menu1")), "28 - FUEL", CancellationToken.None)));
+        Assert.Equal(new[] { new Point(1247, 57), new Point(1247, 139) }, menu.Taps);
+        Assert.Equal(new[] { "Select could not be set to 28 - FUEL." }, menu.Alerts);
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task Picking_the_entry_shown_while_its_list_is_open_closes_the_list(string culture)
+    {
+        // Task 7's concern 2, answered by the measurement (the final review's I2): the runway list open (25c, the pilot's own mouse, or a
+        // choice that failed), RW07L, the entry shown, picked from the window: its row is tapped, which closes the list with nothing changed.
+        var tablet = new FakeTablet(PerfCalc(open: true));
+        tablet.OnTap = _ => tablet.Show(PerfCalc());
+
+        Assert.True(await TestCulture.Run(culture, () => tablet.Runner().ChooseAsync(tablet.Press(Named(tablet.Page, RunwayDropDown)), "RW07L", CancellationToken.None)));
+
+        Assert.Equal(new[] { Rw07LRow }, tablet.Taps);
+        Assert.Empty(tablet.Alerts);
+
+        // The list stayed open: said once.
+        var stays = new FakeTablet(PerfCalc(open: true));
+        Assert.False(await TestCulture.Run(culture, () => stays.Runner().ChooseAsync(stays.Press(Named(stays.Page, RunwayDropDown)), "RW07L", CancellationToken.None)));
+        Assert.Equal(new[] { Rw07LRow }, stays.Taps);
+        Assert.Equal(new[] { "Runway could not be set to RW07L." }, stays.Alerts);
+
+        // Closed, the entry shown taps nothing (as before).
+        var closed = new FakeTablet(PerfCalc());
+        Assert.True(await closed.Runner().ChooseAsync(closed.Press(Named(closed.Page, RunwayDropDown)), "RW07L", CancellationToken.None));
+        Assert.Empty(closed.Taps);
     }
 
     [Fact]

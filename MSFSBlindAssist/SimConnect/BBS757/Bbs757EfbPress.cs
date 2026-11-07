@@ -438,6 +438,11 @@ public static class Bbs757EfbPress
     /// <summary>A slider that did not reach the wished choice or value, or a drop-down whose entry was not chosen.</summary>
     public static string CouldNotSetText(string label, string value) => label + " could not be set to " + value + ".";
 
+    /// <summary>A drop-down's entry its open list does not show, or shows less than <see cref="MinShownPx"/> of (<see cref="RowTapPoint"/>),
+    /// so it was not chosen: an open list scrolls by no input (measured), so the tablet cannot choose it, by anyone (the final review's M3:
+    /// Surface Condition's Wet).</summary>
+    public static string NotShownInListText(string label, string entry) => label + " could not be set to " + entry + ": the tablet's list does not show it.";
+
     /// <summary>A control another drop-down's open list covers (<see cref="CoveringList"/>), so it was not tapped.</summary>
     public static string CoveredText(string name, string list) => name + " is under the open " + list + " list, not pressed.";
 
