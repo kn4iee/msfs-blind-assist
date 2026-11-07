@@ -652,6 +652,41 @@ public class Bbs757EfbElementsTests
         AssertPressable(b2, "IRS alignment time");
     }
 
+    // ---- a name and its value joined ------------------------------------------------------------------------------------
+
+    [Fact]
+    public void A_name_ending_in_a_sentences_period_loses_it_before_its_colon()
+    {
+        // Measured live, signed out of Navigraph: the AIRAC page's row label "Sign in to Navigraph." names its SIGN IN button. The window
+        // read "Sign in to Navigraph.: Sign in"; one trailing period goes before the colon.
+        var signIn = Control(Bbs757EfbKind.Button, "SIGN IN", "btn:|SIGN IN@50,30", new Rectangle(900, 590, 200, 45), true)
+            with { Label = "Sign in to Navigraph." };
+        Assert.Equal("Sign in to Navigraph: Sign in", Bbs757EfbElements.NameOf(signIn));
+
+        var row = Control(Bbs757EfbKind.Row, "Status.", "row:status", new Rectangle(300, 200, 200, 30), false, value: "Connected");
+        var built = Bbs757EfbElements.Build(new Bbs757EfbScreenModel("SETTINGS", "AIRAC DATA", Array.Empty<Bbs757EfbItem>(), new[] { row }), null, NoExtras);
+        AssertText(built, "Status: Connected");
+    }
+
+    [Theory]
+    [InlineData("Loading..", "Loading..: Sign in")]      // two dots are an ellipsis: kept
+    [InlineData("Wait...", "Wait...: Sign in")]
+    [InlineData("Latest cycle:", "Latest cycle: Sign in")] // its own colon, as before
+    [InlineData("Navigraph", "Navigraph: Sign in")]
+    public void Only_one_sentence_period_goes_before_the_colon(string label, string expected)
+    {
+        var button = Control(Bbs757EfbKind.Button, "SIGN IN", "btn:|SIGN IN@50,30", new Rectangle(900, 590, 200, 45), true) with { Label = label };
+        Assert.Equal(expected, Bbs757EfbElements.NameOf(button));
+    }
+
+    [Fact]
+    public void A_name_with_no_value_keeps_its_period()
+    {
+        var row = Control(Bbs757EfbKind.Row, "Sign in to Navigraph.", "row:sign-in", new Rectangle(300, 200, 200, 30), false);
+        var built = Bbs757EfbElements.Build(new Bbs757EfbScreenModel("SETTINGS", "AIRAC DATA", Array.Empty<Bbs757EfbItem>(), new[] { row }), null, NoExtras);
+        AssertText(built, "Sign in to Navigraph.");
+    }
+
     // ---- the same in any culture ----------------------------------------------------------------------------------------
 
     [Theory]

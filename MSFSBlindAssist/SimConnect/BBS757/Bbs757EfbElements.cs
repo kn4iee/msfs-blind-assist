@@ -290,9 +290,16 @@ public static class Bbs757EfbElements
     }
 
     /// <summary>A name and its value as one line with one colon: a name the tablet writes with its own colon ("Airport:") gets no
-    /// second; no value is the name alone.</summary>
-    private static string Named(string name, string value) =>
-        value.Length == 0 ? name : name + (name.EndsWith(':') ? " " : ": ") + value;
+    /// second, and one it ends with a sentence's period loses that one period before the colon (signed out of Navigraph, the AIRAC
+    /// page's "Sign in to Navigraph." names its SIGN IN: "Sign in to Navigraph: Sign in", measured 2026-11-07); two dots or more are
+    /// an ellipsis and stay. No value is the name alone, its period kept.</summary>
+    private static string Named(string name, string value)
+    {
+        if (value.Length == 0) return name;
+        if (name.EndsWith(':')) return name + " " + value;
+        if (name.Length > 1 && name.EndsWith('.') && !name.EndsWith("..", StringComparison.Ordinal)) name = name[..^1];
+        return name + ": " + value;
+    }
 
     /// <summary>A control's words, with the label that names it before them when the page grammar gave one ("Left FWD: Closed"); a
     /// tab says "(current)" after its words when it is the one showing. Both parts are names: sentence case.</summary>
