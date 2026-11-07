@@ -2003,19 +2003,46 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
-    public async Task A_keyboard_that_never_settles_or_stays_up_takes_no_second_close()
+    public async Task A_keyboard_that_never_settles_is_never_tapped_and_the_press_goes_as_before()
     {
-        // Never ready within the runner's change wait: its down key is never tapped (it would land on the page beneath), and the tile is
-        // tapped as before. One that stays up after its down key: no second close, the tile tapped as before (the guard runs once).
+        // Never ready within the runner's change wait: its down key is never tapped (it would land on the page beneath, as a key tapped
+        // before it settles does: measured), and the tile is tapped as before.
         var tile = LowTile();
         var never = new FakeTablet(WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input", ready: false)));
         await never.Runner().ClickAsync(never.Press(tile), CancellationToken.None);
         Assert.Equal(new[] { tile.Hit }, never.Taps);
         Assert.True(never.Now >= Bbs757EfbPressRunner.ChangeMaxMs);
+    }
 
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_keyboard_still_up_after_it_was_put_down_stops_the_press_and_says_so(string culture)
+    {
+        // The re-review's N3: the one put-down did not take (the read after still shows the keyboard shown and settled over the tile), so
+        // a tap would be a key. Nothing more is tapped, no second close, and the pilot is told why (a precision stop, as under a
+        // notification: B757-19).
+        var tile = LowTile();
         var stays = new FakeTablet(WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input")));
-        await stays.Runner().ClickAsync(stays.Press(tile), CancellationToken.None);
-        Assert.Equal(new[] { DownKey, tile.Hit }, stays.Taps);
+
+        await TestCulture.Run(culture, () => stays.Runner().ClickAsync(stays.Press(tile), CancellationToken.None));
+
+        Assert.Equal(new[] { DownKey }, stays.Taps);
+        Assert.Equal(new[] { "Req fuel truck is under the tablet's keyboard, not pressed." }, stays.Alerts);
+    }
+
+    [Fact]
+    public async Task A_page_drag_under_a_keyboard_still_up_after_it_was_put_down_is_not_made()
+    {
+        var row = new Bbs757EfbItem(Bbs757EfbKind.Button, "Dirty panel states", new Rectangle(273, 1202, 600, 60), new Point(573, 1232), true, "btn:DIRTY");
+        var up = WithKeyboard(PageOf("SETTINGS", "AIRCRAFT", row) with { Scrollable = true, Viewport = new Rectangle(250, 82, 1147, 966) },
+            KeyboardUp("planning_charts_request_input"));
+        var tablet = new FakeTablet(up);
+
+        await tablet.Runner().ClickAsync(tablet.Press(row), CancellationToken.None);
+
+        Assert.Equal(new[] { DownKey }, tablet.Taps);
+        Assert.Empty(tablet.Drags);
+        Assert.Equal(new[] { "Dirty panel states is under the tablet's keyboard, not pressed." }, tablet.Alerts);
     }
 
     [Fact]

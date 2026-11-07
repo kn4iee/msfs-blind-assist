@@ -971,7 +971,8 @@ public sealed class Bbs757EfbPressRunner
     /// nothing could be read (the window says why). With <paramref name="proceed"/>, also when it says no of the control as the first
     /// fresh read finds it, before any drag (<see cref="TypeAsync"/>: the text there already, or a character on no key); it says what is
     /// said then. A drag whose press point BlueBird's keyboard covers (<see cref="Bbs757EfbPress.UnderKeyboard"/>) puts the keyboard down
-    /// first, once (<see cref="PutKeyboardDownAsync"/>), and is planned again from the read after it (the final review's I2).
+    /// first, once (<see cref="PutKeyboardDownAsync"/>), and is planned again from the read after it (the final review's I2); still up and
+    /// settled over that point then, no drag: "{name} is under the tablet's keyboard, not pressed." (the re-review's N3).
     /// </summary>
     private async Task<Target?> LocateAsync(Bbs757EfbPressed pressed, CancellationToken ct,
         Func<Bbs757EfbScreenModel, Bbs757EfbItem, bool>? proceed = null)
@@ -998,14 +999,22 @@ public sealed class Bbs757EfbPressRunner
                 return null;
             }
             // On BlueBird's keyboard it would be a key (the final review's I2): the keyboard put down first, once, and the drag planned
-            // again from the read after it.
-            if (!keyboardPutDown && Bbs757EfbPress.UnderKeyboard(now, new Point(drag.X, drag.Y0)))
+            // again from the read after it; still up and settled over the point after that, no drag (the re-review's N3).
+            if (Bbs757EfbPress.UnderKeyboard(now, new Point(drag.X, drag.Y0)))
             {
-                keyboardPutDown = true;
-                if (await PutKeyboardDownAsync(now, ct) is not { } down) return null;   // nothing read: the window says why
-                now = down;
-                found = Find(pressed, now, out gone);
-                continue;
+                if (!keyboardPutDown)
+                {
+                    keyboardPutDown = true;
+                    if (await PutKeyboardDownAsync(now, ct) is not { } down) return null;   // nothing read: the window says why
+                    now = down;
+                    found = Find(pressed, now, out gone);
+                    continue;
+                }
+                if (now.KeyboardState is { Ready: true })
+                {
+                    _io.Alert(Bbs757EfbPress.UnderKeyboardText(Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item)));
+                    return null;
+                }
             }
             if (!await _io.Drag(drag.X, drag.Y0, drag.Y1, ct))
             {
@@ -1096,8 +1105,10 @@ public sealed class Bbs757EfbPressRunner
     /// down first, once (<see cref="PutKeyboardDownAsync"/>), the control found again in the read after it (<see cref="Find"/>, as the press
     /// found it) and tapped where that read draws it, the checks above made again on that read. Gone then: "{name} is no longer on the
     /// tablet."; out of its clip: "{name} could not be brought into view, not pressed."; done already or under a question come up: nothing
-    /// said. Still up after it: tapped as before. This holds for every tap of a press: a control's, a slider's, a drop-down's face and row,
-    /// and a typing's own field tap.</para>
+    /// said. Still up and settled over the point after it: not tapped, "{name} is under the tablet's keyboard, not pressed." (the
+    /// re-review's N3, a precision stop as under a notification); one that never settled is tapped as before (a tap then lands on the page
+    /// beneath: measured). This holds for every tap of a press: a control's, a slider's, a drop-down's face and row, and a typing's own
+    /// field tap.</para>
     /// </summary>
     private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct, Point? at = null, Bbs757EfbScreenModel? on = null,
         bool speak = true)
@@ -1117,7 +1128,15 @@ public sealed class Bbs757EfbPressRunner
                 if (speak) _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(page, item), Bbs757EfbPress.SpokenName(page, covering)));
                 return false;
             }
-            if (keyboardPutDown || !Bbs757EfbPress.UnderKeyboard(page, point)) break;
+            if (!Bbs757EfbPress.UnderKeyboard(page, point)) break;
+            if (keyboardPutDown)
+            {
+                // Put down once and still up and settled over the point: the tap would be a key (the re-review's N3). One that never
+                // settled is tapped as before: a tap before it settles lands on the page beneath (measured).
+                if (page.KeyboardState is not { Ready: true }) break;
+                if (speak) _io.Alert(Bbs757EfbPress.UnderKeyboardText(Bbs757EfbPress.SpokenName(page, item)));
+                return false;
+            }
             keyboardPutDown = true;
             if (await PutKeyboardDownAsync(page, ct) is not { } now) return false;   // nothing read: the window says why
             var found = Find(new Bbs757EfbPressed(item, page), now, out bool gone);

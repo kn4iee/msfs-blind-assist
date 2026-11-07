@@ -468,6 +468,10 @@ public static class Bbs757EfbPress
     /// <summary>A control BlueBird's notification pop-up or list covers (<see cref="UnderNotice"/>), so it was not tapped.</summary>
     public static string UnderNoticeText(string name) => name + " is under a BlueBird notification, not pressed.";
 
+    /// <summary>A control BlueBird's keyboard or keypad still covers, shown and settled, after the runner put it down once
+    /// (<see cref="UnderKeyboard"/>; the re-review's N3), so it was not tapped: the tap would be a key.</summary>
+    public static string UnderKeyboardText(string name) => name + " is under the tablet's keyboard, not pressed.";
+
     // Typing into a field (plan 22, Bbs757EfbPressRunner.TypeAsync). The value is the tablet's own text, said as it reads.
 
     /// <summary>A field whose tap did not bring BlueBird's keyboard up, settled, typing into it, in time: nothing was typed.</summary>
@@ -486,7 +490,7 @@ public static class Bbs757EfbPress
     {
         ' ' => "space",
         '\t' => "tab",
-        ' ' => "no-break space",
+        '\u00A0' => "no-break space",
         '!' => "exclamation mark",
         '"' => "quotation mark",
         '#' => "number sign",

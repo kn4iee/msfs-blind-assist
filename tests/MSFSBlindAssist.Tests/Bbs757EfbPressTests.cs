@@ -1105,6 +1105,7 @@ public class Bbs757EfbPressTests
             Bbs757EfbPress.CouldNotSetText("IRS alignment time", "Full (7 min+)"),
             Bbs757EfbPress.CouldNotSetText("Ceiling", "30,5 percent"),
             Bbs757EfbPress.UnreachableText,
+            Bbs757EfbPress.UnderKeyboardText("Req fuel truck"),
         });
 
         Assert.Equal(new[]
@@ -1117,6 +1118,7 @@ public class Bbs757EfbPressTests
             "IRS alignment time could not be set to Full (7 min+).",
             "Ceiling could not be set to 30,5 percent.",
             "The tablet cannot be reached, so nothing was tapped.",
+            "Req fuel truck is under the tablet's keyboard, not pressed.",
         }, texts);
     }
 
@@ -2036,7 +2038,7 @@ public class Bbs757EfbPressTests
                 data.Add(culture, ',', "comma");                    // the keypad's: a decimal comma typed into the TOD distance
                 data.Add(culture, '_', "underscore");
                 data.Add(culture, '\t', "tab");
-                data.Add(culture, ' ', "no-break space");
+                data.Add(culture, '\u00A0', "no-break space");
                 data.Add(culture, '<', "less-than sign");
                 data.Add(culture, '~', "tilde");
                 data.Add(culture, '\'', "apostrophe");
