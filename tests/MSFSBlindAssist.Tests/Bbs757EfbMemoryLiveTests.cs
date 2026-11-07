@@ -26,7 +26,8 @@ public class Bbs757EfbMemoryLiveTests
         ManagerBase: 0xf1334, ManagerSpan: 0x100, EfbVptr: 0x13128, EfbToBbos: 132, BbosToAppMap: 0x238,
         AppFront: 0x140, AppPage: 0x144, AppRoots: 0x17c, PageChildren: 0x4c,
         CtrlName: 0x1c, CtrlRect: 0x38, CtrlVisible: 0x8c, CtrlChildren: 0xf4, CtrlParent: 0xe8,
-        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x158,
+        // The scroll is the scrollbox's content offset at +0x134 (B757-26), never the scrollbar thumb at +0x158.
+        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134,
         ClassVptrs: new[]
         {
             // N3bbs22bbos_control_scrollboxE's vtable is at 0x30bb0 (its typeinfo at 0x30c34): read live, 2026-11-07.

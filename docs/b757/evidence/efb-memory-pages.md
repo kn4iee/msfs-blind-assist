@@ -59,16 +59,30 @@ Settings, Aircraft (`aircraft_scrollbox` [250,82 1147x966] over `aircraft_stackb
 - **The wheel does not scroll this build reliably.** The agent's `wheel(800,600,±300)` six times and `+2000` three
   times: no control's rectangle and no byte of the scrollbox or stackbox (0x400 each) changed between the last reads;
   one earlier run had left the offset at 98.24.
-- **A drag scrolls**, about 1:1: mouse down at (500,600), 20 moves 50 ms apart to (500,500), 400 ms held, up: the
-  offset went 0 → 97.75; another 50 px → 145.63; another 50 px → 175.19 and no further (the end). Down drags return it
-  to 0. Started on the rows' label area (x 500), the drags changed no setting (the tree before and after identical).
-- **The offset:** a float at scrollbox +0x158, 0 at the top, 175.19 at the end of this page; +0x188 is 82 plus it.
-  +0x134 held 214 (the stackbox's 1,180 less the scrollbox's 966) while scrolled and 0 at the top. Every control's
-  rectangle stays in content coordinates: on the tablet a control inside the scrollbox is drawn at its rectangle's y
-  less the offset. At the end of this page the last row (Dirty panel states, y 1202-1262) is drawn at 1027-1087: its
-  top 21 px show above the viewport's bottom (1048), its center does not.
+- **A drag scrolls**: mouse down at (500,600), 20 moves 50 ms apart to (500,500), 400 ms held, up: the scrollbar thumb
+  (+0x158, below) went 0 → 97.75; another 50 px → 145.63; another 50 px → 175.19 and no further (the end). Down drags
+  return it to 0. Started on the rows' label area (x 500), the drags changed no setting (the tree before and after
+  identical). These are the thumb's numbers, not the content's (corrected 2026-11-07, below).
+- **The offset (corrected 2026-11-07): the scroll is the float at scrollbox +0x134**, the content's offset in tablet
+  pixels: 0 at the top, the content less the viewport at the end (214 on this page, the stackbox's 1,180 less the
+  scrollbox's 966; on Settings, Callouts, stackbox 1,832 tall, 766 after a 766 px drag). Every control's rectangle
+  stays in content coordinates: on the tablet a control inside the scrollbox is drawn at its rectangle's y less this
+  offset. Proven by taps: with it, presses land exactly. At the end of this page the last switch (Dirty panel states'
+  toggle, y 1214.5) is drawn at 1000.5, whole; a strip of it shows only mid-scroll, and a 10.2 px strip was measured
+  to take a tap (offset 176.7: drawn from 1037.8 to the viewport's bottom, 1048). B757-26.
+- **+0x158 is the scrollbar thumb**, not the scroll: the thumb's offset along its track, 0 to the track less the thumb
+  (it stops at 175.19 here). Beside it the thumb's rectangle: +0x184 x, +0x188 y (82 plus the thumb's offset), +0x18c
+  width 12, +0x190 height 790.81 (966 × 966 / 1,180). The content over the thumb is 1.2215 here and 1.945 on Callouts.
+  Task 1 read +0x158 as the scroll; that put every control of a scrolled page 22% short of where it is drawn, and a
+  tap meant for Sync barometers landed on Parking brake mode.
 - **So a tap from a rectangle is right only at offset 0.** A page the pilot or BlueBird scrolled moves every control
   inside the scrollbox up by the offset; plan 20 reads the offset and subtracts it (Task 8b).
+- **A drag flings on unless it eases out** (measured 2026-11-07, the content offset read before and after each drag).
+  Coherent's timer runs about 62 ms a tick, so the agent's drag takes about 1.7 s. Twenty even 5 px steps (a 100 px
+  drag) flung the page 25.7 px on when the button came up, the 400 ms hold before the release notwithstanding, and a
+  70 px drag 13.7 px: about the square of the last step. A move to the same place just before the release changed
+  nothing (agent version 10, a trial). Eased out, each step shorter than the last, the last a 400th of the drag (agent
+  version 11, commit 12cf06e0a), a 100 px drag leaves 0.98 px on and a 766 px drag on Callouts 7.5 px. B757-25.
 
 ## BBOS classes
 

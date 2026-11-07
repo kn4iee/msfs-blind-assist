@@ -23,7 +23,7 @@ public class Bbs757EfbMemoryTests
         ManagerBase: Manager, ManagerSpan: 0x100, EfbVptr: EfbVptr, EfbToBbos: 132, BbosToAppMap: 0x238,
         AppFront: 0x140, AppPage: 0x144, AppRoots: 0x17c, PageChildren: 0x4c,
         CtrlName: 0x1c, CtrlRect: 0x38, CtrlVisible: 0x8c, CtrlChildren: 0xf4, CtrlParent: 0xe8,
-        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x158,
+        CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134,
         ClassVptrs: new[]
         {
             new Bbs757EfbClassVptr("button", ButtonVptr), new Bbs757EfbClassVptr("label", LabelVptr),
@@ -85,18 +85,24 @@ public class Bbs757EfbMemoryTests
         Assert.Equal("RUDDER", value.Text);
     }
 
+    /// <summary>The grid made a scrollbox scrolled by <paramref name="offset"/>, written where the layout keeps a scrollbox's content
+    /// offset (B757-26: never the scrollbar thumb).</summary>
     private void ScrolledGrid(float offset)
     {
-        Ptr(Grid, ScrollboxVptr); F32(Grid + 0x158, offset);
+        Ptr(Grid, ScrollboxVptr); F32(Grid + (uint)Layout.ScrollboxOffset, offset);
         Rect(Button, 0, 1202, 250, 60);
     }
+
+    /// <summary>Settings, Aircraft at the end of its scroll: its stackbox's 1,180 less its scrollbox's 966 (measured at +0x134,
+    /// 2026-11-07).</summary>
+    private const float SettingsAircraftEnd = 214f;
 
     [Fact]
     public void A_scrolled_scrollbox_moves_its_controls_up_by_its_offset()
     {
         var apps = Build(() =>
         {
-            ScrolledGrid(175.19f);
+            ScrolledGrid(SettingsAircraftEnd);
             // a second page child, outside the scrollbox
             Ptr(Page + 0x50, PageVec + 16); Ptr(PageVec + 8, Outside);
             Control(Outside, LabelVptr, "outside", true); Rect(Outside, 0, 1202, 100, 20); ShortStr(Outside + 0x128, "TOP");
@@ -104,9 +110,9 @@ public class Bbs757EfbMemoryTests
         var controls = Assert.Single(apps).Controls;
         var grid = controls[0];
         Assert.Equal("scrollbox", grid.Kind);
-        Assert.Equal(175.19f, grid.Scroll);
-        Assert.Equal(32f, grid.Y);                                   // the scrollbox itself is not moved
-        Assert.Equal(1202f - 175.19f, grid.Children[0].Y, 0.01);     // the row reads where it is drawn
+        Assert.Equal(SettingsAircraftEnd, grid.Scroll);
+        Assert.Equal(32f, grid.Y);                                          // the scrollbox itself is not moved
+        Assert.Equal(1202f - SettingsAircraftEnd, grid.Children[0].Y, 0.01); // the row reads where it is drawn
         Assert.Equal(1202f, controls[1].Y);                          // outside the scrollbox: unmoved
         Assert.Equal(0f, controls[1].Scroll);
     }
@@ -117,7 +123,7 @@ public class Bbs757EfbMemoryTests
         var apps = Build(() =>
         {
             ScrolledGrid(100f);
-            Ptr(Button, ScrollboxVptr); F32(Button + 0x158, 50f);
+            Ptr(Button, ScrollboxVptr); F32(Button + (uint)Layout.ScrollboxOffset, 50f);
             Ptr(Button + 0xf4, InnerVec); Ptr(Button + 0xf8, InnerVec + 8); Ptr(InnerVec, Inner);
             Control(Inner, LabelVptr, "inner", true); Rect(Inner, 0, 500, 100, 20); ShortStr(Inner + 0x128, "IN");
         }).ReadFrontApps();

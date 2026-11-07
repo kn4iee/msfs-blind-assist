@@ -147,8 +147,9 @@ public static class Bbs757EfbPress
 
     // ------------------------------------------------------------------ where a control is tapped, and scrolling it into view
 
-    /// <summary>The fewest pixels of a control that must show for it to be tapped where it shows (Settings, Aircraft's last switch shows
-    /// 9 px at the end of the page's scroll: tapped there).</summary>
+    /// <summary>The fewest pixels of a control that must show for it to be tapped where it shows. At the end of Settings, Aircraft's
+    /// scroll its last switch shows whole (drawn at 1000.5); a strip of it shows only mid-scroll, and a 10.2 px strip was measured to
+    /// take a tap (offset 176.7: drawn 1037.8, the viewport's bottom 1048; 2026-11-07).</summary>
     public const int MinShownPx = 6;
 
     /// <summary>The part of the tablet <paramref name="item"/> can show in: its <see cref="Bbs757EfbItem.Clip"/>, or the content area for

@@ -1250,15 +1250,20 @@ public class Bbs757EfbBridgeTests
     private static Bbs757EfbScreenModel SettingsAircraftAt(double offset) =>
         Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Scrolled(Bbs757EfbTreeJson.Load("51-settings-aircraft"), "aircraft_scrollbox", (float)offset))!;
 
-    /// <summary>The measured end of Settings, Aircraft's scroll (the evidence: 175.19).</summary>
-    private const double SettingsAircraftEnd = 175.19;
+    /// <summary>The end of Settings, Aircraft's scroll: its stackbox's 1,180 less its scrollbox's 966, read at +0x134 (B757-26;
+    /// measured 2026-11-07). The scrollbar thumb at +0x158 stops at 175.19, short of it.</summary>
+    private const double SettingsAircraftEnd = 214;
+
+    /// <summary>A mid-scroll offset of Settings, Aircraft at which a 10.2 px strip of its last switch was measured to take a tap
+    /// (2026-11-07).</summary>
+    private const double SettingsAircraftMidScroll = 176.7;
 
     [Fact]
     public async Task A_partly_shown_last_row_is_tapped_in_its_shown_part()
     {
-        // The real tree at the end of its scroll: Dirty panel states' toggle [1137,1214 60x35] is drawn at 1039-1074 and only its top
-        // 9 px or so show above the viewport's bottom (1048). It is tapped there, in the middle of that strip, with no drag.
-        var page = SettingsAircraftAt(SettingsAircraftEnd);
+        // The real tree mid-scroll: Dirty panel states' toggle [1137,1214.5 60x35] is drawn from 1037.8 and only its top 10 px or so
+        // show above the viewport's bottom (1048). It is tapped there, in the middle of that strip, with no drag.
+        var page = SettingsAircraftAt(SettingsAircraftMidScroll);
         var dirty = page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle);
         var tablet = new FakeTablet(page);
 
@@ -1275,7 +1280,7 @@ public class Bbs757EfbBridgeTests
     public async Task The_last_row_of_the_real_settings_page_is_scrolled_into_view_and_tapped_from_the_top()
     {
         // Review Focus 1 on the real tree: pressed at the top of the page, Dirty panel states is dragged into view (the drag moves the
-        // page 1:1 up to its measured end), read again and tapped where it is drawn then, inside the viewport.
+        // page 1:1 up to its measured end, 214), read again and tapped where it is drawn then, inside the viewport.
         double offset = 0;
         var tablet = new FakeTablet(SettingsAircraftAt(0));
         var press = tablet.Press(tablet.Page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle));

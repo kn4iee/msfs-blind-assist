@@ -149,15 +149,16 @@ public class Bbs757EfbPressTests
     }
 
     [Fact]
-    public void The_last_switch_of_settings_aircraft_at_the_end_of_its_scroll_is_tapped_in_the_strip_that_shows()
+    public void The_last_switch_of_settings_aircraft_mid_scroll_is_tapped_in_the_strip_that_shows()
     {
-        // Evidence: Settings, Aircraft at its end (offset 175.19). The row's control is its toggle, [1137,1214 60x35]: drawn at
-        // 1039-1074, of which 9 or 10 px show above the viewport's bottom (1048). It is tapped in the middle of that strip.
-        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Scrolled(Bbs757EfbTreeJson.Load("51-settings-aircraft"), "aircraft_scrollbox", 175.19f))!;
+        // Geometry: Settings, Aircraft mid-scroll, at the offset where a strip of its last switch was measured to take a tap (176.7,
+        // 2026-11-07). The row's control is its toggle, [1137,1214.5 60x35]: drawn from 1037.8, of which about 10 px show above the
+        // viewport's bottom (1048). It is tapped in the middle of that strip.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Scrolled(Bbs757EfbTreeJson.Load("51-settings-aircraft"), "aircraft_scrollbox", 176.7f))!;
         var dirty = page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle);
         Assert.Equal("DIRTY PANEL STATES", dirty.Text);
         Assert.Equal(1048, page.Viewport.Bottom);
-        Assert.InRange(dirty.Box.Top, 1038, 1039);
+        Assert.InRange(dirty.Box.Top, 1037, 1038);
 
         var tap = Bbs757EfbPress.TapPoint(page, dirty);
 
@@ -165,6 +166,18 @@ public class Bbs757EfbPressTests
         Assert.Equal(dirty.Hit.X, tap!.Value.X);
         Assert.Equal(dirty.Box.Top + (1048 - dirty.Box.Top) / 2, tap.Value.Y);
         Assert.Null(Bbs757EfbPress.DragFor(page, dirty));
+    }
+
+    [Fact]
+    public void The_last_switch_of_settings_aircraft_shows_whole_at_the_end_of_its_scroll()
+    {
+        // The end of the scroll is the stackbox's 1,180 less the scrollbox's 966: 214, read at +0x134 (B757-26). The last switch is
+        // drawn at 1000.5, whole inside the viewport, and tapped at its own point.
+        var page = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Scrolled(Bbs757EfbTreeJson.Load("51-settings-aircraft"), "aircraft_scrollbox", 214f))!;
+        var dirty = page.Items.Last(i => i.Kind == Bbs757EfbKind.Toggle);
+        Assert.Equal(new Rectangle(1137, 1000, 60, 35), dirty.Box);
+
+        Assert.Equal(dirty.Hit, Bbs757EfbPress.TapPoint(page, dirty));
     }
 
     /// <summary>Every page item a pilot can press, of every committed tree.</summary>
