@@ -245,7 +245,7 @@ public sealed class Bbs757EfbPressRunner
     /// a switch must store its wished state; a setting of two choices (the CPDLC network, the units, the EHSI up reference) the
     /// choice that was not set before the tap; the TOD pause distance switched off its empty box. A row that is no setting, or a
     /// file that cannot be read, is judged by the page. Not followed: "{label} did not change." Followed, a switch or check box says
-    /// nothing, since the screen reader said its new state; a check box of two words the window shows as a check box (a row that is no
+    /// nothing, since the screen reader said its new state; a switch of two words the window shows as a check box (a row that is no
     /// setting, or a two-choice setting whose word was not read) says its new word once. A two-choice row the window shows as a choice
     /// list is set by <see cref="ChoiceSwitchAsync"/>, and says nothing either.
     /// </summary>
