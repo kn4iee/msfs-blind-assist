@@ -1,5 +1,11 @@
 # Plan 18: visual guidance from the displaced threshold
 
+> **Superseded 2026-11-07.** The visual guidance overhaul, oasis1701/msfs-blind-assist#345, measures the glidepath from
+> `NavigationCalculator.LandingThreshold`, the same landing threshold. When this branch took #345, `RunwayGlidepathOrigin`,
+> `GlidepathAltitudeErrorFt`, `RunwayGlidepathOriginTests` and this plan's rule VG-20 were removed; VG-20 is now #345's
+> frame-timing rule. The ILS cross-check below lives on as `VisualGuidanceDisplacedThresholdTests`, and the measured biases stand.
+> What follows is the record as it was made.
+
 ## Part A (shared code)
 
 `RunwayGlidepathOrigin.Of` and `VisualGuidanceManager`'s glidepath uses, rule VG-20, `RunwayGlidepathOriginTests` (10 pass): made on

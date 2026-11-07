@@ -292,8 +292,10 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
 
     // Visual landing guidance: the A330neo's widebody profile, the closest Airbus fly-by-wire widebody, not the A320 baseline, on its own
     // measured biases (three coupled ILS approaches, the datum over distance from the landing threshold x tan 3: OMDB 12L twice, 2026-10-30,
-    // medians 52 and 53 ft; VCBI 04, 2026-11-03, median 54; parked the datum reads 15.3 ft above the ground); the flare at about 40 ft
-    // radio altitude is Airbus's figure for the A330/A340/A350/A380 family (Safety First).
+    // medians 52 and 53 ft; VCBI 04, 2026-11-03, median 54); the flare at about 40 ft radio altitude is Airbus's figure for the
+    // A330/A340/A350/A380 family (Safety First). The flare bias is the datum's height above the wheels in the flare attitude, as the
+    // guidance subtracts it there: the flight model's main gear sits 17.63 ft aft of and 16.45 ft below the datum, so at +5 degrees,
+    // struts extended, the datum is 17.9 ft up (parked, struts compressed, it read 15.3). From the contact points: confirm on a landing.
     public override VisualGuidanceProfile GetVisualGuidanceProfile() => new()
     {
         TypicalApproachAoaDeg = 4.5,
@@ -301,7 +303,7 @@ public partial class IniBuildsA350Definition : BaseAircraftDefinition, IDisposab
         MaxPitchRateDegPerSec = 2.0,
         MaxBankRateDegPerSec = 2.5,
         GlideslopeAltitudeBiasFt = 53.0,
-        FlareAltitudeBiasFt = 15.0,
+        FlareAltitudeBiasFt = 18.0,
         FlareTriggerWheelHeightFt = 40.0,
     };
 

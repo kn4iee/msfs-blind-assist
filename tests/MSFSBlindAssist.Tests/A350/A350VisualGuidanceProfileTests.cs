@@ -17,8 +17,18 @@ public class A350VisualGuidanceProfileTests
         Assert.Equal(145.0, p.ReferenceVrefKnots);
         Assert.Equal(2.0, p.MaxPitchRateDegPerSec);
         Assert.Equal(2.5, p.MaxBankRateDegPerSec);
-        Assert.Equal(15.0, p.FlareAltitudeBiasFt);
         Assert.Equal(40.0, p.FlareTriggerWheelHeightFt);
+    }
+
+    // The flare bias is the datum's height above the wheels in the flare attitude, which the guidance subtracts there (review
+    // 2026-11-07: 15, the parked height with the struts compressed, put the wheels about 3 ft high in the flare). The flight model's
+    // main gear contact is 17.63 ft aft of and 16.45 ft below the datum: at +5 degrees, 16.45 cos 5 + 17.63 sin 5 = 17.9.
+    [Fact]
+    public void The_a350_flare_bias_is_the_datum_height_in_the_flare_attitude()
+    {
+        double flarePitch = 5.0 * Math.PI / 180.0;
+        double datumAboveWheelsFt = 16.45 * Math.Cos(flarePitch) + 17.63 * Math.Sin(flarePitch);
+        Assert.Equal(datumAboveWheelsFt, new IniBuildsA350Definition().GetVisualGuidanceProfile().FlareAltitudeBiasFt, 0);
     }
 
     // Plan 18 Task 6: the glidepath bias as the guidance now measures, from the landing threshold (NavigationCalculator.LandingThreshold since the visual guidance overhaul, oasis1701/msfs-blind-assist#345). Three coupled

@@ -84,7 +84,7 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** superseded by the visual guidance overhaul, oasis1701/msfs-blind-assist#345 (2026-11-07): its `NavigationCalculator.LandingThreshold` is Part A's landing threshold (with a guard for an offset that reaches the far end), so `RunwayGlidepathOrigin`, `GlidepathAltitudeErrorFt`, this plan's VG-20 and `RunwayGlidepathOriginTests` were removed when the branch took #345; the ILS cross-check lives on as `VisualGuidanceDisplacedThresholdTests` on #345's path. The measured biases (Task 6) stand: #345 measures from the same threshold.
+- **Status:** superseded by the visual guidance overhaul, oasis1701/msfs-blind-assist#345 (2026-11-07): its `NavigationCalculator.LandingThreshold` is Part A's landing threshold (with a guard for an offset that reaches the far end), so `RunwayGlidepathOrigin`, `GlidepathAltitudeErrorFt`, this plan's VG-20 and `RunwayGlidepathOriginTests` were removed when the branch took #345; the ILS cross-check lives on as `VisualGuidanceDisplacedThresholdTests` on #345's path. The measured glidepath bias (Task 6) stands: #345 measures from the same threshold. Part A's local branch `fix/visual-guidance-threshold` and its worktree were deleted the same day so nothing merges it back against #345; its commit a4895b983 lives on in this branch's history as 2274cd9d5.
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-03
 - **Worked by:** Claude (Opus 5.5), inline
 - **Started:** 2026-11-03; Part A from `origin/main` 8eb77a5b4

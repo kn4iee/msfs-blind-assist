@@ -29,11 +29,15 @@ On the build from `feat/inibuilds-a350` (the all-PRs build), A350-900, cold and 
 4. Plan 24's in-flight checks were flown on the third flight of 2026-11-03 (scripted): the ND's symbols, the SND with a navaid tuned and
    WHAT IF in flight. Nothing is left for you there (`docs/a350/evidence/flight-2026-11-03.md`, the third flight).
 
-### 2.2 The released aircraft's ILS flights (plan 18): nothing left
+### 2.2 One A350 approach with the new visual guidance (plan 18's flights are gone)
 
 The visual guidance overhaul (oasis1701/msfs-blind-assist#345) measures the glidepath from the landing threshold itself, so plan 18's
-shared fix is superseded and its flights with it (2026-11-07). The A350 branch now carries #345; one A350 approach with visual guidance on
-(any ILS, OMDB 12L best: its threshold is displaced) tells whether the A350's measured 53 ft bias still puts the tone on the glideslope.
+shared fix is superseded and its released-aircraft flights with it (2026-11-07). The A350 branch now carries #345, so one A350 approach
+is left, with visual guidance on to touchdown (any ILS, OMDB 12L best: its threshold is displaced):
+
+1. Is the tone on the glideslope down to the minimums (the measured 53 ft bias)?
+2. Do "Flare" and the touchdown come when the wheels are about to touch and touch, not early or late? The flare bias, 18 ft, comes from
+   the flight model's gear geometry, not yet from a landing.
 
 ### 2.3 The other Airbus types (plan 19, before its pull request off `main`)
 
