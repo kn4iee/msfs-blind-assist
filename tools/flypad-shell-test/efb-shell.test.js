@@ -217,12 +217,15 @@ test('without a key, "(now …)" and an after-colon tail are part of the key aga
 const fld = (idx, text, value, extra) => Object.assign({ idx, kind: 'field', controlType: 'text', text, value, clickable: false, level: 0, live: '', disabled: false }, extra || {});
 const keydown = (win, el, k) => el.dispatchEvent(new win.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
 const sets = (s) => s.posted.map((m) => JSON.parse(m)).filter((m) => m.type === 'set');
+// The pilot typing: the box's text changes and the browser fires 'input', as a keystroke does (the Enter-only box counts only
+// text typed since the shell last wrote it, so a test that sets the value without the event is no typing).
+const typeIn = (win, box, v) => { box.value = v; box.dispatchEvent(new win.Event('input', { bubbles: true })); };
 
 test('An_enter_only_box_posts_on_enter_only', (t) => {
   const s = loadShell(t);
   s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
   const box = s.window.document.querySelector('input.in');
-  box.value = '250';
+  typeIn(s.window, box, '250');
   box.dispatchEvent(new s.window.Event('change', { bubbles: true }));
   assert.strictEqual(sets(s).length, 0, 'change must not post');
   keydown(s.window, box, 'Enter');
@@ -233,7 +236,7 @@ test('Leaving_an_enter_only_box_restores_it', async (t) => {
   const s = loadShell(t);
   s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
   const box = s.window.document.querySelector('input.in');
-  box.value = '250';
+  typeIn(s.window, box, '250');
   box.dispatchEvent(new s.window.Event('blur'));
   assert.strictEqual(box.value, '100');
   assert.strictEqual(sets(s).length, 0);
@@ -258,8 +261,9 @@ test('An_enter_only_box_left_before_the_read_back_shows_the_tablets_text_until_i
   const s = loadShell(t);
   s.render('Fuel', [fld(3, 'Zero fuel weight', '100', { commit: 'enter' })]);
   const box = s.window.document.querySelector('input.in');
-  box.value = '250';
+  typeIn(s.window, box, '250');
   keydown(s.window, box, 'Enter');
+  assert.strictEqual(sets(s).length, 1);
   box.dispatchEvent(new s.window.Event('blur'));
   assert.strictEqual(box.value, '100');
   assert.strictEqual(await s.spoken(), 'EFB page: Fuel', 'only the page announce, nothing about the box');
@@ -268,9 +272,10 @@ test('An_enter_only_box_left_before_the_read_back_shows_the_tablets_text_until_i
 });
 
 // The final review's I1. The read-back arrives while the pilot is still in the box (the normal case after Enter), in the tablet's
-// own text: the Airport box upper-cases "kpdx". The box keeps the pilot's text while they are in it, a second Enter types nothing
-// again, and leaving it shows the tablet's text with nothing said: the runner said "Airport: KPDX", and "Airport not changed"
-// after it would be wrong.
+// own text: the Airport box upper-cases "kpdx". The box keeps the pilot's text while they are in it, and leaving it shows the
+// tablet's text with nothing said: the runner said "Airport: KPDX", and "Airport not changed" after it would be wrong. A second
+// Enter on the text the pilot typed types it again (the re-review's N1): the shell cannot tell a read-back from the push of a
+// failed typing, and after a failure Enter is the pilot's retry.
 test('An_enter_only_box_left_after_the_tablet_changed_the_text_shows_it_and_says_nothing', async (t) => {
   const s = loadShell(t);
   s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);
@@ -283,7 +288,7 @@ test('An_enter_only_box_left_after_the_tablet_changed_the_text_shows_it_and_says
   assert.strictEqual(s.window.document.activeElement, box, 'the re-render kept the focus');
   assert.strictEqual(box.value, 'kpdx', 'the box the pilot is in is never written');
   keydown(s.window, box, 'Enter');
-  assert.deepStrictEqual(sets(s), [{ type: 'set', idx: '3', value: 'kpdx', controlType: 'text' }], 'a second Enter typed it again');
+  assert.deepStrictEqual(sets(s).map((m) => m.value), ['kpdx', 'kpdx'], 'a second Enter on the typed text types it again');
   box.blur();
   assert.strictEqual(box.value, 'KPDX');
   assert.strictEqual(await s.spoken(), 'EFB page: PERF calc', 'only the page announce, nothing about the box');
@@ -361,6 +366,54 @@ test('Typing_again_after_the_read_back_is_a_new_edit_that_leaving_does_not_type'
   assert.strictEqual(box.value, 'KPDX');
   assert.strictEqual(sets(s).length, 1);
   assert.strictEqual(await s.spoken(), 'Airport not changed');
+});
+
+// The re-review's N1. A typing that failed ("the tablet's keyboard did not come up", "not typed") leaves the item's value as it was,
+// and the pilot's natural retry is Enter again on the text they typed: it types it again.
+test('After_a_failed_typing_a_second_Enter_types_it_again', (t) => {
+  const s = loadShell(t);
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.focus();
+  typeIn(s.window, box, 'KPDX');
+  keydown(s.window, box, 'Enter');
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);   // the failure's push: the value unchanged
+  keydown(s.window, box, 'Enter');
+  assert.deepStrictEqual(sets(s).map((m) => m.value), ['KPDX', 'KPDX']);
+});
+
+// The pilot sits in a box they have not typed in while BlueBird changes its value (PERF calc fills the runway length from the
+// airport): the box shows the tablet's new value, Enter posts nothing (it would type the stale one back), and leaving says nothing.
+test('An_untouched_box_the_pilot_is_in_follows_the_tablet_and_Enter_posts_nothing', async (t) => {
+  const s = loadShell(t);
+  s.render('PERF calc', [fld(4, 'Length (FT)', '3500', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.focus();
+  s.render('PERF calc', [fld(4, 'Length (FT)', '4000', { commit: 'enter' })]);
+  assert.strictEqual(box.value, '4000');
+  keydown(s.window, box, 'Enter');
+  assert.strictEqual(sets(s).length, 0);
+  box.blur();
+  assert.strictEqual(box.value, '4000');
+  assert.strictEqual(await s.spoken(), 'EFB page: PERF calc', 'only the page announce, nothing about the box');
+});
+
+// Enter, then left before the read-back (the box shows the tablet's old text), then back in when the read-back arrives: the box shows
+// the read-back, since nothing was typed since the shell wrote it, and Enter posts nothing (it would type the old text back over it).
+test('Back_in_the_box_left_before_the_read_back_it_shows_the_read_back_and_Enter_posts_nothing', (t) => {
+  const s = loadShell(t);
+  s.render('PERF calc', [fld(3, 'Airport', 'KSEA', { commit: 'enter' })]);
+  const box = s.window.document.querySelector('input.in');
+  box.focus();
+  typeIn(s.window, box, 'kpdx');
+  keydown(s.window, box, 'Enter');
+  box.blur();
+  assert.strictEqual(box.value, 'KSEA');
+  box.focus();
+  s.render('PERF calc', [fld(3, 'Airport', 'KPDX', { commit: 'enter' })]);
+  assert.strictEqual(box.value, 'KPDX');
+  keydown(s.window, box, 'Enter');
+  assert.deepStrictEqual(sets(s).map((m) => m.value), ['kpdx']);
 });
 
 // The final review's M6: nothing on an Enter-only box said that only Enter types it. It carries that as its accessible description

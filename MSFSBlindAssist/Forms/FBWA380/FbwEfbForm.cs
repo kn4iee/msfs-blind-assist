@@ -1051,27 +1051,31 @@ public class FbwEfbForm : Form
         // Opt-in Enter-only box (the BlueBird 757 tablet's fields, which TYPE on the tablet's own
         // keyboard): the set posts ONLY on Enter. Leaving the box any other way puts the item's value
         // back and says '<label> not changed' once -- the one thing the screen reader cannot say.
-        // inp._val is the item's latest rendered value, the tablet's own text; inp._sent is true from
-        // Enter until the pilot's next keystroke in the box ('input'), across every re-render: the
+        // inp._val is the item's latest rendered value, the tablet's own text. inp._dirty is true
+        // while the box holds text the pilot typed ('input') since the shell last wrote it: only
+        // that text is ever posted, so Enter never types a stale value back over the tablet's (the
+        // re-review's N1), and Enter on it again after a failed typing is the pilot's retry.
+        // inp._sent is true from Enter until the next keystroke, across every re-render: the
         // tablet's read-back may differ from what was typed (a box upper-cases it, drops a key, or
-        // rejects it and keeps its old text). Left with _sent set, the box shows the tablet's text
-        // again with nothing said (the runner said what the tablet reads), and a second Enter types
-        // nothing again. Its accessible description says Enter types it (NVDA says it after the
-        // name, role and value as the box gets the focus; the final review's M6).
+        // rejects it and keeps its old text). Leaving the box shows the tablet's text again, saying
+        // '<label> not changed' only for typed text that Enter never sent (the runner said what
+        // the tablet reads). Its accessible description says Enter types it (NVDA says it after
+        // the name, role and value as the box gets the focus; the final review's M6).
         inp.setAttribute('aria-description', 'Press Enter to type it on the tablet.');
-        inp._val = it.value || ''; inp._sent = false;
-        inp.addEventListener('input', function () { inp._sent = false; });
+        inp._val = it.value || ''; inp._sent = false; inp._dirty = false;
+        inp.addEventListener('input', function () { inp._dirty = true; inp._sent = false; });
         inp.addEventListener('keydown', function (ev) {
           if (ev.key !== 'Enter') return;
           ev.preventDefault();
-          if (inp._sent || inp.value === inp._val) return;
+          if (!inp._dirty || inp.value === inp._val) return;
           inp._sent = true; commit();
         });
         inp.addEventListener('blur', function () {
+          var unsent = inp._dirty && !inp._sent;
+          inp._dirty = false;
           if (inp.value === inp._val) return;
-          var sent = inp._sent;
           inp.value = inp._val;
-          if (!sent) announce((text || 'Field') + ' not changed');
+          if (unsent) announce((text || 'Field') + ' not changed');
         });
       } else {
         inp.addEventListener('change', commit);
@@ -1145,11 +1149,12 @@ public class FbwEfbForm : Form
     if (type === 'in') {
       c.disabled = !!it.disabled;
       if (it.commit === 'enter' && c._val !== undefined) {
-        // The tablet's latest text, put back when the pilot leaves the box; _sent is the pilot's to clear (by typing), never a
-        // re-render's. The box the pilot is in is never written; one they are not in shows the item's value.
+        // The tablet's latest text, put back when the pilot leaves the box; _sent and _dirty are the pilot's to change (by typing,
+        // Enter, leaving), never a re-render's. Text the pilot typed in the box they are in is never written over; any other box,
+        // the one they are in but have not typed in included, shows the item's value.
         var ev2 = it.value || '';
         c._val = ev2;
-        if (document.activeElement !== c && c.value !== ev2) c.value = ev2;
+        if ((document.activeElement !== c || !c._dirty) && c.value !== ev2) c.value = ev2;
       }
       else if (document.activeElement !== c) { var nv = it.value || ''; if (c.value !== nv) c.value = nv; }
       var sp2 = node.querySelector('span'); if (sp2) setText(sp2, (text || 'Field') + ': ');
