@@ -282,6 +282,21 @@ public static class Bbs757EfbPress
     public static bool UnderNotice(Bbs757EfbScreenModel m, Bbs757EfbItem? item, Point at) =>
         (item == null || m.Items.Contains(item)) && m.NoticePanel is { } panel && panel.Contains(at);
 
+    // ------------------------------------------------------------------ BlueBird's keyboard over a press (plan 22, the final review's I2)
+
+    /// <summary>
+    /// Whether BlueBird's keyboard, shown on the read <paramref name="m"/> (<see cref="Bbs757EfbScreenModel.KeyboardState"/>, ready or still
+    /// sliding up), covers <paramref name="at"/>, a point a press would put the mouse down on: the numeric keypad's rectangle while the keypad
+    /// shows, else the QWERTY keyboard's box (<see cref="Bbs757EfbScreenModel.Keyboard"/>, kb_grid: [0,648 1397x400]). Up, it takes a press
+    /// there as a key and types into the box it serves (plan 22, the final review's I2), wherever that box is, and the window cannot show it
+    /// (B757-23). False while it reads down or unread, and when the read has no box for it (the keys or the keypad's rectangle not read).
+    /// Every control is checked, a dialog's answers and the side menu too: the keypad below the fuel dialog's box covers its INSERT.
+    /// </summary>
+    public static bool UnderKeyboard(Bbs757EfbScreenModel m, Point at) =>
+        m.KeyboardState is { Shown: true } k
+        && (k.Keypad ? k.KeypadBox : m.Keyboard?.Box ?? Rectangle.Empty) is { IsEmpty: false } box
+        && box.Contains(at);
+
     // ------------------------------------------------------------------ a question
 
     /// <summary>A question's words as two reads compare them: its letters and digits, upper-cased invariantly. Case, spaces and

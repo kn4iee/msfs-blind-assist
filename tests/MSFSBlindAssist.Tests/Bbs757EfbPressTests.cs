@@ -1238,7 +1238,26 @@ public class Bbs757EfbPressTests
         public string Unit { get; init; } = "";
         /// <summary>After this many runs of typing taps the keyboard goes down (the pilot's own mouse, or BlueBird), null for never.</summary>
         public int? DownAfterRuns { get; init; }
-        private bool KeypadUp => UpFor != null ? UpForKeypad : Keypad;
+        /// <summary>The box the keyboard is up and settled for before the press (the pilot's own mouse, or a typing that stopped), and
+        /// whether that is the keypad (drawn at <see cref="KeypadAt"/>); null: down. The field's own tap brings it up for the field.</summary>
+        public string? UpAtStartFor { get; init; }
+        public bool UpAtStartKeypad { get; init; }
+        /// <summary>Keys a press landed on while the keyboard was up for another box: typed into that box.</summary>
+        public int KeysIntoAnother { get; private set; }
+        private bool? _keypadNow;
+        private bool _started;
+        private bool KeypadUp => _keypadNow ?? (UpFor != null ? UpForKeypad : Keypad);
+
+        /// <summary>The keyboard as it is before the press (<see cref="UpAtStartFor"/>), once.</summary>
+        private void Start()
+        {
+            if (_started) return;
+            _started = true;
+            if (UpAtStartFor is not { } other) return;
+            Shown = Ready = true;
+            Target = other;
+            _keypadNow = UpAtStartKeypad;
+        }
         public bool RunsGoOut { get; init; } = true;
         public int ContentY { get; init; } = 156;
         public bool Scrollable { get; init; }
@@ -1287,6 +1306,7 @@ public class Bbs757EfbPressTests
 
         public Bbs757EfbScreenModel Page()
         {
+            Start();
             var page = PageFrom != null ? PageFrom(this)
                 : !InQuestion ? PageOf("NAVIGATION", "PERF CALC", Field())
                 : DialogUp ? PageOf("AIRCRAFT", "FUEL") with
@@ -1366,20 +1386,30 @@ public class Bbs757EfbPressTests
         /// <summary>A tap landing on the tablet.</summary>
         private void Land(Point p)
         {
+            Start();
+            // Shown and settled, the keyboard (or the keypad) takes a press over it as a key, whatever the page has beneath.
+            if (Shown && Ready && (KeypadUp ? KeypadAt : Kb.Box).Contains(p)) { KeyLanded(p); return; }
             if ((!InQuestion || DialogUp) && FieldBox() is { } box && box.Contains(p))
             {
                 if (!OpensKeyboard) return;
                 if (!Shown) { Shown = true; Ready = false; _upAt = Now; }
                 Target = UpFor ?? Name;
+                _keypadNow = null;
                 Caret = Math.Min(TapCaret, Text.Length);
                 return;
             }
             if (!Shown) { Events.Add("page tap"); return; }
             if (!Ready) { KeysOnThePage++; Down(); return; }   // before it settled: on the page beneath, and the keyboard slides away
+            KeyLanded(p);
+        }
+
+        private void KeyLanded(Point p)
+        {
             if (Target != Name)
             {
-                // Up for another box: only its close is modeled.
+                // Up for another box: only its close is modeled; any other key goes into that box.
                 if (KeypadUp ? p == Bbs757EfbTyping.KeypadOk(KeypadAt) : p == KeyAt("btn_keyboard_down")) Down();
+                else KeysIntoAnother++;
                 return;
             }
             if (Keypad) KeypadKey(p);
@@ -1812,6 +1842,79 @@ public class Bbs757EfbPressTests
 
         Assert.Empty(tablet.Taps);
         Assert.Equal(new[] { "Fuel is no longer on the tablet." }, tablet.Alerts);
+    }
+
+    // ---- a press under BlueBird's keyboard (the final review's I2) ----------------------------------------------------------------
+
+    [Fact]
+    public void A_point_under_the_shown_keyboard_or_keypad_is_under_it()
+    {
+        // Up, BlueBird's keyboard covers kb_grid ([0,648 1397x400]) and takes a press there as a key; the numeric keypad covers its own
+        // rectangle, where that read draws it, and the QWERTY keyboard's place is then the page's.
+        var page = PageOf("NAVIGATION", "PERF CALC") with { Keyboard = Kb };
+        Assert.Equal(new Rectangle(0, 648, 1397, 400), Kb.Box);
+        var qwerty = new Bbs757EfbKeyboardState(true, true, false, "planning_perf_calc_airport_input", false, false, false, Rectangle.Empty);
+        Assert.True(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = qwerty }, new Point(700, 800)));
+        Assert.True(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = qwerty }, new Point(10, 648)));
+        Assert.False(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = qwerty }, new Point(700, 647)));
+        Assert.True(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = qwerty with { Ready = false } }, new Point(700, 800)));   // sliding
+
+        // Down, unread, or its keys unread (no box to tell): under nothing.
+        Assert.False(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = qwerty with { Shown = false, Ready = false, Target = "" } }, new Point(700, 800)));
+        Assert.False(Bbs757EfbPress.UnderKeyboard(page, new Point(700, 800)));
+        Assert.False(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = qwerty, Keyboard = null }, new Point(700, 800)));
+
+        var keypad = qwerty with { Target = "fuel_input_textbox", Keypad = true, KeypadBox = FuelKeypad };
+        Assert.True(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = keypad }, new Point(952, 404)));    // the fuel dialog's INSERT
+        Assert.False(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = keypad }, new Point(1100, 800)));  // kb_grid's, not the keypad's
+        Assert.False(Bbs757EfbPress.UnderKeyboard(page with { KeyboardState = keypad with { KeypadBox = Rectangle.Empty } }, new Point(952, 404)));
+    }
+
+    [Fact]
+    public async Task A_field_under_the_keyboard_up_for_another_box_is_tapped_once_it_is_down()
+    {
+        // The keyboard is up for the runway length box (the pilot's mouse, or a typing that stopped) and the Airport box lies under it: its
+        // tap would be a key typed into the runway length box. The keyboard is put down first with its down key (it keeps the text), the
+        // box found again and tapped, and the typing goes on as ever.
+        var tablet = new TypingTablet { Text = "KSEA", ContentY = 800, UpAtStartFor = "planning_perf_calc_runway_length_input" };
+        var pressed = tablet.Pressed();
+        Assert.True(Bbs757EfbPress.UnderKeyboard(pressed.Page, tablet.FieldHit));
+
+        await tablet.Runner().TypeAsync(pressed, "KPDX", CancellationToken.None);
+
+        Assert.Equal(new[] { KeyAt("btn_keyboard_down"), tablet.FieldHit, KeyAt("btn_keyboard_down") }, tablet.Taps);
+        Assert.Equal(0, tablet.KeysIntoAnother);
+        Assert.Equal(0, tablet.KeysOnThePage);
+        Assert.Equal("KPDX", tablet.Text);
+        Assert.Equal(new[] { "Airport: KPDX" }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_field_under_a_keypad_up_for_another_box_is_tapped_once_its_OK_closed_it()
+    {
+        var keypadAt = new Rectangle(250, 100, 360, 430);   // over the Airport box (289,156 150x34)
+        var tablet = new TypingTablet { Text = "KSEA", KeypadAt = keypadAt, UpAtStartFor = "tod_pause_textbox", UpAtStartKeypad = true };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None);
+
+        Assert.Equal(new[] { Bbs757EfbTyping.KeypadOk(keypadAt)!.Value, tablet.FieldHit, KeyAt("btn_keyboard_down") }, tablet.Taps);
+        Assert.Equal(0, tablet.KeysIntoAnother);
+        Assert.Equal("KPDX", tablet.Text);
+        Assert.Equal(new[] { "Airport: KPDX" }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_field_clear_of_the_keyboard_up_for_another_box_closes_nothing()
+    {
+        // The Airport box (y 156) is not under kb_grid: its tap takes the keyboard over (BlueBird types into the box tapped), nothing is
+        // closed first.
+        var tablet = new TypingTablet { Text = "KSEA", UpAtStartFor = "planning_perf_calc_runway_length_input" };
+
+        await tablet.Runner().TypeAsync(tablet.Pressed(), "KPDX", CancellationToken.None);
+
+        Assert.Equal(new[] { tablet.FieldHit, KeyAt("btn_keyboard_down") }, tablet.Taps);
+        Assert.Equal("KPDX", tablet.Text);
+        Assert.Equal(new[] { "Airport: KPDX" }, tablet.Alerts);
     }
 
     /// <summary>The trees with the control named <paramref name="name"/> replaced by <paramref name="by"/>.</summary>

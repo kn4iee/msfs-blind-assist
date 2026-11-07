@@ -1885,6 +1885,151 @@ public class Bbs757EfbBridgeTests
         Assert.Equal(new[] { "Dirty panel states is under a BlueBird notification, not pressed." }, tablet.Alerts);
     }
 
+    // ---- BlueBird's keyboard up over a press (plan 22, the final review's I2) ----------------------------------------------------
+
+    /// <summary>BlueBird's keyboard where the reader finds it (PERF calc, 25): kb_grid [0,648 1397x400] and its keys.</summary>
+    private static readonly Bbs757EfbKeyboard Kb = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"))!.Keyboard!;
+
+    private static Point DownKey => Kb.Keys.First(k => k.Name == "btn_keyboard_down").Hit;
+
+    /// <summary>The keyboard up typing into <paramref name="target"/>, settled when <paramref name="ready"/>, and the numeric keypad drawn
+    /// at <paramref name="keypad"/> when one is given.</summary>
+    private static Bbs757EfbKeyboardState KeyboardUp(string target, bool ready = true, Rectangle? keypad = null) =>
+        new(true, ready, keypad != null, target, false, false, false, keypad ?? Rectangle.Empty);
+
+    private static readonly Bbs757EfbKeyboardState KeyboardDown = new(false, false, false, "", false, false, false, Rectangle.Empty);
+
+    /// <summary>A tile low on the Ground services page, under kb_grid (y 648 to 1048) while the keyboard is up.</summary>
+    private static Bbs757EfbItem LowTile(string text = "Req fuel truck", string words = "REQ FUEL TRUCK") =>
+        Tile(text, "btn:|" + words + "@56,41", new Rectangle(1132, 800, 196, 42));
+
+    private static Bbs757EfbScreenModel WithKeyboard(Bbs757EfbScreenModel page, Bbs757EfbKeyboardState state) =>
+        page with { Keyboard = Kb, KeyboardState = state };
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public async Task A_control_under_the_tablets_keyboard_is_tapped_once_the_keyboard_is_down(string culture)
+    {
+        // BlueBird's keyboard up (the pilot's own mouse, a typing that stopped, BlueBird itself) covers kb_grid and takes a press there as a
+        // key, typing into the box it serves; the window cannot show it (B757-23). A tile under it is tapped once the keyboard is put down
+        // with its down key (it keeps the text) and the tile is found again in the read after. Nothing is said of the keyboard: only the
+        // tile's own outcome.
+        var tile = LowTile();
+        var up = WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input"));
+        Assert.True(Bbs757EfbPress.UnderKeyboard(up, tile.Hit));
+        var tablet = new FakeTablet(up);
+        var press = tablet.Press(tile);
+        tablet.OnTap = p =>
+        {
+            if (p == DownKey) tablet.Show(WithKeyboard(Ground(tile), KeyboardDown));
+            else if (p == tile.Hit && tablet.Page.KeyboardState is { Shown: false })
+                tablet.Show(WithKeyboard(Ground(LowTile("Requesting" + Ellipsis, "REQUESTING" + Ellipsis)), KeyboardDown));
+        };
+
+        await TestCulture.Run(culture, () => tablet.Runner().ClickAsync(press, CancellationToken.None));
+
+        Assert.Equal(new[] { DownKey, tile.Hit }, tablet.Taps);
+        Assert.Equal(new[] { "Requesting" + Ellipsis }, tablet.Alerts);
+    }
+
+    [Fact]
+    public async Task A_dialogs_answer_under_its_keypad_is_tapped_once_the_keypads_OK_closed_it()
+    {
+        // The fuel input dialog (11c) with its keypad up below its box ([595.5,348 360x430], measured): INSERT ([862.5,380 180x48]) lies
+        // under the keypad's 9, so a tap on it would type a 9. The keypad's OK closes the keypad alone (measured: the dialog stays up), then
+        // INSERT is tapped, found again under the same question.
+        var dialog = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11c-aircraft-fuel-input-dialog"))!;
+        var insert = dialog.Question!.Buttons.Single(b => b.Text.Equals("Insert", StringComparison.OrdinalIgnoreCase));
+        var keypad = new Rectangle(595, 348, 360, 430);
+        var up = WithKeyboard(dialog, KeyboardUp("fuel_input_textbox", keypad: keypad));
+        Assert.True(Bbs757EfbPress.UnderKeyboard(up, insert.Hit));
+        var ok = Bbs757EfbTyping.KeypadOk(keypad)!.Value;
+        var tablet = new FakeTablet(up);
+        var press = tablet.Press(insert);
+        tablet.OnTap = p =>
+        {
+            if (p == ok) tablet.Show(WithKeyboard(dialog, KeyboardDown with { Keypad = true, KeypadBox = keypad }));   // +0x1ae stays 1 when closed
+        };
+
+        await tablet.Runner().ClickAsync(press, CancellationToken.None);
+
+        Assert.Equal(new[] { ok, insert.Hit }, tablet.Taps);
+    }
+
+    [Fact]
+    public async Task A_page_drag_that_would_press_on_the_tablets_keyboard_is_made_once_the_keyboard_is_down()
+    {
+        // Dirty panel states (content 1202) is dragged into view from (500, 899), inside kb_grid: with the keyboard up the drag's press
+        // would be a key. The keyboard is put down first, then the drag made and the row tapped where it is drawn after it.
+        var row = new Bbs757EfbItem(Bbs757EfbKind.Button, "Dirty panel states", new Rectangle(273, 1202, 600, 60), new Point(573, 1232), true, "btn:DIRTY");
+        var scrolled = row with { Box = new Rectangle(273, 535, 600, 60), Hit = new Point(573, 565) };
+        Bbs757EfbScreenModel Settings(Bbs757EfbItem r, Bbs757EfbKeyboardState kb) =>
+            WithKeyboard(PageOf("SETTINGS", "AIRCRAFT", r) with { Scrollable = true, Viewport = new Rectangle(250, 82, 1147, 966) }, kb);
+        var up = Settings(row, KeyboardUp("planning_charts_request_input"));
+        Assert.Equal((500, 899, 232), Bbs757EfbPress.DragFor(up, row)!.Value);
+        Assert.True(Bbs757EfbPress.UnderKeyboard(up, new Point(500, 899)));
+        var tablet = new FakeTablet(up);
+        tablet.OnTap = p => { if (p == DownKey) tablet.Show(Settings(row, KeyboardDown)); };
+        tablet.OnDrag = (_, _, _) => tablet.Show(Settings(scrolled, KeyboardDown));
+
+        await tablet.Runner().ClickAsync(tablet.Press(row), CancellationToken.None);
+
+        Assert.Equal(new[] { DownKey, scrolled.Hit }, tablet.Taps);
+        Assert.Equal(new[] { (500, 899, 232) }, tablet.Drags);
+        Assert.True(tablet.Flow.IndexOf($"tap {DownKey.X},{DownKey.Y}") < tablet.Flow.IndexOf("drag 500,899,232"));
+    }
+
+    [Fact]
+    public async Task A_keyboard_still_sliding_up_is_waited_for_and_then_put_down()
+    {
+        // Shown but not settled: a key tapped then lands on the page beneath (measured), so its down key is not tapped until it reads ready.
+        var tile = LowTile();
+        var sliding = WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input", ready: false));
+        var tablet = new FakeTablet(sliding);
+        int reads = 0;
+        tablet.OnRead = () => { if (++reads == 4) tablet.Show(WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input"))); };
+        bool? readyAtClose = null;
+        tablet.OnTap = p =>
+        {
+            if (p != DownKey) return;
+            readyAtClose = tablet.Page.KeyboardState?.Ready;
+            tablet.Show(WithKeyboard(Ground(tile), KeyboardDown));
+        };
+
+        await tablet.Runner().ClickAsync(tablet.Press(tile), CancellationToken.None);
+
+        Assert.Equal(new[] { DownKey, tile.Hit }, tablet.Taps);
+        Assert.True(readyAtClose);
+    }
+
+    [Fact]
+    public async Task A_keyboard_that_never_settles_or_stays_up_takes_no_second_close()
+    {
+        // Never ready within the runner's change wait: its down key is never tapped (it would land on the page beneath), and the tile is
+        // tapped as before. One that stays up after its down key: no second close, the tile tapped as before (the guard runs once).
+        var tile = LowTile();
+        var never = new FakeTablet(WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input", ready: false)));
+        await never.Runner().ClickAsync(never.Press(tile), CancellationToken.None);
+        Assert.Equal(new[] { tile.Hit }, never.Taps);
+        Assert.True(never.Now >= Bbs757EfbPressRunner.ChangeMaxMs);
+
+        var stays = new FakeTablet(WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input")));
+        await stays.Runner().ClickAsync(stays.Press(tile), CancellationToken.None);
+        Assert.Equal(new[] { DownKey, tile.Hit }, stays.Taps);
+    }
+
+    [Fact]
+    public async Task A_control_clear_of_the_tablets_keyboard_closes_nothing()
+    {
+        // Req fuel truck (y 577 to 619) lies above kb_grid: tapped at once, the keyboard left as it is.
+        var tile = ReqFuelTruck();
+        var tablet = new FakeTablet(WithKeyboard(Ground(tile), KeyboardUp("planning_charts_request_input")));
+
+        await tablet.Runner().ClickAsync(tablet.Press(tile), CancellationToken.None);
+
+        Assert.Equal(new[] { tile.Hit }, tablet.Taps);
+    }
+
     // ---- scrolling into view --------------------------------------------------------------------------------------------
 
     /// <summary>A scrolled page: rows at content positions inside a viewport of 250,82 1147x966, drawn at content less the offset;

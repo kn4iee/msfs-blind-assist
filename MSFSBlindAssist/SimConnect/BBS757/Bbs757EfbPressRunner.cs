@@ -733,7 +733,8 @@ public sealed class Bbs757EfbPressRunner
     /// said once (CORE-7: the screen reader said the pilot's keys in the window's edit box, never what the tablet took): "{name}: {value}"
     /// when it reads the text, case aside (PERF calc's Airport box upper-cases it); else "{name} reads {value}." (BlueBird's boxes filter
     /// what they take, and a full box drops keys); a field that reads empty (emptied as asked, or every key dropped): "{name} is empty.";
-    /// the field gone: "{name} is no longer on the tablet."</item>
+    /// a page field gone after a close that went out, the same from the line its row shows in its place (<see cref="LineFor"/>: the SimBrief
+    /// row hides its box once saved); with neither: "{name} is no longer on the tablet."</item>
     /// </list>
     /// The text goes as typed: no trimming, no case change, no number parsing (BlueBird validates it). The text and the field's value are
     /// never logged, nor anything that gives away their length (the taps, the runs, whether it read back as typed): a log line names the
@@ -969,7 +970,8 @@ public sealed class Bbs757EfbPressRunner
     /// tablet shows the page a side-menu entry or a home-screen app asks for, or Home for the window's Home: nothing said), and when
     /// nothing could be read (the window says why). With <paramref name="proceed"/>, also when it says no of the control as the first
     /// fresh read finds it, before any drag (<see cref="TypeAsync"/>: the text there already, or a character on no key); it says what is
-    /// said then.
+    /// said then. A drag whose press point BlueBird's keyboard covers (<see cref="Bbs757EfbPress.UnderKeyboard"/>) puts the keyboard down
+    /// first, once (<see cref="PutKeyboardDownAsync"/>), and is planned again from the read after it (the final review's I2).
     /// </summary>
     private async Task<Target?> LocateAsync(Bbs757EfbPressed pressed, CancellationToken ct,
         Func<Bbs757EfbScreenModel, Bbs757EfbItem, bool>? proceed = null)
@@ -977,6 +979,7 @@ public sealed class Bbs757EfbPressRunner
         if (await _io.Read(ct) is not { } now) return null;
         var found = Find(pressed, now, out bool gone);
         if (found != null && proceed != null && !proceed(now, found)) return null;   // settled by the first read: no drag, no tap
+        bool keyboardPutDown = false;
         for (int steps = 0; found != null && Bbs757EfbPress.TapPoint(now, found) == null; steps++)
         {
             // Outside its clip (or showing under MinShownPx): dragged toward the viewport's middle, read again, found again where it is
@@ -993,6 +996,16 @@ public sealed class Bbs757EfbPressRunner
             {
                 _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(pressed.Page, pressed.Item), Bbs757EfbPress.SpokenName(now, covering)));
                 return null;
+            }
+            // On BlueBird's keyboard it would be a key (the final review's I2): the keyboard put down first, once, and the drag planned
+            // again from the read after it.
+            if (!keyboardPutDown && Bbs757EfbPress.UnderKeyboard(now, new Point(drag.X, drag.Y0)))
+            {
+                keyboardPutDown = true;
+                if (await PutKeyboardDownAsync(now, ct) is not { } down) return null;   // nothing read: the window says why
+                now = down;
+                found = Find(pressed, now, out gone);
+                continue;
             }
             if (!await _io.Drag(drag.X, drag.Y0, drag.Y1, ct))
             {
@@ -1078,30 +1091,101 @@ public sealed class Bbs757EfbPressRunner
     /// checked here, at the point the tap goes to, so a slider's choice or percent place is checked as a control's middle is (the review's
     /// Minor 2). A nav data press reads the cycle installed BEFORE its tap and hands it over with its hook. With <paramref name="speak"/>
     /// false (the runner's own tap that closes a list it opened, after the choice's alert) a tap not made says nothing.
+    /// <para>A point BlueBird's keyboard or keypad covers while it shows (<see cref="Bbs757EfbPress.UnderKeyboard"/>; the final review's I2)
+    /// would be a key typed into the box the keyboard serves, wherever that is, and the window cannot show the keyboard (B757-23): it is put
+    /// down first, once (<see cref="PutKeyboardDownAsync"/>), the control found again in the read after it (<see cref="Find"/>, as the press
+    /// found it) and tapped where that read draws it, the checks above made again on that read. Gone then: "{name} is no longer on the
+    /// tablet."; out of its clip: "{name} could not be brought into view, not pressed."; done already or under a question come up: nothing
+    /// said. Still up after it: tapped as before. This holds for every tap of a press: a control's, a slider's, a drop-down's face and row,
+    /// and a typing's own field tap.</para>
     /// </summary>
     private async Task<bool> TapAsync(Bbs757EfbItem item, Target target, CancellationToken ct, Point? at = null, Bbs757EfbScreenModel? on = null,
         bool speak = true)
     {
         var page = on ?? target.Page;
-        if (Bbs757EfbPress.UnderNotice(page, item, at ?? target.At))
+        var point = at ?? target.At;
+        bool keyboardPutDown = false;
+        while (true)
         {
-            if (speak) _io.Alert(Bbs757EfbPress.UnderNoticeText(Bbs757EfbPress.SpokenName(page, item)));
-            return false;
-        }
-        if (Bbs757EfbPress.CoveringList(page, item, at ?? target.At) is { } covering)
-        {
-            if (speak) _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(page, item), Bbs757EfbPress.SpokenName(page, covering)));
-            return false;
+            if (Bbs757EfbPress.UnderNotice(page, item, point))
+            {
+                if (speak) _io.Alert(Bbs757EfbPress.UnderNoticeText(Bbs757EfbPress.SpokenName(page, item)));
+                return false;
+            }
+            if (Bbs757EfbPress.CoveringList(page, item, point) is { } covering)
+            {
+                if (speak) _io.Alert(Bbs757EfbPress.CoveredText(Bbs757EfbPress.SpokenName(page, item), Bbs757EfbPress.SpokenName(page, covering)));
+                return false;
+            }
+            if (keyboardPutDown || !Bbs757EfbPress.UnderKeyboard(page, point)) break;
+            keyboardPutDown = true;
+            if (await PutKeyboardDownAsync(page, ct) is not { } now) return false;   // nothing read: the window says why
+            var found = Find(new Bbs757EfbPressed(item, page), now, out bool gone);
+            if (found == null)
+            {
+                if (gone && speak) _io.Alert(Bbs757EfbPress.GoneText(Bbs757EfbPress.SpokenName(page, item)));
+                return false;
+            }
+            // Where the read after draws it: a given point (a slider's place, a list row's) moves with the control's box.
+            var shown = Bbs757EfbPress.TapPoint(now, found);
+            if (shown == null)
+            {
+                if (speak) _io.Alert(Bbs757EfbPress.NotInViewText(Bbs757EfbPress.SpokenName(page, item)));
+                return false;
+            }
+            point = at is { } given ? new Point(given.X + found.Box.X - item.Box.X, given.Y + found.Box.Y - item.Box.Y) : shown.Value;
+            page = now;
+            item = found;
         }
         var hook = Bbs757EfbExtras.HookFor(target.Page.PageName, item);
         int? cycleBefore = hook is Bbs757EfbHook.NavDataUpdate or Bbs757EfbHook.NavDataRemove ? _io.ReadInstalledCycle() : null;
-        if (!await _io.Tap(at ?? target.At, ct))
+        if (!await _io.Tap(point, ct))
         {
             if (speak) _io.Alert(Bbs757EfbPress.UnreachableText);
             return false;
         }
         if (hook != Bbs757EfbHook.None) _io.Hooked(hook, cycleBefore);
         return true;
+    }
+
+    /// <summary>
+    /// Puts BlueBird's keyboard (or the numeric keypad) down before a press that it covers (<see cref="Bbs757EfbPress.UnderKeyboard"/> on
+    /// <paramref name="m"/>, the read the press was decided on; the final review's I2): one tap on its down key (<c>btn_keyboard_down</c>,
+    /// which keeps the text on every box measured) or on the keypad's OK, where the read before the tap draws it (<see cref="ClosePoint"/>),
+    /// then the tablet read until it reads down (at most <see cref="ChangeMaxMs"/>). One shown but still sliding up is waited for until it
+    /// reads settled, within <see cref="ChangeMaxMs"/>, and never tapped before (a key tapped then lands on the page beneath: measured); one
+    /// that never settles in that wait, or whose read has no close key, is not tapped. Nothing is said: the press's own outcome is. The
+    /// last read comes back, the keyboard down or not; null when a read failed (the window says why).
+    /// </summary>
+    private async Task<Bbs757EfbScreenModel?> PutKeyboardDownAsync(Bbs757EfbScreenModel m, CancellationToken ct)
+    {
+        var now = m;
+        long until = _io.NowMs() + ChangeMaxMs;
+        while (now.KeyboardState is { Shown: true, Ready: false } && _io.NowMs() < until)
+        {
+            await _io.Delay(ChangePollMs, ct);
+            if (await _io.Read(ct) is not { } next) return null;
+            now = next;
+        }
+        if (now.KeyboardState is not { Shown: true, Ready: true } k || ClosePoint(now, k.Keypad) is not { } close)
+        {
+            Log.Debug("BBS757", "EFB reader: BlueBird's keyboard over a press was not put down (not settled, or no close key read)");
+            return now;
+        }
+        if (!await _io.Tap(close, ct))
+        {
+            Log.Debug("BBS757", "EFB reader: the close tap of BlueBird's keyboard over a press did not go out");
+            return now;
+        }
+        Log.Debug("BBS757", "EFB reader: BlueBird's keyboard was up over a press; put down first");
+        until = _io.NowMs() + ChangeMaxMs;
+        while (true)
+        {
+            await _io.Delay(ChangePollMs, ct);
+            if (await _io.Read(ct) is not { } next) return null;
+            now = next;
+            if (now.KeyboardState is not { Shown: true } || _io.NowMs() >= until) return now;
+        }
     }
 
     /// <summary>
