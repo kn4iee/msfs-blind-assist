@@ -1,8 +1,8 @@
 # The 757 tablet's text boxes, drop-downs, selection, status bar, notifications and questions in memory (plan 21, Task 1)
 
 Measured 2026-11-07, about 02:20Z to 03:20Z, MSFS 2024, BlueBird 757 build of 2026-10-31 (BBS752.wasm 29,765,919 bytes,
-SHA-256 357292c9…), parked at the gate, MSFSBA closed. Read-only memory reads with a scratch probe built on the app's
-own `ModuleEfbMemory`; taps at rectangles read from memory through a scratch tap probe: navigation, side menus, tabs and
+SHA-256 357292c9…), parked at the gate, MSFSBA closed. Read-only memory reads with a scratch memory probe; taps at
+rectangles read from memory: navigation, side menus, tabs and
 the notifications arrow. With the owner's go-ahead, each undone: Fuel's left quantity box (the fuel input dialog, then
 CANCEL), PERF calc's runway drop-down (opened, then its current entry), the AFT cargo door (opened, closed), Automatic
 boarding off and on again. `efb_settings.json` read back equal to its copy from before the first tap. No snapshot was
@@ -163,7 +163,14 @@ the defuel question's `fuel_icon` "./data/efb/icons/bbs_icon_fuel1.png"; PERF ca
   stack pointer starts at 0x240000, the top of its static memory, so 0x29ac24 is heap, and it is that session's BBOS
   object (0x2918f0) + 0x9334. The file says so too (found 2026-11-07, plan 21 Task 3): of the two functions that write
   `bbos`'s vtable, the constructor initializes the vector at this + 0x9334 and the words up to +0x936c and the
-  destructor frees it, and a getter returns this + 0x9334 (`i32.const 0x9334` is in 12 functions). The words read beside the vector are
+  destructor frees it, and a getter returns this + 0x9334 (`i32.const 0x9334` is in 12 functions). To check it from BBS752.wasm
+  with the private repo's toolkit (`MSFSBlindAssist.WasmToolkit`): `TryGetClassVptr("N3bbs4bbosE")` gives 0x2fb18, so bbos's
+  vtable is 0x2fb10, and `WasmCodeQueries.FunctionsWithI32Const(module, 0x2fb10)` gives functions 65360 (the constructor: it
+  holds `i32.const 0x9334` and `i32.const 0x238`, the app map, and stores to +0x1d8 and +0x936c) and 65871 (the destructor:
+  0x9334 and 0x238, no such stores); decoded (`WasmDecoder.TryDecode`), function 56508 adds `i32.const 0x9334` (37684) to its
+  argument and returns it. Search the code for `i32.const 0x9334` for the other users. The stack top is the module's first
+  global, its mutable i32 stack pointer, whose initializer in the global section is `i32.const 0x240000` (the private repo's
+  b757-memory notes read the same; the data segments end at 0xec6d0). The words read beside the vector are
   its neighbors in BBOS: +0x9340 46 (the last index), +0x9344 49 (the last id), +0x9348 2 (?), +0x9350 40, then 46 after
   the list was opened (?), +0x9368 2 (?), +0x936c 47 (the count). No other pointer to the records' buffer was found.
   `bbs::notification` (vptr 0x1d1f4) is a different object.
