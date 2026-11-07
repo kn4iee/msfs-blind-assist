@@ -1807,6 +1807,29 @@ public class Bbs757EfbBridgeTests
     }
 
     [Fact]
+    public void A_read_while_the_window_is_hidden_does_not_spend_the_next_showings_start()
+    {
+        // A press still reading after the pilot closed the window (its follow-up reads run on for up to a few seconds) reads 52 while
+        // hidden; 53 to 55 come while it stays closed. That read is heard by nobody, so it neither says anything nor takes the next
+        // showing's start: shown again, the first read lists 53 to 55 and says none of them.
+        using var h = new BridgeHarness();
+        h.Bridge.TakeRead(Captured("14-aircraft-cabin-doors"));
+        h.Bridge.SetActive(false);
+        h.Bridge.TakeRead(Captured("14b-aircraft-cabin-doors-door-moving"));
+        Assert.DoesNotContain(h.Pushes[^1], kv => kv.Key.EndsWith(".kind", StringComparison.Ordinal) && kv.Value == "alert");
+        h.Bridge.SetActive(true);
+
+        h.Bridge.TakeRead(Captured("25c-navigation-perf-calc-runway-open"));
+
+        Assert.DoesNotContain(h.Pushes[^1], kv => kv.Key.EndsWith(".kind", StringComparison.Ordinal) && kv.Value == "alert");
+        Assert.Contains("05:06Z Chocks removed.", Texts(h.Pushes[^1]));
+        var again = Bbs757EfbTreeJson.LoadNotices("25c-navigation-perf-calc-runway-open")
+            .Append(new Bbs757EfbNoticeRecord(56, "", "CHOCKS ATTACHED.", "05:09Z", true)).ToList();
+        h.Bridge.TakeRead(Captured("25c-navigation-perf-calc-runway-open", again));
+        Assert.Equal(("alert", "Chocks attached."), (h.Pushes[^1]["items.0.kind"], h.Pushes[^1]["items.0.text"]));
+    }
+
+    [Fact]
     public void A_dialog_still_up_when_the_window_is_shown_again_is_said_again()
     {
         // The same Shift+T does the same every time: a dialog up when the window is shown is said once, as at its first showing.
@@ -1972,7 +1995,8 @@ public class Bbs757EfbBridgeTests
     // ---- the bridge itself: what a read pushes, and the AIRAC page's extras ------------------------------------------------
 
     /// <summary>A bridge whose loop never started, made with no synchronization context (its pushes raised inline), each push kept;
-    /// the memory read, sign-in state and flow are the test's.</summary>
+    /// the memory read, sign-in state and flow are the test's. Its window is shown (<see cref="Bbs757EfbBridge.SetActive"/>), as it is
+    /// whenever the bridge reads.</summary>
     private sealed class BridgeHarness : IDisposable
     {
         private readonly CoherentBbs757EfbClient _client = new(() => "");
@@ -2002,6 +2026,7 @@ public class Bbs757EfbBridgeTests
                 SynchronizationContext.SetSynchronizationContext(saved);
             }
             Bridge.StateUpdated += (_, e) => Pushes.Add(e.Data);
+            Bridge.SetActive(true);
         }
 
         public Bbs757EfbBridge Bridge { get; }

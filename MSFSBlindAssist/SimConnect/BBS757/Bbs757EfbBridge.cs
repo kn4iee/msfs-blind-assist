@@ -95,7 +95,8 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     private volatile bool _active;
     /// <summary>Counts the times the window hid (UI thread; read on the loop): a command sent in an earlier showing is dropped.</summary>
     private int _showing;
-    /// <summary>The showing the last read was taken in (on the loop): a read in a later one is the first of its showing.</summary>
+    /// <summary>The showing the last read the window showed was taken in (on the loop): a shown read in a later one is the first of its
+    /// showing.</summary>
     private int _readShowing;
     private bool _everRead;
     private string? _lastFingerprint;
@@ -133,8 +134,9 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// come to are dropped: they were made on a tablet the next showing may no longer show.</summary>
     public void SetActive(bool active)
     {
-        if (!active) Interlocked.Increment(ref _showing);
+        // Hidden first, then counted: a read that sees the new count also sees the window hidden (TakeRead reads them in that order).
         _active = active;
+        if (!active) Interlocked.Increment(ref _showing);
         _wake.Release();
     }
 
@@ -208,21 +210,23 @@ public sealed class Bbs757EfbBridge : IMcduBridge, IDisposable
     /// A read taken as what the tablet shows. What the read says by itself is said (<see cref="Bbs757EfbReadNews"/>: a question or
     /// BlueBird's notifications that were not in the read before, unless the pilot's own tap was under four seconds ago); and it is
     /// pushed when it says something the window does not show yet (its fingerprint changed), kept for the presses made on it. The first
-    /// read after the window was hidden starts what is said over (<see cref="Bbs757EfbReadNews.Reset"/>): what came while it was hidden
-    /// is listed, not said, and a question up is said once, as at the window's first showing, so every showing reads alike. The
-    /// AIRAC page has the Navigraph sign-in read again when it is newly shown or read because a read was asked for
-    /// (<paramref name="asked"/>). On the loop only; internal for the tests.
+    /// read the window shows after it was hidden starts what is said over (<see cref="Bbs757EfbReadNews.Reset"/>): what came while it was
+    /// hidden is listed, not said, and a question up is said once, as at the window's first showing, so every showing reads alike. A read
+    /// taken while the window is hidden (a press still reading after the pilot closed it) is heard by nobody: it says nothing and leaves
+    /// that start to the next showing's first read. The AIRAC page has the Navigraph sign-in read again when it is newly shown or read
+    /// because a read was asked for (<paramref name="asked"/>). On the loop only; internal for the tests.
     /// </summary>
     internal void TakeRead(Bbs757EfbScreenModel model, bool asked = false)
     {
         int showing = Volatile.Read(ref _showing);
-        if (showing != _readShowing)
+        bool shown = _active;   // after the count: SetActive(false) hides before it counts
+        if (shown && showing != _readShowing)
         {
             _readShowing = showing;
             _news.Reset();
         }
         _lastRead = model;
-        string? said = _news.After(model, Environment.TickCount64 - _lastOwnTapMs);
+        string? said = shown ? _news.After(model, Environment.TickCount64 - _lastOwnTapMs) : null;
         string fp = Bbs757EfbPress.Fingerprint(model);
         bool fresh = fp != _lastFingerprint;
         if (IsAiracPage(model.PageName) && (fresh || asked)) _signInStale = true;
