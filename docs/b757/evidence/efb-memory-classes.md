@@ -126,6 +126,12 @@ the defuel question's `fuel_icon` "./data/efb/icons/bbs_icon_fuel1.png"; PERF ca
   SIMBRIEF, the unit buttons); hidden buttons read +0x140 = 0. The rule holds among a side menu's or a tab row's siblings
   (empirical).
 - PERF calc rebuilds its tab buttons on a tab change (`tab_button_0` moved to a new object): read them fresh every time.
+- **The recapture of every page (2026-11-07, plan 21 Task 5)**, read through the walk: each page with a side menu marks exactly
+  one entry (Aircraft's, Navigation's and Settings' seven, six and six pages); the Checklist marks the checklist shown (BEFORE
+  START) and also its RESET ALL, which sits in the side column but is no checklist, and the content's RESET; Home and Systems mark
+  none; Maintenance (LANDING GEAR, HYDRAULIC), PERF calc (TAKE OFF), Weather (DEPARTURE, METAR) and Charts (MANUAL, TAXI) mark one
+  tab per row, Failures' tab row none; Cockpit presets' Battery and External power buttons read selected (their meaning is not
+  measured; the reader uses the state only for side menus and tab rows).
 
 ## The top bar: the overlay app, found by its class
 

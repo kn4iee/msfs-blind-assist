@@ -76,9 +76,10 @@ public class Bbs757EfbTreeScrubTests
     [Fact]
     public void The_committed_operating_fp_tree_holds_no_flight_plan_text()
     {
+        // Recaptured 2026-11-07 through the scrub: the Operating FP's text box holds the made-up plan alone.
         var value = Bbs757EfbTreeJson.Load("21-navigation-operating-fp").SelectMany(a => a.Controls).SelectMany(Flat)
             .Single(n => n.Name == "planning_operating_fp_value");
-        Assert.Equal("", value.Text);
+        Assert.Equal(("multiline", Bbs757EfbTreeScrub.MadeUpOperatingFp), (value.Kind, value.Text));
 
         static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
     }
@@ -276,7 +277,8 @@ public class Bbs757EfbTreeScrubTests
         string plain = Bbs757EfbTreeJson.Write(App(N("a", "x")));
         Assert.StartsWith("[", plain);
         Assert.Empty(Bbs757EfbTreeJson.ReadNotices(plain));
-        Assert.Empty(Bbs757EfbTreeJson.LoadNotices("13-aircraft-ground-services"));
+        Assert.Empty(Bbs757EfbTreeJson.LoadNotices("11-aircraft-fuel"));            // captured before plan 21: a root array
+        Assert.NotEmpty(Bbs757EfbTreeJson.LoadNotices("13-aircraft-ground-services")); // recaptured with BlueBird's notifications
         Assert.Empty(Bbs757EfbTreeJson.ReadNotices(Bbs757EfbTreeJson.Write(App(N("a", "x")), Array.Empty<Bbs757EfbNoticeRecord>())));
     }
 

@@ -184,25 +184,25 @@ public class Bbs757EfbElementsGrammarTests
 
     [Theory]
     [MemberData(nameof(Cultures))]
-    public void A_text_box_is_an_edit_box_holding_its_text(string culture)
+    public void A_text_box_is_a_line_with_what_it_holds(string culture)
     {
-        // Plan 21: a text box shows what it holds in an edit box, its value as the tablet writes it (a decimal point under every
-        // culture); nothing types into it until plan 22 (B757-23). A value box stays a line.
-        var press = Make(Bbs757EfbKind.Field, "Pressure (inHg)", "planning_perf_calc_press", "30.01") with { TextBox = true };
-        var page = Page("NAVIGATION", "PERF CALC", new[] { press, Make(Bbs757EfbKind.Field, "QUANTITY", "fuel_left_qty_box", "1539 Gal") });
+        // The coordinator's ruling of 2026-11-07: until plan 22 types into the tablet (B757-23), a text box is a line, its name and what
+        // it holds as the tablet writes it (a decimal point under every culture), as a value box is; an empty one is its name alone. No
+        // edit box, so no typing that goes nowhere and no "Set Pressure to ..." for nothing typed; nothing to press.
+        var page = Page("NAVIGATION", "PERF CALC", new[]
+        {
+            Make(Bbs757EfbKind.Field, "Pressure (inHg)", "planning_perf_calc_press", "30.01"), Make(Bbs757EfbKind.Field, "Wind", "planning_perf_calc_wind"),
+        });
 
         var b = TestCulture.Run(culture, () => Bbs757EfbElements.Build(page, null, NoExtras));
 
-        int at = IndexOf(b, "Pressure (inHg)");
-        Assert.Equal(("text", "30.01", "planning_perf_calc_press"), (F(b, at, "type"), F(b, at, "value"), F(b, at, "key")));
-        Assert.Equal(Bbs757EfbElements.ActionKind.Tap, b.Actions[int.Parse(F(b, at, "aidx"))].Kind);
-        Assert.Equal("", F(b, IndexOf(b, "Quantity: 1539 Gal"), "type"));
-        Assert.Contains("edit [30.01]  Pressure (inHg)\ntext  Quantity: 1539 Gal\n", Bbs757EfbListing.Of(b));
-
-        // Behind a question the page takes no tap: the box is a line with what it holds.
-        var dimmed = TestCulture.Run(culture, () => Bbs757EfbElements.Build(page with { Question = Defuel }, null, NoExtras));
-        int line = IndexOf(dimmed, "Pressure (inHg): 30.01");
-        Assert.Equal(("", "false"), (F(dimmed, line, "type"), F(dimmed, line, "clickable")));
+        foreach (string line in new[] { "Pressure (inHg): 30.01", "Wind" })
+        {
+            int at = IndexOf(b, line);
+            Assert.Equal(("", "false"), (F(b, at, "type"), F(b, at, "clickable")));
+            Assert.False(b.Actions.ContainsKey(int.Parse(F(b, at, "aidx"))));
+        }
+        Assert.Contains("text  Pressure (inHg): 30.01\ntext  Wind\n", Bbs757EfbListing.Of(b));
     }
 
     [Theory]

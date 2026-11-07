@@ -1,5 +1,6 @@
 title: Navigation, Map
-button  Day
+combo [IFR Low] {IFR Low|IFR High|VFR|World}  Map provider
+button  Night
 button  Map plus
 button  Map minus
 heading 2  Sections

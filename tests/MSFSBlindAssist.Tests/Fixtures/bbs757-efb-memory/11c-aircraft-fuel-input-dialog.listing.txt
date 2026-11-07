@@ -1,0 +1,27 @@
+title: Aircraft, Fuel
+heading 2  Left
+slider 35  Left (34%)
+text  Quantity: 752 Gal
+text  Weight: 5037 Lbs
+heading 2  Center
+slider 0  Center (0%)
+text  Quantity: 12 Gal
+text  Weight: 80 Lbs
+heading 2  Right
+slider 35  Right (34%)
+text  Quantity: 761 Gal
+text  Weight: 5095 Lbs
+heading 2  Total fuel
+slider 13  Total fuel (13%)
+text  Quantity: 1524 Gal
+text  Weight: 10212 Lbs
+button  Import from SIMBRIEF
+heading 2  Sections
+button  Cockpit presets
+button  Fuel (current page)
+button  Weight & balance
+button  Ground services
+button  Cabin & doors
+button  Maintenance
+button  Failures
+button  Home

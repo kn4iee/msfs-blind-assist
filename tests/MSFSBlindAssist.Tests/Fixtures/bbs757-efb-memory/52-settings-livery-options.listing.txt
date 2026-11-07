@@ -3,7 +3,15 @@ combo [Imperial] {Imperial|Metric}  Units
 combo [HDG] {HDG|TRK}  EHSI up reference
 combo [Option 1] {Option 1|Option 2}  VNAV takeoff behavior
 pre
-    MADEUP
+    VNAV IS NOT DEPENDENT on CLB thrust for engagement.
+    CLB thrust is selected automatically when VNAV engages. Arming VNAV on
+    the ground can therefore result in CLB thrust being selected at 400 ft RA.
+    
+    CAUTION: ARMING BEHAVIOR ON GROUND MAY RESULT IN UNDESIRED
+    THRUST SETTING during takeoff and initial climb segments.
+    
+    For both options, VNAV engagement requires at least 400 ft RA,
+    and acceleration follows FMC ACCEL HT.
 heading 2  Sections
 button  General
 button  Aircraft

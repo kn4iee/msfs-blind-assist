@@ -21,7 +21,7 @@ public enum Bbs757EfbKind
     Checkbox,
     /// <summary>A settings row with neither (a read-only value or a text field).</summary>
     Row,
-    /// <summary>A value box, or a text box (<see cref="Bbs757EfbItem.TextBox"/>): Text is its name, Value its value.</summary>
+    /// <summary>A value box, or a text box: Text is its name, Value its value (the text it holds).</summary>
     Field,
     /// <summary>A tab of a page; Selected is the current one.</summary>
     Tab,
@@ -102,9 +102,6 @@ public sealed record Bbs757EfbSlider(int TrackLeft, int TrackRight, int KnobX)
 /// for a control in no scrollbox, and an item built with none (the default) is read as the content area too
 /// (<see cref="Bbs757EfbPress.ClipOf"/>).
 /// <see cref="Entries"/> are a <see cref="Bbs757EfbKind.Choice"/>'s entries, in BlueBird's order, null for any other kind.
-/// <see cref="TextBox"/> marks a <see cref="Bbs757EfbKind.Field"/> that is one of BlueBird's text boxes, its Value the text it
-/// holds: the window shows it as an edit box, which nothing types into until plan 22 (B757-23); any other field is a value box, or
-/// an input the reader could not read, shown as a line.
 /// </summary>
 public sealed record Bbs757EfbItem(
     Bbs757EfbKind Kind,
@@ -122,8 +119,7 @@ public sealed record Bbs757EfbItem(
     string Label = "",
     string Name = "",
     Rectangle Clip = default,
-    IReadOnlyList<string>? Entries = null,
-    bool TextBox = false);
+    IReadOnlyList<string>? Entries = null);
 
 /// <summary>A parsed tablet page: which app and menu entry, then its elements in reading order.</summary>
 public sealed record Bbs757EfbScreenModel(

@@ -1,23 +1,19 @@
-title: Aircraft, Fuel
-heading 2  Left
+title: Aircraft
 slider 70  Left (70%)
-text  Quantity: 1539 Gal
-text  Weight: 10308 Lbs
-heading 2  Center
 slider 0  Center (0%)
-text  Quantity: 0 Gal
-text  Weight: 0 Lbs
-heading 2  Right
 slider 70  Right (70%)
 text  Quantity: 1539 Gal
 text  Weight: 10308 Lbs
-heading 2  Total fuel
+text  Quantity: 0 Gal
+text  Weight: 0 Lbs
 slider 27  Total fuel (27%)
 text  Quantity: 3077 Gal
 text  Weight: 20617 Lbs
+text  Quantity: 1539 Gal
+text  Weight: 10308 Lbs
 heading 2  Sections
 button  Cockpit presets
-button  Fuel (current page)
+button  Fuel
 button  Weight & balance
 button  Ground services
 button  Cabin & doors

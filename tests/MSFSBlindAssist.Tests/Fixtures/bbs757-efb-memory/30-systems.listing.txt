@@ -1,5 +1,6 @@
 title: Systems
 heading 2  Electrical
+combo [] {|24 - ELECTRICAL|28 - FUEL|29 - HYDRAULICS|36 - PNEUMATICS}  Select
 button  Elec zoom in
 slider 11  Elec zoom
 button  Elec zoom out

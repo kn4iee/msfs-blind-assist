@@ -49,7 +49,8 @@ text  Max ZFW: 0
 text  Max TOW: 0
 text  Max LW: 0
 heading 2  Route
-text  KSEA/16L DCT BTG DCT KPDX/28R
+pre
+    KSEA/16L DCT BTG DCT KPDX/28R
 heading 2  Sections
 button  ACARS dashboard (current page)
 button  Operating FP

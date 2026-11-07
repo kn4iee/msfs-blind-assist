@@ -3,7 +3,7 @@ button  Reset all
 checkbox not checked  Interactive
 button  Reset
 heading 2  Sections
-button  Before start
+button  Before start (current page)
 button  After start
 button  Before take off
 button  After take off

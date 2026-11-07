@@ -63,37 +63,6 @@ public class Bbs757EfbPageListingTests
             n with { Kind = n.Kind == "other" ? "image" : n.Kind, Children = n.Children.Select(AsImage).ToList() };
     }
 
-    /// <summary>BlueBird's selected state, set on the side-menu entry and the tabs the page rules' names make current, reads every
-    /// committed page as its listing: the selected state and the names agree wherever the names give one (plan 21, Task 5).</summary>
-    [Theory]
-    [MemberData(nameof(FixtureNames))]
-    public void Every_page_reads_as_its_listing_with_the_selected_state_where_its_names_put_it(string name)
-    {
-        string expected = File.ReadAllText(Path.Combine(FixtureDir(), name + ".listing.txt")).Replace("\r\n", "\n");
-        var apps = Bbs757EfbTreeJson.Load(name);
-        var model = Bbs757EfbModelReader.Read(apps)!;
-        static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
-        var buttons = apps.SelectMany(a => a.Controls).SelectMany(Flat).Where(n => n.Kind == "button").ToList();
-        // A menu entry is found by where it is tapped (the model gives it no control name), a tab by its name.
-        var current = model.Menu.Where(m => m.Selected)
-            .Select(m => buttons.Single(b => (int)(b.X + b.W / 2) == m.Hit.X && (int)(b.Y + b.H / 2) == m.Hit.Y).Name)
-            .Concat(model.Items.Where(i => i.Kind == Bbs757EfbKind.Tab && i.Selected).Select(i => i.Name)).ToArray();
-
-        var selected = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(apps, current));
-
-        Assert.Equal(expected, Bbs757EfbListing.Of(Bbs757EfbElements.Build(selected, null, Array.Empty<Bbs757EfbExtraElement>())));
-    }
-
-    /// <summary>The trees captured before plan 21 carry no selected state, so the page rules' names still give their section and current
-    /// tab (phase A's fallback): no committed tree has a node with it, or the fallback would not be what their listings pin.</summary>
-    [Theory]
-    [MemberData(nameof(FixtureNames))]
-    public void No_committed_tree_carries_the_selected_state(string name)
-    {
-        static IEnumerable<Bbs757EfbMemory.Node> Flat(Bbs757EfbMemory.Node n) => new[] { n }.Concat(n.Children.SelectMany(Flat));
-        Assert.DoesNotContain(Bbs757EfbTreeJson.Load(name).SelectMany(a => a.Controls).SelectMany(Flat), n => n.Selected is not null);
-    }
-
     private static Bbs757EfbMemory.Node Leaf(string kind, string name, string text, float x, float y, float w, float h) =>
         new(kind, name, text, x, y, w, h, 0, Array.Empty<Bbs757EfbMemory.Node>());
 

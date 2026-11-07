@@ -31,7 +31,7 @@ public class Bbs757EfbModelReaderTests
             new Bbs757EfbItem(Bbs757EfbKind.Field, "SimBrief ID", box, hit, true, "f:id", Value: "12345"),
             new Bbs757EfbItem(Bbs757EfbKind.Tab, "Fuel", box, hit, true, "tab:Fuel", Selected: true),
             new Bbs757EfbItem(Bbs757EfbKind.LongText, "one\ntwo", box, hit, false, "lt:1"),
-            new Bbs757EfbItem(Bbs757EfbKind.Field, "Airport", box, hit, true, "planning_perf_calc_airport_input", Value: "KSEA", TextBox: true),
+            new Bbs757EfbItem(Bbs757EfbKind.Field, "Airport", box, hit, true, "planning_perf_calc_airport_input", Value: "KSEA"),
             new Bbs757EfbItem(Bbs757EfbKind.Choice, "Runway", box, hit, true, "planning_perf_calc_runway_dropdown", Value: "RW07L",
                 Entries: new[] { "RW07L", "RW26" }),
         };
@@ -85,6 +85,10 @@ public class Bbs757EfbModelReaderTests
 
     // ---- a Settings page: side menu, section, scrollable, rows ----
 
+    /// <summary>A Settings page showing the section <paramref name="current"/> (its side-menu entry selected, as BlueBird marks it).</summary>
+    private static App SettingsApp(string current, string selectedScrollbox, int stackHeight, params Node[] rows) =>
+        Showing(SettingsApp(selectedScrollbox, stackHeight, rows), current);
+
     private static App SettingsApp(string selectedScrollbox, int stackHeight, params Node[] rows)
     {
         var menu = N("grid", "control_grid", "", 0, 82, 250, 966,
@@ -118,7 +122,7 @@ public class Bbs757EfbModelReaderTests
     [Fact]
     public void Callouts_names_its_section_marks_it_selected_and_scrolls()
     {
-        var app = SettingsApp("callouts_scrollbox", 1832,
+        var app = SettingsApp("CALLOUTS", "callouts_scrollbox", 1832,
             SettingRow("pilot_callout_v1", "toggle", "V1", "ON"),
             SettingRow("callout_35", "toggle", "35", "OFF"));
 
@@ -150,7 +154,7 @@ public class Bbs757EfbModelReaderTests
     [Fact]
     public void A_short_section_does_not_scroll()
     {
-        var app = SettingsApp("general_scrollbox", 420, SettingRow("x", "toggle", "A ROW", "ON"));
+        var app = SettingsApp("GENERAL", "general_scrollbox", 420, SettingRow("x", "toggle", "A ROW", "ON"));
         var model = Bbs757EfbModelReader.Read(new[] { app })!;
         Assert.Equal("GENERAL", model.Section);
         Assert.False(model.Scrollable);                          // stackbox 420 fits the 966 scrollbox
@@ -172,95 +176,87 @@ public class Bbs757EfbModelReaderTests
         });
     }
 
-    [Theory]
-    [InlineData("presets_label", "COCKPIT PRESETS", "Aircraft, Cockpit presets")]
-    [InlineData("fuel_left_tank", "FUEL", "Aircraft, Fuel")]
-    [InlineData("wb_pax_business_title", "WEIGHT & BALANCE", "Aircraft, Weight & balance")]
-    [InlineData("gnd_service_mode_box", "GROUND SERVICES", "Aircraft, Ground services")]
-    [InlineData("cabin_lighting_section", "CABIN & DOORS", "Aircraft, Cabin & doors")]
-    [InlineData("maintenance_layout_grid", "MAINTENANCE", "Aircraft, Maintenance")]
-    [InlineData("failures_canvas", "FAILURES", "Aircraft, Failures")]
-    public void Every_aircraft_section_is_named_by_its_table_entry(string name, string section, string pageName)
+    /// <summary>The page with BlueBird's selected state on its side menu (plan 21): the entry whose words are <paramref name="word"/>
+    /// current, the others not, as the memory walk reads a side menu.</summary>
+    private static App Showing(App app, string word)
     {
-        var page = PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"],
-            N("other", "canvas_aircraft", "", 250, 82, 1147, 966, N("other", name, "", 300, 200, 100, 30)));
+        Node Walk(Node n) => n with
+        {
+            Selected = n.Kind == "button" && n.X < Bbs757EfbScreen.MenuRight && n.Text.Length > 0 ? n.Text == word : n.Selected,
+            Children = n.Children.Select(Walk).ToList(),
+        };
+        return app with { Controls = app.Controls.Select(Walk).ToList() };
+    }
 
-        var model = Bbs757EfbModelReader.Read(new[] { page })!;
-
-        Assert.Equal(section, model.Section);
-        Assert.Equal(pageName, model.PageName);
-        Assert.Equal(section, Bbs757EfbPageRules.SectionFromTable("AIRCRAFT", new[] { "main_grid", name }));
+    public static TheoryData<string, string> EveryMenuEntry()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var app in new[] { "AIRCRAFT", "NAVIGATION", "SETTINGS" })
+            foreach (var word in Bbs757EfbVocabulary.Menus[app]) data.Add(app, word);
+        return data;
     }
 
     [Theory]
-    [InlineData("planning_acars_dashboard_canvas", "ACARS DASHBOARD")]
-    [InlineData("planning_operating_fp_canvas", "OPERATING FP")]
-    [InlineData("planning_weather_notam_canvas", "WEATHER & NOTAM")]
-    [InlineData("planning_charts_canvas", "CHARTS")]
-    [InlineData("map_canvas", "MAP")]
-    [InlineData("planning_perf_calc_canvas", "PERF CALC")]
-    public void Navigation_sections_are_named_by_their_canvas(string canvas, string section)
+    [MemberData(nameof(EveryMenuEntry))]
+    public void The_section_is_the_selected_menu_entry_whatever_the_page_draws(string app, string word)
     {
-        var page = PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"],
-            N("other", canvas, "", 250, 82, 1147, 966, N("other", "planning_x_card", "", 260, 90, 100, 30)));
+        // R1 from BlueBird's selected state (plan 21): the entry it marks is the section, and the only one marked, whatever names the
+        // page draws (a PERF calc canvas, a fuel_ name, which the page rules' names would have read as their own sections).
+        var page = Showing(PageApp(app, Bbs757EfbVocabulary.Menus[app],
+            N("other", "planning_perf_calc_canvas", "", 250, 82, 1147, 966, N("other", "fuel_left_tank", "", 300, 200, 100, 30))), word);
 
         var model = Bbs757EfbModelReader.Read(new[] { page })!;
 
-        Assert.Equal(section, model.Section);
-        Assert.Contains(model.Menu, m => m.Key == "menu:" + section && m.Selected);
+        Assert.Equal(word, model.Section);
+        Assert.Equal(Bbs757EfbVocabulary.Pretty(app) + ", " + Bbs757EfbVocabulary.Pretty(word), model.PageName);
+        Assert.Equal(new[] { "menu:" + word }, model.Menu.Where(m => m.Selected).Select(m => m.Key));
+    }
+
+    [Theory]
+    [InlineData("11-aircraft-fuel", "Aircraft")]
+    [InlineData("25-navigation-perf-calc", "Navigation")]
+    [InlineData("55-settings-airac-data", "Settings")]
+    [InlineData("55b-settings-airac-data-navigraph-signed-out", "Settings")]
+    public void A_read_with_no_selected_state_names_no_section(string fixture, string pageName)
+    {
+        // The four trees captured before plan 21 and not captured again (their states could not be made on 2026-11-07) carry no
+        // selected state: no section, no entry marked; the page rules' table of names that told a section went with plan 21.
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!;
+        Assert.Equal(("", pageName), (model.Section, model.PageName));
+        Assert.DoesNotContain(model.Menu, m => m.Selected);
+
+        var none = Bbs757EfbModelReader.Read(new[] { PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"], N("other", "maintenance_layout_grid", "", 250, 82, 1147, 966)) })!;
+        Assert.Equal("", none.Section);
     }
 
     [Fact]
-    public void Airac_data_is_named_by_its_grid()
+    public void Livery_options_and_aircraft_read_their_selected_entries()
     {
-        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("55-settings-airac-data"))!;
-        Assert.Equal("AIRAC DATA", model.Section);
-        Assert.Equal("Settings, AIRAC data", model.PageName);
-    }
-
-    [Fact]
-    public void Livery_options_is_not_read_as_aircraft()
-    {
-        // The real shape: no scrollbox, the rows in the stackbox Settings > Aircraft shares.
-        var app = PageApp("SETTINGS", Bbs757EfbVocabulary.Menus["SETTINGS"],
-            N("other", "aircraft_stackbox", "", 250, 94, 1147, 420,
-                SettingRow("weight_units_setting", "toggle", "WEIGHT UNITS", "KG")));
-
-        var model = Bbs757EfbModelReader.Read(new[] { app })!;
-
-        Assert.Equal("LIVERY OPTIONS", model.Section);
-        Assert.Equal("Settings, Livery options", model.PageName);
-        var real = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("52-settings-livery-options"))!;
-        Assert.Equal("Settings, Livery options", real.PageName);
-        var aircraft = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!;
-        Assert.Equal("Settings, Aircraft", aircraft.PageName);
+        // Settings > Livery options draws no scrollbox and no name of its own (its rows sit in the stackbox Settings > Aircraft shares):
+        // the recaptured pages name each by the entry BlueBird marks.
+        Assert.Equal("Settings, Livery options", Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("52-settings-livery-options"))!.PageName);
+        Assert.Equal("Settings, Aircraft", Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("51-settings-aircraft"))!.PageName);
     }
 
     [Fact]
     public void The_section_marks_its_menu_entry_current()
     {
-        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!;
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"))!;
         var current = Assert.Single(model.Menu, m => m.Selected);
         Assert.Equal("menu:FUEL", current.Key);
     }
 
     [Theory]
-    [InlineData("30-systems", "Systems")]
-    [InlineData("40-checklist", "Checklist")]
-    public void A_page_matching_no_section_reads_its_app_alone(string fixture, string pageName)
+    [InlineData("30-systems", "Systems", null)]
+    [InlineData("40-checklist", "Checklist", "menu:BEFORE START")]
+    public void A_page_matching_no_section_reads_its_app_alone(string fixture, string pageName, string? current)
     {
+        // Systems and Checklist have no sections. The checklist's side menu is its list of checklists: BlueBird marks the one shown
+        // (BEFORE START when recaptured), and the RESET ALL beside it, which reads selected too, is a button, never an entry.
         var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!;
         Assert.Equal("", model.Section);
         Assert.Equal(pageName, model.PageName);
-        Assert.DoesNotContain(model.Menu, m => m.Selected);
-    }
-
-    [Fact]
-    public void The_chrome_grids_never_name_a_section()
-    {
-        // main_grid must not read as the start of MAINTENANCE.
-        var page = PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"], N("other", "canvas_aircraft", "", 250, 82, 1147, 966));
-        Assert.Equal("", Bbs757EfbModelReader.Read(new[] { page })!.Section);
+        Assert.Equal(current is null ? Array.Empty<string>() : new[] { current }, model.Menu.Where(m => m.Selected).Select(m => m.Key));
     }
 
     // ---- R2: tab rows and the current tab ----
@@ -268,8 +264,10 @@ public class Bbs757EfbModelReaderTests
     private static Node Tab(string name, string text) => N("button", name, text, 300, 100, 120, 40);
 
     [Fact]
-    public void A_tab_row_marks_the_tab_its_content_names()
+    public void A_tab_row_marks_its_selected_tab()
     {
+        // R2 from BlueBird's selected state (plan 21), on the recaptured pages: Maintenance's gear page and hydraulic page, Weather's
+        // two rows (METAR, DEPARTURE) and Charts' two (MANUAL, TAXI).
         var landing = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"))!;
         var gearTabs = landing.Items.Where(i => i.Kind == Bbs757EfbKind.Tab).ToList();
         Assert.Equal(5, gearTabs.Count);
@@ -278,71 +276,44 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal("Landing gear", gearTabs[0].Text);
         Assert.Equal(new[] { "LANDING GEAR" }, gearTabs.Where(t => t.Selected).Select(t => t.Key["tab:maintenance_selector_grid|".Length..]));
 
-        var hydraulic = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("15b-aircraft-maintenance-hydraulic"))!;
-        Assert.Equal(new[] { "HYDRAULIC" },
-            hydraulic.Items.Where(i => i.Kind == Bbs757EfbKind.Tab && i.Selected).Select(t => t.Key["tab:maintenance_selector_grid|".Length..]));
+        string[] Current(string fixture) =>
+            Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load(fixture))!.Items.Where(i => i.Kind == Bbs757EfbKind.Tab && i.Selected).Select(t => t.Name).ToArray();
+        Assert.Equal(new[] { "maintenance_hydraulic_tab_button" }, Current("15b-aircraft-maintenance-hydraulic"));
+        Assert.Equal(new[] { "planning_weather_primary_selector_button_0", "planning_weather_primary_tab_button_0" }, Current("22-navigation-weather"));
+        Assert.Equal(new[] { "planning_charts_source_button_2", "planning_charts_type_button_2" }, Current("23-navigation-charts"));
     }
 
     [Fact]
-    public void A_tab_row_with_no_match_marks_none()
+    public void A_tab_row_with_no_tab_selected_marks_none()
     {
         var page = PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"],
             N("other", "planning_perf_calc_canvas", "", 250, 82, 1147, 966,
                 N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("x_tab_button_0", "TAKE OFF"), Tab("x_tab_button_1", "LANDING")),
-                N("label", "some_label", "NOTHING HERE", 300, 200, 100, 30)));
+                N("other", "x_take_off_panel", "", 300, 200, 100, 30)));
 
         var tabs = Bbs757EfbModelReader.Read(new[] { page })!.Items.Where(i => i.Kind == Bbs757EfbKind.Tab).ToList();
 
         Assert.Equal(2, tabs.Count);
-        Assert.DoesNotContain(tabs, t => t.Selected);
+        Assert.DoesNotContain(tabs, t => t.Selected);   // a panel named for a tab no longer marks it
     }
 
     [Fact]
-    public void A_tab_row_with_two_matching_panels_marks_none()
+    public void A_tab_row_with_two_tabs_selected_marks_none()
     {
-        var page = PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"],
-            N("other", "planning_perf_calc_canvas", "", 250, 82, 1147, 966,
-                N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("x_tab_button_0", "TAKE OFF"), Tab("x_tab_button_1", "LANDING")),
-                N("other", "x_take_off_panel", "", 300, 200, 100, 30), N("other", "x_landing_panel", "", 300, 240, 100, 30)));
-
-        Assert.DoesNotContain(Bbs757EfbModelReader.Read(new[] { page })!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
+        // A torn read: both of PERF calc's tabs selected. Which one shows is not known, so neither is current.
+        var both = Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated"),
+            "planning_perf_calc_tab_button_0", "planning_perf_calc_tab_button_1");
+        Assert.DoesNotContain(Bbs757EfbModelReader.Read(both)!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
     }
 
     [Fact]
-    public void A_short_tab_word_does_not_match_inside_another_word()
+    public void A_tab_row_BlueBird_keeps_no_selected_state_for_marks_none()
     {
-        var page = PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"],
-            N("other", "maintenance_layout_grid", "", 250, 82, 1147, 966,
-                N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("m_tab_button_0", "APU"), Tab("m_tab_button_1", "ON")),
-                N("other", "maintenance_captured_conditions_panel", "", 300, 200, 100, 30)));
-        Assert.DoesNotContain(Bbs757EfbModelReader.Read(new[] { page })!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
-
-        var whole = PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"],
-            N("other", "maintenance_layout_grid", "", 250, 82, 1147, 966,
-                N("grid", "tabs_grid", "", 260, 90, 300, 40, Tab("m_tab_button_0", "APU"), Tab("m_tab_button_1", "ON")),
-                N("other", "maintenance_apu_panel", "", 300, 200, 100, 30)));
-        var apu = Assert.Single(Bbs757EfbModelReader.Read(new[] { whole })!.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
-        Assert.Equal("m_tab_button_0", apu.Name);
-    }
-
-    [Fact]
-    public void A_tab_row_is_not_marked_from_a_text()
-    {
-        // The Failures shape: the footer button "RANDOM FAILURES: OFF" holds the RANDOM tab's word.
+        // Failures' tabs read no selected state in the recapture (2026-11-07), so none is current; nor does the footer button
+        // "RANDOM FAILURES: OFF", which holds the RANDOM tab's word, mark one.
         var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("16-aircraft-failures"))!;
         var tabs = model.Items.Where(i => i.Kind == Bbs757EfbKind.Tab).ToList();
         Assert.Equal(3, tabs.Count);
-        Assert.DoesNotContain(tabs, t => t.Selected);
-    }
-
-    [Fact]
-    public void A_tab_row_is_not_marked_from_a_canvas_name()
-    {
-        // The Weather shape: planning_weather_notam_canvas holds the NOTAM tab's word.
-        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("22-navigation-weather"))!;
-        var tabs = model.Items.Where(i => i.Kind == Bbs757EfbKind.Tab).ToList();
-        Assert.Contains(tabs, t => t.Name == "planning_weather_primary_tab_button_3");
-        Assert.Contains(tabs, t => t.Name == "planning_weather_primary_selector_button_0");
         Assert.DoesNotContain(tabs, t => t.Selected);
     }
 
@@ -412,6 +383,10 @@ public class Bbs757EfbModelReaderTests
 
     private static IReadOnlyList<Bbs757EfbItem> ItemsOf(params Node[] content) =>
         Bbs757EfbModelReader.Read(new[] { PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"], content) })!.Items;
+
+    /// <summary>The items of an Aircraft page showing <paramref name="section"/> (its entry selected), for the orders a section gives (R9).</summary>
+    private static IReadOnlyList<Bbs757EfbItem> ItemsOn(string section, params Node[] content) =>
+        Bbs757EfbModelReader.Read(new[] { Showing(PageApp("AIRCRAFT", Bbs757EfbVocabulary.Menus["AIRCRAFT"], content), section) })!.Items;
 
     [Fact]
     public void A_label_and_value_named_alike_are_one_line()
@@ -572,11 +547,10 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal(Bbs757EfbKind.LongText, Assert.Single(broken).Kind);
         Assert.Equal("first line\nsecond line", broken[0].Text);
 
-        // Operating FP's plan is a long text when it holds one; the committed tree's is empty, as captured (M5), and reads as nothing.
+        // Operating FP's plan is a long text when it holds one; an empty one reads as nothing (M5).
         var plan = ItemsOf(N("other", "planning_operating_fp_value", "KSEA DCT BTG DCT KPDX", 324, 152, 1000, 25761));
         Assert.Equal(Bbs757EfbKind.LongText, Assert.Single(plan).Kind);
-        var fp = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("21-navigation-operating-fp"))!.Items;
-        Assert.DoesNotContain(fp, i => i.Name == "planning_operating_fp_value");
+        Assert.Empty(ItemsOf(N("multiline", "planning_operating_fp_value", "", 324, 152, 1000, 25761)));
     }
 
     [Fact]
@@ -890,17 +864,6 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal((Bbs757EfbKind.Text, "------"), (line.Kind, line.Text));
     }
 
-    [Theory]
-    [InlineData("ac_card", "")]           // two letters start ACARS DASHBOARD, but name nothing
-    [InlineData("a_card", "")]
-    [InlineData("per_card", "PERF CALC")] // three letters do
-    [InlineData("map_card", "MAP")]
-    public void A_section_stem_needs_three_letters_to_start_a_menu_word(string container, string section)
-    {
-        var page = PageApp("NAVIGATION", Bbs757EfbVocabulary.Menus["NAVIGATION"], N("other", container, "", 260, 90, 100, 30));
-        Assert.Equal(section, Bbs757EfbModelReader.Read(new[] { page })!.Section);
-    }
-
     [Fact]
     public void A_label_far_from_a_button_names_nothing()
     {
@@ -963,7 +926,7 @@ public class Bbs757EfbModelReaderTests
         var ceiling = Assert.Single(cabin);
         Assert.Equal((Bbs757EfbKind.Slider, "CEILING", "OFF", 1140), (ceiling.Kind, ceiling.Text, ceiling.Value, ceiling.Slider!.KnobX));
 
-        var fuel = ItemsOf(Lbl("fuel_left_slider_title", "LEFT", 453, 723, 48), N("slider", "fuel_slider_left", "", 377, 755, 200, 20),
+        var fuel = ItemsOn("FUEL", Lbl("fuel_left_slider_title", "LEFT", 453, 723, 48), N("slider", "fuel_slider_left", "", 377, 755, 200, 20),
             Lbl("fuel_left_tank_label", "70%", 474, 410, 49));
         var slider = Assert.Single(fuel, i => i.Kind == Bbs757EfbKind.Slider);
         Assert.Equal(("LEFT", "70%"), (slider.Text, slider.Value));
@@ -971,7 +934,7 @@ public class Bbs757EfbModelReaderTests
         Assert.Equal(2, fuel.Count);                                     // the title stays its heading; the tank's percent is the slider's
         Assert.Equal(Bbs757EfbKind.Heading, fuel[0].Kind);
 
-        var total = ItemsOf(Lbl("total_fuel_label", "TOTAL FUEL", 542, 884, 147), N("slider", "fuel_slider_total", "", 722, 889, 200, 20),
+        var total = ItemsOn("FUEL", Lbl("total_fuel_label", "TOTAL FUEL", 542, 884, 147), N("slider", "fuel_slider_total", "", 722, 889, 200, 20),
             Lbl("total_fuel_perc_label", "27%", 942, 884, 49));
         var totalSlider = Assert.Single(total, i => i.Kind == Bbs757EfbKind.Slider);
         Assert.Equal(("TOTAL FUEL", "27%", 776), (totalSlider.Text, totalSlider.Value, totalSlider.Slider!.KnobX));
@@ -1189,47 +1152,49 @@ public class Bbs757EfbModelReaderTests
     [Fact]
     public void A_text_box_is_a_field_named_by_its_title()
     {
-        // PERF calc's airport box (plan 21, measured 2026-11-07): BlueBird's text box class holding the airport the pilot typed, named by
-        // the title naming it as plan 20 named the input it could not read. The window shows it as an edit box holding the text.
-        var apps = Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"), "planning_perf_calc_airport_input", "textbox", "KSEA");
+        // PERF calc's airport box (plan 21, recaptured 2026-11-07, the scrub's KSEA in it): BlueBird's text box class, named by the title
+        // naming it as plan 20 named the input it could not read. A line with what it holds, as the tablet writes it, not an edit box:
+        // nothing types into the tablet until plan 22 (B757-23), so an edit box would take typing that goes nowhere.
+        var apps = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
 
         var items = Bbs757EfbModelReader.Read(apps)!.Items;
 
         var airport = Assert.Single(items, i => i.Name == "planning_perf_calc_airport_input");
-        Assert.Equal((Bbs757EfbKind.Field, "Airport", "KSEA", true, "planning_perf_calc_airport_input"),
-            (airport.Kind, airport.Text, airport.Value, airport.TextBox, airport.Key));
+        Assert.Equal((Bbs757EfbKind.Field, "Airport", "KSEA", "planning_perf_calc_airport_input"), (airport.Kind, airport.Text, airport.Value, airport.Key));
         Assert.DoesNotContain(items, i => i.Name == "planning_perf_calc_airport_title");   // the title is its name, not a heading
-        Assert.Contains("button  Landing\nedit [KSEA]  Airport\ntext  Runway\n", ListingOf(apps));
+        Assert.Contains("button  Landing\ntext  Airport: KSEA\n", ListingOf(apps));
+        Assert.DoesNotContain("edit [", ListingOf(apps));
 
-        // An empty one is an empty edit box; the box the trees captured before plan 21 could not read stays the name alone.
-        Assert.Contains("edit []  Airport\n", ListingOf(Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"),
-            "planning_perf_calc_airport_input", "textbox", "")));
+        // An empty one reads its name alone; so does the box the trees captured before plan 21 could not read.
+        Assert.Contains("button  Landing\ntext  Airport\n", ListingOf(Bbs757EfbTreeJson.WithText(apps, "planning_perf_calc_airport_input", "")));
         var unread = Assert.Single(Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"))!.Items,
             i => i.Name == "planning_perf_calc_airport_input");
-        Assert.Equal((Bbs757EfbKind.Field, "", false), (unread.Kind, unread.Value, unread.TextBox));
+        Assert.Equal((Bbs757EfbKind.Field, ""), (unread.Kind, unread.Value));
     }
 
     [Fact]
-    public void A_text_box_no_title_names_is_named_by_its_label_or_its_row()
+    public void A_text_box_no_title_names_is_named_by_its_row_or_its_own_name()
     {
-        // Charts' request box: the label sharing its name (R5) names it, and reads no line of its own. The AIRAC page's code boxes
-        // (empty when measured, 2026-11-07): their settings row's label, which stays the line it makes with the saved value.
-        var charts = Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.Load("23-navigation-charts"), "planning_charts_request_input", "textbox", "KIGM");
-        Assert.Contains("button  Manual\ntext  KINGMAN, UNITED STATES\nedit [KIGM]  Kingman\nbutton  STAR\n", ListingOf(charts));
+        // Charts' request box (recaptured 2026-11-07): no title names it, and the label beside it sharing its name,
+        // planning_charts_request_name_label "KINGMAN", is the requested airport's name, a value, not the box's: a text box shows words of
+        // its own, so R5's labels name none (the coordinator's ruling of 2026-11-07). Its own name's words name it; KINGMAN reads as itself.
+        string charts = ListingOf(Bbs757EfbTreeJson.Load("23-navigation-charts"));
+        Assert.Contains("button  Manual (current)\ntext  KINGMAN\ntext  KINGMAN, UNITED STATES\ntext  Planning charts request: KIGM\nbutton  STAR\n", charts);
 
+        // The AIRAC page's code boxes (empty when measured, 2026-11-07; the page was not captured again): their settings row's label,
+        // which stays the line it makes with the saved value; empty, the box reads its name alone.
         var airac = Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.Load("55-settings-airac-data"),
             "hoppie_logon_code_textbox", "textbox", ""), "sayintentions_acars_key_textbox", "textbox", "");
-        Assert.Contains("text  Hoppie logon code: ------\nedit []  Hoppie logon code\n" +
-            "text  Sayintentions ACARS key: ------\nedit []  Sayintentions ACARS key\nbutton  Sayintentions ACARS key: Fetch key\n", ListingOf(airac));
+        Assert.Contains("text  Hoppie logon code: ------\ntext  Hoppie logon code\n" +
+            "text  Sayintentions ACARS key: ------\ntext  Sayintentions ACARS key\nbutton  Sayintentions ACARS key: Fetch key\n", ListingOf(airac));
     }
 
     [Fact]
     public void The_operating_fp_is_long_text()
     {
-        // The Operating FP is BlueBird's multi-line text box (91,869 characters measured, 2026-11-07; the scrub's few made-up lines here):
-        // one long text, every line of it in the window's pre block, under its title.
-        var apps = Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.Load("21-navigation-operating-fp"), "planning_operating_fp_value", "multiline",
-            Bbs757EfbTreeScrub.MadeUpOperatingFp);
+        // The Operating FP is BlueBird's multi-line text box (91,869 characters measured, 2026-11-07; the recapture holds the scrub's few
+        // made-up lines): one long text, every line of it in the window's pre block, under its title.
+        var apps = Bbs757EfbTreeJson.Load("21-navigation-operating-fp");
 
         var fp = Assert.Single(Bbs757EfbModelReader.Read(apps)!.Items, i => i.Name == "planning_operating_fp_value");
 
@@ -1238,104 +1203,101 @@ public class Bbs757EfbModelReaderTests
             ListingOf(apps));
 
         // A multi-line box of one short line (the ACARS route, 38 px tall) is long text too: its class says so, not its height.
-        var acars = Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.Load("20-navigation-acars-dashboard"), "planning_acars_route_value", "multiline",
-            "KSEA/16L DCT BTG DCT KPDX/28R");
-        Assert.Contains("heading 2  Route\npre\n    KSEA/16L DCT BTG DCT KPDX/28R\n", ListingOf(acars));
+        Assert.Contains("heading 2  Route\npre\n    KSEA/16L DCT BTG DCT KPDX/28R\n", ListingOf(Bbs757EfbTreeJson.Load("20-navigation-acars-dashboard")));
     }
 
     [Fact]
     public void A_drop_down_is_a_choice()
     {
-        // PERF calc's runway drop-down as measured at KPHX (2026-11-07): its face shows RW07L, the first of its six entries.
-        var apps = Bbs757EfbTreeJson.AsDropDown(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"), "planning_perf_calc_runway_dropdown", "RW07L",
-            "RW07L", "RW07R", "RW08", "RW25L", "RW25R", "RW26");
+        // PERF calc's runway drop-down (recaptured 2026-11-07): its face shows RW07L, the first of its six entries.
+        var apps = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
 
         var runway = Assert.Single(Bbs757EfbModelReader.Read(apps)!.Items, i => i.Name == "planning_perf_calc_runway_dropdown");
 
         Assert.Equal((Bbs757EfbKind.Choice, "Runway", "RW07L", "planning_perf_calc_runway_dropdown"), (runway.Kind, runway.Text, runway.Value, runway.Key));
         Assert.Equal(new[] { "RW07L", "RW07R", "RW08", "RW25L", "RW25R", "RW26" }, runway.Entries);
-        Assert.Contains("text  Airport\ncombo [RW07L] {RW07L|RW07R|RW08|RW25L|RW25R|RW26}  Runway\ntext  Length Type\n", ListingOf(apps));
+        Assert.Contains("text  Airport: KSEA\ncombo [RW07L] {RW07L|RW07R|RW08|RW25L|RW25R|RW26}  Runway\ncombo [FULL] {ASDA|FULL|LDA|Shorten Length|TODA|TORA}  Length Type\n",
+            ListingOf(apps));
 
-        // One no title or label names: by its own name's words, as a slider is (Map's provider).
-        var map = Bbs757EfbTreeJson.AsDropDown(Bbs757EfbTreeJson.Load("24-navigation-map"), "map_provider_dropdown", "IFR Low",
-            "IFR Low", "IFR High", "VFR", "World");
-        Assert.StartsWith("title: Navigation, Map\ncombo [IFR Low] {IFR Low|IFR High|VFR|World}  Map provider\nbutton  Day\n", ListingOf(map));
-
-        // Charts' drop-down: the airport's detail label lies 10.5 px above it and 10 px left of the request box, which waits for a name
-        // too (R5), so the nearer box keeps it from the drop-down, which takes its own name's words; the label stays a line.
-        var charts = Bbs757EfbTreeJson.AsDropDown(Bbs757EfbTreeJson.WithKind(Bbs757EfbTreeJson.Load("23-navigation-charts"),
-            "planning_charts_request_input", "textbox", "KIGM"), "planning_charts_dropdown", "AP  AIRPORT, AIRPORT INFO  KIGM109",
-            "AP  AIRPORT, AIRPORT INFO  KIGM109", "AA  AIRPORT");
-        string listing = ListingOf(charts);
-        Assert.Contains("text  KINGMAN, UNITED STATES\n", listing);
-        Assert.Contains("combo [AP  AIRPORT, AIRPORT INFO  KIGM109] {AP  AIRPORT, AIRPORT INFO  KIGM109|AA  AIRPORT}  Planning charts\n", listing);
+        // One no title or row names, whose face shows an entry: by its own name's words, as a slider is (Map's provider, Charts' list).
+        Assert.StartsWith("title: Navigation, Map\ncombo [IFR Low] {IFR Low|IFR High|VFR|World}  Map provider\nbutton  Night\n",
+            ListingOf(Bbs757EfbTreeJson.Load("24-navigation-map")));
+        Assert.Contains("combo [AP  AIRPORT, AIRPORT INFO  KIGM109] {AP  AIRPORT, AIRPORT INFO  KIGM109|AA  AIRPORT INFO (CONTD), TAKE-OFF MNMS  KIGM109A}  Planning charts\n",
+            ListingOf(Bbs757EfbTreeJson.Load("23-navigation-charts")));
     }
 
     [Fact]
     public void A_drop_down_with_no_current_entry_has_no_value()
     {
-        // Systems' page menu always shows SELECT, none of its entries (measured 2026-11-07): no value, and the window's list starts with
-        // an empty choice in its place, so it never reads an entry as the chosen one. The page's title beside it in the header
-        // (selected_page_title_label, the system shown) names it, as a title names the one input beside it in its container.
-        var apps = Bbs757EfbTreeJson.AsDropDown(Bbs757EfbTreeJson.Load("30-systems"), "pb_menu1", "SELECT",
-            "24 - ELECTRICAL", "28 - FUEL", "29 - HYDRAULICS", "36 - PNEUMATICS");
+        // Systems' page menu (recaptured 2026-11-07) always shows SELECT, none of its entries: no value, and the window's list starts with
+        // an empty choice in its place, so it never reads an entry as the chosen one. Its face is a prompt, and nothing else names it,
+        // so the face's word does ("Select"). The system shown, selected_page_title_label, stays the page's heading: a title names an
+        // input only in a container holding the two alone (PERF calc's field canvases), and the header holds four controls (the
+        // coordinator's ruling of 2026-11-07).
+        var apps = Bbs757EfbTreeJson.Load("30-systems");
 
         var menu = Assert.Single(Bbs757EfbModelReader.Read(apps)!.Items, i => i.Name == "pb_menu1");
 
-        Assert.Equal((Bbs757EfbKind.Choice, ""), (menu.Kind, menu.Value));
+        Assert.Equal((Bbs757EfbKind.Choice, "SELECT", ""), (menu.Kind, menu.Text, menu.Value));
         Assert.Equal(new[] { "24 - ELECTRICAL", "28 - FUEL", "29 - HYDRAULICS", "36 - PNEUMATICS" }, menu.Entries);
-        Assert.StartsWith("title: Systems\ncombo [] {|24 - ELECTRICAL|28 - FUEL|29 - HYDRAULICS|36 - PNEUMATICS}  Electrical\nbutton  Elec zoom in\n",
+        Assert.StartsWith("title: Systems\nheading 2  Electrical\ncombo [] {|24 - ELECTRICAL|28 - FUEL|29 - HYDRAULICS|36 - PNEUMATICS}  Select\nbutton  Elec zoom in\n",
             ListingOf(apps));
+
+        // A face showing an entry is its value, never its name: one no title names takes its own name's words.
+        var shown = Bbs757EfbTreeJson.AsDropDown(apps, "pb_menu1", "28 - FUEL", "24 - ELECTRICAL", "28 - FUEL");
+        Assert.Contains("combo [28 - FUEL] {24 - ELECTRICAL|28 - FUEL}  PB MENU1\n", ListingOf(shown));
     }
 
     [Fact]
     public void The_selected_menu_entry_is_the_section()
     {
         // BlueBird's selected state (plan 21, measured 2026-11-07 on three side menus): the entry it marks current is the section and
-        // the "(current page)", whatever the page's names say.
-        var fuel = Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("11-aircraft-fuel"), "btn_maintenance");
+        // the "(current page)", whatever the page's names say (the Fuel page with MAINTENANCE marked reads Maintenance).
+        var fuel = Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("11b-aircraft-fuel-simbrief-import"), "btn_maintenance");
         var model = Bbs757EfbModelReader.Read(fuel)!;
         Assert.Equal("MAINTENANCE", model.Section);
         Assert.Equal(new[] { "menu:MAINTENANCE" }, model.Menu.Where(m => m.Selected).Select(m => m.Key));
         Assert.Contains("button  Maintenance (current page)\n", ListingOf(fuel));
 
         // Livery options draws its rows in aircraft_stackbox, the stackbox Settings > Aircraft shares, and no name of its own: its
-        // selected entry names it, and an entry other than the page rules' table's wins over the table.
+        // selected entry names it, on its own page or another's.
         Assert.Equal("Settings, Livery options",
             Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("51-settings-aircraft"), "btn_livery"))!.PageName);
-        Assert.Equal("Settings, Livery options",
-            Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("52-settings-livery-options"), "btn_livery"))!.PageName);
         Assert.Equal("Settings, General",
             Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("52-settings-livery-options"), "btn_general"))!.PageName);
 
-        // A read with the selected state but no entry selected names no section; a read with none at all (every tree captured before
-        // plan 21) is named as before.
-        var none = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"), "maintenance_apu_tab_button"))!;
-        Assert.Equal(("", "Aircraft"), (none.Section, none.PageName));
-        Assert.DoesNotContain(none.Menu, m => m.Selected);
-        Assert.Equal("FUEL", Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!.Section);
+        // Two entries marked (a torn read): which page shows is not known, so no section and none marked.
+        var torn = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"), "btn_maintenance", "btn_fuel"))!;
+        Assert.Equal(("", "Aircraft"), (torn.Section, torn.PageName));
+        Assert.DoesNotContain(torn.Menu, m => m.Selected);
     }
 
     [Fact]
     public void The_selected_tab_is_current()
     {
         // PERF calc's TAKE OFF and LANDING have no panel named for either, so no tab read as current before plan 21: BlueBird's selected
-        // state marks the one shown.
-        var perf = Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("25-navigation-perf-calc"), "planning_perf_calc_tab_button_1",
-            "btn_navigation_perf_calc");
+        // state marks the one shown (TAKE OFF when recaptured; LANDING when it marks that one).
+        var perf = Bbs757EfbTreeJson.Load("25b-navigation-perf-calc-calculated");
+        Assert.StartsWith("title: Navigation, PERF calc\nbutton  Take off (current)\nbutton  Landing\n", ListingOf(perf));
+        var landing = Bbs757EfbTreeJson.WithSelected(perf, "planning_perf_calc_tab_button_1");
         Assert.Equal(new[] { "planning_perf_calc_tab_button_1" },
-            Bbs757EfbModelReader.Read(perf)!.Items.Where(i => i.Kind == Bbs757EfbKind.Tab && i.Selected).Select(i => i.Name));
-        Assert.StartsWith("title: Navigation, PERF calc\nbutton  Take off\nbutton  Landing (current)\n", ListingOf(perf));
+            Bbs757EfbModelReader.Read(landing)!.Items.Where(i => i.Kind == Bbs757EfbKind.Tab && i.Selected).Select(i => i.Name));
+        Assert.StartsWith("title: Navigation, PERF calc\nbutton  Take off\nbutton  Landing (current)\n", ListingOf(landing));
 
         // The selected state wins over the content's names: the landing gear page with HYDRAULIC selected reads HYDRAULIC current.
         var hydraulic = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"),
-            "maintenance_hydraulic_tab_button", "btn_maintenance"))!;
+            "maintenance_hydraulic_tab_button"))!;
         Assert.Equal(new[] { "maintenance_hydraulic_tab_button" },
             hydraulic.Items.Where(i => i.Kind == Bbs757EfbKind.Tab && i.Selected).Select(i => i.Name));
+    }
 
-        // A read with the selected state and none of a row's tabs selected marks none of them.
-        var none = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("15-aircraft-maintenance"), "btn_maintenance"))!;
-        Assert.DoesNotContain(none.Items, i => i.Kind == Bbs757EfbKind.Tab && i.Selected);
+    [Fact]
+    public void A_moving_door_reads_moving_on_the_live_capture()
+    {
+        // Ruling 4 of 2026-11-07: the AFT cargo door captured while it moved (its button "MOVING") reads under its name, in its place.
+        string listing = ListingOf(Bbs757EfbTreeJson.Load("14b-aircraft-cabin-doors-door-moving"));
+        Assert.Contains("button  FWD cargo: Closed\nbutton  AFT cargo: Moving\nbutton  Close all\n", listing);
+        Assert.DoesNotContain("AFT CARGO", listing);
     }
 
     [Fact]
@@ -1369,7 +1331,9 @@ public class Bbs757EfbModelReaderTests
     [Fact]
     public void Fuel_reads_tank_by_tank()
     {
-        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("11-aircraft-fuel"))!.Items;
+        // The Fuel page captured before plan 21 (no selected state, kept for its knob-less sliders), with FUEL marked as a live read
+        // marks it: the section gives the order.
+        var items = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("11-aircraft-fuel"), "btn_fuel"))!.Items;
 
         Assert.Equal(new[]
         {

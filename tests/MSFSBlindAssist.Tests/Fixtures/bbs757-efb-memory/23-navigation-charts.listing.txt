@@ -1,12 +1,13 @@
 title: Navigation, Charts
 button  Departure
 button  Arrival
-button  Manual
+button  Manual (current)
 text  KINGMAN
 text  KINGMAN, UNITED STATES
+text  Planning charts request: KIGM
 button  STAR
 button  App
-button  Taxi
+button  Taxi (current)
 button  SID
 button  Ref
 button  Night
@@ -14,6 +15,7 @@ button  Planning charts zoom out
 slider 0  Planning charts zoom
 button  Planning charts zoom in
 button  Pin
+combo [AP  AIRPORT, AIRPORT INFO  KIGM109] {AP  AIRPORT, AIRPORT INFO  KIGM109|AA  AIRPORT INFO (CONTD), TAKE-OFF MNMS  KIGM109A}  Planning charts
 heading 2  Sections
 button  ACARS dashboard
 button  Operating FP

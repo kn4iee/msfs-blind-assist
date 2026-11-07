@@ -1,25 +1,25 @@
 title: Navigation, Weather & NOTAM
 heading 2  Departure weather
-button  Departure
+button  Departure (current)
 button  Arrival
 button  Manual
 button  Refresh
-text  Airport: KSEA/SEA
-SEATTLE-TACOMA INTL
-text  Elevation: 432 FT
-text  Local time: 9:22 AM (UTC-8)
+text  Airport: KPHX/PHX
+PHOENIX SKY HARBOR INTL
+text  Elevation: 1135 FT
+text  Local time: 10:04 PM (UTC-7)
 text  Current WX: VFR
-text  METAR ceiling: 9999 FT
+text  METAR ceiling: 9000 FT
 text  METAR visibility: 9999 M
 text  Transition ALT/LVL: 18000 / 18000
-button  METAR
+button  METAR (current)
 button  TAF
 button  ATIS
 button  NOTAM
 pre
-    Observed -> 2026-11-06 | 11:53:00 Z
+    Observed -> 2026-11-06 | 20:51:00 Z
     
-    KSEA 061153Z 15006KT 10SM SCT085 OVC100 10/07 A3010 RMK AO2 SLP200 VIRGA T01000067 10111 20094 58011
+    KPHX 062051Z 25006KT 10SM SCT075 BKN090 BKN140 24/08 A2991 RMK AO2 SLP117 CB DSNT N T02440083 56022 $
 heading 2  Sections
 button  ACARS dashboard
 button  Operating FP

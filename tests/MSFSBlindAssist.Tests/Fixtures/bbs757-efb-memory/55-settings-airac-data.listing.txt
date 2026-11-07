@@ -1,4 +1,4 @@
-title: Settings, AIRAC data
+title: Settings
 text  SIMBRIEF ID number: 123456
 button  SIMBRIEF ID number: Logout
 text  Hoppie logon code: ------
@@ -14,5 +14,5 @@ button  Aircraft
 button  Livery options
 button  Callouts
 button  Cabin audio
-button  AIRAC data (current page)
+button  AIRAC data
 button  Home

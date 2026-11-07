@@ -14,11 +14,10 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// Settings rows (a grid holding a toggle or slider with its label and value) become one Toggle or Slider item carrying
 /// the value the tablet shows and the switch state its value label gives. BlueBird's text boxes become fields holding their text,
 /// its multi-line text boxes long texts and its drop-downs choices (plan 21). The current section, also the selected side-menu entry,
-/// and a tab row's current tab are the ones BlueBird's selected state marks (<see cref="Bbs757EfbMemory.Node.Selected"/>); a read that
-/// carries no selected state (a tree captured before plan 21) takes the section from the page rules' table of distinctive names,
-/// else from the name of a content container (<c>callouts_scrollbox</c> → CALLOUTS, <see cref="SectionOf"/>), and the current tab
-/// from the content panel its words name. Whether the page scrolls, and its viewport, come from the one scrollbox holding a taller
-/// stackbox, and each item is clipped to the scrollbox it sits in. Pure over the walk
+/// and a tab row's current tab are the ones BlueBird's selected state marks (<see cref="Bbs757EfbMemory.Node.Selected"/>,
+/// <see cref="SectionOf"/>); a read that marks none (a tree captured before plan 21) names no section and no current tab. Whether the
+/// page scrolls, and its viewport, come from the one scrollbox holding a taller stackbox, and each item is clipped to the scrollbox it
+/// sits in. Pure over the walk
 /// (<see cref="Read(IReadOnlyList{Bbs757EfbMemory.App})"/>): tested against synthetic trees and the committed trees.
 /// </summary>
 public sealed class Bbs757EfbModelReader
@@ -56,10 +55,10 @@ public sealed class Bbs757EfbModelReader
         }
 
         var grammar = new Grammar(content);
-        string section = SectionOf(content, content.Class, grammar);
+        string section = SectionOf(content.Class, grammar);
         var menu = new List<Bbs757EfbItem>();
         var items = new List<Bbs757EfbItem>();
-        EmitChildren(content.Controls, content, grammar, section, menu, items, Bbs757EfbScreen.ContentArea, parent: null);
+        EmitChildren(content.Controls, content, grammar, menu, items, Bbs757EfbScreen.ContentArea, parent: null);
         var scroller = PageScrollbox(content);
         return new Bbs757EfbScreenModel(content.Class, section, menu, Bbs757EfbPageRules.Reorder(content.Class, section, items))
         {
@@ -132,15 +131,15 @@ public sealed class Bbs757EfbModelReader
 
     /// <summary>One node and what is under it, as items; each item the node itself makes is clipped to <paramref name="clip"/>, the
     /// drawn rectangle of the scrollbox it sits in (the content area in none), and a scrollbox's own descendants to that scrollbox.</summary>
-    private static void Emit(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, Grammar g, string section, List<Bbs757EfbItem> menu,
+    private static void Emit(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, Grammar g, List<Bbs757EfbItem> menu,
         List<Bbs757EfbItem> items, Rectangle clip)
     {
         int first = items.Count;
-        EmitNode(n, content, g, section, menu, items, IsScrollbox(n) ? Within(Box(n), clip) : clip);
+        EmitNode(n, content, g, menu, items, IsScrollbox(n) ? Within(Box(n), clip) : clip);
         Clip(items, first, clip);
     }
 
-    private static void EmitNode(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, Grammar g, string section, List<Bbs757EfbItem> menu,
+    private static void EmitNode(Bbs757EfbMemory.Node n, Bbs757EfbMemory.App content, Grammar g, List<Bbs757EfbItem> menu,
         List<Bbs757EfbItem> items, Rectangle inner)
     {
         if (IsChrome(n)) return; // the home button and the page title: the window adds its own Home and shows the page name
@@ -155,7 +154,7 @@ public sealed class Bbs757EfbModelReader
         // A side-menu entry: a control in the left column (an app's section list, the checklist's sections).
         if (IsMenu(n, content.Class) && n.Kind is "button" or "toggle")
         {
-            EmitMenu(n, content.Class, section, g, menu, items);
+            EmitMenu(n, content.Class, g, menu, items);
             return;
         }
 
@@ -183,10 +182,10 @@ public sealed class Bbs757EfbModelReader
             case "label":
             case "other":
                 if (n.Text.Length > 0 && n.Children.Count == 0) EmitText(n, g, items);
-                EmitChildren(n.Children, content, g, section, menu, items, inner, n);
+                EmitChildren(n.Children, content, g, menu, items, inner, n);
                 return;
             default: // grid, colorbox, canvas, gradientbox, stack, pan_indicator, scrollbox: containers
-                EmitChildren(n.Children, content, g, section, menu, items, inner, n);
+                EmitChildren(n.Children, content, g, menu, items, inner, n);
                 return;
         }
     }
@@ -214,7 +213,7 @@ public sealed class Bbs757EfbModelReader
     /// <see cref="Bbs757EfbPageRules.IsTabName"/> says) come out as <see cref="Bbs757EfbKind.Tab"/> items keyed
     /// <c>tab:&lt;parent's name&gt;|&lt;words&gt;</c>, the current one selected. Every item is clipped to <paramref name="clip"/>, the
     /// scrollbox the children sit in. <paramref name="parent"/> is the container they are the children of (null for the page's roots).</summary>
-    private static void EmitChildren(IReadOnlyList<Bbs757EfbMemory.Node> kids, Bbs757EfbMemory.App content, Grammar g, string section,
+    private static void EmitChildren(IReadOnlyList<Bbs757EfbMemory.Node> kids, Bbs757EfbMemory.App content, Grammar g,
         List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items, Rectangle clip, Bbs757EfbMemory.Node? parent)
     {
         // A card's own title reads before the rest of its card (the final review's M3: Maintenance's REPAIR ALTN comes before
@@ -229,13 +228,13 @@ public sealed class Bbs757EfbModelReader
         var tabs = kids.Where(k => k.Kind == "button" && k.Text.Length > 0 && Bbs757EfbPageRules.IsTabName(k.Name)).ToList();
         if (tabs.Count < 2)
         {
-            foreach (var k in kids) Emit(k, content, g, section, menu, items, clip);
+            foreach (var k in kids) Emit(k, content, g, menu, items, clip);
             return;
         }
-        var current = g.SelectionRead ? TheOneSelected(tabs) : CurrentTab(tabs, content);
+        var current = TheOneSelected(tabs);
         foreach (var k in kids)
         {
-            if (!tabs.Contains(k)) { Emit(k, content, g, section, menu, items, clip); continue; }
+            if (!tabs.Contains(k)) { Emit(k, content, g, menu, items, clip); continue; }
             string words = string.Join(' ', k.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
             items.Add(new Bbs757EfbItem(Bbs757EfbKind.Tab, Bbs757EfbVocabulary.Pretty(words), Box(k), Hit(k), true,
                 "tab:" + ParentNameOf(content, k) + "|" + words, Selected: ReferenceEquals(k, current), Name: k.Name, Clip: clip));
@@ -250,53 +249,19 @@ public sealed class Bbs757EfbModelReader
         return "";
     }
 
-    /// <summary>The one of <paramref name="buttons"/> BlueBird's selected state marks current (a tab row's current tab, a side menu's
-    /// current entry); null when none is, or two or more are (a torn read names none).</summary>
+    /// <summary>The one of <paramref name="buttons"/> BlueBird's selected state marks current (<see cref="Bbs757EfbMemory.Node.Selected"/>:
+    /// a tab row's current tab, a side menu's current entry); null when none is, or two or more are (a torn read names none). A read
+    /// with no selected state (a tree captured before plan 21, or a row BlueBird keeps none for: Failures' tabs) marks none.</summary>
     private static Bbs757EfbMemory.Node? TheOneSelected(IEnumerable<Bbs757EfbMemory.Node> buttons)
     {
         var selected = buttons.Where(b => b.Selected == true).Take(2).ToList();
         return selected.Count == 1 ? selected[0] : null;
     }
 
-    /// <summary>The one tab of a row whose folded words appear in the name of a content panel (<c>*_panel</c>) outside the tab
-    /// buttons' own subtrees; null when none, or two or more, match. Only for a read with no selected state (a tree captured before
-    /// plan 21): a read with it takes the tab it marks (<see cref="TheOneSelected"/>).</summary>
-    private static Bbs757EfbMemory.Node? CurrentTab(List<Bbs757EfbMemory.Node> tabs, Bbs757EfbMemory.App content)
-    {
-        var own = new HashSet<Bbs757EfbMemory.Node>(ReferenceEqualityComparer.Instance);
-        foreach (var t in tabs) { own.Add(t); foreach (var d in Descendants(t)) own.Add(d); }
-        // Only a content panel's name counts (maintenance_landing_gear_panel): a text or a canvas/card/grid name can hold a tab's
-        // word without being that tab's page ("RANDOM FAILURES: OFF", planning_weather_notam_canvas).
-        var panels = Flatten(content.Controls)
-            .Where(n => !own.Contains(n) && IsContent(n) && n.Name.EndsWith("_panel", StringComparison.Ordinal))
-            .Select(n => n.Name.Split('_', StringSplitOptions.RemoveEmptyEntries)).ToList();
-        var hits = tabs.Where(t =>
-        {
-            var words = t.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-                .Select(w => string.Concat(w.Where(char.IsLetterOrDigit))).Where(w => w.Length > 0).ToArray();
-            return words.Length > 0 && panels.Any(parts => HasRun(parts, words));
-        }).ToList();
-        return hits.Count == 1 ? hits[0] : null;
-    }
-
-    /// <summary>Whether the words are a contiguous run of the name's parts, compared case-insensitively ("landing", "gear" in
-    /// maintenance_landing_gear_panel); a word never matches inside another part ("apu" is not in "capture").</summary>
-    private static bool HasRun(string[] parts, string[] words)
-    {
-        for (int i = 0; i + words.Length <= parts.Length; i++)
-        {
-            bool all = true;
-            for (int j = 0; j < words.Length && all; j++)
-                all = string.Equals(parts[i + j], words[j], StringComparison.OrdinalIgnoreCase);
-            if (all) return true;
-        }
-        return false;
-    }
-
     /// <summary>A left-column control: a side-menu entry (<c>menu:GENERAL</c>, selected when it is the one BlueBird's selected state
-    /// marks current, <see cref="Grammar.CurrentEntry"/>, or in a read with no selected state when it is the section the page shows), or
-    /// the checklist's own RESET ALL button and INTERACTIVE switch, which sit in that column but are not sections.</summary>
-    private static void EmitMenu(Bbs757EfbMemory.Node n, string app, string section, Grammar g, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
+    /// marks current, <see cref="Grammar.CurrentEntry"/>), or the checklist's own RESET ALL button and INTERACTIVE switch, which sit in
+    /// that column but are not sections.</summary>
+    private static void EmitMenu(Bbs757EfbMemory.Node n, string app, Grammar g, List<Bbs757EfbItem> menu, List<Bbs757EfbItem> items)
     {
         if (n.Kind == "toggle")
         {
@@ -311,7 +276,7 @@ public sealed class Bbs757EfbModelReader
             items.Add(new Bbs757EfbItem(Bbs757EfbKind.Button, Bbs757EfbVocabulary.Pretty(word), Box(n), Hit(n), true, "btn:RESET ALL"));
             return;
         }
-        bool selected = g.SelectionRead ? ReferenceEquals(n, g.CurrentEntry) : word.Length > 0 && Fold(word) == Fold(section);
+        bool selected = ReferenceEquals(n, g.CurrentEntry);
         menu.Add(new Bbs757EfbItem(Bbs757EfbKind.Menu, Bbs757EfbVocabulary.Pretty(word), Box(n), Hit(n), true, "menu:" + word, Selected: selected));
     }
 
@@ -436,33 +401,12 @@ public sealed class Bbs757EfbModelReader
     // ---- the section and whether the page scrolls ----------------------------
 
     /// <summary>
-    /// The section the page shows, as a side-menu word (CALLOUTS, LIVERY OPTIONS): in a read that carries BlueBird's selected state
-    /// (plan 21), the word of the side-menu entry it marks current (<see cref="Grammar.CurrentEntry"/>), "" when it marks none. In a
-    /// read with no selected state (a tree captured before plan 21): the page rules' table of distinctive names when it has an entry
-    /// (<see cref="Bbs757EfbPageRules.SectionFromTable"/>), else the first menu word whose folded letters equal, or start, the folded
-    /// name of a content container (<c>planning_perf_calc_canvas</c>, <c>callouts_scrollbox</c>) in tree order. "" for an app with no
-    /// sections (Systems, Checklist) or a page that matches none.
+    /// The section the page shows, as a side-menu word (CALLOUTS, LIVERY OPTIONS): the word of the side-menu entry BlueBird's selected
+    /// state marks current (<see cref="Grammar.CurrentEntry"/>; plan 21, measured 2026-11-07 on three side menus). "" for an app with no
+    /// sections (Systems, Checklist) and for a read that marks no entry (a tree captured before plan 21 carries no selected state).
     /// </summary>
-    private static string SectionOf(Bbs757EfbMemory.App content, string app, Grammar g)
-    {
-        if (!Bbs757EfbPageRules.HasSections(app) || !Bbs757EfbVocabulary.Menus.TryGetValue(app, out var words)) return "";
-        if (g.SelectionRead) return g.CurrentEntry is { } entry ? MenuWord(app, entry.Text) : "";
-        var all = Flatten(content.Controls).ToList();
-        if (Bbs757EfbPageRules.SectionFromTable(app, all.Select(n => n.Name)) is { } fromTable) return fromTable;
-        foreach (var n in all)
-        {
-            if (!IsContent(n)) continue; // the shell's and the side menu's own grids (main_grid, control_grid)
-            string prefix = Bbs757EfbPageRules.ContainerWords(n.Name);
-            if (prefix.Length == 0) continue;
-            foreach (var w in words)
-            {
-                // A stem starts a menu word only with three letters or more: "ac" or "a" would start ACARS DASHBOARD or AIRCRAFT.
-                string fw = Fold(w);
-                if (fw == prefix || (prefix.Length >= 3 && fw.StartsWith(prefix, StringComparison.Ordinal))) return w;
-            }
-        }
-        return "";
-    }
+    private static string SectionOf(string app, Grammar g) =>
+        Bbs757EfbPageRules.HasSections(app) && g.CurrentEntry is { } entry ? MenuWord(app, entry.Text) : "";
 
     /// <summary>The one scrollbox of the content that scrolls: the first that wraps a taller <c>*_stackbox</c> (its content does not
     /// fit it; Settings' pages). Null when none does: an inner scrollbox holding a text (the ACARS route, Weather's report, the
@@ -501,7 +445,7 @@ public sealed class Bbs757EfbModelReader
         return string.Join(' ', parts);
     }
 
-    /// <summary>A value's letters and digits, upper-cased invariantly: how a section name and a menu word are compared.</summary>
+    /// <summary>A value's letters and digits, upper-cased invariantly: how a side button's words and a menu word are compared.</summary>
     private static string Fold(string text) =>
         string.Concat(text.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant));
 
@@ -558,9 +502,6 @@ public sealed class Bbs757EfbModelReader
 
     private static int Count(IReadOnlyList<Bbs757EfbMemory.Node> ns) => ns.Count + ns.Sum(n => Count(n.Children));
 
-    /// <summary>Whether a control is part of the page's content area, which starts at x 250 (the settings scrollbox is drawn
-    /// at 250, two pixels left of <see cref="MenuRight"/>): the shell's own grids start at 0.</summary>
-    private static bool IsContent(Bbs757EfbMemory.Node n) => n.X >= MenuRight - 10;
     /// <summary>A side-menu entry: a control in the left column of an app that has a side menu (the apps with sections, and the
     /// checklist's section list). In any other app (Systems' zoom toolbar at x 16) a control left of the content is content.</summary>
     private static bool IsMenu(Bbs757EfbMemory.Node n, string app) =>
@@ -605,11 +546,7 @@ public sealed class Bbs757EfbModelReader
         public Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> InputOf { get; } = new(ReferenceEqualityComparer.Instance);
         /// <summary>The inputs a title names (<see cref="InputOf"/>'s values): each reads where its title is.</summary>
         public HashSet<Bbs757EfbMemory.Node> TitledInputs { get; } = new(ReferenceEqualityComparer.Instance);
-        /// <summary>Whether the read carries BlueBird's selected state (plan 21): a node with it at all. A read without (every tree
-        /// captured before plan 21) takes the section and the current tab from the page rules' names.</summary>
-        public bool SelectionRead { get; }
-        /// <summary>The side-menu entry BlueBird's selected state marks current (<see cref="TheOneSelected"/>); null in a read with no
-        /// selected state, and when it marks none.</summary>
+        /// <summary>The side-menu entry BlueBird's selected state marks current (<see cref="TheOneSelected"/>); null when it marks none.</summary>
         public Bbs757EfbMemory.Node? CurrentEntry { get; }
         private readonly Dictionary<Bbs757EfbMemory.Node, string> _inputName = new(ReferenceEqualityComparer.Instance);
         /// <summary>The word-less buttons holding exactly one label: value boxes, read as fields (R7).</summary>
@@ -631,9 +568,8 @@ public sealed class Bbs757EfbModelReader
             var all = Flatten(content.Controls).ToList();
             var parentOf = new Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node>(ReferenceEqualityComparer.Instance);
             foreach (var n in all) foreach (var c in n.Children) parentOf[c] = n;
-            SelectionRead = all.Any(n => n.Selected is not null);
-            if (SelectionRead)
-                CurrentEntry = TheOneSelected(all.Where(n => n.Kind == "button" && !IsChrome(n) && IsMenu(n, _app) && MenuWord(_app, n.Text) != "RESET ALL"));
+            // The checklist's RESET ALL sits in the side column and reads selected (measured 2026-11-07), but is no section.
+            CurrentEntry = TheOneSelected(all.Where(n => n.Kind == "button" && !IsChrome(n) && IsMenu(n, _app) && MenuWord(_app, n.Text) != "RESET ALL"));
 
             foreach (var b in all)
                 if (b.Kind == "button" && b.Text.Length == 0 && !IsChrome(b) && Descendants(b).Count(IsReadable) == 1)
@@ -650,7 +586,7 @@ public sealed class Bbs757EfbModelReader
             foreach (var l in labels) _info[l] = Bbs757EfbPageRules.ReadName(l.Name);
             var free = labels.Where(l => !_fieldLabels.Contains(l)).ToList();
 
-            _needsLabel.AddRange(Reachable(content.Controls).Where(n => n.Kind is "slider" or "textbox" or "pulldown"
+            _needsLabel.AddRange(Reachable(content.Controls).Where(n => n.Kind == "slider"
                 || (n.Kind == "button" && !IsMenu(n, content.Class) && (FieldButtons.Contains(n) || Bbs757EfbPageRules.IsStateOrAction(n.Text)))));
             Rows(all, free);
             Sliders(content.Controls, free);
@@ -987,12 +923,17 @@ public sealed class Bbs757EfbModelReader
 
         /// <summary>
         /// A title that names an input (<c>planning_perf_calc_flap_field_title</c> and <c>..._flap_dropdown</c>, else the one input
-        /// beside it in its container) is that input's name: it is no heading, and the input reads where the title is. An input is a
-        /// text box or a drop-down (plan 21), or, in a tree captured before plan 21 read their classes, a control named as one with no
-        /// text (<see cref="Bbs757EfbPageRules.IsUnreadInputName"/>), a field with no value read. A text box or drop-down no title
-        /// names is named as R5 names a control: the label sharing its name or the one label touching it (<see cref="NamingLabel"/>:
-        /// Charts' request box), else its settings row's label (the AIRAC page's code boxes), else its own name's words
-        /// (<see cref="OwnName"/>: Map's provider), and reads where it is.
+        /// in a container that holds the two alone, as each of PERF calc's field canvases does) is that input's name: it is no heading,
+        /// and the input reads where the title is. A title among other controls (Systems' <c>selected_page_title_label</c>, the system
+        /// shown, beside the home button, the app's title and the page menu) names none and stays a heading. An input is a text box or
+        /// a drop-down (plan 21), or, in a tree captured before plan 21 read their classes, a control named as one with no text
+        /// (<see cref="Bbs757EfbPageRules.IsUnreadInputName"/>), a field with no value read.
+        /// <para>A text box or drop-down no title names takes no label by R5 (<see cref="NamingLabel"/>): R5 names a control whose own
+        /// words are none, a state or an action, and these show words of their own (a text, a face), so a label beside one is a line of
+        /// its own (Charts' KINGMAN, the airport's name beside its request box). It is named by its settings row's label (the AIRAC
+        /// page's code boxes), else, for a drop-down whose face shows none of its entries, by the face's words (Systems' SELECT: the face
+        /// is a prompt), else by its own name's words (<see cref="OwnName"/>: Charts' request box, Map's provider), and reads where it
+        /// is.</para>
         /// </summary>
         private void Inputs(List<Bbs757EfbMemory.Node> all, List<Bbs757EfbMemory.Node> free, Dictionary<Bbs757EfbMemory.Node, Bbs757EfbMemory.Node> parentOf)
         {
@@ -1010,26 +951,21 @@ public sealed class Bbs757EfbModelReader
             }
             foreach (var t in titles.Where(t => !InputOf.ContainsKey(t)))
             {
-                if (!parentOf.TryGetValue(t, out var parent)) continue;
+                if (!parentOf.TryGetValue(t, out var parent) || parent.Children.Count != 2) continue;
                 var beside = parent.Children.Where(i => inputs.Contains(i) && !used.Contains(i)).ToList();
                 if (beside.Count != 1) continue;
                 InputOf[t] = beside[0];
                 used.Add(beside[0]);
             }
-            var pool = free.Where(l => !Taken.Contains(l) && !ValueOf.ContainsKey(l) && !InputOf.ContainsKey(l)
-                && _info[l].Role != Bbs757EfbPageRules.NameRole.Unit).ToList();
             foreach (var input in inputs.Where(i => IsReadInput(i) && !used.Contains(i)))
             {
-                if (NamingLabel(input, pool) is { } label)
-                {
-                    _inputName[input] = label.Text;
-                    Use(label);
-                }
-                else if (RowGridLabel(input, parentOf) is { } rowLabel)
+                if (RowGridLabel(input, parentOf) is { } rowLabel)
                 {
                     _inputName[input] = rowLabel.Text;
                     if (!ValueOf.ContainsKey(rowLabel)) Use(rowLabel);
                 }
+                else if (input.Kind == "pulldown" && input.Text.Any(char.IsLetterOrDigit) && !(input.Entries ?? Array.Empty<string>()).Contains(input.Text))
+                    _inputName[input] = input.Text;
                 else _inputName[input] = OwnName(input.Name);
             }
         }
@@ -1038,14 +974,13 @@ public sealed class Bbs757EfbModelReader
         public string InputNameOf(Bbs757EfbMemory.Node input) => _inputName.GetValueOrDefault(input) ?? OwnName(input.Name);
 
         /// <summary>An input as an item named <paramref name="name"/>: a drop-down a <see cref="Bbs757EfbKind.Choice"/> of its entries,
-        /// valued by the one it shows; a text box a <see cref="Bbs757EfbKind.Field"/> holding its text (<see cref="Bbs757EfbItem.TextBox"/>);
-        /// an input the reader cannot read a field with no value. Keyed by its control name.</summary>
+        /// valued by the one it shows; a text box a <see cref="Bbs757EfbKind.Field"/> holding its text; an input the reader cannot read a
+        /// field with no value. Keyed by its control name.</summary>
         public Bbs757EfbItem InputItem(Bbs757EfbMemory.Node input, string name) => input.Kind switch
         {
             "pulldown" => new Bbs757EfbItem(Bbs757EfbKind.Choice, name, Box(input), Hit(input), true, input.Name, Value: input.Value, Name: input.Name,
                 Entries: input.Entries ?? Array.Empty<string>()),
-            "textbox" => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Value: input.Text, Name: input.Name,
-                TextBox: true),
+            "textbox" => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Value: input.Text, Name: input.Name),
             _ => new Bbs757EfbItem(Bbs757EfbKind.Field, name, Box(input), Hit(input), true, input.Name, Name: input.Name),
         };
 

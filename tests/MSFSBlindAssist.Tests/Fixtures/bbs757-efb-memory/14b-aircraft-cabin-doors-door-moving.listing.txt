@@ -1,0 +1,25 @@
+title: Aircraft, Cabin & doors
+button  Left FWD: Closed
+button  Left mid: Closed
+button  Left AFT: Closed
+button  Right FWD: Closed
+button  Right mid: Closed
+button  Right AFT: Closed
+button  FWD cargo: Closed
+button  AFT cargo: Moving
+button  Close all
+button  Cockpit open
+heading 2  Cabin lighting
+button  Ground service off
+slider 0  Ceiling (OFF)
+slider 0  Window (OFF)
+slider 0  Entry (OFF)
+heading 2  Sections
+button  Cockpit presets
+button  Fuel
+button  Weight & balance
+button  Ground services
+button  Cabin & doors (current page)
+button  Maintenance
+button  Failures
+button  Home

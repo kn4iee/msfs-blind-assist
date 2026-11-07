@@ -1253,23 +1253,23 @@ public class Bbs757EfbBridgeTests
     // ---- drop-downs and text boxes (plan 21) ----------------------------------------------------------------------------
 
     [Fact]
-    public async Task A_set_on_a_drop_down_or_a_text_box_taps_nothing()
+    public async Task A_set_on_a_drop_down_taps_nothing_and_a_text_box_is_no_control()
     {
-        // The window shows a drop-down as a choice list and a text box as an edit box; choosing is plan 21 Task 7's and typing plan 22's
-        // (B757-23), so a set the window sends for either taps nothing and says nothing: a tap tried would end "cannot be reached".
+        // The window shows a drop-down as a choice list; choosing is plan 21 Task 7's, so a set the window sends for one taps nothing and
+        // says nothing: a tap tried would end "cannot be reached". A text box is a line until plan 22 types (B757-23): nothing to set.
         var runway = new Bbs757EfbItem(Bbs757EfbKind.Choice, "Runway", new Rectangle(519, 156, 150, 34), new Point(594, 173), true,
             "planning_perf_calc_runway_dropdown", Value: "RW07L", Entries: new[] { "RW07L", "RW26" });
         var airport = new Bbs757EfbItem(Bbs757EfbKind.Field, "Airport", new Rectangle(289, 156, 150, 34), new Point(364, 173), true,
-            "planning_perf_calc_airport_input", Value: "KSEA", TextBox: true);
+            "planning_perf_calc_airport_input", Value: "KSEA");
         var page = PageOf("NAVIGATION", "PERF CALC", runway, airport);
         using var h = new BridgeHarness { ModelRead = () => new Bbs757EfbModelRead(page, null) };
         h.Bridge.TakeRead(page);
         var push = h.Pushes[^1];
         int pushes = h.Pushes.Count;
+        Assert.Equal(("", "false"), (push[$"items.{IndexOf(push, "Airport: KSEA")}.type"], push[$"items.{IndexOf(push, "Airport: KSEA")}.clickable"]));
 
-        foreach (var (text, value) in new[] { ("Runway", "RW26"), ("Airport", "KPDX") })
-            await h.Bridge.HandleAsync("set_element_value",
-                new Dictionary<string, string> { ["index"] = push[$"items.{IndexOf(push, text)}.aidx"], ["value"] = value }, CancellationToken.None);
+        await h.Bridge.HandleAsync("set_element_value",
+            new Dictionary<string, string> { ["index"] = push[$"items.{IndexOf(push, "Runway")}.aidx"], ["value"] = "RW26" }, CancellationToken.None);
 
         Assert.Equal(pushes, h.Pushes.Count);
     }
@@ -1896,8 +1896,9 @@ public class Bbs757EfbBridgeTests
     [Fact]
     public async Task The_airac_page_from_memory_offers_the_sign_in()
     {
-        // The real tree of Settings > AIRAC data, read by the model reader: its page name is "Settings, AIRAC data".
-        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.Load("55-settings-airac-data"))!;
+        // The real tree of Settings > AIRAC data, read by the model reader: its page name is "Settings, AIRAC data". The tree predates
+        // plan 21 (not captured again: a sign-in code now shows there), so its entry is marked as a live read marks it.
+        var model = Bbs757EfbModelReader.Read(Bbs757EfbTreeJson.WithSelected(Bbs757EfbTreeJson.Load("55-settings-airac-data"), "btn_airac_data"))!;
         Assert.Equal("Settings, AIRAC data", model.PageName);
         using var h = new BridgeHarness { SignedInAnswer = false };
         h.Bridge.TakeRead(model);

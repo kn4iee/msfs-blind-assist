@@ -45,8 +45,10 @@ public class Bbs757EfbColonLabelTests
     [Fact]
     public void The_checklist_keeps_its_side_menu()
     {
+        // BlueBird marks the checklist shown (BEFORE START when recaptured, 2026-11-07): its entry says so, under Sections.
         var texts = Elements(Built("40-checklist")).Select(e => e.Text).ToList();
-        Assert.True(texts.IndexOf("Before start") > texts.IndexOf("Sections"));
+        Assert.True(texts.IndexOf("Before start (current page)") > texts.IndexOf("Sections"));
+        Assert.True(texts.IndexOf("After start") > texts.IndexOf("Sections"));
     }
 
     [Fact]

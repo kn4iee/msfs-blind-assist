@@ -1,4 +1,4 @@
-title: Navigation, PERF calc
+title: Navigation
 button  Take off
 button  Landing
 text  Airport
@@ -43,5 +43,5 @@ button  Operating FP
 button  Weather & NOTAM
 button  Charts
 button  Map
-button  PERF calc (current page)
+button  PERF calc
 button  Home

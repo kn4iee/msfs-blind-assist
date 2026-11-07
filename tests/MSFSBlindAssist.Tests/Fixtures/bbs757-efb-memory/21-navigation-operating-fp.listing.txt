@@ -1,5 +1,11 @@
 title: Navigation, Operating FP
 heading 2  Operating flight plan
+pre
+    MSF1 KSEA-KPDX 01JAN26
+    KSEA/16L DCT BTG DCT KPDX/28R
+    WPT     FREQ   TRK  DIST  ETE
+    BTG     116.60 186   112  0:21
+    KPDX           103    11  0:04
 heading 2  Sections
 button  ACARS dashboard
 button  Operating FP (current page)

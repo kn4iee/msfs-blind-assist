@@ -13,10 +13,10 @@ public sealed record Bbs757EfbExtraElement(string Key, string Text, bool IsButto
 
 /// <summary>
 /// A read tablet page (<see cref="Bbs757EfbScreenModel"/>) as the shared EFB window's elements, and what pressing each does. Pure:
-/// tested. The window (FbwEfbForm) renders headings, buttons, check boxes, choice lists, sliders and edit boxes from the push's
-/// "items.N.*" keys (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx. A
-/// text box is an edit box holding its text and a drop-down a choice list of its entries (plan 21); the bridge taps nothing for a set
-/// of either until choosing (plan 21, Task 7) and typing (plan 22, B757-23) are built.
+/// tested. The window (FbwEfbForm) renders headings, buttons, check boxes, choice lists and sliders from the push's "items.N.*" keys
+/// (the PMDG client's format) and posts back click_display_element / set_element_value with the element's aidx. A drop-down is a choice
+/// list of its entries (plan 21), whose set the bridge taps nothing for until choosing is built (plan 21, Task 7); a text box is a line
+/// with what it holds until typing is (plan 22, B757-23).
 ///
 /// Every control the reader offers can be pressed (the owner's ruling of 2026-10-29): a button, tile, switch, check box, slider and tab
 /// is clickable whatever the reader's <see cref="Bbs757EfbItem.Clickable"/> says, and nothing here refuses a press. The one exception
@@ -192,14 +192,10 @@ public static class Bbs757EfbElements
                 case Bbs757EfbKind.Row:
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     break;
-                case Bbs757EfbKind.Field when it.TextBox:
-                    // A text box: an edit box named for it, holding what it holds as the tablet writes it. Its set taps and types
-                    // nothing until plan 22 (B757-23): the bridge sets no field.
-                    Add(Bbs757EfbVocabulary.Pretty(it.Text), controlType: "text", clickable: true, value: it.Value, key: it.Key,
-                        action: new Action(ActionKind.Tap, it));
-                    break;
                 case Bbs757EfbKind.Field:
-                    // A value box: its name and what it holds ("Quantity: 1539 Gal"); an input not read yet is just its name.
+                    // A value box or a text box: its name and what it holds ("Quantity: 1539 Gal", "Airport: KPHX"); an empty one, or an
+                    // input not read, is just its name. A line, not an edit box, until plan 22 types into the tablet (B757-23): an
+                    // edit box would take typing that goes nowhere.
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     break;
                 case Bbs757EfbKind.Choice:
@@ -281,7 +277,6 @@ public static class Bbs757EfbElements
                 case Bbs757EfbKind.Slider:
                     Add(SliderStateText(it, pageName), key: it.Key);
                     return true;
-                case Bbs757EfbKind.Field when it.TextBox:
                 case Bbs757EfbKind.Choice:
                     Add(Named(Bbs757EfbVocabulary.Pretty(it.Text), it.Value), key: it.Key);
                     return true;
