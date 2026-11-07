@@ -37,8 +37,9 @@
     // 7: that refusal, the run guards it needed and the page clock they ran on are gone: a click runs anywhere on the tablet.
     // 8: drag(x, y0, y1) replaces wheel: this build scrolls on a drag (plan 20, Task 1)
     // 9: drag answers with its run, as clickSeq does, so the app waits for it by status(id); a throw at its start ends the run
+    // 11: a drag eases out to a stop, so the page does not fling on past it (measured live; 10 was a trial)
     // The app's calls ask for this version or later; an older agent on the page is replaced.
-    var VERSION = 9;
+    var VERSION = 11;
     var MARK = 'MSFSBA_BBS757_EFB_INSTALLED';
     var NOT_READY = 'MSFSBA_BBS757_EFB_NOT_READY:';
     // The tablet gauge's size in BlueBird 0.1.0 (measured 1397 x 1058). Another size means another
@@ -134,7 +135,8 @@
 
     // A drag at a tablet-local x from y0 to y1, for the reader to scroll a page longer than the
     // tablet (this build scrolls on a drag, not reliably on the wheel): mouse move and down at
-    // (x, y0), 20 moves 50 ms apart to (x, y1), held 400 ms, then up. It runs in the page, one run
+    // (x, y0), 20 moves 50 ms apart to (x, y1), each shorter than the last, held 400 ms, then up (the page's
+    // timers run slower: about 1.7 s in all, measured). It runs in the page, one run
     // at a time with the click runs: refused while one is going. It answers as clickSeq does,
     // {ok, id, n, done, totalMs, error}, and the app waits for the run by status(id) before it reads
     // the page again; refused: {ok:false, error}.
@@ -181,7 +183,11 @@
           run.timer = null;
           if (!run.running) return;
           try {
-            lastY = y0 + (y1 - y0) * k / DRAG_MOVES;
+            // Eased out: each step shorter than the last, the final one a 400th of the drag. A scrollbox flings on when the
+            // button comes up, by about the square of the last step, hold or no hold (measured: 20 even steps of 5 px scrolled
+            // the page 125.7 px), so a drag that slows to a stop leaves the page where it let go.
+            var t = 1 - k / DRAG_MOVES;
+            lastY = y0 + (y1 - y0) * (1 - t * t);
             c.onMouseMove(ev(lastY));
             run.done = k + 1;
             if (k < DRAG_MOVES) run.timer = setTimeout(function () { move(k + 1); }, DRAG_MOVE_MS);

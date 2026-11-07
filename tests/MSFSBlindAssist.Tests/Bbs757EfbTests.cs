@@ -363,7 +363,7 @@ public class Bbs757EfbTests
             .Select(m => m.Groups[1].Value).Distinct().OrderBy(r => r, StringComparer.Ordinal).ToList();
         Assert.Equal(new[] { "bad-point", "bad-seq", "busy", "error: ", "no-canvas: ", "unknown-run" }, refusals);
 
-        Assert.Equal(9, CoherentBbs757EfbClient.AgentVersion);
+        Assert.Equal(11, CoherentBbs757EfbClient.AgentVersion);
         Assert.Contains("var VERSION = " + CoherentBbs757EfbClient.AgentVersion.ToString(CultureInfo.InvariantCulture) + ";", code);
     }
 
@@ -395,6 +395,19 @@ public class Bbs757EfbTests
         Assert.Null(CoherentBbs757EfbClient.DragRun("{\"ok\":false,\"error\":\"busy\"}"));
         Assert.Null(CoherentBbs757EfbClient.DragRun("{\"ok\":true,\"id\":9,\"n\":22,\"done\":0,\"running\":false,\"error\":\"error: boom\"}"));
         Assert.Null(CoherentBbs757EfbClient.DragRun("\"started\""));   // an older agent's answer
+    }
+
+    [Fact]
+    public void The_efb_agent_eases_a_drag_out_so_the_page_stops_where_it_let_go()
+    {
+        // Measured live, 2026-11-07: BlueBird's scrollbox flings on when the button comes up by about the square of the last step, the
+        // 400 ms hold before it notwithstanding: 20 even steps of 5 px scrolled Settings, Aircraft 125.7 px, a move to the same place just
+        // before the release changed nothing (version 10), and the eased drag below scrolled 100 px then 0.98 px on (766 px: 7.5 px on).
+        string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));
+        string code = System.Text.RegularExpressions.Regex.Replace(agent, @"//[^\n]*", "");
+        Assert.Matches(@"var t = 1 - k / DRAG_MOVES;\s*lastY = y0 \+ \(y1 - y0\) \* \(1 - t \* t\);", code);
+        Assert.DoesNotContain("(y1 - y0) * k / DRAG_MOVES", code);   // the even steps that flung the page
+        Assert.Contains("11: a drag eases out to a stop", agent);
     }
 
     [Fact]

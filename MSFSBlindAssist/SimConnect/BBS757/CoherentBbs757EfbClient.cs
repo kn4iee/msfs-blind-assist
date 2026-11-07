@@ -59,7 +59,7 @@ public sealed class CoherentBbs757EfbClient : IDisposable
     /// click near the AIRAC page's UPDATE spot and the run guards it needed. An older agent on the
     /// page answers "no agent" to a run and is replaced by the install.
     /// </summary>
-    internal const int AgentVersion = 9;   // 4: mirror(on), 5: wheel (gone), 6: readVars(names), 7: no UPDATE-spot refusal or run guards, 8: drag(x, y0, y1) replaces wheel, 9: drag answers with its run
+    internal const int AgentVersion = 11;   // 4: mirror(on), 5: wheel (gone), 6: readVars(names), 7: no UPDATE-spot refusal or run guards, 8: drag(x, y0, y1) replaces wheel, 9: drag answers with its run, 11: drag eases out (no fling; 10 was a live trial)
 
     // How long Dispose waits for its best-effort cancel of a run still going in the page: short,
     // since it runs on the UI thread during a profile switch or app exit.
