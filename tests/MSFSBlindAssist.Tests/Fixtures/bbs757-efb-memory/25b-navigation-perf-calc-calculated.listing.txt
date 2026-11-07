@@ -1,0 +1,47 @@
+title: Navigation, PERF calc
+button  Take off
+button  Landing
+text  Airport
+text  Runway
+text  Length Type
+text  Length (FT)
+heading 2  Units
+button  Feet
+button  Pounds
+button  inHg
+text  Takeoff Weight (LB)
+text  Flap Setting
+text  Thrust Setting
+text  Bleed Setting
+text  Anti-ice Setting
+text  Wind
+text  Temperature
+text  Pressure (inHg)
+text  Surface Condition
+heading 2  Weather Source
+text  METAR: KPHX Nov 06, 17:54 L
+button  Refresh
+text  Flex/Assumed Temperature
+text  Improved Climb Calculations
+button  Calculate
+text  V1: 149
+text  VR: 149
+text  V2: 151
+text  Flap: 5
+text  N1: D-TO
+text  FLX TMP: 57
+text  Trim: 4.00
+text  TODA: 11489
+text  TORA: 11489
+text  ASDA: 11489
+text  LDA: 11489
+pre
+    RW07L
+heading 2  Sections
+button  ACARS dashboard
+button  Operating FP
+button  Weather & NOTAM
+button  Charts
+button  Map
+button  PERF calc (current page)
+button  Home

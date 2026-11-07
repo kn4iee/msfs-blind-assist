@@ -29,7 +29,8 @@ public class Bbs757EfbMemoryLiveTests
         CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x158,
         ClassVptrs: new[]
         {
-            new Bbs757EfbClassVptr("scrollbox", 0x30c38),
+            // N3bbs22bbos_control_scrollboxE's vtable is at 0x30bb0 (its typeinfo at 0x30c34): read live, 2026-11-07.
+            new Bbs757EfbClassVptr("scrollbox", 0x30bb8),
             new Bbs757EfbClassVptr("button", 0x30164), new Bbs757EfbClassVptr("label", 0x30cd4),
             new Bbs757EfbClassVptr("toggle", 0x30e7c), new Bbs757EfbClassVptr("slider", 0x30c48),
             new Bbs757EfbClassVptr("grid", 0x30320),
