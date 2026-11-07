@@ -368,6 +368,23 @@ public class Bbs757EfbTests
     }
 
     [Fact]
+    public void The_efb_client_logs_no_count_of_a_runs_clicks()
+    {
+        // The final review's M1 (D2, B757-29): a typing run's clicks are keys, so how many of a run's clicks went out before it stopped
+        // gives away the length of what was typed (a SimBrief ID is DEL and its digits). The client's run lines say why a run stopped,
+        // never how far it got. Read from the source: the log has no seam the tests may set (VP-1).
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MSFSBlindAssist.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        string[] lines = File.ReadAllLines(Path.Combine(dir!.FullName, "MSFSBlindAssist", "SimConnect", "BBS757", "CoherentBbs757EfbClient.cs"));
+
+        var logs = lines.Where(l => l.Contains("Log.", StringComparison.Ordinal)).ToList();
+        Assert.Contains(logs, l => l.Contains("EFB sequence stopped", StringComparison.Ordinal));
+        Assert.Contains(logs, l => l.Contains("EFB sequence still running", StringComparison.Ordinal));
+        Assert.All(logs, l => Assert.DoesNotMatch(@"\.(done|n)\b", l));
+    }
+
+    [Fact]
     public void The_efb_agent_scrolls_by_dragging_not_by_the_wheel()
     {
         string agent = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-bbs757-efb-agent.js"));

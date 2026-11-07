@@ -450,13 +450,14 @@ public sealed class CoherentBbs757EfbClient : IDisposable
             if (!status.running)
             {
                 if (status.error == null && status.done == status.n) return Bbs757EfbRunResult.Done;
-                Log.Debug("BBS757", $"EFB sequence stopped after {status.done} of {status.n}: {status.error}");
+                // Why it stopped, never how far it got: a typing run's clicks are keys, so a count gives away the text's length (D2).
+                Log.Debug("BBS757", $"EFB sequence stopped: {status.error}");
                 if (IsSizeProblem(status.error)) { _layoutUnknown = true; return Bbs757EfbRunResult.LayoutUnknown; }
                 return Bbs757EfbRunResult.NotFinished;
             }
             if (DateTime.UtcNow >= until)
             {
-                Log.Debug("BBS757", $"EFB sequence still running after {status.done} of {status.n}: canceled.");
+                Log.Debug("BBS757", "EFB sequence still running: canceled.");
                 await CancelRunAsync();
                 return Bbs757EfbRunResult.NotFinished;
             }
