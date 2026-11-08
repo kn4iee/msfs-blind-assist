@@ -162,17 +162,19 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildBeforeStart() => new()
     {
         Id = "BEFORE_START", Name = "Before Start",
-        Description = "Parking brake, doors, electric hydraulic pumps R then C then L, fuel pumps, seat belts, APU running, external power off once the APU is on line, APU bleed, transponder TA/RA, beacon and logo lights on, IRS aligned.",
+        Description = "Doors, electric hydraulic pumps R then C then L, then the parking brake (it needs their pressure), fuel pumps, seat belts, APU running, external power off once the APU is on line, APU bleed, transponder TA/RA, beacon and logo lights on, IRS aligned.",
         RelatedChecklistGroupIds = new[] { "BEFORE_START", "BEFORE_START_CL" },
         Steps = new()
         {
             OnGroundGuard("BS_ON_GROUND"),
-            Also(Done(Skip(SW("BS_PARK", "Parking brake: SET", X.ParkingBrake, 1), s => s.IsOn(K.ParkingBrake)), "BS_PARK"), "BSC_PARK"),
             Also(Check("BS_CHK_DOORS", "Doors: CLOSED", "FO_DOORS_CLOSED", On, CheckSeconds, "BS_DOORS"), "BSC_DOORS"),
             Done(Skip(Multi("BS_HYD", "Electric hydraulic pumps: ON, R then C then L",
                     (K.RightElecHyd, 1), (K.C1ElecHyd, 1), (K.C2ElecHyd, 1), (K.LeftElecHyd, 1)),
                 s => s.IsOn("FO_ELEC_HYD_PUMPS_ON")), "BS_HYD"),
             Check("BS_CHK_HYD", "Hydraulic panel: SET", "FO_HYD_PANEL_SET", On, CheckSeconds, "BSC_HYD"),
+            // After the pumps (owner, 2026-11-08: the brake does not fully set without them); never sent without pressure.
+            Also(Done(LeaveAlone(Skip(SW("BS_PARK", "Parking brake: SET", X.ParkingBrake, 1), s => s.IsOn(K.ParkingBrake)),
+                Bbs757FoChecklistDefinitions.NoBrakePressure, Bbs757FoChecklistDefinitions.BrakeStaysText), "BS_PARK"), "BSC_PARK"),
             // Center pumps only with center fuel: a provider that knows nothing skips aloud the
             // center half (FO-20); the wing half is its own step.
             Skip(Multi("BS_WING_PUMPS", "Wing fuel pumps: ON",
@@ -438,7 +440,8 @@ public static class Bbs757FoFlowDefinitions
         Steps = new()
         {
             OnGroundGuard("SD_ON_GROUND"),
-            Done(Skip(SW("SD_PARK", "Parking brake: SET", X.ParkingBrake, 1), s => s.IsOn(K.ParkingBrake)), "SD_PARK"),
+            Done(LeaveAlone(Skip(SW("SD_PARK", "Parking brake: SET", X.ParkingBrake, 1), s => s.IsOn(K.ParkingBrake)),
+                Bbs757FoChecklistDefinitions.NoBrakePressure, Bbs757FoChecklistDefinitions.BrakeStaysText), "SD_PARK"),
             // The engines' supply must be on the busses before the fuel goes (the manual's
             // "AC power source: confirmed").
             WaitForField("SD_POWER", "APU or external power on line", "FO_APU_OR_EXT_POWER_ON", On, CheckSeconds, FlowStepFailurePolicy.Stop),

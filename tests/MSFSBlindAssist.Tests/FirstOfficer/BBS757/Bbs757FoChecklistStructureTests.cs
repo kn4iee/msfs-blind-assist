@@ -535,6 +535,64 @@ public class Bbs757FoChecklistStructureTests
         Assert.Equal(tests.Select(t => t.AfterMs), io.Delays);
     }
 
+    // ------------------------------------------------------------------ the parking brake and hydraulic pressure (plan 23)
+
+    private const string BrakeText = "Parking brake left released: no hydraulic pressure. Turn on the electric hydraulic pumps first.";
+
+    /// <summary>The four electric pumps and, when given, the right engine's N2 on a PW (left engine stopped).</summary>
+    private static Bbs757FoStateEvaluator Hyd(double l, double c1, double c2, double r, double? rightN2 = null)
+    {
+        var s = new Bbs757FoStateEvaluator();
+        s.SetSimConnect(SeededSimConnectCache.With((K.LeftElecHyd, l), (K.C1ElecHyd, c1), (K.C2ElecHyd, c2), (K.RightElecHyd, r),
+            (K.EngineVariant, 1)));
+        if (rightN2 is double n2) s.SetEngineN2(0, n2);
+        return s;
+    }
+
+    /// <summary>
+    /// Plan 23 (owner, 2026-11-08: the brake "doesn't seem to fully work unless the electric hydraulic pumps are on"):
+    /// a parking brake SET, ticked or a flow's step, is left alone with words unless the left or right electric pump (the
+    /// 757's alternate and normal brake systems) reads ON or an engine reads running; unread is no pressure.
+    /// </summary>
+    [Theory]
+    [InlineData("BEFORE_START", "BS_PARK")]
+    [InlineData("SHUTDOWN", "SD_PARK")]
+    public void Parking_brake_is_left_alone_without_brake_pressure(string group, string id)
+    {
+        var line = Group(group).Items.Single(i => i.Id == id);
+        var step = Bbs757FoFlowDefinitions.Build().Single(f => f.Id == group).Steps.Single(s => s.Id == id);
+        Assert.Equal(BrakeText, line.LeaveAloneText);
+        Assert.Equal(BrakeText, step.LeaveAloneText);
+        foreach (var when in new[] { line.LeaveAloneWhen!, step.LeaveAloneWhen! })
+        {
+            Assert.True(when(new Bbs757FoStateEvaluator()), $"{id}: nothing read");
+            Assert.True(when(Hyd(0, 0, 0, 0, rightN2: 0)), $"{id}: every pump off, engines stopped");
+            Assert.True(when(Hyd(0, 1, 1, 0, rightN2: 0)), $"{id}: only the center pumps, which feed no brakes");
+            Assert.False(when(Hyd(0, 0, 0, 1)), $"{id}: the right electric pump");
+            Assert.False(when(Hyd(1, 0, 0, 0)), $"{id}: the left electric pump");
+            Assert.False(when(Hyd(0, 0, 0, 0, rightN2: 60)), $"{id}: the right engine running");
+        }
+    }
+
+    [Fact]
+    public void A_parking_brake_tick_with_the_pumps_off_is_refused_aloud_and_sends_nothing()
+    {
+        var sc = SeededSimConnectCache.ConnectedWith((K.LeftElecHyd, 0), (K.C1ElecHyd, 0), (K.C2ElecHyd, 0), (K.RightElecHyd, 0),
+            (K.EngineVariant, 1), (K.ParkingBrake, 0));
+        var state = new Bbs757FoStateEvaluator();
+        state.SetSimConnect(sc);
+        state.SetEngineN2(0, 0);
+        var io = new FakeBbs757FoTransport();
+        var exec = new X();
+        exec.SetTransport(io);
+        exec.SetState(state);
+        var mgr = new MSFSBlindAssist.FirstOfficer.ChecklistManager<X, Bbs757FoStateEvaluator>(state, exec, Bbs757FoChecklistDefinitions.Build());
+
+        Assert.False(mgr.ToggleItem("BEFORE_START", "BS_PARK", out string? why));
+        Assert.Equal(BrakeText, why);
+        Assert.Empty(io.Events);
+    }
+
     /// <summary>Plan 23: a hand-ticked "APU: OFF" stays ticked while BlueBird cools the APU down (the switch OFF, the APU still running).</summary>
     [Theory]
     [InlineData("AFTER_START", "AS_APU")]

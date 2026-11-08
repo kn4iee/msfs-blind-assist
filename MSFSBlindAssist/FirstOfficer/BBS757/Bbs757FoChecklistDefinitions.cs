@@ -148,11 +148,13 @@ public static class Bbs757FoChecklistDefinitions
         Id = "BEFORE_START", Name = "Before Start",
         Items = new()
         {
-            Auto("BS_PARK", "BEFORE_START", "Parking brake: SET", K.ParkingBrake, On, Set(X.ParkingBrake, 1)),
             Auto("BS_DOORS", "BEFORE_START", "Doors: CLOSED", "FO_DOORS_CLOSED", On, null),
             // The manual's order: R, then C, then L.
             Auto("BS_HYD", "BEFORE_START", "Electric hydraulic pumps: ON, R then C then L", "FO_ELEC_HYD_PUMPS_ON", On,
                 SetAll((K.RightElecHyd, 1), (K.C1ElecHyd, 1), (K.C2ElecHyd, 1), (K.LeftElecHyd, 1))),
+            // After the pumps: the brake needs their pressure (owner, 2026-11-08).
+            LeaveAlone(Auto("BS_PARK", "BEFORE_START", "Parking brake: SET", K.ParkingBrake, On, Set(X.ParkingBrake, 1)),
+                NoBrakePressure, BrakeStaysText),
             Auto("BS_FUEL", "BEFORE_START", "Fuel pumps: ON, center pumps with center fuel", "FO_FUEL_PANEL_SET", On, FuelPumpsForStart),
             Auto("BS_SEAT_BELTS", "BEFORE_START", "Seat belt signs: ON", K.SeatBelts, v => Is(v, K.SignOn), Set(K.SeatBelts, K.SignOn)),
             // SLOW (FO-11): a tick starts the APU and waits for it to run, outside the executor's gate.
@@ -319,7 +321,8 @@ public static class Bbs757FoChecklistDefinitions
         Id = "SHUTDOWN", Name = "Shutdown",
         Items = new()
         {
-            Auto("SD_PARK", "SHUTDOWN", "Parking brake: SET", K.ParkingBrake, On, Set(X.ParkingBrake, 1)),
+            LeaveAlone(Auto("SD_PARK", "SHUTDOWN", "Parking brake: SET", K.ParkingBrake, On, Set(X.ParkingBrake, 1)),
+                NoBrakePressure, BrakeStaysText),
             Auto("SD_ENG_ANTI_ICE", "SHUTDOWN", "Engine anti-ice: OFF", "FO_ENG_ANTI_ICE_OFF", On,
                 SetAll((K.LeftEngAntiIce, 0), (K.RightEngAntiIce, 0))),
             // Never airborne, and only with APU or external power on the busses (FO-25).
@@ -632,6 +635,17 @@ public static class Bbs757FoChecklistDefinitions
     /// </summary>
     internal static bool BatteryMustStay(Bbs757FoStateEvaluator s) =>
         NotParked(s) || !s.IsPosition(K.ApuState, 0) || !s.IsOn("FO_EXT_POWER_OFF");
+
+    /// <summary>
+    /// No pressure to set the parking brake with (owner, 2026-11-08: it "doesn't seem to fully work unless the electric
+    /// hydraulic pumps are on", as on the iFly): neither the left nor the right electric hydraulic pump (the 757's
+    /// alternate and normal brake systems; the center pumps feed no brakes) reads ON, and no engine reads running.
+    /// Unread is no pressure. The First Officer never turns a pump on just to set the brake.
+    /// </summary>
+    internal static bool NoBrakePressure(Bbs757FoStateEvaluator s) =>
+        !s.IsOn(K.LeftElecHyd) && !s.IsOn(K.RightElecHyd) && !s.IsOn("FO_ENG1_RUNNING") && !s.IsOn("FO_ENG2_RUNNING");
+
+    internal const string BrakeStaysText = "Parking brake left released: no hydraulic pressure. Turn on the electric hydraulic pumps first.";
 
     // The shutdown cut needs the ground and APU or external power on the busses.
     internal static bool NoGroundPower(Bbs757FoStateEvaluator s) =>

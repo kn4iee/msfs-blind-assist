@@ -678,6 +678,12 @@ public class Bbs757FoFlowTests
         Assert.Contains("2-minute APU cool-down", Flow("SECURE").Description);
     }
 
+    /// <summary>Plan 23 (owner, 2026-11-08): the brake does not fully set without the electric hydraulic pumps, so they come first.</summary>
+    [Fact]
+    public void BeforeStart_sets_the_parking_brake_after_the_electric_hydraulic_pumps()
+        => Assert.Equal(new[] { "BS_ON_GROUND", "BS_CHK_DOORS", "BS_HYD", "BS_CHK_HYD", "BS_PARK", "BS_WING_PUMPS" },
+            Flow("BEFORE_START").Steps.Take(6).Select(s => s.Id));
+
     [Fact]
     public void AfterStart_apu_off_is_already_set_by_the_selector()
     {
