@@ -729,8 +729,8 @@ public class Bbs757FoFlowTests
     {
         var ils = Step("DESCENT", "DS_ILS");
         Assert.Equal(FlowStepActionType.CaptainReminder, ils.ActionType);
-        Assert.Equal("Set and identify the ILS: frequency and course in the NAV radios window, Input Ctrl+N, and the ident on the audio panel.",
-            ils.ReminderText);
+        // The owner (2026-11-08): no ident on the audio panel; the frequency and course only.
+        Assert.Equal("Set the ILS frequency and course in the NAV radios window, Input Ctrl+N.", ils.ReminderText);
         Assert.Equal(Index("DESCENT", "DS_AUTOBRAKE") + 1, Index("DESCENT", "DS_ILS"));
         Assert.Equal(new[] { "DS_ILS" }, ils.LinkedChecklistItemIds.ToArray());
         Assert.Contains("ILS", Flow("DESCENT").Description);

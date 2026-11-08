@@ -282,7 +282,7 @@ public static class Bbs757FoChecklistDefinitions
             ActionManual("DS_CABIN", "DESCENT", "Cabin call: landing preparation", Set(K.CabinCall, 1)),
             // FO-14: the landing autobrake is the Captain's; the reminder names where, never a setting.
             Reminder("DS_AUTOBRAKE", "DESCENT", "Set the landing autobrake on the main panel"),
-            Reminder("DS_ILS", "DESCENT", "ILS: set and identified (NAV radios window, Input Ctrl+N; the ident on the audio panel)"),
+            Reminder("DS_ILS", "DESCENT", "ILS: frequency and course set (NAV radios window, Input Ctrl+N)"),
             Reminder("DS_LANDING_DATA", "DESCENT", "Landing data and approach speeds: checked, minimums set"),
         }
     };

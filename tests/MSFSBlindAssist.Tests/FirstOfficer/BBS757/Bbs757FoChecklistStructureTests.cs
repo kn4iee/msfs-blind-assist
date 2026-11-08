@@ -561,7 +561,7 @@ public class Bbs757FoChecklistStructureTests
     {
         var line = Group("DESCENT").Items.Single(i => i.Id == "DS_ILS");
         Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
-        Assert.Contains("ILS", line.Label);
+        Assert.Equal("ILS: frequency and course set (NAV radios window, Input Ctrl+N)", line.Label);   // no ident (owner)
     }
 
     // ------------------------------------------------------------------ the parking brake and hydraulic pressure (plan 29)

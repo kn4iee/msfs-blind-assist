@@ -386,9 +386,8 @@ public static class Bbs757FoFlowDefinitions
             Also(Skip(Multi("DS_LANDING", "Landing lights: ON", (K.LeftLanding, 1), (K.RightLanding, 1)),
                 s => s.IsOn("FO_LANDING_LIGHTS_ON")), "IRC_LIGHTS"),
             Done(Captain("DS_AUTOBRAKE", "Landing autobrake", "Set the landing autobrake on the main panel."), "DS_AUTOBRAKE"),
-            // The 737s' "Set the ILS frequencies and course"; BlueBird identifies the ILS on the approach (p. 56).
-            Done(Captain("DS_ILS", "ILS",
-                "Set and identify the ILS: frequency and course in the NAV radios window, Input Ctrl+N, and the ident on the audio panel."), "DS_ILS"),
+            // The 737s' "Set the ILS frequencies and course": the frequency and course only, no audio ident (owner, 2026-11-08).
+            Done(Captain("DS_ILS", "ILS", "Set the ILS frequency and course in the NAV radios window, Input Ctrl+N."), "DS_ILS"),
             Done(Captain("DS_LANDING_DATA", "Landing data", "Check the landing data and approach speeds, and set the minimums."), "DS_LANDING_DATA"),
         }
     };
