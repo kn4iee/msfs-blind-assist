@@ -40,7 +40,7 @@ public static class Bbs757FoChecklistDefinitions
         AfterStart(), AfterStartCL(),
         BeforeTakeoff(), BeforeTakeoffCL(),
         AfterTakeoff(), AfterTakeoffCL(),
-        Descent(), InRangeCL(), ApproachCL(),
+        Descent(), InRangeCL(), Approach(), ApproachCL(),
         BeforeLanding(), BeforeLandingCL(),
         AfterLanding(), AfterLandingCL(),
         Shutdown(), ShutdownCL(),
@@ -124,6 +124,8 @@ public static class Bbs757FoChecklistDefinitions
             Auto("PF_BLEEDS", "PREFLIGHT", "Engine and APU bleeds: ON", "FO_ALL_BLEEDS_ON", On,
                 SetAll((K.LeftEngBleed, 1), (K.RightEngBleed, 1), (K.ApuBleed, 1))),
             Auto("PF_FDS", "PREFLIGHT", "Flight directors: ON", "FO_FDS_ON", On, SetAll((K.CaptainFd, 1), (K.FirstOfficerFd, 1))),
+            Auto("PF_ND_MODE", "PREFLIGHT", "Captain's ND mode: MAP", K.NdMode, v => Is(v, K.NdModeMap), Set(K.NdMode, K.NdModeMap)),
+            Auto("PF_ND_RANGE", "PREFLIGHT", "Captain's ND range: 40 NM", K.NdRange, v => Is(v, K.NdRange40), Set(K.NdRange, K.NdRange40)),
             // BlueBird's own A/T flag, not the switch (R40).
             Auto("PF_AT_ARM", "PREFLIGHT", "Autothrottle: ARM", "FO_AT_ARMED", On, Set(X.ArmAutothrottle, 1)),
             Auto("PF_BANK_LIMIT", "PREFLIGHT", "Bank limit: AUTO", K.BankLimit, v => Is(v, 0), Set(K.BankLimit, 0)),
@@ -167,6 +169,7 @@ public static class Bbs757FoChecklistDefinitions
             Auto("BS_XPDR", "BEFORE_START", "Transponder: TA/RA", K.TcasMode, v => Is(v, K.TcasTaRa), Set(K.TcasMode, K.TcasTaRa)),
             Auto("BS_BEACON", "BEFORE_START", "Beacon: ON", K.BeaconLight, On, Set(K.BeaconLight, 1)),
             Auto("BS_LOGO", "BEFORE_START", "Logo lights: ON", K.LogoLights, On, Set(K.LogoLights, 1)),
+            Reminder("BS_MCP", "BEFORE_START", "MCP: speed, heading and initial altitude set"),
             // The Captain's, last on every profile (FoChecklistRefinementTests).
             Reminder("BS_ACARS", "BEFORE_START", "Start ACARS"),
             Reminder("BS_CLEARANCE", "BEFORE_START", "Obtain pushback and start clearance"),
@@ -284,6 +287,19 @@ public static class Bbs757FoChecklistDefinitions
         }
     };
 
+    /// <summary>The 737s' Approach group: the Captain's ND to APP at 20 NM, then the Captain's two items.</summary>
+    private static Group Approach() => new()
+    {
+        Id = "APPROACH", Name = "Approach",
+        Items = new()
+        {
+            Auto("AP_ND_MODE", "APPROACH", "Captain's ND mode: APP", K.NdMode, v => Is(v, K.NdModeApp), Set(K.NdMode, K.NdModeApp)),
+            Auto("AP_ND_RANGE", "APPROACH", "Captain's ND range: 20 NM", K.NdRange, v => Is(v, K.NdRange20), Set(K.NdRange, K.NdRange20)),
+            Reminder("AP_ALTIMETERS", "APPROACH", "Altimeters: set to the local QNH"),
+            Reminder("AP_LOC_APP", "APPROACH", "LOC armed when cleared, then APP"),
+        }
+    };
+
     private static Group BeforeLanding() => new()
     {
         Id = "BEFORE_LANDING", Name = "Before Landing",
@@ -293,6 +309,7 @@ public static class Bbs757FoChecklistDefinitions
                 s => s.IsOn("FO_SPEEDBRAKE_EXTENDED"), SpeedbrakeStaysText),
             Auto("BL_LIGHTS", "BEFORE_LANDING", "Taxi light and runway turnoff lights: ON", "FO_GROUND_LIGHTS_ON", On,
                 SetAll((K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1))),
+            Reminder("BL_MISSED", "BEFORE_LANDING", "Missed approach altitude: set"),
             Auto("BL_GEAR", "BEFORE_LANDING", "Landing gear: down, three green", "FO_GEAR_DOWN", On, null),
         }
     };

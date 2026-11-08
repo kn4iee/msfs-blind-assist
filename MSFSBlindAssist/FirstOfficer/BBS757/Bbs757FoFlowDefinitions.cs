@@ -36,6 +36,7 @@ public static class Bbs757FoFlowDefinitions
         BuildBeforeTakeoff(),
         BuildAfterTakeoff(),
         BuildDescent(),
+        BuildApproach(),
         BuildBeforeLanding(),
         BuildAfterLanding(),
         BuildShutdown(),
@@ -104,7 +105,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildPreflight() => new()
     {
         Id = "PREFLIGHT", Name = "Preflight",
-        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights (anti-collision, wing, landing, runway turnoff and taxi off), window heat, signs, pressurization, air; then the MCP and autobrake RTO; then BlueBird's tests, shortest first: both stall warnings, CVR, the takeoff configuration warning, the wheel well, engine, APU and cargo fire tests, both crew oxygen masks, TCAS and ground proximity.",
+        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights (anti-collision, wing, landing, runway turnoff and taxi off), window heat, signs, pressurization, air; then the MCP, the Captain's ND to MAP at 40 NM, and autobrake RTO; then BlueBird's tests, shortest first: both stall warnings, CVR, the takeoff configuration warning, the wheel well, engine, APU and cargo fire tests, both crew oxygen masks, TCAS and ground proximity.",
         RelatedChecklistGroupIds = new[] { "PREFLIGHT" },
         Steps =
         [
@@ -146,6 +147,9 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(Multi("PF_BLEEDS", "Engine and APU bleeds: ON", (K.LeftEngBleed, 1), (K.RightEngBleed, 1), (K.ApuBleed, 1)),
                 s => s.IsOn("FO_ALL_BLEEDS_ON")), "PF_BLEEDS"),
             Done(Skip(Multi("PF_FDS", "Flight directors: ON", (K.CaptainFd, 1), (K.FirstOfficerFd, 1)), s => s.IsOn("FO_FDS_ON")), "PF_FDS"),
+            // The PMDG 737's Preflight ND (MAP, 40 NM), so a departure starts on the map after an Approach flow's APP 20.
+            Done(Skip(SW("PF_ND_MODE", "Captain's ND mode: MAP", K.NdMode, (int)K.NdModeMap), s => s.IsPosition(K.NdMode, (int)K.NdModeMap)), "PF_ND_MODE"),
+            Done(Skip(SW("PF_ND_RANGE", "Captain's ND range: 40 NM", K.NdRange, (int)K.NdRange40), s => s.IsPosition(K.NdRange, (int)K.NdRange40)), "PF_ND_RANGE"),
             // Judged by BlueBird's own A/T flag, not the switch (R40); a switch at ARM over a disarmed A/T is cycled.
             Done(Skip(SW("PF_AT_ARM", "Autothrottle: ARM", X.ArmAutothrottle, 1), s => s.IsOn("FO_AT_ARMED")), "PF_AT_ARM"),
             Done(Skip(SW("PF_BANK_LIMIT", "Bank limit: AUTO", K.BankLimit, 0), s => s.IsPosition(K.BankLimit, 0)), "PF_BANK_LIMIT"),
@@ -162,7 +166,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildBeforeStart() => new()
     {
         Id = "BEFORE_START", Name = "Before Start",
-        Description = "Doors, electric hydraulic pumps R then C then L, then the parking brake (it needs their pressure), fuel pumps, seat belts, APU running, external power off once the APU is on line, APU bleed, transponder TA/RA, beacon and logo lights on, IRS aligned.",
+        Description = "Doors, electric hydraulic pumps R then C then L, then the parking brake (it needs their pressure), fuel pumps, seat belts, APU running, external power off once the APU is on line, APU bleed, transponder TA/RA, beacon and logo lights on, IRS aligned; the MCP, ACARS and the clearance are the Captain's.",
         RelatedChecklistGroupIds = new[] { "BEFORE_START", "BEFORE_START_CL" },
         Steps = new()
         {
@@ -206,6 +210,8 @@ public static class Bbs757FoFlowDefinitions
             // Last before the Captain's items, so the rest of the flow runs while the IRS aligns (about 10 min;
             // a 5 s check here failed every normal start from cold, live 2026-10-28).
             Check("BS_CHK_IRS", "IRS: ALIGNED", "FO_IRS_ALIGNED", On, IrsAlignSeconds, "BSC_IRS"),
+            // The 737s' "Set MCP airspeed, heading and initial altitude".
+            Done(Captain("BS_MCP", "MCP", "Set the MCP speed, heading and initial altitude."), "BS_MCP"),
             // The Captain's, last on every profile (FoChecklistRefinementTests).
             Also(Done(Captain("BS_ACARS", "Start ACARS", "Start ACARS: on the CDU, MENU, then ACARS."), "BS_ACARS"), "BSC_ACARS"),
             Done(Captain("BS_CLEARANCE", "Obtain pushback and start clearance"), "BS_CLEARANCE"),
@@ -387,11 +393,28 @@ public static class Bbs757FoFlowDefinitions
         }
     };
 
+    // ------------------------------------------------------------------ Approach (the 737s')
+    private static Flow BuildApproach() => new()
+    {
+        Id = "APPROACH", Name = "Approach",
+        Description = "The Captain's ND to APP at 20 NM; the altimeters and arming LOC, then APP, are the Captain's.",
+        RelatedChecklistGroupIds = new[] { "APPROACH", "APPROACH_CL" },
+        Steps = new()
+        {
+            // The PMDG 737 and iFly Approach flows' EFIS mode APP, range 20, on the Captain's side.
+            Done(Skip(SW("AP_ND_MODE", "Captain's ND mode: APP", K.NdMode, (int)K.NdModeApp), s => s.IsPosition(K.NdMode, (int)K.NdModeApp)), "AP_ND_MODE"),
+            Done(Skip(SW("AP_ND_RANGE", "Captain's ND range: 20 NM", K.NdRange, (int)K.NdRange20), s => s.IsPosition(K.NdRange, (int)K.NdRange20)), "AP_ND_RANGE"),
+            Done(Captain("AP_ALTIMETERS", "Altimeters", "Altimeters: set to the local QNH."), "AP_ALTIMETERS"),
+            // BlueBird's approach (p. 56): LOC when cleared, then APP.
+            Done(Captain("AP_LOC_APP", "LOC, then APP", "Arm LOC when cleared for the approach, then APP."), "AP_LOC_APP"),
+        }
+    };
+
     // ------------------------------------------------------------------ Before Landing
     private static Flow BuildBeforeLanding() => new()
     {
         Id = "BEFORE_LANDING", Name = "Before Landing",
-        Description = "Speedbrake armed, taxi light and runway turnoff lights on, seat belts checked, landing flaps 25 or 30 checked, then gear down and three green confirmed, read only.",
+        Description = "Speedbrake armed, taxi light and runway turnoff lights on, the missed approach altitude (the Captain's), seat belts checked, landing flaps 25 or 30 checked, then gear down and three green confirmed, read only.",
         RelatedChecklistGroupIds = new[] { "BEFORE_LANDING", "BEFORE_LANDING_CL" },
         Steps = new()
         {
@@ -399,6 +422,8 @@ public static class Bbs757FoFlowDefinitions
                 s => s.IsOn("FO_SPEEDBRAKE_EXTENDED"), Bbs757FoChecklistDefinitions.SpeedbrakeStaysText), "BL_SPEEDBRAKE"), "BLC_SPEEDBRAKE"),
             Done(Skip(Multi("BL_LIGHTS", "Taxi light and runway turnoff lights: ON", (K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1)),
                 s => s.IsOn("FO_GROUND_LIGHTS_ON")), "BL_LIGHTS"),
+            // The 737s' Landing flow: "Set the missed approach altitude."
+            Done(Captain("BL_MISSED", "Missed approach altitude", "Set the missed approach altitude."), "BL_MISSED"),
             Check("BL_CHK_SEAT_BELTS", "Seat belt signs: ON", K.SeatBelts, v => Is(v, K.SignOn), CheckSeconds, "BLC_SEAT_BELTS"),
             // The Captain's flap lever, read (E181: "The normal landing choices are 25 or 30").
             Check("BL_CHK_FLAPS", "Flaps: landing, 25 or 30", "FO_FLAPS_LANDING", On, CaptainFlapsSeconds, "BLC_FLAPS"),

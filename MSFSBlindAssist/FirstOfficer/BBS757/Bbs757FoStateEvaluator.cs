@@ -77,7 +77,7 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
         K.LeftPackSelector, K.RightPackSelector, K.Isolation, K.LeftEngBleed, K.RightEngBleed, K.ApuBleed,
         K.TrimAir, K.LeftRecirc, K.RightRecirc, K.PressMode,
         K.CaptainFd, K.FirstOfficerFd, K.AutothrottleArm, K.BankLimit, K.Autobrake,
-        K.GearLever, K.ParkingBrake, K.TcasMode,
+        K.GearLever, K.ParkingBrake, K.TcasMode, K.NdMode, K.NdRange,
     }
     .Concat(K.IrsSwitches).Concat(K.WindowHeat).Concat(K.Heaters).Concat(K.TerrainAndWeather)
     .Distinct(StringComparer.Ordinal).ToArray();

@@ -43,7 +43,7 @@ public class Bbs757FoFlowTests
     [Fact]
     public void FlowIds_InFlightOrder()
         => Assert.Equal(new[] { "POWER_UP", "PREFLIGHT", "BEFORE_START", "ENGINE_START", "AFTER_START", "BEFORE_TAKEOFF",
-            "AFTER_TAKEOFF", "DESCENT", "BEFORE_LANDING", "AFTER_LANDING", "SHUTDOWN", "SECURE" }, Flows.Select(f => f.Id));
+            "AFTER_TAKEOFF", "DESCENT", "APPROACH", "BEFORE_LANDING", "AFTER_LANDING", "SHUTDOWN", "SECURE" }, Flows.Select(f => f.Id));
 
     [Fact]
     public void StepIds_AreUniqueAcrossFlows()
@@ -387,7 +387,7 @@ public class Bbs757FoFlowTests
         var irs = Step("BEFORE_START", "BS_CHK_IRS");
         Assert.Equal(600, irs.TimeoutSeconds);
         Assert.Equal("FO_IRS_ALIGNED", irs.ConditionFieldName);
-        Assert.Equal(Index("BEFORE_START", "BS_ACARS") - 1, Index("BEFORE_START", "BS_CHK_IRS"));
+        Assert.Equal(Index("BEFORE_START", "BS_MCP") - 1, Index("BEFORE_START", "BS_CHK_IRS"));   // the Captain's items: MCP, ACARS, clearance
         Assert.Contains("BSC_IRS", irs.LinkedChecklistItemIds);
     }
 
@@ -734,6 +734,72 @@ public class Bbs757FoFlowTests
         Assert.Equal(Index("DESCENT", "DS_AUTOBRAKE") + 1, Index("DESCENT", "DS_ILS"));
         Assert.Equal(new[] { "DS_ILS" }, ils.LinkedChecklistItemIds.ToArray());
         Assert.Contains("ILS", Flow("DESCENT").Description);
+    }
+
+    // ------------------------------------------------------------------ the Approach flow and the 737s' reminders (plan 23)
+
+    /// <summary>The 737s' Approach flow: the Captain's ND to APP at 20 NM ("Already set" there), then the Captain's two items.</summary>
+    [Fact]
+    public void Approach_sets_the_nd_and_reminds_the_altimeters_and_loc()
+    {
+        var f = Flow("APPROACH");
+        Assert.Equal("Approach", f.Name);
+        Assert.Equal(new[] { "APPROACH", "APPROACH_CL" }, f.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "AP_ND_MODE", "AP_ND_RANGE", "AP_ALTIMETERS", "AP_LOC_APP" }, f.Steps.Select(s => s.Id));
+
+        Assert.Equal("B757_ADI_1_CTR_KNOB", K.NdMode);
+        Assert.Equal("B757_ADI_1_TFC_KNOB", K.NdRange);
+        var mode = Step("APPROACH", "AP_ND_MODE");
+        Assert.Equal((K.NdMode, (int?)1), (mode.EventName!, mode.TargetValue));
+        Assert.Equal("Captain's ND mode: APP", mode.Label);
+        Assert.True(mode.SkipCondition!(State((K.NdMode, 1))));
+        Assert.False(mode.SkipCondition!(State((K.NdMode, 2))));
+        var range = Step("APPROACH", "AP_ND_RANGE");
+        Assert.Equal((K.NdRange, (int?)1), (range.EventName!, range.TargetValue));
+        Assert.Equal("Captain's ND range: 20 NM", range.Label);
+        Assert.True(range.SkipCondition!(State((K.NdRange, 1))));
+        Assert.False(range.SkipCondition!(State((K.NdRange, 2))));
+
+        Assert.Equal("Altimeters: set to the local QNH.", Step("APPROACH", "AP_ALTIMETERS").ReminderText);
+        Assert.Equal("Arm LOC when cleared for the approach, then APP.", Step("APPROACH", "AP_LOC_APP").ReminderText);
+        Assert.All(f.Steps.Skip(2), s => Assert.Equal(FlowStepActionType.CaptainReminder, s.ActionType));
+        Assert.Contains(K.NdMode, Bbs757FoStateEvaluator.PollFieldList);
+        Assert.Contains(K.NdRange, Bbs757FoStateEvaluator.PollFieldList);
+    }
+
+    /// <summary>The next departure starts on the map: the PMDG 737's Preflight ND, MAP at 40 NM, after the flight directors.</summary>
+    [Fact]
+    public void Preflight_sets_the_nd_to_map_40_after_the_flight_directors()
+    {
+        Assert.Equal(new[] { "PF_FDS", "PF_ND_MODE", "PF_ND_RANGE" },
+            Flow("PREFLIGHT").Steps.Skip(Index("PREFLIGHT", "PF_FDS")).Take(3).Select(s => s.Id));
+        var mode = Step("PREFLIGHT", "PF_ND_MODE");
+        Assert.Equal((K.NdMode, (int?)2), (mode.EventName!, mode.TargetValue));
+        Assert.Equal("Captain's ND mode: MAP", mode.Label);
+        Assert.True(mode.SkipCondition!(State((K.NdMode, 2))));
+        var range = Step("PREFLIGHT", "PF_ND_RANGE");
+        Assert.Equal((K.NdRange, (int?)2), (range.EventName!, range.TargetValue));
+        Assert.Equal("Captain's ND range: 40 NM", range.Label);
+        Assert.True(range.SkipCondition!(State((K.NdRange, 2))));
+    }
+
+    [Fact]
+    public void BeforeLanding_reminds_the_missed_approach_before_the_checks_gear_still_last()
+    {
+        var missed = Step("BEFORE_LANDING", "BL_MISSED");
+        Assert.Equal(FlowStepActionType.CaptainReminder, missed.ActionType);
+        Assert.Equal("Set the missed approach altitude.", missed.ReminderText);
+        Assert.Equal(Index("BEFORE_LANDING", "BL_LIGHTS") + 1, Index("BEFORE_LANDING", "BL_MISSED"));
+        Assert.Equal("BL_CHK_GEAR", Flow("BEFORE_LANDING").Steps[^1].Id);
+    }
+
+    [Fact]
+    public void BeforeStart_reminds_the_mcp_before_acars()
+    {
+        var mcp = Step("BEFORE_START", "BS_MCP");
+        Assert.Equal(FlowStepActionType.CaptainReminder, mcp.ActionType);
+        Assert.Equal("Set the MCP speed, heading and initial altitude.", mcp.ReminderText);
+        Assert.Equal(Index("BEFORE_START", "BS_ACARS") - 1, Index("BEFORE_START", "BS_MCP"));
     }
 
     // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
