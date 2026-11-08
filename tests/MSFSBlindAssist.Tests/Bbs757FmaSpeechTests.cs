@@ -11,13 +11,13 @@ namespace MSFSBlindAssist.Tests;
 
 public class Bbs757FmaSpeechTests
 {
-    /// <summary>The reader tests' layout with fuller tables, keyed as BlueBird's are: an armed mode and the active mode
-    /// it becomes share one value (LOC 3, ROLLOUT 4, LNAV 5, B/CRS 6 in both roll tables; G/S 9, FLARE 10 in both pitch
-    /// tables), so an armed mode turning active is matched by its value, as the 737's.</summary>
+    /// <summary>The reader tests' layout with fuller tables, keyed as BlueBird's are: the roll tables share their values
+    /// (LOC 3, ROLLOUT 4, LNAV 5, B/CRS 6 in both), and so do G/S 9 and FLARE 10 in both pitch tables, so those armed modes
+    /// turning active are matched by their value, as the 737's; VNAV does not (armed 5, active VNAV PTH 6 or VNAV SPD 7).</summary>
     internal static readonly Bbs757FmaLayout Layout = Bbs757FmaReaderTests.Layout with
     {
         AtWords = new Bbs757WordTable(new Dictionary<int, string> { [1] = "SPD", [2] = "EPR", [3] = "THR HLD", [4] = "IDLE", [5] = "FLCH" }),
-        PitchWords = new Bbs757WordTable(new Dictionary<int, string> { [1] = "TO", [2] = "ALT HOLD", [6] = "VNAV PTH", [9] = "G/S", [10] = "FLARE" }),
+        PitchWords = new Bbs757WordTable(new Dictionary<int, string> { [1] = "TO", [2] = "ALT HOLD", [6] = "VNAV PTH", [7] = "VNAV SPD", [9] = "G/S", [10] = "FLARE" }),
         PitchArmedWords = new Bbs757WordTable(new Dictionary<int, string> { [5] = "VNAV", [9] = "G/S", [10] = "FLARE" }),
         RollWords = new Bbs757WordTable(new Dictionary<int, string> { [2] = "HDG SEL", [3] = "LOC", [4] = "ROLLOUT", [5] = "LNAV", [6] = "B/CRS" }),
         RollArmedWords = new Bbs757WordTable(new Dictionary<int, string> { [3] = "LOC", [4] = "ROLLOUT", [5] = "LNAV", [6] = "B/CRS" }),
@@ -86,6 +86,25 @@ public class Bbs757FmaSpeechTests
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
     [InlineData("en-US")]
+    public void Vnav_engaging_says_the_active_mode_and_the_armed_one_clearing(string culture)
+    {
+        // BlueBird keys armed VNAV 5 but active VNAV PTH 6 and VNAV SPD 7, so the 737's value test (S7, kept) does not
+        // match them as one mode: VNAV engaging says both parts, which the in-sim run expects.
+        var armed = Cruise with { Pitch = 2, PitchArmed = 5 };   // ALT HOLD, VNAV armed
+        Assert.Equal("Pitch: ALT HOLD, armed VNAV", TestCulture.Run(culture, () => Bbs757FmaSpeech.Rows(R(armed))[2]));
+        Assert.Equal("FMA: Pitch: VNAV PTH, Pitch armed: none",
+            TestCulture.Run(culture, () => Spoken(armed, armed with { Pitch = 6, PitchArmed = 0 })));
+        Assert.Equal("FMA: Pitch: VNAV SPD, Pitch armed: none",
+            TestCulture.Run(culture, () => Spoken(armed, armed with { Pitch = 7, PitchArmed = 0 })));
+        // G/S, keyed alike in both pitch tables, is said once, as active.
+        Assert.Equal("FMA: Pitch: G/S",
+            TestCulture.Run(culture, () => Spoken(armed with { PitchArmed = 9 }, armed with { Pitch = 9, PitchArmed = 0 })));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    [InlineData("en-US")]
     public void A_part_going_blank_is_none(string culture)
     {
         Assert.Equal("FMA: A/T: none", TestCulture.Run(culture, () => Spoken(Cruise, Cruise with { At = 0 })));
@@ -125,8 +144,8 @@ public class Bbs757FmaSpeechTests
         // The rows show it as well.
         Assert.Equal("Roll: LNAV, armed unrecognised",
             TestCulture.Run(culture, () => Bbs757FmaSpeech.Rows(R(Cruise with { RollArmed = 7 }))[1]));
-        // A new mode with no word that arms then engages is one mode (BlueBird keys armed and active alike): said once,
-        // as active, as the 737 says it.
+        // A new mode with no word that arms then engages under the same value is one mode (as BlueBird keys the roll
+        // tables): said once, as active, as the 737 says it.
         Assert.Equal("FMA: Roll: unrecognised",
             TestCulture.Run(culture, () => Spoken(Cruise with { RollArmed = 7 }, Cruise with { Roll = 7, RollArmed = 0 })));
         // Armed with no word, then another mode with no word engaging: both said.

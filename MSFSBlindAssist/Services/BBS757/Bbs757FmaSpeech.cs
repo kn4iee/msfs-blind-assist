@@ -21,8 +21,10 @@ public static class Bbs757FmaSpeech
     /// value while the column shows a word, else blank, so a column BlueBird stops drawing (the strip with the Captain's
     /// F/D off and no CMD) goes "none", and a value with no word that changes to another is heard again. The AFDS column
     /// compares its words: "FD" comes from the F/D byte, not the status value. An armed mode that clears as the active
-    /// column turns to its value is said once, as active, exactly as the 737 decides it (BlueBird keys an armed mode and
-    /// the active mode it becomes alike: LOC is 3 in both roll tables, G/S 9 in both pitch tables).
+    /// column turns to its value is said once, as active, exactly as the 737 decides it. BlueBird keys most armed modes
+    /// and the active modes they become alike (the roll tables share their values, LOC 3 in both; G/S 9 and FLARE 10 are
+    /// the same in both pitch tables), but not VNAV: armed 5 becomes VNAV PTH 6 or VNAV SPD 7, so VNAV engaging says
+    /// both parts ("Pitch: VNAV PTH, Pitch armed: none").
     /// </summary>
     public static string? DescribeChange(Bbs757FmaReading before, Bbs757FmaReading after)
     {
@@ -67,8 +69,9 @@ public static class Bbs757FmaSpeech
     private static bool IsUnrecognised(string? word) => string.Equals(word, Bbs757WordTable.Unrecognised, StringComparison.Ordinal);
 
     /// <summary>The armed mode cleared as the active column changed to its value: <see cref="PMDG.Pmdg737FmaSpeech"/>'s
-    /// test, on drawn values (a column BlueBird does not draw, R5, is 0). BlueBird's armed and active tables share their
-    /// values, so a mode with no word that arms then engages is one mode, said once, as active.</summary>
+    /// test, on drawn values (a column BlueBird does not draw, R5, is 0). Where BlueBird's armed and active tables share a
+    /// value (the roll tables, G/S, FLARE), that mode, or one with no word keyed alike, is said once, as active; VNAV's
+    /// values differ (armed 5, active 6 or 7), so its two parts are both said.</summary>
     private static bool ArmedBecameActive(int armedBefore, int armedAfter, int activeBefore, int activeAfter) =>
         armedBefore != armedAfter && armedAfter == 0 && armedBefore != 0
         && activeAfter != activeBefore && activeAfter == armedBefore;
