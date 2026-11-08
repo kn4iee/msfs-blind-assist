@@ -246,14 +246,29 @@ The owner's decisions for every display plan (2026-11-08). Plans 24-28 cite them
 
 ## Execution record
 
-- **Status:** claimed (2026-11-08)
+- **Status:** waiting on owner (2026-11-08): Tasks 0-10 done and reviewed; the push of `B757`, the private branch and the generator-4 layout's publication wait for the owner's word, Task 11's live checks for the new build to be started
 - **Claimed by:** Robin Kipp (robin24), 2026-11-08
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
-- **Started:** 2026-11-08, from `B757` e95b4c9e3 (plan 22 landed; plans 23-28 written)
-- **Landed:**
-- **Tests at landing:**
+- **Started:** 2026-11-08, from `B757` e95b4c9e3 (plan 22 landed; plans 23-28 written; claim c9989d1c9)
+- **Landed:** not yet. Branch `B757-p23-displays-fma` at 124d578a1 (plus this record), not pushed; `git log --grep "^Plan: 23"` lists the plan's commits. Private: `feature/b757-displays` at 0c8b8f72 (merge 278d0c11, recipe c753d9af, hardening 0c8b8f72), not pushed. The generator-4 757 layout `bbs757/39462c4abb2f46d2af51c4c2290c4e33a72e25c25bdf378de5d5c81a34bb10b4-561f3062da22ab51.json` (SHA-256 f0cc0565…) is installed in `%APPDATA%\MSFSBlindAssist\layouts\bbs757\`, not published
+- **Tests at landing:** 21,770 passed, 0 failed (app, at 124d578a1); 506 passed, 0 failed (toolkit, private 0c8b8f72); the solution builds in Debug and Release with 0 errors
 - **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+  - 0 done: the claim (c9989d1c9), pushed to `kn4iee/B757` before any work.
+  - 1 done by the controller (0904c3d81, `docs/b757/evidence/displays-fma.md`): no simulator write was needed; the F/D bytes, the AFDS column, the armed columns and the MCP route came from BlueBird's draw, its cockpit model and the 2026-11-06 probe, checked live read-only in cruise (MSFSBA left running; the L:vars read through the `VCockpit15` view).
+  - 2 done (a6f2cae78, fix round 1 054864bec: a dark candidate never holds the search), 3 done (225285c5c), 4 done (00608ad86), 5 done (private 278d0c11, c753d9af), 6 done (f84a0f516, fix round 1 ed5895f6a: an armed mode turning active as the 737 says it), 7 done (57581d610, fix round 1 07ba82ba5: the menus and the gate keys), 8 done (23939d009), 9 done (9cc5e9d58), 10 done (ba25862b9: B757-30, B757-31, B757-32 and the WASM-1/2/4 mirror in `b757.md`). Each was reviewed (spec and quality) and its fixes re-reviewed.
+  - The whole-branch review (opus): no Critical, four Important for the files this plan freezes; its fix wave 432de3a62..124d578a1 (gate variables may be stock simulator variables, a sampler may take the simulator's values, the registry owns later readers' windows, a dark display reads "<Name> display not powered", every wait ends in a silent baseline, the Review Focus layout test, the VNAV comment) and private 0c8b8f72 (the status step fails on any other status comparison; the regenerated layout byte-identical), re-reviewed: all addressed.
+  - Task 7 Step 1: **2 SimConnect variables added**, hidden batched copies of `L:BBS_FD1_SWITCH` and `L:BBS_FD2_SWITCH` (`ExcludeFromMonitorManager`); the MCP altitude and heading ride the existing `BBS757_MCP_ALTITUDE_WATCH` and `BBS757_MCP_HEADING_WATCH` rows.
+  - 11: the layout generated and installed (above); Step 3 done: the Release build 124d578a1 deployed to `C:\MSFSBA-B757` at 2026-11-08 21:32 (after the owner had closed the copy running plan 22's dbb81c30c and the simulator), robocopy rc 3, ProductVersion `0.0.0+124d578a1…` and the DLL's hash confirmed, with the generator-4 layout above in `%APPDATA%`; Steps 1-2 wait for that build to run with the 757 loaded.
+- **Waiting on the owner:** starting the simulator and the new build with the 757 loaded, for Task 11 Steps 1-2 (read-only: `bbs757-module.log` uses the generator-4 file, `bbs757-fma.log` reaches Running, the tablet still reads, the Ctrl+P list against `state.py`); a cold-and-dark load, for a read-only check that the gate's MCP L:vars and F/D bytes agree with memory while unpowered (not measurable in cruise); the in-sim checks by ear below; the word to push `B757`, push `feature/b757-displays` and publish the generator-4 757 layout.
+- **In-sim results:** none yet.
 - **Changed from the plan:**
-- **Open at landing:**
+  - **The AFDS column:** BlueBird draws "CMD" for status 1, otherwise "FD" when this side's F/D is on, else nothing; no other status value has a word. The layout gained `FdWord` beside `Status`/`StatusWords`; a status value not in the table falls to the F/D test, never "unrecognised".
+  - **The strip's gate:** BlueBird draws pitch, pitch armed, roll and roll armed only while the Captain's F/D is on or CMD is engaged (A/T always); the reading blanks them the same way (S10).
+  - **The F/D bytes** come from one getter with two loads (side 0 first, the Captain's), not two getters; `L:BBS_FD1_SWITCH` is the Captain's switch.
+  - **The MCP route** is the pointer at afds+11848 (`AfdsToMcp`), the fields f64; the recipe tells altitude from heading by the variable each is written to.
+  - **Armed columns:** pitch armed 11944 and roll armed 11940, as the layout had them (the probe's table was swapped); no LNAV arming was needed.
+  - **The menus:** `SimConnectManager.FlightRunning` (the "Sim" event the app already tracked) makes the readers wait while no flight runs; the title test alone never ends.
+  - **For plans 24-28 (the frozen files):** gate variables are typed (`Bbs757GateVariable`: name, type, units; `GateKeys` stays the L:var default), taken from each monitor by the registry; `IBbs757DisplaySampler.TryRead(Bbs757SimValues, out …)`; `Bbs757DisplayRegistry.OwnWindow(form)`, closed for good on a switch away; a dark display's window row "<Name> display not powered".
+  - **No status line is UK-respelled:** "BlueBird file not recognised" and "unrecognised" stay as the 737 and plans 20-22 say them.
+- **Open at landing (later work, none blocking):** plans 24-27 must call `r.OwnWindow(form)` for their `BBS757DisplayForm`; VNAV engaging is said "FMA: Pitch: VNAV PTH, Pitch armed: none" (BlueBird's armed VNAV and active VNAV PTH/SPD have different values; the 737's value test kept); a final "unavailable" (no access, internal error, file not recognised) gets no "resumed" after a reload (as the 737); the window says "unavailable: unexpected values" where the pilot heard "stopped: unexpected values" (as the 737); Ctrl+P now opens on the FMA list (the plan 16 guide note); the recipe would miss a second status switch reached through arithmetic; the side effects of the measuring: none.
+- **Rulings made while working:** in the SDD ledger (git-ignored, `.superpowers/sdd/23-displays-fma/progress.md`) and the commit messages.
