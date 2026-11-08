@@ -649,15 +649,15 @@ public class Bbs757FoFlowTests
 
     // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
 
+    /// <summary>Plan 23 (owner, 2026-11-08): shortest first, the squib and landing config tests left out.</summary>
     internal static readonly string[] PreflightTestIds =
     {
-        "PF_TEST_SQUIB", "PF_TEST_GND_PROX", "PF_TEST_STALL_L", "PF_TEST_STALL_R", "PF_TEST_CONFIG_TO", "PF_TEST_CONFIG_LDG",
-        "PF_TEST_CVR", "PF_TEST_OXY_CAPT", "PF_TEST_OXY_FO", "PF_TEST_TCAS", "PF_TEST_FIRE_WHLWELL", "PF_TEST_FIRE_ENG",
-        "PF_TEST_FIRE_CARGO",
+        "PF_TEST_STALL_L", "PF_TEST_STALL_R", "PF_TEST_CVR", "PF_TEST_CONFIG_TO", "PF_TEST_FIRE_WHLWELL", "PF_TEST_FIRE_ENG",
+        "PF_TEST_FIRE_CARGO", "PF_TEST_OXY_CAPT", "PF_TEST_OXY_FO", "PF_TEST_TCAS", "PF_TEST_GND_PROX",
     };
 
     /// <summary>
-    /// The thirteen tests stand where the Captain's "System tests" reminder stood (after the autobrake, before the
+    /// The eleven tests stand where the Captain's "System tests" reminder stood (after the autobrake, before the
     /// FMS), in the table's order: each a press of its own key, skipped aloud if it cannot be pressed (never a stop,
     /// never "Already set": a self-test has no state), and linked to its own line (FO-6, FO-7). The flow's on-ground
     /// and engines-stopped guards stay first (FO-25).
@@ -669,7 +669,7 @@ public class Bbs757FoFlowTests
         Assert.DoesNotContain(steps, s => s.Id == "PF_TESTS");
         Assert.Equal(new[] { "PF_ON_GROUND", "PF_ENGINES_STOPPED" }, steps.Take(2).Select(s => s.Id));
 
-        int first = Index("PREFLIGHT", "PF_TEST_SQUIB");
+        int first = Index("PREFLIGHT", PreflightTestIds[0]);
         Assert.Equal(Index("PREFLIGHT", "PF_AUTOBRAKE") + 1, first);
         var tests = steps.Skip(first).Take(PreflightTestIds.Length).ToList();
         Assert.Equal(PreflightTestIds, tests.Select(s => s.Id));
@@ -692,9 +692,37 @@ public class Bbs757FoFlowTests
     public void Preflight_Description_NamesTheTests()
     {
         string d = Flow("PREFLIGHT").Description;
-        foreach (var word in new[] { "squib", "ground proximity", "stall warning", "configuration warning", "CVR", "oxygen", "TCAS", "fire" })
+        foreach (var word in new[] { "ground proximity", "stall warning", "configuration warning", "CVR", "oxygen", "TCAS", "fire" })
             Assert.Contains(word, d, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("battery test", d, StringComparison.OrdinalIgnoreCase);
+        foreach (var word in new[] { "battery test", "squib", "landing configuration" })
+            Assert.DoesNotContain(word, d, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A test's time is its hold (a held button's map hold, 3 s, unless the test gives one; a P61 switch's own 3 s) plus its After wait.</summary>
+    private static int TestMs(Bbs757FoTest t)
+        => (t.Kind == Bbs757FoTestKind.P61Switch ? Bbs757SpringControls.TestHoldMs : t.HoldMs ?? 3000) + t.AfterMs;
+
+    /// <summary>Plan 23 (owner, 2026-11-08): "the longer tests to go at the end".</summary>
+    [Fact]
+    public void Preflight_tests_run_shortest_first()
+    {
+        var times = Bbs757FoTests.Preflight.Select(TestMs).ToList();
+        for (int i = 1; i < times.Count; i++)
+            Assert.True(times[i] >= times[i - 1],
+                $"{Bbs757FoTests.Preflight[i].Key} ({times[i]} ms) runs after {Bbs757FoTests.Preflight[i - 1].Key} ({times[i - 1]} ms)");
+        Assert.Equal("FO_TEST_GND_PROX", Bbs757FoTests.Preflight[^1].Key);
+    }
+
+    /// <summary>Plan 23 (owner, 2026-11-08): the squib test is heard doing nothing, and the landing config test is not needed.</summary>
+    [Fact]
+    public void Preflight_has_no_squib_or_landing_config_test()
+    {
+        foreach (var (key, id) in new[] { ("FO_TEST_SQUIB", "PF_TEST_SQUIB"), ("FO_TEST_CONFIG_LDG", "PF_TEST_CONFIG_LDG") })
+        {
+            Assert.Null(Bbs757FoTests.For(key));
+            Assert.DoesNotContain(Flow("PREFLIGHT").Steps, s => s.Id == id);
+            Assert.DoesNotContain(Groups.Single(g => g.Id == "PREFLIGHT").Items, i => i.Id == id);
+        }
     }
 
     // ------------------------------------------------------------------ center pumps (FO-20)

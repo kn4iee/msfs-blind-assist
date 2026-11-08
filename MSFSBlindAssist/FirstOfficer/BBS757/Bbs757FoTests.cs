@@ -27,9 +27,11 @@ public enum Bbs757FoTestKind
 public sealed record Bbs757FoTest(string Key, string Label, string Target, Bbs757FoTestKind Kind, int? HoldMs, int AfterMs);
 
 /// <summary>
-/// BlueBird's preflight tests, in its order (User Procedures v1.01, simplified procedures pp. 36-42): every test the
-/// procedure lists except the battery test (owner). The Preflight flow runs them where the Captain's "System tests"
-/// reminder stood, and each has its own line in the PREFLIGHT checklist group. Pure.
+/// BlueBird's preflight tests (User Procedures v1.01, simplified procedures pp. 36-42), shortest first, so the long ones
+/// come last (owner, 2026-11-08; each one's time is its hold plus its After wait). Left out: the battery test (owner,
+/// plan 19), the squib test, heard doing nothing, and the landing config test, not needed (owner, plan 23); the pilot can
+/// still press both on their panels. The Preflight flow runs them where the Captain's "System tests" reminder stood, and
+/// each has its own line in the PREFLIGHT checklist group. Pure.
 /// </summary>
 public static class Bbs757FoTests
 {
@@ -38,19 +40,17 @@ public static class Bbs757FoTests
 
     public static IReadOnlyList<Bbs757FoTest> Preflight { get; } = new Bbs757FoTest[]
     {
-        new("FO_TEST_SQUIB", "Squib test — the nine green lamps light", "B757_P6_SQUIBS_BUTTON2", Held, null, 1000),
-        new("FO_TEST_GND_PROX", "Ground proximity test — listen for the callouts", "BBS757_P61_GROUND_PROX_TEST", P61, null, 15000),
         new("FO_TEST_STALL_L", "Left stall warning test — listen for the stick shaker", "BBS757_P61_LEFT_STALL_TEST", P61, null, 1000),
         new("FO_TEST_STALL_R", "Right stall warning test — listen for the stick shaker", "BBS757_P61_RIGHT_STALL_TEST", P61, null, 1000),
-        new("FO_TEST_CONFIG_TO", "Takeoff config test — listen for the configuration warning", "BBS757_P61_TAKEOFF_CONFIG_TEST", P61, null, 2000),
-        new("FO_TEST_CONFIG_LDG", "Landing config test — listen for the configuration warning", "BBS757_P61_LANDING_CONFIG_TEST", P61, null, 2000),
         new("FO_TEST_CVR", "CVR test", "B757_OVHD_SW_CVR_TEST", Held, null, 1000),
-        new("FO_TEST_OXY_CAPT", "Captain oxygen test — listen for the oxygen flow", "OXY_CAPT_TEST_SWITCH001", Held, 10000, 1000),
-        new("FO_TEST_OXY_FO", "First officer oxygen test — listen for the oxygen flow", "OXY_FO_TEST_SWITCH1", Held, 10000, 1000),
-        new("FO_TEST_TCAS", "TCAS test — listen for TCAS test pass", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", Held, null, 8000),
+        new("FO_TEST_CONFIG_TO", "Takeoff config test — listen for the configuration warning", "BBS757_P61_TAKEOFF_CONFIG_TEST", P61, null, 2000),
         new("FO_TEST_FIRE_WHLWELL", "Wheel well fire test — listen for the fire bell", "B757_PED_FIRE_WHLWELL_BUTTON", Held, null, 3000),
         new("FO_TEST_FIRE_ENG", "Engine fire test — listen for the fire bell", "B757_PED_FIRE_ENG_BUTTON", Held, null, 3000),
         new("FO_TEST_FIRE_CARGO", "Engine, APU and cargo fire test — listen for the fire bell", "B757_PED_FIRE_CARGO_BUTTON", Held, null, 3000),
+        new("FO_TEST_OXY_CAPT", "Captain oxygen test — listen for the oxygen flow", "OXY_CAPT_TEST_SWITCH001", Held, 10000, 1000),
+        new("FO_TEST_OXY_FO", "First officer oxygen test — listen for the oxygen flow", "OXY_FO_TEST_SWITCH1", Held, 10000, 1000),
+        new("FO_TEST_TCAS", "TCAS test — listen for TCAS test pass", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", Held, null, 8000),
+        new("FO_TEST_GND_PROX", "Ground proximity test — listen for the callouts", "BBS757_P61_GROUND_PROX_TEST", P61, null, 15000),
     };
 
     // Declared after Preflight: static fields are initialized in the order they are written.

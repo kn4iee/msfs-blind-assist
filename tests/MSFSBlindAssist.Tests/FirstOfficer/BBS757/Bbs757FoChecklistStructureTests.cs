@@ -447,15 +447,15 @@ public class Bbs757FoChecklistStructureTests
     // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
 
     /// <summary>
-    /// Thirteen hand-tickable action lines where the "Fire and overheat tests…" reminder stood, in the table's order and
+    /// Eleven hand-tickable action lines where the "Fire and overheat tests…" reminder stood, in the table's order and
     /// with the flow step's label. A self-test has no state: no state field, so a tick fires it every time (FO-12).
     /// </summary>
     [Fact]
-    public void Preflight_HasThirteenTestLines_ActionManual_InTheTablesOrder_WhereTheReminderWas()
+    public void Preflight_HasElevenTestLines_ActionManual_InTheTablesOrder_WhereTheReminderWas()
     {
         var items = Group("PREFLIGHT").Items;
         Assert.DoesNotContain(items, i => i.Id == "PF_TESTS");
-        int first = items.FindIndex(i => i.Id == "PF_TEST_SQUIB");
+        int first = items.FindIndex(i => i.Id == Bbs757FoFlowTests.PreflightTestIds[0]);
         Assert.Equal(items.FindIndex(i => i.Id == "PF_AUTOBRAKE") + 1, first);
         var lines = items.Skip(first).Take(Bbs757FoFlowTests.PreflightTestIds.Length).ToList();
         Assert.Equal(Bbs757FoFlowTests.PreflightTestIds, lines.Select(i => i.Id));
@@ -488,7 +488,7 @@ public class Bbs757FoChecklistStructureTests
         enginesUnread.SetSimConnect(SeededSimConnectCache.With(("SIM_ON_GROUND", 1)));
 
         var lines = Group("PREFLIGHT").Items.Where(i => Bbs757FoFlowTests.PreflightTestIds.Contains(i.Id)).ToList();
-        Assert.Equal(13, lines.Count);
+        Assert.Equal(Bbs757FoFlowTests.PreflightTestIds.Length, lines.Count);
         foreach (var line in lines)
         {
             Assert.NotNull(line.LeaveAloneWhen);

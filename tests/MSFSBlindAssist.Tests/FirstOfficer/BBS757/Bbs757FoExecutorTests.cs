@@ -939,25 +939,26 @@ public class Bbs757FoExecutorTests
     private const Bbs757FoTestKind Held = Bbs757FoTestKind.HeldButton;
     private const Bbs757FoTestKind P61 = Bbs757FoTestKind.P61Switch;
 
-    /// <summary>BlueBird's order (User Procedures v1.01, simplified procedures pp. 36-42), with no battery test (owner).</summary>
+    /// <summary>
+    /// BlueBird's tests (User Procedures v1.01, simplified procedures pp. 36-42) shortest first, with no battery test
+    /// (owner, plan 19) and no squib or landing config test (owner, plan 23).
+    /// </summary>
     [Fact]
-    public void ThePreflightTests_AreBlueBirdsThirteen_InItsOrder()
+    public void ThePreflightTests_AreEleven_ShortestFirst()
     {
         var expected = new Bbs757FoTest[]
         {
-            new("FO_TEST_SQUIB", "Squib test — the nine green lamps light", "B757_P6_SQUIBS_BUTTON2", Held, null, 1000),
-            new("FO_TEST_GND_PROX", "Ground proximity test — listen for the callouts", "BBS757_P61_GROUND_PROX_TEST", P61, null, 15000),
             new("FO_TEST_STALL_L", "Left stall warning test — listen for the stick shaker", "BBS757_P61_LEFT_STALL_TEST", P61, null, 1000),
             new("FO_TEST_STALL_R", "Right stall warning test — listen for the stick shaker", "BBS757_P61_RIGHT_STALL_TEST", P61, null, 1000),
-            new("FO_TEST_CONFIG_TO", "Takeoff config test — listen for the configuration warning", "BBS757_P61_TAKEOFF_CONFIG_TEST", P61, null, 2000),
-            new("FO_TEST_CONFIG_LDG", "Landing config test — listen for the configuration warning", "BBS757_P61_LANDING_CONFIG_TEST", P61, null, 2000),
             new("FO_TEST_CVR", "CVR test", "B757_OVHD_SW_CVR_TEST", Held, null, 1000),
-            new("FO_TEST_OXY_CAPT", "Captain oxygen test — listen for the oxygen flow", "OXY_CAPT_TEST_SWITCH001", Held, 10000, 1000),
-            new("FO_TEST_OXY_FO", "First officer oxygen test — listen for the oxygen flow", "OXY_FO_TEST_SWITCH1", Held, 10000, 1000),
-            new("FO_TEST_TCAS", "TCAS test — listen for TCAS test pass", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", Held, null, 8000),
+            new("FO_TEST_CONFIG_TO", "Takeoff config test — listen for the configuration warning", "BBS757_P61_TAKEOFF_CONFIG_TEST", P61, null, 2000),
             new("FO_TEST_FIRE_WHLWELL", "Wheel well fire test — listen for the fire bell", "B757_PED_FIRE_WHLWELL_BUTTON", Held, null, 3000),
             new("FO_TEST_FIRE_ENG", "Engine fire test — listen for the fire bell", "B757_PED_FIRE_ENG_BUTTON", Held, null, 3000),
             new("FO_TEST_FIRE_CARGO", "Engine, APU and cargo fire test — listen for the fire bell", "B757_PED_FIRE_CARGO_BUTTON", Held, null, 3000),
+            new("FO_TEST_OXY_CAPT", "Captain oxygen test — listen for the oxygen flow", "OXY_CAPT_TEST_SWITCH001", Held, 10000, 1000),
+            new("FO_TEST_OXY_FO", "First officer oxygen test — listen for the oxygen flow", "OXY_FO_TEST_SWITCH1", Held, 10000, 1000),
+            new("FO_TEST_TCAS", "TCAS test — listen for TCAS test pass", "B757_PED_TCAS_MODE_KNOB_TEST_CLICK", Held, null, 8000),
+            new("FO_TEST_GND_PROX", "Ground proximity test — listen for the callouts", "BBS757_P61_GROUND_PROX_TEST", P61, null, 15000),
         };
         Assert.Equal(expected, Bbs757FoTests.Preflight);
     }
@@ -990,7 +991,7 @@ public class Bbs757FoExecutorTests
             }
             Assert.Same(t, Bbs757FoTests.For(t.Key));
         }
-        Assert.Equal(13, Bbs757FoTests.Preflight.Select(t => t.Key).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(11, Bbs757FoTests.Preflight.Select(t => t.Key).Distinct(StringComparer.Ordinal).Count());
         Assert.Null(Bbs757FoTests.For(K.Battery));
         Assert.Null(Bbs757FoTests.For("B757_OVHD_SW_CVR_TEST"));     // a target is not a key
     }
@@ -1015,7 +1016,7 @@ public class Bbs757FoExecutorTests
 
     [Theory]
     [InlineData("FO_TEST_OXY_CAPT", "held OXY_CAPT_TEST_SWITCH001 10000", 1000)]
-    [InlineData("FO_TEST_SQUIB", "held B757_P6_SQUIBS_BUTTON2 map", 1000)]
+    [InlineData("FO_TEST_CVR", "held B757_OVHD_SW_CVR_TEST map", 1000)]
     [InlineData("FO_TEST_GND_PROX", "p61 BBS757_P61_GROUND_PROX_TEST", 15000)]
     [InlineData("FO_TEST_TCAS", "held B757_PED_TCAS_MODE_KNOB_TEST_CLICK map", 8000)]
     public async Task APreflightTest_ByAChecklistTick_IsTheSamePressAndWait(string key, string sent, int after)
@@ -1031,7 +1032,7 @@ public class Bbs757FoExecutorTests
         _io.TestPressLands = false;
         foreach (var t in Bbs757FoTests.Preflight)
             Assert.False(await _exec.ExecuteStepAsync(Sw(t.Key, 1)), t.Key);
-        Assert.Equal(13, _io.HeldPresses.Count + _io.P61Tests.Count);
+        Assert.Equal(11, _io.HeldPresses.Count + _io.P61Tests.Count);
         Assert.Empty(_io.Delays);
     }
 
