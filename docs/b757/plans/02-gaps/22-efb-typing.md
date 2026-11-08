@@ -121,13 +121,31 @@
 
 ## Execution record
 
-- **Status:** claimed
+- **Status:** built, reviewed and checked in the sim (2026-11-08); the push to `kn4iee/B757` and the v3 layout's publication wait for the owner's word
 - **Claimed by:** Robin Kipp (robin24), 2026-11-07
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
-- **Started:** 2026-11-07, from `B757` 8d8bacd18 (plans 20 and 21 landed)
-- **Landed:**
-- **Tests at landing:**
+- **Started:** 2026-11-07, from `B757` 8d8bacd18 (plans 20 and 21 landed; claim 35d91cc7c)
+- **Landed:** not yet. `B757` has moved since the start (4313a1777, kn4iee: the tablet window's own unreadable reasons, in `Bbs757EfbBridge.cs` and `MainForm.BBS757.cs`), so the push rebases onto it and runs the suite again; `git log --grep "^Plan: 22"` lists the plan's commits (26 before this record)
+- **Tests at landing:** before the rebase, at dbb81c30c: 21,620 passed, 0 failed (app); 32 passed, 0 failed (the shared EFB window's jsdom tests, `tools/flypad-shell-test`)
 - **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+  - 0 done: the claim (35d91cc7c), pushed before any work.
+  - 1 done: the measuring (the controller's agent, 2026-11-07), committed as the evidence `docs/b757/evidence/efb-typing.md` (dbc8038e8, its follow-up 35b3ca940).
+  - 1b added (from Task 1): the keyboard's state and a text box's caret in the layout, the walk and the model (22bd8fadd, d3397664f; private e30fff46, 0fdbfeb1, `GeneratorVersion` 3).
+  - 1c added (from Task 1): a toggle's state from its own byte (470f9fc9d, c3f3380f7; private dc04ef2e, 772f97d3).
+  - 2 to 6 done, each reviewed: 2 the planner (9b84144d3), 3 `TypeAsync` (181295a9b, 98aafb083), 4 the shared window's Enter-only box (9e52a4f2f, done first), 5 the edit boxes and the value boxes as buttons (fcaf334ff, 33e180479), 6 the rules (34a1441a0).
+  - The whole-branch review (opus) on Tasks 1-6: no Critical, 4 Important, 6 Minor; its fix wave 2fa8a9ac1..00ffefa50, a scoped re-review that found one more Important (Enter dead after a failed typing) and three Minor, fixed in 409e64879 and dbb81c30c, then checked clean.
+  - 7 done by the owner's checks below on dbb81c30c, deployed to `C:\MSFSBA-B757` with layout v8 (generator version 3); no separate controller round trips were needed.
+- **Waiting on the owner:** his word to push `HEAD:B757` (after the rebase) together with the private `feature/b757-displays` and the v3 757 layout: this build reads no layout older than generator version 3, so the 757's tablet window stays unreadable for anyone on the new code until the layout is published.
+- **In-sim results:** 2026-11-08, the owner by ear on build dbb81c30c, the sim and the app freshly started; all three passed:
+  - 1: PERF calc's Airport typed and heard once; a changed box left without Enter said "Airport not changed"; the original airport typed back.
+  - 2: the Left tank's Quantity opened BlueBird's fuel dialog; "Fuel (Gal)" typed on the keypad and heard once; CANCEL left the fuel unchanged.
+  - 3: the SimBrief ID logged out from the window, typed back and heard; BlueBird saved the same ID again (`efb_settings.json` compared by hash, the Hoppie and SayIntentions values unchanged).
 - **Changed from the plan:**
+  - **Task 1b and 1c added:** the keyboard's shown state is the keyboard app's bytes (shown, ready, keypad, target, the keypad's rectangle, the layers), never its keys, which read visible either way (B757-23); a key tapped before ready lands on the page. A toggle's state is its own byte: the window read TOD pause "not checked" while it was on.
+  - **Clearing uses the caret:** a tap puts the caret at the nearest character, so the plan backspaces before it and deletes after it; the keypad's DEL clears all.
+  - **A box is finished with the keyboard's down key** (it keeps the text; Enter does nothing on Airport and closes the keyboard on Charts), a keypad box with the keypad's OK (it commits TOD; in the fuel dialog INSERT stays the pilot's answer). No account row has a save button.
+  - **Value boxes are buttons:** they open BlueBird's fuel and weight dialog, whose box is the edit box ("Fuel (Gal)": the unit in the name, the bare number as the value).
+  - **The final review's fixes:** the Enter-only box follows the tablet's text after a typing and posts only what the pilot typed since (no "not changed" after a typing the tablet altered); a press under a keyboard that is up puts it down first (B757-18); an account row whose box goes away once saved is read back from the line it shows; no run counts in the log (D2); the no-key alert names a space and the symbols NVDA does not speak; the box says "Press Enter to type it on the tablet."
+  - **The typing rule is B757-29** (B757-26 was taken).
+- **Open at landing (later work, none blocking):** the golden listings still show the pages as captured before the text box state (no committed tree carries it; a recapture through the scrub of PERF calc, Charts, AIRAC data, the fuel dialog and Settings > Aircraft with TOD on would show the edit boxes); ten of the twelve value boxes are not measured opening the dialog; a drop-down row tap is not re-checked after a put-down closes the list; a value box's no-change alert names it "Quantity" alone (three tanks share it); the typing pace stays 100 ms a tap (a 64-character key takes 15 to 20 s; every pace from 0 to 300 ms typed exactly). Side effects of the measuring: Charts shows its first TAXI chart (it showed entry 23), and PERF calc's wind, temperature and pressure boxes changed during the pace runs; both left as they are.
+- **Rulings made while working:** in the SDD ledger (git-ignored, `.superpowers/sdd/22-efb-typing/progress.md`) and the commit messages; the owner's: the plan's go-ahead covered typing into harmless fields, each put back; the SimBrief logout was his to do, in check 3.
