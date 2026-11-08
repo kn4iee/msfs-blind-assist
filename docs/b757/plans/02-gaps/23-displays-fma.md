@@ -246,10 +246,10 @@ The owner's decisions for every display plan (2026-11-08). Plans 24-28 cite them
 
 ## Execution record
 
-- **Status:** not started
-- **Claimed by:**
-- **Worked by:**
-- **Started:**
+- **Status:** claimed (2026-11-08)
+- **Claimed by:** Robin Kipp (robin24), 2026-11-08
+- **Worked by:** Robin Kipp with Claude (subagent-driven development)
+- **Started:** 2026-11-08, from `B757` e95b4c9e3 (plan 22 landed; plans 23-28 written)
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
