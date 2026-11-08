@@ -647,6 +647,45 @@ public class Bbs757FoFlowTests
         Assert.True(battery.LeaveAloneWhen!(apuOn));
     }
 
+    // ------------------------------------------------------------------ the APU off, the 737s' rules (plan 23)
+
+    /// <summary>
+    /// The 737s' Secure (FOB-22, owner 2026-11-08: a 2-minute cool-down "similar to both 737s"): the APU switch OFF,
+    /// "Already set" over a switch already OFF; only after THIS run switched it off, a fixed 120 s cool-down (the
+    /// iFly's 2 minutes); then the read wait for the APU to stop, as the PMDG 737 follows its fixed wait with a read
+    /// of the APU itself; then external power.
+    /// </summary>
+    [Fact]
+    public void Secure_cools_the_apu_down_two_minutes_after_switching_it_off()
+    {
+        Assert.Equal(new[] { "SC_APU", "SC_APU_COOLDOWN", "SC_APU_STOPPED", "SC_EXT_PWR" },
+            Flow("SECURE").Steps.Skip(Index("SECURE", "SC_APU")).Take(4).Select(s => s.Id));
+
+        var cool = Step("SECURE", "SC_APU_COOLDOWN");
+        Assert.Equal(FlowStepActionType.WaitSeconds, cool.ActionType);
+        Assert.Equal(120, cool.WaitSeconds);
+        Assert.Equal("APU cool-down", cool.Label);
+        Assert.Equal("SC_APU", cool.RunOnlyIfStepSent);
+        Assert.Empty(cool.LinkedChecklistItemIds);
+
+        var apu = Step("SECURE", "SC_APU");
+        Assert.True(apu.SkipCondition!(State((K.ApuSelector, 0), (K.ApuState, 2))));
+        Assert.False(apu.SkipCondition!(State((K.ApuSelector, 1), (K.ApuState, 2))));
+
+        var stopped = Step("SECURE", "SC_APU_STOPPED");
+        Assert.Equal(K.ApuState, stopped.ConditionFieldName);
+        Assert.Equal(FlowStepFailurePolicy.Stop, stopped.FailurePolicy);
+        Assert.Contains("2-minute APU cool-down", Flow("SECURE").Description);
+    }
+
+    [Fact]
+    public void AfterStart_apu_off_is_already_set_by_the_selector()
+    {
+        var apu = Step("AFTER_START", "AS_APU");
+        Assert.True(apu.SkipCondition!(State((K.ApuSelector, 0), (K.ApuState, 2))));
+        Assert.False(apu.SkipCondition!(State((K.ApuSelector, 1), (K.ApuState, 2))));
+    }
+
     // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
 
     /// <summary>Plan 23 (owner, 2026-11-08): shortest first, the squib and landing config tests left out.</summary>

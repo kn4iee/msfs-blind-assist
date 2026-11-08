@@ -309,7 +309,11 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
         ["FO_EXT_POWER_ON"] = Vars(v => On(v[0]), K.ExtPwrOn),
         ["FO_EXT_POWER_OFF"] = Vars(v => !On(v[0]), K.ExtPwrOn),
         ["FO_APU_RUNNING"] = Vars(v => Pos(v[0], 2), K.ApuState),
-        ["FO_APU_OFF"] = Vars(v => Pos(v[0], 0) || Pos(v[0], 3), K.ApuState),   // off or shutting down
+        // "APU: OFF" is the APU switch at OFF, as on the 737s (APU_Selector < 0.5; owner, 2026-11-08), never the APU's
+        // running state: BlueBird runs the APU on through a cool-down after OFF, and a line judged by the state un-ticked
+        // a hand tick with "Unable to complete" while the APU was on its way off. Whether it has STOPPED is
+        // B757_APU_STATE 0, read where that matters (Final Securing's wait, the battery).
+        ["FO_APU_OFF"] = Vars(v => Pos(v[0], 0), K.ApuSelector),
         // The APU running with its generator control ON: the generator takes the busses by itself (the manual's
         // "APU GEN ON; RUN illuminated"), so external power may be deselected.
         ["FO_APU_ON_LINE"] = Vars(v => Pos(v[0], 2) && On(v[1]), K.ApuState, K.ApuGen),

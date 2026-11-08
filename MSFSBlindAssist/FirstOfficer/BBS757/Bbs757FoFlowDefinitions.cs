@@ -53,6 +53,9 @@ public static class Bbs757FoFlowDefinitions
     private const int EnginesStopSeconds = 120;
     private const int ApuStopSeconds = 150;
 
+    /// <summary>The APU's cool-down after its switch goes OFF: 2 minutes, as on both 737s (owner, 2026-11-08).</summary>
+    internal const int ApuCooldownSeconds = 120;
+
     private static bool On(double v) => v > 0.5;
     private static bool Is(double v, double p) => Bbs757FoStateEvaluator.Pos(v, p);
 
@@ -481,7 +484,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildSecure() => new()
     {
         Id = "SECURE", Name = "Final Securing",
-        Description = "IRS off, emergency lights off, APU off and stopped, external power off, then the battery off: the aircraft cold and dark.",
+        Description = "IRS off, emergency lights off, APU off, then a 2-minute APU cool-down and the APU stopped, external power off, then the battery off: the aircraft cold and dark.",
         RelatedChecklistGroupIds = new[] { "SECURE" },
         Steps = new()
         {
@@ -491,8 +494,12 @@ public static class Bbs757FoFlowDefinitions
                     (K.IrsSwitches[0], 0), (K.IrsSwitches[1], 0), (K.IrsSwitches[2], 0)),
                 s => s.IsOn("FO_IRS_ALL_OFF")), "SC_IRS"),
             Done(Skip(SW("SC_EMER_LTS", "Emergency lights: OFF", K.EmergencyLights, 0), s => s.IsPosition(K.EmergencyLights, 0)), "SC_EMER_LTS"),
-            // The APU by its selector, never the battery (the manual), and the battery kept on until it stops.
-            Done(Skip(SW("SC_APU", "APU: OFF", K.ApuSelector, 0), s => s.IsPosition(K.ApuState, 0)), "SC_APU"),
+            // The APU by its selector, never the battery (the manual), and the battery kept on until it stops. The 737s'
+            // rules (FOB-22; owner, 2026-11-08): "Already set" over a switch already OFF, so the cool-down below follows
+            // only an APU THIS run switched off: a fixed 2 minutes (the iFly's 120 s), then the read wait for the APU to
+            // stop, as the PMDG 737 follows its fixed wait with a read of the APU itself.
+            Done(Skip(SW("SC_APU", "APU: OFF", K.ApuSelector, 0), s => s.IsOn("FO_APU_OFF")), "SC_APU"),
+            RunOnlyIfSent(Wait("SC_APU_COOLDOWN", "APU cool-down", ApuCooldownSeconds), "SC_APU"),
             WaitForField("SC_APU_STOPPED", "APU to stop", K.ApuState, v => Is(v, 0), ApuStopSeconds, FlowStepFailurePolicy.Stop),
             Done(Skip(SW("SC_EXT_PWR", "External power: OFF", X.ExtPower, 0), s => s.IsOn("FO_EXT_POWER_OFF")), "SC_EXT_PWR"),
             // External power that would not switch off: the GPU itself is removed (E199: "remove the external supply
@@ -547,6 +554,14 @@ public static class Bbs757FoFlowDefinitions
         ActionType = FlowStepActionType.SetSwitchMultiple,
         MultiActions = actions.ToList(),
         FailurePolicy = FlowStepFailurePolicy.Skip,
+    };
+
+    /// <summary>A fixed wait, spoken "Waiting N seconds: label" (the 737s' cool-downs).</summary>
+    private static Step Wait(string id, string label, int seconds) => new()
+    {
+        Id = id, Label = label,
+        ActionType = FlowStepActionType.WaitSeconds,
+        WaitSeconds = seconds,
     };
 
     private static Step WaitForField(string id, string label, string field, Func<double, bool> condition, int timeoutSec,

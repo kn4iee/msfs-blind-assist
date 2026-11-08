@@ -535,6 +535,21 @@ public class Bbs757FoChecklistStructureTests
         Assert.Equal(tests.Select(t => t.AfterMs), io.Delays);
     }
 
+    /// <summary>Plan 23: a hand-ticked "APU: OFF" stays ticked while BlueBird cools the APU down (the switch OFF, the APU still running).</summary>
+    [Theory]
+    [InlineData("AFTER_START", "AS_APU")]
+    [InlineData("SECURE", "SC_APU")]
+    public void Apu_off_lines_read_done_while_the_apu_cools_down(string group, string id)
+    {
+        var item = Group(group).Items.Single(i => i.Id == id);
+        var cooling = new Bbs757FoStateEvaluator();
+        cooling.SetSimConnect(SeededSimConnectCache.With((K.ApuSelector, 0), (K.ApuState, 2)));
+        Assert.True(item.EvaluateState(cooling.GetValue(item.StateFieldName!)));
+        var on = new Bbs757FoStateEvaluator();
+        on.SetSimConnect(SeededSimConnectCache.With((K.ApuSelector, 1), (K.ApuState, 2)));
+        Assert.False(item.EvaluateState(on.GetValue(item.StateFieldName!)));
+    }
+
     [Fact]
     public void AfterTakeoff_and_BeforeLanding_lines_sit_where_the_flow_puts_them()
     {

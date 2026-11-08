@@ -83,6 +83,7 @@ public class Bbs757FoStateEvaluatorTests
         new object[] { "FO_FLAPS_UP", new[] { K.FlapsHandle } },
         new object[] { "FO_FLAPS_LANDING", new[] { K.FlapsHandle } },
         new object[] { "FO_APU_ON_LINE", new[] { K.ApuState, K.ApuGen } },
+        new object[] { "FO_APU_OFF", new[] { K.ApuSelector } },
         new object[] { "FO_PARKED_LIGHTS_OFF", new[] { K.WingLights, K.LogoLights, K.TaxiLight } },
         new object[] { "FO_PREFLIGHT_LIGHTS_OFF", new[] { K.BeaconLight, K.StrobeLights, K.WingLights, K.LeftLanding, K.RightLanding,
             K.LeftTurnoff, K.RightTurnoff, K.TaxiLight } },
@@ -453,6 +454,21 @@ public class Bbs757FoStateEvaluatorTests
     [InlineData(0.0, 1.0, 0.0)]
     public void The_apu_is_on_line_running_with_its_generator_control_on(double apu, double gen, double expected)
         => Assert.Equal(expected, C("FO_APU_ON_LINE", D((K.ApuState, apu), (K.ApuGen, gen))));
+
+    /// <summary>
+    /// Plan 23 (owner, 2026-11-08: "use the same rules as the 737s"): "APU: OFF" is the APU switch at OFF, as the 737s'
+    /// <c>APU_Selector &lt; 0.5</c>, never the APU's running state: BlueBird runs the APU on through its cool-down, so a
+    /// hand tick judged by the state was un-ticked with "Unable to complete" while the APU was on its way off.
+    /// </summary>
+    [Fact]
+    public void Apu_off_is_the_selector_even_while_the_apu_cools_down()
+    {
+        Assert.Equal(1, C("FO_APU_OFF", D((K.ApuSelector, 0), (K.ApuState, 2))));   // switched off, cooling down
+        Assert.Equal(1, C("FO_APU_OFF", D((K.ApuSelector, 0), (K.ApuState, 0))));
+        Assert.Equal(1, C("FO_APU_OFF", D((K.ApuSelector, 0))));                    // the state unread: the switch decides
+        Assert.Equal(0, C("FO_APU_OFF", D((K.ApuSelector, 1), (K.ApuState, 3))));   // the switch ON
+        Assert.True(double.IsNaN(C("FO_APU_OFF", D((K.ApuState, 0)))));             // the switch unread
+    }
 
     [Fact]
     public void Apu_or_external_power_one_lit_source_is_enough()
