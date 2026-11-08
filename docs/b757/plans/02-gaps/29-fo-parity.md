@@ -140,14 +140,15 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 
 - **Claimed by:** Claude, for the owner (kn4iee), 2026-11-08. Written as plan 23; renumbered 29 before its push, when Robin's plans 23-28 (the displays) reached `B757` first (the index: a claim counts once it is on the remote).
 - **Status:** landed on `B757`, waiting on the owner's in-sim checks (above).
-- Worked inline by Claude (superpowers:executing-plans, TDD per task, one fresh whole-branch reviewer at the end), on `B757` in the main folder. Base 3307d5915 (this plan). Every commit carries `Plan: 29`.
-- Task 2, 4943aa9cd: eleven preflight tests, shortest first, no squib or landing config test.
-- Task 3, 14e7f34ea: "APU: OFF" reads the APU switch; Final Securing's 2-minute cool-down (`SC_APU_COOLDOWN`).
-- Task 4, 1e6444eb1: Before Start turns the electric hydraulic pumps on before the parking brake; the brake is left alone without brake pressure.
-- Task 5, 1d66429b2: the FWD cabin call in Before Takeoff and Descent; Descent's ILS reminder.
-- Task 6, 530272469: the Approach flow and group (13 flows, 22 groups); Preflight's ND MAP 40; the missed approach and MCP reminders.
-- Task 7, c5ec420f6: LNAV and VNAV at 400 ft (`Bbs757FoAutoManager`, `PushMcpAsync`).
-- Task 8, 168a48771: the center fuel pumps (`FO_CENTER_FUEL_LBS`, the shared gate, the policy, the settings text).
+- Worked inline by Claude (superpowers:executing-plans, TDD per task, one fresh whole-branch reviewer at the end), on `B757` in the main folder. Base c9989d1c9 (`kn4iee/B757` after the rebase; this plan f70f4f43d). Every commit carries `Plan: 29`.
+- Task 2, d86c0b645: eleven preflight tests, shortest first, no squib or landing config test.
+- Task 3, be4ebe5cd: "APU: OFF" reads the APU switch; Final Securing's 2-minute cool-down (`SC_APU_COOLDOWN`).
+- Task 4, c34044c46: Before Start turns the electric hydraulic pumps on before the parking brake; the brake is left alone without brake pressure.
+- Task 5, 51f0dab83: the FWD cabin call in Before Takeoff and Descent; Descent's ILS reminder.
+- Task 6, a599a6fd9: the Approach flow and group (13 flows, 22 groups); Preflight's ND MAP 40; the missed approach and MCP reminders.
+- Task 7, 8804ce066: LNAV and VNAV at 400 ft (`Bbs757FoAutoManager`, `PushMcpAsync`).
+- Task 8, 092907890: the center fuel pumps (`FO_CENTER_FUEL_LBS`, the shared gate, the policy, the settings text).
+- Task 9, 78ec8d635 (the record); the review's fix, 600684bf8; the renumbering, e3d3b6929.
 
 ### What changed from the plan, and why
 
