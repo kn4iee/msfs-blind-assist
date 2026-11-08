@@ -31,7 +31,8 @@ public interface IBbs757DisplayMonitor : IDisposable
 /// <see cref="IBbs757DisplayEnvironment"/>, off the UI thread, polled with <see cref="Task.IsCompleted"/> and never
 /// continued), trusts a candidate only once a reading passes the one gate (<see cref="Judge"/>), then speaks each change
 /// once it has settled for 300 ms. Only a good reading is spoken, shown or becomes the baseline. The first good reading
-/// after Start or Restart, and after the display was dark or powering up, is a silent baseline (S4). Silence must never
+/// after Start or Restart, after any wait for the simulator, and after the display was dark or powering up, is a silent
+/// baseline (S4). Silence must never
 /// pass for "no change": every way the reader stops is spoken once (the memory lost for 10 s, no good reading for 2 s,
 /// ten corrupt readings, the search window running out, a final reason), "resumed" carries whatever changed meanwhile,
 /// and <see cref="View"/> repeats the stop line the pilot heard. Memory not found and values that do not match are never
@@ -90,7 +91,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     // The display's power (S4) as the sampler being read sees it, from its readings that are not corrupt.
     private bool? _lastLit;      // at the last such reading; null when nothing is known, or with no power state
     private long? _litSinceMs;   // it powered up then, and is still in its quiet
-    private bool _rebaseline;    // a quiet reading was seen: the next good reading is a silent baseline
+    private bool _rebaseline;    // a quiet reading, or a wait for the simulator, was seen: the next good reading is a silent baseline
 
     // Running.
     private TReading _spoken = default!;  // what the pilot last heard (or would have, unmuted)
@@ -242,6 +243,10 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
                 ReleaseReading();
                 _lostAtMs = null; // waiting for the simulator is silent
                 _downSinceMs = null;
+                // Another flight may follow (seen only as this wait, with no reload): its first good reading is a
+                // silent baseline, never the difference between the flights. A stop heard before is still answered
+                // by "resumed" (_resumeOwed), alone.
+                _rebaseline = true;
                 Go(State.WaitingForSimulator, "the simulator's values are not available");
             }
             return;
@@ -469,8 +474,9 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     private void EnterRunning(TReading reading, string reason)
     {
-        // The first good reading after Start or Restart, or after the display was dark or powering up, is the baseline,
-        // never spoken as a change; only "resumed" when a stop heard (before a reload too) is unanswered. Later, what
+        // The first good reading after Start or Restart, after a wait for the simulator, or after the display was dark or
+        // powering up, is the baseline, never spoken as a change; only "resumed" when a stop heard (before a reload or a
+        // wait too) is unanswered. Later, what
         // changed while the reader was not running is told, never swallowed: after "resumed", whose change parts take
         // no prefix of their own, or with its prefix after a quick, silent search, or when the status row is muted.
         bool heardStop = _resumeOwed; // in this session, or before a reload

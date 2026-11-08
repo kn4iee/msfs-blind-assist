@@ -608,6 +608,44 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         Assert.Equal("Locating", h.State);
     }
 
+    [Fact]
+    public void Every_wait_for_the_simulator_ends_in_a_silent_baseline()
+    {
+        // A flight change seen only as a wait (no reload): the new flight's first good reading is a baseline, never the
+        // difference between the two flights (S4).
+        var h = New().Start();
+        h.RunUntilRunning(); // A
+        var gate = h.Env.Simulator;
+        h.Env.Simulator = null;
+        h.Tick(60);
+        Assert.Equal("WaitingForSimulator", h.State);
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("B")); // the next flight's display differs
+        h.Env.Simulator = gate;
+        h.RunUntilRunning(100);
+        h.Tick(30);
+        Assert.Empty(h.Env.Spoken);
+        Assert.Equal(new[] { "X: B" }, h.Monitor.View());
+
+        // A stop the pilot heard before the wait is answered by "resumed" alone, as after a reload.
+        h.Reader.SimAgrees = false;
+        h.Tick(30);
+        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
+        h.Reader.SimAgrees = true;
+        h.Env.Simulator = null;
+        h.Tick(60);
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("C"));
+        h.Env.Simulator = gate;
+        h.RunUntilRunning(100);
+        h.Tick(30);
+        Assert.Equal(new[] { StoppedMismatch, Resumed }, h.Env.Spoken);
+        Assert.Equal(new[] { "X: C" }, h.Monitor.View());
+
+        // Later changes are spoken again.
+        h.Reader.Samplers.Single(s => !s.Disposed).Reading = R("D");
+        h.Tick(5);
+        Assert.Equal(new[] { StoppedMismatch, Resumed, "X: D" }, h.Env.Spoken);
+    }
+
     [Theory]
     [InlineData("files not found")]
     [InlineData("file not recognised")]
