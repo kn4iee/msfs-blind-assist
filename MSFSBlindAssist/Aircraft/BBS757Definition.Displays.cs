@@ -22,9 +22,10 @@ namespace MSFSBlindAssist.Aircraft;
 /// hotkeys (<see cref="HandleHotkeyAction"/>, the readers' keys first) see every reader before the readers start, and a
 /// monitor not started yet sends its key to the AI read.
 ///
-/// Each reader's gate compares memory with BlueBird's own variables (S3), read from SimConnect's batch cache: a gate
-/// variable no batched variable carries yet gets a hidden batched copy (<see cref="AddDisplayVariables"/>), consumed
-/// silently (<see cref="IsDisplayGateCopy"/>), never a second batched variable of one name ([VAR-7]).
+/// Each reader's gate compares memory with the simulator's own variables (S3), BlueBird's L:vars or stock ones, read
+/// from SimConnect's cache: a gate variable no batched variable carries yet gets a hidden copy of its declared type and
+/// units (<see cref="AddDisplayVariables"/>), consumed silently (<see cref="IsDisplayGateCopy"/>), never a second
+/// batched variable of one name ([VAR-7]).
 /// </summary>
 public partial class BBS757Definition
 {
@@ -57,7 +58,7 @@ public partial class BBS757Definition
     private Bbs757DisplayRegistry RegisterDisplays()
     {
         var r = new Bbs757DisplayRegistry();
-        r.Add(Fma, Bbs757FmaDisplay.GateKeys);
+        r.Add(Fma);
         r.AddMonitorRow(new MonitorRow(Bbs757FmaDisplay.MuteKey, Bbs757FmaDisplay.MonitorRowLabel));
         RegisterUpperEicas(r);   // plan 24
         RegisterLowerEicas(r);   // plan 25
@@ -66,9 +67,9 @@ public partial class BBS757Definition
         return r;
     }
 
-    // The later readers' seams (S16): each plan implements its own in a partial of its own, registering its monitor with
-    // its gate variables (Add(monitor, gateKeys)), its Ctrl+M rows and its keys. A seam runs inside the first
-    // GetVariables (AddDisplayVariables), so it must never call GetVariables itself.
+    // The later readers' seams (S16): each plan implements its own in a partial of its own, registering its monitor
+    // (Add(monitor), which takes the gate variables its reader declares), its Ctrl+M rows and its keys. A seam runs
+    // inside the first GetVariables (AddDisplayVariables), so it must never call GetVariables itself.
     partial void RegisterUpperEicas(Bbs757DisplayRegistry r);
     partial void RegisterLowerEicas(Bbs757DisplayRegistry r);
     partial void RegisterEhsi(Bbs757DisplayRegistry r);
@@ -127,47 +128,64 @@ public partial class BBS757Definition
             () => AiReadOverride?.Invoke(action) ?? base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager)));
 
     /// <summary>
-    /// Each registered gate variable's name (<see cref="Bbs757DisplayRegistry.GateKeys"/>), to the key of the batched
-    /// variable whose cached value it is (<see cref="BatchedKeyOf"/>, the test <see cref="AddDisplayVariables"/> skips a
-    /// copy by, so every gate variable has one or the other).
+    /// Each registered gate variable's key (<see cref="Bbs757DisplayRegistry.GateVariables"/>, the key its reader looks
+    /// it up by), to the key of the variable whose cached value it is: the batched variable that already carries it
+    /// (<see cref="BatchedKeyOf"/>, the test <see cref="AddDisplayVariables"/> skips a copy by), else its hidden copy, so
+    /// every gate variable has one or the other.
     /// </summary>
     internal IReadOnlyDictionary<string, string> DisplayCacheKeys()
     {
         var vars = GetVariables();
         var keys = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (string name in Displays.GateKeys)
-            if (BatchedKeyOf(vars, name) is { } key) keys[name] = key;
+        foreach (var gate in Displays.GateVariables)
+        {
+            string copyKey = DisplayGateCopyPrefix + gate.Key;
+            string? key = BatchedKeyOf(vars, gate)
+                ?? (vars.TryGetValue(copyKey, out var copy) && Carries(copy, gate) ? copyKey : null);
+            if (key is not null) keys[gate.Key] = key;
+        }
         return keys;
     }
 
-    /// <summary>The key of the variable that carries the L:var <paramref name="name"/> on the continuous batch
-    /// (<see cref="ContinuousBatchLayout.RidesBatch"/>), or null. The one test for both "already batched" and "read from
-    /// which key".</summary>
-    private static string? BatchedKeyOf(IEnumerable<KeyValuePair<string, SimVarDefinition>> vars, string name)
+    /// <summary>The key of the variable that carries <paramref name="gate"/> on the continuous batch
+    /// (<see cref="ContinuousBatchLayout.RidesBatch"/>: <see cref="Carries"/>), or null. The one test for both "already
+    /// batched" and "read from which key".</summary>
+    private static string? BatchedKeyOf(IEnumerable<KeyValuePair<string, SimVarDefinition>> vars, Bbs757GateVariable gate)
     {
         foreach (var (key, def) in vars)
-            if (def.Type == SimVarType.LVar && def.Name == name && ContinuousBatchLayout.RidesBatch(def)) return key;
+            if (Carries(def, gate) && ContinuousBatchLayout.RidesBatch(def)) return key;
         return null;
     }
 
+    /// <summary>Whether <paramref name="def"/> reads <paramref name="gate"/>'s variable: the same name and type, and for a
+    /// stock variable the same units in any case (an L:var always reads as a number).</summary>
+    private static bool Carries(SimVarDefinition def, Bbs757GateVariable gate) =>
+        def.Name == gate.Name && def.Type == gate.Type
+        && (gate.Type == SimVarType.LVar || string.Equals(def.Units, gate.Units, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>
-    /// Plan 23 Task 7 Step 1: every registered reader's gate variable (<see cref="Bbs757DisplayRegistry.GateKeys"/>) that no
-    /// variable carries on the batch yet (<see cref="BatchedKeyOf"/>) gets a hidden batched copy (Continuous and IsAnnounced,
-    /// which is what puts it on the batch; no Ctrl+M row, [VAR-9]); one already carried gets none, as two batched variables
-    /// of one name shift every later slot ([VAR-7], <c>VarNameCollisionTests</c>). Called last in <see cref="BuildVariables"/>,
-    /// so it sees every other registration. Today the F/D switches, on-request map controls, get copies; the MCP's altitude
-    /// and heading ride the batch for the autoflight call-outs.
+    /// Plan 23 Task 7 Step 1: every registered reader's gate variable (<see cref="Bbs757DisplayRegistry.GateVariables"/>)
+    /// that no variable carries on the batch yet (<see cref="BatchedKeyOf"/>) gets a hidden copy of its declared type and
+    /// units (a stock variable is never an L:var of that name, [VAR-2]): Continuous and IsAnnounced, which is what puts it
+    /// on the batch; no Ctrl+M row, [VAR-9]. One already carried gets none, as two batched variables of one name shift
+    /// every later slot ([VAR-7], <c>VarNameCollisionTests</c>); for the same reason a copy whose name another batched
+    /// variable already has (in other units) streams on its own per-variable subscription into the same cache
+    /// (<see cref="SimVarDefinition.ExcludeFromBatch"/>). Called last in <see cref="BuildVariables"/>, so it sees every other
+    /// registration. Today the F/D switches, on-request map controls, get copies; the MCP's altitude and heading ride the
+    /// batch for the autoflight call-outs.
     /// </summary>
     private void AddDisplayVariables(Dictionary<string, SimVarDefinition> vars)
     {
-        foreach (string name in Displays.GateKeys)
+        foreach (var gate in Displays.GateVariables)
         {
-            if (BatchedKeyOf(vars, name) is not null) continue;
-            vars.TryAdd(DisplayGateCopyPrefix + name, new SimVarDefinition
+            if (BatchedKeyOf(vars, gate) is not null) continue;
+            bool nameOnBatch = vars.Values.Any(def => def.Name == gate.Name && ContinuousBatchLayout.RidesBatch(def));
+            vars.TryAdd(DisplayGateCopyPrefix + gate.Key, new SimVarDefinition
             {
-                Name = name, DisplayName = $"{name} (display reader gate)",
-                Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.Continuous,
-                IsAnnounced = true, ExcludeFromMonitorManager = true,
+                Name = gate.Name, DisplayName = $"{gate.Key} (display reader gate)",
+                Type = gate.Type, Units = gate.Type == SimVarType.LVar ? "number" : gate.Units!,
+                UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true, ExcludeFromMonitorManager = true,
+                ExcludeFromBatch = nameOnBatch,
             });
         }
     }

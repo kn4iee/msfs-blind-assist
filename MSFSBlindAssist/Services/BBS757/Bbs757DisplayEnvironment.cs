@@ -28,8 +28,8 @@ public sealed class Bbs757DisplayEnvironment : IBbs757DisplayEnvironment
     private readonly ScreenReaderAnnouncer _announcer;
     private readonly ModuleSession _session;
 
-    /// <param name="cacheKeys">Each gate variable's name, to the key of the batched variable whose cached value it is
-    /// (<c>BBS757Definition.DisplayCacheKeys</c>).</param>
+    /// <param name="cacheKeys">Each gate variable's <see cref="Bbs757GateVariable.Key"/>, to the key of the variable whose
+    /// cached value it is (<c>BBS757Definition.DisplayCacheKeys</c>).</param>
     public Bbs757DisplayEnvironment(SimConnectManager sim, ScreenReaderAnnouncer announcer, ModuleSession session,
         Bbs757DisplayFilesNotice filesNotice, IReadOnlyDictionary<string, string> cacheKeys)
         : this(ConnectedOf(sim), () => sim.FlightRunning, () => sim.CurrentAircraftTitle, key => sim.GetCachedVariableValue(key),
@@ -69,7 +69,8 @@ public sealed class Bbs757DisplayEnvironment : IBbs757DisplayEnvironment
         title is not null && title.Contains(TitleMark, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The <paramref name="keys"/>' cached values, keyed by their names; null, so the monitor waits silently, while the
+    /// The cached values of the gate variables whose <see cref="Bbs757GateVariable.Key"/>s are <paramref name="keys"/>,
+    /// each under its key (an L:var's or a stock variable's alike); null, so the monitor waits silently, while the
     /// simulator is disconnected, while no flight runs (the "Sim" system event: the menus, a flight's load), while the
     /// loaded title is no 757's (another aircraft under the 757 profile), or while a key has no value yet. The connection
     /// is checked first, before anything else is read ([WASM-7]'s order): a closed simulator leaves the last title and

@@ -21,6 +21,10 @@ public interface IBbs757DisplayMonitor : IDisposable
 
     /// <summary>The display window's rows: the reader's while running, else one status row.</summary>
     IReadOnlyList<string> View();
+
+    /// <summary>The reader's gate variables (<see cref="IBbs757DisplayReader{TLayout, TReading}.GateVariables"/>), which
+    /// the registry records so the definition puts each on SimConnect's batch: never listed apart from the reader.</summary>
+    IReadOnlyList<Bbs757GateVariable> GateVariables { get; }
 }
 
 /// <summary>
@@ -107,10 +111,20 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private bool _resumeOwed;
     private string _reason = Bbs757DisplayReasons.InternalError; // why unavailable, or the search window's last failure
 
-    public Bbs757DisplayMonitor(IBbs757DisplayReader<TLayout, TReading> reader) =>
+    // The reader's gate variables, and their keys as each tick reads the simulator with them.
+    private readonly IReadOnlyList<Bbs757GateVariable> _gates;
+    private readonly IReadOnlyList<string> _gateKeys;
+
+    public Bbs757DisplayMonitor(IBbs757DisplayReader<TLayout, TReading> reader)
+    {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+        _gates = Array.AsReadOnly(reader.GateVariables.ToArray());
+        _gateKeys = Array.AsReadOnly(_gates.Select(g => g.Key).ToArray());
+    }
 
     internal string StateName => _state.ToString();
+
+    public IReadOnlyList<Bbs757GateVariable> GateVariables => _gates;
 
     /// <summary>The latest good reading while running and the display shows it, else default: never the last lit reading
     /// while the display is dark or powering up.</summary>
@@ -241,7 +255,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     private void Step(IBbs757DisplayEnvironment env)
     {
-        var sim = env.ReadSimulator(_reader.GateKeys);
+        var sim = env.ReadSimulator(_gateKeys);
         if (sim is null)
         {
             // Disconnected, or another aircraft loaded: drop the memory, keep the layouts (and an analysis in flight).

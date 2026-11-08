@@ -21,7 +21,7 @@ internal sealed class Bbs757DisplayRegistry
 {
     private readonly List<IBbs757DisplayMonitor> _monitors = new();
     private readonly List<MonitorRow> _rows = new();
-    private readonly List<string> _gateKeys = new();
+    private readonly List<Bbs757GateVariable> _gates = new();
     private readonly Dictionary<HotkeyAction, Func<Bbs757KeyContext, bool>> _keys = new();
 
     /// <summary>Every reader's monitor, in registration order (the FMA first).</summary>
@@ -30,23 +30,45 @@ internal sealed class Bbs757DisplayRegistry
     /// <summary>Every reader's Ctrl+M rows, in registration order.</summary>
     public IReadOnlyList<MonitorRow> Rows => _rows;
 
-    /// <summary>Every reader's gate variables (its <c>GateKeys</c>, BlueBird's L:vars), each once, in registration order:
-    /// the definition puts each on the continuous batch and reads it from there.</summary>
-    public IReadOnlyList<string> GateKeys => _gateKeys;
+    /// <summary>Every reader's gate variables (its monitor's <see cref="IBbs757DisplayMonitor.GateVariables"/>), each key
+    /// once, in registration order: the definition puts each on the continuous batch and reads it from there.</summary>
+    public IReadOnlyList<Bbs757GateVariable> GateVariables => _gates;
 
-    /// <summary>A reader whose gate compares memory with no simulator variable.</summary>
-    public void Add(IBbs757DisplayMonitor monitor) => Add(monitor, Array.Empty<string>());
-
-    /// <summary>A reader and its gate variables (the reader's <c>GateKeys</c>), recorded here because the monitor does not
-    /// expose them.</summary>
-    public void Add(IBbs757DisplayMonitor monitor, IReadOnlyList<string> gateKeys)
+    /// <summary>
+    /// A reader's monitor, with the gate variables its reader declares (taken from the monitor, so they can never differ
+    /// from the reader's). A key two readers share must name the same variable; a gate variable must be an L:var or a
+    /// stock variable with its units. Either mistake is a wiring error, so it throws, and registers nothing of the reader.
+    /// </summary>
+    public void Add(IBbs757DisplayMonitor monitor)
     {
         ArgumentNullException.ThrowIfNull(monitor);
-        ArgumentNullException.ThrowIfNull(gateKeys);
+        var gates = monitor.GateVariables ?? throw new ArgumentException("the monitor has no gate variables list", nameof(monitor));
+        var added = new List<Bbs757GateVariable>();
+        foreach (var gate in gates)
+        {
+            Check(gate);
+            var known = _gates.Concat(added).Where(g => string.Equals(g.Key, gate.Key, StringComparison.Ordinal)).ToList();
+            if (known.Count == 0) added.Add(gate);
+            else if (!known[0].SameVariable(gate))
+                throw new InvalidOperationException(
+                    $"757 display gate key {gate.Key} is already {Describe(known[0])}, not {Describe(gate)}.");
+        }
+        _gates.AddRange(added);
         _monitors.Add(monitor);
-        foreach (string key in gateKeys)
-            if (!_gateKeys.Contains(key, StringComparer.Ordinal)) _gateKeys.Add(key);
     }
+
+    private static void Check(Bbs757GateVariable gate)
+    {
+        if (string.IsNullOrEmpty(gate.Key) || string.IsNullOrEmpty(gate.Name))
+            throw new ArgumentException("a 757 display gate variable needs a key and a name");
+        if (gate.Type is not (SimVarType.LVar or SimVarType.SimVar))
+            throw new ArgumentException($"757 display gate variable {gate.Key} is a {gate.Type}: only an L:var or a stock variable");
+        if (gate.Type == SimVarType.SimVar && string.IsNullOrEmpty(gate.Units))
+            throw new ArgumentException($"757 display gate variable {gate.Key} is a stock variable with no units");
+    }
+
+    private static string Describe(Bbs757GateVariable gate) =>
+        gate.Type == SimVarType.LVar ? $"L:{gate.Name}" : $"{gate.Name} in {gate.Units}";
 
     /// <summary>The handler of <paramref name="action"/>: true when it took the key. One per key: two readers on one key
     /// is a wiring error, so a second throws.</summary>

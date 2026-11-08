@@ -27,26 +27,54 @@ public class Bbs757DisplayRegistryTests
         Assert.False(registry.TryHandle(HotkeyAction.ReadDisplayLowerECAM, default));
     }
 
+    private static readonly Bbs757GateVariable Latitude = new("PLANE LATITUDE", "PLANE LATITUDE", SimVarType.SimVar, "degrees");
+
     [Fact]
-    public void Each_readers_gate_keys_are_recorded_once_in_registration_order()
+    public void Each_readers_gate_variables_are_recorded_once_in_registration_order()
     {
+        // Taken from each monitor (its reader's), so they can never disagree with the reader's.
         var registry = new Bbs757DisplayRegistry();
-        var fma = new BBS757Definition().Fma;
 
-        registry.Add(fma, new[] { "L_A", "L_B" });
-        registry.Add(fma);   // a reader with no gate variable
-        registry.Add(fma, new[] { "L_B", "L_C" });
+        registry.Add(new GateMonitor(Bbs757GateVariable.LVar("L_A"), Bbs757GateVariable.LVar("L_B")));
+        registry.Add(new GateMonitor());   // a reader with no gate variable
+        registry.Add(new GateMonitor(Bbs757GateVariable.LVar("L_B"), Latitude, Bbs757GateVariable.LVar("L_C")));
+        registry.Add(new GateMonitor(Latitude with { Units = "Degrees" }));   // the same variable: units in any case
 
-        Assert.Equal(new[] { "L_A", "L_B", "L_C" }, registry.GateKeys);
-        Assert.Equal(3, registry.Monitors.Count);
+        Assert.Equal(new[] { "L_A", "L_B", "PLANE LATITUDE", "L_C" }, registry.GateVariables.Select(g => g.Key));
+        Assert.Equal(Latitude, registry.GateVariables[2]);
+        Assert.Equal(4, registry.Monitors.Count);
     }
 
     [Fact]
-    public void The_fma_registers_its_gate_keys()
+    public void A_gate_key_declared_as_another_variable_is_refused_whole()
+    {
+        var registry = new Bbs757DisplayRegistry();
+        var pitch = new Bbs757GateVariable("PITCH", "PLANE PITCH DEGREES", SimVarType.SimVar, "degrees");
+        registry.Add(new GateMonitor(pitch));
+
+        // One key, two variables: a wiring error, and nothing of that reader is registered.
+        Assert.Throws<InvalidOperationException>(() =>
+            registry.Add(new GateMonitor(Bbs757GateVariable.LVar("L_NEW"), pitch with { Units = "radians" })));
+        Assert.Throws<InvalidOperationException>(() => registry.Add(new GateMonitor(Bbs757GateVariable.LVar("PITCH"))));
+        // Not a gate variable: an event, a stock variable with no units, no key.
+        Assert.Throws<ArgumentException>(() => registry.Add(new GateMonitor(new Bbs757GateVariable("E", "E", SimVarType.Event, null))));
+        Assert.Throws<ArgumentException>(() => registry.Add(new GateMonitor(new Bbs757GateVariable("S", "S", SimVarType.SimVar, null))));
+        Assert.Throws<ArgumentException>(() => registry.Add(new GateMonitor(new Bbs757GateVariable("", "S", SimVarType.LVar, null))));
+
+        Assert.Single(registry.Monitors);
+        Assert.Equal(new[] { pitch }, registry.GateVariables);
+    }
+
+    [Fact]
+    public void The_fma_registers_its_gate_variables()
     {
         var def = new BBS757Definition();
 
-        Assert.Equal(Bbs757FmaDisplay.GateKeys, def.Displays.GateKeys.Take(Bbs757FmaDisplay.GateKeys.Count));
+        // The FMA declares none of its own: each of its GateKeys is BlueBird's L:var of that name (the default).
+        var expected = Bbs757FmaDisplay.GateKeys.Select(Bbs757GateVariable.LVar).ToArray();
+        Assert.All(expected, g => Assert.Equal((SimVarType.LVar, (string?)null), (g.Type, g.Units)));
+        Assert.Equal(expected, def.Fma.GateVariables);
+        Assert.Equal(expected, def.Displays.GateVariables.Take(expected.Length));
     }
 
     [Fact]
@@ -111,5 +139,17 @@ public class Bbs757DisplayRegistryTests
         Assert.True(def.HandleHotkeyAction(HotkeyAction.ReadDisplayUpperECAM, sim, speech, null!, null!));
         Assert.Equal(new[] { HotkeyAction.ReadDisplayUpperECAM }, aiReads);
         Assert.Single(speech.All);
+    }
+
+    /// <summary>A monitor whose reader declares <paramref name="gates"/>.</summary>
+    private sealed class GateMonitor(params Bbs757GateVariable[] gates) : IBbs757DisplayMonitor
+    {
+        public IReadOnlyList<Bbs757GateVariable> GateVariables { get; } = gates;
+        public void Start(IBbs757DisplayEnvironment env) { }
+        public void Restart() { }
+        public void Stop() { }
+        public bool KeyFallsBackToAi() => true;
+        public IReadOnlyList<string> View() => Array.Empty<string>();
+        public void Dispose() { }
     }
 }

@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Services.BBS757;
 
@@ -22,12 +23,32 @@ public interface IBbs757DisplaySampler<TReading> : IDisposable
     bool TryRead(Bbs757SimValues sim, out TReading reading) => TryRead(out reading);
 }
 
-/// <summary>The simulator's own values of a reader's <see cref="IBbs757DisplayReader{TLayout, TReading}.GateKeys"/>,
+/// <summary>The simulator's own values of a reader's
+/// <see cref="IBbs757DisplayReader{TLayout, TReading}.GateVariables"/>, each under its <see cref="Bbs757GateVariable.Key"/>,
 /// read fresh each tick.</summary>
 public readonly record struct Bbs757SimValues(IReadOnlyDictionary<string, double> Values)
 {
     /// <summary>The key's value, or null when it was not read.</summary>
     public double? this[string key] => Values is not null && Values.TryGetValue(key, out double v) ? v : null;
+}
+
+/// <summary>
+/// One simulator variable a reader's gate (or its sampler, S10) takes: <see cref="Key"/> is the name the reader looks its
+/// value up by in <see cref="Bbs757SimValues"/>; <see cref="Name"/>, <see cref="Type"/> and <see cref="Units"/> are the
+/// variable as SimConnect reads it. BlueBird's own variables are L:vars, with no units (<see cref="LVar"/>); a stock
+/// simulator variable (<c>PLANE LATITUDE</c>, <c>TURB ENG N2:1</c>) is a <see cref="SimVarType.SimVar"/> with its units,
+/// never an L:var of that name ([VAR-2]).
+/// </summary>
+public readonly record struct Bbs757GateVariable(string Key, string Name, SimVarType Type, string? Units)
+{
+    /// <summary>BlueBird's L:var <paramref name="name"/>, looked up by its own name.</summary>
+    public static Bbs757GateVariable LVar(string name) => new(name, name, SimVarType.LVar, null);
+
+    /// <summary>Whether <paramref name="other"/> is the same variable: the same name and type, and for a stock variable
+    /// the same units in any case (an L:var always reads as a number).</summary>
+    public bool SameVariable(Bbs757GateVariable other) =>
+        string.Equals(Name, other.Name, StringComparison.Ordinal) && Type == other.Type
+        && (Type == SimVarType.LVar || string.Equals(Units, other.Units, StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>One line a reader speaks by itself, with the Ctrl+M row that mutes it: a reader with several rows (the upper
@@ -56,8 +77,15 @@ public interface IBbs757DisplayReader<TLayout, TReading>
     /// <summary>The monitor's timer interval, in milliseconds.</summary>
     int TickMs { get; }
 
-    /// <summary>The simulator variables <see cref="Passes"/> and <see cref="Lit"/> compare memory with.</summary>
+    /// <summary>The keys of the simulator variables <see cref="Passes"/> and <see cref="Lit"/> compare memory with (and a
+    /// sampler takes, S10), as they are looked up in <see cref="Bbs757SimValues"/>; each is declared by
+    /// <see cref="GateVariables"/>.</summary>
     IReadOnlyList<string> GateKeys { get; }
+
+    /// <summary>The variable behind each of <see cref="GateKeys"/>, in that order. The default reads each as BlueBird's
+    /// L:var of that name; a reader that takes a stock simulator variable overrides this to declare its type and units
+    /// under the same key.</summary>
+    IReadOnlyList<Bbs757GateVariable> GateVariables => GateKeys.Select(Bbs757GateVariable.LVar).ToArray();
 
     /// <summary>This reader's distinct layouts in the analysed builds, in file order (empty: none).</summary>
     IReadOnlyList<TLayout> LayoutsIn(ModuleAnalysis analysis);
@@ -94,8 +122,9 @@ public interface IBbs757DisplayEnvironment
 {
     long NowMs { get; }
 
-    /// <summary>The <paramref name="keys"/>' values, or null while the simulator is disconnected or another aircraft is
-    /// loaded (the monitor then waits, silently).</summary>
+    /// <summary>The values of the gate variables whose <see cref="Bbs757GateVariable.Key"/>s are <paramref name="keys"/>,
+    /// each under its key, or null while the simulator is disconnected or another aircraft is loaded (the monitor then
+    /// waits, silently).</summary>
     Bbs757SimValues? ReadSimulator(IReadOnlyList<string> keys);
 
     bool IsMuted(string muteKey);

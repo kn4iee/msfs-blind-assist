@@ -77,6 +77,17 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
+    public void The_monitor_reads_the_simulator_by_its_readers_gate_variables()
+    {
+        // A reader that declares none of its own reads each of its GateKeys as an L:var of that name, with no units.
+        var h = New().Start();
+        Assert.Equal(new[] { new Bbs757GateVariable("L:X_GATE", "L:X_GATE", MSFSBlindAssist.SimConnect.SimVarType.LVar, null) },
+            h.Monitor.GateVariables);
+        h.Tick(3);
+        Assert.Equal(new[] { "L:X_GATE", "L:X_GATE", "L:X_GATE" }, h.Env.KeysAsked); // by each variable's key, every tick
+    }
+
+    [Fact]
     public void The_first_passing_reading_is_a_silent_baseline()
     {
         var h = New().Start();
