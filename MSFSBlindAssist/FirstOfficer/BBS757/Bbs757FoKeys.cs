@@ -139,6 +139,11 @@ public static class Bbs757FoKeys
     // ---- MCP / main panel ----
     public const string CaptainFd = "B757_MCP_SW_FD_Cap";
     public const string FirstOfficerFd = "B757_MCP_SW_FD_FO";
+    // The MCP LNAV and VNAV buttons (momentary) and their lights (Bbs757McpLights' streamed rows: lit armed or engaged).
+    public const string LnavButton = "B757_MCP_LNAV_BUTTON";
+    public const string VnavButton = "B757_MCP_VNAV_BUTTON";
+    public const string LnavLight = "BBS757_MCP_LIGHT_LNAV";
+    public const string VnavLight = "BBS757_MCP_LIGHT_VNAV";
     public const string AutothrottleArm = "B757_MCP_SW_AP_throttle";        // 0 ARM (On), 10 Off
     public const double AutothrottleArmed = 0, AutothrottleOff = 10;
     public const string BankLimit = "B757_MCP_AP_HDG_BNKLIM";

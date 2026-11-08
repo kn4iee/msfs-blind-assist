@@ -750,6 +750,43 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
         _say?.Invoke(text);
     }
 
+    // ---- the automation's MCP push (plan 23) ----
+
+    /// <summary>How long after an MCP press its light must come on.</summary>
+    internal const int McpLightWaitMs = 3000;
+
+    /// <summary>
+    /// The 400 ft LNAV or VNAV push (<see cref="Bbs757FoAutoManager"/>), on the gate: the MCP button pressed only over its
+    /// light read fresh and OUT (the buttons toggle: a light read lit or unread is never pressed, false), then the light
+    /// read every 500 ms for up to <see cref="McpLightWaitMs"/>; true once it reads lit.
+    /// </summary>
+    public async Task<bool> PushMcpAsync(string buttonNode, string lightKey)
+    {
+        var io = _io;
+        if (io is not { Ready: true }) return false;
+        await _gate.WaitAsync();
+        try
+        {
+            if (await io.ReadAsync(lightKey, CancellationToken.None) is not double before || before > 0.5) return false;
+            if (!await io.PressAsync(buttonNode, CancellationToken.None)) return false;
+            for (int waited = 0; waited < McpLightWaitMs; waited += 500)
+            {
+                await io.Delay(500, CancellationToken.None);
+                if (await io.ReadAsync(lightKey, CancellationToken.None) is double lit && lit > 0.5) return true;
+            }
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("BBS757 FO", $"{buttonNode}: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     // ---- named helpers for checklists and the phase monitor ----
 
     public Task<bool> SetSeatbeltSign(bool on) => Set(K.SeatBelts, (int)(on ? K.SignOn : K.SignOff));

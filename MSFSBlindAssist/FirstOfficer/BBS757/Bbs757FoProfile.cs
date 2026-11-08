@@ -51,7 +51,12 @@ public sealed class Bbs757FoProfile : IFoProfile<Bbs757FoActionExecutor, Bbs757F
 
     public IFoAutoManager CreateAutoManager(Bbs757FoActionExecutor exec, Bbs757FoStateEvaluator state,
         ScreenReaderAnnouncer a, UserSettings s)
-        => new Bbs757FoAutoManager { AutoFlapsEnabled = s.FOAutoFlapsEnabled };   // stored, never acted on
+        // The settings read live, as the other Boeings' managers read SettingsManager.Current: a change applies at once.
+        => new Bbs757FoAutoManager(exec, state, a.Announce,
+            () => SettingsManager.Current.FOAutoApEnabled, () => SettingsManager.Current.FOAutoCenterPumpsEnabled)
+        {
+            AutoFlapsEnabled = s.FOAutoFlapsEnabled,   // stored, never acted on (the flap lever is the Captain's)
+        };
 
     public IFoPhaseMonitor CreatePhaseMonitor(Bbs757FoActionExecutor exec, Bbs757FoStateEvaluator state,
         ScreenReaderAnnouncer a)
