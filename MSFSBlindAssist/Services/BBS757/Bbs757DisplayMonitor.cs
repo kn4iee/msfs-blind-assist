@@ -416,7 +416,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private void OnVerifying(IBbs757DisplayEnvironment env, Bbs757SimValues sim)
     {
         long now = env.NowMs;
-        if (!_sampler!.TryRead(out var reading))
+        if (!_sampler!.TryRead(sim, out var reading))
         {
             EndHold(now);
             DropCandidate(readFailed: true);
@@ -519,7 +519,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private void OnRunning(IBbs757DisplayEnvironment env, Bbs757SimValues sim)
     {
         long now = env.NowMs;
-        if (!TryReadRunning(now, out var reading)) return;
+        if (!TryReadRunning(now, sim, out var reading)) return;
         var verdict = Judge(now, reading, sim);
         if (verdict == Verdict.Corrupt)
         {
@@ -567,16 +567,16 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private void OnMismatched(IBbs757DisplayEnvironment env, Bbs757SimValues sim)
     {
         long now = env.NowMs;
-        if (!TryReadRunning(now, out var reading)) return;
+        if (!TryReadRunning(now, sim, out var reading)) return;
         // The first good reading resumes, and "resumed" carries what changed while stopped.
         if (Judge(now, reading, sim) == Verdict.Passes) EnterRunning(reading, "the memory agrees with the simulator again");
     }
 
     /// <summary>A failed read means the memory moved or went away: search again, silently at first. From Running, a
     /// search that has not verified within 10 s says "stopped"; from Mismatched it was said.</summary>
-    private bool TryReadRunning(long now, out TReading reading)
+    private bool TryReadRunning(long now, Bbs757SimValues sim, out TReading reading)
     {
-        if (_sampler!.TryRead(out reading)) return true;
+        if (_sampler!.TryRead(sim, out reading)) return true;
         if (_state == State.Running)
         {
             _lostAtMs = now;

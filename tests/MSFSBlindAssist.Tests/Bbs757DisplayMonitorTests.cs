@@ -194,6 +194,32 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
+    public void A_sampler_is_given_each_ticks_simulator_values()
+    {
+        // Where the draw takes a simulator variable, the reader takes the same one (S10): the values read for the gate
+        // this tick reach the sampler, in every state that reads memory.
+        var h = New();
+        var seen = new List<Bbs757SimValues>();
+        h.Reader.Wrap = inner => new SimRecordingSampler(inner, seen);
+        h.Start();
+        var states = new HashSet<string>();
+        for (int i = 0; i < 60; i++)
+        {
+            if (i == 30) h.Reader.SimAgrees = false; // stopped on a mismatch 2 s later
+            h.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double> { ["L:X_GATE"] = i });
+            int before = seen.Count;
+            string state = h.State;
+            h.Tick();
+            if (seen.Count == before) continue;
+            Assert.Equal(before + 1, seen.Count); // one read a tick
+            Assert.Equal(i, seen[^1]["L:X_GATE"]); // with this tick's values
+            states.Add(state);
+        }
+        Assert.Equal(new[] { "Mismatched", "Running", "Verifying" }, states.Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(h.Env.Logged, l => l.Line.Contains("internal error"));
+    }
+
+    [Fact]
     public void A_dark_display_shows_not_powered_and_powering_up_shows_starting()
     {
         // A sighted pilot sees a blank screen: the window never shows the last lit reading as current, and says nothing.
@@ -1147,6 +1173,20 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         public void Dispose() => Interlocked.Increment(ref _disposeCount);
     }
 
+    /// <summary>A sampler that takes the simulator's values (S10): records each tick's, then reads as its inner one.</summary>
+    internal sealed class SimRecordingSampler(FakeSampler inner, List<Bbs757SimValues> seen) : IBbs757DisplaySampler<FakeReading>
+    {
+        public bool TryRead(Bbs757SimValues sim, out FakeReading reading)
+        {
+            seen.Add(sim);
+            return inner.TryRead(out reading);
+        }
+
+        public bool TryRead(out FakeReading reading) => throw new InvalidOperationException("read without the simulator's values");
+
+        public void Dispose() => inner.Dispose();
+    }
+
     internal sealed class FakeReader : IBbs757DisplayReader<FakeLayout, FakeReading>
     {
         public FakeReader() => MakeSampler = (_, _) => NewSampler(R("A"));
@@ -1188,7 +1228,11 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         public IReadOnlyList<FakeLayout> LayoutsIn(ModuleAnalysis analysis) =>
             analysis.Builds.Count > 0 ? Layouts : Array.Empty<FakeLayout>();
 
-        public IBbs757DisplaySampler<FakeReading>? SamplerFor(LocatedModule module, FakeLayout layout) => MakeSampler(module, layout);
+        /// <summary>When set, wraps each sampler <see cref="MakeSampler"/> made (which stays in <see cref="Samplers"/>).</summary>
+        public Func<FakeSampler, IBbs757DisplaySampler<FakeReading>>? Wrap { get; set; }
+
+        public IBbs757DisplaySampler<FakeReading>? SamplerFor(LocatedModule module, FakeLayout layout) =>
+            MakeSampler(module, layout) is { } sampler ? Wrap?.Invoke(sampler) ?? sampler : null;
 
         /// <summary>A reading "WRONG" never agrees with the simulator, nor does any while <see cref="SimAgrees"/> is false.</summary>
         public bool Passes(IReadOnlyList<(long AtMs, FakeReading Reading)> history, Bbs757SimValues sim) =>

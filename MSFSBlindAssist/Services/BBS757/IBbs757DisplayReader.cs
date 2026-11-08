@@ -15,6 +15,11 @@ public interface IBbs757Reading
 public interface IBbs757DisplaySampler<TReading> : IDisposable
 {
     bool TryRead(out TReading reading);
+
+    /// <summary>The read the monitor makes, with this tick's simulator values (the reader's gate variables): where
+    /// BlueBird's draw takes a simulator variable, the reader takes the same one (S10), declared as a gate variable. A
+    /// sampler that needs none (the FMA's) keeps the default, which reads memory alone.</summary>
+    bool TryRead(Bbs757SimValues sim, out TReading reading) => TryRead(out reading);
 }
 
 /// <summary>The simulator's own values of a reader's <see cref="IBbs757DisplayReader{TLayout, TReading}.GateKeys"/>,
