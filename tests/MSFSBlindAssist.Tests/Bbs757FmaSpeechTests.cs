@@ -11,15 +11,16 @@ namespace MSFSBlindAssist.Tests;
 
 public class Bbs757FmaSpeechTests
 {
-    /// <summary>The reader tests' layout with fuller tables, keyed as BlueBird's are: the armed tables have their own
-    /// values (armed LOC is 4, active LOC 3), so an armed mode turning active is matched by its word.</summary>
+    /// <summary>The reader tests' layout with fuller tables, keyed as BlueBird's are: an armed mode and the active mode
+    /// it becomes share one value (LOC 3, ROLLOUT 4, LNAV 5, B/CRS 6 in both roll tables; G/S 9, FLARE 10 in both pitch
+    /// tables), so an armed mode turning active is matched by its value, as the 737's.</summary>
     internal static readonly Bbs757FmaLayout Layout = Bbs757FmaReaderTests.Layout with
     {
         AtWords = new Bbs757WordTable(new Dictionary<int, string> { [1] = "SPD", [2] = "EPR", [3] = "THR HLD", [4] = "IDLE", [5] = "FLCH" }),
-        PitchWords = new Bbs757WordTable(new Dictionary<int, string> { [1] = "TO", [2] = "ALT HOLD", [6] = "VNAV PTH", [9] = "G/S" }),
-        PitchArmedWords = new Bbs757WordTable(new Dictionary<int, string> { [5] = "VNAV", [9] = "G/S" }),
-        RollWords = new Bbs757WordTable(new Dictionary<int, string> { [2] = "HDG SEL", [3] = "LOC", [5] = "LNAV" }),
-        RollArmedWords = new Bbs757WordTable(new Dictionary<int, string> { [3] = "LNAV", [4] = "LOC" }),
+        PitchWords = new Bbs757WordTable(new Dictionary<int, string> { [1] = "TO", [2] = "ALT HOLD", [6] = "VNAV PTH", [9] = "G/S", [10] = "FLARE" }),
+        PitchArmedWords = new Bbs757WordTable(new Dictionary<int, string> { [5] = "VNAV", [9] = "G/S", [10] = "FLARE" }),
+        RollWords = new Bbs757WordTable(new Dictionary<int, string> { [2] = "HDG SEL", [3] = "LOC", [4] = "ROLLOUT", [5] = "LNAV", [6] = "B/CRS" }),
+        RollArmedWords = new Bbs757WordTable(new Dictionary<int, string> { [3] = "LOC", [4] = "ROLLOUT", [5] = "LNAV", [6] = "B/CRS" }),
     };
 
     /// <summary>Everything blank but the Captain's F/D, so the pitch and roll columns are drawn (R5).</summary>
@@ -27,7 +28,7 @@ public class Bbs757FmaSpeechTests
         FdCaptain: true, FdFirstOfficer: true, McpAltitude: 35000, McpHeading: 65);
 
     /// <summary>A/T SPD, LNAV with LOC armed, VNAV PTH with G/S armed, CMD.</summary>
-    internal static readonly Bbs757FmaRaw Cruise = Blank with { At = 1, Roll = 5, RollArmed = 4, Pitch = 6, PitchArmed = 9, Status = 1 };
+    internal static readonly Bbs757FmaRaw Cruise = Blank with { At = 1, Roll = 5, RollArmed = 3, Pitch = 6, PitchArmed = 9, Status = 1 };
 
     internal static Bbs757FmaReading R(Bbs757FmaRaw raw) => Bbs757FmaReader.Decode(Layout, raw);
 
@@ -66,8 +67,8 @@ public class Bbs757FmaSpeechTests
     [InlineData("en-US")]
     public void An_armed_mode_turning_active_is_said_once_as_active(string culture)
     {
-        var armed = Cruise with { Roll = 2, RollArmed = 4, Pitch = 2, PitchArmed = 9 };
-        // LOC armed (4) becomes LOC active (3): the same word, so said once, as active.
+        var armed = Cruise with { Roll = 2, RollArmed = 3, Pitch = 2, PitchArmed = 9 };
+        // LOC armed (3) becomes LOC active (3): said once, as active.
         Assert.Equal("FMA: Roll: LOC", TestCulture.Run(culture, () => Spoken(armed, armed with { Roll = 3, RollArmed = 0 })));
         Assert.Equal("FMA: Pitch: G/S", TestCulture.Run(culture, () => Spoken(armed, armed with { Pitch = 9, PitchArmed = 0 })));
         Assert.Equal("FMA: Roll: LOC, Pitch: G/S",
@@ -76,6 +77,9 @@ public class Bbs757FmaSpeechTests
         Assert.Equal("FMA: Roll armed: none", TestCulture.Run(culture, () => Spoken(armed, armed with { RollArmed = 0 })));
         Assert.Equal("FMA: Roll: LNAV, Roll armed: none",
             TestCulture.Run(culture, () => Spoken(armed, armed with { Roll = 5, RollArmed = 0 })));
+        // A column BlueBird stops drawing (the Captain's F/D off, no CMD: R5) is blank, never the armed mode turning active.
+        Assert.Equal("FMA: Roll: none, Roll armed: none, Pitch: none, Pitch armed: none, AFDS: none",
+            TestCulture.Run(culture, () => Spoken(armed, armed with { Roll = 3, RollArmed = 0, Status = 2, FdCaptain = false })));
     }
 
     [Theory]
@@ -121,9 +125,13 @@ public class Bbs757FmaSpeechTests
         // The rows show it as well.
         Assert.Equal("Roll: LNAV, armed unrecognised",
             TestCulture.Run(culture, () => Bbs757FmaSpeech.Rows(R(Cruise with { RollArmed = 7 }))[1]));
-        // Two different unknown modes, one armed and one active, are not taken for one mode turning active.
-        Assert.Equal("FMA: Roll: unrecognised, Roll armed: none",
+        // A new mode with no word that arms then engages is one mode (BlueBird keys armed and active alike): said once,
+        // as active, as the 737 says it.
+        Assert.Equal("FMA: Roll: unrecognised",
             TestCulture.Run(culture, () => Spoken(Cruise with { RollArmed = 7 }, Cruise with { Roll = 7, RollArmed = 0 })));
+        // Armed with no word, then another mode with no word engaging: both said.
+        Assert.Equal("FMA: Roll: unrecognised, Roll armed: none",
+            TestCulture.Run(culture, () => Spoken(Cruise with { RollArmed = 7 }, Cruise with { Roll = 8, RollArmed = 0 })));
     }
 
     [Theory]

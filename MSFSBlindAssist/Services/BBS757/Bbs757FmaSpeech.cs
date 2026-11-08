@@ -21,17 +21,20 @@ public static class Bbs757FmaSpeech
     /// value while the column shows a word, else blank, so a column BlueBird stops drawing (the strip with the Captain's
     /// F/D off and no CMD) goes "none", and a value with no word that changes to another is heard again. The AFDS column
     /// compares its words: "FD" comes from the F/D byte, not the status value. An armed mode that clears as the active
-    /// column turns to the same word is said once, as active; two values with no word are never taken for one mode.
+    /// column turns to its value is said once, as active, exactly as the 737 decides it (BlueBird keys an armed mode and
+    /// the active mode it becomes alike: LOC is 3 in both roll tables, G/S 9 in both pitch tables).
     /// </summary>
     public static string? DescribeChange(Bbs757FmaReading before, Bbs757FmaReading after)
     {
         var parts = new List<string>(6);
         AddChange(parts, "A/T", before.AutoThrottle, before.AtValue, after.AutoThrottle, after.AtValue);
         AddChange(parts, "Roll", before.Roll, before.RollValue, after.Roll, after.RollValue);
-        if (!ArmedBecameActive(before.RollArmed, after.RollArmed, before.Roll, after.Roll))
+        if (!ArmedBecameActive(Drawn(before.RollArmed, before.RollArmedValue), Drawn(after.RollArmed, after.RollArmedValue),
+                Drawn(before.Roll, before.RollValue), Drawn(after.Roll, after.RollValue)))
             AddChange(parts, "Roll armed", before.RollArmed, before.RollArmedValue, after.RollArmed, after.RollArmedValue);
         AddChange(parts, "Pitch", before.Pitch, before.PitchValue, after.Pitch, after.PitchValue);
-        if (!ArmedBecameActive(before.PitchArmed, after.PitchArmed, before.Pitch, after.Pitch))
+        if (!ArmedBecameActive(Drawn(before.PitchArmed, before.PitchArmedValue), Drawn(after.PitchArmed, after.PitchArmedValue),
+                Drawn(before.Pitch, before.PitchValue), Drawn(after.Pitch, after.PitchValue)))
             AddChange(parts, "Pitch armed", before.PitchArmed, before.PitchArmedValue, after.PitchArmed, after.PitchArmedValue);
         if (!string.Equals(before.Status, after.Status, StringComparison.Ordinal))
             parts.Add($"AFDS: {after.Status ?? None}");
@@ -63,12 +66,12 @@ public static class Bbs757FmaSpeech
 
     private static bool IsUnrecognised(string? word) => string.Equals(word, Bbs757WordTable.Unrecognised, StringComparison.Ordinal);
 
-    /// <summary>The armed mode cleared as the active column changed to its word. BlueBird's armed tables have their own
-    /// values (armed LOC is not active LOC's), so the words are compared, never the values.</summary>
-    private static bool ArmedBecameActive(string? armedBefore, string? armedAfter, string? activeBefore, string? activeAfter) =>
-        armedBefore is not null && !IsUnrecognised(armedBefore) && armedAfter is null
-        && string.Equals(activeAfter, armedBefore, StringComparison.Ordinal)
-        && !string.Equals(activeBefore, activeAfter, StringComparison.Ordinal);
+    /// <summary>The armed mode cleared as the active column changed to its value: <see cref="PMDG.Pmdg737FmaSpeech"/>'s
+    /// test, on drawn values (a column BlueBird does not draw, R5, is 0). BlueBird's armed and active tables share their
+    /// values, so a mode with no word that arms then engages is one mode, said once, as active.</summary>
+    private static bool ArmedBecameActive(int armedBefore, int armedAfter, int activeBefore, int activeAfter) =>
+        armedBefore != armedAfter && armedAfter == 0 && armedBefore != 0
+        && activeAfter != activeBefore && activeAfter == armedBefore;
 
     private static void AddChange(List<string> parts, string label, string? wordBefore, int valueBefore, string? wordAfter, int valueAfter)
     {
