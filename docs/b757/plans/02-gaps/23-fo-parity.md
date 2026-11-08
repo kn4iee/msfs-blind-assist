@@ -139,8 +139,59 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 ## Execution record
 
 - **Claimed by:** Claude, for the owner (kn4iee), 2026-11-08.
-- **Status:** in progress.
+- **Status:** landed on `B757`, waiting on the owner's in-sim checks (above).
+- Worked inline by Claude (superpowers:executing-plans, TDD per task, one fresh whole-branch reviewer at the end), on `B757` in the main folder. Base 3307d5915 (this plan). Every commit carries `Plan: 23`.
+- Task 2, 4943aa9cd: eleven preflight tests, shortest first, no squib or landing config test.
+- Task 3, 14e7f34ea: "APU: OFF" reads the APU switch; Final Securing's 2-minute cool-down (`SC_APU_COOLDOWN`).
+- Task 4, 1e6444eb1: Before Start turns the electric hydraulic pumps on before the parking brake; the brake is left alone without brake pressure.
+- Task 5, 1d66429b2: the FWD cabin call in Before Takeoff and Descent; Descent's ILS reminder.
+- Task 6, 530272469: the Approach flow and group (13 flows, 22 groups); Preflight's ND MAP 40; the missed approach and MCP reminders.
+- Task 7, c5ec420f6: LNAV and VNAV at 400 ft (`Bbs757FoAutoManager`, `PushMcpAsync`).
+- Task 8, 168a48771: the center fuel pumps (`FO_CENTER_FUEL_LBS`, the shared gate, the policy, the settings text).
+
+### What changed from the plan, and why
+
+- Task 6: `BeforeStart_WaitsForTheIrsAlignment_LastBeforeTheCaptainsItems` now expects the IRS check right before `BS_MCP`, not `BS_ACARS`: the MCP reminder is a Captain item, and the IRS check stays last before them.
+- Task 7: the push's words are queued (`Announce`), as the 757's phase monitor speaks its crossings; the PMDG 737 interrupts.
+- Task 8: the center pump words are said once the write lands ("did not switch on/off" when it did not); the 737s speak before writing. The manager takes an optional clock so the policy's 2 s window is testable.
+
+### Sweep (Task 1): can a write that worked be reported failed?
+
+A hand tick says "Unable to complete" when its line's state still reads false 10 s after its action and the
+executor's queue (FO-9, FO-10); a flow write says "Skipping: …" when its write returns false. A plain switch write
+(`FoSetCoreAsync`) returns true once two reads in a row show the target, within 3 s; the window polls every First
+Officer control each second, and a write's end requests a fresh read.
+
+| Lines (hand tick) and their flow steps | State read | What the write waits for | Verdict |
+|---|---|---|---|
+| PU_BATTERY, PU_STBY_POWER, PU_POSITION, PF_EMER_LTS (guarded), PF_IGNITION, PF_WIPERS, PF_NO_SMOKING, PF_PRESS_MODE, PF_ND_MODE, PF_ND_RANGE, PF_BANK_LIMIT, PF_AUTOBRAKE, BS_SEAT_BELTS, BS_APU_BLEED, BS_XPDR, BS_BEACON, BS_LOGO, AS_APU_BLEED, AS_AUTOBRAKE, AS_TAXI_LIGHT, BT_SEAT_BELTS, BT_STROBES, BT_WING, BT_TAXI_LIGHT, DS_SEAT_BELTS, AP_ND_MODE, AP_ND_RANGE, AL_AUTOBRAKE, AL_WING_ANTI_ICE, AL_STROBES, AL_WING_LIGHTS, AL_TAXI_LIGHT, SD_BEACON, SD_SEAT_BELTS, SD_WING_ANTI_ICE, SD_WIPERS, SD_APU_BLEED, SC_EMER_LTS, SC_BATTERY | the switch it writes | two reads of the target, 3 s | no false failure |
+| PU_FUEL_CUTOFF, PU_ELEC_HYD_OFF, PU_ELEC_PANEL, PU_IRS (two clicks a switch), PF_ENGINE_CONTROLS (guarded EECs on a RR), PF_YAW_DAMPERS, PF_ENG_HYD, PF_START_SEL, PF_XFEED, PF_FUEL_PUMPS, PF_ANTI_ICE, PF_LIGHTS_OFF, PF_WINDOW_HEAT, PF_TRIM_AIR, PF_ISOLATION, PF_BLEEDS, PF_FDS, BS_HYD, BS_FUEL (center ON gated only over an empty tank, which the line then wants OFF), ES_PACKS_OFF, ES_BLEEDS, ES_ISOLATION, ES_E1_FUEL, ES_E2_FUEL, AS_PACKS, AS_ISOLATION, BT_LANDING, BT_TURNOFF, AT_GROUND_LIGHTS, BL_LIGHTS, AL_WXR_TERR, AL_LANDING, AL_TURNOFF, AL_FDS, SD_ENG_ANTI_ICE, SD_FUEL_CUTOFF, SD_ELEC_HYD, SD_FUEL_PUMPS, SD_WINDOW_HEAT, SD_ISOLATION, SD_FDS, SD_HEATERS, SD_TURNOFF, SD_EXT_LIGHTS, SD_XPDR, SC_IRS | a synthetic of exactly the switches it writes | each switch as above, in turn | no false failure |
+| AS_APU, SC_APU | `FO_APU_OFF`: the APU switch (Task 3) | the switch, 3 s | fixed by Task 3 (was the APU's running state: BlueBird's cool-down outlasted the grace) |
+| BS_APU, AL_APU | `FO_APU_RUNNING` (`B757_APU_STATE` 2) | the action holds until the APU runs, up to 150 s (FO-11; measured 58-80 s) | no false failure |
+| PU_EXT_PWR, BS_EXT_PWR_OFF, SC_EXT_PWR | the EXT PWR ON light (status row) | the light, up to 4.5 s | no false failure. A tick of "External power: ON" with no GPU sends nothing and says "Unable to complete": true, but without the flow's reason (the flow leaves it alone with words). Not changed: not a false failure. |
+| PF_AT_ARM | BlueBird's A/T armed flag (R40) | the flag, up to 3 s | the tick: no false failure (a later flag ticks the line within the grace). The flow step could say "Skipping" if the flag lagged past 3 s: never observed, so not changed (watch in the in-sim checks). |
+| AS_SPEEDBRAKE, BL_SPEEDBRAKE, AL_SPEEDBRAKE | the lever (streamed row) | the lever, up to 3.5 s | no false failure |
+| BS_PARK, SD_PARK | `L:B757_FC_PARK_BRAKE` | the lever toggle, then full braking (REALISTIC), one read each after 1.5 s | the one logged failure (2026-11-07) was real (no hydraulic pressure); fixed by Task 4. A brief 1-0-1 write-back after a set lasts about 2 s (logged 2026-11-06 and 11-07), inside the grace. |
+| ES_E1_GND, ES_E2_GND | N2 past the starter | the selector, 3 s | never reverts (StayComplete, FOB-1) |
+| PF_TEST_* (eleven), BT_CABIN, DS_CABIN | none (no state) | the press sent | never reverts; a flow step fails only when nothing was sent |
+| The lines with no action (PU_GEAR, BS_DOORS, AS_START_SEL, BT_ENGINES, AT_FLAPS, AT_GEAR, BL_GEAR) and every reminder | — | — | nothing to report |
+
+Final full suite: see Task 10.
 
 ## Handoff to plan 16
 
-(Task 9.)
+**What changes for a pilot** (for the pull request and the changelog, category `improvement` with one `fix` line):
+- The First Officer's preflight tests run quickest first, ground proximity last; the squib and landing configuration tests are gone (both can still be pressed on their panels).
+- Ticking "APU: OFF" no longer says "Unable to complete" while the APU cools down (fix). Final Securing waits a 2-minute APU cool-down after switching the APU off, as on the 737s.
+- Before Start turns the electric hydraulic pumps on before setting the parking brake. Without hydraulic pressure the First Officer leaves the brake alone and says "Parking brake left released: no hydraulic pressure. Turn on the electric hydraulic pumps first."
+- The First Officer rings the cabin chime before takeoff and for landing preparation (Descent), and reminds you to set and identify the ILS.
+- A new Approach flow (the ND to APP at 20 NM, the altimeters, LOC then APP); Preflight puts the ND back to MAP at 40 NM; Before Landing reminds the missed approach altitude, Before Start the MCP speed, heading and altitude.
+- With "Auto-engage autopilot on climbout" on, the First Officer presses LNAV and VNAV at 400 ft if they are not lit: "400 feet. LNAV and VNAV on."
+- With "Auto-manage center fuel pumps" on (now for the BlueBird 757 too), the center pumps go on in ground setup with center fuel and off when the center tank runs dry: "Center tank low. Center fuel pumps off."
+
+**The guide** (`guide/**`): the 757 First Officer text (the tests, the cabin calls, the ILS reminder, the Approach flow, the parking brake words, the two automations); `guide/first-officer.md` line 136, the center pump setting row, names the BlueBird 757 (the app's checkbox now reads "Auto-manage center fuel pumps (PMDG 737/777, iFly MAX8 and BlueBird 757)"). `docs/b757.md`'s First Officer section the same. The "User guide:" line.
+
+**Proposed rule lines** (`docs/invariants/b757.md` and the rule files):
+- [B757-n] The 757 First Officer's "APU: OFF" lines and steps read the APU switch (`FO_APU_OFF`), never `B757_APU_STATE`: BlueBird runs the APU through a cool-down after OFF. Final Securing waits `ApuCooldownSeconds` (120) only after a switch-off it sent, then for the state to read 0; the battery waits for 0 (`BatteryMustStay`).
+- [B757-n] Never send the 757 parking brake SET without brake pressure (`Bbs757FoChecklistDefinitions.NoBrakePressure`: the left or right electric hydraulic pump ON, or an engine running); never turn a pump on to set it.
+- [FOB-n] (`first-officer-boeing.md`) The BlueBird 757's center-pump ON gate sits at `Bbs757FoActionExecutor.DispatchAsync`, its single chokepoint (`CenterPumpGate`, the 757 map's `B757_OVHD_C_PUMPS_L/R_BUTTON`), the tank in pounds (`FO_CENTER_FUEL_LBS`, 6.7 lb/gal until BlueBird's density reads), as FOB-10/FOB-18.
