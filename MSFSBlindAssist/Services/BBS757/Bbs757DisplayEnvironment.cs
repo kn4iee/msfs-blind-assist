@@ -20,6 +20,7 @@ public sealed class Bbs757DisplayEnvironment : IBbs757DisplayEnvironment
     public const string TitleMark = "757";
 
     private readonly Func<bool> _connected;
+    private readonly Func<bool> _flightRunning;
     private readonly Func<string?> _title;
     private readonly Func<string, double?> _cached;
     private readonly IReadOnlyDictionary<string, string> _cacheKeys;
@@ -31,17 +32,18 @@ public sealed class Bbs757DisplayEnvironment : IBbs757DisplayEnvironment
     /// (<c>BBS757Definition.DisplayCacheKeys</c>).</param>
     public Bbs757DisplayEnvironment(SimConnectManager sim, ScreenReaderAnnouncer announcer, ModuleSession session,
         Bbs757DisplayFilesNotice filesNotice, IReadOnlyDictionary<string, string> cacheKeys)
-        : this(ConnectedOf(sim), () => sim.CurrentAircraftTitle, key => sim.GetCachedVariableValue(key), cacheKeys,
-            () => SettingsManager.Current, announcer, session, filesNotice)
+        : this(ConnectedOf(sim), () => sim.FlightRunning, () => sim.CurrentAircraftTitle, key => sim.GetCachedVariableValue(key),
+            cacheKeys, () => SettingsManager.Current, announcer, session, filesNotice)
     {
     }
 
-    /// <summary>For tests: the simulator's connection, title and cache, and the settings, as delegates.</summary>
-    internal Bbs757DisplayEnvironment(Func<bool> connected, Func<string?> title, Func<string, double?> cached,
-        IReadOnlyDictionary<string, string> cacheKeys, Func<UserSettings> settings, ScreenReaderAnnouncer announcer,
-        ModuleSession session, Bbs757DisplayFilesNotice filesNotice)
+    /// <summary>For tests: the simulator's connection, flight, title and cache, and the settings, as delegates.</summary>
+    internal Bbs757DisplayEnvironment(Func<bool> connected, Func<bool> flightRunning, Func<string?> title,
+        Func<string, double?> cached, IReadOnlyDictionary<string, string> cacheKeys, Func<UserSettings> settings,
+        ScreenReaderAnnouncer announcer, ModuleSession session, Bbs757DisplayFilesNotice filesNotice)
     {
         _connected = connected ?? throw new ArgumentNullException(nameof(connected));
+        _flightRunning = flightRunning ?? throw new ArgumentNullException(nameof(flightRunning));
         _title = title ?? throw new ArgumentNullException(nameof(title));
         _cached = cached ?? throw new ArgumentNullException(nameof(cached));
         _cacheKeys = cacheKeys ?? throw new ArgumentNullException(nameof(cacheKeys));
@@ -68,14 +70,17 @@ public sealed class Bbs757DisplayEnvironment : IBbs757DisplayEnvironment
 
     /// <summary>
     /// The <paramref name="keys"/>' cached values, keyed by their names; null, so the monitor waits silently, while the
-    /// simulator is disconnected, while the loaded title is no 757's (another aircraft under the 757 profile), or while a
-    /// key has no value yet. The connection is checked first, before the title or a value is read ([WASM-7]'s order): a
-    /// closed simulator leaves the last title and values in place, and without the check the monitor would search memory
-    /// that is gone and say "unavailable: aircraft memory not found" two minutes later.
+    /// simulator is disconnected, while no flight runs (the "Sim" system event: the menus, a flight's load), while the
+    /// loaded title is no 757's (another aircraft under the 757 profile), or while a key has no value yet. The connection
+    /// is checked first, before anything else is read ([WASM-7]'s order): a closed simulator leaves the last title and
+    /// values in place, and without the check the monitor would search memory that is gone and say "unavailable: aircraft
+    /// memory not found" two minutes later. The flight comes next for the same reason: in the menus the title stays the last
+    /// flight's, so the title alone would send the monitor searching there.
     /// </summary>
     public Bbs757SimValues? ReadSimulator(IReadOnlyList<string> keys)
     {
         if (!_connected()) return null;
+        if (!_flightRunning()) return null;
         if (!IsBbs757Title(_title())) return null;
         var values = new Dictionary<string, double>(keys.Count, StringComparer.Ordinal);
         foreach (string key in keys)

@@ -126,18 +126,76 @@ public class Bbs757DisplaysWiringTests
         using var session = NewSession();
         var asked = new List<string>();
         var env = new Bbs757DisplayEnvironment(connected: () => false,
+            flightRunning: () => { asked.Add("flight"); return true; },
             title: () => { asked.Add("title"); return BlueBirdTitle; },
             cached: key => { asked.Add(key); return 1; },
             cacheKeys: Bbs757FmaDisplay.GateKeys.ToDictionary(k => k, k => k),
             settings: () => new UserSettings(), new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
 
         Assert.Null(env.ReadSimulator(Bbs757FmaDisplay.GateKeys));
-        Assert.Empty(asked);   // neither the title nor a value is read while disconnected
+        Assert.Empty(asked);   // neither the flight, the title nor a value is read while disconnected
 
         // The app's own manager, never connected here.
         var real = new Bbs757DisplayEnvironment(new SimConnectManager(IntPtr.Zero), new SpeechCapture(), session,
             new Bbs757DisplayFilesNotice(), new Dictionary<string, string>());
         Assert.Null(real.ReadSimulator(Bbs757FmaDisplay.GateKeys));
+    }
+
+    [Fact]
+    public void The_environment_waits_while_no_flight_runs()
+    {
+        // The menus, or a flight's load: the "Sim" system event says no flight runs, while the title stays the last
+        // flight's and the cache keeps its values.
+        using var session = NewSession();
+        bool flight = false;
+        var asked = new List<string>();
+        var cache = new Dictionary<string, double> { ["CACHE_A"] = 1 };
+        var env = new Bbs757DisplayEnvironment(() => true, () => flight,
+            () => { asked.Add("title"); return "BlueBird 757-200 RR"; },
+            key => { asked.Add(key); return cache.TryGetValue(key, out double v) ? v : null; },
+            new Dictionary<string, string> { ["L_A"] = "CACHE_A" }, () => new UserSettings(), new SpeechCapture(), session,
+            new Bbs757DisplayFilesNotice());
+
+        Assert.Null(env.ReadSimulator(new[] { "L_A" }));
+        Assert.Empty(asked);   // the flight is asked before the title or a value
+
+        flight = true;
+        Assert.Equal(1, env.ReadSimulator(new[] { "L_A" })!.Value["L_A"]);
+    }
+
+    [Fact]
+    public void Leaving_a_flight_for_the_menus_says_nothing_for_10_minutes()
+    {
+        // A running reader, then the flight ends: BlueBird's memory goes, the title stays a 757's. With the flight's end the
+        // environment reads null, so the monitor waits: never "stopped: aircraft memory not found".
+        using var session = NewSession();
+        var fake = new Bbs757DisplayMonitorTests.FakeEnvironment();
+        bool flight = true;
+        var real = new Bbs757DisplayEnvironment(() => true, () => flight, () => BlueBirdTitle, _ => 1,
+            new Dictionary<string, string> { ["L:X_GATE"] = "CACHE_X" }, () => new UserSettings(), new SpeechCapture(), session,
+            new Bbs757DisplayFilesNotice());
+        var env = new SimulatorFrom(real, fake);
+        var reader = new Bbs757DisplayMonitorTests.FakeReader();
+        var monitor = new Bbs757DisplayMonitor<Bbs757DisplayMonitorTests.FakeLayout, Bbs757DisplayMonitorTests.FakeReading>(reader);
+        monitor.Start(env, startTimer: false);
+        for (int i = 0; i < 300 && monitor.StateName != "Running"; i++) Tick();
+        Assert.Equal("Running", monitor.StateName);
+
+        flight = false;
+        reader.Samplers.Single(s => !s.Disposed).Fail = true;
+        fake.Locate = () => Task.FromResult(new ModuleLocation(Array.Empty<LocatedModule>(), null));
+        for (int i = 0; i < 6_000; i++) Tick();   // 10 minutes at 100 ms
+
+        Assert.Equal("WaitingForSimulator", monitor.StateName);
+        Assert.Empty(fake.Spoken);
+        Assert.False(monitor.KeyFallsBackToAi());   // the window opens and says it waits
+        monitor.Stop();
+
+        void Tick()
+        {
+            monitor.Tick();
+            fake.NowMs += 100;
+        }
     }
 
     [Theory]
@@ -192,7 +250,7 @@ public class Bbs757DisplaysWiringTests
         using var session = NewSession();
         var settings = new UserSettings { BBS757DisabledMonitorVariables = new() { Bbs757FmaDisplay.MuteKey } };
         settings.RebuildDisabledMonitorVariableCaches();
-        var env = new Bbs757DisplayEnvironment(() => true, () => BlueBirdTitle, _ => 1, new Dictionary<string, string>(),
+        var env = new Bbs757DisplayEnvironment(() => true, () => true, () => BlueBirdTitle, _ => 1, new Dictionary<string, string>(),
             () => settings, new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
 
         Assert.True(env.IsMuted(Bbs757FmaDisplay.MuteKey));
@@ -204,8 +262,9 @@ public class Bbs757DisplaysWiringTests
     {
         // Step 1: the F/D switches were on-request map controls, so each has a hidden batched copy; the MCP's altitude and
         // heading already ride the batch for the autoflight call-outs, so they have none ([VAR-7]: one batched var a name).
-        var vars = new BBS757Definition().GetVariables();
-        var keys = BBS757Definition.DisplayCacheKeys(vars);
+        var def = new BBS757Definition();
+        var vars = def.GetVariables();
+        var keys = def.DisplayCacheKeys();
 
         foreach (string gate in Bbs757FmaDisplay.GateKeys)
         {
@@ -230,7 +289,7 @@ public class Bbs757DisplaysWiringTests
     {
         var def = new BBS757Definition { NestRunning = () => true };
         var speech = new SpeechCapture();
-        string copy = BBS757Definition.DisplayCacheKeys(def.GetVariables())[Bbs757FmaGate.FdCaptainKey];
+        string copy = def.DisplayCacheKeys()[Bbs757FmaGate.FdCaptainKey];
 
         Assert.True(def.ProcessSimVarUpdate(copy, 1, speech));
         Assert.True(def.ProcessSimVarUpdate(copy, 0, speech));
@@ -238,7 +297,54 @@ public class Bbs757DisplaysWiringTests
         Assert.Empty(speech.All);
     }
 
+    [Fact]
+    public void A_later_readers_gate_key_gets_its_copy_and_cache_key()
+    {
+        // As a later plan's seam registers its reader (S16), with its own gate variables: nothing in Displays.cs lists them.
+        const string gate = "BBS_TEST_READER_GATE";
+        var def = new BBS757Definition();
+        def.Displays.Add(new FakeMonitor(), new[] { gate, Bbs757FmaGate.HeadingKey });
+
+        var vars = def.GetVariables();
+        var keys = def.DisplayCacheKeys();
+
+        Assert.Equal(BBS757Definition.DisplayGateCopyPrefix + gate, keys[gate]);
+        var copy = vars[keys[gate]];
+        Assert.Equal(gate, copy.Name);
+        Assert.Equal(SimVarType.LVar, copy.Type);
+        Assert.True(ContinuousBatchLayout.RidesBatch(copy));
+        Assert.True(copy.ExcludeFromMonitorManager);
+        // A key another variable already carries on the batch gets no copy, and is read from that variable.
+        Assert.Equal(Bbs757AutoflightAnnouncements.HeadingWatchKey, keys[Bbs757FmaGate.HeadingKey]);
+        Assert.DoesNotContain(BBS757Definition.DisplayGateCopyPrefix + Bbs757FmaGate.HeadingKey, vars.Keys);
+        // Every registered gate variable resolves, each to one batched variable.
+        Assert.All(def.Displays.GateKeys, k => Assert.Single(vars, kv => kv.Value.Name == k && ContinuousBatchLayout.RidesBatch(kv.Value)));
+        Assert.Equal(def.Displays.GateKeys.OrderBy(k => k, StringComparer.Ordinal), keys.Keys.OrderBy(k => k, StringComparer.Ordinal));
+    }
+
     // ---- fakes ----
+
+    /// <summary>The real environment's simulator reads; everything else (clock, speech, the session's jobs) a fake's.</summary>
+    private sealed class SimulatorFrom : IBbs757DisplayEnvironment
+    {
+        private readonly Bbs757DisplayEnvironment _real;
+        private readonly Bbs757DisplayMonitorTests.FakeEnvironment _fake;
+
+        public SimulatorFrom(Bbs757DisplayEnvironment real, Bbs757DisplayMonitorTests.FakeEnvironment fake)
+        {
+            _real = real;
+            _fake = fake;
+        }
+
+        public long NowMs => _fake.NowMs;
+        public Bbs757SimValues? ReadSimulator(IReadOnlyList<string> keys) => _real.ReadSimulator(keys);
+        public bool IsMuted(string muteKey) => _fake.IsMuted(muteKey);
+        public Bbs757DisplayFilesNotice FilesNotice => _fake.FilesNotice;
+        public void Speak(string text) => _fake.Speak(text);
+        public void Log(string channel, string line) => _fake.Log(channel, line);
+        public Task<ModuleAnalysis> AnalyseAsync() => _fake.AnalyseAsync();
+        public Task<ModuleLocation> LocateAsync() => _fake.LocateAsync();
+    }
 
     /// <summary>Starts the FMA without its WinForms timer (the tests tick it); any other monitor as the app would.</summary>
     private static void StartWithoutTimer(IBbs757DisplayMonitor monitor, IBbs757DisplayEnvironment env)
@@ -254,8 +360,8 @@ public class Bbs757DisplaysWiringTests
 
     private static Bbs757DisplayEnvironment Connected(ModuleSession session, string? title, Dictionary<string, double> cache,
         Dictionary<string, string> cacheKeys) =>
-        new(() => true, () => title, key => cache.TryGetValue(key, out double v) ? v : null, cacheKeys, () => new UserSettings(),
-            new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
+        new(() => true, () => true, () => title, key => cache.TryGetValue(key, out double v) ? v : null, cacheKeys,
+            () => new UserSettings(), new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
 
     private sealed class FakeMonitor : IBbs757DisplayMonitor
     {

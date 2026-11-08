@@ -21,6 +21,7 @@ internal sealed class Bbs757DisplayRegistry
 {
     private readonly List<IBbs757DisplayMonitor> _monitors = new();
     private readonly List<MonitorRow> _rows = new();
+    private readonly List<string> _gateKeys = new();
     private readonly Dictionary<HotkeyAction, Func<Bbs757KeyContext, bool>> _keys = new();
 
     /// <summary>Every reader's monitor, in registration order (the FMA first).</summary>
@@ -29,10 +30,22 @@ internal sealed class Bbs757DisplayRegistry
     /// <summary>Every reader's Ctrl+M rows, in registration order.</summary>
     public IReadOnlyList<MonitorRow> Rows => _rows;
 
-    public void Add(IBbs757DisplayMonitor monitor)
+    /// <summary>Every reader's gate variables (its <c>GateKeys</c>, BlueBird's L:vars), each once, in registration order:
+    /// the definition puts each on the continuous batch and reads it from there.</summary>
+    public IReadOnlyList<string> GateKeys => _gateKeys;
+
+    /// <summary>A reader whose gate compares memory with no simulator variable.</summary>
+    public void Add(IBbs757DisplayMonitor monitor) => Add(monitor, Array.Empty<string>());
+
+    /// <summary>A reader and its gate variables (the reader's <c>GateKeys</c>), recorded here because the monitor does not
+    /// expose them.</summary>
+    public void Add(IBbs757DisplayMonitor monitor, IReadOnlyList<string> gateKeys)
     {
         ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(gateKeys);
         _monitors.Add(monitor);
+        foreach (string key in gateKeys)
+            if (!_gateKeys.Contains(key, StringComparer.Ordinal)) _gateKeys.Add(key);
     }
 
     /// <summary>The handler of <paramref name="action"/>: true when it took the key. One per key: two readers on one key

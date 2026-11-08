@@ -28,6 +28,28 @@ public class Bbs757DisplayRegistryTests
     }
 
     [Fact]
+    public void Each_readers_gate_keys_are_recorded_once_in_registration_order()
+    {
+        var registry = new Bbs757DisplayRegistry();
+        var fma = new BBS757Definition().Fma;
+
+        registry.Add(fma, new[] { "L_A", "L_B" });
+        registry.Add(fma);   // a reader with no gate variable
+        registry.Add(fma, new[] { "L_B", "L_C" });
+
+        Assert.Equal(new[] { "L_A", "L_B", "L_C" }, registry.GateKeys);
+        Assert.Equal(3, registry.Monitors.Count);
+    }
+
+    [Fact]
+    public void The_fma_registers_its_gate_keys()
+    {
+        var def = new BBS757Definition();
+
+        Assert.Equal(Bbs757FmaDisplay.GateKeys, def.Displays.GateKeys.Take(Bbs757FmaDisplay.GateKeys.Count));
+    }
+
+    [Fact]
     public void Monitor_rows_list_every_reader_before_the_readers_start()
     {
         var def = new BBS757Definition();
