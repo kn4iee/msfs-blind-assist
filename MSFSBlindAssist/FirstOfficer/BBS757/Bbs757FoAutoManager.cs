@@ -31,17 +31,26 @@ public sealed class Bbs757FoAutoManager : IFoAutoManager
     private bool _wasOnGround = true;
     private int _pushing;
 
+    private readonly CenterFuelPumpAutomation _centerPumps = new();
+    private readonly CenterPumpDiagnostics _centerPumpLog = new("BBS757");
+    private readonly Func<double> _clockMs;
+    private double _lastCenterPumpsMs;
+    private bool _centerPumpsClockPrimed;
+
     /// <param name="say">What the manager says (queued, as the 757's phase monitor speaks its crossings).</param>
     /// <param name="autoApEnabled">The auto-autopilot setting, read live (<c>FOAutoApEnabled</c>).</param>
     /// <param name="centerPumpsEnabled">The center fuel pump setting, read live (<c>FOAutoCenterPumpsEnabled</c>).</param>
+    /// <param name="clockMs">Wall-clock milliseconds for the center pump policy's windows (default a stopwatch).</param>
     public Bbs757FoAutoManager(Bbs757FoActionExecutor executor, Bbs757FoStateEvaluator state, Action<string> say,
-        Func<bool> autoApEnabled, Func<bool> centerPumpsEnabled)
+        Func<bool> autoApEnabled, Func<bool> centerPumpsEnabled, Func<double>? clockMs = null)
     {
         _executor = executor;
         _state = state;
         _say = say;
         _autoApEnabled = autoApEnabled;
         _centerPumpsEnabled = centerPumpsEnabled;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        _clockMs = clockMs ?? (() => watch.Elapsed.TotalMilliseconds);
     }
 
     public bool AutoFlapsEnabled { get; set; }   // stored, never acted on
@@ -51,11 +60,15 @@ public sealed class Bbs757FoAutoManager : IFoAutoManager
         _armed = false;
         _spent = false;
         _wasOnGround = true;
+        _centerPumps.Reset();
+        _centerPumpsClockPrimed = false;
     }
 
     public void Update(double altitudeMsl, double verticalSpeedFpm, double altitudeAgl, double airspeedKts, bool onGround)
     {
         if (!_executor.IsAvailable) return;
+
+        UpdateCenterPumps(onGround);
 
         if (onGround)
         {
@@ -93,6 +106,54 @@ public sealed class Bbs757FoAutoManager : IFoAutoManager
         finally
         {
             Interlocked.Exchange(ref _pushing, 0);
+        }
+    }
+
+    /// <summary>
+    /// The other Boeings' center fuel pump management (opt-in, <c>FOAutoCenterPumpsEnabled</c>), through their shared
+    /// <see cref="CenterFuelPumpAutomation"/> policy: ON during ground setup with the center tank above 1,500 lb and the
+    /// wing pumps on; OFF in any phase once it reads below 1,000 lb for 2 s. The tank in pounds (<c>FO_CENTER_FUEL_LBS</c>);
+    /// nothing decided until the tank and every pump switch read. The 737s' words, said once the write lands.
+    /// </summary>
+    private void UpdateCenterPumps(bool onGround)
+    {
+        double now = _clockMs();
+        double elapsedMs = _centerPumpsClockPrimed ? now - _lastCenterPumpsMs : 0;
+        _lastCenterPumpsMs = now;
+        _centerPumpsClockPrimed = true;
+
+        bool enabled = _centerPumpsEnabled();
+        double qty = _state.GetValue("FO_CENTER_FUEL_LBS");
+        double[] center = { _state.GetValue(K.CenterLeftPump), _state.GetValue(K.CenterRightPump) };
+        double[] wing = { _state.GetValue(K.LeftFwdPump), _state.GetValue(K.LeftAftPump), _state.GetValue(K.RightFwdPump), _state.GetValue(K.RightAftPump) };
+        bool dataReady = !double.IsNaN(qty) && !center.Any(double.IsNaN) && !wing.Any(double.IsNaN);
+        bool pumpsOn = center.Any(v => v > 0.5);
+        bool wingOn = wing.All(v => v > 0.5);
+
+        var action = _centerPumps.Update(enabled: enabled, dataReady: dataReady, onGround: onGround, centerQtyLbs: qty,
+            centerPumpsOn: pumpsOn, wingPumpsOn: wingOn, rawElapsedMs: elapsedMs);
+        _centerPumpLog.Record(enabled, dataReady, onGround, qty, pumpsOn, wingOn, elapsedMs, action, _centerPumps.Diagnostics);
+
+        switch (action)
+        {
+            case CenterFuelPumpAutomation.Action.TurnOn:
+                _ = SetCenterPumpsAsync(1, "Center fuel pumps on.", "Center fuel pumps did not switch on.");
+                break;
+            case CenterFuelPumpAutomation.Action.TurnOff:
+                _ = SetCenterPumpsAsync(0, "Center tank low. Center fuel pumps off.", "Center tank low. Center fuel pumps did not switch off.");
+                break;
+        }
+    }
+
+    private async Task SetCenterPumpsAsync(int on, string done, string failed)
+    {
+        try
+        {
+            _say(await _executor.SetCenterFuelPumps(on) ? done : failed);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("BBS757 FO", $"center fuel pumps {(on == 1 ? "on" : "off")} failed: {ex.Message}");
         }
     }
 

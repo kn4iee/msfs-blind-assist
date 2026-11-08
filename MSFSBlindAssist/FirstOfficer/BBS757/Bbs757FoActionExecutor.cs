@@ -277,6 +277,14 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
     {
         // A write the flow's Stop overtook while it waited for the gate is not sent.
         if (stop.IsCancellationRequested) return false;
+        // The other Boeings' center-pump ON gate (FOB-10, FOB-18), here at the one chokepoint every write passes (flow
+        // steps and their tuples, checklist ticks, the automation): an ON over a tank at or below the empty threshold is
+        // done with nothing written; an OFF is never gated; an unread tank (NaN) is not gated.
+        if (CenterPumpGate.ShouldSuppressCenterOn(key, target is 1, _state?.GetValue("FO_CENTER_FUEL_LBS") ?? double.NaN))
+        {
+            Log.Info("BBS757 FO", $"{key} ON not sent: the center tank reads at or below {CenterFuelPumpAutomation.OffThresholdLbs:0} lb.");
+            return true;
+        }
         switch (key)
         {
             case ExtPower: return await ExternalPowerAsync(io, target is > 0, stop);
@@ -788,6 +796,14 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
     }
 
     // ---- named helpers for checklists and the phase monitor ----
+
+    /// <summary>Both center fuel pumps ON (1) or OFF (0), for the center pump automation; true when both landed.</summary>
+    public async Task<bool> SetCenterFuelPumps(int on)
+    {
+        bool l = await Set(K.CenterLeftPump, on);
+        bool r = await Set(K.CenterRightPump, on);
+        return l && r;
+    }
 
     public Task<bool> SetSeatbeltSign(bool on) => Set(K.SeatBelts, (int)(on ? K.SignOn : K.SignOff));
 

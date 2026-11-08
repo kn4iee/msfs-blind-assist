@@ -26,6 +26,7 @@ public class Bbs757FoAutoManagerTests
         public List<string> Said { get; } = new();
         public bool AutoAp = true;
         public bool CenterPumps;
+        public double NowMs;
 
         /// <summary>The evaluator's cached value for <paramref name="key"/>, as the window's batch delivers it.</summary>
         public void Cache(string key, double value) => SeededSimConnectCache.Cache(Sc)[key] = value;
@@ -58,7 +59,8 @@ public class Bbs757FoAutoManagerTests
         exec.SetTransport(io);
         exec.SetState(state);
         Rig? rig = null;
-        var mgr = new Bbs757FoAutoManager(exec, state, s => rig!.Said.Add(s), () => rig!.AutoAp, () => rig!.CenterPumps);
+        var mgr = new Bbs757FoAutoManager(exec, state, s => rig!.Said.Add(s), () => rig!.AutoAp, () => rig!.CenterPumps,
+            clockMs: () => rig!.NowMs);
         rig = new Rig { Mgr = mgr, Io = io, Sc = sc };
         return rig;
     }
@@ -167,6 +169,59 @@ public class Bbs757FoAutoManagerTests
         var r = NewRig(lightsComeOn: false);
         TakeOff(r);
         Assert.Equal(new[] { "400 feet. LNAV and VNAV did not come on." }, r.Said);
+    }
+
+    // ------------------------------------------------------------------ the center fuel pumps (the other Boeings' policy)
+
+    /// <summary>In cruise, the wing and center pumps on, the center tank at <paramref name="gallons"/> (6.7 lb/gal).</summary>
+    private static Rig Cruise(bool settingOn, double gallons)
+    {
+        var r = NewRig(lnav: 1, vnav: 1);
+        r.CenterPumps = settingOn;
+        foreach (var k in new[] { K.LeftFwdPump, K.LeftAftPump, K.RightFwdPump, K.RightAftPump, K.CenterLeftPump, K.CenterRightPump })
+        {
+            r.Cache(k, 1);
+            r.Io.Values[k] = 1;
+        }
+        r.Cache(K.CenterFuelGallons, gallons);
+        return r;
+    }
+
+    private static void Tick(Rig r, double atMs)
+    {
+        r.NowMs = atMs;
+        r.Air(20000, vsFpm: 0);
+    }
+
+    [Fact]
+    public void Center_pumps_turn_off_when_the_tank_runs_dry_and_say_so()
+    {
+        var r = Cruise(settingOn: true, gallons: 2000);
+        Tick(r, 0);
+        r.Cache(K.CenterFuelGallons, 100);                                    // 670 lb: below the 1,000 lb empty threshold
+        Tick(r, 1000);
+        Assert.Empty(r.Io.Sets);                                              // 2 s confirmed below first
+        Tick(r, 2000);
+        Assert.Equal(new[] { (K.CenterLeftPump, 0.0), (K.CenterRightPump, 0.0) }, r.Io.Sets);
+        Assert.Equal(new[] { "Center tank low. Center fuel pumps off." }, r.Said);
+    }
+
+    [Fact]
+    public void The_center_pump_setting_off_does_nothing()
+    {
+        var r = Cruise(settingOn: false, gallons: 100);
+        for (int t = 0; t <= 5000; t += 1000) Tick(r, t);
+        Assert.Empty(r.Io.Sets);
+        Assert.Empty(r.Said);
+    }
+
+    [Fact]
+    public void Center_pumps_are_never_touched_on_unread_switches()
+    {
+        var r = Cruise(settingOn: true, gallons: 100);
+        SeededSimConnectCache.Cache(r.Sc).TryRemove(K.CenterLeftPump, out _);
+        for (int t = 0; t <= 5000; t += 1000) Tick(r, t);
+        Assert.Empty(r.Io.Sets);
     }
 
     // ------------------------------------------------------------------ the executor's MCP push

@@ -1,4 +1,5 @@
 using MSFSBlindAssist.FirstOfficer.Generic;
+using MSFSBlindAssist.SimConnect.BBS757;
 using K = MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoKeys;
 
 namespace MSFSBlindAssist.FirstOfficer.BBS757;
@@ -40,8 +41,27 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
     /// <summary>A Rolls-Royce is motored until its EGT is below this before fuel, °C (the manual's hot core).</summary>
     public const double RrHotStartEgtCelsius = 100.0;
 
-    /// <summary>Center tank gallons above which the center pumps belong on (about 1,000 lb).</summary>
-    public const double CenterFuelPumpsOnGallons = 150.0;
+    /// <summary>
+    /// The fuel density the center tank's pounds use until BlueBird's own (<c>Bbs757Loadsheet.FuelDensityKey</c>) is read:
+    /// the loadsheet's 6.7 lb/gal, so an unread density never leaves the tank unknown (the center pumps would never arm).
+    /// </summary>
+    public const double FallbackPoundsPerGallon = 6.7;
+
+    /// <summary>
+    /// The center tank in pounds, as the other Boeings' center pump policy and gate count it (plan 23): gallons times
+    /// BlueBird's density, or <see cref="FallbackPoundsPerGallon"/> while that reads nothing usable; NaN with the gallons unread.
+    /// </summary>
+    internal static double CenterFuelLbs(double gallons, double poundsPerGallon)
+    {
+        if (double.IsNaN(gallons)) return double.NaN;
+        double density = double.IsNaN(poundsPerGallon) || poundsPerGallon <= 0 ? FallbackPoundsPerGallon : poundsPerGallon;
+        return gallons * density;
+    }
+
+    /// <summary>The center pumps belong on above the policy's empty threshold (1,000 lb), so no write ever meets the gate.</summary>
+    private static bool CenterFuelWanted(double lbs) => lbs > CenterFuelPumpAutomation.OffThresholdLbs;
+
+    private static readonly string[] CenterFuel = { K.CenterFuelGallons, Bbs757Loadsheet.FuelDensityKey };
 
     /// <summary>Gear legs: up below 5 %, down above 95 % (stock legs, 0..1 as "percent over 100").</summary>
     public const double GearUpBelow = 0.05, GearDownAbove = 0.95;
@@ -69,7 +89,7 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
         K.LeftFuelPw, K.RightFuelPw, K.LeftFuelRr, K.RightFuelRr,
         K.LeftEngHyd, K.RightEngHyd, K.LeftElecHyd, K.C1ElecHyd, K.C2ElecHyd, K.RightElecHyd,
         K.LeftFwdPump, K.LeftAftPump, K.RightFwdPump, K.RightAftPump, K.CenterLeftPump, K.CenterRightPump,
-        K.XfeedFwd, K.XfeedAft, K.CenterFuelGallons,
+        K.XfeedFwd, K.XfeedAft, K.CenterFuelGallons, Bbs757Loadsheet.FuelDensityKey,
         K.WingAntiIce, K.LeftEngAntiIce, K.RightEngAntiIce,
         K.BeaconLight, K.PositionLights, K.StrobeLights, K.TaxiLight, K.LeftLanding, K.RightLanding,
         K.LeftTurnoff, K.RightTurnoff, K.WingLights, K.LogoLights,
@@ -267,18 +287,24 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
         // Before Start: the four wing pumps ON, the center pumps ON only with fuel in the center
         // tank, both crossfeeds OFF (the manual: "Select the applicable pumps ON; leave crossfeed OFF").
         ["FO_FUEL_PANEL_SET"] = new(WingPumps.Concat(CenterPumps).Append(K.XfeedFwd).Append(K.XfeedAft)
-                                     .Append(K.CenterFuelGallons).ToArray(), r =>
+                                     .Concat(CenterFuel).ToArray(), r =>
         {
             var wing = WingPumps.Select(r).ToArray();
             var ctr = CenterPumps.Select(r).ToArray();
-            double xf = r(K.XfeedFwd), xa = r(K.XfeedAft), gal = r(K.CenterFuelGallons);
-            if (!Known(wing) || !Known(ctr) || !Known(xf, xa, gal)) return double.NaN;
-            bool centerWanted = gal > CenterFuelPumpsOnGallons;
+            double xf = r(K.XfeedFwd), xa = r(K.XfeedAft);
+            double lbs = CenterFuelLbs(r(K.CenterFuelGallons), r(Bbs757Loadsheet.FuelDensityKey));
+            if (!Known(wing) || !Known(ctr) || !Known(xf, xa, lbs)) return double.NaN;
+            bool centerWanted = CenterFuelWanted(lbs);
             return B(wing.All(On) && ctr.All(c => On(c) == centerWanted) && !On(xf) && !On(xa));
         }),
         ["FO_FUEL_PUMPS_OFF"] = Vars(v => !v.Any(On), WingPumps.Concat(CenterPumps).ToArray()),
         ["FO_CROSSFEEDS_OFF"] = Vars(v => !v.Any(On), K.XfeedFwd, K.XfeedAft),
-        ["FO_CENTER_FUEL_FOR_PUMPS"] = Vars(v => v[0] > CenterFuelPumpsOnGallons, K.CenterFuelGallons),
+        ["FO_CENTER_FUEL_LBS"] = new(CenterFuel, r => CenterFuelLbs(r(K.CenterFuelGallons), r(Bbs757Loadsheet.FuelDensityKey))),
+        ["FO_CENTER_FUEL_FOR_PUMPS"] = new(CenterFuel, r =>
+        {
+            double lbs = CenterFuelLbs(r(K.CenterFuelGallons), r(Bbs757Loadsheet.FuelDensityKey));
+            return double.IsNaN(lbs) ? double.NaN : B(CenterFuelWanted(lbs));
+        }),
 
         // ---- anti-ice, windows, heaters ----
         ["FO_ENG_ANTI_ICE_OFF"] = Vars(v => !v.Any(On), K.LeftEngAntiIce, K.RightEngAntiIce),

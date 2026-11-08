@@ -455,6 +455,31 @@ public class Bbs757FoStateEvaluatorTests
     public void The_apu_is_on_line_running_with_its_generator_control_on(double apu, double gen, double expected)
         => Assert.Equal(expected, C("FO_APU_ON_LINE", D((K.ApuState, apu), (K.ApuGen, gen))));
 
+    // ------------------------------------------------------------------ the center tank in pounds (plan 23)
+
+    /// <summary>The center tank in pounds for the other Boeings' policy: BlueBird's density when read, 6.7 lb/gal until then.</summary>
+    [Fact]
+    public void Center_fuel_pounds_fall_back_to_6_7_per_gallon()
+    {
+        string density = MSFSBlindAssist.SimConnect.BBS757.Bbs757Loadsheet.FuelDensityKey;
+        Assert.Equal(6.7, E.FallbackPoundsPerGallon);
+        Assert.Equal(2010, C("FO_CENTER_FUEL_LBS", D((K.CenterFuelGallons, 300))), 6);
+        Assert.Equal(2016, C("FO_CENTER_FUEL_LBS", D((K.CenterFuelGallons, 300), (density, 6.72))), 6);
+        Assert.Equal(2010, C("FO_CENTER_FUEL_LBS", D((K.CenterFuelGallons, 300), (density, 0))), 6);
+        Assert.True(double.IsNaN(C("FO_CENTER_FUEL_LBS", D((density, 6.7)))));
+        Assert.Contains(density, E.PollFieldList);
+    }
+
+    /// <summary>Before Start's center pumps use the policy's own empty threshold (1,000 lb), so no write ever meets the gate.</summary>
+    [Fact]
+    public void Center_pumps_for_start_follow_the_pound_threshold()
+    {
+        string density = MSFSBlindAssist.SimConnect.BBS757.Bbs757Loadsheet.FuelDensityKey;
+        Assert.Equal(0, C("FO_CENTER_FUEL_FOR_PUMPS", D((K.CenterFuelGallons, 149))));                   // 998 lb
+        Assert.Equal(1, C("FO_CENTER_FUEL_FOR_PUMPS", D((K.CenterFuelGallons, 160))));                   // 1,072 lb
+        Assert.Equal(0, C("FO_CENTER_FUEL_FOR_PUMPS", D((K.CenterFuelGallons, 160), (density, 6.0))));   // 960 lb
+    }
+
     /// <summary>
     /// Plan 23 (owner, 2026-11-08: "use the same rules as the 737s"): "APU: OFF" is the APU switch at OFF, as the 737s'
     /// <c>APU_Selector &lt; 0.5</c>, never the APU's running state: BlueBird runs the APU on through its cool-down, so a
@@ -492,6 +517,9 @@ public class Bbs757FoStateEvaluatorTests
         Assert.Equal(0, C("FO_FUEL_PANEL_SET", D(Panel(1, 0))));
         Assert.Equal(1, C("FO_FUEL_PANEL_SET", D(Panel(1, 2000))));
         Assert.Equal(0, C("FO_FUEL_PANEL_SET", D(Panel(0, 2000))));
+        // Plan 23: judged in pounds against the policy's 1,000 lb: 160 gallons at 6.0 lb/gal is 960 lb, an empty tank.
+        var light = Panel(1, 160).Append((MSFSBlindAssist.SimConnect.BBS757.Bbs757Loadsheet.FuelDensityKey, 6.0)).ToArray();
+        Assert.Equal(0, C("FO_FUEL_PANEL_SET", D(light)));
     }
 
     // ------------------------------------------------------------------ through the live evaluator

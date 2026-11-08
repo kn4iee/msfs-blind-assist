@@ -934,6 +934,43 @@ public class Bbs757FoExecutorTests
         first.Dispose();
     }
 
+    // ------------------------------------------------------------------ the center pump ON gate (plan 23, FOB-10/FOB-18)
+
+    /// <summary>
+    /// At the executor's single chokepoint, as on the other Boeings: a center pump ON over a tank at or below 1,000 lb is
+    /// done with nothing written; an OFF is never gated; with center fuel the ON is written; an unread tank is not gated.
+    /// </summary>
+    [Fact]
+    public async Task A_center_pump_on_over_an_empty_tank_is_suppressed_but_off_never_is()
+    {
+        Cockpit((K.CenterFuelGallons, 100));                                   // 670 lb
+        Assert.True(await _exec.Set(K.CenterLeftPump, 1));
+        Assert.True(await _exec.ExecuteStepAsync(new Bbs757Step
+        {
+            ActionType = MSFSBlindAssist.FirstOfficer.Models.FlowStepActionType.SetSwitchMultiple,
+            MultiActions = new (string, int?)[] { (K.CenterRightPump, 1) },
+        }));
+        Assert.Empty(_io.Sets);
+        Assert.True(await _exec.Set(K.CenterLeftPump, 0));
+        Assert.Equal(new[] { (K.CenterLeftPump, 0.0) }, _io.Sets);
+
+        Cockpit((K.CenterFuelGallons, 2000));
+        Assert.True(await _exec.Set(K.CenterRightPump, 1));
+        Assert.Contains((K.CenterRightPump, 1.0), _io.Sets);
+
+        Cockpit();                                                              // the tank unread
+        Assert.True(await _exec.Set(K.CenterLeftPump, 1));
+        Assert.Contains((K.CenterLeftPump, 1.0), _io.Sets);
+    }
+
+    [Fact]
+    public async Task SetCenterFuelPumps_sets_both()
+    {
+        Cockpit((K.CenterFuelGallons, 2000));
+        Assert.True(await _exec.SetCenterFuelPumps(1));
+        Assert.Equal(new[] { (K.CenterLeftPump, 1.0), (K.CenterRightPump, 1.0) }, _io.Sets);
+    }
+
     // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
 
     private const Bbs757FoTestKind Held = Bbs757FoTestKind.HeldButton;
