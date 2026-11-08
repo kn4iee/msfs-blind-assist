@@ -55,6 +55,27 @@ public class Bbs757DisplayFormTests
     }
 
     [Fact]
+    public void A_close_hides_and_only_close_for_good_ends_the_window()
+    {
+        var form = new BBS757DisplayForm("t", "n", () => new[] { "a" });
+        form.ShowForm();
+        form.Close();   // the pilot's close (Alt+F4): hidden, kept for reuse
+        Assert.False(form.IsDisposed);
+        Assert.False(form.Visible);
+
+        form.ShowForm();
+        form.CloseForGood();   // the 757 definition's switch away
+        Assert.True(form.IsDisposed);
+        form.CloseForGood();   // again: nothing
+        Assert.True(form.IsDisposed);
+
+        // Never shown: disposed as well.
+        var unseen = new BBS757DisplayForm("t", "n", () => new[] { "a" });
+        unseen.CloseForGood();
+        Assert.True(unseen.IsDisposed);
+    }
+
+    [Fact]
     public void The_controls_follow_the_list_in_the_tab_order()
     {
         var panel = new Panel { Name = "controls" };

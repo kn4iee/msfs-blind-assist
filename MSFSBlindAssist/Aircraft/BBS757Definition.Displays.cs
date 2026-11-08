@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.Services;
 using MSFSBlindAssist.Services.BBS757;
@@ -14,8 +15,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// reader shares (WASM-11), the tablet window's EFB read included, and every reader's monitor. MainForm starts them on a
 /// new session (<see cref="StartDisplays"/>: at startup, after a switch to the 757, and when the simulator changes); a
 /// flight reload or a dropped connection invalidates the session and restarts them (<see cref="ResetDisplays"/>, from
-/// OnSimContextReset); a switch away or the app's exit stops them and disposes the session (<see cref="StopDisplays"/>,
-/// from OnSwitchedAway, before the tablet client goes).
+/// OnSimContextReset); a switch away or the app's exit closes the readers' windows for good, stops them and disposes the
+/// session (<see cref="StopDisplays"/>, from OnSwitchedAway, before the tablet client goes).
 ///
 /// The readers are listed once, in <see cref="Displays"/>, on its first use: the FMA registers itself, then each later
 /// plan's reader through its seam, in order (S16). So Ctrl+M (<see cref="MonitorRows"/>, the readers' rows last) and the
@@ -68,8 +69,9 @@ public partial class BBS757Definition
     }
 
     // The later readers' seams (S16): each plan implements its own in a partial of its own, registering its monitor
-    // (Add(monitor), which takes the gate variables its reader declares), its Ctrl+M rows and its keys. A seam runs
-    // inside the first GetVariables (AddDisplayVariables), so it must never call GetVariables itself.
+    // (Add(monitor), which takes the gate variables its reader declares), its Ctrl+M rows and its keys; the window its key
+    // makes once and shows again is owned too (OwnWindow), so a switch away closes it. A seam runs inside the first
+    // GetVariables (AddDisplayVariables), so it must never call GetVariables itself.
     partial void RegisterUpperEicas(Bbs757DisplayRegistry r);
     partial void RegisterLowerEicas(Bbs757DisplayRegistry r);
     partial void RegisterEhsi(Bbs757DisplayRegistry r);
@@ -105,11 +107,27 @@ public partial class BBS757Definition
         }
     }
 
-    /// <summary>A switch away or the app's exit: every monitor stops (its timer and leases), then the session goes, and the
-    /// readers never start again on this definition. Never throws.</summary>
+    /// <summary>A switch away or the app's exit, on the UI thread: every window the readers own closes for good and is
+    /// disposed (none stays up showing a stopped monitor), every monitor stops (its timer and leases), then the session
+    /// goes, and the readers never start again on this definition. Never throws: each window and monitor is tried on its
+    /// own, and a failure is logged.</summary>
     private void StopDisplays()
     {
         _displaysRetired = true;
+        foreach (var window in Displays.Windows)
+        {
+            try
+            {
+                if (window.IsDisposed) continue;
+                if (window is BBS757DisplayForm display) display.CloseForGood();
+                else
+                {
+                    window.Close();
+                    if (!window.IsDisposed) window.Dispose();
+                }
+            }
+            catch (Exception ex) { Log.Error("BBS757", "A display reader's window did not close.", ex); }
+        }
         foreach (var monitor in Displays.Monitors)
         {
             try { monitor.Stop(); }

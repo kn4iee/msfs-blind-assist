@@ -7,7 +7,8 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// controls area below it in the tab order. A 1 s timer asks for the rows and rewrites the list only when they
 /// differ, so the screen reader's cursor never jumps and only a changed row is re-read. Escape hides the window
 /// and returns to the previous one (the PMDG737EngineDisplaysForm pattern); hiding keeps the window for reuse,
-/// and only a real shutdown or its owner's Dispose ends it. A rows provider that throws keeps the rows shown.
+/// and only a real shutdown, <see cref="CloseForGood"/> (the 757's switch away, for a window the readers' registry
+/// owns) or its owner's Dispose ends it. A rows provider that throws keeps the rows shown.
 /// What the rows say is the reader's; this window only lays them out.
 /// </summary>
 internal sealed class BBS757DisplayForm : Form
@@ -20,6 +21,7 @@ internal sealed class BBS757DisplayForm : Form
     private readonly System.Windows.Forms.Timer _timer;
     private IReadOnlyList<string> _shown = Array.Empty<string>();
     private IntPtr _previousWindow;
+    private bool _closingForGood;
 
     public BBS757DisplayForm(string title, string listName, Func<IReadOnlyList<string>> rows, Control? controls = null)
     {
@@ -58,10 +60,11 @@ internal sealed class BBS757DisplayForm : Form
             e.Handled = true;
             HideWindow();
         };
-        // Any close other than the real shutdown hides, so the window keeps its place.
+        // Any close other than the real shutdown or CloseForGood hides, so the window keeps its place.
         FormClosing += (_, e) =>
         {
-            if (e.CloseReason is CloseReason.ApplicationExitCall or CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing)
+            if (_closingForGood
+                || e.CloseReason is CloseReason.ApplicationExitCall or CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing)
                 return;
             e.Cancel = true;
             HideWindow();
@@ -92,6 +95,18 @@ internal sealed class BBS757DisplayForm : Form
         if (_shown.SequenceEqual(rows)) return;
         _shown = rows.ToArray();
         _list.SetLines(_shown);
+    }
+
+    /// <summary>Ends the window: its timer stops, the close is not cancelled, and it is disposed. The 757 definition's
+    /// switch away does this to every window its readers own (<c>Bbs757DisplayRegistry.OwnWindow</c>), so none stays up
+    /// showing a stopped monitor. On the UI thread; again, nothing.</summary>
+    public void CloseForGood()
+    {
+        if (IsDisposed) return;
+        _closingForGood = true;
+        _timer.Stop();
+        Close();
+        if (!IsDisposed) Dispose();
     }
 
     private void HideWindow()

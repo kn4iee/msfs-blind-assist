@@ -4,8 +4,10 @@
 // of a monitor (Bbs757DisplayEnvironment) waits while the simulator is disconnected, checked first ([WASM-7]'s order), or
 // another aircraft is loaded, and speaks without interrupting (S5).
 
+using System.Windows.Forms;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.Services.BBS757;
 using MSFSBlindAssist.Services.WasmMemory;
 using MSFSBlindAssist.Settings;
@@ -45,6 +47,37 @@ public class Bbs757DisplaysWiringTests
         Assert.Null(def.DisplaySession);
         Assert.Equal("Stopped", def.Fma.StateName);
         Assert.Equal(2, other.Calls.Count);
+    }
+
+    [Fact]
+    public void A_switch_away_closes_every_owned_window_for_good()
+    {
+        // Plans 24-27 make their window once and show it again: one open at a switch away must not stay up showing the
+        // stopped monitor's frozen rows, and the window itself cancels every close but the app's exit.
+        var def = new BBS757Definition { StartMonitor = StartWithoutTimer };
+        def.StartDisplays(new FakeHost(), new NoLayouts(), new SimConnectManager(IntPtr.Zero), new SpeechCapture());
+        var shown = new BBS757DisplayForm("Upper EICAS", "Upper EICAS", def.Fma.View);
+        var hidden = new BBS757DisplayForm("Lower EICAS", "Lower EICAS", def.Fma.View);
+        var failing = new FailingForm();
+        var plain = new Form();
+        def.Displays.OwnWindow(shown);
+        def.Displays.OwnWindow(failing);   // a window whose close throws leaves the others to close
+        def.Displays.OwnWindow(hidden);
+        def.Displays.OwnWindow(plain);
+        shown.ShowForm();
+
+        def.OnSwitchedAway();
+
+        Assert.True(shown.IsDisposed);
+        Assert.True(hidden.IsDisposed);
+        Assert.True(plain.IsDisposed);
+        Assert.Equal(1, failing.Attempts);
+        Assert.Equal("Stopped", def.Fma.StateName);
+        Assert.Null(def.DisplaySession);
+
+        Assert.Null(Record.Exception(def.OnSwitchedAway));   // a second switch away throws nothing
+        failing.Fail = false;
+        failing.Dispose();
     }
 
     [Fact]
@@ -384,6 +417,24 @@ public class Bbs757DisplaysWiringTests
     }
 
     // ---- fakes ----
+
+    /// <summary>A window whose disposal throws while <see cref="Fail"/> holds.</summary>
+    private sealed class FailingForm : Form
+    {
+        // Fields, not properties: a Form's public properties take designer serialization (WFO1000).
+        public bool Fail = true;
+        public int Attempts;
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && Fail)
+            {
+                Attempts++;
+                throw new InvalidOperationException("the window would not close");
+            }
+            base.Dispose(disposing);
+        }
+    }
 
     /// <summary>The real environment's simulator reads; everything else (clock, speech, the session's jobs) a fake's.</summary>
     private sealed class SimulatorFrom : IBbs757DisplayEnvironment

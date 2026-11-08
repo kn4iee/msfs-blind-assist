@@ -23,6 +23,7 @@ internal sealed class Bbs757DisplayRegistry
     private readonly List<MonitorRow> _rows = new();
     private readonly List<Bbs757GateVariable> _gates = new();
     private readonly Dictionary<HotkeyAction, Func<Bbs757KeyContext, bool>> _keys = new();
+    private readonly List<Form> _windows = new();
 
     /// <summary>Every reader's monitor, in registration order (the FMA first).</summary>
     public IReadOnlyList<IBbs757DisplayMonitor> Monitors => _monitors;
@@ -80,6 +81,18 @@ internal sealed class Bbs757DisplayRegistry
     }
 
     public void AddMonitorRow(MonitorRow row) => _rows.Add(row);
+
+    /// <summary>Every window a reader keeps for reuse, in the order owned.</summary>
+    public IReadOnlyList<Form> Windows => _windows;
+
+    /// <summary>A window a reader made once and shows again (its <c>BBS757DisplayForm</c>): the definition's switch away
+    /// closes it for good and disposes it, so it never stays up showing a stopped monitor. Each window once; on the UI
+    /// thread.</summary>
+    public void OwnWindow(Form form)
+    {
+        ArgumentNullException.ThrowIfNull(form);
+        if (!_windows.Contains(form)) _windows.Add(form);
+    }
 
     /// <summary>Runs the key's handler: true when there is one and it took the key; false leaves the key to the
     /// definition.</summary>
