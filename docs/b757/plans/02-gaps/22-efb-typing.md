@@ -121,12 +121,12 @@
 
 ## Execution record
 
-- **Status:** built, reviewed and checked in the sim (2026-11-08); the push to `kn4iee/B757` and the v3 layout's publication wait for the owner's word
+- **Status:** done (2026-11-08): landed on `kn4iee/B757` at the owner's word, the v3 757 layout published with it; the owner's in-sim checks passed
 - **Claimed by:** Robin Kipp (robin24), 2026-11-07
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-07, from `B757` 8d8bacd18 (plans 20 and 21 landed; claim 35d91cc7c)
-- **Landed:** not yet. `B757` has moved since the start (4313a1777, kn4iee: the tablet window's own unreadable reasons, in `Bbs757EfbBridge.cs` and `MainForm.BBS757.cs`), so the push rebases onto it and runs the suite again; `git log --grep "^Plan: 22"` lists the plan's commits (26 before this record)
-- **Tests at landing:** before the rebase, at dbb81c30c: 21,620 passed, 0 failed (app); 32 passed, 0 failed (the shared EFB window's jsdom tests, `tools/flypad-shell-test`)
+- **Landed:** 2026-11-08, as a fast-forward of `B757` 4313a1777 (kn4iee's, after the start: the tablet window's own unreadable reasons, in `Bbs757EfbBridge.cs` and `MainForm.BBS757.cs`), onto which the plan's commits were rebased without a conflict; the last code commit `fix(b757): a press still under the keyboard after its put-down is not tapped` (64259ea84, dbb81c30c before the rebase); `git log --grep "^Plan: 22"` lists the plan's commits. Private: `feature/b757-displays` pushed at 772f97d3 and the 757 layout at generator version 3 (`bbs757/39462c4a…-69911a5bb8c57b24.json`, the file the in-sim checks ran on) published to the `layouts` branch (a13e8f3a), beside the version 2 file
+- **Tests at landing:** 21,627 passed, 0 failed (app, on the rebased head 879b5c726); 32 passed, 0 failed (the shared EFB window's jsdom tests, `tools/flypad-shell-test`); before the rebase, at dbb81c30c: 21,620 and 32
 - **Tasks:**
   - 0 done: the claim (35d91cc7c), pushed before any work.
   - 1 done: the measuring (the controller's agent, 2026-11-07), committed as the evidence `docs/b757/evidence/efb-typing.md` (dbc8038e8, its follow-up 35b3ca940).
@@ -135,7 +135,7 @@
   - 2 to 6 done, each reviewed: 2 the planner (9b84144d3), 3 `TypeAsync` (181295a9b, 98aafb083), 4 the shared window's Enter-only box (9e52a4f2f, done first), 5 the edit boxes and the value boxes as buttons (fcaf334ff, 33e180479), 6 the rules (34a1441a0).
   - The whole-branch review (opus) on Tasks 1-6: no Critical, 4 Important, 6 Minor; its fix wave 2fa8a9ac1..00ffefa50, a scoped re-review that found one more Important (Enter dead after a failed typing) and three Minor, fixed in 409e64879 and dbb81c30c, then checked clean.
   - 7 done by the owner's checks below on dbb81c30c, deployed to `C:\MSFSBA-B757` with layout v8 (generator version 3); no separate controller round trips were needed.
-- **Waiting on the owner:** his word to push `HEAD:B757` (after the rebase) together with the private `feature/b757-displays` and the v3 757 layout: this build reads no layout older than generator version 3, so the 757's tablet window stays unreadable for anyone on the new code until the layout is published.
+- **Waiting on the owner:** nothing. This build reads no 757 layout older than generator version 3: a tester's copy reads the tablet once it has the published file.
 - **In-sim results:** 2026-11-08, the owner by ear on build dbb81c30c, the sim and the app freshly started; all three passed:
   - 1: PERF calc's Airport typed and heard once; a changed box left without Enter said "Airport not changed"; the original airport typed back.
   - 2: the Left tank's Quantity opened BlueBird's fuel dialog; "Fuel (Gal)" typed on the keypad and heard once; CANCEL left the fuel unchanged.
