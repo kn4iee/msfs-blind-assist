@@ -65,7 +65,8 @@ public interface IBbs757DisplayReader<TLayout, TReading>
     /// <see cref="Bbs757DisplayMonitor{TLayout, TReading}.HistoryMs"/>, oldest first, the newest last.</summary>
     bool Passes(IReadOnlyList<(long AtMs, TReading Reading)> history, Bbs757SimValues sim);
 
-    /// <summary>Whether the display is powered; null for a display with no power state (the FMA).</summary>
+    /// <summary>Whether the display is powered; null for a display with no power state (the FMA). A reader returns null
+    /// always or never: a <c>Lit</c> that turned null for a tick would reset the power-up quiet.</summary>
     bool? Lit(TReading reading, Bbs757SimValues sim);
 
     /// <summary>The lines that tell what changed from <paramref name="heard"/> to <paramref name="now"/> (empty: nothing to

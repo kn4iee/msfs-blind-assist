@@ -194,6 +194,60 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
+    public void A_dark_display_shows_not_powered_and_powering_up_shows_starting()
+    {
+        // A sighted pilot sees a blank screen: the window never shows the last lit reading as current, and says nothing.
+        var h = New();
+        h.Reader.LitNow = true;
+        h.Start();
+        var s = h.RunUntilRunning();
+        Assert.Equal(new[] { "X: A" }, h.Monitor.View());
+
+        h.Reader.LitNow = false; // the display goes dark
+        h.Tick();
+        Assert.Equal("Running", h.State);
+        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View());
+        Assert.Null(h.Monitor.RowsWhileRunning());
+        Assert.Equal(default(FakeReading), h.Monitor.Latest);
+        Assert.False(h.Monitor.KeyFallsBackToAi()); // the reader runs: the window opens and says so
+        s.Reading = R("B");
+        h.Tick(300);
+        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View());
+
+        h.Reader.LitNow = true; // powering up: quiet for 10 s
+        h.Tick(); // t
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View());
+        Assert.Null(h.Monitor.RowsWhileRunning());
+        Assert.Equal(default(FakeReading), h.Monitor.Latest);
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+        h.Tick(99); // to t+9.9 s
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View());
+
+        h.Tick(); // t+10 s: the first trusted reading, a silent baseline
+        Assert.Equal(new[] { "X: B" }, h.Monitor.View());
+        Assert.Equal(R("B"), h.Monitor.Latest);
+        Assert.Empty(h.Env.Spoken); // neither row is ever spoken (S4)
+        Assert.Equal("Running", h.State);
+    }
+
+    [Fact]
+    public void A_reader_with_no_power_state_shows_its_rows_throughout()
+    {
+        // The FMA's path (Lit null): no "not powered" or "starting" row while it runs.
+        var h = New().Start();
+        var s = h.RunUntilRunning();
+        for (int i = 0; i < 200; i++)
+        {
+            if (i == 50) s.Reading = R("B");
+            h.Tick();
+            var shown = i < 50 ? "X: A" : "X: B"; // shown at once, spoken once settled
+            Assert.Equal(new[] { shown }, h.Monitor.View());
+            Assert.Equal(R(shown[3..]), h.Monitor.Latest);
+        }
+        Assert.Equal(new[] { "X: B" }, h.Env.Spoken);
+    }
+
+    [Fact]
     public void Unlit_at_the_first_reading_holds_the_candidate_until_10_s_after_it_lights()
     {
         // A cold-and-dark load: the reading counts for nothing, so the candidate is neither trusted nor dropped (a drop

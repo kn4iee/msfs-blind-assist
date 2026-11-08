@@ -112,17 +112,23 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     internal string StateName => _state.ToString();
 
-    /// <summary>The latest good reading while running, else default.</summary>
-    public TReading? Latest => _state == State.Running ? _current : default;
+    /// <summary>The latest good reading while running and the display shows it, else default: never the last lit reading
+    /// while the display is dark or powering up.</summary>
+    public TReading? Latest => ShowsReading ? _current : default;
 
-    /// <summary>The reader's rows of the latest good reading while running, else null.</summary>
-    public IReadOnlyList<string>? RowsWhileRunning() => _state == State.Running ? _reader.Rows(_current) : null;
+    /// <summary>The reader's rows of the latest good reading while running and the display shows it, else null.</summary>
+    public IReadOnlyList<string>? RowsWhileRunning() => ShowsReading ? _reader.Rows(_current) : null;
 
     /// <summary>The reader's rows while running; otherwise one row saying why not. Never a reading the gate has not
     /// passed, and never muted. Once a stop line has been said it repeats it until the reader runs again, never
     /// "starting" after the pilot heard "stopped"; after a mismatch it adds the last good reading, which may be stale,
-    /// so only as "last known".</summary>
+    /// so only as "last known". While it runs and the newest reading is dark, "not powered"; while it powers up (lit,
+    /// still quiet), "starting": neither is spoken (S4).</summary>
     public IReadOnlyList<string> View() => RowsWhileRunning() ?? new[] { StatusRow() };
+
+    /// <summary>Running, and the newest reading that is not corrupt is neither dark nor powering up: what the display
+    /// shows is the latest good reading. A reader with no power state (the FMA) always shows it while running.</summary>
+    private bool ShowsReading => _state == State.Running && _lastLit != false && _litSinceMs is null;
 
     /// <summary>
     /// Whether the reader's display key goes straight to the AI read (S15) instead of opening the window: not started,
@@ -202,7 +208,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         State.Mismatched => HeardStopLine(Bbs757DisplayReasons.Mismatch),
         _ when _stopReason is { } heard => HeardStopLine(heard),
         State.WaitingForSimulator => Bbs757DisplaySpeech.Waiting(_reader.Name),
-        _ => Bbs757DisplaySpeech.Starting(_reader.Name),
+        State.Running when _lastLit == false => Bbs757DisplaySpeech.Unpowered(_reader.Name),
+        _ => Bbs757DisplaySpeech.Starting(_reader.Name), // starting, or running while the display powers up
     };
 
     /// <summary>The stop line the pilot heard, for the window: after a mismatch, with the last good reading.</summary>

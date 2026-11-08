@@ -12,4 +12,7 @@ public static class Bbs757DisplaySpeech
     public static string Starting(string name) => $"{name} reader starting";
 
     public static string Waiting(string name) => $"{name} reader waiting for the simulator";
+
+    /// <summary>The window's one row while the reader runs and its display is dark: never spoken (S4).</summary>
+    public static string Unpowered(string name) => $"{name} display not powered";
 }
