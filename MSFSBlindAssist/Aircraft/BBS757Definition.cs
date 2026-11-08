@@ -174,6 +174,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
         AddThrustVariables(vars);         // plan 15
         AddFirstOfficerVariables(vars);   // plan 10
 
+        // The display readers' gate variables, batched; last, so it sees every other registration (BBS757Definition.Displays.cs).
+        AddDisplayVariables(vars);        // plan 23
+
         Log.Info("BBS757", $"Built {vars.Count} variables from {Map.Controls.Count} controls and {Map.Status.Count} status rows.");
         return vars;
     }
@@ -395,13 +398,15 @@ public partial class BBS757Definition : BaseAircraftDefinition
     /// <summary>
     /// The 757 Monitor Manager's rows: every announced variable's, as on every aircraft
     /// (<see cref="MonitorRowBuilder"/>), then the rows of speech that is no variable's, which the
-    /// gap plans add through <see cref="AddCduMonitorRows"/> and <see cref="AddCockpitMonitorRows"/>.
+    /// gap plans add through <see cref="AddCduMonitorRows"/> and <see cref="AddCockpitMonitorRows"/>, then the display
+    /// readers' rows, last (<see cref="Displays"/>: the FMA's first).
     /// </summary>
     public IReadOnlyList<MonitorRow> MonitorRows()
     {
         var rows = MonitorRowBuilder.Build(GetVariables());
         AddCduMonitorRows(rows);       // plan 09
         AddCockpitMonitorRows(rows);   // plan 13
+        rows.AddRange(Displays.Rows);  // plan 23
         return rows;
     }
 

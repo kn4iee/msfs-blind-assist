@@ -1,0 +1,330 @@
+// The 757 definition owns its display readers' module session and monitors (plan 23 Task 7, S2): StartDisplays makes a
+// new session and starts every registered monitor on it, a flight reload invalidates the session and restarts them, a
+// switch away stops them and disposes the session, and the tablet reads the EFB through the same session. The app's side
+// of a monitor (Bbs757DisplayEnvironment) waits while the simulator is disconnected, checked first ([WASM-7]'s order), or
+// another aircraft is loaded, and speaks without interrupting (S5).
+
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.BBS757;
+using MSFSBlindAssist.Services.BBS757;
+using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.SimConnect.BBS757;
+
+namespace MSFSBlindAssist.Tests;
+
+public class Bbs757DisplaysWiringTests
+{
+    private const string BlueBirdTitle = "BlueBird 757-200 RR N/W 4 Door";
+
+    [Fact]
+    public void Switching_away_stops_every_monitor_and_disposes_the_session()
+    {
+        var client = new CoherentBbs757TabletClient(() => "");   // never started: no socket
+        var def = new BBS757Definition { StartMonitor = StartWithoutTimer, TabletClientFactory = () => client };
+        def.EnsureTabletClient();
+        var other = new FakeMonitor { TabletClient = client };
+        def.Displays.Add(other);
+        def.StartDisplays(new FakeHost(), new NoLayouts(), new SimConnectManager(IntPtr.Zero), new SpeechCapture());
+        var session = def.DisplaySession;
+        Assert.NotNull(session);
+        Assert.Equal("WaitingForSimulator", def.Fma.StateName);
+        Assert.Equal(new[] { "start" }, other.Calls);
+
+        def.OnSwitchedAway();
+
+        Assert.Equal("Stopped", def.Fma.StateName);
+        Assert.Equal(new[] { "start", "stop while the tablet client lived" }, other.Calls);
+        Assert.Null(def.DisplaySession);
+        Assert.Throws<ObjectDisposedException>(() => StartSearch(session!));
+        Assert.True(client.IsDisposed);
+
+        // A start that lands after the switch starts nothing.
+        def.StartDisplays(new FakeHost(), new NoLayouts(), new SimConnectManager(IntPtr.Zero), new SpeechCapture());
+        Assert.Null(def.DisplaySession);
+        Assert.Equal("Stopped", def.Fma.StateName);
+        Assert.Equal(2, other.Calls.Count);
+    }
+
+    [Fact]
+    public void A_flight_reload_invalidates_the_session_and_restarts_every_monitor()
+    {
+        var host = new FakeHost();   // no installed files: an analysis with no builds
+        var speech = new SpeechCapture();
+        var def = new BBS757Definition { NestRunning = () => true, StartMonitor = (m, env) => StartWithoutTimer(m, new SimulatorUp(env)) };
+        var other = new FakeMonitor();
+        def.Displays.Add(other);
+        def.StartDisplays(host, new NoLayouts(), new SimConnectManager(IntPtr.Zero), speech);
+        var session = def.DisplaySession;
+
+        def.Fma.Tick();   // the simulator is up: the session analyses the files
+        def.Fma.Tick();   // no layout file
+        Assert.Equal("Unavailable", def.Fma.StateName);
+        Assert.Equal(1, host.FindCalls);
+
+        def.OnSimContextReset();
+
+        Assert.Same(session, def.DisplaySession);   // a reload keeps the session
+        Assert.Equal("WaitingForSimulator", def.Fma.StateName);
+        Assert.Equal(new[] { "start", "restart" }, other.Calls);
+        def.Fma.Tick();
+        def.Fma.Tick();
+        Assert.Equal(2, host.FindCalls);   // the analysis that found nothing was dropped and runs again
+        Assert.Equal("Unavailable", def.Fma.StateName);
+        // The session's one files line, said once for it, reload or not (S14), and never interrupting (S5).
+        Assert.Equal(new[] { Bbs757DisplayFilesNotice.Line }, speech.All);
+        Assert.Empty(speech.Interrupts);
+        def.OnSwitchedAway();
+    }
+
+    [Fact]
+    public void Every_reader_shares_one_files_notice_per_session()
+    {
+        var envs = new List<IBbs757DisplayEnvironment>();
+        var def = new BBS757Definition { StartMonitor = (m, env) => { envs.Add(env); StartWithoutTimer(m, env); } };
+        def.Displays.Add(new FakeMonitor());
+        var sim = new SimConnectManager(IntPtr.Zero);
+
+        def.StartDisplays(new FakeHost(), new NoLayouts(), sim, new SpeechCapture());
+        def.StartDisplays(new FakeHost(), new NoLayouts(), sim, new SpeechCapture());   // a new session: the simulator changed
+
+        Assert.Equal(4, envs.Count);
+        Assert.Same(envs[0].FilesNotice, envs[1].FilesNotice);
+        Assert.Same(envs[2].FilesNotice, envs[3].FilesNotice);
+        Assert.NotSame(envs[0].FilesNotice, envs[2].FilesNotice);
+        def.OnSwitchedAway();
+    }
+
+    [Fact]
+    public async Task The_tablet_reads_through_the_definitions_session()
+    {
+        var host = new FakeHost();
+        var def = new BBS757Definition { StartMonitor = StartWithoutTimer };
+        var notFound = Bbs757EfbModelRead.Unreadable(Bbs757DisplayReasons.MemoryNotFound);
+
+        Assert.Equal(notFound, await def.ReadEfbModelAsync());   // no session yet: nothing searched
+        Assert.Equal(0, host.FindCalls);
+
+        def.StartDisplays(host, new NoLayouts(), new SimConnectManager(IntPtr.Zero), new SpeechCapture());
+        var read = await def.ReadEfbModelAsync();
+
+        // The session's own analysis (no installed files here), in the 757's words.
+        Assert.Equal(Bbs757EfbModelRead.Unreadable(Bbs757DisplayReasons.FilesNotFound), read);
+        Assert.Equal(1, host.FindCalls);
+        await def.DisplaySession!.AnalyseAsync();
+        Assert.Equal(1, host.FindCalls);   // one analysis for the tablet and the readers (WASM-11)
+
+        def.OnSwitchedAway();
+        Assert.Equal(notFound, await def.ReadEfbModelAsync());
+        Assert.Equal(1, host.FindCalls);
+    }
+
+    [Fact]
+    public void The_environment_reads_null_while_disconnected_first()
+    {
+        using var session = NewSession();
+        var asked = new List<string>();
+        var env = new Bbs757DisplayEnvironment(connected: () => false,
+            title: () => { asked.Add("title"); return BlueBirdTitle; },
+            cached: key => { asked.Add(key); return 1; },
+            cacheKeys: Bbs757FmaDisplay.GateKeys.ToDictionary(k => k, k => k),
+            settings: () => new UserSettings(), new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
+
+        Assert.Null(env.ReadSimulator(Bbs757FmaDisplay.GateKeys));
+        Assert.Empty(asked);   // neither the title nor a value is read while disconnected
+
+        // The app's own manager, never connected here.
+        var real = new Bbs757DisplayEnvironment(new SimConnectManager(IntPtr.Zero), new SpeechCapture(), session,
+            new Bbs757DisplayFilesNotice(), new Dictionary<string, string>());
+        Assert.Null(real.ReadSimulator(Bbs757FmaDisplay.GateKeys));
+    }
+
+    [Theory]
+    [InlineData("BlueBird 757-200 PW", true)]
+    [InlineData("BlueBird 757-200 RR Scimitar/W", true)]
+    [InlineData("bluebird 757-200 pw no cabin", true)]
+    [InlineData("FenixA320 BAW", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void The_environment_waits_while_another_aircraft_is_loaded(string? title, bool reads)
+    {
+        using var session = NewSession();
+        var env = Connected(session, title, new Dictionary<string, double> { ["CACHE_A"] = 1 }, new() { ["L_A"] = "CACHE_A" });
+
+        Assert.Equal(reads, env.ReadSimulator(new[] { "L_A" }) is not null);
+    }
+
+    [Fact]
+    public void The_environment_reads_each_gate_value_from_its_batched_copy()
+    {
+        using var session = NewSession();
+        var cache = new Dictionary<string, double> { ["CACHE_A"] = 1, ["CACHE_B"] = 35000 };
+        var env = Connected(session, BlueBirdTitle, cache, new() { ["L_A"] = "CACHE_A", ["L_B"] = "CACHE_B", ["L_C"] = "CACHE_C" });
+
+        var values = env.ReadSimulator(new[] { "L_A", "L_B" });
+
+        Assert.NotNull(values);
+        Assert.Equal(1, values!.Value["L_A"]);
+        Assert.Equal(35000, values.Value["L_B"]);
+        // A value not delivered yet, or a key with no batched copy: nothing to compare with, so the monitor waits.
+        Assert.Null(env.ReadSimulator(new[] { "L_A", "L_C" }));
+        Assert.Null(env.ReadSimulator(new[] { "L_A", "L_UNREGISTERED" }));
+    }
+
+    [Fact]
+    public void The_environment_speaks_without_interrupting()
+    {
+        using var session = NewSession();
+        var speech = new SpeechCapture();
+        var env = new Bbs757DisplayEnvironment(new SimConnectManager(IntPtr.Zero), speech, session, new Bbs757DisplayFilesNotice(),
+            new Dictionary<string, string>());
+
+        env.Speak("FMA: Roll: LOC, Pitch: G/S");
+
+        Assert.Equal(new[] { "FMA: Roll: LOC, Pitch: G/S" }, speech.All);
+        Assert.Empty(speech.Interrupts);
+    }
+
+    [Fact]
+    public void The_environment_mutes_by_the_757s_ctrl_m_rows()
+    {
+        using var session = NewSession();
+        var settings = new UserSettings { BBS757DisabledMonitorVariables = new() { Bbs757FmaDisplay.MuteKey } };
+        settings.RebuildDisabledMonitorVariableCaches();
+        var env = new Bbs757DisplayEnvironment(() => true, () => BlueBirdTitle, _ => 1, new Dictionary<string, string>(),
+            () => settings, new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
+
+        Assert.True(env.IsMuted(Bbs757FmaDisplay.MuteKey));
+        Assert.False(env.IsMuted("MSFSBA_BBS757_OTHER"));
+    }
+
+    [Fact]
+    public void Every_fma_gate_key_rides_the_batch_once()
+    {
+        // Step 1: the F/D switches were on-request map controls, so each has a hidden batched copy; the MCP's altitude and
+        // heading already ride the batch for the autoflight call-outs, so they have none ([VAR-7]: one batched var a name).
+        var vars = new BBS757Definition().GetVariables();
+        var keys = BBS757Definition.DisplayCacheKeys(vars);
+
+        foreach (string gate in Bbs757FmaDisplay.GateKeys)
+        {
+            var batched = vars.Where(kv => kv.Value.Name == gate && ContinuousBatchLayout.RidesBatch(kv.Value)).ToList();
+            var only = Assert.Single(batched);
+            Assert.Equal(only.Key, keys[gate]);
+            Assert.Equal(SimVarType.LVar, only.Value.Type);
+        }
+        Assert.Equal(Bbs757AutoflightAnnouncements.HeadingWatchKey, keys[Bbs757FmaGate.HeadingKey]);
+        Assert.Equal(Bbs757AutoflightAnnouncements.AltitudeWatchKey, keys[Bbs757FmaGate.AltitudeKey]);
+        foreach (string fd in new[] { Bbs757FmaGate.FdCaptainKey, Bbs757FmaGate.FdFirstOfficerKey })
+        {
+            var copy = vars[keys[fd]];
+            Assert.True(copy.ExcludeFromMonitorManager);   // no Ctrl+M row: it is never spoken ([VAR-9])
+            Assert.Equal(UpdateFrequency.Continuous, copy.UpdateFrequency);
+            Assert.True(copy.IsAnnounced);                 // what puts it on the batch
+        }
+    }
+
+    [Fact]
+    public void A_gate_copy_is_consumed_silently()
+    {
+        var def = new BBS757Definition { NestRunning = () => true };
+        var speech = new SpeechCapture();
+        string copy = BBS757Definition.DisplayCacheKeys(def.GetVariables())[Bbs757FmaGate.FdCaptainKey];
+
+        Assert.True(def.ProcessSimVarUpdate(copy, 1, speech));
+        Assert.True(def.ProcessSimVarUpdate(copy, 0, speech));
+
+        Assert.Empty(speech.All);
+    }
+
+    // ---- fakes ----
+
+    /// <summary>Starts the FMA without its WinForms timer (the tests tick it); any other monitor as the app would.</summary>
+    private static void StartWithoutTimer(IBbs757DisplayMonitor monitor, IBbs757DisplayEnvironment env)
+    {
+        if (monitor is Bbs757DisplayMonitor<Bbs757FmaLayout, Bbs757FmaReading> fma) fma.Start(env, startTimer: false);
+        else monitor.Start(env);
+    }
+
+    /// <summary>A disposed session refuses before it returns a task.</summary>
+    private static void StartSearch(ModuleSession session) => session.LocateAsync();
+
+    private static ModuleSession NewSession() => new(MSFSBlindAssist.DisplayLayouts.Bbs757Module.Description, new FakeHost(), new NoLayouts());
+
+    private static Bbs757DisplayEnvironment Connected(ModuleSession session, string? title, Dictionary<string, double> cache,
+        Dictionary<string, string> cacheKeys) =>
+        new(() => true, () => title, key => cache.TryGetValue(key, out double v) ? v : null, cacheKeys, () => new UserSettings(),
+            new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
+
+    private sealed class FakeMonitor : IBbs757DisplayMonitor
+    {
+        public List<string> Calls { get; } = new();
+        public CoherentBbs757TabletClient? TabletClient { get; init; }
+
+        public void Start(IBbs757DisplayEnvironment env) => Calls.Add("start");
+        public void Restart() => Calls.Add("restart");
+        public void Stop() => Calls.Add(TabletClient is { IsDisposed: false } ? "stop while the tablet client lived" : "stop");
+        public bool KeyFallsBackToAi() => true;
+        public IReadOnlyList<string> View() => Array.Empty<string>();
+        public void Dispose() => Stop();
+    }
+
+    /// <summary>The real environment, with the simulator up and every gate value read as 1.</summary>
+    private sealed class SimulatorUp : IBbs757DisplayEnvironment
+    {
+        private readonly IBbs757DisplayEnvironment _inner;
+
+        public SimulatorUp(IBbs757DisplayEnvironment inner) => _inner = inner;
+
+        public long NowMs => _inner.NowMs;
+        public Bbs757SimValues? ReadSimulator(IReadOnlyList<string> keys) => new Bbs757SimValues(keys.ToDictionary(k => k, _ => 1.0));
+        public bool IsMuted(string muteKey) => false;
+        public Bbs757DisplayFilesNotice FilesNotice => _inner.FilesNotice;
+        public void Speak(string text) => _inner.Speak(text);
+        public void Log(string channel, string line) => _inner.Log(channel, line);
+        public Task<ModuleAnalysis> AnalyseAsync() => _inner.AnalyseAsync();
+        public Task<ModuleLocation> LocateAsync() => _inner.LocateAsync();
+    }
+
+    /// <summary>No installed files and no simulator process; the work runs at once.</summary>
+    private sealed class FakeHost : IModuleHost
+    {
+        public int FindCalls { get; private set; }
+        public long NowMs => 0;
+        public string SimulatorVersion => "FS2024";
+
+        public IReadOnlyList<string> FindInstalledFiles(string simulatorVersion, Action<string> log)
+        {
+            FindCalls++;
+            return Array.Empty<string>();
+        }
+
+        public byte[] ReadFile(string path) => throw new InvalidOperationException($"the session read {path}");
+
+        public IProcessMemorySource? OpenSimulator(string simulatorVersion, out string? failure)
+        {
+            failure = null;
+            return null;
+        }
+
+        public void Log(string line) { }
+
+        public Task<T> RunInBackground<T>(string name, Func<T> work)
+        {
+            try
+            {
+                return Task.FromResult(work());
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<T>(ex);
+            }
+        }
+    }
+
+    private sealed class NoLayouts : ILayoutSource
+    {
+        public LayoutLookup Find(string wasmFile) => new(null, "no layout");
+    }
+}

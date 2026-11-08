@@ -8,6 +8,7 @@ namespace MSFSBlindAssist;
 /// BlueBird 757-200 windows and menu entry. Kept in its own partial so the aircraft's surfaces sit
 /// together: the Ctrl+M monitor manager, the Shift+M CDU window and the Shift+T EFB windows (the tablet window and the
 /// settings window, <see cref="ShowBBS757EfbDialog"/> picking one); <see cref="DisposeBBS757Forms"/> is where each is torn down.
+/// The display readers' start is here too (<see cref="StartBbs757Displays"/>); the definition owns them and their session.
 /// </summary>
 public partial class MainForm
 {
@@ -84,24 +85,34 @@ public partial class MainForm
     private Bbs757EfbBridge? bbs757EfbBridge;
 
     /// <summary>
-    /// The shared module session for BlueBird's BBS752.wasm, from which the tablet bridge reads the EFB control tree
-    /// (and, in time, the FMA and the displays: WASM-11, one load of the file's layouts and one memory search for every
-    /// reader). Made when the tablet window first opens, disposed with the 757's windows. Its layouts come from the layout
-    /// store (the layouts folder beside the app and %APPDATA%, and LayoutGenerator.exe when present): without a current EFB
-    /// layout the reader is unavailable, and the window says so (WASM-2).
+    /// Starts the 757's display readers (the FMA, and each later plan's reader) on the UI thread, each on its own WinForms
+    /// timer, on a new module session for BlueBird's BBS752.wasm, which the definition owns
+    /// (<see cref="BBS757Definition.DisplaySession"/>: one load of the file's layouts and one memory search for every reader,
+    /// the tablet window's EFB read included, WASM-11); a no-op unless the 757 is the current aircraft. Its layouts come from
+    /// the layout store (the layouts folder beside the app and %APPDATA%, and LayoutGenerator.exe when present): without a
+    /// current layout a reader is unavailable (WASM-2). The readers wait for the simulator themselves, so they start with
+    /// the aircraft; the definition restarts them on a flight reload and stops them on a switch away.
     /// </summary>
-    private Services.WasmMemory.ModuleSession? bbs757ModuleSession;
-
-    /// <summary>The module session for the 757, created on first use over a layout store with the generator when the app
-    /// has one.</summary>
-    private Services.WasmMemory.ModuleSession EnsureBbs757ModuleSession()
+    private void StartBbs757Displays()
     {
-        if (bbs757ModuleSession != null) return bbs757ModuleSession;
+        if (currentAircraft is not BBS757Definition bbs757) return;
         var module = DisplayLayouts.Bbs757Module.Description;
         var host = new Services.WasmMemory.ModuleHost(simConnectManager, module);
         var layouts = new Services.WasmMemory.LayoutStore(module, Services.WasmMemory.LayoutStore.DefaultRoot,
             Services.WasmMemory.LayoutStore.BundledRoot, Services.WasmMemory.ProcessLayoutGenerator.NextToApp(), host.ReadFile, host.Log);
-        return bbs757ModuleSession = new Services.WasmMemory.ModuleSession(module, host, layouts);
+        bbs757.StartDisplays(host, layouts, simConnectManager, announcer);
+    }
+
+    /// <summary>A flight loaded in another simulator than the one the 757's session analysed BlueBird's files for (MSFS 2020
+    /// closed, 2024 started, the app left running): the readers start again on a new session, so they analyse that
+    /// simulator's own files. The version is detected when the connection opens, before any AircraftLoaded.</summary>
+    private void RestartBbs757DisplaysIfSimulatorChanged()
+    {
+        if (currentAircraft is not BBS757Definition bbs757) return;
+        string simulator = simConnectManager.DetectedSimulatorVersion;
+        if (bbs757.DisplaySession?.AnalysedForOtherSimulator(simulator) != true) return;
+        Log.Info("BBS757", $"display readers: simulator is now {simulator}; starting them again on its files");
+        StartBbs757Displays();
     }
 
     /// <summary>
@@ -141,7 +152,7 @@ public partial class MainForm
 
     /// <summary>
     /// The 757 tablet window (titled "757 EFB"), which Shift+T opens while a simulator runs: BlueBird's tablet in the shared
-    /// accessible EFB window, READ from the 757 module's memory (<see cref="Bbs757EfbBridge"/> over the module session) and
+    /// accessible EFB window, READ from the 757 module's memory (<see cref="Bbs757EfbBridge"/> over the definition's module session) and
     /// pressed where the reader found each control (the owner's ruling of 2026-10-29: nothing refuses a press). No text
     /// recognition, no pop-out and no ND mirror: the tree is read straight from memory and the ND stays the ND. The window opens
     /// at once; when the 757's memory is not located yet, or its build has no layout, the window says so as its status.
@@ -174,7 +185,7 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// The bridge's seams. The tablet is read from the 757 module's memory through the shared module session
+    /// The bridge's seams. The tablet is read from the 757 module's memory through the definition's module session
     /// (<see cref="ReadBbs757EfbModelAsync"/>), off the UI thread. Variables are read fresh (safe from any thread). A Settings
     /// press is judged by BlueBird's file, read on the bridge's loop (<see cref="Bbs757SettingsFile.ReadValue"/> in the work
     /// folder <see cref="Bbs757WorkFolder.Find()"/> picks); the Navigraph sign-in is read and run over the definition's tablet
@@ -206,43 +217,16 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Reads BlueBird's tablet control tree from the 757 module's memory now, as the window's model, or the reason there is none.
-    /// Locates the module through the shared session (every reader shares the one simulator handle and the one search, WASM-11),
-    /// takes the build whose EFB layout the generator wrote, and walks its memory read-only through that layout (WASM-1, WASM-2);
-    /// a build without a current EFB layout is "not recognised", no located build is "not found yet", and no access is final.
-    /// Runs on the bridge's loop, off the UI thread; never throws.
+    /// Reads BlueBird's tablet control tree from the 757 module's memory now, as the window's model, or the reason there is none:
+    /// through the definition's module session (<see cref="BBS757Definition.ReadEfbModelAsync"/>: every reader shares the one
+    /// simulator handle and the one search, WASM-11). While the simulator is not connected it is "aircraft memory not found" and the
+    /// session is not asked: its file analysis would run for an unknown simulator, find no files, and leave every reader on the
+    /// session unavailable until a flight reload. Runs on the bridge's loop, off the UI thread; never throws.
     /// </summary>
-    private async Task<Bbs757EfbModelRead> ReadBbs757EfbModelAsync(CancellationToken ct)
-    {
-        try
-        {
-            var location = await EnsureBbs757ModuleSession().LocateAsync();
-            var module = location.Found.FirstOrDefault(m =>
-                m.Build.Layout<Services.BBS757.Bbs757EfbMemLayout>(DisplayLayouts.Bbs757Module.Efb) is not null);
-            if (module is null)
-            {
-                // The session's reasons are worded for the PMDG 737; the window says the 757's own.
-                string reason = location.Failure is { } failure
-                    ? Services.BBS757.Bbs757DisplayReasons.FromSession(failure)
-                    : location.Found.Count > 0 ? Services.BBS757.Bbs757DisplayReasons.FileNotRecognised : Services.BBS757.Bbs757DisplayReasons.MemoryNotFound;
-                return Bbs757EfbModelRead.Unreadable(reason);
-            }
-            var layout = module.Build.Layout<Services.BBS757.Bbs757EfbMemLayout>(DisplayLayouts.Bbs757Module.Efb)!;
-            using var lease = module.AcquireLease();
-            var memory = new Bbs757EfbMemory(new ModuleEfbMemory(module.Memory), layout);
-            var model = new Bbs757EfbModelReader(memory).Read();
-            return model is null ? Bbs757EfbModelRead.Unreadable(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound) : new Bbs757EfbModelRead(model, null);
-        }
-        catch (ObjectDisposedException)
-        {
-            return Bbs757EfbModelRead.Unreadable(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("BBS757", "EFB memory read failed: " + ex.Message);
-            return Bbs757EfbModelRead.Unreadable(Services.BBS757.Bbs757DisplayReasons.InternalError);
-        }
-    }
+    private Task<Bbs757EfbModelRead> ReadBbs757EfbModelAsync(CancellationToken ct) =>
+        simConnectManager is { IsConnected: true } && currentAircraft is BBS757Definition bbs757
+            ? bbs757.ReadEfbModelAsync()
+            : Task.FromResult(Bbs757EfbModelRead.Unreadable(Services.BBS757.Bbs757DisplayReasons.MemoryNotFound));
 
     /// <summary>
     /// Whether the pilot is signed in to Navigraph, read fresh through the tablet client: true, false, or null when the helper
@@ -399,8 +383,8 @@ public partial class MainForm
     /// disposed client). Called by SwitchAircraft on every switch, and on app exit: the monitor manager's
     /// rows are snapshotted from the definition it was built for, so a surviving one would list the
     /// outgoing definition, and the client holds the one inspector socket Coherent allows on its view.
-    /// The tablet client is the definition's, disposed by its OnSwitchedAway (which closes the CDU
-    /// window first).
+    /// The tablet client and the module session are the definition's, disposed by its OnSwitchedAway
+    /// (which closes the CDU window first and stops the display readers before the session goes).
     /// </summary>
     private void DisposeBBS757Forms()
     {
@@ -417,9 +401,6 @@ public partial class MainForm
         bbs757EfbBridge = null;
         bbs757EfbClient?.Dispose();
         bbs757EfbClient = null;
-        // The module session holds the read-only simulator handle through its lease; dispose it so the handle closes.
-        bbs757ModuleSession?.Dispose();
-        bbs757ModuleSession = null;
     }
 
     private void BBS757MenuItem_Click(object? sender, EventArgs e)

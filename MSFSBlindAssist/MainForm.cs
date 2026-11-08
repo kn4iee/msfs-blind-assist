@@ -551,6 +551,7 @@ public partial class MainForm : Form
 
         // PMDG 737: the display readers wait for the PMDG SDK themselves, so they start with the aircraft.
         StartPmdg737Displays();
+        StartBbs757Displays();   // likewise the BlueBird 757's, which wait for the simulator themselves
 
         // Don't set focus - let default tab order handle it for proper menu accessibility
     }

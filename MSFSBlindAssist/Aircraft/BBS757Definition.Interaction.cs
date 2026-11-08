@@ -380,8 +380,9 @@ public partial class BBS757Definition
     /// aircraft (a guarded sequence in its step gap included: it sends none of its remaining calls).
     /// The outgoing definition is never used again, so its lifetime source goes too.
     /// Safe to call again (a switch that threw part-way, then app exit): a canceled and disposed
-    /// source stays canceled, and Dispose is idempotent. The tablet client goes even when a step
-    /// before it throws, so it never keeps the view for a profile that is gone.
+    /// source stays canceled, and Dispose is idempotent. The display readers stop, and their module
+    /// session goes, and then the tablet client, even when a step before them throws, so no reader
+    /// speaks over the next aircraft and the client never keeps the view for a profile that is gone.
     /// </summary>
     public override void OnSwitchedAway()
     {
@@ -398,6 +399,7 @@ public partial class BBS757Definition
         }
         finally
         {
+            StopDisplays();          // plan 23: never throws; before the tablet client goes
             DisposeTabletClient();   // last: after every window on it has closed
         }
     }
@@ -436,6 +438,8 @@ public partial class BBS757Definition
     {
         WarnOnceIfNestMissing(announcer);
         if (IsPickPending(varName)) return true;
+        // A display reader's gate value: read from the cache, never spoken (BBS757Definition.Displays.cs).
+        if (IsDisplayGateCopy(varName)) return true;   // plan 23
         // The gap plans' rows (BBS757Definition.Hooks.cs); the first to claim a delivery ends it.
         bool handled = false;
         ProcessRadioUpdate(varName, value, announcer, ref handled);                   // plan 04
@@ -490,8 +494,9 @@ public partial class BBS757Definition
     /// <summary>
     /// A flight load or a dropped connection: BBS Nest is asked about again on the next batch, every
     /// pick still in flight is dropped so none writes into the flight that follows (a guarded
-    /// sequence already past its first call included: it sends none of its remaining calls), and the
-    /// load watch ends (its load belonged to the flight before).
+    /// sequence already past its first call included: it sends none of its remaining calls), the
+    /// load watch ends (its load belonged to the flight before), and the display readers search
+    /// memory again, the new flight's first reading a silent baseline.
     /// </summary>
     public override void OnSimContextReset()
     {
@@ -506,6 +511,7 @@ public partial class BBS757Definition
         ResetAutoflight();      // plan 05
         ResetThrust();          // plan 15
         ResetAnnouncements();   // plan 13
+        ResetDisplays();        // plan 23
     }
 
     // =================================================================================
@@ -516,6 +522,9 @@ public partial class BBS757Definition
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
         Sim = simConnect;
+
+        // A display reader's key, first (BBS757Definition.Displays.cs): plan 23's registry.
+        if (HandleDisplayKey(action, simConnect, announcer, parentForm, hotkeyManager)) return true;
 
         // The gap plans' hotkeys (BBS757Definition.Hooks.cs).
         bool handled = false;

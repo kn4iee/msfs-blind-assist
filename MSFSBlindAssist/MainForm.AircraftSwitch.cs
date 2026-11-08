@@ -203,6 +203,7 @@ public partial class MainForm
         _lastAircraftLoadedTick = Environment.TickCount64;
         currentAircraft?.OnSimContextReset();
         RestartPmdg737DisplaysIfSimulatorChanged();
+        RestartBbs757DisplaysIfSimulatorChanged();
         // The First Officer window outlives a flight load (only an aircraft switch disposes it):
         // the last flight's SimBrief plan and phase latches are dropped here, and so are the
         // universal automation's legs (a flight loaded in the air is no takeoff it watched).
@@ -1204,6 +1205,7 @@ public partial class MainForm
 
         // Likewise the PMDG 737 display readers unless it is the PMDG 737 (a reader already running restarts).
         StartPmdg737Displays();
+        StartBbs757Displays();   // and the BlueBird 757's unless it is the 757
 
         // The 757's windows, on every switch: the monitor manager lists the definition it was
         // built for, so the next Ctrl+M rebuilds it from the live one.
