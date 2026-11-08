@@ -474,24 +474,41 @@ public class Bbs757LayoutFileTests
     public void A_layout_without_the_fma_gate_fields_reads_as_missing()
     {
         // The generator-3 text: a file written before the gate fields has none of them, so it is refused whole for
-        // every 757 reader, the EFB's included, never read with zeros (WASM-26).
+        // every 757 reader, the EFB's included, never read with zeros (WASM-26). The members are removed from the parsed
+        // file, so the text stays JSON and is refused for the missing member, never for its syntax.
         string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
-        string old = text;
-        foreach (string name in new[] { "status", "fdWord", "fdCaptain", "fdFirstOfficer", "afdsToMcp", "mcpAltitude", "mcpHeading", "mcpValueType" })
-            old = System.Text.RegularExpressions.Regex.Replace(old, "\\s*\"" + name + "\": [^,\\n]*,?", "");
-        old = System.Text.RegularExpressions.Regex.Replace(old, "\\s*\"statusWords\": \\{[^}]*\\},?", "");
+        string[] gateFields = { "status", "statusWords", "fdWord", "fdCaptain", "fdFirstOfficer", "afdsToMcp", "mcpAltitude", "mcpHeading", "mcpValueType" };
+        string old = WithoutFmaMembers(text, gateFields);
         Assert.DoesNotContain("\"statusWords\"", old, StringComparison.Ordinal);
         Assert.DoesNotContain("\"mcpHeading\"", old, StringComparison.Ordinal);
         Assert.Contains("\"rollArmedWords\"", old, StringComparison.Ordinal);
-        Assert.False(LayoutFileFormat.TryRead(Module, old, out _, out string? failure));
-        Assert.False(string.IsNullOrEmpty(failure));
-        foreach (string name in new[] { "\"status\": 11948", "\"fdWord\": \"FD\"", "\"mcpValueType\": \"F64\"" })
+        AssertRefusedForAMissingMember(old, gateFields);
+        // Each alone too.
+        foreach (string name in gateFields)
         {
-            string damaged = System.Text.RegularExpressions.Regex.Replace(text, "\\s*" + System.Text.RegularExpressions.Regex.Escape(name) + ",?", "");
+            string damaged = WithoutFmaMembers(text, name);
             Assert.NotEqual(text, damaged);
-            Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? one), name);
-            Assert.False(string.IsNullOrEmpty(one), name);
+            AssertRefusedForAMissingMember(damaged, name);
         }
+    }
+
+    /// <summary>The file with <paramref name="names"/> removed from the FMA's layout object, still well-formed JSON.</summary>
+    private static string WithoutFmaMembers(string text, params string[] names)
+    {
+        var root = System.Text.Json.Nodes.JsonNode.Parse(text)!;
+        var layout = root["readers"]![Bbs757Module.Fma]!["layout"]!.AsObject();
+        foreach (string name in names) Assert.True(layout.Remove(name), name);
+        return root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>The text parses as JSON, and the format refuses it naming one of <paramref name="names"/> as missing.</summary>
+    private static void AssertRefusedForAMissingMember(string text, params string[] names)
+    {
+        using (System.Text.Json.JsonDocument.Parse(text)) { }   // still JSON: not refused for its syntax
+        Assert.False(LayoutFileFormat.TryRead(Module, text, out _, out string? failure));
+        Assert.DoesNotContain("not a layout file", failure, StringComparison.Ordinal);
+        Assert.True(names.Any(n => failure.Contains($"'{n}'", StringComparison.Ordinal)),
+            $"the failure names none of {string.Join(", ", names)}: {failure}");
     }
 
     [Fact]
