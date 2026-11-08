@@ -52,7 +52,16 @@ public sealed record Bbs757FmaLayout(
     Bbs757WordTable PitchWords,
     Bbs757WordTable PitchArmedWords,
     Bbs757WordTable RollWords,
-    Bbs757WordTable RollArmedWords)
+    Bbs757WordTable RollArmedWords,
+    int Status,
+    Bbs757WordTable StatusWords,
+    string FdWord,
+    int FdCaptain,
+    int FdFirstOfficer,
+    int AfdsToMcp,
+    int McpAltitude,
+    int McpHeading,
+    Bbs757McpValueType McpValueType)
 {
     public bool Equals(Bbs757FmaLayout? other) =>
         other is not null
@@ -72,7 +81,16 @@ public sealed record Bbs757FmaLayout(
         && PitchWords.Equals(other.PitchWords)
         && PitchArmedWords.Equals(other.PitchArmedWords)
         && RollWords.Equals(other.RollWords)
-        && RollArmedWords.Equals(other.RollArmedWords);
+        && RollArmedWords.Equals(other.RollArmedWords)
+        && Status == other.Status
+        && StatusWords.Equals(other.StatusWords)
+        && string.Equals(FdWord, other.FdWord, StringComparison.Ordinal)
+        && FdCaptain == other.FdCaptain
+        && FdFirstOfficer == other.FdFirstOfficer
+        && AfdsToMcp == other.AfdsToMcp
+        && McpAltitude == other.McpAltitude
+        && McpHeading == other.McpHeading
+        && McpValueType == other.McpValueType;
 
     public override int GetHashCode()
     {
@@ -94,9 +112,22 @@ public sealed record Bbs757FmaLayout(
         h.Add(PitchArmedWords);
         h.Add(RollWords);
         h.Add(RollArmedWords);
+        h.Add(Status);
+        h.Add(StatusWords);
+        h.Add(FdWord, StringComparer.Ordinal);
+        h.Add(FdCaptain);
+        h.Add(FdFirstOfficer);
+        h.Add(AfdsToMcp);
+        h.Add(McpAltitude);
+        h.Add(McpHeading);
+        h.Add(McpValueType);
         return h.ToHashCode();
     }
 }
+
+/// <summary>How the MCP object stores its altitude and heading: a 32-bit integer or a 64-bit float. The layout names it
+/// because it is a property of the BlueBird build, never guessed by the app.</summary>
+public enum Bbs757McpValueType { I32, F64 }
 
 /// <summary>The FMA's result in a layout file: a layout, or the detailed reason (for the log) there is none.</summary>
 public sealed record Bbs757FmaDerivation(Bbs757FmaLayout? Layout, string? Failure);

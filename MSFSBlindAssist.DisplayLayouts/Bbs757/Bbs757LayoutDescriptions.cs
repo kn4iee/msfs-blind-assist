@@ -15,12 +15,16 @@ public static class Bbs757LayoutDescriptions
             $"pfd->afds {l.PfdToAfds}, pfd->tmc {l.PfdToTmc}",
             $"file analysis: {l.SourceFile}: FMA fields: pitch {l.Pitch}, pitchArmed {l.PitchArmed}, roll {l.Roll}, " +
             $"rollArmed {l.RollArmed}, atMode {l.AtMode}",
+            $"file analysis: {l.SourceFile}: FMA gate fields: status {l.Status}, fdWord {l.FdWord}, fdCaptain {l.FdCaptain}, " +
+            $"fdFirstOfficer {l.FdFirstOfficer}, afdsToMcp {l.AfdsToMcp}, mcpAltitude {l.McpAltitude}, " +
+            $"mcpHeading {l.McpHeading}, mcpValueType {l.McpValueType}",
         };
         Words(lines, l.SourceFile, "A/T", l.AtWords);
         Words(lines, l.SourceFile, "pitch", l.PitchWords);
         Words(lines, l.SourceFile, "pitch armed", l.PitchArmedWords);
         Words(lines, l.SourceFile, "roll", l.RollWords);
         Words(lines, l.SourceFile, "roll armed", l.RollArmedWords);
+        Words(lines, l.SourceFile, "status", l.StatusWords);
         return lines;
     }
 

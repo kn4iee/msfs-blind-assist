@@ -43,7 +43,16 @@ public class Bbs757LayoutFileTests
             [1] = "HDG HOLD", [2] = "HDG SEL", [3] = "LOC", [4] = "ROLLOUT", [5] = "LNAV", [6] = "B/CRS",
             [8] = "TO", [9] = "GA",
         }),
-        RollArmedWords: new Bbs757WordTable(new Dictionary<int, string> { [3] = "LNAV", [4] = "LOC", [5] = "B/CRS", [6] = "ROLLOUT" }));
+        RollArmedWords: new Bbs757WordTable(new Dictionary<int, string> { [3] = "LNAV", [4] = "LOC", [5] = "B/CRS", [6] = "ROLLOUT" }),
+        Status: 11948,
+        StatusWords: new Bbs757WordTable(new Dictionary<int, string> { [1] = "CMD" }),
+        FdWord: "FD",
+        FdCaptain: 11957,
+        FdFirstOfficer: 11958,
+        AfdsToMcp: 11848,
+        McpAltitude: 856,
+        McpHeading: 848,
+        McpValueType: Bbs757McpValueType.F64);
 
     private static Bbs757EfbMemLayout SampleEfbLayout() => new(
         SourceFile: "",
@@ -433,6 +442,52 @@ public class Bbs757LayoutFileTests
         foreach (var (name, value) in KeyboardFields)
         {
             string damaged = WithoutField(text, name, value);
+            Assert.NotEqual(text, damaged);
+            Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? one), name);
+            Assert.False(string.IsNullOrEmpty(one), name);
+        }
+    }
+
+    [Fact]
+    public void A_layout_with_the_gate_fields_round_trips()
+    {
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        Assert.True(LayoutFileFormat.TryRead(Module, text, out var file, out string? failure), failure);
+        var loaded = (Bbs757FmaLayout)file!.Readers.Single(r => r.Reader == Bbs757Module.Fma).Layout!;
+        Assert.Equal(SampleLayout() with { SourceFile = "" }, loaded);
+        Assert.Equal("CMD", loaded.StatusWords.Lookup(1));
+        Assert.Equal("FD", loaded.FdWord);
+        Assert.Equal(Bbs757McpValueType.F64, loaded.McpValueType);
+        Assert.NotEqual(SampleLayout(), SampleLayout() with { McpValueType = Bbs757McpValueType.I32 });
+        Assert.NotEqual(SampleLayout(), SampleLayout() with { FdWord = "F/D" });
+        Assert.NotEqual(SampleLayout(), SampleLayout() with
+        {
+            StatusWords = new Bbs757WordTable(new Dictionary<int, string> { [1] = "CWS" }),
+        });
+        Assert.Equal(text, LayoutFileFormat.Write(Module, file));
+        foreach (string culture in new[] { "de-DE", "sv-SE" })
+            Assert.Equal(text, TestCulture.Run(culture, () => LayoutFileFormat.Write(Module, FileWith(SampleLayout()))));
+        Assert.Contains(Bbs757LayoutDescriptions.Describe(loaded), line => line.Contains("afdsToMcp 11848", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_layout_without_the_fma_gate_fields_reads_as_missing()
+    {
+        // The generator-3 text: a file written before the gate fields has none of them, so it is refused whole for
+        // every 757 reader, the EFB's included, never read with zeros (WASM-26).
+        string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
+        string old = text;
+        foreach (string name in new[] { "status", "fdWord", "fdCaptain", "fdFirstOfficer", "afdsToMcp", "mcpAltitude", "mcpHeading", "mcpValueType" })
+            old = System.Text.RegularExpressions.Regex.Replace(old, "\\s*\"" + name + "\": [^,\\n]*,?", "");
+        old = System.Text.RegularExpressions.Regex.Replace(old, "\\s*\"statusWords\": \\{[^}]*\\},?", "");
+        Assert.DoesNotContain("\"statusWords\"", old, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"mcpHeading\"", old, StringComparison.Ordinal);
+        Assert.Contains("\"rollArmedWords\"", old, StringComparison.Ordinal);
+        Assert.False(LayoutFileFormat.TryRead(Module, old, out _, out string? failure));
+        Assert.False(string.IsNullOrEmpty(failure));
+        foreach (string name in new[] { "\"status\": 11948", "\"fdWord\": \"FD\"", "\"mcpValueType\": \"F64\"" })
+        {
+            string damaged = System.Text.RegularExpressions.Regex.Replace(text, "\\s*" + System.Text.RegularExpressions.Regex.Escape(name) + ",?", "");
             Assert.NotEqual(text, damaged);
             Assert.False(LayoutFileFormat.TryRead(Module, damaged, out _, out string? one), name);
             Assert.False(string.IsNullOrEmpty(one), name);

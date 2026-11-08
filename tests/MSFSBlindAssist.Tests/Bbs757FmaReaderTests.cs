@@ -21,7 +21,10 @@ public class Bbs757FmaReaderTests
         PitchWords: new Bbs757WordTable(new Dictionary<int, string> { [1] = "TO", [6] = "VNAV PTH" }),
         PitchArmedWords: new Bbs757WordTable(new Dictionary<int, string> { [9] = "G/S" }),
         RollWords: new Bbs757WordTable(new Dictionary<int, string> { [5] = "LNAV", [8] = "TO" }),
-        RollArmedWords: new Bbs757WordTable(new Dictionary<int, string> { [3] = "LOC" }));
+        RollArmedWords: new Bbs757WordTable(new Dictionary<int, string> { [3] = "LOC" }),
+        Status: 11948, StatusWords: new Bbs757WordTable(new Dictionary<int, string> { [1] = "CMD" }), FdWord: "FD",
+        FdCaptain: 11957, FdFirstOfficer: 11958, AfdsToMcp: 11848, McpAltitude: 856, McpHeading: 848,
+        McpValueType: Bbs757McpValueType.F64);
 
     private static void Put(byte[] b, uint at, int v) => BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan((int)at), v);
 
