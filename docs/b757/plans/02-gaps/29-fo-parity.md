@@ -233,7 +233,8 @@ generator-version-2 file (`bbs757/39462c4a…-49c0a29a1e5b8cf1.json`) beside the
 (`…-69911a5bb8c57b24.json`). Under plan 22's format the v2 file no longer loads ("missing required properties including
 'keyboardShown'"), and `LayoutBundler` is all-or-nothing, so once this branch is on `main` the release and preview
 workflows fail at the bundle step (UPD-10) until the v2 file is removed from the store. This plan's Debug build was
-bundled from a copy of the store without it.
+bundled from a copy of the store without it. **Done 2026-11-08:** the v2 and v3 files left the branch in `layouts`
+af2d7f71, at the owner's word (plan 23's execution record).
 
 **Proposed rule lines** (`docs/invariants/b757.md` and the rule files). The center pump line must load on the 757's
 First Officer files: `first-officer-boeing.md`'s globs do not reach `FirstOfficer/BBS757/**`, so it is homed in
