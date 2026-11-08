@@ -194,6 +194,57 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
+    public void A_dark_candidate_gives_way_to_the_next_which_runs_once_lit()
+    {
+        // A wrong candidate that reads cleanly and decodes "dark" is never trusted, and never holds the others from their
+        // turn: held 2 s while another waits, it goes to the back of the queue. Each keeps its own view of the power.
+        var h = New();
+        var one = new FakeLayout("one");
+        var two = new FakeLayout("two");
+        h.Reader.Layouts = new[] { one, two };
+        h.Reader.MakeSampler = (_, layout) => h.Reader.NewSampler(layout == one ? R("DARK") : R("OFF"));
+        h.Reader.LitOf = r => r.Value is not ("DARK" or "OFF");
+        h.Start();
+        h.Tick(300); // 30 s, both dark: they take turns, silently
+        Assert.Equal("Verifying", h.State);
+        Assert.Equal(2, h.Reader.Samplers.Count);
+        Assert.All(h.Reader.Samplers, s => Assert.False(s.Disposed));
+        Assert.All(h.Reader.Samplers, s => Assert.True(s.Reads > 50, $"{s.Reads} reads"));
+
+        var first = h.Reader.Samplers[0];
+        var second = h.Reader.Samplers[1];
+        second.Reading = R("A"); // the second one's display lights; the first reads dark forever
+        var running = h.RunUntilRunning(200); // its 10 s quiet, counted across the turns it is not read
+        Assert.Same(second, running);
+        Assert.True(first.Disposed);
+        Assert.Equal(1, h.Env.LocateCalls); // the same two candidates throughout, no new search
+        Assert.Empty(h.Env.Spoken);
+        Assert.Equal(new[] { "X: A" }, h.Monitor.View());
+    }
+
+    [Fact]
+    public void A_long_dark_hold_leaves_the_search_window_for_after_power_up()
+    {
+        // Five minutes cold and dark, then the display lights and the candidate disagrees: the search goes on every 5 s,
+        // because the dark time never counted toward the 120 s window (else it would already be the 30 s slow retry).
+        var h = New();
+        h.Reader.LitNow = false;
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("WRONG"));
+        h.Start();
+        h.Tick(3000); // 5 minutes
+        Assert.Equal("Verifying", h.State);
+        Assert.Equal(1, h.Env.LocateCalls);
+
+        h.Reader.LitNow = true;
+        h.Tick(600); // a minute lit: 10 s quiet, then each candidate disagrees for its 2 s
+        var after = h.Env.LocateTimes.Skip(1).ToArray();
+        Assert.True(after.Length >= 8, $"{after.Length} attempts after power-up");
+        Assert.All(after.Zip(after.Skip(1)), p => Assert.Equal(5000, p.Second - p.First));
+        Assert.NotEqual("Running", h.State);
+        Assert.Empty(h.Env.Spoken);
+    }
+
+    [Fact]
     public void A_change_missed_while_searching_again_is_spoken_when_found()
     {
         // A failed read searches again silently; what changed meanwhile is told once it reads again, never swallowed.
@@ -332,8 +383,11 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
         public List<FakeSampler> Samplers { get; } = new();
 
-        /// <summary>The power state every reading reports (null: no power state).</summary>
+        /// <summary>The power state every reading reports (null: no power state), unless <see cref="LitOf"/> is set.</summary>
         public bool? LitNow { get; set; }
+
+        /// <summary>When set, the power state as decoded from the reading itself.</summary>
+        public Func<FakeReading, bool?>? LitOf { get; set; }
 
         public FakeSampler NewSampler(FakeReading reading)
         {
@@ -350,7 +404,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         public bool Passes(IReadOnlyList<(long AtMs, FakeReading Reading)> history, Bbs757SimValues sim) =>
             history.Count > 0 && history[^1].Reading.Value != "WRONG";
 
-        public bool? Lit(FakeReading reading, Bbs757SimValues sim) => LitNow;
+        public bool? Lit(FakeReading reading, Bbs757SimValues sim) => LitOf is { } of ? of(reading) : LitNow;
 
         public IReadOnlyList<Bbs757SpokenLine> Changes(FakeReading heard, FakeReading now, bool withPrefix) =>
             new[] { new Bbs757SpokenLine("MUTE_X", "X: " + now) };

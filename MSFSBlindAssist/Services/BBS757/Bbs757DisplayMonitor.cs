@@ -74,14 +74,16 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private int _attempts;
     private bool _slowRetry; // the 120 s window ran out: search every 30 s until found
 
-    // The candidate being read and those not tried yet. The monitor owns them all and disposes each once.
+    // The candidate being read and those waiting, each waiting one with what it knew of the display's power. The monitor
+    // owns them all and disposes each once.
     private IBbs757DisplaySampler<TReading>? _sampler;
-    private readonly Queue<IBbs757DisplaySampler<TReading>> _candidates = new();
+    private readonly Queue<(IBbs757DisplaySampler<TReading> Sampler, bool? LastLit, long? LitSinceMs)> _candidates = new();
     private long _candidateStartMs;
+    private long? _holdSinceMs; // the candidate has read quiet since then: the search window pauses meanwhile
     private readonly List<(long AtMs, TReading Reading)> _history = new();
 
-    // The display's power (S4), from the readings that are not corrupt.
-    private bool? _lastLit;      // at the last such reading; null before the first, or with no power state
+    // The display's power (S4) as the sampler being read sees it, from its readings that are not corrupt.
+    private bool? _lastLit;      // at the last such reading; null when nothing is known, or with no power state
     private long? _litSinceMs;   // it powered up then, and is still in its quiet
     private bool _rebaseline;    // a quiet reading was seen: the next good reading is a silent baseline
 
@@ -302,7 +304,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         var found = SamplersIn(location);
         if (found.Count > 0)
         {
-            foreach (var sampler in found) _candidates.Enqueue(sampler);
+            // Each starts from what is known of the display's power now.
+            foreach (var sampler in found) _candidates.Enqueue((sampler, _lastLit, _litSinceMs));
             StartNextCandidate(Invariant($"{found.Count} candidate(s) found"));
             return;
         }
@@ -350,8 +353,9 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     private void StartNextCandidate(string reason)
     {
-        _sampler = _candidates.Dequeue();
+        (_sampler, _lastLit, _litSinceMs) = _candidates.Dequeue();
         _candidateStartMs = _env!.NowMs;
+        _holdSinceMs = null;
         _history.Clear();
         Go(State.Verifying, reason);
     }
@@ -361,22 +365,47 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         long now = env.NowMs;
         if (!_sampler!.TryRead(out var reading))
         {
+            EndHold(now);
             DropCandidate(readFailed: true);
             return;
         }
-        switch (Judge(now, reading, sim))
+        var verdict = Judge(now, reading, sim);
+        if (verdict == Verdict.Quiet)
         {
-            case Verdict.Passes:
-                while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue());
-                EnterRunning(reading, "the memory agrees with the simulator");
-                return;
-            case Verdict.Quiet:
-                // Not compared: neither trusted nor dropped (a cold-and-dark load would otherwise search again and again);
-                // the candidate has its 2 s once the display counts.
-                _candidateStartMs = now;
-                return;
+            // Not compared: neither trusted nor dropped (a cold-and-dark load would otherwise search again and again), and
+            // the search window pauses. Held 2 s while another candidate waits, it goes to the back of the queue, so a
+            // wrong one that decodes "dark" never starves the rest; alone, it holds. It has its 2 s once the display counts.
+            _holdSinceMs ??= now;
+            _candidateStartMs = now;
+            if (_candidates.Count > 0 && now - _holdSinceMs >= MismatchToleranceMs) RequeueCandidate(now);
+            return;
+        }
+        EndHold(now);
+        if (verdict == Verdict.Passes)
+        {
+            while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue().Sampler);
+            EnterRunning(reading, "the memory agrees with the simulator");
+            return;
         }
         if (now - _candidateStartMs >= MismatchToleranceMs) DropCandidate(readFailed: false);
+    }
+
+    /// <summary>A quiet hold ends: its time does not count toward the 120 s search window.</summary>
+    private void EndHold(long now)
+    {
+        if (_holdSinceMs is not { } since) return;
+        _locateStartMs += now - since;
+        _holdSinceMs = null;
+    }
+
+    /// <summary>The quiet candidate goes to the back of the queue with what it knows of the display's power; its 2 s
+    /// start afresh when it comes up again.</summary>
+    private void RequeueCandidate(long now)
+    {
+        EndHold(now);
+        _candidates.Enqueue((_sampler!, _lastLit, _litSinceMs));
+        _sampler = null;
+        StartNextCandidate("quiet for 2 s while another candidate waits; trying the next");
     }
 
     /// <summary>
@@ -496,7 +525,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     }
 
     /// <summary>Whether the display is unpowered or powered up less than <see cref="LitQuietMs"/> ago. A display already lit
-    /// at the session's first reading counts at once: its power-up was not seen, and that reading is a silent baseline.</summary>
+    /// when nothing is known of its power (the session's first reading) counts at once: its power-up was not seen, and
+    /// that reading is a silent baseline.</summary>
     private bool IsQuiet(long now, TReading reading, Bbs757SimValues sim)
     {
         bool? lit = _reader.Lit(reading, sim);
@@ -618,7 +648,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     {
         DisposeQuietly(_sampler);
         _sampler = null;
-        while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue());
+        while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue().Sampler);
+        _holdSinceMs = null;
         _history.Clear();
         _changeAtMs = null;
 
