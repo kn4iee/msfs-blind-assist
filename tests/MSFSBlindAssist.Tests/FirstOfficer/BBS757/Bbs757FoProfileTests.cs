@@ -51,7 +51,7 @@ public class Bbs757FoProfileTests
     public void BuildsTheFlowsAndChecklists()
     {
         var p = Profile();
-        Assert.Equal(13, p.BuildFlows().Count);        // plan 23 added Approach
+        Assert.Equal(13, p.BuildFlows().Count);        // plan 29 added Approach
         Assert.Equal(22, p.BuildChecklists().Count);   // and its action group
     }
 

@@ -1,4 +1,4 @@
-# BlueBird 757 First Officer: Tests, False Failures, Cabin Calls, ILS, Approach, and the Other Boeings' Automation (plan 23, added 2026-11-08)
+# BlueBird 757 First Officer: Tests, False Failures, Cabin Calls, ILS, Approach, and the Other Boeings' Automation (plan 29, added 2026-11-08)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0 and Task 10 are the controller's own.
 
@@ -12,12 +12,12 @@
 
 ## Global Constraints
 
-- Branch `B757` in the main folder (no worktree, as plan 19). Every commit carries the trailers `Plan: 23` and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Nothing is pushed until Task 10.
-- Tests: `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --artifacts-path bin/b757-p23 --filter "FullyQualifiedName~<name>"` (the artifacts path spares the app's exe); the full suite the same without `--filter`. Never the bare csproj without `-p:Platform=x64` (CORE-1).
+- Branch `B757` in the main folder (no worktree, as plan 19). Every commit carries the trailers `Plan: 29` and `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Nothing is pushed until Task 10.
+- Tests: `dotnet test tests/MSFSBlindAssist.Tests/MSFSBlindAssist.Tests.csproj -c Debug -p:Platform=x64 --artifacts-path bin/b757-p29 --filter "FullyQualifiedName~<name>"` (the artifacts path spares the app's exe); the full suite the same without `--filter`. Never the bare csproj without `-p:Platform=x64` (CORE-1).
 - Test names keep `Bbs757`. No test reads a file under `docs/b757/`.
 - FO-5 (the 2 s pause) untouched. FO-6/FO-7: every new write step is `Done(...)`-linked to a line of its own group, and every new actionable line has a delivering step (`Bbs757FoFlowTests.EveryActionGroup_ListsTheSameLinesInTheSameOrderAsItsFlow` and `EveryActionGroupLine_IsDeliveredOnceByItsFlow` must keep passing). FO-12: a line with no state (test, chime) fires on every tick. FO-13: each gear check stays the last step of its flow. FO-14: no landing autobrake. FO-16: the push height is fixed. FO-26: step lines through `AnnounceProgress` (the flow manager does it).
 - CORE-7: the First Officer's MCP press takes its light's change as its own echo (`LinkedStatusKey`), so the First Officer says the result once. Any new spoken number is invariant and tested under `sv-SE` (`TestCulture.Run`).
-- File ownership (`00-index.md`): plan 23 takes `FirstOfficer/BBS757/**`, `Aircraft/BBS757Definition.FirstOfficer.cs`, `tests/.../FirstOfficer/BBS757/**`, and makes two small shared edits the design names: `FirstOfficer/CenterPumpGate.cs` (the 757's two keys join the list) and `Forms/Settings/FirstOfficerPanel.cs` (the center pump checkbox's text and description). The guide, `docs/b757.md` and rule lines stay plan 16's: Task 9 writes them as handoff requests.
+- File ownership (`00-index.md`): plan 29 takes `FirstOfficer/BBS757/**`, `Aircraft/BBS757Definition.FirstOfficer.cs`, `tests/.../FirstOfficer/BBS757/**`, and makes two small shared edits the design names: `FirstOfficer/CenterPumpGate.cs` (the 757's two keys join the list) and `Forms/Settings/FirstOfficerPanel.cs` (the center pump checkbox's text and description). The guide, `docs/b757.md` and rule lines stay plan 16's: Task 9 writes them as handoff requests.
 
 ## Review Focus
 
@@ -31,7 +31,7 @@
 
 ### Task 0 [controller]: The plan
 
-- [ ] **Step 1:** Commit this plan: `docs(b757): plan 23, the First Officer's parity with the other Boeings` with the trailers.
+- [ ] **Step 1:** Commit this plan: `docs(b757): plan 29, the First Officer's parity with the other Boeings` with the trailers.
 
 ### Task 1: The written sweep for false failures
 
@@ -120,11 +120,11 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 
 ### Task 9: Handoff to plan 16 and the record
 
-- [ ] **Step 1:** Fill in this plan's "Handoff to plan 16" and "Execution record" (the sweep table, commits, the suite count, what changed from the plan). Commit `docs(b757): plan 23's execution record`.
+- [ ] **Step 1:** Fill in this plan's "Handoff to plan 16" and "Execution record" (the sweep table, commits, the suite count, what changed from the plan). Commit `docs(b757): plan 29's execution record`.
 
 ### Task 10 [controller]: Review, verify, push
 
-- [ ] **Step 1:** Whole-branch review of plan 23's commits by a fresh reviewer; fixes as a wave, each with the trailers.
+- [ ] **Step 1:** Whole-branch review of plan 29's commits by a fresh reviewer; fixes as a wave, each with the trailers.
 - [ ] **Step 2:** `dotnet build MSFSBlindAssist.sln -c Debug -p:Platform=x64` (MSFSBA closed, or the build is reported locked) and the full suite: 0 failed; record the count.
 - [ ] **Step 3:** The owner's EFB layout file (owner, 2026-11-08): after the Debug build, check that the 757 tablet layout is where the Debug app reads it (`%APPDATA%\MSFSBlindAssist\layouts\bbs757`, plan 22's v3 layout); if it is missing, say so and how it gets there, never a guess.
 - [ ] **Step 4:** Fetch `kn4iee/B757`; if it moved, rebase onto it and rerun the suite; then `git push kn4iee B757` (plain, no force).
@@ -138,9 +138,9 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 
 ## Execution record
 
-- **Claimed by:** Claude, for the owner (kn4iee), 2026-11-08.
+- **Claimed by:** Claude, for the owner (kn4iee), 2026-11-08. Written as plan 23; renumbered 29 before its push, when Robin's plans 23-28 (the displays) reached `B757` first (the index: a claim counts once it is on the remote).
 - **Status:** landed on `B757`, waiting on the owner's in-sim checks (above).
-- Worked inline by Claude (superpowers:executing-plans, TDD per task, one fresh whole-branch reviewer at the end), on `B757` in the main folder. Base 3307d5915 (this plan). Every commit carries `Plan: 23`.
+- Worked inline by Claude (superpowers:executing-plans, TDD per task, one fresh whole-branch reviewer at the end), on `B757` in the main folder. Base 3307d5915 (this plan). Every commit carries `Plan: 29`.
 - Task 2, 4943aa9cd: eleven preflight tests, shortest first, no squib or landing config test.
 - Task 3, 14e7f34ea: "APU: OFF" reads the APU switch; Final Securing's 2-minute cool-down (`SC_APU_COOLDOWN`).
 - Task 4, 1e6444eb1: Before Start turns the electric hydraulic pumps on before the parking brake; the brake is left alone without brake pressure.

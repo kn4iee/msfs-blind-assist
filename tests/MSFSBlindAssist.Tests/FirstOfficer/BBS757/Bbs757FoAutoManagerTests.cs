@@ -10,7 +10,7 @@ using X = MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoActionExecutor;
 namespace MSFSBlindAssist.Tests.FirstOfficer.BBS757;
 
 /// <summary>
-/// Plan 23: the 757 First Officer's automation, the other Boeings' own. LNAV and VNAV pushed at 400 ft AGL on a climb
+/// Plan 29: the 757 First Officer's automation, the other Boeings' own. LNAV and VNAV pushed at 400 ft AGL on a climb
 /// the manager watched (the 737s' <c>LnavVnavPushHeight</c> rules, FO-16, FOB-21), each only over its MCP light read
 /// out, the result said once (the press takes its light's change as its own echo, CORE-7).
 /// </summary>

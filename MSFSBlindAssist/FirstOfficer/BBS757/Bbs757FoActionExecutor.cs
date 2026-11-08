@@ -766,7 +766,7 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
         _say?.Invoke(text);
     }
 
-    // ---- the automation's MCP push (plan 23) ----
+    // ---- the automation's MCP push (plan 29) ----
 
     /// <summary>How long after an MCP press its light must come on.</summary>
     internal const int McpLightWaitMs = 3000;

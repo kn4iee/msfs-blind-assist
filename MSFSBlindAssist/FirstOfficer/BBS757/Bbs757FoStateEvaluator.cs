@@ -48,7 +48,7 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
     public const double FallbackPoundsPerGallon = 6.7;
 
     /// <summary>
-    /// The center tank in pounds, as the other Boeings' center pump policy and gate count it (plan 23): gallons times
+    /// The center tank in pounds, as the other Boeings' center pump policy and gate count it (plan 29): gallons times
     /// BlueBird's density, or <see cref="FallbackPoundsPerGallon"/> while that reads nothing usable; NaN with the gallons unread.
     /// </summary>
     internal static double CenterFuelLbs(double gallons, double poundsPerGallon)

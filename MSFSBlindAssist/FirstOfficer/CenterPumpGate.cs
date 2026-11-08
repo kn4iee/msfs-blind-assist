@@ -13,7 +13,7 @@ public static class CenterPumpGate
     /// are the PMDG 737/777 SDK event names; the second two are the iFly 737 MAX8 SDK field
     /// names its executor dispatches by (the iFly write path is keyed on the definition's
     /// varKey, not on an event id); the last two are the BlueBird 757 map's center pump nodes,
-    /// which its executor writes by (plan 23). One list, because ONE gate covers all four aircraft.</summary>
+    /// which its executor writes by (plan 29). One list, because ONE gate covers all four aircraft.</summary>
     public static bool IsCenterOnEvent(string eventName) =>
         eventName == "EVT_OH_FUEL_PUMP_L_CENTER" || eventName == "EVT_OH_FUEL_PUMP_R_CENTER" ||
         eventName == "Fuel_CENTER_L_Switch_Status" || eventName == "Fuel_CENTER_R_Switch_Status" ||

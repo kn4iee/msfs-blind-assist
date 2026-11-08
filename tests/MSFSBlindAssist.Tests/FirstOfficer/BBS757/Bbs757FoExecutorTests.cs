@@ -934,7 +934,7 @@ public class Bbs757FoExecutorTests
         first.Dispose();
     }
 
-    // ------------------------------------------------------------------ the center pump ON gate (plan 23, FOB-10/FOB-18)
+    // ------------------------------------------------------------------ the center pump ON gate (plan 29, FOB-10/FOB-18)
 
     /// <summary>
     /// At the executor's single chokepoint, as on the other Boeings: a center pump ON over a tank at or below 1,000 lb is
@@ -978,7 +978,7 @@ public class Bbs757FoExecutorTests
 
     /// <summary>
     /// BlueBird's tests (User Procedures v1.01, simplified procedures pp. 36-42) shortest first, with no battery test
-    /// (owner, plan 19) and no squib or landing config test (owner, plan 23).
+    /// (owner, plan 19) and no squib or landing config test (owner, plan 29).
     /// </summary>
     [Fact]
     public void ThePreflightTests_AreEleven_ShortestFirst()

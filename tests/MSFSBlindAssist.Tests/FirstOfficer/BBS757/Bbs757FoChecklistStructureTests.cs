@@ -535,7 +535,7 @@ public class Bbs757FoChecklistStructureTests
         Assert.Equal(tests.Select(t => t.AfterMs), io.Delays);
     }
 
-    // ------------------------------------------------------------------ cabin calls and the ILS (plan 23)
+    // ------------------------------------------------------------------ cabin calls and the ILS (plan 29)
 
     /// <summary>A cabin call has no state: an action-only line whose every tick rings again (FO-12), as the tests' lines.</summary>
     [Theory]
@@ -564,7 +564,7 @@ public class Bbs757FoChecklistStructureTests
         Assert.Contains("ILS", line.Label);
     }
 
-    // ------------------------------------------------------------------ the parking brake and hydraulic pressure (plan 23)
+    // ------------------------------------------------------------------ the parking brake and hydraulic pressure (plan 29)
 
     private const string BrakeText = "Parking brake left released: no hydraulic pressure. Turn on the electric hydraulic pumps first.";
 
@@ -579,7 +579,7 @@ public class Bbs757FoChecklistStructureTests
     }
 
     /// <summary>
-    /// Plan 23 (owner, 2026-11-08: the brake "doesn't seem to fully work unless the electric hydraulic pumps are on"):
+    /// Plan 29 (owner, 2026-11-08: the brake "doesn't seem to fully work unless the electric hydraulic pumps are on"):
     /// a parking brake SET, ticked or a flow's step, is left alone with words unless the left or right electric pump (the
     /// 757's alternate and normal brake systems) reads ON or an engine reads running; unread is no pressure.
     /// </summary>
@@ -622,7 +622,7 @@ public class Bbs757FoChecklistStructureTests
         Assert.Empty(io.Events);
     }
 
-    /// <summary>Plan 23: a hand-ticked "APU: OFF" stays ticked while BlueBird cools the APU down (the switch OFF, the APU still running).</summary>
+    /// <summary>Plan 29: a hand-ticked "APU: OFF" stays ticked while BlueBird cools the APU down (the switch OFF, the APU still running).</summary>
     [Theory]
     [InlineData("AFTER_START", "AS_APU")]
     [InlineData("SECURE", "SC_APU")]

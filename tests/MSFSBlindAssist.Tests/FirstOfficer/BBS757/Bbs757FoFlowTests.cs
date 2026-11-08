@@ -647,7 +647,7 @@ public class Bbs757FoFlowTests
         Assert.True(battery.LeaveAloneWhen!(apuOn));
     }
 
-    // ------------------------------------------------------------------ the APU off, the 737s' rules (plan 23)
+    // ------------------------------------------------------------------ the APU off, the 737s' rules (plan 29)
 
     /// <summary>
     /// The 737s' Secure (FOB-22, owner 2026-11-08: a 2-minute cool-down "similar to both 737s"): the APU switch OFF,
@@ -678,7 +678,7 @@ public class Bbs757FoFlowTests
         Assert.Contains("2-minute APU cool-down", Flow("SECURE").Description);
     }
 
-    /// <summary>Plan 23 (owner, 2026-11-08): the brake does not fully set without the electric hydraulic pumps, so they come first.</summary>
+    /// <summary>Plan 29 (owner, 2026-11-08): the brake does not fully set without the electric hydraulic pumps, so they come first.</summary>
     [Fact]
     public void BeforeStart_sets_the_parking_brake_after_the_electric_hydraulic_pumps()
         => Assert.Equal(new[] { "BS_ON_GROUND", "BS_CHK_DOORS", "BS_HYD", "BS_CHK_HYD", "BS_PARK", "BS_WING_PUMPS" },
@@ -692,7 +692,7 @@ public class Bbs757FoFlowTests
         Assert.False(apu.SkipCondition!(State((K.ApuSelector, 1), (K.ApuState, 2))));
     }
 
-    // ------------------------------------------------------------------ cabin calls and the ILS (plan 23)
+    // ------------------------------------------------------------------ cabin calls and the ILS (plan 29)
 
     /// <summary>
     /// The owner (2026-11-08): any cabin call button rings the chime. BlueBird's descent procedure presses one for landing
@@ -736,7 +736,7 @@ public class Bbs757FoFlowTests
         Assert.Contains("ILS", Flow("DESCENT").Description);
     }
 
-    // ------------------------------------------------------------------ the Approach flow and the 737s' reminders (plan 23)
+    // ------------------------------------------------------------------ the Approach flow and the 737s' reminders (plan 29)
 
     /// <summary>The 737s' Approach flow: the Captain's ND to APP at 20 NM ("Already set" there), then the Captain's two items.</summary>
     [Fact]
@@ -804,7 +804,7 @@ public class Bbs757FoFlowTests
 
     // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
 
-    /// <summary>Plan 23 (owner, 2026-11-08): shortest first, the squib and landing config tests left out.</summary>
+    /// <summary>Plan 29 (owner, 2026-11-08): shortest first, the squib and landing config tests left out.</summary>
     internal static readonly string[] PreflightTestIds =
     {
         "PF_TEST_STALL_L", "PF_TEST_STALL_R", "PF_TEST_CVR", "PF_TEST_CONFIG_TO", "PF_TEST_FIRE_WHLWELL", "PF_TEST_FIRE_ENG",
@@ -857,7 +857,7 @@ public class Bbs757FoFlowTests
     private static int TestMs(Bbs757FoTest t)
         => (t.Kind == Bbs757FoTestKind.P61Switch ? Bbs757SpringControls.TestHoldMs : t.HoldMs ?? 3000) + t.AfterMs;
 
-    /// <summary>Plan 23 (owner, 2026-11-08): "the longer tests to go at the end".</summary>
+    /// <summary>Plan 29 (owner, 2026-11-08): "the longer tests to go at the end".</summary>
     [Fact]
     public void Preflight_tests_run_shortest_first()
     {
@@ -868,7 +868,7 @@ public class Bbs757FoFlowTests
         Assert.Equal("FO_TEST_GND_PROX", Bbs757FoTests.Preflight[^1].Key);
     }
 
-    /// <summary>Plan 23 (owner, 2026-11-08): the squib test is heard doing nothing, and the landing config test is not needed.</summary>
+    /// <summary>Plan 29 (owner, 2026-11-08): the squib test is heard doing nothing, and the landing config test is not needed.</summary>
     [Fact]
     public void Preflight_has_no_squib_or_landing_config_test()
     {

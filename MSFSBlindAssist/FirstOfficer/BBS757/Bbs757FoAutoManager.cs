@@ -5,7 +5,7 @@ using K = MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoKeys;
 namespace MSFSBlindAssist.FirstOfficer.BBS757;
 
 /// <summary>
-/// The BlueBird 757 First Officer's automation layer: what the other Boeings' managers do (plan 23, owner 2026-11-08).
+/// The BlueBird 757 First Officer's automation layer: what the other Boeings' managers do (plan 29, owner 2026-11-08).
 /// The flap lever stays the Captain's (BlueBird publishes no flap schedule; Shift+1 to Shift+6 read the maneuver speeds),
 /// so <see cref="AutoFlapsEnabled"/> is stored and never acted on; gear and autopilot engagement are the universal
 /// automation service's.

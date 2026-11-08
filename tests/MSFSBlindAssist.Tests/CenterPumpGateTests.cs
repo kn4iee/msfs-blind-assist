@@ -42,7 +42,7 @@ public class CenterPumpGateTests
     // A wing pump on the iFly key spelling is never gated.
     [Fact] public void IFly_WingPump_NeverGated()      => Assert.False(CenterPumpGate.ShouldSuppressCenterOn("Fuel_L_FWD_Switch_Status", isOn: true, centerQty: 0));
 
-    // ---- BlueBird 757 (plan 23): the SAME gate, keyed on the 757 map's center pump nodes, which its executor writes.
+    // ---- BlueBird 757 (plan 29): the SAME gate, keyed on the 757 map's center pump nodes, which its executor writes.
     private const string Bbs757L = "B757_OVHD_C_PUMPS_L_BUTTON";
     private const string Bbs757R = "B757_OVHD_C_PUMPS_R_BUTTON";
 

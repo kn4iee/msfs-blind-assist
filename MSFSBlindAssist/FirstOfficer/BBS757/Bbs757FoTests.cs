@@ -29,7 +29,7 @@ public sealed record Bbs757FoTest(string Key, string Label, string Target, Bbs75
 /// <summary>
 /// BlueBird's preflight tests (User Procedures v1.01, simplified procedures pp. 36-42), shortest first, so the long ones
 /// come last (owner, 2026-11-08; each one's time is its hold plus its After wait). Left out: the battery test (owner,
-/// plan 19), the squib test, heard doing nothing, and the landing config test, not needed (owner, plan 23); the pilot can
+/// plan 19), the squib test, heard doing nothing, and the landing config test, not needed (owner, plan 29); the pilot can
 /// still press both on their panels. The Preflight flow runs them where the Captain's "System tests" reminder stood, and
 /// each has its own line in the PREFLIGHT checklist group. Pure.
 /// </summary>
