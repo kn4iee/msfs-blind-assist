@@ -250,6 +250,8 @@ public static class Bbs757FoChecklistDefinitions
             Auto("BT_TURNOFF", "BEFORE_TAKEOFF", "Runway turnoff lights: ON", "FO_TURNOFF_LIGHTS_ON", On,
                 SetAll((K.LeftTurnoff, 1), (K.RightTurnoff, 1))),
             Auto("BT_TAXI_LIGHT", "BEFORE_TAKEOFF", "Taxi light: ON", K.TaxiLight, On, Set(K.TaxiLight, 1)),
+            // The cabin chime: no state, so every tick rings it again (FO-12).
+            ActionManual("BT_CABIN", "BEFORE_TAKEOFF", "Cabin call: advise the cabin crew for takeoff", Set(K.CabinCall, 1)),
             Reminder("BT_CONFIG", "BEFORE_TAKEOFF", "Takeoff configuration: press the CONFIG button and check no warning"),
         }
     };
@@ -273,8 +275,11 @@ public static class Bbs757FoChecklistDefinitions
         Items = new()
         {
             Auto("DS_SEAT_BELTS", "DESCENT", "Seat belt signs: ON", K.SeatBelts, v => Is(v, K.SignOn), Set(K.SeatBelts, K.SignOn)),
+            // BlueBird's landing-preparation chime: no state, so every tick rings it again (FO-12).
+            ActionManual("DS_CABIN", "DESCENT", "Cabin call: landing preparation", Set(K.CabinCall, 1)),
             // FO-14: the landing autobrake is the Captain's; the reminder names where, never a setting.
             Reminder("DS_AUTOBRAKE", "DESCENT", "Set the landing autobrake on the main panel"),
+            Reminder("DS_ILS", "DESCENT", "ILS: set and identified (NAV radios window, Input Ctrl+N; the ident on the audio panel)"),
             Reminder("DS_LANDING_DATA", "DESCENT", "Landing data and approach speeds: checked, minimums set"),
         }
     };

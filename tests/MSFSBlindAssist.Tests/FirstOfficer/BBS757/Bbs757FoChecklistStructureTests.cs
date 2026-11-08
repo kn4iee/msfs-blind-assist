@@ -535,6 +535,35 @@ public class Bbs757FoChecklistStructureTests
         Assert.Equal(tests.Select(t => t.AfterMs), io.Delays);
     }
 
+    // ------------------------------------------------------------------ cabin calls and the ILS (plan 23)
+
+    /// <summary>A cabin call has no state: an action-only line whose every tick rings again (FO-12), as the tests' lines.</summary>
+    [Theory]
+    [InlineData("BEFORE_TAKEOFF", "BT_CABIN")]
+    [InlineData("DESCENT", "DS_CABIN")]
+    public async Task Cabin_call_lines_press_the_fwd_cabin_call_button_on_every_tick(string group, string id)
+    {
+        var line = Group(group).Items.Single(i => i.Id == id);
+        Assert.Equal(ChecklistItemType.Actionable, line.Type);
+        Assert.Null(line.StateFieldName);
+        Assert.Null(line.LeaveAloneWhen);
+        var io = new FakeBbs757FoTransport();
+        io.Buttons.Add(K.CabinCall);
+        var exec = new X();
+        exec.SetTransport(io);
+        await line.CheckAction!(exec, new Bbs757FoStateEvaluator());
+        await line.CheckAction!(exec, new Bbs757FoStateEvaluator());
+        Assert.Equal(new[] { $"press {K.CabinCall}", $"press {K.CabinCall}" }, io.Events);
+    }
+
+    [Fact]
+    public void Descent_has_the_ils_reminder_line()
+    {
+        var line = Group("DESCENT").Items.Single(i => i.Id == "DS_ILS");
+        Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
+        Assert.Contains("ILS", line.Label);
+    }
+
     // ------------------------------------------------------------------ the parking brake and hydraulic pressure (plan 23)
 
     private const string BrakeText = "Parking brake left released: no hydraulic pressure. Turn on the electric hydraulic pumps first.";

@@ -115,6 +115,12 @@ public static class Bbs757FoKeys
     public const string NoSmoking = "B757_OVHD_NO_SMOKING_SWITCH";
     public const double SignOff = 0, SignAuto = 1, SignOn = 2;
     public const string EmergencyLights = "B757_OVHD_PASS_OXY_Toggle_Switch_CLICK";   // 0 OFF, 1 ARMED, 2 ON (guarded)
+
+    /// <summary>
+    /// The FWD cabin call button (momentary): the hi-lo chime. Any of the panel's cabin call buttons rings it (owner,
+    /// 2026-11-08); BlueBird's descent procedure illustrates FWD (p. 55).
+    /// </summary>
+    public const string CabinCall = "B757_OVHD_FWD_CABIN_CALL_BUTTON";
     public const string Wipers = "B757_OVHD_WIPER_SWITCH";
 
     // ---- air conditioning / pressurisation ----

@@ -324,7 +324,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildBeforeTakeoff() => new()
     {
         Id = "BEFORE_TAKEOFF", Name = "Before Takeoff",
-        Description = "Both engines running, seat belts on, flaps and autobrake checked, landing, strobe, wing, runway turnoff and taxi lights on.",
+        Description = "Both engines running, seat belts on, flaps and autobrake checked, landing, strobe, wing, runway turnoff and taxi lights on, then a cabin call for takeoff.",
         RelatedChecklistGroupIds = new[] { "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL" },
         Steps = new()
         {
@@ -340,6 +340,8 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(Multi("BT_TURNOFF", "Runway turnoff lights: ON", (K.LeftTurnoff, 1), (K.RightTurnoff, 1)),
                 s => s.IsOn("FO_TURNOFF_LIGHTS_ON")), "BT_TURNOFF"),
             Done(Skip(SW("BT_TAXI_LIGHT", "Taxi light: ON", K.TaxiLight, 1), s => s.IsOn(K.TaxiLight)), "BT_TAXI_LIGHT"),
+            // The cabin chime (the 737s' "Advise the cabin crew for takeoff"): a press with no state, never "Already set".
+            Done(SW("BT_CABIN", "Cabin call: advise the cabin crew for takeoff", K.CabinCall, 1), "BT_CABIN"),
             Done(Captain("BT_CONFIG", "Takeoff configuration", "Press the CONFIG button and check there is no configuration warning."), "BT_CONFIG"),
         }
     };
@@ -366,15 +368,21 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildDescent() => new()
     {
         Id = "DESCENT", Name = "Descent",
-        Description = "Seat belts on and landing lights on; the landing autobrake, landing data and minimums are the Captain's.",
+        Description = "Seat belts on, a cabin call for landing preparation, landing lights on; the landing autobrake, the ILS, landing data and minimums are the Captain's.",
         // Not APPROACH_CL: top of descent is not the approach (it latched the Approach checklist there).
         RelatedChecklistGroupIds = new[] { "DESCENT", "DESCENT_CL" },
         Steps = new()
         {
             Done(Skip(SW("DS_SEAT_BELTS", "Seat belt signs: ON", K.SeatBelts, (int)K.SignOn), s => s.IsPosition(K.SeatBelts, (int)K.SignOn)), "DS_SEAT_BELTS"),
+            // BlueBird's descent procedure (p. 55): "Press one of the blue cabin-call buttons to sound the hi-lo chime for
+            // landing preparation". A press with no state, never "Already set".
+            Done(SW("DS_CABIN", "Cabin call: landing preparation", K.CabinCall, 1), "DS_CABIN"),
             Also(Skip(Multi("DS_LANDING", "Landing lights: ON", (K.LeftLanding, 1), (K.RightLanding, 1)),
                 s => s.IsOn("FO_LANDING_LIGHTS_ON")), "IRC_LIGHTS"),
             Done(Captain("DS_AUTOBRAKE", "Landing autobrake", "Set the landing autobrake on the main panel."), "DS_AUTOBRAKE"),
+            // The 737s' "Set the ILS frequencies and course"; BlueBird identifies the ILS on the approach (p. 56).
+            Done(Captain("DS_ILS", "ILS",
+                "Set and identify the ILS: frequency and course in the NAV radios window, Input Ctrl+N, and the ident on the audio panel."), "DS_ILS"),
             Done(Captain("DS_LANDING_DATA", "Landing data", "Check the landing data and approach speeds, and set the minimums."), "DS_LANDING_DATA"),
         }
     };

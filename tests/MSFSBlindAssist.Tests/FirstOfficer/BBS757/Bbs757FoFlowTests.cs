@@ -692,6 +692,50 @@ public class Bbs757FoFlowTests
         Assert.False(apu.SkipCondition!(State((K.ApuSelector, 1), (K.ApuState, 2))));
     }
 
+    // ------------------------------------------------------------------ cabin calls and the ILS (plan 23)
+
+    /// <summary>
+    /// The owner (2026-11-08): any cabin call button rings the chime. BlueBird's descent procedure presses one for landing
+    /// preparation (p. 55); the 737s call the cabin before takeoff too. A press with no state: never "Already set".
+    /// </summary>
+    [Fact]
+    public void BeforeTakeoff_and_Descent_call_the_cabin_with_the_fwd_button()
+    {
+        Assert.Equal("B757_OVHD_FWD_CABIN_CALL_BUTTON", K.CabinCall);
+        Assert.True(Bbs757Write.IsMomentary(Def.ControlFor(K.CabinCall)!));
+        foreach (var (flow, id, label) in new[]
+        {
+            ("BEFORE_TAKEOFF", "BT_CABIN", "Cabin call: advise the cabin crew for takeoff"),
+            ("DESCENT", "DS_CABIN", "Cabin call: landing preparation"),
+        })
+        {
+            var s = Step(flow, id);
+            Assert.Equal(FlowStepActionType.SetSwitch, s.ActionType);
+            Assert.Equal(K.CabinCall, s.EventName);
+            Assert.Equal(1, s.TargetValue);
+            Assert.Equal(label, s.Label);
+            Assert.Equal(FlowStepFailurePolicy.Skip, s.FailurePolicy);
+            Assert.Null(s.SkipCondition);
+            Assert.Equal(new[] { id }, s.LinkedChecklistItemIds.ToArray());
+        }
+        Assert.Equal(Index("BEFORE_TAKEOFF", "BT_CONFIG") - 1, Index("BEFORE_TAKEOFF", "BT_CABIN"));
+        Assert.Equal(Index("DESCENT", "DS_SEAT_BELTS") + 1, Index("DESCENT", "DS_CABIN"));
+        Assert.Contains("cabin call", Flow("BEFORE_TAKEOFF").Description, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cabin call", Flow("DESCENT").Description, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Descent_reminds_the_ils_after_the_landing_autobrake()
+    {
+        var ils = Step("DESCENT", "DS_ILS");
+        Assert.Equal(FlowStepActionType.CaptainReminder, ils.ActionType);
+        Assert.Equal("Set and identify the ILS: frequency and course in the NAV radios window, Input Ctrl+N, and the ident on the audio panel.",
+            ils.ReminderText);
+        Assert.Equal(Index("DESCENT", "DS_AUTOBRAKE") + 1, Index("DESCENT", "DS_ILS"));
+        Assert.Equal(new[] { "DS_ILS" }, ils.LinkedChecklistItemIds.ToArray());
+        Assert.Contains("ILS", Flow("DESCENT").Description);
+    }
+
     // ------------------------------------------------------------------ BlueBird's preflight tests (plan 19, task 8)
 
     /// <summary>Plan 23 (owner, 2026-11-08): shortest first, the squib and landing config tests left out.</summary>
