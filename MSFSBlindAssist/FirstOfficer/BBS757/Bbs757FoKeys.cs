@@ -149,14 +149,6 @@ public static class Bbs757FoKeys
     public const string BankLimit = "B757_MCP_AP_HDG_BNKLIM";
     public const string Autobrake = "B757_MAIN_knob_gears_altn_autobrake";  // 0 RTO, 1 OFF, 2 DISARM, 3-6 "1"-"4", 7 MAX AUTO
     public const double AutobrakeRto = 0, AutobrakeOff = 1;
-    /// <summary>The Captain's EFIS ND mode knob: 0 VOR, 1 APP, 2 MAP, 3 PLAN.</summary>
-    public const string NdMode = "B757_ADI_1_CTR_KNOB";
-    public const double NdModeApp = 1, NdModeMap = 2;
-
-    /// <summary>The Captain's EFIS ND range knob (state <c>BBS_ND1_Range_Index</c>): 0 10 NM, 1 20 NM, 2 40 NM, up to 5 320 NM.</summary>
-    public const string NdRange = "B757_ADI_1_TFC_KNOB";
-    public const double NdRange20 = 1, NdRange40 = 2;
-
     public static readonly string[] Heaters =
     {
         "B757_MAIN_L_FOOT_HEATERS_SWITCH", "B757_MAIN_L_SHOULDER_HEATERS_SWITCH",

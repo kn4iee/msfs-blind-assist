@@ -36,7 +36,6 @@ public static class Bbs757FoFlowDefinitions
         BuildBeforeTakeoff(),
         BuildAfterTakeoff(),
         BuildDescent(),
-        BuildApproach(),
         BuildBeforeLanding(),
         BuildAfterLanding(),
         BuildShutdown(),
@@ -105,7 +104,7 @@ public static class Bbs757FoFlowDefinitions
     private static Flow BuildPreflight() => new()
     {
         Id = "PREFLIGHT", Name = "Preflight",
-        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights (anti-collision, wing, landing, runway turnoff and taxi off), window heat, signs, pressurization, air; then the MCP, the Captain's ND to MAP at 40 NM, and autobrake RTO; then BlueBird's tests, shortest first: both stall warnings, CVR, the takeoff configuration warning, the wheel well, engine, APU and cargo fire tests, both crew oxygen masks, TCAS and ground proximity.",
+        Description = "Overhead left to right: EEC (Rolls-Royce), yaw dampers, engine hydraulic pumps, emergency lights armed, ignition, start selectors, fuel, anti-ice, lights (anti-collision, wing, landing, runway turnoff and taxi off), window heat, signs, pressurization, air; then the MCP and autobrake RTO; then BlueBird's tests, shortest first: both stall warnings, CVR, the takeoff configuration warning, the wheel well, engine, APU and cargo fire tests, both crew oxygen masks, TCAS and ground proximity.",
         RelatedChecklistGroupIds = new[] { "PREFLIGHT" },
         Steps =
         [
@@ -147,9 +146,6 @@ public static class Bbs757FoFlowDefinitions
             Done(Skip(Multi("PF_BLEEDS", "Engine and APU bleeds: ON", (K.LeftEngBleed, 1), (K.RightEngBleed, 1), (K.ApuBleed, 1)),
                 s => s.IsOn("FO_ALL_BLEEDS_ON")), "PF_BLEEDS"),
             Done(Skip(Multi("PF_FDS", "Flight directors: ON", (K.CaptainFd, 1), (K.FirstOfficerFd, 1)), s => s.IsOn("FO_FDS_ON")), "PF_FDS"),
-            // The PMDG 737's Preflight ND (MAP, 40 NM), so a departure starts on the map after an Approach flow's APP 20.
-            Done(Skip(SW("PF_ND_MODE", "Captain's ND mode: MAP", K.NdMode, (int)K.NdModeMap), s => s.IsPosition(K.NdMode, (int)K.NdModeMap)), "PF_ND_MODE"),
-            Done(Skip(SW("PF_ND_RANGE", "Captain's ND range: 40 NM", K.NdRange, (int)K.NdRange40), s => s.IsPosition(K.NdRange, (int)K.NdRange40)), "PF_ND_RANGE"),
             // Judged by BlueBird's own A/T flag, not the switch (R40); a switch at ARM over a disarmed A/T is cycled.
             Done(Skip(SW("PF_AT_ARM", "Autothrottle: ARM", X.ArmAutothrottle, 1), s => s.IsOn("FO_AT_ARMED")), "PF_AT_ARM"),
             Done(Skip(SW("PF_BANK_LIMIT", "Bank limit: AUTO", K.BankLimit, 0), s => s.IsPosition(K.BankLimit, 0)), "PF_BANK_LIMIT"),
@@ -171,7 +167,8 @@ public static class Bbs757FoFlowDefinitions
         Steps = new()
         {
             OnGroundGuard("BS_ON_GROUND"),
-            Also(Check("BS_CHK_DOORS", "Doors: CLOSED", "FO_DOORS_CLOSED", On, CheckSeconds, "BS_DOORS"), "BSC_DOORS"),
+            // A check only read: the checklist's line alone, never repeated in the action group (owner, 2026-11-08).
+            Check("BS_CHK_DOORS", "Doors: CLOSED", "FO_DOORS_CLOSED", On, CheckSeconds, "BSC_DOORS"),
             Done(Skip(Multi("BS_HYD", "Electric hydraulic pumps: ON, R then C then L",
                     (K.RightElecHyd, 1), (K.C1ElecHyd, 1), (K.C2ElecHyd, 1), (K.LeftElecHyd, 1)),
                 s => s.IsOn("FO_ELEC_HYD_PUMPS_ON")), "BS_HYD"),
@@ -334,7 +331,7 @@ public static class Bbs757FoFlowDefinitions
         RelatedChecklistGroupIds = new[] { "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL" },
         Steps = new()
         {
-            Check("BT_CHK_ENGINES", "Engines: both running", "FO_ENGINES_RUNNING", On, CheckSeconds, "BT_ENGINES", "BTC_ENGINES"),
+            Check("BT_CHK_ENGINES", "Engines: both running", "FO_ENGINES_RUNNING", On, CheckSeconds, "BTC_ENGINES"),
             Check("BT_CHK_FLAPS", "Flaps: set for takeoff", "FO_FLAPS_TAKEOFF", On, CheckSeconds, "BTC_FLAPS"),
             Check("BT_CHK_AUTOBRAKE", "Autobrake: RTO", K.Autobrake, v => Is(v, K.AutobrakeRto), CheckSeconds, "BTC_AUTOBRAKE"),
             Also(Done(Skip(SW("BT_SEAT_BELTS", "Seat belt signs: ON", K.SeatBelts, (int)K.SignOn), s => s.IsPosition(K.SeatBelts, (int)K.SignOn)),
@@ -364,9 +361,10 @@ public static class Bbs757FoFlowDefinitions
                 s => s.IsOn("FO_GEAR_UP_OFF")), "AT_GEAR_OFF"),
             Done(Skip(Multi("AT_GROUND_LIGHTS", "Runway turnoff and taxi lights: OFF", (K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0)),
                 s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "AT_GROUND_LIGHTS"),
-            Also(Check("AT_CHK_FLAPS", "Flaps: up", "FO_FLAPS_UP", On, FlapsUpCheckSeconds, "AT_FLAPS"), "ATC_FLAPS"),
+            // Checks only read: the checklist's lines alone (owner, 2026-11-08).
+            Check("AT_CHK_FLAPS", "Flaps: up", "FO_FLAPS_UP", On, FlapsUpCheckSeconds, "ATC_FLAPS"),
             // Last (FO-13): the lever at OFF and every leg up.
-            Also(Check("AT_CHK_GEAR", "Gear: up and off", "FO_GEAR_UP_OFF", On, GearCheckSeconds, "AT_GEAR"), "ATC_GEAR"),
+            Check("AT_CHK_GEAR", "Gear: up and off", "FO_GEAR_UP_OFF", On, GearCheckSeconds, "ATC_GEAR"),
         }
     };
 
@@ -375,7 +373,8 @@ public static class Bbs757FoFlowDefinitions
     {
         Id = "DESCENT", Name = "Descent",
         Description = "Seat belts on, a cabin call for landing preparation, landing lights on; the landing autobrake, the ILS, landing data and minimums are the Captain's.",
-        // Not APPROACH_CL: top of descent is not the approach (it latched the Approach checklist there).
+        // The arrival is two flows, as on the MD-11 (owner, 2026-11-08): this one and Before Landing. DESCENT_CL is BlueBird's
+        // In Range and Approach cards as one checklist, so there is no Approach flow or group.
         RelatedChecklistGroupIds = new[] { "DESCENT", "DESCENT_CL" },
         Steps = new()
         {
@@ -389,23 +388,6 @@ public static class Bbs757FoFlowDefinitions
             // The 737s' "Set the ILS frequencies and course": the frequency and course only, no audio ident (owner, 2026-11-08).
             Done(Captain("DS_ILS", "ILS", "Set the ILS frequency and course in the NAV radios window, Input Ctrl+N."), "DS_ILS"),
             Done(Captain("DS_LANDING_DATA", "Landing data", "Check the landing data and approach speeds, and set the minimums."), "DS_LANDING_DATA"),
-        }
-    };
-
-    // ------------------------------------------------------------------ Approach (the 737s')
-    private static Flow BuildApproach() => new()
-    {
-        Id = "APPROACH", Name = "Approach",
-        Description = "The Captain's ND to APP at 20 NM; the altimeters and arming LOC, then APP, are the Captain's.",
-        RelatedChecklistGroupIds = new[] { "APPROACH", "APPROACH_CL" },
-        Steps = new()
-        {
-            // The PMDG 737 and iFly Approach flows' EFIS mode APP, range 20, on the Captain's side.
-            Done(Skip(SW("AP_ND_MODE", "Captain's ND mode: APP", K.NdMode, (int)K.NdModeApp), s => s.IsPosition(K.NdMode, (int)K.NdModeApp)), "AP_ND_MODE"),
-            Done(Skip(SW("AP_ND_RANGE", "Captain's ND range: 20 NM", K.NdRange, (int)K.NdRange20), s => s.IsPosition(K.NdRange, (int)K.NdRange20)), "AP_ND_RANGE"),
-            Done(Captain("AP_ALTIMETERS", "Altimeters", "Altimeters: set to the local QNH."), "AP_ALTIMETERS"),
-            // BlueBird's approach (p. 56): LOC when cleared, then APP.
-            Done(Captain("AP_LOC_APP", "LOC, then APP", "Arm LOC when cleared for the approach, then APP."), "AP_LOC_APP"),
         }
     };
 
@@ -427,7 +409,7 @@ public static class Bbs757FoFlowDefinitions
             // The Captain's flap lever, read (E181: "The normal landing choices are 25 or 30").
             Check("BL_CHK_FLAPS", "Flaps: landing, 25 or 30", "FO_FLAPS_LANDING", On, CaptainFlapsSeconds, "BLC_FLAPS"),
             // Last (FO-13): the lever down and every leg down.
-            Also(Check("BL_CHK_GEAR", "Gear: down, three green", "FO_GEAR_DOWN", On, GearCheckSeconds, "BL_GEAR"), "BLC_GEAR"),
+            Check("BL_CHK_GEAR", "Gear: down, three green", "FO_GEAR_DOWN", On, GearCheckSeconds, "BLC_GEAR"),
         }
     };
 

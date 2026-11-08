@@ -51,8 +51,8 @@ public class Bbs757FoProfileTests
     public void BuildsTheFlowsAndChecklists()
     {
         var p = Profile();
-        Assert.Equal(13, p.BuildFlows().Count);        // plan 29 added Approach
-        Assert.Equal(22, p.BuildChecklists().Count);   // and its action group
+        Assert.Equal(12, p.BuildFlows().Count);        // the arrival is Descent and Before Landing (owner, 2026-11-08)
+        Assert.Equal(20, p.BuildChecklists().Count);   // In Range and Approach one checklist; no Approach group
     }
 
     [Fact]

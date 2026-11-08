@@ -134,7 +134,7 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 1. **APU off:** After Start, tick "APU: OFF" by hand with the APU running: it stays ticked. Final Securing with the APU running: "Waiting 120 seconds: APU cool-down", the wait for the APU to stop, then the battery. Note how long the APU takes to stop after the 2 minutes.
 2. **Cold and dark, Before Start flow:** the hydraulic pumps, then the parking brake sets. With the brake released and the pumps off, tick "Parking brake: SET": the refusal words.
 3. **Departure:** the eleven preflight tests in order; the takeoff cabin chime; LNAV and VNAV pushed at 400 ft when not armed ("400 feet. LNAV and VNAV on.", heard once: no second "LNAV on" from the light's own announcement); with the setting on and about 1,500 lb in the center tank, the center pumps go off when it runs dry.
-4. **Arrival:** the Descent chime and ILS reminder; the Approach flow (ND APP 20, the two reminders); "Set the missed approach altitude" in Before Landing.
+4. **Arrival:** two flows only, Descent then Before Landing: the Descent chime and ILS reminder, then the Descent and Approach Checklist (BlueBird's In Range and Approach lines, "Altimeters" once); "Set the missed approach altitude" in Before Landing; each check (gear, flaps) heard once.
 
 ## Execution record
 
@@ -149,6 +149,22 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 - Task 7, 8804ce066: LNAV and VNAV at 400 ft (`Bbs757FoAutoManager`, `PushMcpAsync`).
 - Task 8, 092907890: the center fuel pumps (`FO_CENTER_FUEL_LBS`, the shared gate, the policy, the settings text).
 - Task 9, 78ec8d635 (the record); the review's fix, 600684bf8; the renumbering, e3d3b6929.
+- After landing, the owner's changes (2026-11-08): the Descent ILS reminder asks only for the frequency and course, no audio ident (0bdedd494). Then the condensing below.
+
+### Condensed after landing (owner, 2026-11-08)
+
+The owner: "so many flows and checklists for the full descent ... We need to condense; some flows and action groups have
+almost nothing you do as a pilot other than verify." Approved as proposed:
+- **The arrival is two flows, as on the MD-11** (the PMDG 737, iFly and 777 have three): Descent and Before Landing. Task
+  6's Approach flow and group are gone, with the LOC reminder (taken from a note about the MCP's LOC button, on no
+  checklist) and the Captain's ND knobs (APP 20 there, MAP 40 in Preflight): a screen the pilot does not use needs no
+  setting. BlueBird's In Range and Approach cards are one "Descent and Approach Checklist" (`DESCENT_CL`), latched by
+  Descent, "Altimeters" once. 12 flows, 20 groups, 8 read-back groups.
+- **A check only read is said once, by its checklist:** `BS_DOORS`, `BT_ENGINES`, `AT_FLAPS`, `AT_GEAR` and `BL_GEAR` left
+  their action groups; the flows' read-only checks deliver `BSC_DOORS`, `BTC_ENGINES`, `ATC_FLAPS`, `ATC_GEAR` and
+  `BLC_GEAR` alone (FO-13 holds: each gear line is still backed by its flow's last, read-only step). After Takeoff's group
+  is the gear lever OFF (the Captain's) and the ground lights; Before Landing's, the speedbrake, the lights and the missed
+  approach reminder.
 
 ### What changed from the plan, and why
 
@@ -201,11 +217,11 @@ Final full suite, after the fix: 21,669 passed, 0 failed.
 - Ticking "APU: OFF" no longer says "Unable to complete" while the APU cools down (fix). Final Securing waits a 2-minute APU cool-down after switching the APU off, as on the 737s.
 - Before Start turns the electric hydraulic pumps on before setting the parking brake. Without hydraulic pressure the First Officer leaves the brake alone and says "Parking brake left released: no hydraulic pressure. Turn on the electric hydraulic pumps first."
 - The First Officer rings the cabin chime before takeoff and for landing preparation (Descent), and reminds you to set the ILS frequency and course.
-- A new Approach flow (the ND to APP at 20 NM, the altimeters, LOC then APP); Preflight puts the ND back to MAP at 40 NM; Before Landing reminds the missed approach altitude, Before Start the MCP speed, heading and altitude.
+- The arrival is two flows, Descent and Before Landing, and BlueBird's In Range and Approach checklists are one Descent and Approach Checklist; checks the checklists read (doors, engines running, flaps up, gear) are no longer repeated in the flows' own lists. Before Landing reminds the missed approach altitude, Before Start the MCP speed, heading and altitude.
 - With "Auto-engage autopilot on climbout" on, the First Officer presses LNAV and VNAV at 400 ft if they are not lit: "400 feet. LNAV and VNAV on."
 - With "Auto-manage center fuel pumps" on (now for the BlueBird 757 too), the center pumps go on in ground setup with center fuel and off when the center tank runs dry: "Center tank low. Center fuel pumps off."
 
-**The guide** (`guide/**`): the 757 First Officer text (the tests, the cabin calls, the ILS reminder, the Approach flow, the parking brake words, the two automations); `guide/first-officer.md` line 136, the center pump setting row, names the BlueBird 757 (the app's checkbox now reads "Auto-manage center fuel pumps (PMDG 737/777, iFly MAX8 and BlueBird 757)"). `docs/b757.md`'s First Officer section the same. The "User guide:" line.
+**The guide** (`guide/**`): the 757 First Officer text (the tests, the cabin calls, the ILS reminder, the two-flow arrival and the Descent and Approach Checklist, the parking brake words, the two automations); `guide/first-officer.md` line 136, the center pump setting row, names the BlueBird 757 (the app's checkbox now reads "Auto-manage center fuel pumps (PMDG 737/777, iFly MAX8 and BlueBird 757)"). `docs/b757.md`'s First Officer section the same. The "User guide:" line.
 
 **`docs/first-officer.md`:** its section "Center fuel pump auto-management (PMDG 737 + 777 + iFly MAX8)" and its text on
 the 400 ft LNAV/VNAV push (today the 737s' only) name the BlueBird 757 too. The full texts of FO-16 (the fixed push

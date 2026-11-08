@@ -30,7 +30,7 @@ public class Bbs757FoChecklistStructureTests
         => Assert.Equal(new[]
         {
             "POWER_UP", "PREFLIGHT", "BEFORE_START", "BEFORE_START_CL", "ENGINE_START", "AFTER_START", "AFTER_START_CL",
-            "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL", "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "DESCENT", "DESCENT_CL", "APPROACH", "APPROACH_CL",
+            "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL", "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "DESCENT", "DESCENT_CL",
             "BEFORE_LANDING", "BEFORE_LANDING_CL", "AFTER_LANDING", "AFTER_LANDING_CL", "SHUTDOWN", "SHUTDOWN_CL", "SECURE",
         }, Groups.Select(g => g.Id));
 
@@ -38,7 +38,7 @@ public class Bbs757FoChecklistStructureTests
     public void NoReadbackGroupHasACheckAction()
     {
         var readBack = Groups.Where(g => g.Id.EndsWith("_CL", StringComparison.Ordinal)).ToList();
-        Assert.Equal(9, readBack.Count);
+        Assert.Equal(8, readBack.Count);   // In Range and Approach merged into one (owner, 2026-11-08)
         foreach (var g in readBack)
             foreach (var i in g.Items)
                 Assert.True(i.CheckAction == null, $"{g.Id}/{i.Id}: *_CL items are action-free (FO-3)");
@@ -637,12 +637,30 @@ public class Bbs757FoChecklistStructureTests
         Assert.False(item.EvaluateState(on.GetValue(item.StateFieldName!)));
     }
 
+    /// <summary>The owner (2026-11-08): an action group holds what someone does; its checks are the checklist's lines alone.</summary>
     [Fact]
-    public void AfterTakeoff_and_BeforeLanding_lines_sit_where_the_flow_puts_them()
+    public void AfterTakeoff_and_BeforeLanding_groups_hold_only_what_someone_does()
     {
-        var at = Group("AFTER_TAKEOFF").Items;
-        Assert.Equal(at.FindIndex(i => i.Id == "AT_GROUND_LIGHTS") + 1, at.FindIndex(i => i.Id == "AT_FLAPS"));
-        var bl = Group("BEFORE_LANDING").Items;
-        Assert.Equal("BL_GEAR", bl[^1].Id);
+        Assert.Equal(new[] { "AT_GEAR_OFF", "AT_GROUND_LIGHTS" }, Group("AFTER_TAKEOFF").Items.Select(i => i.Id));
+        Assert.Equal(new[] { "BL_SPEEDBRAKE", "BL_LIGHTS", "BL_MISSED" }, Group("BEFORE_LANDING").Items.Select(i => i.Id));
+    }
+
+    /// <summary>
+    /// The owner (2026-11-08): BlueBird's In Range and Approach cards as one Descent and Approach Checklist, latched by the
+    /// Descent flow, in the cards' order, "Altimeters" once.
+    /// </summary>
+    [Fact]
+    public void The_descent_checklist_is_the_in_range_and_approach_cards_with_altimeters_once()
+    {
+        var g = Group("DESCENT_CL");
+        Assert.Equal("Descent and Approach Checklist", g.Name);
+        Assert.Equal(new[]
+        {
+            "IRC_REPORT", "IRC_ALTIMETERS", "IRC_LANDING_DATA", "IRC_AUTOBRAKES", "IRC_RECALL", "IRC_LIGHTS", "IRC_CREW_BELTS",
+            "APC_BRIEFING", "APC_MINIMUMS", "APC_NAVAIDS",
+        }, g.Items.Select(i => i.Id));
+        Assert.Single(g.Items, i => i.Label.StartsWith("Altimeters", StringComparison.Ordinal));
+        Assert.All(g.Items, i => Assert.Equal("DESCENT_CL", i.GroupId));
+        Assert.DoesNotContain(Groups, x => x.Id is "APPROACH" or "APPROACH_CL");
     }
 }

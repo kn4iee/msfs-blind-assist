@@ -12,12 +12,15 @@ using CheckFn = System.Func<Bbs757FoActionExecutor, Bbs757FoStateEvaluator, Syst
 /// The BlueBird 757 First Officer checklists. Two layers, as on every profile:
 ///
 ///   • ACTION groups, one per flow, from BlueBird's simplified procedures (manual v1.00, part 3A):
-///     ticking an item sets its switch through the executor, and it auto-detects from the cockpit.
+///     ticking an item sets its switch through the executor, and it auto-detects from the cockpit. An action
+///     group holds what someone DOES: a check only read is its checklist's line alone, never repeated here
+///     (owner, 2026-11-08).
 ///   • READ-BACK (*_CL) groups, BlueBird's one-page Normal Checklist (manual p. 201) in its order and
 ///     words, action-free (FO-3). A line the app can read ticks itself from BlueBird's own variables;
 ///     a line that needs the pilot's judgment or a figure (fuel against the plan, the briefing, the
-///     altimeters) is a Captain reminder. In Range is the descent checklist (DESCENT_CL); BlueBird has
-///     no Preflight or Secure read-back page.
+///     altimeters) is a Captain reminder. BlueBird's In Range and Approach cards are ONE Descent and Approach
+///     Checklist (DESCENT_CL), latched by the Descent flow: the arrival is two flows, as on the MD-11 (owner,
+///     2026-11-08). BlueBird has no Preflight or Secure read-back page.
 ///
 /// Engine-variant differences ride the variant (the aircraft title, then <c>L:B757_ENG_VARIANT</c>
 /// reading 1 for a PW): the fuel control switches (PW RUN/CUTOFF, RR RUN/RICH/CUTOFF, RICH for a cold
@@ -40,7 +43,7 @@ public static class Bbs757FoChecklistDefinitions
         AfterStart(), AfterStartCL(),
         BeforeTakeoff(), BeforeTakeoffCL(),
         AfterTakeoff(), AfterTakeoffCL(),
-        Descent(), InRangeCL(), Approach(), ApproachCL(),
+        Descent(), DescentCL(),
         BeforeLanding(), BeforeLandingCL(),
         AfterLanding(), AfterLandingCL(),
         Shutdown(), ShutdownCL(),
@@ -124,8 +127,6 @@ public static class Bbs757FoChecklistDefinitions
             Auto("PF_BLEEDS", "PREFLIGHT", "Engine and APU bleeds: ON", "FO_ALL_BLEEDS_ON", On,
                 SetAll((K.LeftEngBleed, 1), (K.RightEngBleed, 1), (K.ApuBleed, 1))),
             Auto("PF_FDS", "PREFLIGHT", "Flight directors: ON", "FO_FDS_ON", On, SetAll((K.CaptainFd, 1), (K.FirstOfficerFd, 1))),
-            Auto("PF_ND_MODE", "PREFLIGHT", "Captain's ND mode: MAP", K.NdMode, v => Is(v, K.NdModeMap), Set(K.NdMode, K.NdModeMap)),
-            Auto("PF_ND_RANGE", "PREFLIGHT", "Captain's ND range: 40 NM", K.NdRange, v => Is(v, K.NdRange40), Set(K.NdRange, K.NdRange40)),
             // BlueBird's own A/T flag, not the switch (R40).
             Auto("PF_AT_ARM", "PREFLIGHT", "Autothrottle: ARM", "FO_AT_ARMED", On, Set(X.ArmAutothrottle, 1)),
             Auto("PF_BANK_LIMIT", "PREFLIGHT", "Bank limit: AUTO", K.BankLimit, v => Is(v, 0), Set(K.BankLimit, 0)),
@@ -150,7 +151,7 @@ public static class Bbs757FoChecklistDefinitions
         Id = "BEFORE_START", Name = "Before Start",
         Items = new()
         {
-            Auto("BS_DOORS", "BEFORE_START", "Doors: CLOSED", "FO_DOORS_CLOSED", On, null),
+            // "Doors: CLOSED" is the Before Start Checklist's line alone (BSC_DOORS), never repeated here.
             // The manual's order: R, then C, then L.
             Auto("BS_HYD", "BEFORE_START", "Electric hydraulic pumps: ON, R then C then L", "FO_ELEC_HYD_PUMPS_ON", On,
                 SetAll((K.RightElecHyd, 1), (K.C1ElecHyd, 1), (K.C2ElecHyd, 1), (K.LeftElecHyd, 1))),
@@ -244,7 +245,7 @@ public static class Bbs757FoChecklistDefinitions
         Id = "BEFORE_TAKEOFF", Name = "Before Takeoff",
         Items = new()
         {
-            Auto("BT_ENGINES", "BEFORE_TAKEOFF", "Engines: both running", "FO_ENGINES_RUNNING", On, null),
+            // "Engines running" is the Before Takeoff Checklist's line alone (BTC_ENGINES), never repeated here.
             Auto("BT_SEAT_BELTS", "BEFORE_TAKEOFF", "Seat belt signs: ON", K.SeatBelts, v => Is(v, K.SignOn), Set(K.SeatBelts, K.SignOn)),
             Auto("BT_LANDING", "BEFORE_TAKEOFF", "Landing lights: ON", "FO_LANDING_LIGHTS_ON", On,
                 SetAll((K.LeftLanding, 1), (K.RightLanding, 1))),
@@ -267,8 +268,7 @@ public static class Bbs757FoChecklistDefinitions
             Reminder("AT_GEAR_OFF", "AFTER_TAKEOFF", "Landing gear lever: OFF after retraction"),
             Auto("AT_GROUND_LIGHTS", "AFTER_TAKEOFF", "Runway turnoff and taxi lights: OFF", "FO_GROUND_LIGHTS_OFF", On,
                 SetAll((K.LeftTurnoff, 0), (K.RightTurnoff, 0), (K.TaxiLight, 0))),
-            Auto("AT_FLAPS", "AFTER_TAKEOFF", "Flaps: up", "FO_FLAPS_UP", On, null),
-            Auto("AT_GEAR", "AFTER_TAKEOFF", "Gear: up and off", "FO_GEAR_UP_OFF", On, null),
+            // Flaps up and the gear up and off are the After Takeoff Checklist's lines alone (ATC_FLAPS, ATC_GEAR).
         }
     };
 
@@ -287,19 +287,6 @@ public static class Bbs757FoChecklistDefinitions
         }
     };
 
-    /// <summary>The 737s' Approach group: the Captain's ND to APP at 20 NM, then the Captain's two items.</summary>
-    private static Group Approach() => new()
-    {
-        Id = "APPROACH", Name = "Approach",
-        Items = new()
-        {
-            Auto("AP_ND_MODE", "APPROACH", "Captain's ND mode: APP", K.NdMode, v => Is(v, K.NdModeApp), Set(K.NdMode, K.NdModeApp)),
-            Auto("AP_ND_RANGE", "APPROACH", "Captain's ND range: 20 NM", K.NdRange, v => Is(v, K.NdRange20), Set(K.NdRange, K.NdRange20)),
-            Reminder("AP_ALTIMETERS", "APPROACH", "Altimeters: set to the local QNH"),
-            Reminder("AP_LOC_APP", "APPROACH", "LOC armed when cleared, then APP"),
-        }
-    };
-
     private static Group BeforeLanding() => new()
     {
         Id = "BEFORE_LANDING", Name = "Before Landing",
@@ -310,7 +297,7 @@ public static class Bbs757FoChecklistDefinitions
             Auto("BL_LIGHTS", "BEFORE_LANDING", "Taxi light and runway turnoff lights: ON", "FO_GROUND_LIGHTS_ON", On,
                 SetAll((K.LeftTurnoff, 1), (K.RightTurnoff, 1), (K.TaxiLight, 1))),
             Reminder("BL_MISSED", "BEFORE_LANDING", "Missed approach altitude: set"),
-            Auto("BL_GEAR", "BEFORE_LANDING", "Landing gear: down, three green", "FO_GEAR_DOWN", On, null),
+            // The gear down, three green, is the Before Landing Checklist's line alone (BLC_GEAR).
         }
     };
 
@@ -477,14 +464,19 @@ public static class Bbs757FoChecklistDefinitions
         };
     }
 
-    private static Group InRangeCL()
+    /// <summary>
+    /// BlueBird's In Range and Approach cards as ONE checklist (owner, 2026-11-08: the arrival condensed to two flows, as
+    /// on the MD-11), in the cards' order; the Approach card's "Altimeters: SET" is the In Range card's, said once.
+    /// </summary>
+    private static Group DescentCL()
     {
         const string G = "DESCENT_CL";
         return new Group
         {
-            Id = G, Name = "In Range Checklist",
+            Id = G, Name = "Descent and Approach Checklist",
             Items = new()
             {
+                // In Range.
                 Reminder("IRC_REPORT", G, "In Range report: SENT"),
                 Reminder("IRC_ALTIMETERS", G, "Altimeters: SET"),
                 Reminder("IRC_LANDING_DATA", G, "Landing data: CHECKED"),
@@ -492,20 +484,8 @@ public static class Bbs757FoChecklistDefinitions
                 Reminder("IRC_RECALL", G, "Recall: CHECKED"),
                 Read("IRC_LIGHTS", G, "Lights: ON", "FO_LANDING_LIGHTS_ON", On),
                 Reminder("IRC_CREW_BELTS", G, "Crew seat belts and harnesses: FASTENED"),
-            }
-        };
-    }
-
-    private static Group ApproachCL()
-    {
-        const string G = "APPROACH_CL";
-        return new Group
-        {
-            Id = G, Name = "Approach Checklist",
-            Items = new()
-            {
+                // Approach.
                 Reminder("APC_BRIEFING", G, "Briefing: COMPLETE"),
-                Reminder("APC_ALTIMETERS", G, "Altimeters: SET"),
                 Reminder("APC_MINIMUMS", G, "Minimums: SET, radio or baro"),
                 Reminder("APC_NAVAIDS", G, "Navaids: CHECKED"),
             }
