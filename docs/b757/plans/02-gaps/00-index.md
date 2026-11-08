@@ -211,3 +211,45 @@ each); plan 16 is docs and owner steps, worked with superpowers:executing-plans.
   `origin/main` at f5ead55c2).
 - Later plans (09-15) start from `B757` once their "After" plans have landed; record the commit you started from in
   your plan's execution record ("Started").
+
+## Display readers (plans 23-28, added 2026-11-08)
+
+The 757's displays read from `BBS752.wasm` memory, as the PMDG 737's are (`docs/wasm-memory.md`). The owner's decisions
+for the series (S1-S17) are in plan 23's "The series"; each plan restates the ones it relies on. Plans 17-22 (the EFB)
+have no rows above; their files are named in their own Global Constraints.
+
+| # | Plan | After |
+|---|---|---|
+| 23 | `23-displays-fma.md`: the shared monitor, the session in the definition, the seams, the shared window; the FMA spoken and listed in Ctrl+P | 22 |
+| 24 | `24-displays-upper-eicas.md`: EICAS messages spoken; Alt+E window | 23 |
+| 25 | `25-displays-lower-eicas.md`: the lower EICAS's pages; status messages on STATUS; Alt+S window | 23 |
+| 26 | `26-displays-ehsi-map.md`: the EHSI in MAP and PLAN; Alt+N window; Ctrl+W | 23 |
+| 27 | `27-displays-adi.md` (optional): the rest of the ADI; Alt+P window, the AI read its fallback | 23 |
+| 28 | `28-displays-ehsi-modes-tcas.md`: the EHSI's VOR and ILS modes, TCAS, the map options | 26 |
+
+24, 25, 26 and 27 run in parallel once 23 has landed; 28 takes over 26's files once 26 has landed.
+
+| File or pattern | Owner |
+|---|---|
+| `Services/BBS757/IBbs757DisplayReader.cs`, `Bbs757DisplayMonitor.cs`, `Bbs757DisplaySpeech.cs`, `Bbs757DisplayFilesNotice.cs`, `Bbs757DisplayEnvironment.cs`, `Bbs757DisplayRegistry.cs`, `Bbs757Fma*.cs`, `Aircraft/BBS757Definition.Displays.cs`, `Forms/BBS757/BBS757DisplayForm.cs`, `Forms/BBS757/BBS757AutopilotWindow.cs`, `Aircraft/BBS757Definition.Autopilot.cs`, `MSFSBlindAssist.DisplayLayouts/Bbs757/Bbs757FmaLayout.cs`, `MainForm.BBS757.cs`, the display lines in `MainForm.cs` and `MainForm.AircraftSwitch.cs`, the registry calls in `BBS757Definition.cs` and `BBS757Definition.Interaction.cs` | 23, then frozen (a later plan's need goes in its handoff) |
+| `Services/BBS757/Bbs757UpperEicas*.cs`, `DisplayLayouts/Bbs757/Bbs757UpperEicasLayout.cs`, `Aircraft/BBS757Definition.UpperEicas.cs` | 24 |
+| `Services/BBS757/Bbs757LowerEicas*.cs`, `DisplayLayouts/Bbs757/Bbs757LowerEicasLayout.cs`, `Aircraft/BBS757Definition.LowerEicas.cs` | 25 |
+| `Services/BBS757/Bbs757Ehsi*.cs`, `DisplayLayouts/Bbs757/Bbs757EhsiLayout.cs`, `Aircraft/BBS757Definition.Ehsi.cs` | 26 → 28 |
+| `Services/BBS757/Bbs757Adi*.cs`, `DisplayLayouts/Bbs757/Bbs757AdiLayout.cs`, `Aircraft/BBS757Definition.Adi.cs` | 27 |
+| `docs/b757/evidence/displays-<display>.md` | its plan |
+| Private repo: `toolkit/MSFSBlindAssist.WasmToolkit/Bbs757/Bbs757<Display>Recipe.cs`, its fixture and tests | its plan |
+
+Tests follow their code (`Bbs757<Display>*Tests.cs`). **Shared lines** (one each per plan, never a whole file):
+`Bbs757Module.Description`'s reader list and `Bbs757LayoutDescriptions.cs` (a method per reader) in the app repo;
+`Bbs757Recipes.All` and `GeneratorVersion.Current` in the private repo; the rule files' new lines.
+
+**Landing a display plan:**
+
+1. Add your reader at the end of `Bbs757Module.Description`'s readers and your recipe at the end of `Bbs757Recipes.All`.
+2. At landing, rebase onto `B757` (a conflict on the shared lines keeps both lines, yours last) and the private branch
+   onto its head, take the next `GeneratorVersion.Current` (one higher than the head's), regenerate the 757 layout with
+   every reader then on `B757`, and run the layout tests and both suites.
+3. The layout store refuses a file lacking any reader ([WASM-26]): once a new reader is on `B757`, every 757 reader,
+   the EFB's included, is unavailable until the regenerated layout is installed. Deploy each build with its layout,
+   and publish the layout (`toolkit/scripts/publish-layouts.ps1 -Source` that file only) together with the push, both
+   at the owner's word.
