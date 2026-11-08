@@ -34,6 +34,9 @@ public sealed class BBS757AutopilotWindow : Form
 
     private readonly IReadOnlyList<Bbs757AutopilotButton> _items;
     private readonly Action? _requestStates;
+    private readonly Func<IReadOnlyList<string>> _fmaRows;
+    private DisplayListBox _fmaList = null!;
+    private IReadOnlyList<string> _fmaShown = Array.Empty<string>();
     private readonly List<(Button Button, Bbs757AutopilotButton Item)> _buttons = new();
     private readonly System.Windows.Forms.Timer _refresh;
     private IntPtr _previousWindow;
@@ -41,10 +44,12 @@ public sealed class BBS757AutopilotWindow : Form
 
     /// <param name="items">The buttons, in order.</param>
     /// <param name="requestStates">Asks the sim for the states the cache does not stream; called about once a second while shown.</param>
-    public BBS757AutopilotWindow(IReadOnlyList<Bbs757AutopilotButton> items, Action? requestStates)
+    /// <param name="fmaRows">The flight mode annunciator's rows (the reader's four, or one status row), asked on every refresh.</param>
+    public BBS757AutopilotWindow(IReadOnlyList<Bbs757AutopilotButton> items, Action? requestStates, Func<IReadOnlyList<string>> fmaRows)
     {
         _items = items;
         _requestStates = requestStates;
+        _fmaRows = fmaRows;
         BuildForm();
         _refresh = new System.Windows.Forms.Timer { Interval = RefreshMs };
         _refresh.Tick += (_, _) => Tick();
@@ -61,7 +66,18 @@ public sealed class BBS757AutopilotWindow : Form
         ShowInTaskbar = true;
 
         const int left = 15, col2 = 215, width = 190, height = 34, row = 42;
-        int y = 15, tab = 0;
+        // The flight mode annunciator first (S6): a list the reader's cursor can walk, before the buttons.
+        int tab = 0;
+        _fmaList = new DisplayListBox
+        {
+            Location = new Point(left, 15),
+            Size = new Size(col2 + width - left, 90),
+            AccessibleName = "Flight mode annunciator",
+            Name = "Flight mode annunciator",
+            TabIndex = tab++,
+        };
+        Controls.Add(_fmaList);
+        int y = 15 + 90 + 12;
         for (int i = 0; i < _items.Count; i++)
         {
             var item = _items[i];
@@ -103,6 +119,18 @@ public sealed class BBS757AutopilotWindow : Form
             HideWindow();
         };
         RefreshCaptions(force: true);
+        RefreshFma();
+    }
+
+    /// <summary>The list's next rows from the monitor, set only when they differ (a stable row is never re-read); a failure keeps the rows shown.</summary>
+    internal void RefreshFma()
+    {
+        IReadOnlyList<string> rows;
+        try { rows = _fmaRows(); }
+        catch (Exception) { return; }
+        if (_fmaShown.SequenceEqual(rows)) return;
+        _fmaShown = rows.ToArray();
+        _fmaList.SetLines(_fmaShown);
     }
 
     /// <summary>Alt and a button's letter presses it, as a click would.</summary>
@@ -129,12 +157,13 @@ public sealed class BBS757AutopilotWindow : Form
         _previousWindow = GetForegroundWindow();
         _requestStates?.Invoke();
         RefreshCaptions(force: true);
+        RefreshFma();
         Show();
         BringToFront();
         Activate();
         TopMost = true;
         TopMost = false;
-        if (_buttons.Count > 0) _buttons[0].Button.Focus();
+        _fmaList.Focus();
         _refresh.Start();
     }
 
@@ -150,6 +179,7 @@ public sealed class BBS757AutopilotWindow : Form
         if (IsDisposed || !Visible) return;
         if (++_tick % 2 == 0) _requestStates?.Invoke();
         RefreshCaptions(force: false);
+        RefreshFma();
     }
 
     /// <summary>

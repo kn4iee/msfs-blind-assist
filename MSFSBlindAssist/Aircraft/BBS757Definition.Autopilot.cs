@@ -40,7 +40,7 @@ public partial class BBS757Definition
         _autopilotAnnouncer = announcer;
         if (_autopilotWindow == null || _autopilotWindow.IsDisposed)
             _autopilotWindow = new BBS757AutopilotWindow(
-                AutopilotButtons(key => _autopilotSim?.GetCachedVariableValue(key)), RequestAutopilotSwitches);
+                AutopilotButtons(key => _autopilotSim?.GetCachedVariableValue(key)), RequestAutopilotSwitches, Fma.View);
         _autopilotWindow.ShowForm();
     }
 
