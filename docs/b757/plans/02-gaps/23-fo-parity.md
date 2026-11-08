@@ -211,6 +211,13 @@ the 400 ft LNAV/VNAV push (today the 737s' only) name the BlueBird 757 too. The 
 height) and FOB-21 (the latch burn) name the 757's `Bbs757FoAutoManager` beside the 737s. The doc comment of
 `LnavVnavPushHeight` ("for both 737s") names the 757, which reuses it from the `PMDG737` namespace.
 
+**Noticed in passing (2026-11-08), for the release:** the private layouts store's `layouts` branch still holds the 757's
+generator-version-2 file (`bbs757/39462c4a…-49c0a29a1e5b8cf1.json`) beside the v3 one plan 22 published
+(`…-69911a5bb8c57b24.json`). Under plan 22's format the v2 file no longer loads ("missing required properties including
+'keyboardShown'"), and `LayoutBundler` is all-or-nothing, so once this branch is on `main` the release and preview
+workflows fail at the bundle step (UPD-10) until the v2 file is removed from the store. This plan's Debug build was
+bundled from a copy of the store without it.
+
 **Proposed rule lines** (`docs/invariants/b757.md` and the rule files). The center pump line must load on the 757's
 First Officer files: `first-officer-boeing.md`'s globs do not reach `FirstOfficer/BBS757/**`, so it is homed in
 `b757.md` (or mirrored there word for word), or `ClaudeContextBudgetTests` fails on it.
