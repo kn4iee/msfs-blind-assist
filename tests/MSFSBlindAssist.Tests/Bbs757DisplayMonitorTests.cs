@@ -4,6 +4,7 @@
 
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.BBS757;
+using MSFSBlindAssist.Services.PMDG;
 using MSFSBlindAssist.Services.WasmMemory;
 using Xunit;
 
@@ -15,7 +16,31 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     private const string StartingRow = "X reader starting";
     private const string WaitingRow = "X reader waiting for the simulator";
 
+    private const string StoppedMismatch = "X announcements stopped: values do not match the simulator";
+    private const string StoppedNotFound = "X announcements stopped: aircraft memory not found";
+    private const string StoppedUnexpected = "X announcements stopped: unexpected values";
+    private const string UnavailableNotFound = "X announcements unavailable: aircraft memory not found";
+    private const string Resumed = "X announcements resumed";
+
     private static FakeReading R(string value) => new(value);
+
+    private static FakeReading Corrupt(string value) => new(value, Corrupt: true);
+
+    private static Task<ModuleAnalysis> OneBuild() =>
+        Task.FromResult(new ModuleAnalysis(new[] { FakeEnvironment.Build() }, null));
+
+    /// <summary>The session's analysis when no layout file loaded: no builds, and its (PMDG-worded) reason.</summary>
+    private static Func<Task<ModuleAnalysis>> NoBuilds(string sessionFailure) =>
+        () => Task.FromResult(new ModuleAnalysis(Array.Empty<ModuleBuild>(), sessionFailure));
+
+    private static Task<ModuleLocation> Found() =>
+        Task.FromResult(new ModuleLocation(new[] { FakeEnvironment.Located() }, null));
+
+    private static Task<ModuleLocation> NotFound() =>
+        Task.FromResult(new ModuleLocation(Array.Empty<LocatedModule>(), null));
+
+    private static Task<ModuleLocation> NoAccess() =>
+        Task.FromResult(new ModuleLocation(Array.Empty<LocatedModule>(), FmaReasons.NoAccess));
 
     // Every sampler any test's reader made: each must be disposed at most once (the real ones each hold a lease on
     // the one shared simulator handle).
@@ -284,6 +309,665 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         Assert.DoesNotContain("Running", seen);
     }
 
+    // ---- stops, recovery and status lines ----
+
+    [Fact]
+    public void No_passing_reading_for_2_s_stops_with_the_mismatch_line()
+    {
+        var h = New().Start();
+        var s = h.RunUntilRunning();
+        h.Tick(5); // the last passing reading
+        h.Reader.SimAgrees = false; // the display still reads A, but the simulator disagrees
+        h.Tick(19);
+        Assert.Empty(h.Env.Spoken); // inside the 2 s tolerance
+        Assert.Equal("Running", h.State);
+
+        h.Tick();
+        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
+        Assert.Equal("Mismatched", h.State);
+        h.Tick(100);
+        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken); // once
+
+        // The window repeats the line the pilot heard, with the last good reading only as "last known".
+        string heard = StoppedMismatch + ". Last known: X: A";
+        Assert.Equal(new[] { heard }, h.Monitor.View());
+        Assert.Null(h.Monitor.RowsWhileRunning());
+        Assert.Equal(default(FakeReading), h.Monitor.Latest);
+
+        // Still the line heard while it searches again or waits for the simulator: never "starting" after "stopped".
+        s.Fail = true;
+        h.Tick();
+        Assert.Equal("Locating", h.State);
+        Assert.Equal(new[] { heard }, h.Monitor.View());
+        h.Env.Simulator = null;
+        h.Tick();
+        Assert.Equal("WaitingForSimulator", h.State);
+        Assert.Equal(new[] { heard }, h.Monitor.View());
+        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
+    }
+
+    [Fact]
+    public void Ten_corrupt_readings_stop_with_unexpected_values()
+    {
+        var h = New().Start();
+        var s = h.RunUntilRunning();
+        h.Tick(5);
+
+        // Nine corrupt, one good: the count starts again.
+        s.Reading = Corrupt("Z");
+        h.Tick(9);
+        s.Reading = R("A");
+        h.Tick();
+        s.Reading = Corrupt("Z");
+        h.Tick(9);
+        Assert.Empty(h.Env.Spoken); // a corrupt reading is never spoken...
+        Assert.Equal("Running", h.State);
+        Assert.Equal(new[] { "X: A" }, h.Monitor.View()); // ...nor shown
+
+        h.Tick(); // the tenth in a row
+        Assert.Equal(new[] { StoppedUnexpected }, h.Env.Spoken);
+        Assert.Equal("Unavailable", h.State);
+        Assert.True(s.Disposed);
+        Assert.Contains(h.Env.Logged, l => l.Line.Contains("unexpected values for 10 readings"));
+        h.Tick(50);
+        Assert.Single(h.Env.Spoken);
+        Assert.Equal(new[] { "X announcements unavailable: unexpected values" }, h.Monitor.View());
+    }
+
+    [Fact]
+    public void A_lost_reading_searches_silently_and_says_memory_not_found_after_10_s()
+    {
+        var h = New().Start();
+        var s = h.RunUntilRunning();
+        h.Tick(60); // past the 5 s between attempts
+        h.Env.Locate = NotFound;
+        s.Fail = true;
+        h.Tick(); // lost: a new search, silently
+        Assert.Equal("Locating", h.State);
+        Assert.True(s.Disposed);
+        Assert.Equal(2, h.Env.LocateCalls);
+
+        h.Tick(99); // 9.9 s after the loss
+        Assert.Empty(h.Env.Spoken);
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View()); // a short search: nothing said yet
+
+        h.Tick(); // 10 s
+        Assert.Equal(new[] { StoppedNotFound }, h.Env.Spoken);
+        Assert.Equal(new[] { StoppedNotFound }, h.Monitor.View());
+
+        h.Tick(1300); // the window runs out for the same reason: nothing more, and it keeps searching
+        Assert.Equal(new[] { StoppedNotFound }, h.Env.Spoken);
+        Assert.Equal("Locating", h.State);
+        Assert.Equal(new[] { StoppedNotFound }, h.Monitor.View());
+    }
+
+    [Fact]
+    public void The_search_window_running_out_says_unavailable_once_then_retries_every_30_s()
+    {
+        var h = New();
+        h.Env.Locate = NotFound;
+        h.Start();
+        h.Tick(1200); // to 119.9 s
+        Assert.Equal(24, h.Env.LocateCalls); // 0 to 115 s after the first attempt
+        var times = h.Env.LocateTimes.ToArray();
+        Assert.All(times.Zip(times.Skip(1)), p => Assert.Equal(5000, p.Second - p.First));
+        Assert.Empty(h.Env.Spoken);
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View());
+
+        h.Tick(10);
+        Assert.Equal(new[] { UnavailableNotFound }, h.Env.Spoken);
+        Assert.Equal(new[] { UnavailableNotFound }, h.Monitor.View());
+
+        // Not final: a long load can outlast the window, so the search goes on, slowly and silently.
+        h.Tick(3000); // to about 7 minutes
+        times = h.Env.LocateTimes.ToArray();
+        Assert.True(times.Length > 30, $"{times.Length} attempts");
+        Assert.All(times.Skip(23).Zip(times.Skip(24)), p => Assert.Equal(30_000, p.Second - p.First));
+        Assert.Equal(new[] { UnavailableNotFound }, h.Env.Spoken);
+        Assert.Equal("Locating", h.State);
+
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("B"));
+        h.Env.Locate = Found;
+        h.RunUntilRunning(310); // the next attempt is at most 30 s away
+        h.Tick(20);
+        Assert.Equal(new[] { UnavailableNotFound, Resumed }, h.Env.Spoken); // it never ran: no change to tell
+        Assert.Equal(new[] { "X: B" }, h.Monitor.View());
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Resumed_carries_what_changed_meanwhile(string culture)
+    {
+        var spoken = TestCulture.Run(culture, () =>
+        {
+            var h = New();
+            h.Reader.ChangesOf = (heard, now, withPrefix) => new[]
+            {
+                new Bbs757SpokenLine("MUTE_X", (withPrefix ? "X: " : "") + heard + " to " + now),
+                new Bbs757SpokenLine("MUTE_X", (withPrefix ? "X: " : "") + now + " armed"),
+            };
+            h.Start();
+            var s = h.RunUntilRunning(); // A
+            h.Reader.SimAgrees = false;
+            h.Tick(30); // stopped at A
+            s.Reading = R("B");
+            h.Tick(30); // B while stopped: not a good reading, so not spoken yet...
+            Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
+
+            h.Reader.SimAgrees = true; // ...but never swallowed: the first good reading tells it, after "resumed"
+            h.Tick();
+            Assert.Equal("Running", h.State);
+            h.Tick(30);
+            string expected = Resumed + ", " +
+                string.Join(", ", h.Reader.Changes(R("A"), R("B"), withPrefix: false).Select(l => l.Text));
+            Assert.Equal("X announcements resumed, A to B, B armed", expected);
+            Assert.Equal(new[] { StoppedMismatch, expected }, h.Env.Spoken);
+
+            // The memory lost for longer than 10 s, found again at C.
+            h.Tick(60);
+            h.Env.Locate = NotFound;
+            s.Fail = true;
+            h.Tick(110);
+            h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("C"));
+            h.Env.Locate = Found;
+            h.RunUntilRunning(100);
+            h.Tick(20);
+            return h.Env.Spoken;
+        });
+        Assert.Equal(new[]
+        {
+            StoppedMismatch, "X announcements resumed, A to B, B armed",
+            StoppedNotFound, "X announcements resumed, B to C, C armed",
+        }, spoken);
+    }
+
+    // A stop line the pilot heard survives a flight reload (Restart): the new flight's first reading is still a silent
+    // baseline, so no change list, but it says "resumed" so the "stopped" is never left unanswered (Review Focus).
+
+    [Theory]
+    [InlineData("lost")]
+    [InlineData("mismatch")]
+    [InlineData("corrupt")]
+    [InlineData("never found")]
+    public void A_stop_heard_before_a_reload_is_answered_by_resumed_alone(string how)
+    {
+        var h = New().Start();
+        string heard;
+        switch (how)
+        {
+            case "lost": // the memory lost in flight: "stopped" at 10 s
+            {
+                var first = h.RunUntilRunning();
+                h.Tick(60);
+                h.Env.Locate = NotFound;
+                first.Fail = true;
+                h.Tick(110);
+                heard = StoppedNotFound;
+                break;
+            }
+            case "mismatch":
+                h.RunUntilRunning();
+                h.Reader.SimAgrees = false;
+                h.Tick(30);
+                h.Reader.SimAgrees = true;
+                heard = StoppedMismatch;
+                break;
+            case "corrupt": // ten corrupt readings: the one stop that waits for a new flight
+            {
+                var s = h.RunUntilRunning();
+                s.Reading = Corrupt("Z");
+                h.Tick(10);
+                heard = StoppedUnexpected;
+                break;
+            }
+            default: // the search window ran out before the reader ever ran
+                h.Env.Locate = NotFound;
+                h.Tick(1300);
+                heard = UnavailableNotFound;
+                break;
+        }
+        Assert.Equal(new[] { heard }, h.Env.Spoken);
+
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("B")); // the new flight's display differs
+        h.Env.Locate = Found;
+        h.Monitor.Restart(); // a flight reload
+        Assert.Equal(new[] { WaitingRow }, h.Monitor.View()); // a new search, as at a start
+        h.RunUntilRunning(10);
+        h.Tick(30);
+        // Exactly one "resumed", with no change list: the new flight's reading is a baseline, not a change.
+        Assert.Equal(new[] { heard, Resumed }, h.Env.Spoken);
+        Assert.Equal(new[] { "X: B" }, h.Monitor.View());
+
+        h.Monitor.Restart(); // answered: the next reload is silent again
+        h.RunUntilRunning(10);
+        h.Tick(30);
+        Assert.Equal(new[] { heard, Resumed }, h.Env.Spoken);
+    }
+
+    [Theory]
+    [InlineData("Start")]
+    [InlineData("Stop")]
+    public void A_stop_heard_is_forgotten_by_a_new_start_or_a_stop(string how)
+    {
+        // Selecting the 757 again (a new environment) or leaving it starts afresh: no "resumed".
+        var h = New().Start();
+        h.RunUntilRunning();
+        h.Reader.SimAgrees = false;
+        h.Tick(30);
+        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
+        h.Reader.SimAgrees = true;
+
+        var first = h.Env;
+        var next = how == "Stop" ? first : new FakeEnvironment();
+        if (how == "Stop") h.Monitor.Stop();
+        h.Monitor.Start(next, startTimer: false);
+        for (int i = 0; i < 20 && h.State != "Running"; i++) { h.Monitor.Tick(); next.NowMs += 100; }
+        Assert.Equal("Running", h.State);
+        for (int i = 0; i < 30; i++) { h.Monitor.Tick(); next.NowMs += 100; }
+        Assert.Equal(new[] { StoppedMismatch }, first.Spoken);
+        if (how == "Start") Assert.Empty(next.Spoken);
+    }
+
+    [Fact]
+    public void Another_aircraft_loaded_waits_silently()
+    {
+        var h = New().Start();
+        var gate = h.Env.Simulator;
+        var s = h.RunUntilRunning();
+        h.Tick(60);
+        h.Env.Locate = NotFound;
+        s.Fail = true;
+        h.Tick(); // the memory lost: a silent search
+        Assert.Equal(2, h.Env.LocateCalls);
+
+        h.Env.Simulator = null; // another aircraft (or the menus)...
+        h.Monitor.Restart();    // ...after a flight reload
+        h.Tick(6000); // 10 minutes
+        Assert.Empty(h.Env.Spoken); // never "unavailable: aircraft memory not found"
+        Assert.Equal("WaitingForSimulator", h.State);
+        Assert.Equal(new[] { WaitingRow }, h.Monitor.View());
+        Assert.Equal(2, h.Env.LocateCalls); // no search while it waits
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+
+        // Without a reload too: the memory lost, then the simulator's values gone, is silent, and so is the new search
+        // once they return (the loss was answered by the wait, which starts a new window).
+        h.Env.Simulator = gate;
+        h.Env.Locate = Found;
+        var again = h.RunUntilRunning(10);
+        h.Tick(60);
+        h.Env.Locate = NotFound;
+        again.Fail = true;
+        h.Tick();
+        h.Env.Simulator = null;
+        h.Tick(6000);
+        h.Env.Simulator = gate;
+        h.Tick(600); // a minute of searching
+        Assert.Empty(h.Env.Spoken);
+        Assert.Equal("Locating", h.State);
+    }
+
+    [Theory]
+    [InlineData("files not found")]
+    [InlineData("file not recognised")]
+    [InlineData("no access")]
+    [InlineData("internal error")]
+    public void Final_reasons_hold_until_restart(string how)
+    {
+        var h = New();
+        string reason;
+        string said;
+        switch (how)
+        {
+            case "files not found": // no layout file at all: the 757 readers' one line is spoken (S14), the reason shown
+                h.Env.Analyse = NoBuilds(FmaReasons.FilesNotFound);
+                reason = Bbs757DisplayReasons.FilesNotFound;
+                said = Bbs757DisplayFilesNotice.Line;
+                break;
+            case "file not recognised": // a layout file loaded, but without this reader's layout: its own line
+                h.Reader.Layouts = Array.Empty<FakeLayout>();
+                reason = Bbs757DisplayReasons.FileNotRecognised;
+                said = "X announcements unavailable: BlueBird file not recognised";
+                break;
+            case "no access":
+                h.Env.Locate = NoAccess;
+                reason = Bbs757DisplayReasons.NoAccess;
+                said = "X announcements unavailable: no access to the simulator";
+                break;
+            default:
+                h.Env.Locate = () => Task.FromException<ModuleLocation>(new IOException("locate blew up"));
+                reason = Bbs757DisplayReasons.InternalError;
+                said = "X announcements unavailable: internal error, see the log";
+                break;
+        }
+        h.Start();
+        h.TickUntil(() => h.State == "Unavailable", 100);
+        Assert.Equal(new[] { said }, h.Env.Spoken);
+        int analyses = h.Env.AnalyseCalls;
+        int locates = h.Env.LocateCalls;
+
+        h.Tick(3000); // 5 minutes: no retry
+        Assert.Equal("Unavailable", h.State);
+        Assert.Equal(analyses, h.Env.AnalyseCalls);
+        Assert.Equal(locates, h.Env.LocateCalls);
+        Assert.Equal(new[] { said }, h.Env.Spoken);
+        Assert.Equal(new[] { "X announcements unavailable: " + reason }, h.Monitor.View());
+        Assert.True(h.Monitor.KeyFallsBackToAi());
+
+        // A flight reload tries again; an "unavailable" line is not a stop, so the reader runs without "resumed".
+        h.Env.Analyse = OneBuild;
+        h.Reader.Layouts = new[] { new FakeLayout("one") };
+        h.Env.Locate = Found;
+        h.Monitor.Restart();
+        h.RunUntilRunning(20);
+        h.Tick(20);
+        Assert.Equal(new[] { said }, h.Env.Spoken);
+        Assert.Equal(new[] { "X: A" }, h.Monitor.View());
+
+        // Only the no-layout-file case uses the session's one files line.
+        var later = new List<string>();
+        h.Env.FilesNotice.Say(muted: false, later.Add);
+        Assert.Equal(how == "files not found" ? Array.Empty<string>() : new[] { Bbs757DisplayFilesNotice.Line }, later);
+    }
+
+    [Fact]
+    public void No_layout_file_says_the_one_files_line_once_per_notice()
+    {
+        Assert.Equal("BlueBird display files could not be loaded; the display keys fall back to AI reading.",
+            Bbs757DisplayFilesNotice.Line); // the owner's text (S14)
+
+        // Two readers on one module session's notice: the first says the line, the second nothing, and neither its own.
+        var session = new Bbs757DisplayFilesNotice();
+        var a = New();
+        var b = New();
+        foreach (var h in new[] { a, b })
+        {
+            h.Env.FilesNotice = session;
+            h.Env.Analyse = NoBuilds(FmaReasons.FileNotRecognised);
+            h.Start();
+        }
+        for (int i = 0; i < 10; i++) { a.Tick(); b.Tick(); }
+        Assert.Equal(new[] { Bbs757DisplayFilesNotice.Line }, a.Env.Spoken);
+        Assert.Empty(b.Env.Spoken);
+        foreach (var h in new[] { a, b })
+        {
+            Assert.Equal("Unavailable", h.State);
+            Assert.Equal(0, h.Env.LocateCalls);
+            // Each still logs and shows its own reason (window text is not speech).
+            Assert.Equal(new[] { "X announcements unavailable: BlueBird file not recognised" }, h.Monitor.View());
+            Assert.Contains(h.Env.Logged, l => l.Line == "Analyzing -> Unavailable: BlueBird file not recognised");
+        }
+
+        // A flight reload in the same session analyses again, and says nothing more.
+        a.Monitor.Restart();
+        b.Monitor.Restart();
+        for (int i = 0; i < 10; i++) { a.Tick(); b.Tick(); }
+        Assert.Equal(2, a.Env.AnalyseCalls);
+        Assert.Equal(new[] { Bbs757DisplayFilesNotice.Line }, a.Env.Spoken);
+        Assert.Empty(b.Env.Spoken);
+
+        // In a new session, a muted reader leaves the line to the next.
+        var next = new Bbs757DisplayFilesNotice();
+        var c = New();
+        var d = New();
+        c.Env.Muted.Add("MUTE_X");
+        foreach (var h in new[] { c, d })
+        {
+            h.Env.FilesNotice = next;
+            h.Env.Analyse = NoBuilds(FmaReasons.FilesNotFound);
+            h.Start();
+        }
+        for (int i = 0; i < 10; i++) { c.Tick(); d.Tick(); }
+        Assert.Empty(c.Env.Spoken);
+        Assert.Equal(new[] { Bbs757DisplayFilesNotice.Line }, d.Env.Spoken);
+    }
+
+    [Fact]
+    public void A_muted_row_says_nothing()
+    {
+        // The same flight twice, once with the reader's row muted: nothing spoken, the window the same at every step.
+        var (spoken, views) = Flight(New());
+        Assert.Equal(new[]
+        {
+            "X: B", StoppedMismatch, Resumed + ", C", StoppedNotFound,
+            "X announcements unavailable: no access to the simulator",
+        }, spoken);
+
+        var muted = New();
+        muted.Env.Muted.Add("MUTE_X");
+        var (mutedSpoken, mutedViews) = Flight(muted);
+        Assert.Empty(mutedSpoken);
+        Assert.Equal(views, mutedViews);
+
+        static (string[] Spoken, List<string[]> Views) Flight(Harness h)
+        {
+            var views = new List<string[]>();
+            void Look() => views.Add(h.Monitor.View().ToArray());
+            h.Start();
+            var s = h.RunUntilRunning();
+            Look();
+            s.Reading = R("B"); // a change
+            h.Tick(5);
+            Look();
+            h.Reader.SimAgrees = false; // stopped
+            h.Tick(30);
+            Look();
+            s.Reading = R("C"); // resumed, with what changed
+            h.Reader.SimAgrees = true;
+            h.Tick(5);
+            Look();
+            h.Tick(60);
+            h.Env.Locate = NotFound; // lost for 10 s
+            s.Fail = true;
+            h.Tick(110);
+            Look();
+            h.Env.Locate = NoAccess; // unavailable
+            h.Tick(60);
+            Look();
+            Assert.Equal("Unavailable", h.State);
+            return (h.Env.Spoken, views);
+        }
+    }
+
+    [Fact]
+    public void Each_change_line_is_muted_by_its_own_row()
+    {
+        var h = New();
+        h.Reader.ChangesOf = (_, now, withPrefix) => new[]
+        {
+            new Bbs757SpokenLine("ROW_A", (withPrefix ? "A: " : "a ") + now),
+            new Bbs757SpokenLine("ROW_B", (withPrefix ? "B: " : "b ") + now),
+        };
+        h.Env.Muted.Add("ROW_A");
+        h.Start();
+        var s = h.RunUntilRunning();
+        s.Reading = R("C");
+        h.Tick(5);
+        Assert.Equal(new[] { "B: C" }, h.Env.Spoken);
+
+        // "resumed" joins only the unmuted rows' parts.
+        h.Reader.SimAgrees = false;
+        h.Tick(30);
+        s.Reading = R("D");
+        h.Reader.SimAgrees = true;
+        h.Tick(5);
+        Assert.Equal(new[] { "B: C", StoppedMismatch, Resumed + ", b D" }, h.Env.Spoken);
+
+        // Both rows muted: "resumed" alone.
+        h.Env.Muted.Add("ROW_B");
+        h.Reader.SimAgrees = false;
+        h.Tick(30);
+        s.Reading = R("E");
+        h.Reader.SimAgrees = true;
+        h.Tick(5);
+        Assert.Equal(new[] { "B: C", StoppedMismatch, Resumed + ", b D", StoppedMismatch, Resumed }, h.Env.Spoken);
+
+        // The status row muted: no stop or "resumed", but an unmuted row still tells what changed meanwhile, as a change.
+        h.Env.Muted.Remove("ROW_B");
+        h.Env.Muted.Add("MUTE_X");
+        h.Reader.SimAgrees = false;
+        h.Tick(30);
+        s.Reading = R("F");
+        h.Reader.SimAgrees = true;
+        h.Tick(5);
+        Assert.Equal(new[] { "B: C", StoppedMismatch, Resumed + ", b D", StoppedMismatch, Resumed, "B: F" }, h.Env.Spoken);
+    }
+
+    [Fact]
+    public void Key_falls_back_to_ai_only_when_unavailable_or_stopped_10_s()
+    {
+        var h = New();
+        Assert.True(h.Monitor.KeyFallsBackToAi()); // not started: the AI read
+        var gate = h.Env.Simulator;
+        h.Env.Simulator = null;
+        h.Start();
+        h.Tick(100);
+        Assert.False(h.Monitor.KeyFallsBackToAi()); // waiting: the window says so
+        h.Env.Simulator = gate;
+        h.Tick();
+        Assert.Equal("Analyzing", h.State);
+        Assert.False(h.Monitor.KeyFallsBackToAi()); // starting
+        var s = h.RunUntilRunning();
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+
+        // Stopped on a mismatch: the window for 10 s, then the AI read.
+        h.Reader.SimAgrees = false;
+        h.TickUntil(() => h.State == "Mismatched");
+        long stoppedAt = h.Env.NowMs - 100;
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+        h.Env.NowMs = stoppedAt + 9_999;
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+        h.Env.NowMs = stoppedAt + 10_000;
+        Assert.True(h.Monitor.KeyFallsBackToAi());
+        h.Reader.SimAgrees = true;
+        h.Tick();
+        Assert.Equal("Running", h.State);
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+
+        // The memory lost: the window while it searches, the AI read from 10 s, through the slow retry.
+        h.Tick(60);
+        h.Env.Locate = NotFound;
+        s.Fail = true;
+        h.TickUntil(() => h.State == "Locating");
+        long lostAt = h.Env.NowMs - 100;
+        h.Env.NowMs = lostAt + 9_999;
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+        h.Env.NowMs = lostAt + 10_000;
+        Assert.True(h.Monitor.KeyFallsBackToAi());
+        h.Tick(1300);
+        Assert.Equal("Locating", h.State);
+        Assert.True(h.Monitor.KeyFallsBackToAi());
+
+        h.Env.Locate = Found;
+        s = h.RunUntilRunning(310);
+        Assert.False(h.Monitor.KeyFallsBackToAi()); // found again
+
+        s.Reading = Corrupt("Z");
+        h.Tick(10);
+        Assert.Equal("Unavailable", h.State);
+        Assert.True(h.Monitor.KeyFallsBackToAi());
+        h.Monitor.Stop();
+        Assert.True(h.Monitor.KeyFallsBackToAi());
+
+        // A search window that ran out before the reader ever ran: the AI read.
+        var never = New();
+        never.Env.Locate = NotFound;
+        never.Start();
+        never.Tick(1200); // to 119.9 s
+        Assert.False(never.Monitor.KeyFallsBackToAi());
+        never.Tick(10);
+        Assert.Equal(new[] { UnavailableNotFound }, never.Env.Spoken);
+        Assert.True(never.Monitor.KeyFallsBackToAi());
+    }
+
+    [Fact]
+    public void An_exception_in_a_tick_ends_in_internal_error_and_restart_recovers()
+    {
+        var h = New().Start();
+        var s = h.RunUntilRunning();
+        h.Tick(5);
+        s.Throw = new InvalidOperationException("boom");
+        h.Tick();
+        Assert.Equal(new[] { "X announcements unavailable: internal error, see the log" }, h.Env.Spoken);
+        Assert.Equal("Unavailable", h.State);
+        Assert.True(s.Disposed);
+        // Logged with its stack, on the reader's own log.
+        Assert.Contains(h.Env.Logged, l => l.Channel == LogChannel && l.Line.Contains("boom") && l.Line.Contains(nameof(FakeSampler.TryRead)));
+        h.Tick(20);
+        Assert.Single(h.Env.Spoken);
+        Assert.Equal(new[] { "X announcements unavailable: internal error, see the log" }, h.Monitor.View());
+
+        // The timer keeps ticking, so a flight reload recovers.
+        h.Monitor.Restart();
+        h.RunUntilRunning(10);
+        h.Tick(20);
+        Assert.Single(h.Env.Spoken);
+        Assert.Equal(new[] { "X: A" }, h.Monitor.View());
+    }
+
+    [Fact]
+    public void Stop_releases_every_sampler_once()
+    {
+        var h = New();
+        h.Reader.Layouts = new[] { new FakeLayout("one"), new FakeLayout("two") };
+        h.Start();
+        h.TickUntil(() => h.State == "Verifying"); // one candidate read, one waiting
+        Assert.Equal(2, h.Reader.Samplers.Count);
+        Assert.All(h.Reader.Samplers, s => Assert.False(s.Disposed));
+        h.Monitor.Stop();
+        Assert.Equal("Stopped", h.State);
+        Assert.All(h.Reader.Samplers, s => Assert.Equal(1, s.DisposeCount));
+
+        h.Monitor.Stop(); // twice, and Dispose, release nothing again
+        h.Monitor.Dispose();
+        h.Tick(50); // a stopped monitor does nothing
+        Assert.Equal(2, h.Reader.Samplers.Count);
+        Assert.All(h.Reader.Samplers, s => Assert.Equal(1, s.DisposeCount));
+
+        // Running (the waiting candidate dropped when the first passed), then stopped.
+        h.Start();
+        h.RunUntilRunning();
+        Assert.Equal(4, h.Reader.Samplers.Count);
+        h.Monitor.Stop();
+        Assert.All(h.Reader.Samplers, s => Assert.Equal(1, s.DisposeCount));
+
+        // Through a reload: the old ones released by Restart, the new ones by Stop.
+        h.Start();
+        h.RunUntilRunning();
+        h.Monitor.Restart();
+        h.RunUntilRunning(10);
+        h.Monitor.Stop();
+        Assert.Equal(8, h.Reader.Samplers.Count);
+        Assert.All(h.Reader.Samplers, s => Assert.Equal(1, s.DisposeCount));
+        Assert.Empty(h.Env.Spoken); // stopping is silent
+    }
+
+    [Theory]
+    [InlineData("analysis", FmaReasons.FileNotRecognised, "X announcements unavailable: BlueBird file not recognised")]
+    [InlineData("analysis", FmaReasons.FilesNotFound, "X announcements unavailable: BlueBird 757 files not found")]
+    [InlineData("search", FmaReasons.FileNotRecognised, "X announcements unavailable: BlueBird file not recognised")]
+    [InlineData("search", FmaReasons.FilesNotFound, "X announcements unavailable: BlueBird 757 files not found")]
+    public void Session_failures_are_worded_for_the_757(string where, string sessionFailure, string line)
+    {
+        // The shared module session words its reasons for the PMDG 737 whatever the module.
+        Assert.Contains("PMDG", sessionFailure);
+        var h = New();
+        if (where == "analysis")
+            h.Env.Analyse = NoBuilds(sessionFailure);
+        else
+            h.Env.Locate = () => Task.FromResult(new ModuleLocation(Array.Empty<LocatedModule>(), sessionFailure));
+        h.Start();
+        h.TickUntil(() => h.State == "Unavailable", 100);
+        h.Tick(10);
+
+        Assert.Equal(new[] { line }, h.Monitor.View());
+        // No layout file is the one files line (S14); a search's failure is the reader's own line.
+        Assert.Equal(new[] { where == "analysis" ? Bbs757DisplayFilesNotice.Line : line }, h.Env.Spoken);
+        Assert.DoesNotContain(h.Env.Spoken, l => l.Contains("PMDG"));
+        Assert.DoesNotContain(h.Env.Logged, l => l.Line.Contains("PMDG"));
+    }
+
     // ---- fakes ----
 
     private sealed class Harness
@@ -350,6 +1034,10 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
         public Queue<FakeReading> Script { get; } = new();
         public bool Fail { get; set; }
+
+        /// <summary>When set, every read throws it (a bug in a reader).</summary>
+        public Exception? Throw { get; set; }
+
         public int Reads { get; private set; }
         public int DisposeCount => Volatile.Read(ref _disposeCount);
         public bool Disposed => DisposeCount > 0;
@@ -358,6 +1046,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         {
             // A read after Dispose is a monitor bug; throwing turns it into a visible internal error.
             if (Disposed) throw new ObjectDisposedException(nameof(FakeSampler));
+            if (Throw is { } ex) throw ex;
             Reads++;
             reading = Fail ? default : Script.Count > 0 ? Script.Dequeue() : Reading;
             return !Fail;
@@ -389,6 +1078,13 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         /// <summary>When set, the power state as decoded from the reading itself.</summary>
         public Func<FakeReading, bool?>? LitOf { get; set; }
 
+        /// <summary>False: the simulator disagrees with every reading (the gate fails, whatever memory holds).</summary>
+        public bool SimAgrees { get; set; } = true;
+
+        /// <summary>When set, the change lines; by default one line on the status row, "X: " + now with the prefix and
+        /// the bare reading without it.</summary>
+        public Func<FakeReading, FakeReading, bool, IReadOnlyList<Bbs757SpokenLine>>? ChangesOf { get; set; }
+
         public FakeSampler NewSampler(FakeReading reading)
         {
             var s = new FakeSampler(reading);
@@ -396,18 +1092,22 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
             return s;
         }
 
-        public IReadOnlyList<FakeLayout> LayoutsIn(ModuleAnalysis analysis) => Layouts;
+        /// <summary><see cref="Layouts"/> from any build, as a real reader takes its layout from each; none without builds.</summary>
+        public IReadOnlyList<FakeLayout> LayoutsIn(ModuleAnalysis analysis) =>
+            analysis.Builds.Count > 0 ? Layouts : Array.Empty<FakeLayout>();
 
         public IBbs757DisplaySampler<FakeReading>? SamplerFor(LocatedModule module, FakeLayout layout) => MakeSampler(module, layout);
 
-        /// <summary>A reading "WRONG" never agrees with the simulator.</summary>
+        /// <summary>A reading "WRONG" never agrees with the simulator, nor does any while <see cref="SimAgrees"/> is false.</summary>
         public bool Passes(IReadOnlyList<(long AtMs, FakeReading Reading)> history, Bbs757SimValues sim) =>
-            history.Count > 0 && history[^1].Reading.Value != "WRONG";
+            SimAgrees && history.Count > 0 && history[^1].Reading.Value != "WRONG";
 
         public bool? Lit(FakeReading reading, Bbs757SimValues sim) => LitOf is { } of ? of(reading) : LitNow;
 
         public IReadOnlyList<Bbs757SpokenLine> Changes(FakeReading heard, FakeReading now, bool withPrefix) =>
-            new[] { new Bbs757SpokenLine("MUTE_X", "X: " + now) };
+            ChangesOf is { } of
+                ? of(heard, now, withPrefix)
+                : new[] { new Bbs757SpokenLine("MUTE_X", withPrefix ? "X: " + now : now.ToString()) };
 
         public IReadOnlyList<string> Rows(FakeReading reading) => new[] { "X: " + reading };
 
@@ -433,7 +1133,9 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
         public List<string> KeysAsked { get; } = new();
         public HashSet<string> Muted { get; } = new();
-        public Bbs757DisplayFilesNotice FilesNotice { get; } = new();
+
+        /// <summary>One per module session; settable so several monitors share one, as the definition wires them.</summary>
+        public Bbs757DisplayFilesNotice FilesNotice { get; set; } = new();
 
         public Func<Task<ModuleAnalysis>> Analyse { get; set; }
         public Func<Task<ModuleLocation>> Locate { get; set; }
