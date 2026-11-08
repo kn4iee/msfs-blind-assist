@@ -133,7 +133,7 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 
 1. **APU off:** After Start, tick "APU: OFF" by hand with the APU running: it stays ticked. Final Securing with the APU running: "Waiting 120 seconds: APU cool-down", the wait for the APU to stop, then the battery. Note how long the APU takes to stop after the 2 minutes.
 2. **Cold and dark, Before Start flow:** the hydraulic pumps, then the parking brake sets. With the brake released and the pumps off, tick "Parking brake: SET": the refusal words.
-3. **Departure:** the eleven preflight tests in order; the takeoff cabin chime; LNAV and VNAV pushed at 400 ft when not armed ("400 feet. LNAV and VNAV on."); with the setting on and about 1,500 lb in the center tank, the center pumps go off when it runs dry.
+3. **Departure:** the eleven preflight tests in order; the takeoff cabin chime; LNAV and VNAV pushed at 400 ft when not armed ("400 feet. LNAV and VNAV on.", heard once: no second "LNAV on" from the light's own announcement); with the setting on and about 1,500 lb in the center tank, the center pumps go off when it runs dry.
 4. **Arrival:** the Descent chime and ILS reminder; the Approach flow (ND APP 20, the two reminders); "Set the missed approach altitude" in Before Landing.
 
 ## Execution record
@@ -176,7 +176,22 @@ Officer control each second, and a write's end requests a fresh read.
 | PF_TEST_* (eleven), BT_CABIN, DS_CABIN | none (no state) | the press sent | never reverts; a flow step fails only when nothing was sent |
 | The lines with no action (PU_GEAR, BS_DOORS, AS_START_SEL, BT_ENGINES, AT_FLAPS, AT_GEAR, BL_GEAR) and every reminder | — | — | nothing to report |
 
-Final full suite: see Task 10.
+### Final review (Task 10)
+
+A fresh whole-branch reviewer: no Critical; one Important, fixed: the 400 ft push said "LNAV did not come on" when it had
+pressed nothing (the fresh read found the light lit or unread), which could send the pilot to toggle a lit mode off.
+`PushMcpAsync` now returns `McpPush` (not pressed, pressed and lit, pressed and not lit), and only a press that went out
+is spoken (`A_light_found_lit_on_the_fresh_read_is_neither_pressed_nor_reported`, RED then GREEN). The handoff's
+docs and rule-homing gaps it named are added below.
+
+Deferred minors (not changed): the gate's ON test is `target is 1` (an untargeted center pump write, which no caller
+makes, would pass ungated; the PMDG form is `(target ?? 1) == 1`); a light lighting more than 1.5 s after the press could
+be said twice ("heard once" added to in-sim check 3); `LnavVnavPushHeight`'s summary still says "both 737s" (handoff).
+Set aside, each ruled: FlowManager's `WaitSeconds` does not hold on Pause (shared, as the 737s' cool-downs);
+`FO_APU_RUNNING` reads the cooling APU as running, so a Before Start run within 2 minutes of a hand switch-off would skip
+the APU start (pre-existing, a false success rather than a false failure; for the owner to judge).
+
+Final full suite, after the fix: 21,669 passed, 0 failed.
 
 ## Handoff to plan 16
 
@@ -191,7 +206,15 @@ Final full suite: see Task 10.
 
 **The guide** (`guide/**`): the 757 First Officer text (the tests, the cabin calls, the ILS reminder, the Approach flow, the parking brake words, the two automations); `guide/first-officer.md` line 136, the center pump setting row, names the BlueBird 757 (the app's checkbox now reads "Auto-manage center fuel pumps (PMDG 737/777, iFly MAX8 and BlueBird 757)"). `docs/b757.md`'s First Officer section the same. The "User guide:" line.
 
-**Proposed rule lines** (`docs/invariants/b757.md` and the rule files):
+**`docs/first-officer.md`:** its section "Center fuel pump auto-management (PMDG 737 + 777 + iFly MAX8)" and its text on
+the 400 ft LNAV/VNAV push (today the 737s' only) name the BlueBird 757 too. The full texts of FO-16 (the fixed push
+height) and FOB-21 (the latch burn) name the 757's `Bbs757FoAutoManager` beside the 737s. The doc comment of
+`LnavVnavPushHeight` ("for both 737s") names the 757, which reuses it from the `PMDG737` namespace.
+
+**Proposed rule lines** (`docs/invariants/b757.md` and the rule files). The center pump line must load on the 757's
+First Officer files: `first-officer-boeing.md`'s globs do not reach `FirstOfficer/BBS757/**`, so it is homed in
+`b757.md` (or mirrored there word for word), or `ClaudeContextBudgetTests` fails on it.
 - [B757-n] The 757 First Officer's "APU: OFF" lines and steps read the APU switch (`FO_APU_OFF`), never `B757_APU_STATE`: BlueBird runs the APU through a cool-down after OFF. Final Securing waits `ApuCooldownSeconds` (120) only after a switch-off it sent, then for the state to read 0; the battery waits for 0 (`BatteryMustStay`).
 - [B757-n] Never send the 757 parking brake SET without brake pressure (`Bbs757FoChecklistDefinitions.NoBrakePressure`: the left or right electric hydraulic pump ON, or an engine running); never turn a pump on to set it.
-- [FOB-n] (`first-officer-boeing.md`) The BlueBird 757's center-pump ON gate sits at `Bbs757FoActionExecutor.DispatchAsync`, its single chokepoint (`CenterPumpGate`, the 757 map's `B757_OVHD_C_PUMPS_L/R_BUTTON`), the tank in pounds (`FO_CENTER_FUEL_LBS`, 6.7 lb/gal until BlueBird's density reads), as FOB-10/FOB-18.
+- [B757-n] (homed in `b757.md`, see above) The BlueBird 757's center-pump ON gate sits at `Bbs757FoActionExecutor.DispatchAsync`, its single chokepoint (`CenterPumpGate`, the 757 map's `B757_OVHD_C_PUMPS_L/R_BUTTON`), the tank in pounds (`FO_CENTER_FUEL_LBS`, 6.7 lb/gal until BlueBird's density reads), as FOB-10/FOB-18. FOB-16's exemption, written down: the 757 passes an unread tank as NaN, not through `SafeRoundToInt`, which is safe because the manager's `dataReady` needs every input and the policy rejects NaN (as the iFly does).
+- [B757-n] The 757's 400 ft push says only what a press did (`McpPush`): a light found lit or unread on the fresh read is not pressed and not reported, never "did not come on" over a lit mode (a pilot would toggle it off).

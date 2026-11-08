@@ -160,15 +160,39 @@ public class Bbs757FoAutoManagerTests
     [Fact]
     public void The_words_say_on_or_did_not_come_on()
     {
-        Assert.Equal("400 feet. LNAV and VNAV on.", Bbs757FoAutoManager.PushWords(true, true, true, true));
-        Assert.Equal("400 feet. LNAV on.", Bbs757FoAutoManager.PushWords(true, true, false, false));
-        Assert.Equal("400 feet. VNAV on.", Bbs757FoAutoManager.PushWords(false, false, true, true));
-        Assert.Equal("400 feet. LNAV on. VNAV did not come on.", Bbs757FoAutoManager.PushWords(true, true, true, false));
-        Assert.Equal("400 feet. LNAV and VNAV did not come on.", Bbs757FoAutoManager.PushWords(true, false, true, false));
+        const McpPush Lit = McpPush.PressedLit, Out = McpPush.PressedNotLit, None = McpPush.NotPressed;
+        Assert.Equal("400 feet. LNAV and VNAV on.", Bbs757FoAutoManager.PushWords(Lit, Lit));
+        Assert.Equal("400 feet. LNAV on.", Bbs757FoAutoManager.PushWords(Lit, None));
+        Assert.Equal("400 feet. VNAV on.", Bbs757FoAutoManager.PushWords(None, Lit));
+        Assert.Equal("400 feet. LNAV on. VNAV did not come on.", Bbs757FoAutoManager.PushWords(Lit, Out));
+        Assert.Equal("400 feet. LNAV and VNAV did not come on.", Bbs757FoAutoManager.PushWords(Out, Out));
+        Assert.Null(Bbs757FoAutoManager.PushWords(None, None));
 
         var r = NewRig(lightsComeOn: false);
         TakeOff(r);
         Assert.Equal(new[] { "400 feet. LNAV and VNAV did not come on." }, r.Said);
+    }
+
+    /// <summary>
+    /// Final review: the cache said LNAV out but the fresh read says it is lit (the pilot or BlueBird lit it that second):
+    /// nothing pressed and nothing said about LNAV, never "LNAV did not come on" over a lit mode, which would send the pilot
+    /// to press the toggle and turn it off.
+    /// </summary>
+    [Fact]
+    public void A_light_found_lit_on_the_fresh_read_is_neither_pressed_nor_reported()
+    {
+        var r = NewRig();
+        r.Io.Values[K.LnavLight] = 1;                      // the fresh read: lit; the window's cache still reads it out
+        TakeOff(r);
+        Assert.Equal(new[] { K.VnavButton }, r.Io.Presses);
+        Assert.Equal(new[] { "400 feet. VNAV on." }, r.Said);
+
+        var both = NewRig();
+        both.Io.Values[K.LnavLight] = 1;
+        both.Io.Values[K.VnavLight] = 1;
+        TakeOff(both);
+        Assert.Empty(both.Io.Presses);
+        Assert.Empty(both.Said);
     }
 
     // ------------------------------------------------------------------ the center fuel pumps (the other Boeings' policy)
@@ -232,12 +256,16 @@ public class Bbs757FoAutoManagerTests
         var r = NewRig();
         var exec = new X();
         exec.SetTransport(r.Io);
-        Assert.True(await exec.PushMcpAsync(K.LnavButton, K.LnavLight));
+        Assert.Equal(McpPush.PressedLit, await exec.PushMcpAsync(K.LnavButton, K.LnavLight));
         Assert.Equal(new[] { $"press {K.LnavButton}" }, r.Io.Events);
 
-        Assert.False(await exec.PushMcpAsync(K.LnavButton, K.LnavLight));        // now lit: never pressed again
+        Assert.Equal(McpPush.NotPressed, await exec.PushMcpAsync(K.LnavButton, K.LnavLight));   // now lit: never pressed again
         r.Io.Values.Remove(K.VnavLight);
-        Assert.False(await exec.PushMcpAsync(K.VnavButton, K.VnavLight));        // unread: never a toggle on a guess
+        Assert.Equal(McpPush.NotPressed, await exec.PushMcpAsync(K.VnavButton, K.VnavLight));   // unread: never a toggle on a guess
         Assert.Single(r.Io.Presses);
+
+        r.Io.Values[K.VnavLight] = 0;
+        r.Io.OnPress = null;                                                                   // pressed, but the light never comes on
+        Assert.Equal(McpPush.PressedNotLit, await exec.PushMcpAsync(K.VnavButton, K.VnavLight));
     }
 }

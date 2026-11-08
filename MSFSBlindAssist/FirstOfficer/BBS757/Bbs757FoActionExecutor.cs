@@ -56,6 +56,14 @@ public interface IBbs757FoTransport
     Task Delay(int ms, CancellationToken ct);
 }
 
+/// <summary>What an MCP push did: nothing (the light read lit or unread, or the press not sent), pressed and lit, or pressed and still out.</summary>
+public enum McpPush
+{
+    NotPressed,
+    PressedLit,
+    PressedNotLit,
+}
+
 /// <summary>
 /// The BlueBird 757 First Officer's executor. Every write goes through the definition's silent
 /// write path (<see cref="IBbs757FoTransport"/>), serialized on one gate, and reports success only
@@ -765,29 +773,36 @@ public sealed class Bbs757FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// The 400 ft LNAV or VNAV push (<see cref="Bbs757FoAutoManager"/>), on the gate: the MCP button pressed only over its
-    /// light read fresh and OUT (the buttons toggle: a light read lit or unread is never pressed, false), then the light
-    /// read every 500 ms for up to <see cref="McpLightWaitMs"/>; true once it reads lit.
+    /// light read fresh and OUT (the buttons toggle: a light read lit or unread is never pressed), then the light
+    /// read every 500 ms for up to <see cref="McpLightWaitMs"/>. Only a press that went out reports lit or not lit: a light
+    /// found lit or unread, or a press not sent, is <see cref="McpPush.NotPressed"/>, so nothing is said about it (never
+    /// "did not come on" over a lit mode, which would send the pilot to toggle it off).
     /// </summary>
-    public async Task<bool> PushMcpAsync(string buttonNode, string lightKey)
+    public async Task<McpPush> PushMcpAsync(string buttonNode, string lightKey)
     {
         var io = _io;
-        if (io is not { Ready: true }) return false;
+        if (io is not { Ready: true }) return McpPush.NotPressed;
         await _gate.WaitAsync();
         try
         {
-            if (await io.ReadAsync(lightKey, CancellationToken.None) is not double before || before > 0.5) return false;
-            if (!await io.PressAsync(buttonNode, CancellationToken.None)) return false;
+            double? before = await io.ReadAsync(lightKey, CancellationToken.None);
+            if (before is not double light || light > 0.5)
+            {
+                Log.Info("BBS757 FO", $"{buttonNode}: not pressed, its light reads {(before is null ? "nothing" : "lit")}.");
+                return McpPush.NotPressed;
+            }
+            if (!await io.PressAsync(buttonNode, CancellationToken.None)) return McpPush.NotPressed;
             for (int waited = 0; waited < McpLightWaitMs; waited += 500)
             {
                 await io.Delay(500, CancellationToken.None);
-                if (await io.ReadAsync(lightKey, CancellationToken.None) is double lit && lit > 0.5) return true;
+                if (await io.ReadAsync(lightKey, CancellationToken.None) is double lit && lit > 0.5) return McpPush.PressedLit;
             }
-            return false;
+            return McpPush.PressedNotLit;
         }
         catch (Exception ex)
         {
             Log.Error("BBS757 FO", $"{buttonNode}: {ex.Message}");
-            return false;
+            return McpPush.NotPressed;
         }
         finally
         {

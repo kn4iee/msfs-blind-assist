@@ -95,9 +95,9 @@ public sealed class Bbs757FoAutoManager : IFoAutoManager
     {
         try
         {
-            bool lnavOn = lnav && await _executor.PushMcpAsync(K.LnavButton, K.LnavLight);
-            bool vnavOn = vnav && await _executor.PushMcpAsync(K.VnavButton, K.VnavLight);
-            _say(PushWords(lnav, lnavOn, vnav, vnavOn));
+            var lnavPush = lnav ? await _executor.PushMcpAsync(K.LnavButton, K.LnavLight) : McpPush.NotPressed;
+            var vnavPush = vnav ? await _executor.PushMcpAsync(K.VnavButton, K.VnavLight) : McpPush.NotPressed;
+            if (PushWords(lnavPush, vnavPush) is { } words) _say(words);
         }
         catch (Exception ex)
         {
@@ -175,12 +175,18 @@ public sealed class Bbs757FoAutoManager : IFoAutoManager
     /// The push's one line, in the lights' word: a lit LNAV or VNAV light is armed or engaged, so "on", never "engaged".
     /// "400 feet. LNAV and VNAV on.", "400 feet. LNAV on. VNAV did not come on.", "400 feet. LNAV and VNAV did not come on."
     /// </summary>
-    internal static string PushWords(bool pushedLnav, bool lnavOn, bool pushedVnav, bool vnavOn)
+    internal static string? PushWords(McpPush lnav, McpPush vnav)
     {
         var on = new List<string>();
         var off = new List<string>();
-        if (pushedLnav) (lnavOn ? on : off).Add("LNAV");
-        if (pushedVnav) (vnavOn ? on : off).Add("VNAV");
+        void Add(McpPush push, string mode)
+        {
+            if (push == McpPush.PressedLit) on.Add(mode);
+            else if (push == McpPush.PressedNotLit) off.Add(mode);
+        }
+        Add(lnav, "LNAV");
+        Add(vnav, "VNAV");
+        if (on.Count == 0 && off.Count == 0) return null;
         string text = "400 feet.";
         if (on.Count > 0) text += $" {string.Join(" and ", on)} on.";
         if (off.Count > 0) text += $" {string.Join(" and ", off)} did not come on.";
