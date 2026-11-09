@@ -185,7 +185,7 @@ Per engine, with `start = 22950(engine)` = any of the engine's bytes **+6922, +6
 
 | Item, as drawn | Source | Format | Live |
 |---|---|---|---|
-| "HYD QTY" "L" "C" "R" | hydraulics (lower+276) → +2996 array, stride 40: capacity f64 +0, quantity f64 +8 | below ("HYD QTY") | 0.98, 0.97, 1.00 (98.48 %, 97.26 %, 99.92 %) |
+| "HYD QTY" "L" "C" "R" | hydraulics (lower+276) → +2996 a vector's begin pointer; records at *(+2996) + 40i (23018 → 23032): capacity f64 +0, quantity f64 +8 | below ("HYD QTY") | 0.98, 0.97, 1.00 (98.48 %, 97.26 %, 99.92 %) |
 | "HYD PRESS" | hydraulics +2896 + 8 × (L 0, C 1, R 2), f64 psi | whole (trunc) | 3000, 2880, 2950 (exactly) |
 | "APU  EGT" (two spaces) | APU (lower+272) +1544, f64 °C | whole (trunc) | −52 (−52.124; APU off) |
 | "RPM" | APU +1528 | whole % (trunc) | 0 (0.0) |
@@ -396,7 +396,7 @@ Proposed parts (required: the objects, the page and the gate; optional: each pag
   max boxes +560, +564, +568, +572; units settings+596; the words "N2" (drawn "N" "2"), "N3", "FF", "OIL PRESS",
   "OIL TEMP", "OIL QTY", "VIB", "STATUS", "X-BLD"; FF ÷ 1000.
 - **STATUS page (optional)**: the list 985716 (begin +0, end +4); record text +0, length +4, sequence +8; the page
-  number 573108; 11 lines, or 10 and "PAGE n"; hydraulics +2896 (stride 8) and +2996 (stride 40: +0 capacity, +8
+  number 573108; 11 lines, or 10 and "PAGE n"; hydraulics +2896 (stride 8) and +2996 (a vector's begin pointer; records at *(+2996) + 40i (23018 → 23032): +0 capacity, +8
   quantity; suffix thresholds 122 and 75 %); APU +1544, +1528, +1600; oxygen +946, +440, +456, +464, +472; flight
   controls lower+536, +540, +544, +548 (with the signs and the elevator's 1.5 above) and their circuit ids; brakes
   computer+584 (u32[8], the drawing order and positions above) and +616, circuit id 379; settings+37732 (the

@@ -35,7 +35,10 @@ public sealed record Bbs757LowerEicasEnginePage(
 /// a record's text pointer, length and sequence stamp, and the objects the page prints beside it: hydraulics, APU,
 /// oxygen, the four flight control pointers (offsets into the lower EICAS object, f32) and the computer's brake
 /// temperatures (u32 per wheel, <see cref="BrakeWheels"/> of them). Each <c>LowerTo*</c> is the pointer's offset in
-/// the lower EICAS object.
+/// the lower EICAS object. <c>HydraulicQuantities</c> is the offset of a std::vector's BEGIN POINTER in the hydraulics
+/// object: system i's record is at <c>*(hydraulics + HydraulicQuantities) + HydraulicQuantityStride * i</c>, with
+/// <c>HydraulicCapacity</c> and <c>HydraulicQuantity</c> (f64) the offsets inside that record (BlueBird's 23018 calls
+/// 23032). The pressures are inline: <c>hydraulics + HydraulicPressures + HydraulicPressureStride * i</c>.
 /// </summary>
 public sealed record Bbs757LowerEicasStatusPage(
     uint ListAddress,

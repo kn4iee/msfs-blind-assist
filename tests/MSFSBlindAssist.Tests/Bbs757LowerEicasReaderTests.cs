@@ -15,7 +15,8 @@ public class Bbs757LowerEicasReaderTests
     private const ulong Base = 0x20000000;
     private const int Size = 0x100000;
     private const uint Lower = 0x2000, Left = 0x10000, Right = 0x20000, Computer = 0x30000, Hyd = 0x40000, Apu = 0x50000,
-        Oxy = 0x60000, Settings = 0x70000, Vector = 0x80000, Records = 0x90000, Texts = 0xA0000;
+        Oxy = 0x60000, Settings = 0x70000, Vector = 0x80000, Records = 0x90000, Texts = 0xA0000,
+        HydRecords = 0xB0000;
 
     private static readonly Bbs757LowerEicasLayout Layout = Bbs757LowerEicasLayoutTests.Sample();
 
@@ -47,10 +48,12 @@ public class Bbs757LowerEicasReaderTests
 
         // Hydraulics: capacity, quantity per system; pressure per system.
         double[] cap = { 1, 1, 1 }, qty = { 0.98, 0.97, 1.00 }, press = { 3000, 2880, 2950 };
+        // The quantities are a vector's records in a separate block; hyd+2996 holds its begin pointer.
+        Put(b, Hyd + 2996, (int)HydRecords);
         for (int i = 0; i < 3; i++)
         {
-            PutD(b, Hyd + 2996 + 40u * (uint)i, cap[i]);
-            PutD(b, Hyd + 2996 + 40u * (uint)i + 8, qty[i]);
+            PutD(b, HydRecords + 40u * (uint)i, cap[i]);
+            PutD(b, HydRecords + 40u * (uint)i + 8, qty[i]);
             PutD(b, Hyd + 2896 + 8u * (uint)i, press[i]);
         }
         PutD(b, Apu + 1544, -55);
@@ -168,6 +171,38 @@ public class Bbs757LowerEicasReaderTests
             "FF: 3.6, 3.6",
             "BRAKE TEMP: 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0",
         }, reading.PageRows);
+    }
+
+    [Fact]
+    public void The_hydraulic_quantities_are_read_through_the_vectors_begin_pointer()
+    {
+        var qty = Read(Memory(page: 2)).PageRows.First(r => r.StartsWith("HYD QTY"));
+        Assert.Equal("HYD QTY: L 0.98, C 0.97, R 1.00", qty);
+    }
+
+    [Fact]
+    public void Quantities_laid_out_inline_no_longer_read_as_the_live_values()
+    {
+        // The old layout: the records inline at hyd+2996, so the field holds a double, not a pointer.
+        var inline = Memory(page: 2, tweak: b =>
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                PutD(b, Hyd + 2996 + 40u * (uint)i, 1);
+                PutD(b, Hyd + 2996 + 40u * (uint)i + 8, new[] { 0.98, 0.97, 1.00 }[i]);
+            }
+        });
+        using var r = Reader(inline);
+        Assert.False(r.TryRead(default, out _));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(0x7fff0000)]
+    public void A_null_or_outside_begin_pointer_is_a_lost_read(int begin)
+    {
+        using var r = Reader(Memory(page: 2, tweak: b => Put(b, Hyd + 2996, begin)));
+        Assert.False(r.TryRead(default, out _));
     }
 
     [Fact]

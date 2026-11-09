@@ -192,10 +192,13 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
         var cap = new double[3];
         var qty = new double[3];
         var press = new double[3];
+        // The quantities are a std::vector's records: the field holds its begin pointer (BlueBird's 23018 calls 23032, which
+        // returns *(hydraulics + 2996) + 40 * i). A null or out-of-module begin is a lost read, like any bad pointer.
+        if (!Ptr(hyd, s.HydraulicQuantities, out uint begin)) return false;
         for (int i = 0; i < 3; i++)
         {
-            int q = s.HydraulicQuantities + s.HydraulicQuantityStride * i;
-            if (!Dbl(hyd, q + s.HydraulicCapacity, out cap[i]) || !Dbl(hyd, q + s.HydraulicQuantity, out qty[i])
+            uint rec = begin + (uint)(s.HydraulicQuantityStride * i);
+            if (!Dbl(rec, s.HydraulicCapacity, out cap[i]) || !Dbl(rec, s.HydraulicQuantity, out qty[i])
                 || !Dbl(hyd, s.HydraulicPressures + s.HydraulicPressureStride * i, out press[i]))
                 return false;
         }
