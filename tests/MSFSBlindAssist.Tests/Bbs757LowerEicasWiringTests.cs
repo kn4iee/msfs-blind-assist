@@ -137,6 +137,8 @@ public class Bbs757LowerEicasWiringTests
             var copy = vars[keys[gateKey]];
             Assert.Equal(row.Name, copy.Name);
             Assert.True(copy.ExcludeFromBatch);
+            Assert.Equal(UpdateFrequency.Continuous, copy.UpdateFrequency);   // streams on its own subscription
+            Assert.True(copy.IsAnnounced);
             Assert.False(ContinuousBatchLayout.RidesBatch(copy));
         }
         // The page copy has no such twin: it rides the batch.

@@ -359,8 +359,12 @@ public class Bbs757DisplaysWiringTests
         // one a Continuous variable already streams (the Engines panel's N2 rows, plan 25) is read from its own copy, off the batch.
         Assert.All(def.Displays.GateVariables, g =>
         {
-            Assert.Equal(g.Name, vars[keys[g.Key]].Name);
-            Assert.True(vars.Count(kv => kv.Value.Name == g.Name && ContinuousBatchLayout.RidesBatch(kv.Value)) <= 1);
+            var cache = vars[keys[g.Key]];
+            Assert.Equal(g.Name, cache.Name);
+            Assert.Equal(UpdateFrequency.Continuous, cache.UpdateFrequency);   // it streams
+            Assert.True(cache.IsAnnounced);
+            Assert.True(vars.Values.Count(v => v.Name == g.Name && ContinuousBatchLayout.RidesBatch(v)) <= 1);
+            Assert.True(ContinuousBatchLayout.RidesBatch(cache) || cache.ExcludeFromBatch);   // on the batch, or its own subscription
         });
         Assert.Equal(def.Displays.GateVariables.Select(g => g.Key).OrderBy(k => k, StringComparer.Ordinal),
             keys.Keys.OrderBy(k => k, StringComparer.Ordinal));
