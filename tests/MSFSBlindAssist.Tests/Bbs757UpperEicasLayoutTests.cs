@@ -198,8 +198,58 @@ public class Bbs757UpperEicasLayoutTests
     }
 
     [Fact]
+    public void Bbs757UpperEicasLayout_equality_covers_every_field_but_the_source_file()
+    {
+        var sample = Sample();
+        var ctor = typeof(Bbs757UpperEicasLayout).GetConstructors().Single();
+        var parameters = ctor.GetParameters();
+        object?[] Values() => parameters.Select(p => typeof(Bbs757UpperEicasLayout).GetProperty(p.Name!)!.GetValue(sample)).ToArray();
+
+        // Only the source file differing: equal, same hash.
+        var sourceOnly = sample with { SourceFile = "C:\\elsewhere.json" };
+        Assert.Equal(sample, sourceOnly);
+        Assert.Equal(sample.GetHashCode(), sourceOnly.GetHashCode());
+
+        int checkedFields = 0;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            string name = parameters[i].Name!;
+            if (name == "SourceFile") continue;
+            object?[] args = Values();
+            args[i] = args[i] switch
+            {
+                uint u => u + 1,
+                int n => n + 1,
+                double d => d + 1.5,
+                string s => s + "x",
+                byte[] b => ((byte[])b.Clone()).Also(c => c[^1] ^= 0x55),
+                int[] a => ((int[])a.Clone()).Also(c => c[^1] += 1),
+                Bbs757WordTable t => new Bbs757WordTable(t.Words.ToDictionary(kv => kv.Key, kv => kv.Value)
+                    .Also(d => d[d.Keys.Min()] = d[d.Keys.Min()] + "x")),
+                _ => throw new InvalidOperationException($"{name}: no mutation for {args[i]?.GetType()}"),
+            };
+            var changed = (Bbs757UpperEicasLayout)ctor.Invoke(args);
+            Assert.False(sample.Equals(changed), $"Equals ignores {name}");
+            Assert.False(changed.Equals(sample), $"Equals ignores {name} (reversed)");
+            Assert.NotEqual(sample.GetHashCode(), changed.GetHashCode());
+            checkedFields++;
+        }
+        Assert.Equal(parameters.Length - 1, checkedFields);
+    }
+
+    [Fact]
     public void Every_757_reader_is_in_the_module_in_order()
     {
         Assert.Equal(new[] { "fma", "efb", "lowerEicas", "upperEicas" }, Module.Readers.Select(r => r.Id).ToArray());
+    }
+}
+
+internal static class Bbs757UpperEicasMutation
+{
+    /// <summary>Applies <paramref name="change"/> to the value and returns it (a mutation inside an expression).</summary>
+    public static T Also<T>(this T value, Action<T> change)
+    {
+        change(value);
+        return value;
     }
 }

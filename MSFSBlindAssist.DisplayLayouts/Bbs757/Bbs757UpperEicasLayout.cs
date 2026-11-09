@@ -321,3 +321,6 @@ public sealed record Bbs757UpperEicasLayout(
         return h.ToHashCode();
     }
 }
+
+/// <summary>The upper EICAS's result in a layout file: a layout, or the detailed reason (for the log) there is none.</summary>
+public sealed record Bbs757UpperEicasDerivation(Bbs757UpperEicasLayout? Layout, string? Failure);
