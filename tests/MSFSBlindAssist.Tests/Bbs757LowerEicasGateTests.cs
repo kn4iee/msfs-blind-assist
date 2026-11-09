@@ -19,9 +19,9 @@ public class Bbs757LowerEicasGateTests
     internal static Bbs757SimValues Sim(double n1 = 77.0, double n2 = 77.5, double mode = 1) =>
         new(new Dictionary<string, double>
         {
-            ["TURB ENG N2:1"] = n1,
-            ["TURB ENG N2:2"] = n2,
-            ["L:BBS_ECAM_Mode"] = mode,
+            ["BBS757_LOWER_EICAS_N2_1"] = n1,
+            ["BBS757_LOWER_EICAS_N2_2"] = n2,
+            ["BBS_ECAM_Mode"] = mode,
         });
 
     private static bool Passes(Bbs757SimValues sim, params (long AtMs, Bbs757LowerEicasReading R)[] history) =>
@@ -69,7 +69,7 @@ public class Bbs757LowerEicasGateTests
     [Fact]
     public void A_missing_or_non_finite_simulator_value_fails()
     {
-        var noMode = new Bbs757SimValues(new Dictionary<string, double> { ["TURB ENG N2:1"] = 77, ["TURB ENG N2:2"] = 77.5 });
+        var noMode = new Bbs757SimValues(new Dictionary<string, double> { ["BBS757_LOWER_EICAS_N2_1"] = 77, ["BBS757_LOWER_EICAS_N2_2"] = 77.5 });
         Assert.False(Passes(noMode, (0, R())));
         Assert.False(Passes(Sim(mode: double.NaN), (0, R())));
         Assert.False(Passes(default, (0, R())));
@@ -80,7 +80,8 @@ public class Bbs757LowerEicasGateTests
     public void The_gate_variables_are_two_stock_n2_variables_and_one_l_var()
     {
         var vars = Bbs757LowerEicasGate.Variables;
-        Assert.Equal(new[] { "TURB ENG N2:1", "TURB ENG N2:2", "L:BBS_ECAM_Mode" }, vars.Select(v => v.Key));
+        Assert.Equal(new[] { "BBS757_LOWER_EICAS_N2_1", "BBS757_LOWER_EICAS_N2_2", "BBS_ECAM_Mode" }, vars.Select(v => v.Key));
+        Assert.Equal(new[] { "TURB ENG N2:1", "TURB ENG N2:2", "BBS_ECAM_Mode" }, vars.Select(v => v.Name));
         Assert.Equal(MSFSBlindAssist.SimConnect.SimVarType.SimVar, vars[0].Type);
         Assert.Equal("percent", vars[0].Units);
         Assert.Equal(MSFSBlindAssist.SimConnect.SimVarType.LVar, vars[2].Type);

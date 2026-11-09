@@ -187,8 +187,9 @@ public partial class BBS757Definition
     /// units (a stock variable is never an L:var of that name, [VAR-2]): Continuous and IsAnnounced, which is what puts it
     /// on the batch; no Ctrl+M row, [VAR-9]. One already carried gets none, as two batched variables of one name shift
     /// every later slot ([VAR-7], <c>VarNameCollisionTests</c>); for the same reason a copy whose name another batched
-    /// variable already has (in other units) streams on its own per-variable subscription into the same cache
-    /// (<see cref="SimVarDefinition.ExcludeFromBatch"/>). Called last in <see cref="BuildVariables"/>, so it sees every other
+    /// variable already has (in other units, or one that streams unannounced such as the Engines panel's N2 rows: any
+    /// Continuous, not excluded, as <c>VarNameCollisionTests</c> counts it) streams on its own per-variable subscription
+    /// into the same cache (<see cref="SimVarDefinition.ExcludeFromBatch"/>). Called last in <see cref="BuildVariables"/>, so it sees every other
     /// registration. Today the F/D switches, on-request map controls, get copies; the MCP's altitude and heading ride the
     /// batch for the autoflight call-outs.
     /// </summary>
@@ -197,7 +198,8 @@ public partial class BBS757Definition
         foreach (var gate in Displays.GateVariables)
         {
             if (BatchedKeyOf(vars, gate) is not null) continue;
-            bool nameOnBatch = vars.Values.Any(def => def.Name == gate.Name && ContinuousBatchLayout.RidesBatch(def));
+            bool nameOnBatch = vars.Values.Any(def => def.Name == gate.Name
+                && def.UpdateFrequency == UpdateFrequency.Continuous && !def.ExcludeFromBatch);
             vars.TryAdd(DisplayGateCopyPrefix + gate.Key, new SimVarDefinition
             {
                 Name = gate.Name, DisplayName = $"{gate.Key} (display reader gate)",

@@ -122,10 +122,12 @@ public class Bbs757DisplaysWiringTests
         def.StartDisplays(new FakeHost(), new NoLayouts(), sim, new SpeechCapture());
         def.StartDisplays(new FakeHost(), new NoLayouts(), sim, new SpeechCapture());   // a new session: the simulator changed
 
-        Assert.Equal(4, envs.Count);
-        Assert.Same(envs[0].FilesNotice, envs[1].FilesNotice);
-        Assert.Same(envs[2].FilesNotice, envs[3].FilesNotice);
-        Assert.NotSame(envs[0].FilesNotice, envs[2].FilesNotice);
+        // Every registered reader (the FMA, the fake, and each later plan's seam) starts on each session.
+        int readers = def.Displays.Monitors.Count;
+        Assert.Equal(2 * readers, envs.Count);
+        Assert.Single(envs.Take(readers).Select(e => e.FilesNotice).Distinct());
+        Assert.Single(envs.Skip(readers).Select(e => e.FilesNotice).Distinct());
+        Assert.NotSame(envs[0].FilesNotice, envs[readers].FilesNotice);
         def.OnSwitchedAway();
     }
 
@@ -353,8 +355,13 @@ public class Bbs757DisplaysWiringTests
         // A key another variable already carries on the batch gets no copy, and is read from that variable.
         Assert.Equal(Bbs757AutoflightAnnouncements.HeadingWatchKey, keys[Bbs757FmaGate.HeadingKey]);
         Assert.DoesNotContain(BBS757Definition.DisplayGateCopyPrefix + Bbs757FmaGate.HeadingKey, vars.Keys);
-        // Every registered gate variable resolves, each to one batched variable.
-        Assert.All(def.Displays.GateVariables, g => Assert.Single(vars, kv => kv.Value.Name == g.Name && ContinuousBatchLayout.RidesBatch(kv.Value)));
+        // Every registered gate variable resolves to a variable of its name, and no name rides the batch twice ([VAR-7]);
+        // one a Continuous variable already streams (the Engines panel's N2 rows, plan 25) is read from its own copy, off the batch.
+        Assert.All(def.Displays.GateVariables, g =>
+        {
+            Assert.Equal(g.Name, vars[keys[g.Key]].Name);
+            Assert.True(vars.Count(kv => kv.Value.Name == g.Name && ContinuousBatchLayout.RidesBatch(kv.Value)) <= 1);
+        });
         Assert.Equal(def.Displays.GateVariables.Select(g => g.Key).OrderBy(k => k, StringComparer.Ordinal),
             keys.Keys.OrderBy(k => k, StringComparer.Ordinal));
     }

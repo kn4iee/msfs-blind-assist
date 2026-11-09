@@ -12,9 +12,11 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// </summary>
 public static class Bbs757LowerEicasGate
 {
-    public const string LeftN2Key = "TURB ENG N2:1";
-    public const string RightN2Key = "TURB ENG N2:2";
-    public const string PageKey = "L:BBS_ECAM_Mode";
+    // Bare identifiers (R24): the registry builds each hidden copy's key as "BBS757_DISPLAY_GATE_" + key, and no 757
+    // variable key carries a space or a colon.
+    public const string LeftN2Key = "BBS757_LOWER_EICAS_N2_1";
+    public const string RightN2Key = "BBS757_LOWER_EICAS_N2_2";
+    public const string PageKey = "BBS_ECAM_Mode";
 
     /// <summary>How far apart (percent points) the memory's HP spool and the simulator's N2 may be.</summary>
     public const double SpoolTolerance = 0.1;

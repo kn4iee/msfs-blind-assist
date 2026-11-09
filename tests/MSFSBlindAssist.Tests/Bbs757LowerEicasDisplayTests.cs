@@ -28,7 +28,7 @@ public class Bbs757LowerEicasDisplayTests
         Assert.Equal("bbs757-lower-eicas", Bbs757LowerEicasDisplay.LogChannel);
         Assert.Equal(250, Bbs757LowerEicasDisplay.TickMs);
         Assert.Equal("EICAS status messages", Bbs757LowerEicasDisplay.MonitorRowLabel);
-        Assert.Equal(new[] { "TURB ENG N2:1", "TURB ENG N2:2", "L:BBS_ECAM_Mode" }, Bbs757LowerEicasDisplay.GateKeys);
+        Assert.Equal(new[] { "BBS757_LOWER_EICAS_N2_1", "BBS757_LOWER_EICAS_N2_2", "BBS_ECAM_Mode" }, Bbs757LowerEicasDisplay.GateKeys);
         IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading> reader = new Bbs757LowerEicasDisplay();
         Assert.Equal(3, reader.GateVariables.Count);
         Assert.Equal("percent", reader.GateVariables[0].Units);
