@@ -300,19 +300,20 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
             || !Int(entry, l.EntryLevel, out int level))
             return false;
         uint text = unchecked((uint)textPv);
-        if (text == 0 || length < 1 || length > l.MaxTextLength || length > int.MaxValue / Word
+        if (text == 0 || length < 1 || length > l.MaxTextLength || length >= int.MaxValue / Word
             || !TryReadText(text, length, out string s))
             return false;
         e = new Bbs757EicasRawEntry(id, s, level, cancelled);
         return true;
     }
 
-    /// <summary>A UTF-32 text of <paramref name="length"/> code points, each a Unicode scalar value.</summary>
+    /// <summary>A UTF-32 text of <paramref name="length"/> code points, each a Unicode scalar value, followed by the
+    /// literal's 0 terminator, where the draw stops: anything else at that place is a torn read.</summary>
     private bool TryReadText(uint at, int length, out string text)
     {
         text = "";
-        var bytes = new byte[length * Word];
-        if (!_memory.TryRead(at, bytes)) return false;
+        var bytes = new byte[(length + 1) * Word];
+        if (!_memory.TryRead(at, bytes) || BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(length * Word)) != 0) return false;
         var sb = new StringBuilder(length);
         Span<char> utf16 = stackalloc char[2];
         for (int i = 0; i < length; i++)

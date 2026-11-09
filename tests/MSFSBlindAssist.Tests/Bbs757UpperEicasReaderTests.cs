@@ -307,7 +307,7 @@ public class Bbs757UpperEicasReaderTests
     public enum Tear
     {
         EndBeforeBegin, CapBeforeEnd, Misaligned, NullStorage, NullEntry, EntryOutside, NullText, TextOutside, ZeroLength,
-        LengthOverMax, Surrogate, BeyondUnicode, UnknownLevel,
+        LengthOverMax, Surrogate, BeyondUnicode, UnknownLevel, NoTerminator, TerminatorOutside,
     }
 
     public static IEnumerable<object[]> Tears() =>
@@ -341,6 +341,13 @@ public class Bbs757UpperEicasReaderTests
             case Tear.Surrogate: I32(b, text + 4, 0xD800); break;
             case Tear.BeyondUnicode: I32(b, text + 4, 0x110000); break;
             case Tear.UnknownLevel: I32(b, entry + L.EntryLevel, 5); break;
+            case Tear.NoTerminator: I32(b, text + 4 * P(b, entry + L.EntryLength), 'X'); break;
+            case Tear.TerminatorOutside:
+                // The whole text inside the module, its terminator just past the end.
+                uint bytes = 4 * P(b, entry + L.EntryLength), last = Size - bytes;
+                b.AsSpan((int)text, (int)bytes).CopyTo(b.AsSpan((int)last));
+                I32(b, entry + L.EntryText, last);
+                break;
         }
     }
 
@@ -406,9 +413,10 @@ public class Bbs757UpperEicasReaderTests
         Assert.Equal(new[] { "APU FIRE", "L ENG OVHT", " PARKING BRAKE", "\U0001F6EB WIDE", " SELCAL" }, eicas.Messages.Select(m => m.Text));
         Assert.Equal(new[] { "warning", "caution", "advisory", "caution", "communication" }, eicas.Messages.Select(m => m.Level));
 
-        // Read to its stored length: what follows in memory is not part of it.
+        // The text ends where BlueBird's literal does, at its stored length with its terminator (where the draw stops):
+        // anything else in that place is a torn read, never a longer or a shorter text.
         I32(bytes, MainTexts + 2 * TextPitch + 4 * " PARKING BRAKE".Length, 'X');
-        Assert.Equal(" PARKING BRAKE", Read(bytes).Messages[2].Text);
+        Assert.True(Read(bytes).Corrupt);
     }
 
     [Theory]
