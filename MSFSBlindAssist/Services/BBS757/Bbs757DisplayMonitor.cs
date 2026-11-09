@@ -222,7 +222,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         State.Mismatched => HeardStopLine(Bbs757DisplayReasons.Mismatch),
         _ when _stopReason is { } heard => HeardStopLine(heard),
         State.WaitingForSimulator => Bbs757DisplaySpeech.Waiting(_reader.Name),
-        State.Running when _lastLit == false => Bbs757DisplaySpeech.Unpowered(_reader.Name),
+        State.Running or State.Verifying when _lastLit == false => Bbs757DisplaySpeech.Unpowered(_reader.Name),
         _ => Bbs757DisplaySpeech.Starting(_reader.Name), // starting, or running while the display powers up
     };
 

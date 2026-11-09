@@ -268,6 +268,22 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
+    public void A_dark_display_while_verifying_shows_not_powered()
+    {
+        // A session that starts with the display dark never verifies (the reading is quiet and holds the candidate):
+        // the window says so, never "starting" for as long as the display is dark.
+        var h = New();
+        h.Reader.LitNow = false;
+        h.Start();
+        for (int i = 0; i < 300 && h.State != "Verifying"; i++) h.Tick();
+        Assert.Equal("Verifying", h.State);
+        h.Tick(10);
+        Assert.Equal("Verifying", h.State);
+        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View());
+        Assert.Empty(h.Env.Spoken);
+    }
+
+    [Fact]
     public void A_reader_with_no_power_state_shows_its_rows_throughout()
     {
         // The FMA's path (Lit null): no "not powered" or "starting" row while it runs.
@@ -296,12 +312,13 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         Assert.Equal("Verifying", h.State);
         Assert.Equal(1, h.Env.LocateCalls);
         Assert.False(Assert.Single(h.Reader.Samplers).Disposed);
-        Assert.Equal(new[] { StartingRow }, h.Monitor.View());
+        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View()); // dark while verifying: not "starting"
 
         h.Reader.LitNow = true;
         h.Reader.Samplers[0].Reading = R("B");
         h.Tick(100); // lit for 9.9 s
         Assert.Equal("Verifying", h.State);
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View()); // lit, powering up
 
         h.Tick(); // lit for 10 s: trusted, and a silent baseline
         Assert.Equal("Running", h.State);
