@@ -47,6 +47,9 @@ public class Bbs757UpperEicasLayoutTests
         EnvelopeRows: 420,
         EnvelopeRowStride: 36,
         EnvelopeRowCount: 3,
+        EnvelopeRowFl: 0,
+        EnvelopeRowMin: 4,
+        EnvelopeRowMax: 8,
         MainList: 0xf0a64,
         CommunicationList: 0xf0a84,
         EntryText: 0,
@@ -160,6 +163,9 @@ public class Bbs757UpperEicasLayoutTests
         Assert.Equal("warning", loaded.Levels.Lookup(4));
         Assert.Contains(Bbs757LayoutDescriptions.DescribeUpperEicas(loaded),
             line => line.Contains("recallShowSeconds 0.5", StringComparison.Ordinal));
+        Assert.Contains(Bbs757LayoutDescriptions.DescribeUpperEicas(loaded),
+            line => line.Contains("envelopeRowFl 0, envelopeRowMin 4, envelopeRowMax 8", StringComparison.Ordinal));
+        Assert.Equal((0, 4, 8), (loaded.EnvelopeRowFl, loaded.EnvelopeRowMin, loaded.EnvelopeRowMax));
 
         // Equality is content equality over every field but the source file.
         Assert.Equal(Sample(), Sample() with

@@ -94,7 +94,8 @@ public static class Bbs757LayoutDescriptions
             $"timedBlank {l.TimedBlank}, compact {l.Compact}, egtRed {l.EgtRed}, egtAmber {l.EgtAmber}, n1Red {l.N1Red}, " +
             $"n1Amber {l.N1Amber}, maxN1Left {l.MaxN1Left}, maxN1Right {l.MaxN1Right}, maxEgtLeft {l.MaxEgtLeft}, " +
             $"maxEgtRight {l.MaxEgtRight}, envelopeRows {l.EnvelopeRows}, envelopeRowStride {l.EnvelopeRowStride}, " +
-            $"envelopeRowCount {l.EnvelopeRowCount}",
+            $"envelopeRowCount {l.EnvelopeRowCount}, envelopeRowFl {l.EnvelopeRowFl}, envelopeRowMin {l.EnvelopeRowMin}, " +
+            $"envelopeRowMax {l.EnvelopeRowMax}",
             $"file analysis: {f}: upper EICAS messages: mainList {H(l.MainList)}, communicationList {H(l.CommunicationList)}, " +
             $"entryText {l.EntryText}, entryLength {l.EntryLength}, entryId {l.EntryId}, entryCancelled {l.EntryCancelled}, " +
             $"entryLevel {l.EntryLevel}, maxMessages {l.MaxMessages}, maxTextLength {l.MaxTextLength}, " +

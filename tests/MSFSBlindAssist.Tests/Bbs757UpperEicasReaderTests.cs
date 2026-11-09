@@ -97,9 +97,9 @@ public class Bbs757UpperEicasReaderTests
         for (int k = 0; k < raw.EnvelopeRows.Count; k++)
         {
             long row = Upper + L.EnvelopeRows + k * L.EnvelopeRowStride;
-            I32(b, row, raw.EnvelopeRows[k].Fl);
-            I32(b, row + 4, raw.EnvelopeRows[k].Min);
-            I32(b, row + 8, raw.EnvelopeRows[k].Max);
+            I32(b, row + L.EnvelopeRowFl, raw.EnvelopeRows[k].Fl);
+            I32(b, row + L.EnvelopeRowMin, raw.EnvelopeRows[k].Min);
+            I32(b, row + L.EnvelopeRowMax, raw.EnvelopeRows[k].Max);
         }
 
         I32(b, Computer + L.ComputerPage, raw.Page);
@@ -271,6 +271,24 @@ public class Bbs757UpperEicasReaderTests
         var noRows = Array.Empty<Bbs757EicasRawEnvelopeRow>();
         Assert.Equal(raw with { Main = noEntries, Communication = noEntries, EnvelopeRows = noRows },
             read with { Main = noEntries, Communication = noEntries, EnvelopeRows = noRows });
+    }
+
+    [Fact]
+    public void The_envelope_rows_are_read_through_the_layouts_row_fields()
+    {
+        var raw = Live() with { EnvelopeRows = [new(250, 260, 360), new(230, 255, 360), default] };
+        var permuted = L with { EnvelopeRowFl = 8, EnvelopeRowMin = 0, EnvelopeRowMax = 4 };
+        var bytes = Place(raw);
+        for (int k = 0; k < raw.EnvelopeRows.Count; k++)
+        {
+            long row = Upper + L.EnvelopeRows + k * L.EnvelopeRowStride;
+            I32(bytes, row + permuted.EnvelopeRowFl, raw.EnvelopeRows[k].Fl);
+            I32(bytes, row + permuted.EnvelopeRowMin, raw.EnvelopeRows[k].Min);
+            I32(bytes, row + permuted.EnvelopeRowMax, raw.EnvelopeRows[k].Max);
+        }
+        using var r = Reader(bytes, permuted);
+        Assert.True(r.TryReadRaw(out var read));
+        Assert.Equal(raw.EnvelopeRows, read.EnvelopeRows);
     }
 
     [Theory]
@@ -501,6 +519,7 @@ public class Bbs757UpperEicasReaderTests
             ("the reverser", L with { ReverserState = (int)Outside }),
             ("the component vector", L with { PneumaticComponents = (int)Outside }),
             ("the envelope rows", L with { EnvelopeRows = (int)Outside }),
+            ("the envelope row's max", L with { EnvelopeRowMax = (int)Outside }),
             ("the power byte", L with { Powered = (int)Outside }),
             ("the max memories", L with { MaxEgtRight = (int)Outside }),
         })

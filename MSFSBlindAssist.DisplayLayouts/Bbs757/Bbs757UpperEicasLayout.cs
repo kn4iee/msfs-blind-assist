@@ -7,7 +7,9 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// layout file, never hardcoded (BBS757-D2). The object is found through the gauge manager as the FMA's PFD is:
 /// <see cref="ManagerBase"/> is the manager's static address and the upper EICAS is the one pointer in its
 /// <see cref="ManagerSpan"/> bytes whose target starts with <see cref="UpperEicasVptr"/>. The <c>To...</c> fields are
-/// offsets of pointers to the objects it draws from; every other offset is into the object named in its group;
+/// offsets of pointers to the objects it draws from; <see cref="EnvelopeRowFl"/>, <see cref="EnvelopeRowMin"/> and
+/// <see cref="EnvelopeRowMax"/> are into one in-flight start row (<see cref="EnvelopeRowStride"/> bytes from
+/// <see cref="EnvelopeRows"/>); every other offset is into the object named in its group;
 /// <see cref="MainList"/>, <see cref="CommunicationList"/> and <see cref="Clock"/> are static addresses. Equality
 /// compares every field by content (the arrays and word tables too) except <see cref="SourceFile"/>, so the same
 /// build installed twice gives one layout.
@@ -45,6 +47,9 @@ public sealed record Bbs757UpperEicasLayout(
     int EnvelopeRows,
     int EnvelopeRowStride,
     int EnvelopeRowCount,
+    int EnvelopeRowFl,
+    int EnvelopeRowMin,
+    int EnvelopeRowMax,
     uint MainList,
     uint CommunicationList,
     int EntryText,
@@ -147,6 +152,9 @@ public sealed record Bbs757UpperEicasLayout(
         && EnvelopeRows == other.EnvelopeRows
         && EnvelopeRowStride == other.EnvelopeRowStride
         && EnvelopeRowCount == other.EnvelopeRowCount
+        && EnvelopeRowFl == other.EnvelopeRowFl
+        && EnvelopeRowMin == other.EnvelopeRowMin
+        && EnvelopeRowMax == other.EnvelopeRowMax
         && MainList == other.MainList
         && CommunicationList == other.CommunicationList
         && EntryText == other.EntryText
@@ -250,6 +258,9 @@ public sealed record Bbs757UpperEicasLayout(
         h.Add(EnvelopeRows);
         h.Add(EnvelopeRowStride);
         h.Add(EnvelopeRowCount);
+        h.Add(EnvelopeRowFl);
+        h.Add(EnvelopeRowMin);
+        h.Add(EnvelopeRowMax);
         h.Add(MainList);
         h.Add(CommunicationList);
         h.Add(EntryText);

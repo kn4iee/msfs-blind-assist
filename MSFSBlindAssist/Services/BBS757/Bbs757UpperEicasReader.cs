@@ -87,12 +87,11 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     /// <summary>The manual thrust reference flag, BlueBird's L:var (no prefix), as the draw reads it (S10).</summary>
     public const string ManualKey = "BBS757_THRREF_PULL";
 
-    // The shapes of the module's own types, not addresses: a wasm32 pointer and i32 are 4 bytes, a libc++
-    // std::vector is (begin, end, cap) pointers, a text is UTF-32. The envelope row's fields (FL, min, max) are three
-    // i32s from the row's start (layout-fields.md: "each row i32 FL +0, min +4, max +8").
+    // A wasm32 pointer, i32 and UTF-32 code point are 4 bytes; a std::vector's layout (begin, end, capacity) is libc++
+    // ABI, known to the reader, as Bbs757EfbMemLayout states for its vectors. Neither is BlueBird's: every offset into
+    // BlueBird's own objects and structs is a layout field.
     private const int Word = 4;
-    private const int VectorEnd = Word, VectorCap = 2 * Word;
-    private const int RowMin = Word, RowMax = 2 * Word;
+    private const int VectorBegin = 0, VectorEnd = Word, VectorCap = 2 * Word;
 
     // The reverser states the draw tests (22928, 22929): moving (REV amber), fully deployed (REV green, the thrust
     // reference hidden).
@@ -249,7 +248,8 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         for (int k = 0; k < read.Length; k++)
         {
             if (!At(eicas, (long)l.EnvelopeRows + (long)k * l.EnvelopeRowStride, out uint row)
-                || !Int(row, 0, out int fl) || !Int(row, RowMin, out int min) || !Int(row, RowMax, out int max))
+                || !Int(row, l.EnvelopeRowFl, out int fl) || !Int(row, l.EnvelopeRowMin, out int min)
+                || !Int(row, l.EnvelopeRowMax, out int max))
                 return false;
             read[k] = new Bbs757EicasRawEnvelopeRow(fl, min, max);
         }
@@ -261,7 +261,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     private bool Vector(uint at, bool withCap, out uint begin, out uint end, out uint cap)
     {
         begin = end = cap = 0;
-        if (!Int(at, 0, out int bv) || !Int(at, VectorEnd, out int ev)) return false;
+        if (!Int(at, VectorBegin, out int bv) || !Int(at, VectorEnd, out int ev)) return false;
         begin = unchecked((uint)bv);
         end = unchecked((uint)ev);
         if (!withCap) return true;
