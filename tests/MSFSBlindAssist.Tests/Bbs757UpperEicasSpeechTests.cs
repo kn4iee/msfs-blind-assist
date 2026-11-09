@@ -266,16 +266,44 @@ public class Bbs757UpperEicasSpeechTests
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
     [InlineData("en-US")]
-    public void A_value_going_blank_or_coming_back_says_no_color(string culture)
+    public void A_value_going_blank_says_no_color(string culture)
     {
         var amber = Gauge(Eicas(), V("EGT", "800", "360", "amber"));
         var blank = Gauge(Eicas(), V("EGT", null, "360"));
         Assert.Empty(Said(culture, amber, blank));
-        Assert.Empty(Said(culture, blank, amber));
         var n1Red = Gauge(Eicas(), V("N1", "109.0", "98.0", "red"));
         Assert.Empty(Said(culture, n1Red, Gauge(Eicas(), V("N1", null, "98.0"))));
         // A row missing from a reading says nothing either.
         Assert.Empty(Said(culture, amber, Without(amber, "EGT")));
+        Assert.Empty(Said(culture, Without(amber, "EGT"), amber));
+    }
+
+    // R42: a sighted pilot sees a value come back amber or red, so its color is said; one coming back with no color (a
+    // PW engine's readouts at its start) says nothing.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    [InlineData("en-US")]
+    public void A_value_coming_back_from_blank_says_only_a_color(string culture)
+    {
+        var blank = Gauge(Eicas(), V("EGT", null, "360"));
+        Assert.Equal(new[] { Colors("EICAS: L EGT red") }, Said(culture, blank, Gauge(Eicas(), V("EGT", "851", "360", "red"))));
+        Assert.Equal(new[] { Colors("EICAS: L EGT amber") }, Said(culture, blank, Gauge(Eicas(), V("EGT", "800", "360", "amber"))));
+        Assert.Empty(Said(culture, blank, Gauge(Eicas(), V("EGT", "702", "360"))));
+
+        // Amber, blank for a tick, then back red: the red is said (the monitor's baseline moved to the blank reading).
+        var amber = Gauge(Eicas(), V("EGT", "800", "360", "amber"));
+        var red = Gauge(Eicas(), V("EGT", "851", "360", "red"));
+        Assert.Empty(Said(culture, amber, blank));
+        Assert.Equal(new[] { Colors("EICAS: L EGT red") }, Said(culture, blank, red));
+
+        // In the one colors line and its order, beside a color change on a value drawn throughout.
+        var bothBlank = Gauge(Gauge(Eicas(), V("N1", "19.9", "19.9")), V("EGT", null, null));
+        var back = Gauge(Gauge(Eicas(), V("N1", "19.9", "108.5", null, "amber")), V("EGT", "851", "812", "red", "amber"));
+        Assert.Equal(new[] { Colors("EICAS: R N1 amber, L EGT red, R EGT amber") }, Said(culture, bothBlank, back));
+        // The N1 coming back red on one side, white on the other.
+        var n1Blank = Gauge(Eicas(), V("N1", null, null));
+        Assert.Equal(new[] { Colors("EICAS: R N1 red") }, Said(culture, n1Blank, Gauge(Eicas(), V("N1", "26.3", "109.0", null, "red"))));
     }
 
     [Theory]

@@ -64,7 +64,8 @@ public static class Bbs757UpperEicasSpeech
     /// nothing drawn "none" (R12).</item>
     /// <item>The N1 and EGT colors (R5), on <see cref="Bbs757UpperEicasDisplay.ColorsKey"/>: each engine's that changed
     /// while its value is drawn before and after, in one line, left N1, right N1, left EGT, right EGT: "EICAS: L EGT
-    /// amber, R EGT amber", no color "normal". A value going blank or coming back says nothing.</item>
+    /// amber, R EGT amber", no color "normal". A value coming back from blank amber or red says its color in that line
+    /// ("EICAS: L EGT red", R42); one coming back with no color, or going blank, says nothing.</item>
     /// </list>
     /// Nothing else is spoken: no gauge value, TAT, TAI, REV, in-flight start block, page or RECALL word.
     /// </summary>
@@ -107,10 +108,10 @@ public static class Bbs757UpperEicasSpeech
         foreach (string label in new[] { Bbs757EicasValue.N1Label, Bbs757EicasValue.EgtLabel })
         {
             if (Row(heard, label) is not { } then || Row(now, label) is not { } current) continue;
-            if (ColorChanged(then.Left, then.LeftColor, current.Left, current.LeftColor))
-                colors.Add(Left + " " + label + " " + (current.LeftColor ?? Normal));
-            if (ColorChanged(then.Right, then.RightColor, current.Right, current.RightColor))
-                colors.Add(Right + " " + label + " " + (current.RightColor ?? Normal));
+            if (ColorSaid(then.Left, then.LeftColor, current.Left, current.LeftColor) is { } leftColor)
+                colors.Add(Left + " " + label + " " + leftColor);
+            if (ColorSaid(then.Right, then.RightColor, current.Right, current.RightColor) is { } rightColor)
+                colors.Add(Right + " " + label + " " + rightColor);
         }
         if (colors.Count > 0) lines.Add(new Bbs757SpokenLine(Bbs757UpperEicasDisplay.ColorsKey, MessageLine + string.Join(", ", colors)));
 
@@ -188,9 +189,15 @@ public static class Bbs757UpperEicasSpeech
         return i < Levels.Length ? Levels[i].Row : level ?? Bbs757WordTable.Unrecognised;
     }
 
-    /// <summary>A color change that counts: the value drawn before and after, its color not the same.</summary>
-    private static bool ColorChanged(string? valueBefore, string? colorBefore, string? valueAfter, string? colorAfter) =>
-        valueBefore is not null && valueAfter is not null && !string.Equals(colorBefore, colorAfter, StringComparison.Ordinal);
+    /// <summary>The color word to say for one engine's value, or null: a value drawn before and after whose color changed
+    /// says its new one ("normal" for none); a value coming back from blank says its color only when it has one (R42); a
+    /// value going blank, or staying blank, says nothing.</summary>
+    private static string? ColorSaid(string? valueBefore, string? colorBefore, string? valueAfter, string? colorAfter)
+    {
+        if (valueAfter is null) return null;
+        if (valueBefore is null) return colorAfter;
+        return string.Equals(colorBefore, colorAfter, StringComparison.Ordinal) ? null : colorAfter ?? Normal;
+    }
 
     /// <summary>The gauge row with <paramref name="label"/>, or null when the reading has none.</summary>
     private static Bbs757EicasValue? Row(Bbs757UpperEicasReading r, string label)
