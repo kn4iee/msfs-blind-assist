@@ -111,10 +111,10 @@
 
 ## Execution record
 
-- **Status:** not started
-- **Claimed by:**
-- **Worked by:**
-- **Started:**
+- **Status:** claimed (2026-11-09)
+- **Claimed by:** Claude, for the owner (kn4iee), 2026-11-09
+- **Worked by:** Claude for kn4iee (subagent-driven development)
+- **Started:** 2026-11-09, from `B757` 8b04ea227 (plan 23 landed; plan 24 claimed by Robin)
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
