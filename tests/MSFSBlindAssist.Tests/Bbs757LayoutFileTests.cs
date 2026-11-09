@@ -13,6 +13,10 @@ public class Bbs757LayoutFileTests
     private const string Hash0 = "0000000000000000000000000000000000000000000000000000000000000000";
     private const string Hash1 = "1111111111111111111111111111111111111111111111111111111111111111";
 
+    /// <summary>The sample FMA and EFB layouts, for the tests that build a whole 757 file.</summary>
+    public static Bbs757FmaLayout SampleFma() => SampleLayout();
+    public static Bbs757EfbMemLayout SampleEfb() => SampleEfbLayout();
+
     private static Bbs757FmaLayout SampleLayout() => new(
         SourceFile: "",
         AnchorAddress: 0x636930,
@@ -173,7 +177,11 @@ public class Bbs757LayoutFileTests
         DataRanges: new[] { new DataRange(0x400, 64) },
         DataHash: Hash1,
         Searches: Array.Empty<DataSearch>(),
-        Readers: new[] { new ReaderResult(Bbs757Module.Fma, fma, null), new ReaderResult(Bbs757Module.Efb, efb, null) });
+        Readers: new[]
+        {
+            new ReaderResult(Bbs757Module.Fma, fma, null), new ReaderResult(Bbs757Module.Efb, efb, null),
+            new ReaderResult(Bbs757Module.LowerEicas, Bbs757LowerEicasLayoutTests.Sample(), null),
+        });
 
     [Fact]
     public void A_fma_layout_round_trips_through_the_format()

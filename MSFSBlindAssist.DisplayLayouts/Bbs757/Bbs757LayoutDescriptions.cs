@@ -34,6 +34,49 @@ public static class Bbs757LayoutDescriptions
         lines.Add($"file analysis: {file}: FMA {column} words: {body}");
     }
 
+    public static IReadOnlyList<string> DescribeLowerEicas(Bbs757LowerEicasLayout l)
+    {
+        string H(uint v) => "0x" + v.ToString("x", CultureInfo.InvariantCulture);
+        string p = $"file analysis: {l.SourceFile}: lower EICAS";
+        var lines = new List<string>
+        {
+            $"{p}: manager {H(l.ManagerBase)} span {l.ManagerSpan}, lowerVptr {H(l.LowerVptr)}",
+            $"{p} power: set {l.PowerSet}, clear {l.PowerClear}, blankClear {l.BlankClear}",
+            $"{p} page: page {l.Page}, enginePage {l.EnginePage}, statusPage {l.StatusPage}, engineOff {l.EngineOff}, nLatch {l.NLatch}",
+            $"{p} engines: left {l.LeftEngine}, right {l.RightEngine}, engineToData {l.EngineToData}, engineType {l.EngineType}, " +
+            $"engineInvalid {l.EngineInvalid}, engineInvalidValue {l.EngineInvalidValue}, hpSpoolRr {l.HpSpoolRr}, hpSpoolPw {l.HpSpoolPw}",
+        };
+        if (l.Engine is { } e)
+        {
+            lines.Add($"{p} engine page data: n2 {e.N2}, n3 {e.N3}, fuelFlow {e.FuelFlow}, oilPressure {e.OilPressure}, " +
+                $"oilTemperature {e.OilTemperature}, oilQuantity {e.OilQuantity}, vibration {e.Vibration}");
+            lines.Add($"{p} engine page fields: maxN2 {e.MaxN2Left}/{e.MaxN2Right}, maxN3 {e.MaxN3Left}/{e.MaxN3Right}, " +
+                $"lowerToSettings {e.LowerToSettings}, poundsFlag {e.PoundsFlag}, startFlags {e.StartFlagA}/{e.StartFlagB}/{e.StartFlagC}, " +
+                $"holdTimer {e.HoldTimer}, holdDelay {e.HoldDelay}, holdBytes {e.HoldByteA}/{e.HoldByteB}");
+        }
+        else
+        {
+            lines.Add($"{p}: engine page missing: {l.EngineMissing}");
+        }
+        if (l.Status is { } s)
+        {
+            lines.Add($"{p} status list: listAddress {H(s.ListAddress)}, begin {s.ListBegin}, end {s.ListEnd}, stride {s.ListStride}, " +
+                $"listCap {s.ListCap}, text {s.RecordText}, length {s.RecordLength}, sequence {s.RecordSequence}");
+            lines.Add($"{p} status hydraulics: lowerToHydraulics {s.LowerToHydraulics}, pressures {s.HydraulicPressures} stride {s.HydraulicPressureStride}, " +
+                $"quantities {s.HydraulicQuantities} stride {s.HydraulicQuantityStride}, capacity {s.HydraulicCapacity}, quantity {s.HydraulicQuantity}");
+            lines.Add($"{p} status apu: lowerToApu {s.LowerToApu}, egt {s.ApuEgt}, rpm {s.ApuRpm}, oilQuantity {s.ApuOilQuantity}");
+            lines.Add($"{p} status oxygen: lowerToOxygen {s.LowerToOxygen}, shown {s.OxygenShown}, capacity {s.OxygenCapacity}, " +
+                $"active {s.OxygenActive}, full {s.OxygenFull}, oxygenLevel {s.OxygenLevel}");
+            lines.Add($"{p} status pointers: rudder {s.Rudder}, aileronLeft {s.AileronLeft}, elevator {s.Elevator}, aileronRight {s.AileronRight}");
+            lines.Add($"{p} status brakes: lowerToComputer {s.LowerToComputer}, brakeTemperatures {s.BrakeTemperatures}, wheels {s.BrakeWheels}");
+        }
+        else
+        {
+            lines.Add($"{p}: status page missing: {l.StatusMissing}");
+        }
+        return lines;
+    }
+
     public static IReadOnlyList<string> DescribeEfb(Bbs757EfbMemLayout l)
     {
         string H(uint v) => "0x" + v.ToString("x", CultureInfo.InvariantCulture);
