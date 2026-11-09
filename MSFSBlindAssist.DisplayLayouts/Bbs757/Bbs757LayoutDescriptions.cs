@@ -77,6 +77,60 @@ public static class Bbs757LayoutDescriptions
         return lines;
     }
 
+    public static IReadOnlyList<string> DescribeUpperEicas(Bbs757UpperEicasLayout l)
+    {
+        string H(uint v) => "0x" + v.ToString("x", CultureInfo.InvariantCulture);
+        string D(double v) => v.ToString("0.0###", CultureInfo.InvariantCulture);
+        string A(int[] v) => "[" + string.Join(", ", v.Select(x => x.ToString(CultureInfo.InvariantCulture))) + "]";
+        string f = l.SourceFile;
+        var lines = new List<string>
+        {
+            $"file analysis: {f}: upper EICAS: manager {H(l.ManagerBase)} span {l.ManagerSpan}, upper EICAS vptr {H(l.UpperEicasVptr)}",
+            $"file analysis: {f}: upper EICAS links: toComputer {l.ToComputer}, toEngineLeft {l.ToEngineLeft}, " +
+            $"toEngineRight {l.ToEngineRight}, toLower {l.ToLower}, toPneumatic {l.ToPneumatic}, toFms {l.ToFms}, " +
+            $"toFire {l.ToFire}, toReverserLeft {l.ToReverserLeft}, toReverserRight {l.ToReverserRight}, " +
+            $"toTmc {l.ToTmc}, toTat {l.ToTat}",
+            $"file analysis: {f}: upper EICAS power and limits: powered {l.Powered}, failed {l.Failed}, " +
+            $"timedBlank {l.TimedBlank}, compact {l.Compact}, egtRed {l.EgtRed}, egtAmber {l.EgtAmber}, n1Red {l.N1Red}, " +
+            $"n1Amber {l.N1Amber}, maxN1Left {l.MaxN1Left}, maxN1Right {l.MaxN1Right}, maxEgtLeft {l.MaxEgtLeft}, " +
+            $"maxEgtRight {l.MaxEgtRight}, envelopeRows {l.EnvelopeRows}, envelopeRowStride {l.EnvelopeRowStride}, " +
+            $"envelopeRowCount {l.EnvelopeRowCount}",
+            $"file analysis: {f}: upper EICAS messages: mainList {H(l.MainList)}, communicationList {H(l.CommunicationList)}, " +
+            $"entryText {l.EntryText}, entryLength {l.EntryLength}, entryId {l.EntryId}, entryCancelled {l.EntryCancelled}, " +
+            $"entryLevel {l.EntryLevel}, maxMessages {l.MaxMessages}, maxTextLength {l.MaxTextLength}, " +
+            $"linesPerPage {l.LinesPerPage}, communicationLinesBase {l.CommunicationLinesBase}",
+            $"file analysis: {f}: upper EICAS computer: computerPage {l.ComputerPage}, computerRecallTime {l.ComputerRecallTime}, " +
+            $"computerBlank {l.ComputerBlank}, clock {H(l.Clock)}, recallShowSeconds {D(l.RecallShowSeconds)}, " +
+            $"pageWord {l.PageWord}, recallWord {l.RecallWord}",
+            $"file analysis: {f}: upper EICAS engines: engineBlock {l.EngineBlock}, blockEgt {l.BlockEgt}, blockN1 {l.BlockN1}, " +
+            $"blockEpr {l.BlockEpr}, engineN1Alternate {l.EngineN1Alternate}, engineN1AlternateFlags {A(l.EngineN1AlternateFlags)}, " +
+            $"engineValid {l.EngineValid}, engineInvalidValue {l.EngineInvalidValue}, engineType {l.EngineType}, " +
+            $"engineTypePw {l.EngineTypePw}, engineCombustion {l.EngineCombustion}, pwBlankBelow {D(l.PwBlankBelow)}, " +
+            $"blockN2Pw {l.BlockN2Pw}",
+            $"file analysis: {f}: upper EICAS thrust reference: thrustMode {l.ThrustMode}, thrustNumber {l.ThrustNumber}, " +
+            $"derate {l.Derate}, dtoFlags {A(l.DtoFlags)}, derateShown {l.DerateShown}, referenceEpr {l.ReferenceEpr}, " +
+            $"manualEprLeft {l.ManualEprLeft}, manualEprRight {l.ManualEprRight}, tmcFailed {l.TmcFailed}, " +
+            $"tmcChannelLeft {l.TmcChannelLeft}, tmcChannelRight {l.TmcChannelRight}, dtoWord {l.DtoWord}, " +
+            $"manualWord {l.ManualWord}, numberedModes {A(l.NumberedModes)}, inhibitModes {A(l.InhibitModes)}",
+            $"file analysis: {f}: upper EICAS others: tatValue {l.TatValue}, reverserState {l.ReverserState}, " +
+            $"pneumaticComponents {l.PneumaticComponents}, componentStride {l.ComponentStride}, componentId {l.ComponentId}, " +
+            $"componentPosition {l.ComponentPosition}, componentState {l.ComponentState}, taiLeftId {l.TaiLeftId}, " +
+            $"taiRightId {l.TaiRightId}, taiMinOpen {D(l.TaiMinOpen)}, taiStates {A(l.TaiStates)}, maxComponents {l.MaxComponents}",
+            $"file analysis: {f}: upper EICAS envelope gate: fmsOnGround {l.FmsOnGround}, fireSwitchLeft {l.FireSwitchLeft}, " +
+            $"fireSwitchRight {l.FireSwitchRight}, lowerMode {l.LowerMode}, envelopeLowerMode {l.EnvelopeLowerMode}, " +
+            $"envelopeTitle {l.EnvelopeTitle}, envelopeFl {l.EnvelopeFl}, envelopeKts {l.EnvelopeKts}",
+        };
+        Words(lines, f, "levels", l.Levels, "upper EICAS");
+        Words(lines, f, "thrust", l.ThrustWords, "upper EICAS");
+        return lines;
+    }
+
+    private static void Words(List<string> lines, string file, string column, Bbs757WordTable table, string display)
+    {
+        string body = string.Join(", ", table.Words.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value}"));
+        lines.Add($"file analysis: {file}: {display} {column} words: {body}");
+    }
+
     public static IReadOnlyList<string> DescribeEfb(Bbs757EfbMemLayout l)
     {
         string H(uint v) => "0x" + v.ToString("x", CultureInfo.InvariantCulture);

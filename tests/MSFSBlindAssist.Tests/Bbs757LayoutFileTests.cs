@@ -58,6 +58,10 @@ public class Bbs757LayoutFileTests
         McpHeading: 848,
         McpValueType: Bbs757McpValueType.F64);
 
+    internal static Bbs757FmaLayout SampleFmaLayout() => SampleLayout();
+
+    internal static Bbs757EfbMemLayout SampleEfbMemLayout() => SampleEfbLayout();
+
     private static Bbs757EfbMemLayout SampleEfbLayout() => new(
         SourceFile: "",
         AnchorAddress: 0x636930,
@@ -181,6 +185,7 @@ public class Bbs757LayoutFileTests
         {
             new ReaderResult(Bbs757Module.Fma, fma, null), new ReaderResult(Bbs757Module.Efb, efb, null),
             new ReaderResult(Bbs757Module.LowerEicas, Bbs757LowerEicasLayoutTests.Sample(), null),
+            new ReaderResult(Bbs757Module.UpperEicas, Bbs757UpperEicasLayoutTests.Sample(), null),
         });
 
     [Fact]
