@@ -120,7 +120,8 @@ public class Bbs757DisplayRegistryTests
         bool handles = true;
         // The base answers this key itself ("Trim announcements off"), so a handler that runs first is heard by silence.
         def.Displays.OnKey(HotkeyAction.ToggleTrimAnnouncements, ctx => { contexts.Add(ctx); return handles; });
-        def.Displays.OnKey(HotkeyAction.ReadDisplayUpperECAM, ctx => ctx.AiRead());
+        // A key no reader has claimed yet (plan 24 owns the upper EICAS's).
+        def.Displays.OnKey(HotkeyAction.ReadDisplayISIS, ctx => ctx.AiRead());
 
         Assert.True(def.HandleHotkeyAction(HotkeyAction.ToggleTrimAnnouncements, sim, speech, null!, null!));
 
@@ -136,8 +137,8 @@ public class Bbs757DisplayRegistryTests
         Assert.Single(speech.All);
 
         // The fallback is the AI read of the same key.
-        Assert.True(def.HandleHotkeyAction(HotkeyAction.ReadDisplayUpperECAM, sim, speech, null!, null!));
-        Assert.Equal(new[] { HotkeyAction.ReadDisplayUpperECAM }, aiReads);
+        Assert.True(def.HandleHotkeyAction(HotkeyAction.ReadDisplayISIS, sim, speech, null!, null!));
+        Assert.Equal(new[] { HotkeyAction.ReadDisplayISIS }, aiReads);
         Assert.Single(speech.All);
     }
 

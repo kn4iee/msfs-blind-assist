@@ -1,0 +1,238 @@
+// Plan 24 Task 6: the upper EICAS reader on the 757 definition: its monitor, its three Ctrl+M rows (after the FMA's) and
+// Alt+E, which opens the "Upper EICAS" window once and shows it again, or falls back to the AI read when the reader
+// cannot run. The window is a real WinForms form (no message loop is needed to show it, as in the display-form tests).
+
+using System.Reflection;
+using System.Windows.Forms;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Forms.BBS757;
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.Services;
+using MSFSBlindAssist.Services.BBS757;
+using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Tests;
+
+public class Bbs757UpperEicasWiringTests
+{
+    [Fact]
+    public void Alt_E_opens_the_upper_eicas_window_while_the_reader_runs()
+    {
+        using var rig = new Rig(started: true);
+
+        Assert.True(rig.PressAltE());
+
+        Assert.Empty(rig.AiReads);
+        var form = Assert.Single(rig.Def.Displays.Windows.OfType<BBS757DisplayForm>());
+        Assert.Equal("Upper EICAS", form.Text);
+        Assert.Equal("Upper EICAS", form.AccessibleName);
+        Assert.True(form.Visible);
+        Assert.Empty(rig.Speech.All);   // the key says nothing itself: the window's title and list are what NVDA reads
+        rig.Def.OnSwitchedAway();
+    }
+
+    [Fact]
+    public void Alt_E_falls_back_to_the_ai_read_when_unavailable()
+    {
+        using var rig = new Rig(started: false);   // never started: the monitor cannot run
+
+        Assert.True(rig.Def.UpperEicas.KeyFallsBackToAi());
+        Assert.True(rig.PressAltE());
+
+        Assert.Equal(new[] { HotkeyAction.ReadDisplayUpperECAM }, rig.AiReads);
+        Assert.Empty(rig.Def.Displays.Windows);
+        Assert.Empty(rig.Speech.All);   // the AI read says its own words, nothing of ours first
+    }
+
+    [Fact]
+    public void The_ctrl_m_rows_are_listed()
+    {
+        var def = new BBS757Definition();
+        var rows = def.MonitorRows();
+
+        var expected = new[]
+        {
+            new MonitorRow(Bbs757UpperEicasDisplay.MessagesKey, "EICAS messages"),
+            new MonitorRow(Bbs757UpperEicasDisplay.ThrustKey, "Thrust reference"),
+            new MonitorRow(Bbs757UpperEicasDisplay.ColorsKey, "Engine gauge colors"),
+        };
+        foreach (var row in expected) Assert.Contains(row, rows);
+        Assert.Equal(expected, def.Displays.Rows.Skip(1).Take(3));
+        Assert.Equal(rows.Count, rows.Select(r => r.Key).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void The_upper_eicas_rows_come_after_the_fmas()
+    {
+        var def = new BBS757Definition();
+
+        Assert.Equal(Bbs757FmaDisplay.MuteKey, def.Displays.Rows[0].Key);
+        Assert.Equal(Bbs757UpperEicasDisplay.MessagesKey, def.Displays.Rows[1].Key);
+        Assert.Same(def.Fma, def.Displays.Monitors[0]);
+        Assert.Same(def.UpperEicas, def.Displays.Monitors[1]);
+    }
+
+    [Fact]
+    public void A_second_Alt_E_shows_the_same_window_again()
+    {
+        using var rig = new Rig(started: true);
+        rig.PressAltE();
+        var first = Assert.Single(rig.Def.Displays.Windows.OfType<BBS757DisplayForm>());
+        first.Hide();
+
+        rig.PressAltE();
+
+        Assert.Same(first, Assert.Single(rig.Def.Displays.Windows));
+        Assert.True(first.Visible);
+        Assert.False(first.IsDisposed);
+        rig.Def.OnSwitchedAway();
+    }
+
+    [Fact]
+    public void Alt_E_exits_output_hotkey_mode_before_showing_the_window()
+    {
+        using var rig = new Rig(started: true);
+        typeof(HotkeyManager).GetField("outputHotkeyModeActive", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(rig.Hotkeys, true);
+        Assert.True(rig.Hotkeys.IsOutputHotkeyModeActive);
+
+        rig.PressAltE();
+
+        Assert.False(rig.Hotkeys.IsOutputHotkeyModeActive);
+        rig.Def.OnSwitchedAway();
+    }
+
+    [Fact]
+    public void Alt_E_makes_the_window_anew_when_it_was_disposed()
+    {
+        using var rig = new Rig(started: true);
+        rig.PressAltE();
+        var first = Assert.Single(rig.Def.Displays.Windows.OfType<BBS757DisplayForm>());
+        first.CloseForGood();
+
+        rig.PressAltE();
+
+        var second = rig.Def.Displays.Windows.OfType<BBS757DisplayForm>().Last();
+        Assert.NotSame(first, second);
+        Assert.True(second.Visible);
+        rig.Def.OnSwitchedAway();
+    }
+
+    [Fact]
+    public void Switching_away_stops_the_upper_eicas_monitor()
+    {
+        using var rig = new Rig(started: true);
+        Assert.Equal("WaitingForSimulator", rig.Def.UpperEicas.StateName);
+
+        rig.Def.OnSwitchedAway();
+
+        Assert.Equal("Stopped", rig.Def.UpperEicas.StateName);
+    }
+
+    [Fact]
+    public void Switching_away_closes_the_upper_eicas_window_for_good()
+    {
+        using var rig = new Rig(started: true);
+        rig.PressAltE();
+        var form = Assert.Single(rig.Def.Displays.Windows.OfType<BBS757DisplayForm>());
+
+        rig.Def.OnSwitchedAway();
+
+        Assert.True(form.IsDisposed);
+    }
+
+    [Fact]
+    public void The_upper_eicas_gate_variables_ride_the_batch_once_each()
+    {
+        // Step 1 (R4): the registry turns the reader's gate variables into hidden batched copies; each is carried once,
+        // either by a variable that already rides the batch or by one hidden copy ([VAR-7]); at most 3 are plan 24's.
+        var def = new BBS757Definition();
+        var vars = def.GetVariables();
+        var keys = def.DisplayCacheKeys();
+
+        foreach (var gate in Bbs757UpperEicasDisplay.GateVariables)
+        {
+            var carriers = vars.Where(kv => kv.Value.Name == gate.Name && kv.Value.Type == gate.Type
+                && ContinuousBatchLayout.RidesBatch(kv.Value)).ToList();
+            var only = Assert.Single(carriers);
+            Assert.Equal(only.Key, keys[gate.Key]);
+            if (gate.Type == SimVarType.SimVar) Assert.Equal("percent", only.Value.Units, ignoreCase: true);
+        }
+        Assert.Equal(3, Bbs757UpperEicasDisplay.GateVariables.Count);
+
+        var copies = Bbs757UpperEicasDisplay.GateKeys.Where(k => keys[k].StartsWith(BBS757Definition.DisplayGateCopyPrefix, StringComparison.Ordinal)).ToList();
+        Assert.InRange(copies.Count, 0, 3);
+        foreach (string k in copies)
+        {
+            var copy = vars[keys[k]];
+            Assert.True(copy.ExcludeFromMonitorManager);   // none is announced or listed in Ctrl+M ([VAR-9])
+            Assert.Equal(UpdateFrequency.Continuous, copy.UpdateFrequency);
+        }
+    }
+
+    /// <summary>A definition with the reader started (never its timer) or not, and Alt+E pressed through its hotkey path.</summary>
+    private sealed class Rig : IDisposable
+    {
+        public BBS757Definition Def { get; }
+        public SpeechCapture Speech { get; } = new();
+        public List<HotkeyAction> AiReads { get; } = new();
+        public HotkeyManager Hotkeys { get; } = new();
+        private readonly SimConnectManager _sim = new(IntPtr.Zero);
+        private readonly Form _parent = new();
+
+        public Rig(bool started)
+        {
+            Def = new BBS757Definition { StartMonitor = StartWithoutTimer };
+            Def.AiReadOverride = a => { AiReads.Add(a); return true; };
+            if (started) Def.StartDisplays(new NoFiles(), new NoLayouts(), _sim, Speech);
+            else _ = Def.Displays;
+        }
+
+        public bool PressAltE() => Def.HandleHotkeyAction(HotkeyAction.ReadDisplayUpperECAM, _sim, Speech, _parent, Hotkeys);
+
+        public void Dispose()
+        {
+            Def.OnSwitchedAway();
+            _parent.Dispose();
+            Hotkeys.Dispose();
+        }
+    }
+
+    private static void StartWithoutTimer(IBbs757DisplayMonitor monitor, IBbs757DisplayEnvironment env)
+    {
+        switch (monitor)
+        {
+            case Bbs757DisplayMonitor<Bbs757FmaLayout, Bbs757FmaReading> fma: fma.Start(env, startTimer: false); break;
+            case Bbs757DisplayMonitor<Bbs757UpperEicasLayout, Bbs757UpperEicasReading> eicas: eicas.Start(env, startTimer: false); break;
+            default: monitor.Start(env); break;
+        }
+    }
+
+    private sealed class NoFiles : IModuleHost
+    {
+        public long NowMs => 0;
+        public string SimulatorVersion => "FS2024";
+        public IReadOnlyList<string> FindInstalledFiles(string simulatorVersion, Action<string> log) => Array.Empty<string>();
+        public byte[] ReadFile(string path) => throw new InvalidOperationException($"the session read {path}");
+
+        public IProcessMemorySource? OpenSimulator(string simulatorVersion, out string? failure)
+        {
+            failure = null;
+            return null;
+        }
+
+        public void Log(string line) { }
+
+        public Task<T> RunInBackground<T>(string name, Func<T> work)
+        {
+            try { return Task.FromResult(work()); }
+            catch (Exception ex) { return Task.FromException<T>(ex); }
+        }
+    }
+
+    private sealed class NoLayouts : ILayoutSource
+    {
+        public LayoutLookup Find(string wasmFile) => new(null, "no layout");
+    }
+}
