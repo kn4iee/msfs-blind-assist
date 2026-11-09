@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services.BBS757;
 
@@ -22,11 +23,17 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
 
     public Bbs757LowerEicasLayout Layout { get; }
 
-    public Bbs757LowerEicasReader(ModuleMemory memory, IDisposable ownedSource, Bbs757LowerEicasLayout layout)
+    private readonly Action<string> _log;
+    private string? _cause; // why the last reading was corrupt, until a good one: logged once per change
+
+    /// <param name="log">Where a corrupt reading's cause goes (CORE-15): the lower EICAS channel unless a test injects one.</param>
+    public Bbs757LowerEicasReader(ModuleMemory memory, IDisposable ownedSource, Bbs757LowerEicasLayout layout,
+        Action<string>? log = null)
     {
         _memory = memory;
         _ownedSource = ownedSource;
         Layout = layout;
+        _log = log ?? (line => Log.Channel(Bbs757LowerEicasDisplay.LogChannel).Debug(line));
     }
 
     /// <summary>The lower EICAS object: the first manager pointer whose target carries the class vptr.</summary>
@@ -74,14 +81,21 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
 
         if (!ReadMessages(out List<string> messages, out bool listCorrupt)) return false;
 
+        // The value-range checks apply only while the display draws: nothing is drawn while it is not powered. The status
+        // list walk's structural checks (pointers inside the module, count within its cap) are always on.
         bool bad = listCorrupt;
-        double C(double v)
+        string? cause = listCorrupt ? "the status list walk failed (a pointer, count, length or character out of range)" : null;
+        double C(string name, double v)
         {
-            if (!double.IsFinite(v) || Math.Abs(v) > 1e9) bad = true;
+            if (powered && (!double.IsFinite(v) || Math.Abs(v) > 1e9))
+            {
+                bad = true;
+                cause ??= string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{name} = {v:R} is out of range");
+            }
             return v;
         }
-        C(leftHp);
-        C(rightHp);
+        C("left HP spool", leftHp);
+        C("right HP spool", rightHp);
 
         bool pounds = false;
         Bbs757LowerEicasEngineRaw[]? engines = null;
@@ -100,7 +114,23 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
         if (Layout.Status is { } sp)
         {
             if (!ReadStatus(lower, sp, C, out status)) return false;
-            if (status.BrakeTemperatures.Any(d => d > 9)) bad = true;
+            if (powered)
+            {
+                for (int i = 0; i < status.BrakeTemperatures.Count; i++)
+                {
+                    if (status.BrakeTemperatures[i] <= 9) continue;
+                    bad = true;
+                    cause ??= string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                        $"brake {i + 1} digit = {status.BrakeTemperatures[i]} is above 9");
+                    break;
+                }
+            }
+        }
+
+        if (cause != _cause)
+        {
+            _cause = cause;
+            if (cause is not null) _log("corrupt reading: " + cause);
         }
 
         IReadOnlyList<string> rows = Array.Empty<string>();
@@ -123,7 +153,7 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
     }
 
     private bool ReadEngine(uint lower, uint engine, bool isLeft, Bbs757LowerEicasEnginePage e, int hpOffset,
-        Func<double, double> check, out Bbs757LowerEicasEngineRaw raw)
+        Func<string, double, double> check, out Bbs757LowerEicasEngineRaw raw)
     {
         raw = default!;
         uint data = engine + (uint)Layout.EngineToData;
@@ -141,13 +171,19 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
             return false;
         // BlueBird's hold: the timer has not reached its delay, or either hold byte is set.
         bool hold = timer < delay || ha != 0 || hb != 0;
-        foreach (double v in new[] { n2, n3, ff, oilP, oilT, oilQ, vib, hp, maxN2, maxN3, timer, delay }) check(v);
+        string side = isLeft ? "left" : "right";
+        var checks = new (string Name, double V)[]
+        {
+            ("N2", n2), ("N3", n3), ("FF", ff), ("oil pressure", oilP), ("oil temperature", oilT), ("oil quantity", oilQ),
+            ("vibration", vib), ("HP spool", hp), ("max N2", maxN2), ("max N3", maxN3), ("hold timer", timer), ("hold delay", delay),
+        };
+        foreach (var (name, v) in checks) check($"{side} engine {name}", v);
         raw = new Bbs757LowerEicasEngineRaw(invalid != Layout.EngineInvalidValue, n2, n3, ff, oilP, oilT, oilQ, vib,
             maxN2, maxN3, sa != 0 || sb != 0 || sc != 0, hold, hp);
         return true;
     }
 
-    private bool ReadStatus(uint lower, Bbs757LowerEicasStatusPage s, Func<double, double> check, out Bbs757LowerEicasStatusRaw raw)
+    private bool ReadStatus(uint lower, Bbs757LowerEicasStatusPage s, Func<string, double, double> check, out Bbs757LowerEicasStatusRaw raw)
     {
         raw = default!;
         if (!Ptr(lower, s.LowerToHydraulics, out uint hyd) || !Ptr(lower, s.LowerToApu, out uint apu)
@@ -176,7 +212,16 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
             if (!Int(computer, s.BrakeTemperatures + 4 * i, out int d)) return false;
             brakes[i] = unchecked((uint)d);
         }
-        foreach (double v in cap.Concat(qty).Concat(press).Concat(new[] { egt, rpm, oilQ, full, level, rud, ailL, elev, ailR })) check(v);
+        for (int i = 0; i < 3; i++)
+        {
+            check($"hydraulic {i + 1} capacity", cap[i]);
+            check($"hydraulic {i + 1} quantity", qty[i]);
+            check($"hydraulic {i + 1} pressure", press[i]);
+        }
+        foreach (var (name, v) in new (string, double)[] { ("APU EGT", egt), ("APU RPM", rpm), ("APU oil quantity", oilQ),
+            ("oxygen full", full), ("oxygen level", level), ("rudder", rud), ("left aileron", ailL), ("elevator", elev),
+            ("right aileron", ailR) })
+            check(name, v);
         raw = new Bbs757LowerEicasStatusRaw(cap, qty, press, egt, rpm, oilQ, shown != 0, active != 0, oxyCap, full, level,
             rud, ailL, elev, ailR, brakes);
         return true;

@@ -89,9 +89,10 @@ public class Bbs757LowerEicasDisplayTests
     }
 
     [Fact]
-    public void A_page_change_and_messages_come_in_order()
+    public void A_new_message_with_the_status_page_on_both_sides_keeps_BlueBirds_words()
     {
-        // From another page both readings are not STATUS: only the page change. Texts keep BlueBird's words exactly.
+        // Status lines need STATUS on both sides, so a page change and status lines never come together: here both
+        // readings show STATUS and only the new message is said, in BlueBird's words exactly (spaces included).
         var lines = Changes(Status("Z"), Status("Y  X", "Z"));
         Assert.Equal(new[] { "Status: Y  X" }, Texts(lines));
     }
@@ -137,7 +138,7 @@ public class Bbs757LowerEicasDisplayTests
         Assert.Contains("FF: 1.6, 1.6", rows); // kilograms, one decimal, a point
         Assert.Contains("RUD: 12 % right", rows);
         string all = TestCulture.Run(culture, () => display.DescribeAll(reading));
-        Assert.StartsWith("STATUS page, Page: STATUS, HYD QTY: L 0.98, C 0.97, R 1.00", all);
+        Assert.StartsWith("STATUS page, HYD QTY: L 0.98, C 0.97, R 1.00", all);
     }
 
     [Fact]
@@ -147,7 +148,7 @@ public class Bbs757LowerEicasDisplayTests
         Assert.Equal(new[] { "Lower EICAS: blank" }, display.Rows(R(0)));
         Assert.Equal("blank", display.DescribeAll(R(0)));
         Assert.Equal(new[] { "Page: engine" }, display.Rows(R(1)));
-        Assert.Equal("engine page, Page: engine", display.DescribeAll(R(1)));
+        Assert.Equal("engine page", display.DescribeAll(R(1))); // the page is said once: Rows keeps its "Page:" row
     }
 
     // ---- through the monitor ------------------------------------------------------------------------------------
@@ -228,7 +229,9 @@ public class Bbs757LowerEicasDisplayTests
     public void Fast_page_changes_say_only_the_last()
     {
         var (reader, monitor, env, tick) = Run();
-        // STATUS, back to engine and on to engine off, each shorter than the settle (300 ms): only the page that holds.
+        // The monitor's settle starts at the first change and does not restart on later ones. Here the middle step returns
+        // to the heard page (engine), which closes the open settle window unspoken; engine off then opens a new one and
+        // holds. So this proves: a page that came and went is never said, and the page that holds is said once.
         foreach (int page in new[] { 2, 1, 3 })
         {
             reader.Current = R(page);

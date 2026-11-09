@@ -268,6 +268,43 @@ public class Bbs757LowerEicasReaderTests
     }
 
     [Fact]
+    public void An_unpowered_reading_with_a_non_finite_field_is_not_corrupt()
+    {
+        // Nothing is drawn while the display is not powered, so the value-range checks are off.
+        var reading = Read(Memory(powered: false, tweak: b => PutD(b, Left + (uint)Layout.EngineToData + 16, double.NaN)));
+        Assert.False(reading.Powered);
+        Assert.False(reading.Corrupt);
+        // The status list's structural checks stay on.
+        var torn = Read(Memory(powered: false, messages: new[] { "WARN ELEX" }, tweak: b => Put(b, Vector, 0x7fff0000)));
+        Assert.True(torn.Corrupt);
+    }
+
+    [Fact]
+    public void A_powered_corrupt_reading_logs_its_cause_once_per_change()
+    {
+        var lines = new List<string>();
+        var bytes = Memory(tweak: b => PutD(b, Left + (uint)Layout.EngineToData + 16, double.NaN));
+        var src = new FakeProcessMemory().Add(new MemoryRegion(Base, Base, (ulong)bytes.Length, true, true, true), bytes);
+        using var r = new Bbs757LowerEicasReader(new ModuleMemory(src, Base), src, Layout, lines.Add);
+        for (int i = 0; i < 5; i++)
+        {
+            Assert.True(r.TryRead(default, out var reading));
+            Assert.True(reading.Corrupt);
+        }
+        var line = Assert.Single(lines);
+        Assert.Contains("left engine N2", line);
+        Assert.Contains("NaN", line);
+
+        // Another cause is a change: logged again.
+        PutD(bytes, Left + (uint)Layout.EngineToData + 16, 81.0);
+        PutD(bytes, Right + (uint)Layout.EngineToData + 24, double.PositiveInfinity);
+        Assert.True(r.TryRead(default, out _));
+        Assert.True(r.TryRead(default, out _));
+        Assert.Equal(2, lines.Count);
+        Assert.Contains("right HP spool", lines[1]); // an RR's N3 is its HP spool
+    }
+
+    [Fact]
     public void A_pratt_and_whitney_engine_gates_on_its_n2_and_has_no_n3_row()
     {
         var reading = Read(Memory(tweak: b =>

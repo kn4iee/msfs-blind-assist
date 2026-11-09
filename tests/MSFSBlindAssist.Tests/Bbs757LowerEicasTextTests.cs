@@ -66,6 +66,14 @@ public class Bbs757LowerEicasTextTests
     }
 
     [Fact]
+    public void Oil_quantity_clamps_to_0_to_21_quarts_before_truncating()
+    {
+        // Evidence: 23014 clamps the drawn quantity to 0..21.
+        var rows = Rows(Raw(1, left: Eng(oilQ: 1.2), right: Eng(n2: 82.09, oilQ: -0.1)));
+        Assert.Contains("OIL QTY: 21, 0", rows);
+    }
+
+    [Fact]
     public void A_pratt_and_whitney_engine_page_has_no_n3_rows()
     {
         Assert.DoesNotContain(Rows(Raw(1, rr: false)), r => r.StartsWith("N3"));

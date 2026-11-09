@@ -87,9 +87,11 @@ public static class Bbs757LowerEicasText
         return rows;
     }
 
-    /// <summary>The whole display in one line: the page phrase, then every row, joined with ", ".</summary>
+    /// <summary>The whole display in one line: the page phrase, then every row but "Page:" (the phrase says it), joined
+    /// with ", ".</summary>
     public static string DescribeAll(Bbs757LowerEicasReading reading) =>
-        string.Join(", ", new[] { PagePhrase(reading.Page) }.Concat(Rows(reading).Where(r => KindOf(reading) != Blank)));
+        string.Join(", ", new[] { PagePhrase(reading.Page) }
+            .Concat(Rows(reading).Where(r => KindOf(reading) != Blank && !r.StartsWith("Page: ", StringComparison.Ordinal))));
 
     // ---- engine page -----------------------------------------------------------------------------------------
 
@@ -103,7 +105,7 @@ public static class Bbs757LowerEicasText
         rows.Add("OIL PRESS: " + Pair(e, x => x.Valid ? Whole(x.OilPressure) : Blank));
         if (raw.Messages.Count > 0) rows.Add("STATUS");
         rows.Add("OIL TEMP: " + Pair(e, x => x.Valid && x.N2 >= 5 ? OilTemperature(x.OilTemperature) : Blank));
-        rows.Add("OIL QTY: " + Pair(e, x => x.Valid ? Whole(x.OilQuantity * 21) : Blank));
+        rows.Add("OIL QTY: " + Pair(e, x => x.Valid ? Whole(Math.Clamp(x.OilQuantity * 21, 0, 21)) : Blank));
         rows.Add("VIB: " + Pair(e, x => x.Valid ? Math.Abs(x.Vibration).ToString("F1", CultureInfo.InvariantCulture) : Blank));
         return rows;
     }
