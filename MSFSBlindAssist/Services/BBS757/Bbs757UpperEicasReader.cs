@@ -307,8 +307,9 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         return true;
     }
 
-    /// <summary>A UTF-32 text of <paramref name="length"/> code points, each a Unicode scalar value, followed by the
-    /// literal's 0 terminator, where the draw stops: anything else at that place is a torn read.</summary>
+    /// <summary>A UTF-32 text of <paramref name="length"/> code points, each a Unicode scalar value other than 0, followed
+    /// by the literal's 0 terminator, where the draw stops: a 0 before it, or anything else in its place, is a torn
+    /// read.</summary>
     private bool TryReadText(uint at, int length, out string text)
     {
         text = "";
@@ -318,7 +319,8 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         Span<char> utf16 = stackalloc char[2];
         for (int i = 0; i < length; i++)
         {
-            if (!Rune.TryCreate(BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(i * Word)), out Rune r)) return false;
+            uint codePoint = BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(i * Word));
+            if (codePoint == 0 || !Rune.TryCreate(codePoint, out Rune r)) return false;
             sb.Append(utf16[..r.EncodeToUtf16(utf16)]);
         }
         text = sb.ToString();

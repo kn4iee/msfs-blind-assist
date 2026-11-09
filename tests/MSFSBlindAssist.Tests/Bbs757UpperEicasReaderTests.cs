@@ -307,7 +307,7 @@ public class Bbs757UpperEicasReaderTests
     public enum Tear
     {
         EndBeforeBegin, CapBeforeEnd, Misaligned, NullStorage, NullEntry, EntryOutside, NullText, TextOutside, ZeroLength,
-        LengthOverMax, Surrogate, BeyondUnicode, UnknownLevel, NoTerminator, TerminatorOutside,
+        LengthOverMax, Surrogate, BeyondUnicode, UnknownLevel, NoTerminator, TerminatorOutside, EmbeddedNul,
     }
 
     public static IEnumerable<object[]> Tears() =>
@@ -342,6 +342,7 @@ public class Bbs757UpperEicasReaderTests
             case Tear.BeyondUnicode: I32(b, text + 4, 0x110000); break;
             case Tear.UnknownLevel: I32(b, entry + L.EntryLevel, 5); break;
             case Tear.NoTerminator: I32(b, text + 4 * P(b, entry + L.EntryLength), 'X'); break;
+            case Tear.EmbeddedNul: I32(b, text + 4, 0); break;
             case Tear.TerminatorOutside:
                 // The whole text inside the module, its terminator just past the end.
                 uint bytes = 4 * P(b, entry + L.EntryLength), last = Size - bytes;
@@ -364,6 +365,7 @@ public class Bbs757UpperEicasReaderTests
         // A reading, never a failed read (the object is still there) and never a partial list.
         Assert.True(r.TryRead(out var torn));
         Assert.True(torn.Corrupt);
+        if (tear != Tear.UnknownLevel) Assert.Empty(torn.Messages);   // a level is checked by Decode, on a whole list
 
         // The reader keeps nothing: the next reading of a whole list is clean.
         clean.CopyTo(bytes, 0);
