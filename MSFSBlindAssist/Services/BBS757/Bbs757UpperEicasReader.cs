@@ -506,9 +506,9 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
                 values.Add(new Bbs757EicasValue(Bbs757EicasValue.EprReferenceLabel, referenceLeft, referenceRight, null, null));
         }
 
-        // The max-exceedance memories (R10), each over a valid engine, inside the N1 and EGT functions.
+        // The max-exceedance memories (R10), each over a valid engine while set, inside the N1 and EGT functions.
         string? MaxText(Bbs757EicasRawEngine e, float memory, Func<double, string> format) =>
-            Valid(e) ? format(Use(memory)) : null;
+            Valid(e) && memory != 0 ? format(Use(memory)) : null;
         bool Set(Bbs757EicasRawEngine e, float memory) => Valid(e) && memory != 0;
         if (n1Drawn && (Set(raw.Left, raw.Left.MaxN1) || Set(raw.Right, raw.Right.MaxN1)))
             values.Add(new Bbs757EicasValue(Bbs757EicasValue.N1MaxLabel, MaxText(raw.Left, raw.Left.MaxN1, v => v.ToString("F1", Inv)),

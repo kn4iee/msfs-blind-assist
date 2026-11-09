@@ -927,13 +927,18 @@ public class Bbs757UpperEicasReaderTests
         Assert.Null(Row(none, "N1 max"));
         Assert.Null(Row(none, "EGT max"));
 
+        // BlueBird draws a memory only while it is set: a zero side is null.
         var n1 = Max(109.2f, 0, 0, 0);
-        Assert.Equal(V("N1 max", "109.2", "0.0"), Row(n1, "N1 max"));
+        Assert.Equal(V("N1 max", "109.2", null), Row(n1, "N1 max"));
         Assert.Null(Row(n1, "EGT max"));
 
         var egt = Max(0, 0, 0, 861.7f);
         Assert.Null(Row(egt, "N1 max"));
-        Assert.Equal(V("EGT max", "0", "861"), Row(egt, "EGT max"));
+        Assert.Equal(V("EGT max", null, "861"), Row(egt, "EGT max"));
+
+        var both = Max(109.2f, 110.5f, 861.7f, 870.2f);
+        Assert.Equal(V("N1 max", "109.2", "110.5"), Row(both, "N1 max"));
+        Assert.Equal(V("EGT max", "861", "870"), Row(both, "EGT max"));
 
         // Each memory is drawn for a valid engine only: an invalid engine's side is null, and a row whose only set
         // memory belongs to an invalid engine is not drawn.
@@ -951,7 +956,7 @@ public class Bbs757UpperEicasReaderTests
 
         // Compact mode draws no EGT, and no EGT max; the N1 max stays.
         var compact = Decode(Live() with { Compact = true, Left = IdleLeft with { MaxN1 = 109.2f, MaxEgt = 861.5f } });
-        Assert.Equal(V("N1 max", "109.2", "0.0"), Row(compact, "N1 max"));
+        Assert.Equal(V("N1 max", "109.2", null), Row(compact, "N1 max"));
         Assert.Null(Row(compact, "EGT max"));
     }
 
@@ -1114,8 +1119,8 @@ public class Bbs757UpperEicasReaderTests
             Assert.Equal(new[]
             {
                 V("EPR", "1.46", "1.00"), V("N1", "87.3", "101.0"), V("EGT", "612", "598"), V("TAT", "-15c"),
-                V("REV", "REV", null, "amber"), V("EPR reference", "1.45", "1.45"), V("N1 max", "109.2", "0.0"),
-                V("EGT max", "861", "0"),
+                V("REV", "REV", null, "amber"), V("EPR reference", "1.45", "1.45"), V("N1 max", "109.2", null),
+                V("EGT max", "861", null),
             }, eicas.Values);
             Assert.Equal("D-TO 1, -5c", eicas.ThrustReference);
             Assert.Equal(new[] { "IN-FLT START", "FL 250 260-360 KTS", "FL 50 180-360 KTS" }, eicas.Envelope);
