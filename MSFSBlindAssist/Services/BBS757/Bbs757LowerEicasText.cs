@@ -40,6 +40,57 @@ public static class Bbs757LowerEicasText
         return Array.Empty<string>();
     }
 
+    // ---- spoken lines, window rows (plan 25, Task 5) -----------------------------------------------------------
+
+    /// <summary>The prefix of a page change: "Lower EICAS: engine page".</summary>
+    public const string ChangePrefix = "Lower EICAS: ";
+
+    private const string StatusWord = "STATUS";
+
+    private static string KindOf(Bbs757LowerEicasReading r) => r.Page ?? Blank;
+
+    /// <summary>The page in words (R9): "engine page", "STATUS page", "engine page off", "blank".</summary>
+    public static string PagePhrase(string? pageWord) => pageWord switch
+    {
+        "engine" => "engine page",
+        "STATUS" => "STATUS page",
+        "engine off" => "engine page off",
+        _ => Blank,
+    };
+
+    /// <summary>What changed from <paramref name="heard"/> to <paramref name="now"/>, in speaking order: the page change
+    /// (S11: with <see cref="ChangePrefix"/> unless <paramref name="withPrefix"/> is false), then "Status: A, B" for the
+    /// messages new, then "Status gone: A, B" for those gone, in list order, compared by text, ordinal, and only when both
+    /// readings show the STATUS page: the messages present when STATUS opens are its content, and a message that comes or
+    /// goes under another page is never spoken.</summary>
+    public static IReadOnlyList<string> Changes(Bbs757LowerEicasReading heard, Bbs757LowerEicasReading now, bool withPrefix)
+    {
+        var lines = new List<string>();
+        if (!string.Equals(KindOf(heard), KindOf(now), StringComparison.Ordinal))
+            lines.Add((withPrefix ? ChangePrefix : "") + PagePhrase(now.Page));
+        if (KindOf(heard) == StatusWord && KindOf(now) == StatusWord)
+        {
+            var added = now.StatusMessages.Where(m => !heard.StatusMessages.Contains(m, StringComparer.Ordinal)).ToList();
+            var gone = heard.StatusMessages.Where(m => !now.StatusMessages.Contains(m, StringComparer.Ordinal)).ToList();
+            if (added.Count > 0) lines.Add("Status: " + string.Join(", ", added));
+            if (gone.Count > 0) lines.Add("Status gone: " + string.Join(", ", gone));
+        }
+        return lines;
+    }
+
+    /// <summary>The window's rows: "Page: STATUS" and the page's rows, or the one row "Lower EICAS: blank".</summary>
+    public static IReadOnlyList<string> Rows(Bbs757LowerEicasReading reading)
+    {
+        if (KindOf(reading) == Blank) return new[] { ChangePrefix + Blank };
+        var rows = new List<string> { "Page: " + reading.Page };
+        rows.AddRange(reading.PageRows);
+        return rows;
+    }
+
+    /// <summary>The whole display in one line: the page phrase, then every row, joined with ", ".</summary>
+    public static string DescribeAll(Bbs757LowerEicasReading reading) =>
+        string.Join(", ", new[] { PagePhrase(reading.Page) }.Concat(Rows(reading).Where(r => KindOf(reading) != Blank)));
+
     // ---- engine page -----------------------------------------------------------------------------------------
 
     private static List<string> EnginePageRows(Bbs757LowerEicasRaw raw)
