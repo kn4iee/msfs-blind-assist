@@ -372,12 +372,15 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     /// all shown but entry 0 while RECALL shows. RECALL shows for <see cref="Bbs757UpperEicasLayout.RecallShowSeconds"/>
     /// after the press; PAGE while the communication list is empty or RECALL shows, on page 1 with every line drawn or
     /// on another page with any drawn.</item>
-    /// <item>The gauges: EPR (2 decimals), N1 (1 decimal, the alternate when flagged) and EGT (whole, from 0) blank on an
-    /// invalid engine and on the PW2000 at low N2 or N1; EGT not drawn in compact mode; N1 and EGT red at their limit,
-    /// amber at theirs unless the mode inhibit (N1: RB211 only); TAT signed with its c; TAI and REV only while drawn;
-    /// the reference EPR with the thrust reference; the max memories while either is set.</item>
+    /// <item>The gauges: EPR (the float, 2 decimals), N1 (1 decimal, the alternate when flagged) and EGT (whole, from 0)
+    /// blank on an invalid engine and on the PW2000 at low N2 or N1; N1 (with TAI and the N1 max) not drawn while its red
+    /// limit is not above 0, EGT (with the EGT max) likewise and in compact mode; N1 and EGT red at their limit, amber at
+    /// theirs unless the mode inhibit (N1: RB211 only); TAT signed with its c; TAI and REV only while drawn; the
+    /// reference EPR over each valid engine with the thrust reference; the max memories over each valid engine while one
+    /// is set.</item>
     /// <item>The thrust reference: hidden with a reverser deployed or without the manual flag or a valid TMC; MAN when
-    /// manual; else the mode's word (D-TO for TO with both D-TO flags), its number and the derate.</item>
+    /// manual; else the mode's word (D-TO for TO with both D-TO flags), its number and the derate, the derate alone
+    /// under an empty word.</item>
     /// <item>The in-flight start block: airborne, not compact, the lower ENGINE page, and an engine not running whose
     /// fire switch is in.</item>
     /// </list>
@@ -421,31 +424,37 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         }
         bool pageShown = (n == 0 || recall) && ((raw.Page == 1 && drawn == lines) || (raw.Page != 1 && drawn != 0));
 
-        // The gauges (22929, 22951, 22952).
+        // The gauges (22929, 22951, 22952). The N1 function (with TAI and the N1 max) draws nothing while the N1 red
+        // limit is not above 0; the EGT function (with the EGT max) likewise, and it is not called in compact mode.
         bool tmcValid = !raw.TmcFailed && (!raw.TmcChannelLeftFailed || !raw.TmcChannelRightFailed);
         bool inhibit = tmcValid && layout.InhibitModes.Contains(raw.ThrustMode);
+        bool n1Drawn = Use(raw.N1Red) > 0;
+        bool egtDrawn = !raw.Compact && Use(raw.EgtRed) > 0;
+        bool Valid(Bbs757EicasRawEngine e) => e.Valid != layout.EngineInvalidValue;
+        // EPR is drawn from the float (22929 ;4272): the float's own value, 2 decimals.
+        string EprText(double v) => Use((float)v).ToString("F2", Inv);
         (string? Epr, string? N1, string? N1Color, string? Egt, string? EgtColor) Gauges(Bbs757EicasRawEngine e)
         {
-            if (e.Valid == layout.EngineInvalidValue) return default;
+            if (!Valid(e)) return default;
             bool pw = e.Type == layout.EngineTypePw;
             bool lowN2 = pw && Use(e.N2) <= layout.PwBlankBelow;
-            string? epr = lowN2 ? null : Use(e.Epr).ToString("F2", Inv);
+            string? epr = lowN2 ? null : EprText(e.Epr);
 
             string? n1Text = null, n1Color = null;
-            double n1 = Use(e.AlternateFlagged ? e.N1Alternate : e.N1);
-            if (!(pw && n1 <= layout.PwBlankBelow))
+            double n1 = n1Drawn ? Use(e.AlternateFlagged ? e.N1Alternate : e.N1) : 0;
+            if (n1Drawn && !(pw && n1 <= layout.PwBlankBelow))
             {
                 n1Text = n1.ToString("F1", Inv);
-                n1Color = n1 >= Use(raw.N1Red) ? Bbs757EicasValue.Red
+                n1Color = n1 >= raw.N1Red ? Bbs757EicasValue.Red
                     : n1 >= Use(raw.N1Amber) && !(!pw && inhibit) ? Bbs757EicasValue.Amber : null;
             }
 
             string? egtText = null, egtColor = null;
-            if (!lowN2 && !raw.Compact)
+            if (egtDrawn && !lowN2)
             {
                 double egt = Math.Max(0, Use(e.Egt));
                 egtText = Whole(egt);
-                egtColor = egt >= Use(raw.EgtRed) ? Bbs757EicasValue.Red
+                egtColor = egt >= raw.EgtRed ? Bbs757EicasValue.Red
                     : egt >= Use(raw.EgtAmber) && !inhibit ? Bbs757EicasValue.Amber : null;
             }
             return (epr, n1Text, n1Color, egtText, egtColor);
@@ -461,7 +470,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         };
 
         string? Tai(Bbs757EicasRawValve? valve) =>
-            valve is { } v && Use(v.Position) >= layout.TaiMinOpen && layout.TaiStates.Contains(v.State) ? TaiWord : null;
+            n1Drawn && valve is { } v && Use(v.Position) >= layout.TaiMinOpen && layout.TaiStates.Contains(v.State) ? TaiWord : null;
         string? taiLeft = Tai(raw.Left.AntiIce), taiRight = Tai(raw.Right.AntiIce);
         if (taiLeft is not null || taiRight is not null)
             values.Add(new Bbs757EicasValue(Bbs757EicasValue.TaiLabel, taiLeft, taiRight, null, null));
@@ -476,35 +485,36 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         bool hidden = raw.Left.Reverser == ReverserDeployed || raw.Right.Reverser == ReverserDeployed || !(manual || tmcValid);
         if (!hidden)
         {
-            string referenceLeft, referenceRight;
             if (manual)
-            {
                 thrust = layout.ManualWord;
-                referenceLeft = Use(raw.ManualEprLeft).ToString("F2", Inv);
-                referenceRight = Use(raw.ManualEprRight).ToString("F2", Inv);
-            }
             else
             {
-                thrust = raw.ThrustMode == 0 && tmcValid && raw.DtoFlagged ? layout.DtoWord
-                    : layout.ThrustWords.Words.TryGetValue(raw.ThrustMode, out string? word) ? word : null;
-                if (thrust is not null)
-                {
-                    if (layout.NumberedModes.Contains(raw.ThrustMode) && raw.ThrustNumber is 1 or 2)
-                        thrust += " " + raw.ThrustNumber.ToString(Inv);
-                    if (raw.DerateShown && tmcValid) thrust += Derate(raw.Derate);
-                }
-                referenceLeft = referenceRight = Use(raw.ReferenceEpr).ToString("F2", Inv);
+                // The word, its number after it, and the derate above it, which is drawn under an empty word too.
+                string? word = raw.ThrustMode == 0 && tmcValid && raw.DtoFlagged ? layout.DtoWord
+                    : layout.ThrustWords.Words.TryGetValue(raw.ThrustMode, out string? w) ? w : null;
+                string? derate = raw.DerateShown && tmcValid ? Derate(raw.Derate) : null;
+                if (word is not null && layout.NumberedModes.Contains(raw.ThrustMode) && raw.ThrustNumber is 1 or 2)
+                    word += " " + raw.ThrustNumber.ToString(Inv);
+                thrust = word is null ? derate : derate is null ? word : word + ", " + derate;
             }
-            values.Add(new Bbs757EicasValue(Bbs757EicasValue.EprReferenceLabel, referenceLeft, referenceRight, null, null));
+            // The reference EPR over each valid engine's dial.
+            string? Reference(Bbs757EicasRawEngine e, double epr) => Valid(e) ? EprText(epr) : null;
+            string? referenceLeft = Reference(raw.Left, manual ? raw.ManualEprLeft : raw.ReferenceEpr);
+            string? referenceRight = Reference(raw.Right, manual ? raw.ManualEprRight : raw.ReferenceEpr);
+            if (referenceLeft is not null || referenceRight is not null)
+                values.Add(new Bbs757EicasValue(Bbs757EicasValue.EprReferenceLabel, referenceLeft, referenceRight, null, null));
         }
 
-        // The max-exceedance memories (R10).
-        if (raw.Left.MaxN1 != 0 || raw.Right.MaxN1 != 0)
-            values.Add(new Bbs757EicasValue(Bbs757EicasValue.N1MaxLabel, Use(raw.Left.MaxN1).ToString("F1", Inv),
-                Use(raw.Right.MaxN1).ToString("F1", Inv), null, null));
-        if (raw.Left.MaxEgt != 0 || raw.Right.MaxEgt != 0)
-            values.Add(new Bbs757EicasValue(Bbs757EicasValue.EgtMaxLabel, Whole(Math.Max(0, Use(raw.Left.MaxEgt))),
-                Whole(Math.Max(0, Use(raw.Right.MaxEgt))), null, null));
+        // The max-exceedance memories (R10), each over a valid engine, inside the N1 and EGT functions.
+        string? MaxText(Bbs757EicasRawEngine e, float memory, Func<double, string> format) =>
+            Valid(e) ? format(Use(memory)) : null;
+        bool Set(Bbs757EicasRawEngine e, float memory) => Valid(e) && memory != 0;
+        if (n1Drawn && (Set(raw.Left, raw.Left.MaxN1) || Set(raw.Right, raw.Right.MaxN1)))
+            values.Add(new Bbs757EicasValue(Bbs757EicasValue.N1MaxLabel, MaxText(raw.Left, raw.Left.MaxN1, v => v.ToString("F1", Inv)),
+                MaxText(raw.Right, raw.Right.MaxN1, v => v.ToString("F1", Inv)), null, null));
+        if (egtDrawn && (Set(raw.Left, raw.Left.MaxEgt) || Set(raw.Right, raw.Right.MaxEgt)))
+            values.Add(new Bbs757EicasValue(Bbs757EicasValue.EgtMaxLabel, MaxText(raw.Left, raw.Left.MaxEgt, v => Whole(Math.Max(0, v))),
+                MaxText(raw.Right, raw.Right.MaxEgt, v => Whole(Math.Max(0, v))), null, null));
 
         // The in-flight start block (22932, R11).
         var envelope = new List<string>();
@@ -533,9 +543,8 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         return (v < 0 ? "-" : "+") + Math.Abs(v).ToString("F0", Inv) + "c";
     }
 
-    /// <summary>The derate after the thrust word: ", +25c", ", 0c", ", -5c" (R26 drops the alignment space).</summary>
-    private static string Derate(int d) =>
-        d > 0 ? ", +" + d.ToString(Inv) + "c" : d == 0 ? ", 0c" : ", " + d.ToString(Inv) + "c";
+    /// <summary>The derate text: "+25c", "0c", "-5c" (R26 drops the alignment space).</summary>
+    private static string Derate(int d) => (d > 0 ? "+" : "") + d.ToString(Inv) + "c";
 
     /// <summary>REV's color: amber while the reverser moves, green once fully deployed; null when nothing is drawn.</summary>
     private static string? RevColor(int state) =>

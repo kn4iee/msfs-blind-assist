@@ -426,7 +426,10 @@ public class Bbs757UpperEicasReaderTests
     [InlineData(9, 1, 10, 0, true, "CRZ 1, +10c")]
     [InlineData(10, 1, 0, 0, false, "CON")]
     [InlineData(11, 2, 0, 0, false, "G/A")]
-    [InlineData(2, 1, 25, 2, true, null)]
+    [InlineData(2, 1, 25, 2, true, "+25c")]
+    [InlineData(12, 1, 0, 0, true, "0c")]
+    [InlineData(3, 0, -5, 0, true, "-5c")]
+    [InlineData(2, 1, 25, 2, false, null)]
     [InlineData(12, 1, 0, 0, false, null)]
     public void Reads_the_thrust_reference_and_derate(int mode, int number, int derate, int dtoFlags, bool derateShown, string? expected)
     {
@@ -729,6 +732,43 @@ public class Bbs757UpperEicasReaderTests
         Assert.Equal(V("EPR", "1.70", "1.03"), Epr(IdleLeft with { Epr = 1.7 }));
         // Never amber or red, even with the N1 and EGT red.
         Assert.Equal(V("EPR", "1.96", "1.03"), Epr(IdleLeft with { Epr = 1.957, N1 = 112, Egt = 900 }));
+        // Formatted as the draw does, from the float: 1.00500001 is 1.01 as a double, 1.0049999952 as a float.
+        Assert.Equal(V("EPR", "1.00", "1.03"), Epr(IdleLeft with { Epr = 1.00500001 }));
+    }
+
+    [Fact]
+    public void The_reference_epr_is_drawn_for_each_valid_engine_from_the_float()
+    {
+        var invalid = IdleLeft with { Valid = 2 };
+        Assert.Equal(V("EPR reference", "1.00", "1.00"), Row(Decode(Live() with { ReferenceEpr = 1.00500001 }), "EPR reference"));
+        Assert.Equal(V("EPR reference", null, "1.71"), Row(Decode(Live() with { Left = invalid }), "EPR reference"));
+        Assert.Equal(V("EPR reference", "1.00", null),
+            Row(Decode(Live() with { Right = invalid, ManualEprLeft = 1.00500001 }, manual: true), "EPR reference"));
+        // Both engines invalid: no side is drawn, so no row; the thrust reference itself is still drawn.
+        var neither = Decode(Live() with { Left = invalid, Right = invalid });
+        Assert.Null(Row(neither, "EPR reference"));
+        Assert.Equal("TO", neither.ThrustReference);
+        Assert.False(Decode(Live() with { Left = invalid, Right = invalid, ReferenceEpr = double.NaN }).Corrupt);
+    }
+
+    [Fact]
+    public void N1_and_egt_are_not_drawn_without_their_red_limit()
+    {
+        foreach (float limit in new[] { 0f, -1f })
+        {
+            var noN1 = Decode(Live() with { N1Red = limit, Left = IdleLeft with { AntiIce = new(100, 0), MaxN1 = 109.2f } });
+            Assert.False(noN1.Corrupt);
+            Assert.Equal(V("N1", null, null), Row(noN1, "N1"));
+            Assert.Null(Row(noN1, "TAI"));
+            Assert.Null(Row(noN1, "N1 max"));   // drawn inside the N1 function (22951)
+            Assert.Equal(V("EGT", "357", "360"), Row(noN1, "EGT"));
+
+            var noEgt = Decode(Live() with { EgtRed = limit, Left = IdleLeft with { MaxEgt = 861.5f, Egt = 900 } });
+            Assert.False(noEgt.Corrupt);
+            Assert.Equal(V("EGT", null, null), Row(noEgt, "EGT"));
+            Assert.Null(Row(noEgt, "EGT max"));   // drawn inside the EGT function (22952)
+            Assert.Equal(V("N1", "19.9", "19.9"), Row(noEgt, "N1"));
+        }
     }
 
     [Fact]
@@ -886,6 +926,25 @@ public class Bbs757UpperEicasReaderTests
         var egt = Max(0, 0, 0, 861.7f);
         Assert.Null(Row(egt, "N1 max"));
         Assert.Equal(V("EGT max", "0", "861"), Row(egt, "EGT max"));
+
+        // Each memory is drawn for a valid engine only: an invalid engine's side is null, and a row whose only set
+        // memory belongs to an invalid engine is not drawn.
+        var invalid = IdleLeft with { Valid = 2 };
+        var leftInvalid = Decode(Live() with
+        {
+            Left = invalid with { MaxN1 = 109.2f, MaxEgt = 861.5f },
+            Right = IdleLeft with { MaxEgt = 870.2f },
+        });
+        Assert.Null(Row(leftInvalid, "N1 max"));
+        Assert.Equal(V("EGT max", null, "870"), Row(leftInvalid, "EGT max"));
+        var rightInvalid = Decode(Live() with { Left = IdleLeft with { MaxN1 = 109.2f }, Right = invalid with { MaxN1 = 110f } });
+        Assert.Equal(V("N1 max", "109.2", null), Row(rightInvalid, "N1 max"));
+        Assert.False(Decode(Live() with { Left = invalid with { MaxN1 = float.NaN } }).Corrupt);
+
+        // Compact mode draws no EGT, and no EGT max; the N1 max stays.
+        var compact = Decode(Live() with { Compact = true, Left = IdleLeft with { MaxN1 = 109.2f, MaxEgt = 861.5f } });
+        Assert.Equal(V("N1 max", "109.2", "0.0"), Row(compact, "N1 max"));
+        Assert.Null(Row(compact, "EGT max"));
     }
 
     [Fact]
@@ -939,6 +998,7 @@ public class Bbs757UpperEicasReaderTests
     [InlineData("recall time", true)]
     [InlineData("gate N1", true)]
     [InlineData("EPR", true)]
+    [InlineData("EPR beyond a float", true)]
     [InlineData("EGT", true)]
     [InlineData("EGT red", true)]
     [InlineData("EGT amber", true)]
@@ -968,6 +1028,7 @@ public class Bbs757UpperEicasReaderTests
             "recall time" => raw with { RecallTime = nan },
             "gate N1" => raw with { Right = IdleLeft with { N1 = nan, Valid = 2 } },
             "EPR" => raw with { Left = IdleLeft with { Epr = double.NegativeInfinity } },
+            "EPR beyond a float" => raw with { Left = IdleLeft with { Epr = 1e39 } },
             "EGT" => raw with { Left = IdleLeft with { Egt = nan } },
             "EGT red" => raw with { EgtRed = float.NaN },
             "EGT amber" => raw with { EgtAmber = float.PositiveInfinity },
