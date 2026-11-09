@@ -116,6 +116,24 @@ public class Bbs757LowerEicasLayoutTests
     }
 
     [Fact]
+    public void A_missing_page_part_is_reported_through_the_readers_part_failures()
+    {
+        var reader = Module.Reader(Bbs757Module.LowerEicas);
+        Assert.Empty(reader.PartFailures(Sample()));
+
+        var both = Sample() with
+        {
+            Engine = null, EngineMissing = "no engine page in this build",
+            Status = null, StatusMissing = "no status list found",
+        };
+        Assert.Equal(new[] { ("engine page", "no engine page in this build"), ("STATUS page", "no status list found") },
+            reader.PartFailures(both).ToArray());
+
+        var onlyStatus = Sample() with { Status = null, StatusMissing = "no status list found" };
+        Assert.Equal(new[] { ("STATUS page", "no status list found") }, reader.PartFailures(onlyStatus).ToArray());
+    }
+
+    [Fact]
     public void A_file_without_the_lower_eicas_reader_reads_as_missing()
     {
         // Today's generator-4 757 file: the FMA and EFB readers only (WASM-26).

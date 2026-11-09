@@ -28,6 +28,16 @@ public static class Bbs757Module
                 Bbs757LayoutDescriptions.DescribeEfb),
             new LayoutReader<Bbs757LowerEicasLayout>(LowerEicas, "lower EICAS",
                 l => new ModuleAnchor(l.AnchorAddress, l.Anchor), (l, s) => l with { SourceFile = s },
-                Bbs757LayoutDescriptions.DescribeLowerEicas),
+                Bbs757LayoutDescriptions.DescribeLowerEicas, LowerEicasFailures),
         });
+
+    /// <summary>The lower EICAS pages whose part could not be derived, with the generator's reason (each page is an
+    /// optional part of the layout): the generator and the store log them.</summary>
+    private static IReadOnlyList<(string Part, string Reason)> LowerEicasFailures(Bbs757LowerEicasLayout l)
+    {
+        var failures = new List<(string, string)>();
+        if (l.EngineMissing is { } engine) failures.Add(("engine page", engine));
+        if (l.StatusMissing is { } status) failures.Add(("STATUS page", status));
+        return failures;
+    }
 }
