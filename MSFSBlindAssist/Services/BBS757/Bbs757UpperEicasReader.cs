@@ -161,7 +161,8 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     }
 
     /// <summary>The memory walk, inside one <see cref="ModuleMemory.RememberRegions"/> scope (WASM-15): every object and
-    /// fixed field first (any failure: false), then the two lists and the component vector (any failure: torn).</summary>
+    /// fixed field first (any failure: false), then the two lists and the component vector (any failure: torn), then
+    /// the three vector headers again (changed: torn).</summary>
     internal bool TryReadRaw(out Bbs757UpperEicasRaw raw)
     {
         raw = null!;
@@ -196,15 +197,21 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
             || !F64(tmc, l.ManualEprRight, out double manualRight) || !F64(tat, l.TatValue, out double tatValue)
             || !Flag(fms, l.FmsOnGround, out bool onGround) || !Int(lower, l.LowerMode, out int lowerMode)
             || !At(pneumatic, l.PneumaticComponents, out uint components)
-            || !Vector(components, withCap: false, out uint componentsBegin, out uint componentsEnd, out _)
-            || !Vector(l.MainList, withCap: true, out uint mainBegin, out uint mainEnd, out uint mainCap)
-            || !Vector(l.CommunicationList, withCap: true, out uint commBegin, out uint commEnd, out uint commCap))
+            || !Header(components, out var componentsHeader)
+            || !Header(l.MainList, out var mainHeader)
+            || !Header(l.CommunicationList, out var commHeader))
             return false;
 
-        var main = Entries(mainBegin, mainEnd, mainCap);
-        var communication = Entries(commBegin, commEnd, commCap);
-        bool valvesRead = TryFindValves(componentsBegin, componentsEnd, out var valveLeft, out var valveRight);
-        bool torn = main is null || communication is null || !valvesRead;
+        var main = Entries(mainHeader);
+        var communication = Entries(commHeader);
+        bool valvesRead = TryFindValves(componentsHeader.Begin, componentsHeader.End, out var valveLeft, out var valveRight);
+        // A vector BlueBird changed while it was walked (a reallocation, or an erase lowering its end after shifting its
+        // elements down) reads torn, whatever the walk found.
+        if (!Header(l.MainList, out var mainAfter) || !Header(l.CommunicationList, out var commAfter)
+            || !Header(components, out var componentsAfter))
+            return false;
+        bool torn = main is null || communication is null || !valvesRead
+            || mainAfter != mainHeader || commAfter != commHeader || componentsAfter != componentsHeader;
 
         raw = new Bbs757UpperEicasRaw(
             Torn: torn,
@@ -257,35 +264,37 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         return true;
     }
 
-    /// <summary>A vector's (begin, end[, cap]) at <paramref name="at"/>: fixed fields.</summary>
-    private bool Vector(uint at, bool withCap, out uint begin, out uint end, out uint cap)
+    /// <summary>A std::vector's header: its begin, end and capacity pointers.</summary>
+    private readonly record struct VectorHeader(uint Begin, uint End, uint Cap);
+
+    /// <summary>A vector's header at <paramref name="at"/>, its three pointers in one read (a fixed field).</summary>
+    private bool Header(uint at, out VectorHeader header)
     {
-        begin = end = cap = 0;
-        if (!Int(at, VectorBegin, out int bv) || !Int(at, VectorEnd, out int ev)) return false;
-        begin = unchecked((uint)bv);
-        end = unchecked((uint)ev);
-        if (!withCap) return true;
-        if (!Int(at, VectorCap, out int cv)) return false;
-        cap = unchecked((uint)cv);
+        header = default;
+        Span<byte> bytes = stackalloc byte[3 * Word];
+        if (!_memory.TryRead(at, bytes)) return false;
+        header = new VectorHeader(BinaryPrimitives.ReadUInt32LittleEndian(bytes[VectorBegin..]),
+            BinaryPrimitives.ReadUInt32LittleEndian(bytes[VectorEnd..]), BinaryPrimitives.ReadUInt32LittleEndian(bytes[VectorCap..]));
         return true;
     }
 
     /// <summary>A message list's entries in vector order; null when torn: end before begin, cap before end, not whole
     /// pointers, more than <see cref="Bbs757UpperEicasLayout.MaxMessages"/>, storage, an entry or its text null or
-    /// outside the module, a length out of range or a code point that is not a Unicode scalar value. An empty vector
-    /// (begin = end, both 0 included) is an empty list.</summary>
-    private List<Bbs757EicasRawEntry>? Entries(uint begin, uint end, uint cap)
+    /// outside the module, one entry twice, a length out of range or a code point that is not a Unicode scalar value.
+    /// An empty vector (begin = end, both 0 included) is an empty list.</summary>
+    private List<Bbs757EicasRawEntry>? Entries(VectorHeader h)
     {
-        if (end < begin || cap < end || (end - begin) % Word != 0) return null;
-        uint count = (end - begin) / Word;
+        if (h.End < h.Begin || h.Cap < h.End || (h.End - h.Begin) % Word != 0) return null;
+        uint count = (h.End - h.Begin) / Word;
         if (count == 0) return new List<Bbs757EicasRawEntry>();
-        if (begin == 0 || count > (uint)Math.Max(0, Layout.MaxMessages)) return null;
+        if (h.Begin == 0 || count > (uint)Math.Max(0, Layout.MaxMessages)) return null;
         var list = new List<Bbs757EicasRawEntry>((int)count);
+        var seen = new HashSet<uint>();
         for (uint i = 0; i < count; i++)
         {
-            if (!Int(begin, (int)(i * Word), out int pv)) return null;
+            if (!Int(h.Begin, (int)(i * Word), out int pv)) return null;
             uint entry = unchecked((uint)pv);
-            if (entry == 0 || !TryReadEntry(entry, out var e)) return null;
+            if (entry == 0 || !seen.Add(entry) || !TryReadEntry(entry, out var e)) return null;
             list.Add(e);
         }
         return list;

@@ -131,6 +131,7 @@ public class Bbs757UpperEicasReaderTests
 
         I32(b, Pneumatic + L.PneumaticComponents, Components);
         I32(b, Pneumatic + L.PneumaticComponents + 4, Components + ComponentIds.Length * L.ComponentStride);
+        I32(b, Pneumatic + L.PneumaticComponents + 8, Components + 40 * L.ComponentStride);   // reserved for 40
         for (int i = 0; i < ComponentIds.Length; i++)
         {
             long c = Components + i * L.ComponentStride;
@@ -382,10 +383,16 @@ public class Bbs757UpperEicasReaderTests
         var bytes = Place(Live() with { Communication = [Communication(262, " SELCAL")] });
         uint header = communication ? L.CommunicationList : L.MainList;
         uint storage = communication ? CommStorage : MainStorage;
-        uint entry = P(bytes, storage);
+        uint entries = communication ? CommEntries : MainEntries;
+        // Distinct entries, each a copy of the list's first (one entry twice is torn by itself).
         void Fill(int count)
         {
-            for (int i = 0; i < count; i++) I32(bytes, storage + 4 * i, entry);
+            for (int i = 0; i < count; i++)
+            {
+                uint entry = entries + EntryPitch * (uint)i;
+                if (i > 0) bytes.AsSpan((int)entries, (int)EntryPitch).CopyTo(bytes.AsSpan((int)entry));
+                I32(bytes, storage + 4 * i, entry);
+            }
             I32(bytes, header + 4, storage + 4 * count);
             I32(bytes, header + 8, storage + 4 * count);
         }
@@ -397,6 +404,75 @@ public class Bbs757UpperEicasReaderTests
 
         Fill(L.MaxMessages + 1);
         Assert.True(Read(bytes).Corrupt);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_list_holding_one_entry_twice_is_torn(bool communication)
+    {
+        // An erase shifts the pointers down before it lowers the end: walked between the two, the last entry is there
+        // twice (or, the shift half done, another one is).
+        var raw = Live() with { Communication = [Communication(262, " SELCAL"), Communication(260, " FMC")] };
+        var bytes = Place(raw);
+        uint storage = communication ? CommStorage : MainStorage;
+        int last = (communication ? raw.Communication.Count : raw.Main.Count) - 1;
+        I32(bytes, storage + 4 * (last - 1), P(bytes, storage + 4 * last));
+        var torn = Read(bytes);
+        Assert.True(torn.Corrupt);
+        Assert.Empty(torn.Messages);
+    }
+
+    /// <summary>Memory BlueBird changes while the reader walks it: <paramref name="change"/> runs once, just before the
+    /// first read that touches the module address <paramref name="trigger"/>.</summary>
+    private sealed class ChangingMemory(FakeProcessMemory inner, uint trigger, Action change) : IProcessMemorySource
+    {
+        private bool _changed;
+
+        public IEnumerable<MemoryRegion> Regions() => inner.Regions();
+
+        public MemoryRegion? RegionAt(ulong address) => inner.RegionAt(address);
+
+        public bool TryRead(ulong address, Span<byte> into)
+        {
+            ulong at = Base + trigger;
+            if (!_changed && address <= at && at < address + (ulong)into.Length)
+            {
+                _changed = true;
+                change();
+            }
+            return inner.TryRead(address, into);
+        }
+
+        public void Dispose() { }
+    }
+
+    [Theory]
+    [InlineData("main")]
+    [InlineData("communication")]
+    [InlineData("components")]
+    public void A_vector_whose_header_changes_during_the_walk_is_torn(string vector)
+    {
+        var raw = Live() with { Communication = [Communication(262, " SELCAL"), Communication(260, " FMC")] };
+        var bytes = Place(raw);
+        // The walk reaches the vector's last element; BlueBird then lowers its end (the erase finishing).
+        (uint trigger, long endAt, int step) = vector switch
+        {
+            "main" => (MainTexts + TextPitch * (uint)(raw.Main.Count - 1), L.MainList + 4, 4),
+            "communication" => (CommTexts + TextPitch * (uint)(raw.Communication.Count - 1), L.CommunicationList + 4, 4),
+            _ => (Components + (uint)((ComponentIds.Length - 1) * L.ComponentStride + L.ComponentId),
+                Pneumatic + L.PneumaticComponents + 4, L.ComponentStride),
+        };
+        var src = new ChangingMemory(Source(bytes), trigger, () => I32(bytes, endAt, P(bytes, endAt) - step));
+        using var r = new Bbs757UpperEicasReader(new ModuleMemory(src, Base), src, L);
+        Assert.True(r.TryRead(out var torn));
+        Assert.True(torn.Corrupt);
+        Assert.Empty(torn.Messages);
+
+        // The vector as it now stands reads whole.
+        Assert.True(r.TryRead(out var next));
+        Assert.False(next.Corrupt);
+        Assert.Equal(raw.Main.Count + raw.Communication.Count - (vector == "components" ? 0 : 1), next.Messages.Count);
     }
 
     [Fact]
