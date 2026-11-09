@@ -236,19 +236,37 @@ public class Bbs757LowerEicasTextTests
     }
 
     [Fact]
-    public void The_flight_control_rows_apply_the_draws_signs_and_the_elevator_gain()
+    public void The_flight_control_rows_draw_the_stored_values_as_they_are()
     {
         InEveryCulture(() =>
         {
-            // Stored: left aileron +0.3 -> 30 % down; elevator -0.1 -> 10 % up; right aileron +0.3 negated by the draw -> 30 % up.
+            // The update stores the values as drawn: positive is down on the vertical scales, right on the rudder.
             var rows = Rows(Raw(2, status: Status(rud: 0.25, ailL: 0.3, elev: -0.1, ailR: 0.3)));
             Assert.Contains("RUD: 25 % right", rows);
             Assert.Contains("AIL left: 30 % down", rows);
             Assert.Contains("ELEV: 10 % up", rows);
-            Assert.Contains("AIL right: 30 % up", rows);
-            // A positive stored elevator is multiplied by 1.5: 0.2 -> 30 % down, and the scale ends at 0.667.
-            Assert.Contains("ELEV: 30 % down", Rows(Raw(2, status: Status(elev: 0.2))));
-            Assert.Contains("ELEV: 100 % down", Rows(Raw(2, status: Status(elev: 0.9))));
+            Assert.Contains("AIL right: 30 % down", rows);
+            Assert.Contains("AIL right: 30 % up", Rows(Raw(2, status: Status(ailR: -0.3))));
+            // No gain and no negation after the load: a stored elevator of 0.2 is 20 %.
+            Assert.Contains("ELEV: 20 % down", Rows(Raw(2, status: Status(elev: 0.2))));
+            Assert.Contains("ELEV: 100 % down", Rows(Raw(2, status: Status(elev: 1.4))));
+        });
+    }
+
+    [Fact]
+    public void The_n2_and_n3_digits_and_max_boxes_truncate_after_an_f32_demotion()
+    {
+        InEveryCulture(() =>
+        {
+            // 81.99999999 demotes to exactly 82f in f32, so it reads 82 (an f64 truncation would give 81).
+            double nearly = 81.99999999;
+            Assert.Equal(81, (int)nearly);
+            var rows = Rows(Raw(1, left: Eng(n2: nearly, n3: 76.999999999, maxN2: 100.99999999), right: Eng(n2: 81.9999)));
+            Assert.Equal("N2: 82, 81", rows[0]);
+            Assert.Equal("N2 max: 101, blank", rows[1]);
+            Assert.Equal("N3: 77, 77", rows[2]);
+            // The other whole numbers stay f64: OIL PRESS 91.99999999 is 91.
+            Assert.Contains("OIL PRESS: 91, 91", Rows(Raw(1, left: Eng(oilP: 91.99999999))));
         });
     }
 

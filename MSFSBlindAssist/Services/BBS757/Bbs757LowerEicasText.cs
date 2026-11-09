@@ -75,10 +75,10 @@ public static class Bbs757LowerEicasText
         Func<Bbs757LowerEicasEngineRaw, double> value, Func<Bbs757LowerEicasEngineRaw, double> max)
     {
         var e = raw.Engines!;
-        rows.Add($"{label}: " + Pair(e, x => x.Valid ? Whole(value(x)) : Blank));
+        rows.Add($"{label}: " + Pair(e, x => x.Valid ? WholeF32(value(x)) : Blank));
         // The max box is drawn only while it is not 0: the row exists while either is.
         if (e.Any(x => max(x) != 0))
-            rows.Add($"{label} max: " + Pair(e, x => x.Valid && max(x) != 0 ? Whole(max(x)) : Blank));
+            rows.Add($"{label} max: " + Pair(e, x => x.Valid && max(x) != 0 ? WholeF32(max(x)) : Blank));
     }
 
     /// <summary>23017: at 0 and above whole; between -10 and 0 "- " then the absolute whole value; at -10 and below
@@ -118,10 +118,9 @@ public static class Bbs757LowerEicasText
         if (s.OxygenShown) rows.Add("OXY PRESS: " + Whole(OxygenPressure(s)));
         rows.Add("RUD: " + Rudder(s.Rudder));
         rows.Add("AIL left: " + Vertical(s.AileronLeft));
-        // The stored elevator value is the smoothed NEGATED variable; the draw multiplies it by 1.5 while positive.
-        rows.Add("ELEV: " + Vertical(s.Elevator > 0 ? s.Elevator * 1.5 : s.Elevator));
-        // The draw negates the stored right aileron value.
-        rows.Add("AIL right: " + Vertical(-s.AileronRight));
+        // The update stores the four values already as drawn (-elevator with its gain, -right aileron): the draw uses them as stored.
+        rows.Add("ELEV: " + Vertical(s.Elevator));
+        rows.Add("AIL right: " + Vertical(s.AileronRight));
         rows.Add("FF: " + (raw.Engines is { Count: >= 2 } e ? Pair(e, x => FuelFlow(raw, x, status: true)) : "not read"));
         foreach (string m in raw.Messages) rows.Add(m);
         rows.Add("BRAKE TEMP: " + string.Join(", ", s.BrakeTemperatures.Select((d, i) => $"{i + 1}: {d.ToString(CultureInfo.InvariantCulture)}")));
@@ -175,6 +174,10 @@ public static class Bbs757LowerEicasText
 
     private static string Pair(IReadOnlyList<Bbs757LowerEicasEngineRaw> engines, Func<Bbs757LowerEicasEngineRaw, string> cell) =>
         cell(engines[0]) + ", " + cell(engines[1]);
+
+    /// <summary>The N2/N3 digits and their max boxes: BlueBird demotes to f32 (<c>f32.demote_f64</c>) before truncating, so a
+    /// value within about 4e-6 below a whole number reads that number. No other row demotes.</summary>
+    internal static string WholeF32(double v) => Whole((float)v);
 
     /// <summary>BlueBird's whole number: truncated toward zero, invariant.</summary>
     internal static string Whole(double v) => ((long)Math.Truncate(v)).ToString(CultureInfo.InvariantCulture);
