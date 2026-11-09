@@ -48,14 +48,16 @@ public class Bbs757UpperEicasGateTests
         // While N1 rises memory leads the simulator: the simulator's value is one memory held a moment ago.
         Assert.True(Passes(Sim(left: 24.0, right: 24.0), (0, R(24.1, 24.1)), (250, R(26.0, 26.0)), (500, R(28.0, 28.0))));
 
-        // Light-off: the simulator's right N1 jumps to 33.2 % for about a second while memory holds 26.3 %. Each tick of
-        // that second passes while the window still holds a reading within 2.5 % of the simulator's...
+        // The window rule, with light-off's numbers: memory holds 26.3 % while the simulator's right N1 reads 33.2 %. A
+        // tick passes only while the window still holds a reading within 2.5 % of the simulator's, here a made-up earlier
+        // 31.0 %. At a real light-off memory never comes that close, so those ticks fail here and the monitor's 2 s grace
+        // carries them (Bbs757UpperEicasDisplayTests.An_engine_start_light_off_says_no_stopped).
         var before = (0L, R(19.93, 31.0));
         var held = new[] { (250L, R(19.93, 26.3)), (500L, R(19.93, 26.3)), (750L, R(19.93, 26.3)), (1000L, R(19.93, 26.3)), (1250L, R(19.93, 26.3)) };
         var jump = Sim(right: 33.2);
         for (int i = 1; i <= held.Length; i++)
             Assert.True(Passes(jump, held.Take(i).Prepend(before).ToArray()), $"{i} readings at 26.3");
-        // ...and fails while none is: 6.9 % apart (the monitor allows 2 s of failing, MismatchToleranceMs).
+        // Without it, 6.9 % apart, it fails.
         Assert.False(Passes(jump, held));
         // A reading that matched counts until it is more than 3 s older than the newest.
         Assert.True(Passes(jump, before, (3000, R(19.93, 26.3))));

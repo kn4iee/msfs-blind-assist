@@ -444,10 +444,16 @@ public class Bbs757UpperEicasSpeechTests
         FireSwitch: false, AntiIce: new Bbs757EicasRawValve(100, 0));
 
     /// <summary>In flight, the left engine at its N1 and EGT amber limits with its anti-ice on, the right engine out
-    /// (the in-flight start block drawn), CRZ 2 with a derate, TAT −15, page 2 just after RECALL.</summary>
+    /// (the in-flight start block drawn) with its fire warning and overheat caution up, CRZ 2 with a derate, TAT −15,
+    /// page 2 just after RECALL. The entries carry the raw levels (4 warning, 3 caution, 2 advisory, 1 communication),
+    /// so the words come from the layout's level table.</summary>
     private static Bbs757UpperEicasRaw InFlight() => new(
         Torn: false,
-        Main: new[] { new Bbs757EicasRawEntry(141, " L ENG BLEED OFF", 2, true), new Bbs757EicasRawEntry(164, " L PACK OFF", 2, false) },
+        Main: new[]
+        {
+            new Bbs757EicasRawEntry(2, "R ENGINE FIRE", 4, false), new Bbs757EicasRawEntry(31, "R ENG OVHT", 3, false),
+            new Bbs757EicasRawEntry(141, " L ENG BLEED OFF", 2, true), new Bbs757EicasRawEntry(164, " L PACK OFF", 2, false),
+        },
         Communication: new[] { new Bbs757EicasRawEntry(258, " CABIN ALERT", 1, false) },
         Page: 2, RecallTime: 4023.89, Blank: 0, Clock: 4024.14, Powered: true, Failed: false, TimedBlank: false, Compact: false,
         EgtRed: 850, EgtAmber: 795, N1Red: 108.8f, N1Amber: 108.4f,
@@ -472,11 +478,11 @@ public class Bbs757UpperEicasSpeechTests
         {
             "EPR: 1.55, 1.40", "N1: 108.6 amber, 26.3", "EGT: 812 amber, 402", "TAI: L", "N1 max: 109.2, blank",
             "EGT max: 870, blank", "Thrust reference: CRZ 2, +25c", "EPR reference: 1.71, 1.71", "TAT: -15c", "IN-FLT START",
-            "FL 250 260-360 KTS", "FL 230 255-360 KTS", "Advisory: L ENG BLEED OFF (cancelled)", "Advisory: L PACK OFF",
-            "Communication: CABIN ALERT", "PAGE 2", "RECALL",
+            "FL 250 260-360 KTS", "FL 230 255-360 KTS", "Warning: R ENGINE FIRE", "Caution: R ENG OVHT",
+            "Advisory: L ENG BLEED OFF (cancelled)", "Advisory: L PACK OFF", "Communication: CABIN ALERT", "PAGE 2", "RECALL",
         }, Rows(culture, now));
 
-        // From climb, the left engine below its limits, both messages up and no communication message.
+        // From climb, the left engine below its limits, the two advisories up, no fire and no communication message.
         var heard = TestCulture.Run(culture, () => Bbs757UpperEicasReader.Decode(layout, raw with
         {
             Main = new[] { new Bbs757EicasRawEntry(141, " L ENG BLEED OFF", 2, false), new Bbs757EicasRawEntry(164, " L PACK OFF", 2, false) },
@@ -486,8 +492,8 @@ public class Bbs757UpperEicasSpeechTests
         }, manual: false));
         Assert.Equal(new[]
         {
-            Msg("EICAS: CABIN ALERT"), Msg("EICAS: 1 message cancelled"), Thrust("Thrust reference: CRZ 2, +25c"),
-            Colors("EICAS: L N1 amber, L EGT amber"),
+            Msg("EICAS warning: R ENGINE FIRE"), Msg("EICAS caution: R ENG OVHT"), Msg("EICAS: CABIN ALERT"),
+            Msg("EICAS: 1 message cancelled"), Thrust("Thrust reference: CRZ 2, +25c"), Colors("EICAS: L N1 amber, L EGT amber"),
         }, Said(culture, heard, now));
     }
 }
