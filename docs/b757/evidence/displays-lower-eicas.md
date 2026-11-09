@@ -98,10 +98,26 @@ The draw 22998 reads the page from **`L:BBS_ECAM_Mode`**, an L:var object at the
 only the wing and clouds), and showing the lower EICAS needs a camera change or the tablet-mirror overlay over the
 cockpit screens, neither of them among the approved writes. The words, formats and blanking below are the draw's
 code; the "Live" columns are the values memory held, formatted the way the code formats them, not read off a
-screen. The owner's ground session should compare them with the display.
+screen. **The Live columns are one read-only snapshot at 17:32:08 (page 1)**, replacing the draft's mixed reads
+(its "N2 82 (81.99)" was wrong: 81.99 draws 81). The owner's ground session should compare them with the display.
 
-All numbers are formatted by BlueBird's own code: `f536` is `to_wstring(int)` of a value truncated toward zero
-(never rounded); "1 decimal" is a fixed stream with precision 1. An engine's numbers are **blank** (an empty string,
+**Whole numbers are truncated toward zero, never rounded.** Every whole number goes through `i32.trunc_f32_s` or
+`i32.trunc_f64_s` (behind the -O0 guard `abs(x) < 0x1p+31`, else INT_MIN) and then 536 (`to_wstring(int)`); no
+`f64.nearest`, `ceil`, `floor`, `+ 0.5` or rounding call lies on any of these paths (raw WAT, checked 2026-11-09):
+
+| Item | From the load to the int (raw WAT) |
+|---|---|
+| N2 digits (23002 line 344-658) | `f64.load offset=16` (data) → `f32.demote_f64` → `f32.store` frame 1068 → `f32.load` → `i32.trunc_f32_s`. N3 the same from `offset=24` (frame 756, line 2288-2886); the max boxes `f32.load` lower+560/+568 (+4i) → `i32.trunc_f32_s`. The f32 demotion is the only change: a value within about 4e-6 below a whole number demotes up to it. |
+| OIL QTY (23003 line 4858-4877, 5102-5121) | `f64.load offset=112` → `call 23014(v, 0, 1, 0, 21)` = `((v − 0) / (1 − 0)) × (21 − 0) + 0` in f64 (the f32 bounds promoted), clamped to 0..21, no rounding inside → `i32.trunc_f64_s`. BlueBird stores the fraction as whole quarts ÷ 21: live exactly 12/21 and 14/21 (f64 0x3FE2492492492492, 0x3FE5555555555555), × 21 = exactly 12.0 and 14.0, so 12 and 14. Every k/21 for k = 0..21 comes back exactly k in f64. |
+| OIL PRESS (23003 line 470-489, 698-717) | `f64.load offset=96` → `i32.trunc_f64_s`. |
+| OIL TEMP (23017) | its f64 argument (data+104) → `i32.trunc_f64_s` (twice: the "- " branch, then 8580 `abs`, and the plain branch). |
+| HYD PRESS (23004 line 1408-1427, 1556-1575, 1709-1728) | `call 23021` (`f64.load` hydraulics + 2896 + 8i) → `i32.trunc_f64_s`. |
+| APU EGT, RPM (23004 line 1948-1967, 2208-2227) | `call 23022` (`f64.load offset=1544`), `call 23023` (`offset=1528`) → `i32.trunc_f64_s`. |
+| OXY PRESS (35584 → 35596) | while f64 +464 ≥ 1 (live), `i32.load` oxygen+440: an int already, no conversion. Otherwise `call 9836` (C `round`, half away from zero, the 2^52 method) of clamp(f64 +472, 0, i32 +440) ÷ 10, × 10 → `i32.trunc_f64_s`: rounded to tens. |
+
+Rounding happens only where the draw formats a fraction: FF (÷ 1000), VIB, HYD QTY and the APU OIL Q print through
+a fixed stream (8413 / 8415 / 9958 with `setprecision` 1 or 2), which rounds to that many decimals, and APU OIL Q is
+first rounded to a quarter by 9836 (`round(v × 4) / 4`). An engine's numbers are **blank** (an empty string,
 a static `L""` in the BSS at 1008596..1008656) while that engine's **`engine+1944 == 2`** (getter 22937, "valid" is
 `!= 2`; live 0 for both). The engine data block is **`engine+3576`** (getter 36839, `p0 + 3576`), all f64.
 
@@ -109,17 +125,17 @@ a static `L""` in the BSS at 1008596..1008656) while that engine's **`engine+194
 
 | Item, as drawn | Source | Format and blanking | Live, engine 1 / 2 |
 |---|---|---|---|
-| "N" "2" dial and value (label by 22891 with 2) | data+16 (RR: the IP spool; PW: N2) | whole % (trunc); blank if invalid; red at ≥ lower+212 (100.3), amber at ≥ lower+224 (98.0) | 82 / 82 (81.99, 82.09) |
+| "N" "2" dial and value (label by 22891 with 2) | data+16 (RR: the IP spool; PW: N2) | whole % (trunc); blank if invalid; red at ≥ lower+212 (100.3), amber at ≥ lower+224 (98.0) | 82 / 82 (82.477, 82.572) |
 | its max box | lower+560 / +564 (f32, latched by 23000 above +212) | whole %, drawn only when not 0 | none |
-| "N" "3" dial and value, **RR only** (engine type, below) | data+24 (the HP spool) | whole %; red ≥ lower+216 (99.0), amber ≥ lower+228 (95.8) | 77 / 77 |
+| "N" "3" dial and value, **RR only** (engine type, below) | data+24 (the HP spool) | whole %; red ≥ lower+216 (99.0), amber ≥ lower+228 (95.8) | 78 / 78 (78.019, 78.081) |
 | its max box | lower+568 / +572 | as N2's | none |
 | "X-BLD" on the N3 dial (RR) or N2 dial (PW) | 23008: the upper EICAS's in-flight start test (22975 on upper, engine) and the air-data value (30362 on +296) below the upper's threshold (22900) | the word only | not drawn |
-| "FF" | data+88 (lb/h), or while starting a computed value (below, "FF while starting") | thousands, 1 decimal; ÷ 2.205 (kg) unless settings+596 (lower+288 → +596) is non-zero (live 1, lb); blank if invalid | 3.6 / 3.6 |
-| "OIL" "PRESS" | data+96 (psi) | whole; blank if invalid | 91 / 89 |
+| "FF" | data+88 (lb/h), or while starting a computed value (below, "FF while starting") | thousands, 1 decimal; ÷ 2.205 (kg) unless settings+596 (lower+288 → +596) is non-zero (live 1, lb); blank if invalid | 3.7 / 3.7 (3679.9, 3692.6) |
+| "OIL" "PRESS" | data+96 (psi) | whole (trunc); blank if invalid | 92 / 90 (92.076, 90.118) |
 | "STATUS" (the cue) | the STATUS list is not empty (36354: count != 0) | the word, cyan, in the 38-size font (lower+156), at (0.233 W − 140, 0.041 H + 5): about (60, 34) on the 859 × 704 display, its top left; drawn only by 23003, so only on page 1, never on the STATUS page (no STATUS-page function references U"STATUS") | not drawn (list empty) |
-| "OIL" "TEMP" | data+104 (°C) | 23017: at 0 and above, whole (trunc); between −10 and 0 (exclusive), "- " then the absolute whole value (8580 is `abs`): −5.7 prints "- 5", −0.4 "- 0"; at −10 and below, the signed whole value, "-12"; **blank while that same engine's data+16 < 5** (each engine tests its own); blank if invalid | 114 / 109 |
-| "OIL" "QTY" | data+112 (a fraction) | whole quarts: trunc(fraction × 21) (23014 maps 0..1 to 0..21); blank if invalid | 12 / 14 (0.5714, 0.6670) |
-| "VIB" | data+120 | absolute value, 1 decimal; blank if invalid | 1.8 / 1.7 |
+| "OIL" "TEMP" | data+104 (°C) | 23017: at 0 and above, whole (trunc); between −10 and 0 (exclusive), "- " then the absolute whole value (8580 is `abs`): −5.7 prints "- 5", −0.4 "- 0"; at −10 and below, the signed whole value, "-12"; **blank while that same engine's data+16 < 5** (each engine tests its own); blank if invalid | 114 / 109 (114.871, 109.838) |
+| "OIL" "QTY" | data+112 (a fraction) | whole quarts: trunc(fraction × 21) (23014 maps 0..1 to 0..21); blank if invalid | 12 / 14 (exactly 12/21 and 14/21; × 21 = 12.0, 14.0) |
+| "VIB" | data+120 | absolute value, 1 decimal (stream rounding); blank if invalid | 1.8 / 1.7 (1.805, 1.706) |
 | "N" "1" beside each VIB value | the constant 1 (22891 draws "N" then the number as a subscript at +12.5, +8.5); not a field, not gated by engine type or validity | white, the value colour; most likely the vibration source (the real 757's VIB readout names the spool it monitors); BlueBird always draws N1 | drawn |
 
 - **Order** (the draw's): N2 (both engines), N3 (RR), FF, then OIL PRESS, STATUS cue, OIL TEMP, OIL QTY, VIB and
@@ -169,14 +185,14 @@ Per engine, with `start = 22950(engine)` = any of the engine's bytes **+6922, +6
 
 | Item, as drawn | Source | Format | Live |
 |---|---|---|---|
-| "HYD QTY" "L" "C" "R" | hydraulics (lower+276) → +2996 array, stride 40: capacity f64 +0, quantity f64 +8 | below ("HYD QTY") | 0.98, 0.97, 1.00 |
-| "HYD PRESS" | hydraulics +2896 + 8 × (L 0, C 1, R 2), f64 psi | whole | 3000, 2880, 2950 |
-| "APU  EGT" (two spaces) | APU (lower+272) +1544, f64 °C | whole | −55 (APU off) |
-| "RPM" | APU +1528 | whole % | 0 |
-| "OIL Q" | APU +1600, rounded to quarters, clamped 0.25..1 | "FULL" at ≥ 0.99, else 2 decimals | 0.75 |
+| "HYD QTY" "L" "C" "R" | hydraulics (lower+276) → +2996 array, stride 40: capacity f64 +0, quantity f64 +8 | below ("HYD QTY") | 0.98, 0.97, 1.00 (98.48 %, 97.26 %, 99.92 %) |
+| "HYD PRESS" | hydraulics +2896 + 8 × (L 0, C 1, R 2), f64 psi | whole (trunc) | 3000, 2880, 2950 (exactly) |
+| "APU  EGT" (two spaces) | APU (lower+272) +1544, f64 °C | whole (trunc) | −52 (−52.124; APU off) |
+| "RPM" | APU +1528 | whole % (trunc) | 0 (0.0) |
+| "OIL Q" | APU +1600, rounded to quarters (9836 `round(v × 4) / 4`), clamped 0.25..1 | "FULL" at ≥ 0.99, else 2 decimals | 0.75 (0.7499) |
 | "OXY PRESS" | oxygen (lower+284): drawn only while byte +946; value (35596 on +440): 0 while byte +456 is clear, i32 +440 while f64 +464 ≥ 1, else f64 +472 clamped to 0..(i32 +440) and rounded to tens | whole psi | 1760 |
-| "RUD", "AIL", "ELEV", "AIL" | pointers only: lower+548 (rudder), +536 (left aileron), +544 (elevator, both marks), +540 (right aileron, negated): f32 −1..1, smoothed by 23035 from four simulator variables (below) | no digits; below ("Flight control pointers") | 0.000, −0.003, 0.007, 0.003 |
-| "FF" | 23006: data+88, but while starting 0 (or 600 when 22971 holds), not the engine page's computed value | thousands, 1 decimal, the same units; blank if invalid | 3.6 / 3.6 |
+| "RUD", "AIL", "ELEV", "AIL" | pointers only: lower+548 (rudder), +536 (left aileron), +544 (elevator, both marks), +540 (right aileron, negated): f32 −1..1, smoothed by 23035 from four simulator variables (below) | no digits; below ("Flight control pointers") | stored, in that order: 0.000, −0.003, 0.004, 0.003 |
+| "FF" | 23006: data+88, but while starting 0 (or 600 when 22971 holds), not the engine page's computed value | thousands, 1 decimal, the same units; blank if invalid | 3.7 / 3.7 |
 | the status messages, then "PAGE " n | the STATUS list (below), 23027 | one message per line | none |
 | "BRAKE  TEMP" (two spaces) | computer (lower+132) +584: u32[8], 0..9 per wheel; +616 the hottest wheel | below ("Brake temperatures") | 0 × 8 |
 
@@ -214,7 +230,22 @@ scaled by lower+268 (1.0 live).
   - So ±1 (the variables' unit is percent over 100: ±1 is ±100 %) is the scales' end ticks, except the elevator's
     lower end at −0.667. Which physical direction the simulator's signs mean (trailing edge up or down, rudder left
     or right) was not checked live: no control was moved.
-- **Smoothing** (23035, every update): `new = 0.94 × old + 0.06 × input` (23036 with the f32 0.06).
+- **Where the negations and the ×1.5 happen: in the update, before the store.** The update 23035 (vtable slot 6)
+  computes each input, then stores `f32.store offset=…` of `23036(&stored, &input, 0.06)` (raw WAT lines 23-224):
+
+| Pointer | Stored (the update, 23035) | Drawn v (the draw, 23005) |
+|---|---|---|
+| Left aileron | +536 = smooth(`AILERON LEFT DEFLECTION PCT`) | v = +536 |
+| Right aileron | +540 = smooth(−`AILERON RIGHT DEFLECTION PCT`): `call 23025` (the variable at +408) → `f32.neg` → store | v = +540 |
+| Elevator (both marks) | +544 = smooth(e), e = −`ELEVATOR DEFLECTION PCT` (`call 23025` on +440 → `f32.neg`), then, if `e > 0` (`f64.promote_f32`, `f64.gt` 0), e = 6258(e, 0.666667, 0) = e ÷ 0.6666667 (f32 0x1.555556p-1), that is × 1.4999999 | v = +544 |
+| Rudder | +548 = smooth(`RUDDER DEFLECTION PCT`) | v = +548 |
+
+  with smooth(x) = 0.94 × stored + 0.06 × x per update (23036: `(1 − a) × *p + a × *q`, a = f32 0x3D75C28F =
+  0.06). **The draw applies nothing more**: each pointer's value is a plain `f32.load offset=536/540/544/548` of
+  `this`, passed to 23015 (map −1..1 onto the scale, clamp). The draw does contain the same negation and ×1.5 a
+  second time, reading the simulator variables directly, but only on the other side of a test that is always true
+  (`i64.load offset=552`, `i64.const 0`, `i64.and`, `i64.const 0`, `i64.eq`: anything AND 0 is 0), so that path never
+  runs. A reader takes the stored values as they are.
 - **Nothing else is printed**: the three-tick lines and the four words; no numbers, no scale words.
 - **Each pointer is drawn only while its circuit is on** (the lines and words always are): 36730 → 36697 reads
   `A:CIRCUIT ON` (Bool, the reader at the system-5 object +11336) at index settings+37732 (live 0) + id, and is false
