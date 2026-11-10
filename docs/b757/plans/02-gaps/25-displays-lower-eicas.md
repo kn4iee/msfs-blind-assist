@@ -108,17 +108,33 @@
 
 - **Pilot-facing:** "Alt+S opens the 757's lower EICAS: the page it shows and its values; status messages are spoken while STATUS shows." Changelog `feature`; the guide's 757 displays part.
 - **docs/b757.md:** the lower EICAS reader; Alt+S's fallback. **HotkeyGuides/BBS757_Hotkeys.txt:** Alt+S's line.
+- **The guide:** the window's rows (engine page: N2, N3 on the RR, FF, OIL PRESS, OIL TEMP, OIL QTY, VIB; STATUS: HYD QTY, HYD PRESS, APU, OXY PRESS, the control pointers in words, FF, the messages, BRAKE TEMP by wheel 1-8); the page words; the Ctrl+M row "EICAS status messages" mutes page changes and status lines; the panel's "EICAS L Status" is the ENGINE key and "EICAS R Status" the STATUS key.
+- **For plan 23's owner (Robin):** three edits to plan 23's frozen files, needed by any later reader (plan 24 will meet the first two): `AddDisplayVariables`' `nameOnBatch`, `Bbs757DisplayMonitor`'s "not powered" row while verifying, and `Bbs757DisplaysWiringTests`' monitor count and gate-streaming assertions. Also: the settle does not restart on later changes (its comment says "held for 300 ms").
+- **Rule:** B757-33 (status messages only while STATUS shows on both readings).
 
 ## Execution record
 
-- **Status:** claimed (2026-11-09)
+- **Status:** done on the branch, waiting on the owner: the push of `B757` and the private branch, the generator-5 757 layout's publication, and the in-sim checks (below)
 - **Claimed by:** Claude, for the owner (kn4iee), 2026-11-09
-- **Worked by:** Claude for kn4iee (subagent-driven development)
-- **Started:** 2026-11-09, from `B757` 8b04ea227 (plan 23 landed; plan 24 claimed by Robin)
-- **Landed:**
-- **Tests at landing:**
+- **Worked by:** Claude for kn4iee (subagent-driven development: an implementer and a reviewer per task, an opus whole-branch review)
+- **Started:** 2026-11-09, from `B757` 8b04ea227 (plan 23 landed; plan 24 claimed by Robin); claim 674206787
+- **Landed:** not yet. App branch `B757-p25-lower-eicas` (this commit's parent 20fe14a6c), nothing new on `kn4iee/B757` since the claim, so the push is a fast-forward. Private branch `B757-p25-lower-eicas` (8c3f22ee7, on `feature/b757-displays` c5730f146 with the app merged in at ad4fdb4c3), not pushed; nothing new on `origin/feature/b757-displays` since. The generator-5 757 layout `bbs757/39462c4a…-1b75e5d6dd88c029.json` (SHA-256 9a4296a8…800f) is installed in `%APPDATA%`, not published
+- **Tests at landing:** 21,917 passed, 0 failed (app, 20fe14a6c); 535 passed, 0 failed (toolkit, 8c3f22ee7); the solution builds with 0 errors
 - **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+  - 0 done (674206787, pushed). 1 done by a research agent for the controller (e54e4d6e7, corrected at 509fc8dec and 20fe14a6c): three presses of the lower EICAS's ENGINE and STATUS keys at the owner's go-ahead ("The sim is up so test as needed"), the page left as found; no cold and dark (the aircraft was in cruise).
+  - 2 done (450e114df; its missing-part log ec9d8327d). 3 done in three reviewed parts (private: 3a core c5cfb7e7f, 3b engine page d8484c636, 3c STATUS page 8c3f22ee7): all 72 lower EICAS members derive from the installed file and equal the evidence; fma and efb identical to the published generator-4 file. 4 done (acfff9df9, fix round 8dd88fc3e: pointers as stored, N2/N3 truncated through f32). 5 done (1ae06f332). 6 done (1033ab117, fix round 30b4b708b). 7 done (560d3efe8: B757-33).
+  - The whole-branch review (opus): no Critical; its fix wave 013dbff9c..7bb849f6c (a dark display reads "not powered" while its reader verifies; a corrupt reading's cause is logged; OIL QTY clamped to 21), re-reviewed: all addressed. 3c then found HYD QTY behind a vector's begin pointer: 20fe14a6c, re-reviewed.
+  - Task 6 Step 1: **3 simulator variables added**, hidden copies of `TURB ENG N2:1`, `TURB ENG N2:2` (off the batch: the Engines panel streams those names) and `L:BBS_ECAM_Mode`.
+  - 8: Step 1 done (no rebase needed; generator 5; layout and suites green). Step 2 done read-only without starting MSFSBA: a throwaway harness ran the app's own `LayoutStore`, `ModuleSession` and sampler on the running simulator in cruise for 92 s (367 readings, none lost or corrupt), the gate passed at 7 simulator samples (HP spool within 0.001 %) and failed on 3 made-up wrong ones; engine page, STATUS page and engine page off read plausibly (STATUS 19:02:07, ENGINE 19:02:32, :42, :52; left on the engine page as found). Step 3: the Release build deployed to `C:\MSFSBA-B757` (this machine had no such folder; the owner's usual copy, the main folder's Release build, is untouched).
+- **Waiting on the owner:** push `B757` and the private branch, and publish the generator-5 757 layout (`toolkit/scripts/publish-layouts.ps1 -Source` that file only) together: [WASM-26] makes every 757 reader (the FMA and the tablet included) unavailable on a build of this branch until that file is installed. The in-sim checks below, ideally starting from cold and dark with the engine page showing, then an engine start: the power bytes, the gate during a spool-up and the start FF formula were never measured.
+- **In-sim results:** none yet (the owner's).
 - **Changed from the plan:**
-- **Open at landing:**
+  - **Page words (no BlueBird title exists):** 1 "engine page", 2 "STATUS page", 3 "engine page off" (FF stays drawn on 3), 0 or other "blank"; the layout carries the page values by kind, not a word table.
+  - **The gate:** the HP spool (RR data+24, PW data+16) against `TURB ENG N2:1`/`:2` within 0.1 % in 3 s, and the page field against `L:BBS_ECAM_Mode`.
+  - **Not read:** the X-BLD cue (a computed condition); the six `A:CIRCUIT ON` reads (pointers and brake digits read as with breakers in); the STATUS page number (the window lists every message, newest first).
+  - **Several status messages in one change share one line** ("Status: A, B").
+  - **Flight-control pointers** (nothing printed) read as "RUD: 25 % right", "ELEV: 10 % up" by the screen's direction.
+  - **Engine FF while starting** follows BlueBird's formula without its fuel-control and fire-switch L:vars.
+  - **Plan 23's frozen files:** `AddDisplayVariables` keeps a copy off the batch when any Continuous variable streams its name (VAR-7's own definition); `Bbs757DisplayMonitor` shows "display not powered" while verifying a dark candidate; two wiring tests count the registry's monitors and prove each gate copy streams.
+- **Open at landing (later work, none blocking):** a panel ENGINE or STATUS press says "EICAS L/R Status pressed" and then the page change (kept: the only feedback when STATUS steps its own pages); the shared monitor's 300 ms settle starts at the first change, so presses under 300 ms apart can give two lines; PW not measured; deferred test and robustness minors in the SDD ledger.
+- **Rulings made while working:** in the SDD ledger (git-ignored, `.superpowers/sdd/25-displays-lower-eicas/progress.md`) and the owner's report.
