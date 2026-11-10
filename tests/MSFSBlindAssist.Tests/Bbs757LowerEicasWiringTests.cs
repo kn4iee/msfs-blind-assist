@@ -2,6 +2,7 @@
 // Alt+S, which opens the one "Lower EICAS" window while the reader runs and falls back to the AI read when it cannot.
 
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.Services;
@@ -143,6 +144,122 @@ public class Bbs757LowerEicasWiringTests
         }
         // The page copy has no such twin: it rides the batch.
         Assert.False(vars[keys[Bbs757LowerEicasGate.PageKey]].ExcludeFromBatch);
+    }
+
+    // ENGINE and STATUS buttons (Task 9): built in memory, never from the generated map's labels.
+    private static Bbs757Control Key(string node, string label) => new()
+    {
+        Node = node, Label = label, Kind = Bbs757Kinds.Button,
+        Press = $"1 (>L:{node}, bool)", Release = $"0 (>L:{node}, bool)",
+    };
+
+    private sealed class Rig
+    {
+        public readonly List<string> Writes = new();
+        public bool CanWrite = true;
+        public readonly SpeechCapture Speech = new();
+        public BBS757Definition Def;
+        public Rig(bool omitStatus = false)
+        {
+            var controls = new List<Bbs757Control> { Key("B757_EICAS_L_STATUS_BUTTON", "EICAS L Status") };
+            if (!omitStatus) controls.Add(Key("B757_EICAS_R_STATUS_BUTTON", "EICAS R Status"));
+            Def = new BBS757Definition(new Bbs757ControlMap { Controls = controls })
+            {
+                NestRunning = () => true,
+                WriteIo = _ => new Bbs757SimIo
+                {
+                    CanWrite = () => CanWrite,
+                    ReadFresh = (_, _) => Task.FromResult<double?>(null),
+                    Cached = _ => null,
+                    Write = rpn => Writes.Add(rpn),
+                    RequestRead = _ => { },
+                    Delay = (_, ct) => Task.CompletedTask,
+                },
+            };
+        }
+
+        public System.Windows.Forms.FlowLayoutPanel Panel(bool running) =>
+            Def.LowerEicasButtons(() => running, new SimConnectManager(IntPtr.Zero), Speech);
+    }
+
+    private static void Click(System.Windows.Forms.FlowLayoutPanel panel, string name) =>
+        typeof(System.Windows.Forms.Button).GetMethod("OnClick",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(panel.Controls.Cast<System.Windows.Forms.Button>().Single(b => b.Text == name), new object[] { EventArgs.Empty });
+
+    [Fact]
+    public void The_window_has_engine_and_status_buttons_after_the_list()
+    {
+        var rig = new Rig();
+        using var panel = rig.Panel(true);
+        using var form = new BBS757DisplayForm("Lower EICAS", "Lower EICAS", () => new[] { "x" }, panel);
+
+        Assert.Equal(new[] { "Engine", "Status" }, panel.Controls.Cast<System.Windows.Forms.Control>().Select(c => c.Text));
+        Assert.Equal(new[] { "Engine", "Status" }, panel.Controls.Cast<System.Windows.Forms.Control>().Select(c => c.AccessibleName));
+        var list = form.Controls.Cast<System.Windows.Forms.Control>().Single(c => c.AccessibleName == "Lower EICAS");
+        Assert.True(list.TabIndex < panel.TabIndex);
+        Assert.Contains(panel, form.Controls.Cast<System.Windows.Forms.Control>());
+        Assert.True(panel.Controls[0].TabIndex < panel.Controls[1].TabIndex);
+    }
+
+    [Fact]
+    public void The_status_button_presses_bluebirds_status_key()
+    {
+        var rig = new Rig();
+        using var panel = rig.Panel(true);
+
+        Click(panel, "Status");
+
+        Assert.Equal(new[] { "1 (>L:B757_EICAS_R_STATUS_BUTTON, bool)", "0 (>L:B757_EICAS_R_STATUS_BUTTON, bool)" }, rig.Writes);
+    }
+
+    [Fact]
+    public void The_engine_button_presses_bluebirds_engine_key()
+    {
+        var rig = new Rig();
+        using var panel = rig.Panel(true);
+
+        Click(panel, "Engine");
+
+        Assert.Equal(new[] { "1 (>L:B757_EICAS_L_STATUS_BUTTON, bool)", "0 (>L:B757_EICAS_L_STATUS_BUTTON, bool)" }, rig.Writes);
+    }
+
+    [Fact]
+    public void A_press_while_the_reader_runs_says_nothing_itself()
+    {
+        var rig = new Rig();
+        using var panel = rig.Panel(true);
+
+        Click(panel, "Engine");
+
+        Assert.Equal(2, rig.Writes.Count);
+        Assert.Empty(rig.Speech.All);   // the reader's own page change is the confirmation
+    }
+
+    [Fact]
+    public void A_press_while_the_reader_is_not_running_says_pressed()
+    {
+        var rig = new Rig();
+        using var panel = rig.Panel(false);
+
+        Click(panel, "Status");
+
+        Assert.Equal(new[] { "EICAS R Status pressed" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_press_that_cannot_land_says_unavailable()
+    {
+        var rig = new Rig { CanWrite = false };
+        using var panel = rig.Panel(true);
+        Click(panel, "Engine");
+        Assert.Empty(rig.Writes);
+        Assert.Equal(new[] { "EICAS L Status unavailable" }, rig.Speech.All);
+
+        var missing = new Rig(omitStatus: true);   // a control the map lacks: no press, nothing thrown
+        using var panel2 = missing.Panel(true);
+        Click(panel2, "Status");
+        Assert.Empty(missing.Writes);
     }
 
     private sealed class FakeHost : IModuleHost
