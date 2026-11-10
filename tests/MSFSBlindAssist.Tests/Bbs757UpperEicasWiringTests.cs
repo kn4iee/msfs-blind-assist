@@ -93,8 +93,10 @@ public class Bbs757UpperEicasWiringTests
     public void Alt_E_exits_output_hotkey_mode_before_showing_the_window()
     {
         using var rig = new Rig(started: true);
-        typeof(HotkeyManager).GetField("outputHotkeyModeActive", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .SetValue(rig.Hotkeys, true);
+        var outputMode = typeof(HotkeyManager).GetField("outputHotkeyModeActive", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.True(outputMode is not null,
+            "HotkeyManager has no private field outputHotkeyModeActive: this test sets it to enter output hotkey mode; follow its rename");
+        outputMode.SetValue(rig.Hotkeys, true);
         Assert.True(rig.Hotkeys.IsOutputHotkeyModeActive);
 
         rig.PressAltE();
@@ -128,6 +130,23 @@ public class Bbs757UpperEicasWiringTests
         rig.Def.OnSwitchedAway();
 
         Assert.Equal("Stopped", rig.Def.UpperEicas.StateName);
+    }
+
+    [Fact]
+    public void Alt_E_after_switching_away_reaches_the_ai_read_with_every_window_disposed()
+    {
+        using var rig = new Rig(started: true);
+        rig.PressAltE();
+        var form = Assert.Single(rig.Def.Displays.Windows.OfType<BBS757DisplayForm>());
+
+        rig.Def.OnSwitchedAway();
+        Assert.True(rig.PressAltE());
+
+        // The stopped reader cannot run: the key falls back to the AI read, and no window is made again or shown.
+        Assert.Equal(new[] { HotkeyAction.ReadDisplayUpperECAM }, rig.AiReads);
+        Assert.True(form.IsDisposed);
+        Assert.All(rig.Def.Displays.Windows, w => Assert.True(w.IsDisposed, $"{w.Text} is still open"));
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]
