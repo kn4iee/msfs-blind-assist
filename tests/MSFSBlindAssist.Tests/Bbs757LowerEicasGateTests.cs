@@ -66,6 +66,44 @@ public class Bbs757LowerEicasGateTests
         Assert.True(Passes(Sim(), (0, R()), (500, R(corrupt: true))));
     }
 
+    // The owner's flight (2026-11-09, FL CH): N2 fell 76.18, 75.79, 74.60, 73.07 ... about 1-2 %/s while memory was read every
+    // 250 ms, so a simulator value taken between two readings was over 0.1 from both.
+    private static (long AtMs, Bbs757LowerEicasReading R)[] Spooling() => new[]
+    {
+        (0L, R(left: 76.0, right: 76.0)), (250L, R(left: 75.5, right: 75.5)),
+        (500L, R(left: 75.0, right: 75.0)), (750L, R(left: 74.5, right: 74.5)),
+    };
+
+    [Fact]
+    public void Passes_while_n2_spools_faster_than_the_readings()
+    {
+        Assert.True(Bbs757LowerEicasGate.Passes(Spooling(), Sim(n1: 75.25, n2: 75.25)));
+    }
+
+    [Fact]
+    public void A_spooling_value_outside_every_interval_fails()
+    {
+        Assert.False(Bbs757LowerEicasGate.Passes(Spooling(), Sim(n1: 74.2, n2: 75.25)));
+        Assert.False(Bbs757LowerEicasGate.Passes(Spooling(), Sim(n1: 75.25, n2: 76.3)));
+    }
+
+    [Fact]
+    public void A_pair_further_apart_than_a_second_does_not_bracket()
+    {
+        var history = new[] { (0L, R(left: 70, right: 70)), (1500L, R(left: 76, right: 76)) };
+        Assert.False(Bbs757LowerEicasGate.Passes(history, Sim(n1: 73, n2: 73)));
+    }
+
+    [Fact]
+    public void A_corrupt_reading_breaks_a_pair()
+    {
+        var history = new[]
+        {
+            (0L, R(left: 76.0, right: 76.0)), (250L, R(left: 0, right: 0, corrupt: true)), (500L, R(left: 75.0, right: 75.0)),
+        };
+        Assert.False(Bbs757LowerEicasGate.Passes(history, Sim(n1: 75.5, n2: 75.5)));
+    }
+
     [Fact]
     public void A_missing_or_non_finite_simulator_value_fails()
     {

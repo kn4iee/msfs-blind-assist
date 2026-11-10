@@ -8,7 +8,9 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// engine, and the page value equals <c>L:BBS_ECAM_Mode</c> truncated toward zero (BlueBird's L:var reader truncates).
 /// The simulator's value may lag memory, so each field must match at least one reading of the last
 /// <see cref="WindowMs"/> before the newest; different fields may match different readings. A corrupt reading never
-/// matches.
+/// matches. Memory is sampled every quarter second while the simulator's value is taken in between, so a spooling engine
+/// (up to 2 percent points a second, FL CH) falls between two readings: an engine's N2 also passes when it lies within the
+/// tolerance of the range spanned by two adjacent good readings no more than <see cref="PairMaxGapMs"/> apart.
 /// </summary>
 public static class Bbs757LowerEicasGate
 {
@@ -20,6 +22,9 @@ public static class Bbs757LowerEicasGate
 
     /// <summary>How far apart (percent points) the memory's HP spool and the simulator's N2 may be.</summary>
     public const double SpoolTolerance = 0.1;
+
+    /// <summary>Two adjacent readings bracket the simulator's N2 only when at most this far apart (ms).</summary>
+    public const long PairMaxGapMs = 1000;
 
     /// <summary>How far back a reading may match: the monitor's history.</summary>
     public const long WindowMs = Bbs757DisplayMonitor<Bbs757FmaLayout, Bbs757FmaReading>.HistoryMs;
@@ -46,15 +51,26 @@ public static class Bbs757LowerEicasGate
 
         long newest = history[^1].AtMs;
         bool leftOk = false, rightOk = false, pageOk = false;
-        foreach (var (atMs, r) in history)
+        for (int i = 0; i < history.Count; i++)
         {
+            var (atMs, r) = history[i];
             if (newest - atMs > WindowMs || r.Corrupt) continue;
             leftOk |= Math.Abs(r.LeftHpSpool - left) <= SpoolTolerance;
             rightOk |= Math.Abs(r.RightHpSpool - right) <= SpoolTolerance;
             pageOk |= r.PageValue == pageValue;
+
+            // A spooling engine falls between two readings: bracket with the previous adjacent, good reading.
+            if (i == 0) continue;
+            var (prevAt, p) = history[i - 1];
+            if (newest - prevAt > WindowMs || p.Corrupt || atMs - prevAt > PairMaxGapMs) continue;
+            leftOk |= Between(p.LeftHpSpool, r.LeftHpSpool, left);
+            rightOk |= Between(p.RightHpSpool, r.RightHpSpool, right);
         }
         return leftOk && rightOk && pageOk;
     }
+
+    private static bool Between(double a, double b, double sim) =>
+        Math.Min(a, b) - SpoolTolerance <= sim && sim <= Math.Max(a, b) + SpoolTolerance;
 
     private static double? Value(Bbs757SimValues sim, string key) => sim[key] is { } v && double.IsFinite(v) ? v : null;
 }
