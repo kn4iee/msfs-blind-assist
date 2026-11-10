@@ -145,8 +145,9 @@ public class Bbs757UpperEicasWiringTests
     [Fact]
     public void The_upper_eicas_gate_variables_ride_the_batch_once_each()
     {
-        // Step 1 (R4): the registry turns the reader's gate variables into hidden batched copies; each is carried once,
-        // either by a variable that already rides the batch or by one hidden copy ([VAR-7]); at most 3 are plan 24's.
+        // Step 1, as plan 23's registry is built: it turns the reader's gate variables into hidden batched copies; each
+        // is carried once, either by a variable that already rides the batch or by one hidden copy ([VAR-7]); at most 3
+        // are plan 24's.
         var def = new BBS757Definition();
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();

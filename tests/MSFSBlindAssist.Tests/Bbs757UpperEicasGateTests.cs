@@ -1,7 +1,7 @@
-// The 757 upper EICAS's gate (S3, Ruling R7): memory is trusted only while each engine's N1 as BlueBird keeps it is
-// within 2.5 % N1 of the simulator's TURB ENG N1:1 and :2. The simulator may lag memory (and its N1 spikes for about a
-// second at light-off), so each engine must match at least one reading of the last 3 s; the two engines may match
-// different readings. The display's power is the reading's own. Pure logic.
+// The 757 upper EICAS's gate (S3, as measured at both engine starts): memory is trusted only while each engine's N1 as
+// BlueBird keeps it is within 2.5 % N1 of the simulator's TURB ENG N1:1 and :2. The simulator may lag memory (and its
+// N1 spikes for about a second at light-off), so each engine must match at least one reading of the last 3 s; the two
+// engines may match different readings. The display's power is the reading's own. Pure logic.
 
 using MSFSBlindAssist.Services.BBS757;
 using Xunit;

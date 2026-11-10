@@ -106,7 +106,8 @@ public class Bbs757UpperEicasSpeechTests
     [InlineData("en-US")]
     public void Warnings_are_said_before_cautions_before_the_rest(string culture)
     {
-        // The engine fire test: warning, caution, advisory, then a communication message on its own line (R14).
+        // The engine fire test: warning, caution, advisory, then a communication message on its own line (a level of
+        // its own).
         var before = Eicas(new[] { ParkingBrake });
         var after = Eicas(new[] { FireL, FireR, OvhtL, OvhtR, FireSys, ParkingBrake, Cabin });
         Assert.Equal(new[]
@@ -142,7 +143,7 @@ public class Bbs757UpperEicasSpeechTests
     [InlineData("en-US")]
     public void A_cancelled_message_leaving_says_nothing(string culture)
     {
-        // R17: it was not on the screen.
+        // It was not on the screen.
         var before = Eicas(new[] { Cancelled(ShutdownL), Cancelled(BleedL), ParkingBrake });
         Assert.Empty(Said(culture, before, Eicas(new[] { ParkingBrake })));
         Assert.Equal(new[] { Msg("EICAS gone: PARKING BRAKE") }, Said(culture, before, Eicas()));
@@ -237,7 +238,7 @@ public class Bbs757UpperEicasSpeechTests
     {
         Assert.Equal(new[] { Thrust("Thrust reference: CLB") }, Said(culture, Eicas(thrust: "TO"), Eicas(thrust: "CLB")));
         Assert.Empty(Said(culture, Eicas(thrust: "CLB"), Eicas(thrust: "CLB")));
-        // Nothing drawn is "none" (R12); the words as drawn.
+        // Nothing drawn is "none"; the words as drawn.
         Assert.Equal(new[] { Thrust("Thrust reference: none") }, Said(culture, Eicas(thrust: "CLB"), Eicas(thrust: null)));
         Assert.Equal(new[] { Thrust("Thrust reference: D-TO 1, +25c") }, Said(culture, Eicas(thrust: null), Eicas(thrust: "D-TO 1, +25c")));
         Assert.Equal(new[] { Thrust("Thrust reference: MAN") }, Said(culture, Eicas(thrust: "CRZ 2"), Eicas(thrust: "MAN")));
@@ -278,7 +279,7 @@ public class Bbs757UpperEicasSpeechTests
         Assert.Empty(Said(culture, Without(amber, "EGT"), amber));
     }
 
-    // R42: a sighted pilot sees a value come back amber or red, so its color is said; one coming back with no color (a
+    // A sighted pilot sees a value come back amber or red, so its color is said; one coming back with no color (a
     // PW engine's readouts at its start) says nothing.
     [Theory]
     [InlineData("de-DE")]

@@ -1,8 +1,9 @@
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
-/// The 757 upper EICAS's comparison with the simulator (S3, Ruling R7): memory is trusted only while each engine's N1 as
-/// BlueBird keeps it (<see cref="Bbs757UpperEicasReading.GateN1Left"/>, <see cref="Bbs757UpperEicasReading.GateN1Right"/>:
+/// The 757 upper EICAS's comparison with the simulator (S3, as measured at both engine starts): memory is trusted only
+/// while each engine's N1 as BlueBird keeps it (<see cref="Bbs757UpperEicasReading.GateN1Left"/>,
+/// <see cref="Bbs757UpperEicasReading.GateN1Right"/>:
 /// the engine field the draw reads, never the alternate) is within <see cref="N1Tolerance"/> of the simulator's
 /// <c>TURB ENG N1:1</c> and <c>TURB ENG N1:2</c>. At steady idle the two agree to 0.0002 %; while N1 rises memory leads
 /// the simulator by about 0.5 s, and at light-off the simulator's N1 jumps for about a second, so each engine must match

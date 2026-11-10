@@ -143,7 +143,7 @@ public class Bbs757UpperEicasDisplayTests
             new Bbs757SpokenLine("MSFSBA_BBS757_THRUST_REFERENCE", "Thrust reference: CLB"),
             new Bbs757SpokenLine("MSFSBA_BBS757_ENGINE_COLORS", "EICAS: L EGT amber"),
         };
-        // R32: "EICAS caution" names the display, it is not a reader prefix; the words are the same after "resumed".
+        // "EICAS caution" names the display, it is not a reader prefix; the words are the same after "resumed".
         Assert.Equal(lines, TestCulture.Run(culture, () => Reader().Changes(heard, now, withPrefix: true)));
         Assert.Equal(lines, TestCulture.Run(culture, () => Reader().Changes(heard, now, withPrefix: false)));
         Assert.Empty(TestCulture.Run(culture, () => Reader().Changes(now, now, withPrefix: true)));
@@ -384,10 +384,10 @@ public class Bbs757UpperEicasDisplayTests
         Assert.Equal(said ? new[] { "EICAS announcements stopped: values do not match the simulator" } : Array.Empty<string>(), f.Spoken);
     }
 
-    // Review Focus (R7, R42): the measured engine starts. At light-off the simulator's N1 jumps for about a second (right
-    // 33.2 % while memory holds 26.3 %, left 32.7 % against 26.2 %) and otherwise matches memory. No reading in the window
-    // comes within 2.5 %, so the gate fails those ticks; the monitor's 2 s grace (MismatchToleranceMs) carries them: the
-    // reader stays running and says no "stopped" at either start.
+    // Review Focus: the measured engine starts, which set the gate's tolerance. At light-off the simulator's N1 jumps
+    // for about a second (right 33.2 % while memory holds 26.3 %, left 32.7 % against 26.2 %) and otherwise matches
+    // memory. No reading in the window comes within 2.5 %, so the gate fails those ticks; the monitor's 2 s grace
+    // (MismatchToleranceMs) carries them: the reader stays running and says no "stopped" at either start.
     [Fact]
     public void An_engine_start_light_off_says_no_stopped()
     {

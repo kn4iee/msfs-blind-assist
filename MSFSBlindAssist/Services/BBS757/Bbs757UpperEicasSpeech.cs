@@ -3,7 +3,7 @@ using System.Globalization;
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
-/// What is spoken and listed for the 757 upper EICAS (S8, S9, Rulings R5 and R12-R17). A message is BlueBird's text
+/// What is spoken and listed for the 757 upper EICAS (S8, S9). A message is BlueBird's text
 /// exactly, its leading space dropped here and nowhere else, and is told apart from the others by its
 /// <see cref="Bbs757EicasMessage.Id"/>. Every reading's message counts, on the screen or past the first page. Only the
 /// messages, the thrust reference and the N1 and EGT colors are ever spoken, each on its own Ctrl+M row; the window
@@ -45,7 +45,7 @@ public static class Bbs757UpperEicasSpeech
 
     /// <summary>
     /// The lines that tell what changed from <paramref name="heard"/> to <paramref name="now"/>, in this order (empty:
-    /// nothing to say). They keep their words after "resumed" (R32): "EICAS warning" names the display, and the thrust
+    /// nothing to say). They keep their words after "resumed": "EICAS warning" names the display, and the thrust
     /// line has no prefix.
     /// <list type="number">
     /// <item>New, on <see cref="Bbs757UpperEicasDisplay.MessagesKey"/>: each message uncancelled now that was not in
@@ -53,17 +53,20 @@ public static class Bbs757UpperEicasSpeech
     /// line per level, warning, caution, advisory, then communication: "EICAS warning: L ENGINE FIRE, R ENGINE FIRE",
     /// "EICAS caution: …", "EICAS: …".</item>
     /// <item>Gone: each message uncancelled in <paramref name="heard"/> and no longer in the list, in its order there:
-    /// "EICAS gone: A, B". A cancelled message leaving was not on the screen and says nothing (R17); one being
-    /// cancelled is not gone.</item>
-    /// <item>Cancelled (R16): "EICAS: 3 messages cancelled", the messages uncancelled before and cancelled now.</item>
-    /// <item>Recall (R16), when RECALL's time changed: "EICAS recall: " and the messages it brought back, or "no
-    /// cancelled messages". They are never also said as new.</item>
+    /// "EICAS gone: A, B". A cancelled message leaving was not on the screen and says nothing; one being cancelled is
+    /// not gone.</item>
+    /// <item>Cancelled, CANC's read-back: "EICAS: 3 messages cancelled", the messages uncancelled before and cancelled
+    /// now.</item>
+    /// <item>Recall, RECALL's read-back, when its time changed (each press stamps it): "EICAS recall: " and the
+    /// messages it brought back, or "no cancelled messages". They are never also said as new.</item>
     /// <item>The thrust reference as drawn, on <see cref="Bbs757UpperEicasDisplay.ThrustKey"/>: "Thrust reference: CLB",
-    /// nothing drawn "none" (R12).</item>
-    /// <item>The N1 and EGT colors (R5), on <see cref="Bbs757UpperEicasDisplay.ColorsKey"/>: each engine's that changed
-    /// while its value is drawn before and after, in one line, left N1, right N1, left EGT, right EGT: "EICAS: L EGT
-    /// amber, R EGT amber", no color "normal". A value coming back from blank amber or red says its color in that line
-    /// ("EICAS: L EGT red", R42); one coming back with no color, or going blank, says nothing.</item>
+    /// nothing drawn "none", so the pilot hears the reference go.</item>
+    /// <item>The N1 and EGT colors, which a sighted pilot sees turn amber or red, on
+    /// <see cref="Bbs757UpperEicasDisplay.ColorsKey"/>: each engine's that changed while its value is drawn before and
+    /// after, in one line, left N1, right N1, left EGT, right EGT: "EICAS: L EGT amber, R EGT amber", no color
+    /// "normal". A value coming back from blank amber or red says its color in that line ("EICAS: L EGT red": a sighted
+    /// pilot sees it come back in that color); one coming back with no color, or going
+    /// blank, says nothing.</item>
     /// </list>
     /// Nothing else is spoken: no gauge value, TAT, TAI, REV, in-flight start block, page or RECALL word.
     /// </summary>
@@ -117,13 +120,13 @@ public static class Bbs757UpperEicasSpeech
     }
 
     /// <summary>
-    /// The Alt+E window's rows (R33), in this order: the engine rows ("EPR: 1.03, 1.03", "N1: 19.9, 19.9", "EGT: 358,
-    /// 360"; a blank value "blank", a color after its value: "EGT: 800 amber, 360"); TAI and REV while drawn ("TAI: L,
-    /// R", "REV: L amber", only the sides drawn); the N1 and EGT max memories while set ("N1 max: 109.2, blank"); the
-    /// thrust reference ("Thrust reference: TO 1", or "none") and the reference EPR while drawn; TAT ("TAT: +11c"); the
-    /// in-flight start block's lines; every message in screen order ("Caution: L ENG SHUTDOWN", a cancelled one with
-    /// " (cancelled)"), or "Messages: none"; the page line ("PAGE 2") while BlueBird draws it and the RECALL word while it
-    /// shows, both as the reading carries them in the layout's words.
+    /// The Alt+E window's rows, in the order the design gives them: the engine rows ("EPR: 1.03, 1.03", "N1: 19.9,
+    /// 19.9", "EGT: 358, 360"; a blank value "blank", a color after its value: "EGT: 800 amber, 360"); TAI and REV
+    /// while drawn ("TAI: L, R", "REV: L amber", only the sides drawn); the N1 and EGT max memories while set ("N1 max:
+    /// 109.2, blank"); the thrust reference ("Thrust reference: TO 1", or "none") and the reference EPR while drawn;
+    /// TAT ("TAT: +11c"); the in-flight start block's lines; every message in screen order ("Caution: L ENG SHUTDOWN",
+    /// a cancelled one with " (cancelled)"), or "Messages: none"; the page line ("PAGE 2") while BlueBird draws it and
+    /// the RECALL word while it shows, both as the reading carries them in the layout's words.
     /// </summary>
     public static IReadOnlyList<string> Rows(Bbs757UpperEicasReading r)
     {
@@ -189,7 +192,8 @@ public static class Bbs757UpperEicasSpeech
     }
 
     /// <summary>The color word to say for one engine's value, or null: a value drawn before and after whose color changed
-    /// says its new one ("normal" for none); a value coming back from blank says its color only when it has one (R42); a
+    /// says its new one ("normal" for none); a value coming back from blank says its color only when it has one (a
+    /// sighted pilot sees it come back amber or red); a
     /// value going blank, or staying blank, says nothing.</summary>
     private static string? ColorSaid(string? valueBefore, string? colorBefore, string? valueAfter, string? colorAfter)
     {

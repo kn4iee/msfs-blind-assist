@@ -392,7 +392,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     /// </list>
     /// Corrupt when the walk was torn, a level is missing from <see cref="Bbs757UpperEicasLayout.Levels"/>, or a value
     /// the reading uses is not finite while the screen is lit (dark, such a value reads blank). Every number is
-    /// formatted with the invariant culture; BlueBird's alignment padding is dropped (R26).
+    /// formatted with the invariant culture; BlueBird's alignment padding is dropped, as column alignment, not a word.
     /// </summary>
     public static Bbs757UpperEicasReading Decode(Bbs757UpperEicasLayout layout, Bbs757UpperEicasRaw raw, bool manual)
     {
@@ -533,7 +533,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         AddMax(n1Drawn, Bbs757EicasValue.N1MaxLabel, raw.Left.MaxN1, raw.Right.MaxN1, v => v.ToString("F1", Inv));
         AddMax(egtDrawn, Bbs757EicasValue.EgtMaxLabel, raw.Left.MaxEgt, raw.Right.MaxEgt, v => Whole(Math.Max(0, v)));
 
-        // The in-flight start block (22932, R11).
+        // The in-flight start block (22932): its lines as BlueBird draws them, for the window.
         var envelope = new List<string>();
         static bool Out(Bbs757EicasRawEngine e) => !e.Combusting && !e.FireSwitch;
         if (!raw.OnGround && !raw.Compact && raw.LowerMode == layout.EnvelopeLowerMode && (Out(raw.Left) || Out(raw.Right)))
@@ -558,14 +558,16 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     /// <summary>A readout's whole number, truncated toward zero (EGT, as BlueBird's <c>trunc</c>).</summary>
     private static string Whole(double v) => Math.Truncate(v).ToString("F0", Inv);
 
-    /// <summary>TAT: truncated, signed, then BlueBird's small c ("+11c", "+5c", "-15c"; R26 drops the alignment space).</summary>
+    /// <summary>TAT: truncated, signed, then BlueBird's small c ("+11c", "+5c", "-15c"; the alignment space before a
+    /// one-digit value is dropped, as column alignment, not a word).</summary>
     private static string Tat(double celsius)
     {
         double v = Math.Truncate(celsius);
         return (v < 0 ? "-" : "+") + Math.Abs(v).ToString("F0", Inv) + "c";
     }
 
-    /// <summary>The derate text: "+25c", "0c", "-5c" (R26 drops the alignment space).</summary>
+    /// <summary>The derate text: "+25c", "0c", "-5c" (the alignment space is dropped, as column alignment, not a
+    /// word).</summary>
     private static string Derate(int d) => (d > 0 ? "+" : "") + d.ToString(Inv) + "c";
 
     /// <summary><paramref name="b"/> plus <paramref name="offset"/>, false when the offset is negative or the sum

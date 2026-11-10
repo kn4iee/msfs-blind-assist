@@ -25,7 +25,8 @@ public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEi
     public const string ThrustKey = "MSFSBA_BBS757_THRUST_REFERENCE";
     public const string ThrustLabel = "Thrust reference";
 
-    /// <summary>The Ctrl+M row of the N1 and EGT colors' line (R5).</summary>
+    /// <summary>The Ctrl+M row of the N1 and EGT colors' line, spoken because a sighted pilot sees a readout turn
+    /// amber or red.</summary>
     public const string ColorsKey = "MSFSBA_BBS757_ENGINE_COLORS";
     public const string ColorsLabel = "Engine gauge colors";
 
@@ -85,7 +86,7 @@ public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEi
     /// power-up messages are a silent baseline (S4).</summary>
     public bool? Lit(Bbs757UpperEicasReading reading, Bbs757SimValues sim) => reading.Powered;
 
-    /// <summary>Each line on its own row; <paramref name="withPrefix"/> changes nothing (R32): "EICAS warning: …" names the
+    /// <summary>Each line on its own row; <paramref name="withPrefix"/> changes nothing: "EICAS warning: …" names the
     /// display, and "Thrust reference: …" has no prefix.</summary>
     public IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757UpperEicasReading heard, Bbs757UpperEicasReading now, bool withPrefix) =>
         Bbs757UpperEicasSpeech.Changes(heard, now);
