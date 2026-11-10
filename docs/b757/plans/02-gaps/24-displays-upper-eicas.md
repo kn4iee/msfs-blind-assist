@@ -110,9 +110,11 @@
 ## In-sim checks (owner, by ear)
 
 1. Cold and dark to engines running: battery on, then the first messages are silent; a pack off and on heard "EICAS: L PACK OFF" and "EICAS gone: L PACK OFF".
-2. An engine start: the thrust reference and the engine rows in Alt+E; any start message heard once.
-3. CANC and RECALL: the count once, the recall line once, no "gone".
-4. A flight: "Thrust reference: CLB" after takeoff, "CRZ" at cruise; Ctrl+M "EICAS messages" off silences the messages only.
+2. An engine start: the thrust reference and the engine rows in Alt+E; any start message heard once; no "EICAS announcements stopped" at light-off.
+3. CANC and RECALL: the count once, the recall line once, no "gone". Two questions for the owner, each on its own: the panel also says "Cancel pressed" and "Recall pressed" before the reader's line; keep each, or drop it while the reader runs? (A CANC that cancels nothing leaves no trace in memory, so "Cancel pressed" is then its only confirmation; a RECALL always gets the reader's line.)
+4. A flight: "Thrust reference: CLB" after takeoff, "CRZ" at cruise; Ctrl+M "EICAS messages" off silences the messages only. On the landing roll with reverse thrust, "Thrust reference: none", then the reference again once the reversers stow (BlueBird hides it while a reverser is deployed).
+
+Claude's own checks at Task 8 (read-only, the logs): a cold-and-dark load left dark more than 2 minutes, then the battery off at a shutdown, says neither "unavailable" nor "stopped"; the PW2000 variant's engine start against the gate's tolerance (measured on the RB211 only); a communication message read live if one comes. A question for the owner: what the cyan "V V V V V V V" row at the bottom of the upper EICAS tells a pilot (not read).
 
 ## Handoff to plan 16
 
@@ -128,8 +130,20 @@
 - **Started:** 2026-11-09, from `B757` 9c1ab1c0a (plan 23 landed, every check passed)
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
+- **Tasks:** 0-7 done and reviewed (each task review, then a final whole-branch review and its one fix round, all
+  clean); Task 8 Step 1 done 2026-11-10 (rebased onto `B757` 674206787, generator version 5 on the private branch, the
+  757 layout regenerated: fma and efb unchanged, upperEicas as measured; both suites green); the build at 1f4c1f44b
+  deployed to `C:\MSFSBA-B757` with its layout in `%APPDATA%` (2026-11-10 01:42).
+- **Waiting on the owner:** the simulator for Task 8 Step 2 and Claude's checks above; the in-sim checks; the word to
+  push `B757` and publish the layout.
 - **In-sim results:**
-- **Changed from the plan:**
-- **Open at landing:**
+- **Changed from the plan:** the reading carries what Task 1 measured: no page count (BlueBird draws "PAGE n" only, no
+  "of n"), each message's cancelled and on-screen state, per-engine colors, the in-flight start block, TAI and REV
+  rows, max memories and the reference EPR; the window's rows follow the screen's words ("TAT: +11c"). Engine values
+  are all read from memory (no per-value simulator source). The layout also carries the reverser states, the REV and
+  TAI words, the thrust numbers and the envelope row fields, so another BlueBird build fails rather than guesses.
+  Colors are spoken ("EICAS: L EGT amber", back to "normal"), and a gauge reappearing in a color says it. The gate is
+  N1 of both engines within 2.5 % over 3 s (the simulator's N1 jumps for about a second at light-off; the monitor's
+  2 s grace carries it).
+- **Open at landing:** the 757 rule file (`.claude/rules/b757.md`) is at its character budget: plans 25-28 split it
+  (the EFB rules into their own file) before adding rules.
