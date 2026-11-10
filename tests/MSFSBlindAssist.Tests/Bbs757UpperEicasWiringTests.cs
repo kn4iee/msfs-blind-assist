@@ -5,6 +5,7 @@
 using System.Reflection;
 using System.Windows.Forms;
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.Services;
@@ -191,10 +192,101 @@ public class Bbs757UpperEicasWiringTests
         }
     }
 
+    // ---- The window's cockpit buttons (task 8b) ------------------------------------------------
+
+    private static readonly (string Node, string Caption, string Label)[] Buttons =
+    {
+        ("B757_MAIN_CANCEL_BUTTON", "&Cancel", "Cancel"),
+        ("B757_MAIN_RECALL_BUTTON", "&Recall", "Recall"),
+        ("B757_EICAS_MAX-IND_BUTTON", "&Max Ind", "EICAS Max Ind"),
+    };
+
+    private static (BBS757DisplayForm Form, List<Button> Buttons) OpenWindow(Rig rig)
+    {
+        rig.PressAltE();
+        var form = Assert.Single(rig.Def.Displays.Windows.OfType<BBS757DisplayForm>());
+        var buttons = form.Controls.Cast<Control>().SelectMany(c => c.Controls.OfType<Button>()).ToList();
+        return (form, buttons);
+    }
+
+    [Fact]
+    public void The_window_holds_cancel_recall_and_max_ind_after_the_list_in_the_tab_order()
+    {
+        using var rig = new Rig(started: true);
+
+        var (form, buttons) = OpenWindow(rig);
+
+        Assert.Equal(Buttons.Select(b => b.Caption), buttons.Select(b => b.Text));
+        var list = form.Controls.Cast<Control>().Single(c => c is not FlowLayoutPanel);
+        var panel = form.Controls.OfType<FlowLayoutPanel>().Single();
+        Assert.True(panel.TabIndex > list.TabIndex);
+        Assert.Equal(new[] { 0, 1, 2 }, buttons.Select(b => b.TabIndex));
+    }
+
+    [Fact]
+    public void A_click_writes_the_press_then_the_release_and_says_pressed_once()
+    {
+        foreach (var (node, _, label) in Buttons)
+        {
+            using var rig = new Rig(started: true);
+            var (_, buttons) = OpenWindow(rig);
+            var control = rig.Def.ControlFor(node)!;
+            var press = Bbs757Write.PressFor(control)!;
+
+            buttons[Array.FindIndex(Buttons, b => b.Node == node)].PerformClick();
+
+            Assert.Equal(press.Up == null ? new[] { press.Down } : new[] { press.Down, press.Up }, rig.Io.Writes);
+            Assert.Equal(new[] { $"{label} pressed" }, rig.Speech.All);
+        }
+    }
+
+    [Fact]
+    public void A_click_that_cannot_land_says_unavailable_and_writes_nothing()
+    {
+        using var rig = new Rig(started: true);
+        rig.Io.CanWrite = false;
+        var (_, buttons) = OpenWindow(rig);
+
+        foreach (var b in buttons) b.PerformClick();
+
+        Assert.Empty(rig.Io.Writes);
+        Assert.Equal(Buttons.Select(b => $"{b.Label} unavailable"), rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_window_shown_again_keeps_one_set_of_buttons()
+    {
+        using var rig = new Rig(started: true);
+        var (form, _) = OpenWindow(rig);
+        form.Hide();
+
+        var (again, buttons) = OpenWindow(rig);
+
+        Assert.Same(form, again);
+        Assert.Equal(3, buttons.Count);
+    }
+
+    private sealed class FakeIo
+    {
+        public bool CanWrite = true;
+        public readonly List<string> Writes = new();
+
+        public Bbs757SimIo Io => new()
+        {
+            CanWrite = () => CanWrite,
+            ReadFresh = (_, _) => Task.FromResult<double?>(null),
+            Cached = _ => null,
+            Write = rpn => Writes.Add(rpn),
+            RequestRead = _ => { },
+            Delay = (_, ct) => { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; },
+        };
+    }
+
     /// <summary>A definition with the reader started (never its timer) or not, and Alt+E pressed through its hotkey path.</summary>
     private sealed class Rig : IDisposable
     {
         public BBS757Definition Def { get; }
+        public FakeIo Io { get; } = new();
         public SpeechCapture Speech { get; } = new();
         public List<HotkeyAction> AiReads { get; } = new();
         public HotkeyManager Hotkeys { get; } = new();
@@ -203,7 +295,7 @@ public class Bbs757UpperEicasWiringTests
 
         public Rig(bool started)
         {
-            Def = new BBS757Definition { StartMonitor = StartWithoutTimer };
+            Def = new BBS757Definition { StartMonitor = StartWithoutTimer, NestRunning = () => true, WriteIo = _ => Io.Io };
             Def.AiReadOverride = a => { AiReads.Add(a); return true; };
             if (started) Def.StartDisplays(new NoFiles(), new NoLayouts(), _sim, Speech);
             else _ = Def.Displays;
