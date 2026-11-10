@@ -103,9 +103,9 @@
 
 ### Task 8 [controller, simulator up]: Live checks, deploy, publish
 
-- [ ] **Step 1:** Rebase onto `B757` and the private branch onto its head; take the next `GeneratorVersion.Current` if another display plan landed meanwhile; regenerate the 757 layout with every reader on `B757`; layout tests and the full suite green.
-- [ ] **Step 2:** Read-only on the ground: the window's messages against the probe's `eicastab.py` reading (PARKING BRAKE; L PACK OFF if the owner sets it); `bbs757-upper-eicas.log` reaches Running; the FMA and the tablet still read.
-- [ ] **Step 3:** Deploy to `C:\MSFSBA-B757` with the regenerated layout; ask the owner to push and publish.
+- [x] **Step 1:** Rebase onto `B757` and the private branch onto its head; take the next `GeneratorVersion.Current` if another display plan landed meanwhile; regenerate the 757 layout with every reader on `B757`; layout tests and the full suite green.
+- [x] **Step 2:** Read-only on the ground: the window's messages against the probe's `eicastab.py` reading (PARKING BRAKE; L PACK OFF if the owner sets it); `bbs757-upper-eicas.log` reaches Running; the FMA and the tablet still read.
+- [x] **Step 3:** Deploy to `C:\MSFSBA-B757` with the regenerated layout; ask the owner to push and publish.
 
 ## In-sim checks (owner, by ear)
 
@@ -121,22 +121,48 @@ Claude's own checks at Task 8 (read-only, the logs): a cold-and-dark load left d
 - **Pilot-facing:** "The 757's EICAS messages are spoken as they appear and go, and Alt+E opens the upper EICAS: engine indications, thrust reference and every message." Changelog `feature`; the guide's 757 displays part, its Ctrl+M rows.
 - **docs/b757.md:** the upper EICAS reader; the "AI display reads" section: Alt+E's fallback.
 - **HotkeyGuides/BBS757_Hotkeys.txt:** Alt+E's line ("the upper EICAS window; AI read when it cannot be read").
+- **The window's buttons** (the owner's request after check 3): Cancel (Alt+C), Recall (Alt+R) and Max Ind (Alt+M)
+  after the list, each pressing as the panel does ("Cancel pressed", then the reader's own line); the guide's Alt+E
+  paragraph names them.
+- **Plan 16's in-sim pass** takes this plan's deferred checks (the owner, 2026-11-10: no full flight then), added to its
+  Task 5: "Thrust reference: CLB" after takeoff and "CRZ" at cruise; Ctrl+M "EICAS messages" off silences the messages
+  only; the landing roll with reverse thrust says "Thrust reference: none", then the reference again; at the shutdown,
+  the battery off says neither "EICAS announcements unavailable" nor "stopped" (Claude reads `bbs757-upper-eicas.log`).
 
 ## Execution record
 
-- **Status:** claimed (2026-11-09)
+- **Status:** landed (2026-11-10) at the owner's word ("please go ahead and close out the plan and push"), with the
+  generator-6 757 layout published and the older 757 files removed from the `layouts` branch; in-sim checks 1-3 and
+  the window's buttons passed on the PW2000 variant; check 4 (a flight) and the shutdown check moved to plan 16's
+  in-sim pass at the owner's request
 - **Claimed by:** Robin Kipp (robin24), 2026-11-09
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-09, from `B757` 9c1ab1c0a (plan 23 landed, every check passed)
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:** 0-7 done and reviewed (each task review, then a final whole-branch review and its one fix round, all
-  clean); Task 8 Step 1 done 2026-11-10 (rebased onto `B757` 674206787, generator version 5 on the private branch, the
-  757 layout regenerated: fma and efb unchanged, upperEicas as measured; both suites green); the build at 1f4c1f44b
-  deployed to `C:\MSFSBA-B757` with its layout in `%APPDATA%` (2026-11-10 01:42).
-- **Waiting on the owner:** the simulator for Task 8 Step 2 and Claude's checks above; the in-sim checks; the word to
-  push `B757` and publish the layout.
-- **In-sim results:**
+- **Landed:** 2026-11-10, rebased onto `B757` 6c56fb5b5 (plan 25, the lower EICAS, landed meanwhile, then a main
+  merge), then a fast-forward of `B757`. Shared lines kept both, plan 25's first: the module's readers (fma, efb,
+  lowerEicas, upperEicas), the layout descriptions and the test files' full layout files; plan 25 took B757-33, so this
+  plan's rules are B757-34 and B757-35. Plan 25's gate copies already stream a name a Continuous row carries off the
+  batch, so this plan's own workaround on the status display rows was dropped. `git log --grep "^Plan: 24"` lists the
+  plan's commits. Private: `feature/b757-displays` at ad1ab9dc7 (plan 25's branch merged in, both recipes, generator
+  version 6, the golden files rewritten); the generator-6 757 layout
+  `bbs757/39462c4abb2f46d2af51c4c2290c4e33a72e25c25bdf378de5d5c81a34bb10b4-ded5623881d98102.json` (every reader equal
+  to its reviewed layout: fma, efb and lowerEicas to plan 25's published file, upperEicas to this plan's) published
+- **Tests at landing:** 24,704 passed, 0 failed (app, on the rebased code with plan 25 and main); 589 passed, 0 failed
+  (toolkit, private ad1ab9dc7); the solution builds in Debug and Release with 0 errors
+- **Tasks:** 0-7 done, each reviewed (spec and quality) and its fixes re-reviewed; a final whole-branch review (opus)
+  and its one fix round (the reverser states, the REV and TAI words and the thrust numbers into the layout, PAGE and
+  RECALL in the layout's words, a dark display's stray values blank, ruling numbers as prose), re-reviewed clean; Task
+  8 done; then the window's buttons (the owner's request), reviewed. Task 6 Step 1 (the gate variables): 3 added,
+  `TURB ENG N1:1`, `TURB ENG N1:2` (percent, streaming off the batch beside the status display's rows of those names)
+  and `L:BBS757_THRREF_PULL`.
+- **Waiting on the owner:** nothing; plan 16's in-sim pass holds the deferred checks.
+- **In-sim results:** 2026-11-10, `C:\MSFSBA-B757` at 1f4c1f44b, then f16667a7d for the buttons, the PW2000 variant
+  ("BlueBird 757-200 PW N/W"): cold and dark, the reader held quietly 3 minutes and said nothing, the objects already
+  in place while dark; check 1 passed ("announcements exactly as described"); check 2 passed (the Alt+E window as
+  memory predicted it: EPR 1.00, N1 20.8, EGT, Thrust reference TO, EPR reference 1.41, TAT +8c, Advisory PARKING
+  BRAKE; no "stopped" through the PW engine start, so the gate holds on the PW2000 as on the RB211); check 3 passed,
+  and the owner kept "Cancel pressed" and "Recall pressed" beside the reader's lines; the window's Cancel, Recall and
+  Max Ind passed ("All as expected").
 - **Changed from the plan:** the reading carries what Task 1 measured: no page count (BlueBird draws "PAGE n" only, no
   "of n"), each message's cancelled and on-screen state, per-engine colors, the in-flight start block, TAI and REV
   rows, max memories and the reference EPR; the window's rows follow the screen's words ("TAT: +11c"). Engine values
@@ -144,6 +170,12 @@ Claude's own checks at Task 8 (read-only, the logs): a cold-and-dark load left d
   TAI words, the thrust numbers and the envelope row fields, so another BlueBird build fails rather than guesses.
   Colors are spoken ("EICAS: L EGT amber", back to "normal"), and a gauge reappearing in a color says it. The gate is
   N1 of both engines within 2.5 % over 3 s (the simulator's N1 jumps for about a second at light-off; the monitor's
-  2 s grace carries it).
-- **Open at landing:** the 757 rule file (`.claude/rules/b757.md`) is at its character budget: plans 25-28 split it
-  (the EFB rules into their own file) before adding rules.
+  2 s grace carries it). The window gained Cancel, Recall and Max Ind at the owner's request.
+- **Open at landing (later work, none blocking):** the 757 rule file (`.claude/rules/b757.md`) is at its character
+  budget (8,000): plans 26-28 split it (the EFB rules into their own file) before adding a rule; the cyan "V V V V V V
+  V" row at the bottom of the upper EICAS is not read (it shows while the lower EICAS draws its N2/N3 dials; what it
+  tells a pilot is the owner's to say); no communication message (ATC, CABIN CALL, …) was seen live, so that list's
+  shape is from the code only; the TMC's circuit side is not read (a TMC breaker pulled would show a thrust reference
+  the screen hides).
+- **Rulings made while working:** in the SDD ledger (git-ignored, `.superpowers/sdd/24-displays-upper-eicas/progress.md`,
+  R1-R51) and the commit messages.

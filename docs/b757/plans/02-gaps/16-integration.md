@@ -51,8 +51,8 @@ Before any other task. A claim counts only once it is on the remote `B757`: one 
 ## Task 5: The owner's in-sim pass (owner)
 
 1. **Gate (fixes and essentials):** panels read real names; Emergency Lights ARMED and back; Landing Altitude typed; ground power disconnect and connect; EXT PWR reads back; COM standby typed and transferred; Ctrl+N (the FMC's runway ILS shown, the ILS course and frequency set); a VOR tuned in the CDU window and read by N; N, D, Shift+D, Shift+3; the CDU cursor stays on its line; a typed CDU entry lands at the faster timing.
-2. **Climb and cruise:** Speed Intervene in VNAV, a Mach set, Shift+S, an MCP altitude change heard once.
-3. **Approach:** LAND 3 (or LAND 2), the A/P disconnect announced.
+2. **Climb and cruise:** Speed Intervene in VNAV, a Mach set, Shift+S, an MCP altitude change heard once. From plan 24 (deferred at the owner's request): "Thrust reference: CLB" after takeoff and "CRZ" at cruise; Ctrl+M "EICAS messages" off silences the EICAS messages only.
+3. **Approach:** LAND 3 (or LAND 2), the A/P disconnect announced. From plan 24: on the landing roll with reverse thrust, "Thrust reference: none", then the reference again once the reversers stow; at the shutdown, the battery off says neither "EICAS announcements unavailable" nor "stopped" (Claude reads `bbs757-upper-eicas.log`).
 4. **New features:** Shift+C's checklist ticking; the reworked EFB (a service, a preset, a setting); a preset's summary line; the CDU rows on braille.
 - [ ] Record the results for the PR description; fix what fails (back to the owning plan's tests).
 
