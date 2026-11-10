@@ -162,7 +162,8 @@ Each step from the export, numbered for this build:
 1. Export `eicas_gauge_callback` = 23077 → `f960` (`i32.const` 987956 = gauges manager 0xf1334) → f23058(mgr, 12) →
    23060 → 5105 (`base + id << 3`) → `[0xf1394]` = eicas_upper; its draw = vtable slot 4 = 22920 (vtable 0x133d8,
    vptr 0x133e0).
-2. 22920's first call 22884 (base setup): `f963` (`i32.const` 986912 = systems manager 0xf0f20) → f22885(mgr, 38) →
+2. 22903's first call 22884 (base setup; 22903 is the setup, vtable slot 3, beside the draw 22920 at slot 4): `f963`
+   (`i32.const` 986912 = systems manager 0xf0f20) → f22885(mgr, 38) →
    `[0xf1050]` eicas_computer stored at +132; f22886(mgr, 28 / 29) → `[0xf1000]`/`[0xf1008]` stored at +136/+140.
 3. 22903 stores the rest: 112/113 tr → +308/+312; 41 tmc → +316; 12 tat_probe → +328; 13 (gauges) eicas_lower → +272.
 4. Lists: in 22920 the callees on `i32.load offset=132` whose body is one `i32.const`: 36345 → 0xf0a64 (the first, its
@@ -177,5 +178,5 @@ Each step from the export, numbered for this build:
 10. TAI: f47114 on eicas_upper+276 (pneumatic) → +1932 vector, 184-byte stride, id at +4 (16, 22 as `i32.const` in
     22951 ;1009/;1022), +72, +52. Envelope: 22956's reads (fms+1513 on +284, engine +3992, fire_protection +400/+401 on
     +288, eicas_lower+576 on +272), rows at +420 (22959, stride 36). TMC valid: f46943 → tmc+408, +440, +441.
-11. Words: the level colours from the switch in 22920; the thrust words from the UTF-32 constants 22929 draws; the
+11. Words: the level colors from the switch in 22920; the thrust words from the UTF-32 constants 22929 draws; the
     `PAGE` format and `RECALL` from their UTF-32 literals in 22920.
