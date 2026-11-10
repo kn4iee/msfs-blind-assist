@@ -96,8 +96,8 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     /// <summary>The out value of a failed read: never shown, spoken or a baseline.</summary>
-    private static readonly Bbs757UpperEicasReading NotRead = new(Array.Empty<Bbs757EicasMessage>(), 0, false, false, 0, 0,
-        Array.Empty<Bbs757EicasValue>(), null, Array.Empty<string>(), 0, 0, false, Corrupt: true);
+    private static readonly Bbs757UpperEicasReading NotRead = new(Array.Empty<Bbs757EicasMessage>(), 0, false, null, false,
+        null, 0, 0, Array.Empty<Bbs757EicasValue>(), null, Array.Empty<string>(), 0, 0, false, Corrupt: true);
 
     private readonly ModuleMemory _memory;
     private readonly IDisposable _ownedSource;
@@ -540,8 +540,11 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
 
         bool powered = raw.Powered && !raw.Failed && !raw.TimedBlank && raw.Blank == 0;
         double gateLeft = Use(raw.Left.N1), gateRight = Use(raw.Right.N1);
-        return new Bbs757UpperEicasReading(messages.AsReadOnly(), raw.Page, pageShown, recall, raw.RecallTime, cancelled,
-            values.AsReadOnly(), thrust, envelope.AsReadOnly(), gateLeft, gateRight, powered, corrupt);
+        // PAGE and RECALL in the layout's words; the draw's column padding before the number is dropped.
+        string? pageLine = pageShown ? layout.PageWord + " " + raw.Page.ToString(Inv) : null;
+        string? recallLine = recall ? layout.RecallWord : null;
+        return new Bbs757UpperEicasReading(messages.AsReadOnly(), raw.Page, pageShown, pageLine, recall, recallLine,
+            raw.RecallTime, cancelled, values.AsReadOnly(), thrust, envelope.AsReadOnly(), gateLeft, gateRight, powered, corrupt);
     }
 
     /// <summary>A readout's whole number, truncated toward zero (EGT, as BlueBird's <c>trunc</c>).</summary>

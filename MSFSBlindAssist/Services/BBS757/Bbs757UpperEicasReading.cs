@@ -5,9 +5,10 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// <list type="bullet">
 /// <item><see cref="Messages"/>: the main list in BlueBird's vector order (a cancelled entry kept, with
 /// <see cref="Bbs757EicasMessage.Cancelled"/>), then the communication list top to bottom as the screen shows it.</item>
-/// <item><see cref="Page"/> as stored; <see cref="PageShown"/> whether "PAGE n" is drawn (no "of n": BlueBird draws none);
-/// <see cref="Recall"/> whether the RECALL word is drawn; <see cref="RecallTime"/> as stored, so a RECALL press shows as its
-/// change; <see cref="Cancelled"/> the main-list entries whose cancelled mark is set.</item>
+/// <item><see cref="Page"/> as stored; <see cref="PageShown"/> whether "PAGE n" is drawn (no "of n": BlueBird draws none),
+/// and <see cref="PageLine"/> that line in the layout's word while it is ("PAGE 2"); <see cref="Recall"/> whether the
+/// RECALL word is drawn, and <see cref="RecallLine"/> that word while it is; <see cref="RecallTime"/> as stored, so a
+/// RECALL press shows as its change; <see cref="Cancelled"/> the main-list entries whose cancelled mark is set.</item>
 /// <item><see cref="Values"/>: the gauge rows in screen order (EPR, N1, EGT, TAT, then TAI, REV, EPR reference, N1 max and
 /// EGT max only while drawn); <see cref="ThrustReference"/> as drawn, null when nothing is drawn;
 /// <see cref="Envelope"/> the in-flight start block's lines, empty when it is not drawn.</item>
@@ -22,7 +23,9 @@ public sealed record Bbs757UpperEicasReading(
     IReadOnlyList<Bbs757EicasMessage> Messages,
     int Page,
     bool PageShown,
+    string? PageLine,
     bool Recall,
+    string? RecallLine,
     double RecallTime,
     int Cancelled,
     IReadOnlyList<Bbs757EicasValue> Values,
@@ -39,7 +42,9 @@ public sealed record Bbs757UpperEicasReading(
             || (Messages.SequenceEqual(other.Messages)
                 && Page == other.Page
                 && PageShown == other.PageShown
+                && string.Equals(PageLine, other.PageLine, StringComparison.Ordinal)
                 && Recall == other.Recall
+                && string.Equals(RecallLine, other.RecallLine, StringComparison.Ordinal)
                 && RecallTime.Equals(other.RecallTime)
                 && Cancelled == other.Cancelled
                 && Values.SequenceEqual(other.Values)
@@ -56,7 +61,9 @@ public sealed record Bbs757UpperEicasReading(
         foreach (var m in Messages) h.Add(m);
         h.Add(Page);
         h.Add(PageShown);
+        h.Add(PageLine, StringComparer.Ordinal);
         h.Add(Recall);
+        h.Add(RecallLine, StringComparer.Ordinal);
         h.Add(RecallTime);
         h.Add(Cancelled);
         foreach (var v in Values) h.Add(v);

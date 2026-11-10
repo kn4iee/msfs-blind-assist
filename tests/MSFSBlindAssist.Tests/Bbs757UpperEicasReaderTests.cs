@@ -774,6 +774,23 @@ public class Bbs757UpperEicasReaderTests
         Assert.Equal(recall, eicas.Recall);
         Assert.Equal(page, eicas.Page);
         Assert.Equal(expected, eicas.PageShown);
+        Assert.Equal(expected ? "PAGE " + page : null, eicas.PageLine);
+        Assert.Equal(recall ? "RECALL" : null, eicas.RecallLine);
+    }
+
+    [Fact]
+    public void The_page_and_recall_lines_are_drawn_in_the_layouts_words()
+    {
+        // Page 2 with five messages drawn, just after RECALL.
+        var raw = Live() with { Page = 2, RecallTime = 4096.0, Clock = 4096.29 };
+        var drawn = Decode(raw);
+        Assert.Equal(("PAGE 2", "RECALL"), (drawn.PageLine, drawn.RecallLine));
+        var other = Bbs757UpperEicasReader.Decode(L with { PageWord = "SEITE", RecallWord = "ZURUECK" }, raw, manual: false);
+        Assert.Equal(("SEITE 2", "ZURUECK"), (other.PageLine, other.RecallLine));
+        // Neither drawn: page 1 with five of ten lines, no RECALL press within the half second.
+        var quiet = Decode(Live());
+        Assert.Null(quiet.PageLine);
+        Assert.Null(quiet.RecallLine);
     }
 
     [Theory]
@@ -1208,7 +1225,9 @@ public class Bbs757UpperEicasReaderTests
         Assert.NotEqual(a, a with { GateN1Right = 19.931 });
         Assert.NotEqual(a, a with { Page = 2 });
         Assert.NotEqual(a, a with { PageShown = true });
+        Assert.NotEqual(a, a with { PageLine = "PAGE 1" });
         Assert.NotEqual(a, a with { Recall = true });
+        Assert.NotEqual(a, a with { RecallLine = "RECALL" });
         Assert.NotEqual(a, a with { Cancelled = 1 });
         Assert.NotEqual(a, a with { Powered = false });
         Assert.NotEqual(a, a with { Corrupt = true });

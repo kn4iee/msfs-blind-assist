@@ -29,8 +29,6 @@ public static class Bbs757UpperEicasSpeech
     private const string Left = "L", Right = "R";
     private const string CancelledMark = " (cancelled)";
     private const string NoMessages = "Messages: none";
-    private const string PageRow = "PAGE ";
-    private const string RecallRow = "RECALL";
 
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -124,7 +122,8 @@ public static class Bbs757UpperEicasSpeech
     /// R", "REV: L amber", only the sides drawn); the N1 and EGT max memories while set ("N1 max: 109.2, blank"); the
     /// thrust reference ("Thrust reference: TO 1", or "none") and the reference EPR while drawn; TAT ("TAT: +11c"); the
     /// in-flight start block's lines; every message in screen order ("Caution: L ENG SHUTDOWN", a cancelled one with
-    /// " (cancelled)"), or "Messages: none"; "PAGE 2" while BlueBird draws it; "RECALL" while it shows.
+    /// " (cancelled)"), or "Messages: none"; the page line ("PAGE 2") while BlueBird draws it and the RECALL word while it
+    /// shows, both as the reading carries them in the layout's words.
     /// </summary>
     public static IReadOnlyList<string> Rows(Bbs757UpperEicasReading r)
     {
@@ -142,8 +141,8 @@ public static class Bbs757UpperEicasSpeech
         if (r.Messages.Count == 0) rows.Add(NoMessages);
         foreach (var m in r.Messages)
             rows.Add(RowLabel(m.Level) + ": " + Spoken(m.Text) + (m.Cancelled ? CancelledMark : ""));
-        if (r.PageShown) rows.Add(PageRow + r.Page.ToString(Inv));
-        if (r.Recall) rows.Add(RecallRow);
+        if (r.PageLine is { } page) rows.Add(page);
+        if (r.RecallLine is { } recall) rows.Add(recall);
         return rows;
     }
 

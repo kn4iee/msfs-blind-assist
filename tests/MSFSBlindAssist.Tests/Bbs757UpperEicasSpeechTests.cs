@@ -53,7 +53,7 @@ public class Bbs757UpperEicasSpeechTests
         double recallTime = 4023.89, bool powered = true)
     {
         var list = messages ?? Array.Empty<Bbs757EicasMessage>();
-        return new Bbs757UpperEicasReading(list, Page: 1, PageShown: false, Recall: false, RecallTime: recallTime,
+        return new Bbs757UpperEicasReading(list, Page: 1, PageShown: false, PageLine: null, Recall: false, RecallLine: null, RecallTime: recallTime,
             Cancelled: list.Count(m => m.Cancelled), Values: Idle, ThrustReference: thrust, Envelope: Array.Empty<string>(),
             GateN1Left: 19.93, GateN1Right: 19.93, Powered: powered, Corrupt: false);
     }
@@ -320,8 +320,8 @@ public class Bbs757UpperEicasSpeechTests
             Gauge(r, V("EPR", "1.03", "1.03", "amber")), Gauge(r, V("TAT", "+12c")), Gauge(r, V("TAI", "TAI", null)),
             Gauge(r, V("REV", "REV", "REV", "amber", "amber")), Gauge(r, V("EPR reference", "1.65", "1.65")),
             Gauge(r, V("N1 max", "109.2", null)), Gauge(r, V("EGT max", "870", null)), Without(r, "EPR reference"),
-            r with { Envelope = new[] { "IN-FLT START", "FL 250 260-360 KTS" } }, r with { Page = 2, PageShown = true },
-            r with { Recall = true }, r with { GateN1Left = 88.25, GateN1Right = 88.1 },
+            r with { Envelope = new[] { "IN-FLT START", "FL 250 260-360 KTS" } }, r with { Page = 2, PageShown = true, PageLine = "PAGE 2" },
+            r with { Recall = true, RecallLine = "RECALL" }, r with { GateN1Left = 88.25, GateN1Right = 88.1 },
             Eicas(new[] { BleedL with { Shown = false }, ParkingBrake }),
         };
         foreach (var now in quiet) Assert.Empty(Said(culture, r, now));
@@ -426,7 +426,9 @@ public class Bbs757UpperEicasSpeechTests
             Envelope = new[] { "IN-FLT START", "FL 250 260-360 KTS", "FL 230 255-360 KTS" },
             Page = 2,
             PageShown = true,
+            PageLine = "PAGE 2",
             Recall = true,
+            RecallLine = "RECALL",
         };
         Assert.Equal(new[]
         {
@@ -434,7 +436,10 @@ public class Bbs757UpperEicasSpeechTests
             "Advisory: L ENG BLEED OFF (cancelled)", "Advisory: PARKING BRAKE", "PAGE 2", "RECALL",
         }, Rows(culture, r)[5..]);
         // PAGE only while BlueBird draws it.
-        Assert.DoesNotContain(Rows(culture, r with { PageShown = false, Recall = false }), row => row.StartsWith("PAGE", StringComparison.Ordinal) || row == "RECALL");
+        Assert.DoesNotContain(Rows(culture, r with { PageShown = false, PageLine = null, Recall = false, RecallLine = null }),
+            row => row.StartsWith("PAGE", StringComparison.Ordinal) || row == "RECALL");
+        // The rows are the lines as the reading carries them, in the layout's words; the window writes none of its own.
+        Assert.Equal(new[] { "SEITE 2", "ZURUECK" }, Rows(culture, r with { PageLine = "SEITE 2", RecallLine = "ZURUECK" })[^2..]);
     }
 
     // ---- numbers, through the reader's own decode ----
