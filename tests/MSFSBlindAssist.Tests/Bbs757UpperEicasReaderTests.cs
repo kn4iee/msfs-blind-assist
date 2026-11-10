@@ -1195,6 +1195,45 @@ public class Bbs757UpperEicasReaderTests
     }
 
     [Fact]
+    public void A_dark_screens_values_that_are_not_numbers_read_blank()
+    {
+        // BlueBird may leave anything in an unpowered display's fields, and a dark reading is never spoken: read blank,
+        // so a shutdown's ten such readings do not stop the reader as corrupt.
+        double nan = double.NaN;
+        var dark = Live() with
+        {
+            Powered = false, Clock = nan, Tat = nan, ReferenceEpr = nan, N1Amber = float.NaN, EgtAmber = float.PositiveInfinity,
+            Left = IdleLeft with { Epr = nan, N1 = nan, Egt = double.PositiveInfinity, MaxN1 = float.NaN, AntiIce = new(nan, 0) },
+            Right = IdleLeft with { MaxEgt = float.NaN, Epr = 1e39 },
+        };
+        var eicas = Decode(dark);
+        Assert.False(eicas.Corrupt);
+        Assert.False(eicas.Powered);
+        Assert.Equal(new[] { V("EPR", null, null), V("N1", null, "19.9"), V("EGT", null, "357"), V("TAT", null) }, eicas.Values);
+        Assert.False(eicas.Recall);
+        Assert.Equal("TO", eicas.ThrustReference);
+        Assert.True(double.IsNaN(eicas.GateN1Left));   // the gate's value stays raw; a dark screen is never compared
+        Assert.Equal(LiveList.Length, eicas.Messages.Count);
+        Assert.False(Read(Place(dark)).Corrupt);
+
+        // Without its red limit the N1 or EGT is not drawn at all.
+        var noLimits = Decode(Live() with { Powered = false, N1Red = float.NaN, EgtRed = float.NaN });
+        Assert.False(noLimits.Corrupt);
+        Assert.Equal(V("N1", null, null), Row(noLimits, "N1"));
+        Assert.Equal(V("EGT", null, null), Row(noLimits, "EGT"));
+
+        // Each way the screen goes dark reads blank; lit, the same values are corrupt.
+        foreach (var off in new[] { dark with { Powered = true, Failed = true }, dark with { Powered = true, TimedBlank = true },
+            dark with { Powered = true, Blank = 25 } })
+            Assert.False(Decode(off).Corrupt);
+        Assert.True(Decode(dark with { Powered = true }).Corrupt);
+
+        // A torn list is corrupt whatever the power, and so is a level missing from the table.
+        Assert.True(Decode(dark with { Torn = true }).Corrupt);
+        Assert.True(Decode(dark with { Main = [new(500, "WHAT", 7, false)] }).Corrupt);
+    }
+
+    [Fact]
     public void A_level_missing_from_the_table_or_a_torn_walk_is_corrupt()
     {
         var unknown = Decode(Live() with { Main = [.. LiveList, new(500, "WHAT", 7, false)] });

@@ -391,16 +391,21 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     /// fire switch is in.</item>
     /// </list>
     /// Corrupt when the walk was torn, a level is missing from <see cref="Bbs757UpperEicasLayout.Levels"/>, or a value
-    /// the reading uses is not finite. Every number is formatted with the invariant culture; BlueBird's alignment
-    /// padding is dropped (R26).
+    /// the reading uses is not finite while the screen is lit (dark, such a value reads blank). Every number is
+    /// formatted with the invariant culture; BlueBird's alignment padding is dropped (R26).
     /// </summary>
     public static Bbs757UpperEicasReading Decode(Bbs757UpperEicasLayout layout, Bbs757UpperEicasRaw raw, bool manual)
     {
+        // The screen's own power: its gauge powered, not failed or timed blank, and the computer not blanking it.
+        bool powered = raw.Powered && !raw.Failed && !raw.TimedBlank && raw.Blank == 0;
         bool corrupt = raw.Torn;
-        double Use(double v)
+        // A value the reading uses, or null when it is not a number: torn while the screen is lit, blank while it is dark,
+        // where BlueBird may leave anything in its fields (a dark reading is never spoken). A torn list is torn either way.
+        double? Use(double v)
         {
-            if (!double.IsFinite(v)) corrupt = true;
-            return v;
+            if (double.IsFinite(v)) return v;
+            if (powered) corrupt = true;
+            return null;
         }
         string Level(int value)
         {
@@ -412,7 +417,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         // The messages (22920).
         int n = raw.Communication.Count;
         int lines = n >= 2 ? layout.CommunicationLinesBase - n : layout.LinesPerPage;
-        double sinceRecall = Use(raw.Clock) - Use(raw.RecallTime);
+        double? sinceRecall = Use(raw.Clock) - Use(raw.RecallTime);
         bool recall = sinceRecall >= 0 && sinceRecall < layout.RecallShowSeconds;
         var messages = new List<Bbs757EicasMessage>(raw.Main.Count + n);
         int drawn = 0, cancelled = 0;
@@ -438,7 +443,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         bool egtDrawn = !raw.Compact && Use(raw.EgtRed) > 0;
         bool Valid(Bbs757EicasRawEngine e) => e.Valid != layout.EngineInvalidValue;
         // EPR is drawn from the float (22929 ;4272): the float's own value, 2 decimals.
-        string EprText(double v) => Use((float)v).ToString("F2", Inv);
+        string? EprText(double v) => Use((float)v) is double f ? f.ToString("F2", Inv) : null;
         (string? Epr, string? N1, string? N1Color, string? Egt, string? EgtColor) Gauges(Bbs757EicasRawEngine e)
         {
             if (!Valid(e)) return default;
@@ -447,8 +452,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
             string? epr = lowN2 ? null : EprText(e.Epr);
 
             string? n1Text = null, n1Color = null;
-            double n1 = n1Drawn ? Use(e.AlternateFlagged ? e.N1Alternate : e.N1) : 0;
-            if (n1Drawn && !(pw && n1 <= layout.PwBlankBelow))
+            if (n1Drawn && Use(e.AlternateFlagged ? e.N1Alternate : e.N1) is double n1 && !(pw && n1 <= layout.PwBlankBelow))
             {
                 n1Text = n1.ToString("F1", Inv);
                 n1Color = n1 >= raw.N1Red ? Bbs757EicasValue.Red
@@ -456,9 +460,9 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
             }
 
             string? egtText = null, egtColor = null;
-            if (egtDrawn && !lowN2)
+            if (egtDrawn && !lowN2 && Use(e.Egt) is double egtValue)
             {
-                double egt = Math.Max(0, Use(e.Egt));
+                double egt = Math.Max(0, egtValue);
                 egtText = Whole(egt);
                 egtColor = egt >= raw.EgtRed ? Bbs757EicasValue.Red
                     : egt >= Use(raw.EgtAmber) && !inhibit ? Bbs757EicasValue.Amber : null;
@@ -472,7 +476,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
             new(Bbs757EicasValue.EprLabel, left.Epr, right.Epr, null, null),
             new(Bbs757EicasValue.N1Label, left.N1, right.N1, left.N1Color, right.N1Color),
             new(Bbs757EicasValue.EgtLabel, left.Egt, right.Egt, left.EgtColor, right.EgtColor),
-            new(Bbs757EicasValue.TatLabel, Tat(Use(raw.Tat)), null, null, null),
+            new(Bbs757EicasValue.TatLabel, Use(raw.Tat) is double tat ? Tat(tat) : null, null, null, null),
         };
 
         string? Tai(Bbs757EicasRawValve? valve) =>
@@ -516,16 +520,18 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
                 values.Add(new Bbs757EicasValue(Bbs757EicasValue.EprReferenceLabel, referenceLeft, referenceRight, null, null));
         }
 
-        // The max-exceedance memories (R10), each over a valid engine while set, inside the N1 and EGT functions.
+        // The max-exceedance memories, drawn inside the N1 and EGT functions over each valid engine while set: what a
+        // sighted pilot sees after an exceedance, until the MAX IND button clears them. A row while either side is drawn.
         string? MaxText(Bbs757EicasRawEngine e, float memory, Func<double, string> format) =>
-            Valid(e) && memory != 0 ? format(Use(memory)) : null;
-        bool Set(Bbs757EicasRawEngine e, float memory) => Valid(e) && memory != 0;
-        if (n1Drawn && (Set(raw.Left, raw.Left.MaxN1) || Set(raw.Right, raw.Right.MaxN1)))
-            values.Add(new Bbs757EicasValue(Bbs757EicasValue.N1MaxLabel, MaxText(raw.Left, raw.Left.MaxN1, v => v.ToString("F1", Inv)),
-                MaxText(raw.Right, raw.Right.MaxN1, v => v.ToString("F1", Inv)), null, null));
-        if (egtDrawn && (Set(raw.Left, raw.Left.MaxEgt) || Set(raw.Right, raw.Right.MaxEgt)))
-            values.Add(new Bbs757EicasValue(Bbs757EicasValue.EgtMaxLabel, MaxText(raw.Left, raw.Left.MaxEgt, v => Whole(Math.Max(0, v))),
-                MaxText(raw.Right, raw.Right.MaxEgt, v => Whole(Math.Max(0, v))), null, null));
+            Valid(e) && memory != 0 && Use(memory) is double m ? format(m) : null;
+        void AddMax(bool drawn, string label, float leftMemory, float rightMemory, Func<double, string> format)
+        {
+            if (!drawn) return;
+            string? leftText = MaxText(raw.Left, leftMemory, format), rightText = MaxText(raw.Right, rightMemory, format);
+            if (leftText is not null || rightText is not null) values.Add(new Bbs757EicasValue(label, leftText, rightText, null, null));
+        }
+        AddMax(n1Drawn, Bbs757EicasValue.N1MaxLabel, raw.Left.MaxN1, raw.Right.MaxN1, v => v.ToString("F1", Inv));
+        AddMax(egtDrawn, Bbs757EicasValue.EgtMaxLabel, raw.Left.MaxEgt, raw.Right.MaxEgt, v => Whole(Math.Max(0, v)));
 
         // The in-flight start block (22932, R11).
         var envelope = new List<string>();
@@ -538,8 +544,10 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
                     envelope.Add(Invariant($"{layout.EnvelopeFl} {row.Fl} {row.Min}-{row.Max} {layout.EnvelopeKts}"));
         }
 
-        bool powered = raw.Powered && !raw.Failed && !raw.TimedBlank && raw.Blank == 0;
-        double gateLeft = Use(raw.Left.N1), gateRight = Use(raw.Right.N1);
+        // The gate's values stay raw: a lit reading's must be numbers, and a dark one is never compared.
+        _ = Use(raw.Left.N1);
+        _ = Use(raw.Right.N1);
+        double gateLeft = raw.Left.N1, gateRight = raw.Right.N1;
         // PAGE and RECALL in the layout's words; the draw's column padding before the number is dropped.
         string? pageLine = pageShown ? layout.PageWord + " " + raw.Page.ToString(Inv) : null;
         string? recallLine = recall ? layout.RecallWord : null;
