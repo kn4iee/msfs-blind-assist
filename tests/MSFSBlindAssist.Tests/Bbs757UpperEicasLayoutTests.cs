@@ -139,8 +139,8 @@ public class Bbs757UpperEicasLayoutTests
         Searches: Array.Empty<DataSearch>(),
         Readers: new[]
         {
-            new ReaderResult(Bbs757Module.Fma, Bbs757LayoutFileTests.SampleFmaLayout(), null),
-            new ReaderResult(Bbs757Module.Efb, Bbs757LayoutFileTests.SampleEfbMemLayout(), null),
+            new ReaderResult(Bbs757Module.Fma, Bbs757LayoutFileTests.SampleFma(), null),
+            new ReaderResult(Bbs757Module.Efb, Bbs757LayoutFileTests.SampleEfb(), null),
             new ReaderResult(Bbs757Module.LowerEicas, Bbs757LowerEicasLayoutTests.Sample(), null),
             new ReaderResult(Bbs757Module.UpperEicas, Sample(), null),
         }.Where(r => !without.Contains(r.Reader)).ToArray());

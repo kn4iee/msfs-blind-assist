@@ -165,20 +165,23 @@ public class Bbs757UpperEicasWiringTests
     [Fact]
     public void The_upper_eicas_gate_variables_ride_the_batch_once_each()
     {
-        // Step 1, as plan 23's registry is built: it turns the reader's gate variables into hidden batched copies; each
-        // is carried once, either by a variable that already rides the batch or by one hidden copy ([VAR-7]); at most 3
-        // are plan 24's.
+        // Step 1, as plan 23's registry is built: it turns the reader's gate variables into hidden copies; each is read
+        // from one streamed variable, one already on the batch or a hidden copy, which streams on its own subscription
+        // when a Continuous row of its name exists (the status display's TURB ENG N1 rows), so no name is batched twice
+        // ([VAR-7]); at most 3 are plan 24's.
         var def = new BBS757Definition();
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
 
         foreach (var gate in Bbs757UpperEicasDisplay.GateVariables)
         {
-            var carriers = vars.Where(kv => kv.Value.Name == gate.Name && kv.Value.Type == gate.Type
-                && ContinuousBatchLayout.RidesBatch(kv.Value)).ToList();
-            var only = Assert.Single(carriers);
-            Assert.Equal(only.Key, keys[gate.Key]);
-            if (gate.Type == SimVarType.SimVar) Assert.Equal("percent", only.Value.Units, ignoreCase: true);
+            var carrier = vars[keys[gate.Key]];
+            Assert.Equal(gate.Name, carrier.Name);
+            Assert.Equal(gate.Type, carrier.Type);
+            Assert.Equal(UpdateFrequency.Continuous, carrier.UpdateFrequency);
+            Assert.True(carrier.IsAnnounced);   // streamed: on the batch or on its own subscription
+            if (gate.Type == SimVarType.SimVar) Assert.Equal("percent", carrier.Units, ignoreCase: true);
+            Assert.True(vars.Count(kv => kv.Value.Name == gate.Name && ContinuousBatchLayout.RidesBatch(kv.Value)) <= 1);
         }
         Assert.Equal(3, Bbs757UpperEicasDisplay.GateVariables.Count);
 

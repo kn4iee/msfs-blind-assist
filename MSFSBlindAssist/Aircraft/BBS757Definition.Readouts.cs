@@ -157,9 +157,6 @@ public partial class BBS757Definition
     {
         Name = name, DisplayName = label, Type = SimVarType.SimVar, Units = units,
         UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = false,
-        // These silent rows are not on the batch anyway (IsAnnounced false); the flag says so for VarNameCollisionTests
-        // ([VAR-7]): the display readers' hidden copies of the same names (TURB ENG N1:1/:2) ride the batch.
-        ExcludeFromBatch = true,
         RenderAsReadOnlyStatus = true, ExcludeFromMonitorManager = true,
     };
 

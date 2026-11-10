@@ -304,7 +304,8 @@ public class Bbs757UpperEicasDisplayTests
         var f = new Flight(Eicas(powered: false));
         f.Tick(40); // ten seconds cold and dark
         Assert.Equal("Verifying", f.State);
-        Assert.Equal(new[] { "EICAS reader starting" }, f.Monitor.View());
+        // A dark display reads "not powered" while its reader verifies (plan 25's monitor change), as it does running.
+        Assert.Equal(new[] { "EICAS display not powered" }, f.Monitor.View());
 
         var lit = Eicas(new[] { ShutdownL, ShutdownR, HydPress, BleedL, BleedR, ParkingBrake });
         f.Show(lit);
