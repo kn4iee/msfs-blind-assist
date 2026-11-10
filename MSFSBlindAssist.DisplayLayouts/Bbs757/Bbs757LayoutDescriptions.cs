@@ -114,15 +114,18 @@ public static class Bbs757LayoutDescriptions
             $"tmcChannelLeft {l.TmcChannelLeft}, tmcChannelRight {l.TmcChannelRight}, dtoWord {l.DtoWord}, " +
             $"manualWord {l.ManualWord}, numberedModes {A(l.NumberedModes)}, inhibitModes {A(l.InhibitModes)}",
             $"file analysis: {f}: upper EICAS others: tatValue {l.TatValue}, reverserState {l.ReverserState}, " +
+            $"reverserMoving {l.ReverserMoving}, reverserDeployed {l.ReverserDeployed}, revWord {l.RevWord}, " +
             $"pneumaticComponents {l.PneumaticComponents}, componentStride {l.ComponentStride}, componentId {l.ComponentId}, " +
             $"componentPosition {l.ComponentPosition}, componentState {l.ComponentState}, taiLeftId {l.TaiLeftId}, " +
-            $"taiRightId {l.TaiRightId}, taiMinOpen {D(l.TaiMinOpen)}, taiStates {A(l.TaiStates)}, maxComponents {l.MaxComponents}",
+            $"taiRightId {l.TaiRightId}, taiMinOpen {D(l.TaiMinOpen)}, taiStates {A(l.TaiStates)}, taiWord {l.TaiWord}, " +
+            $"maxComponents {l.MaxComponents}",
             $"file analysis: {f}: upper EICAS envelope gate: fmsOnGround {l.FmsOnGround}, fireSwitchLeft {l.FireSwitchLeft}, " +
             $"fireSwitchRight {l.FireSwitchRight}, lowerMode {l.LowerMode}, envelopeLowerMode {l.EnvelopeLowerMode}, " +
             $"envelopeTitle {l.EnvelopeTitle}, envelopeFl {l.EnvelopeFl}, envelopeKts {l.EnvelopeKts}",
         };
         Words(lines, f, "levels", l.Levels, "upper EICAS");
         Words(lines, f, "thrust", l.ThrustWords, "upper EICAS");
+        Words(lines, f, "thrust number", l.ThrustNumbers, "upper EICAS");
         return lines;
     }
 

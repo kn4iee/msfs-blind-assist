@@ -955,6 +955,40 @@ public class Bbs757UpperEicasReaderTests
     }
 
     [Fact]
+    public void The_reverser_states_and_the_drawn_words_come_from_the_layout()
+    {
+        // Another build that numbers the reverser's states 3 (moving) and 4 (deployed) and draws other words.
+        var renumbered = L with { ReverserMoving = 3, ReverserDeployed = 4, RevWord = "RV", TaiWord = "AI" };
+        Bbs757UpperEicasReading At(int left, int right) => Bbs757UpperEicasReader.Decode(renumbered, Live() with
+        {
+            Left = IdleLeft with { Reverser = left, AntiIce = new(100, 0) }, Right = IdleLeft with { Reverser = right },
+        }, manual: false);
+        Assert.Equal(V("REV", "RV", "RV", "amber", "green"), Row(At(3, 4), "REV"));
+        Assert.Null(At(3, 4).ThrustReference);   // the deployed state hides the thrust reference
+        Assert.Null(At(0, 4).ThrustReference);
+        Assert.Equal("TO", At(3, 0).ThrustReference);
+        // This build's 1 and 2 mean nothing to that layout.
+        Assert.Null(Row(At(1, 2), "REV"));
+        Assert.Equal("TO", At(1, 2).ThrustReference);
+        Assert.Equal(V("TAI", "AI", null), Row(At(0, 0), "TAI"));
+    }
+
+    [Fact]
+    public void The_thrust_number_is_drawn_from_the_layouts_table()
+    {
+        string? Thrust(Bbs757UpperEicasLayout layout, int mode, int number) =>
+            Bbs757UpperEicasReader.Decode(layout, Live() with { ThrustMode = mode, ThrustNumber = number }, manual: false).ThrustReference;
+        var numbers = L with { ThrustNumbers = new Bbs757WordTable(new Dictionary<int, string> { [1] = "1", [3] = "3" }) };
+        Assert.Equal("CRZ 3", Thrust(numbers, 8, 3));
+        Assert.Equal("CRZ", Thrust(numbers, 8, 2));
+        Assert.Equal("CRZ 1", Thrust(numbers, 8, 1));
+        Assert.Equal("CLB", Thrust(numbers, 4, 3));   // a mode the draw does not number
+        // Looked up as the table holds it: a 0 entry is a number too, never the blank a word table's 0 reads as.
+        var zero = L with { ThrustNumbers = new Bbs757WordTable(new Dictionary<int, string> { [0] = "0" }) };
+        Assert.Equal("TO 0", Thrust(zero, 0, 0));
+    }
+
+    [Fact]
     public void The_thrust_reference_hides_with_a_deployed_reverser_or_without_the_tmc()
     {
         void Hidden(Bbs757UpperEicasRaw raw, bool manual = false)

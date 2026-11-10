@@ -93,12 +93,6 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
     private const int Word = 4;
     private const int VectorBegin = 0, VectorEnd = Word, VectorCap = 2 * Word;
 
-    // The reverser states the draw tests (22928, 22929): moving (REV amber), fully deployed (REV green, the thrust
-    // reference hidden).
-    private const int ReverserMoving = 1, ReverserDeployed = 2;
-
-    private const string TaiWord = "TAI", RevWord = "REV";
-
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     /// <summary>The out value of a failed read: never shown, spoken or a baseline.</summary>
@@ -482,19 +476,23 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
         };
 
         string? Tai(Bbs757EicasRawValve? valve) =>
-            n1Drawn && valve is { } v && Use(v.Position) >= layout.TaiMinOpen && layout.TaiStates.Contains(v.State) ? TaiWord : null;
+            n1Drawn && valve is { } v && Use(v.Position) >= layout.TaiMinOpen && layout.TaiStates.Contains(v.State) ? layout.TaiWord : null;
         string? taiLeft = Tai(raw.Left.AntiIce), taiRight = Tai(raw.Right.AntiIce);
         if (taiLeft is not null || taiRight is not null)
             values.Add(new Bbs757EicasValue(Bbs757EicasValue.TaiLabel, taiLeft, taiRight, null, null));
 
+        // REV (22928): amber while the reverser moves, green once fully deployed, nothing in any other state.
+        string? RevColor(int state) =>
+            state == layout.ReverserMoving ? Bbs757EicasValue.Amber : state == layout.ReverserDeployed ? Bbs757EicasValue.Green : null;
         string? revLeftColor = RevColor(raw.Left.Reverser), revRightColor = RevColor(raw.Right.Reverser);
         if (revLeftColor is not null || revRightColor is not null)
-            values.Add(new Bbs757EicasValue(Bbs757EicasValue.RevLabel, revLeftColor is null ? null : RevWord,
-                revRightColor is null ? null : RevWord, revLeftColor, revRightColor));
+            values.Add(new Bbs757EicasValue(Bbs757EicasValue.RevLabel, revLeftColor is null ? null : layout.RevWord,
+                revRightColor is null ? null : layout.RevWord, revLeftColor, revRightColor));
 
-        // The thrust reference (22929, R12).
+        // The thrust reference (22929), as drawn: the word, its number, the derate.
         string? thrust = null;
-        bool hidden = raw.Left.Reverser == ReverserDeployed || raw.Right.Reverser == ReverserDeployed || !(manual || tmcValid);
+        bool hidden = raw.Left.Reverser == layout.ReverserDeployed || raw.Right.Reverser == layout.ReverserDeployed
+            || !(manual || tmcValid);
         if (!hidden)
         {
             if (manual)
@@ -505,8 +503,9 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
                 string? word = raw.ThrustMode == 0 && tmcValid && raw.DtoFlagged ? layout.DtoWord
                     : layout.ThrustWords.Words.TryGetValue(raw.ThrustMode, out string? w) ? w : null;
                 string? derate = raw.DerateShown && tmcValid ? Derate(raw.Derate) : null;
-                if (word is not null && layout.NumberedModes.Contains(raw.ThrustMode) && raw.ThrustNumber is 1 or 2)
-                    word += " " + raw.ThrustNumber.ToString(Inv);
+                if (word is not null && layout.NumberedModes.Contains(raw.ThrustMode)
+                    && layout.ThrustNumbers.Words.TryGetValue(raw.ThrustNumber, out string? number))
+                    word += " " + number;
                 thrust = word is null ? derate : derate is null ? word : word + ", " + derate;
             }
             // The reference EPR over each valid engine's dial.
@@ -557,10 +556,6 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
 
     /// <summary>The derate text: "+25c", "0c", "-5c" (R26 drops the alignment space).</summary>
     private static string Derate(int d) => (d > 0 ? "+" : "") + d.ToString(Inv) + "c";
-
-    /// <summary>REV's color: amber while the reverser moves, green once fully deployed; null when nothing is drawn.</summary>
-    private static string? RevColor(int state) =>
-        state == ReverserMoving ? Bbs757EicasValue.Amber : state == ReverserDeployed ? Bbs757EicasValue.Green : null;
 
     /// <summary><paramref name="b"/> plus <paramref name="offset"/>, false when the offset is negative or the sum
     /// leaves the 32-bit address space (it never wraps into the module).</summary>

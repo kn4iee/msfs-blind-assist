@@ -104,9 +104,13 @@ public class Bbs757UpperEicasLayoutTests
         DtoWord: "D-TO",
         ManualWord: "MAN",
         NumberedModes: new[] { 0, 7, 8, 9 },
+        ThrustNumbers: new Bbs757WordTable(new Dictionary<int, string> { [1] = "1", [2] = "2" }),
         InhibitModes: new[] { 0, 1, 2, 3, 11 },
         TatValue: 344,
         ReverserState: 664,
+        ReverserMoving: 1,
+        ReverserDeployed: 2,
+        RevWord: "REV",
         PneumaticComponents: 1932,
         ComponentStride: 184,
         ComponentId: 4,
@@ -116,6 +120,7 @@ public class Bbs757UpperEicasLayoutTests
         TaiRightId: 22,
         TaiMinOpen: 7.0,
         TaiStates: new[] { 0, 1 },
+        TaiWord: "TAI",
         MaxComponents: 64,
         FmsOnGround: 1513,
         FireSwitchLeft: 400,
@@ -166,6 +171,14 @@ public class Bbs757UpperEicasLayoutTests
         Assert.Contains(Bbs757LayoutDescriptions.DescribeUpperEicas(loaded),
             line => line.Contains("envelopeRowFl 0, envelopeRowMin 4, envelopeRowMax 8", StringComparison.Ordinal));
         Assert.Equal((0, 4, 8), (loaded.EnvelopeRowFl, loaded.EnvelopeRowMin, loaded.EnvelopeRowMax));
+        Assert.Equal((1, 2, "REV", "TAI"), (loaded.ReverserMoving, loaded.ReverserDeployed, loaded.RevWord, loaded.TaiWord));
+        Assert.Equal("2", loaded.ThrustNumbers.Lookup(2));
+        Assert.Contains(Bbs757LayoutDescriptions.DescribeUpperEicas(loaded),
+            line => line.Contains("reverserMoving 1, reverserDeployed 2, revWord REV", StringComparison.Ordinal));
+        Assert.Contains(Bbs757LayoutDescriptions.DescribeUpperEicas(loaded),
+            line => line.Contains("taiWord TAI", StringComparison.Ordinal));
+        Assert.Contains(Bbs757LayoutDescriptions.DescribeUpperEicas(loaded),
+            line => line.EndsWith("upper EICAS thrust number words: 1=1, 2=2", StringComparison.Ordinal));
 
         // Equality is content equality over every field but the source file.
         Assert.Equal(Sample(), Sample() with

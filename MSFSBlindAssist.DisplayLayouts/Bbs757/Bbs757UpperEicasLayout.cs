@@ -97,9 +97,13 @@ public sealed record Bbs757UpperEicasLayout(
     string DtoWord,
     string ManualWord,
     int[] NumberedModes,
+    Bbs757WordTable ThrustNumbers,
     int[] InhibitModes,
     int TatValue,
     int ReverserState,
+    int ReverserMoving,
+    int ReverserDeployed,
+    string RevWord,
     int PneumaticComponents,
     int ComponentStride,
     int ComponentId,
@@ -109,6 +113,7 @@ public sealed record Bbs757UpperEicasLayout(
     int TaiRightId,
     double TaiMinOpen,
     int[] TaiStates,
+    string TaiWord,
     int MaxComponents,
     int FmsOnGround,
     int FireSwitchLeft,
@@ -202,9 +207,13 @@ public sealed record Bbs757UpperEicasLayout(
         && string.Equals(DtoWord, other.DtoWord, StringComparison.Ordinal)
         && string.Equals(ManualWord, other.ManualWord, StringComparison.Ordinal)
         && NumberedModes.AsSpan().SequenceEqual(other.NumberedModes)
+        && ThrustNumbers.Equals(other.ThrustNumbers)
         && InhibitModes.AsSpan().SequenceEqual(other.InhibitModes)
         && TatValue == other.TatValue
         && ReverserState == other.ReverserState
+        && ReverserMoving == other.ReverserMoving
+        && ReverserDeployed == other.ReverserDeployed
+        && string.Equals(RevWord, other.RevWord, StringComparison.Ordinal)
         && PneumaticComponents == other.PneumaticComponents
         && ComponentStride == other.ComponentStride
         && ComponentId == other.ComponentId
@@ -214,6 +223,7 @@ public sealed record Bbs757UpperEicasLayout(
         && TaiRightId == other.TaiRightId
         && TaiMinOpen == other.TaiMinOpen
         && TaiStates.AsSpan().SequenceEqual(other.TaiStates)
+        && string.Equals(TaiWord, other.TaiWord, StringComparison.Ordinal)
         && MaxComponents == other.MaxComponents
         && FmsOnGround == other.FmsOnGround
         && FireSwitchLeft == other.FireSwitchLeft
@@ -308,9 +318,13 @@ public sealed record Bbs757UpperEicasLayout(
         h.Add(DtoWord, StringComparer.Ordinal);
         h.Add(ManualWord, StringComparer.Ordinal);
         h.AddBytes(MemoryMarshal.AsBytes(NumberedModes.AsSpan()));
+        h.Add(ThrustNumbers);
         h.AddBytes(MemoryMarshal.AsBytes(InhibitModes.AsSpan()));
         h.Add(TatValue);
         h.Add(ReverserState);
+        h.Add(ReverserMoving);
+        h.Add(ReverserDeployed);
+        h.Add(RevWord, StringComparer.Ordinal);
         h.Add(PneumaticComponents);
         h.Add(ComponentStride);
         h.Add(ComponentId);
@@ -320,6 +334,7 @@ public sealed record Bbs757UpperEicasLayout(
         h.Add(TaiRightId);
         h.Add(TaiMinOpen);
         h.AddBytes(MemoryMarshal.AsBytes(TaiStates.AsSpan()));
+        h.Add(TaiWord, StringComparer.Ordinal);
         h.Add(MaxComponents);
         h.Add(FmsOnGround);
         h.Add(FireSwitchLeft);
