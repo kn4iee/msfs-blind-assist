@@ -235,8 +235,13 @@ public class Bbs757EhsiReaderTests
         Assert.Equal(full, reading.Route is not null && reading.Route.Count == 0);
         Assert.Null(reading.Modification);
         Assert.Equal(full, reading.Points is not null && reading.Points.Count == 0);
+        // The map's constants are the layout's in every reading, so the rows never need the layout.
+        Assert.Equal(LayoutConstants, reading.Constants);
         return reading;
     }
+
+    /// <summary>The sample layout's map constants, as every reading carries them.</summary>
+    private static readonly Bbs757EhsiConstants LayoutConstants = new(0.6775, 0.8175, 66, 10, 100, 100);
 
     // ---- the light set ----
 
@@ -261,6 +266,7 @@ public class Bbs757EhsiReaderTests
         Assert.Equal(250, reading.GroundSpeed);
         Assert.Equal(1512.38, reading.Clock);
         Assert.Equal(new Bbs757EhsiMap(47.442946, -122.303648, 134.43, 352, 702.2, 704, 859), reading.Map);
+        Assert.Equal(LayoutConstants, reading.Constants);
         Assert.True(reading.RouteActive);
         Assert.False(reading.DataSwitch);
         Assert.Equal(3, reading.ExcessCount);
@@ -514,6 +520,7 @@ public class Bbs757EhsiReaderTests
                 Assert.Null(reading.Points);
                 Assert.Equal(0, reading.Range);
                 Assert.Equal(default, reading.Map);
+                Assert.Equal(LayoutConstants, reading.Constants);
             }
         }
     }

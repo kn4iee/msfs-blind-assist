@@ -46,7 +46,12 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
         _memory = memory;
         _ownedSource = ownedSource;
         Layout = layout;
+        _constants = new Bbs757EhsiConstants(layout.RadiusFactor, layout.AircraftYFactor, layout.ClipInset, layout.MarkerMargin,
+            layout.MinEtaGroundSpeed, layout.ExcessLimit);
     }
+
+    /// <summary>The layout's map constants, carried in every reading (powered or not) so the rows need no layout.</summary>
+    private readonly Bbs757EhsiConstants _constants;
 
     /// <summary>The Captain's nd: the first manager pointer whose target carries its vptr. False when none in the
     /// manager's span does (the module is not where the anchor said, not ready, or not this build).</summary>
@@ -69,13 +74,13 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
 
     /// <summary>The reading of a screen that is not powered: every field its default, not corrupt (a dark screen's
     /// fields hold anything, and it is never spoken).</summary>
-    private static readonly Bbs757EhsiReading Dark = new(false, null, false, 0, false, false, false, 0, false, false, 0, 0, 0,
-        0, 0, default, null, false, false, 0, null, null, null, Corrupt: false);
+    private Bbs757EhsiReading Dark => new(false, null, false, 0, false, false, false, 0, false, false, 0, 0, 0,
+        0, 0, default, _constants, null, false, false, 0, null, null, null, Corrupt: false);
 
     /// <summary>The reading of a torn or out-of-range read: powered (it is lit), nothing else, and an empty route and
     /// points in a full reading, never a partial one.</summary>
-    private static Bbs757EhsiReading Bad(bool full) => new(true, null, false, 0, false, false, false, 0, false, false, 0, 0, 0,
-        0, 0, default, null, false, false, 0, full ? Array.Empty<Bbs757EhsiLeg>() : null, null,
+    private Bbs757EhsiReading Bad(bool full) => new(true, null, false, 0, false, false, false, 0, false, false, 0, 0, 0,
+        0, 0, default, _constants, null, false, false, 0, full ? Array.Empty<Bbs757EhsiLeg>() : null, null,
         full ? Array.Empty<Bbs757EhsiPoint>() : null, Corrupt: true);
 
     public bool TryRead(out Bbs757EhsiReading reading)
@@ -178,7 +183,7 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             Valid: valid && hasIrs, Aligning: aligning, Number: number, TrackUp: trackUp != 0, TrueReference: trueReference != 0,
             HeadingBug: bug, Latitude: latitude, Longitude: longitude, GroundSpeed: groundSpeed, Clock: clock,
             Map: new Bbs757EhsiMap(centerLatitude, centerLongitude, rotation, screenX, screenY, width, height),
-            Active: activeLeg, RouteActive: routeActive, DataSwitch: dataSwitch, ExcessCount: excessCount,
+            Constants: _constants, Active: activeLeg, RouteActive: routeActive, DataSwitch: dataSwitch, ExcessCount: excessCount,
             Route: routeLegs, Modification: modificationLegs, Points: points, Corrupt: false);
         return true;
     }

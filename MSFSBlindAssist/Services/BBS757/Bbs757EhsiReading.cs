@@ -14,6 +14,18 @@ public readonly record struct Bbs757EhsiMap(
     double Width,
     double Height);
 
+/// <summary>The draw's own constants, the layout's values, carried in every reading so the rows need no layout: the map's
+/// radius factor, the aircraft's Y factor and the clip inset (<see cref="Bbs757EhsiGeometry.Project"/>,
+/// <see cref="Bbs757EhsiGeometry.OnScreen"/>), the margin a point may lie beyond the range, the ground speed under which no
+/// ETA is drawn, and the background item count at which EXCESS DATA shows.</summary>
+public readonly record struct Bbs757EhsiConstants(
+    double RadiusFactor,
+    double AircraftYFactor,
+    double ClipInset,
+    double MarkerMargin,
+    double MinEtaGroundSpeed,
+    int ExcessLimit);
+
 /// <summary>One leg of a route as BlueBird draws it: its label (empty for a discontinuity), its position in degrees (0, 0
 /// for a discontinuity, which is its own leg: nothing is drawn or invented across it), its path terminator,
 /// <see cref="Manual"/> (a manual-termination leg, whose top-line distance is dashes), <see cref="Symbol"/> (whether the
@@ -39,7 +51,8 @@ public readonly record struct Bbs757EhsiPoint(string Word, bool Airport, double 
 /// <see cref="Modification"/> and <see cref="Points"/> null and still carries <see cref="Active"/>: the leg the top line
 /// uses (leg 0 of the modification while one is pending). <see cref="Powered"/> false: every other field is its default and
 /// the reading is not corrupt (a dark screen holds anything). <see cref="Corrupt"/>: a torn or out-of-range read, with
-/// no route, modification or points at all (never partial).
+/// no route, modification or points at all (never partial). <see cref="Constants"/> is the layout's in every reading,
+/// powered or not.
 /// </summary>
 public sealed record Bbs757EhsiReading(
     bool Powered,
@@ -58,6 +71,7 @@ public sealed record Bbs757EhsiReading(
     double GroundSpeed,
     double Clock,
     Bbs757EhsiMap Map,
+    Bbs757EhsiConstants Constants,
     Bbs757EhsiLeg? Active,
     bool RouteActive,
     bool DataSwitch,
