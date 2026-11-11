@@ -49,6 +49,10 @@ internal sealed class BBS757DisplayForm : Form
             controls.Location = new Point(12, _list.Bottom + 8);
             controls.TabIndex = 1;
             Controls.Add(controls);
+            // A controls area that wraps onto more rows than the room below the list holds (the EHSI's ten EFIS
+            // controls) makes the window taller; a smaller one (the upper EICAS's three buttons) leaves it as it was.
+            int needed = controls.Top + controls.GetPreferredSize(new Size(_list.Width, 0)).Height + 12;
+            if (ClientSize.Height < needed) ClientSize = new Size(ClientSize.Width, needed);
         }
 
         _timer = new System.Windows.Forms.Timer { Interval = 1000 };

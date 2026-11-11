@@ -93,6 +93,7 @@ public partial class BBS757Definition
     /// <summary>The tablet client's changes (on the UI context): each line spoken as a background announcement (CORE-7).</summary>
     internal void OnCockpitLvarsChanged(IReadOnlyDictionary<string, double> changes)
     {
+        FollowEhsiCockpit(changes);   // plan 26: the EHSI window's EFIS controls show the cockpit; speaks nothing
         var cockpit = _cockpit;
         var announcer = _cockpitAnnouncer;
         if (cockpit == null || announcer == null) return;

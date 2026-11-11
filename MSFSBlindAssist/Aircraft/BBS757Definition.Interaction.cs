@@ -438,6 +438,7 @@ public partial class BBS757Definition
     {
         WarnOnceIfNestMissing(announcer);
         if (IsPickPending(varName)) return true;
+        FollowEhsiControl(varName, value);   // plan 26: the EHSI window's EFIS control shows it; consumes nothing
         // A display reader's input: read from the cache, never spoken (BBS757Definition.Displays.cs).
         if (IsDisplayInputCopy(varName)) return true;   // plan 23
         // The gap plans' rows (BBS757Definition.Hooks.cs); the first to claim a delivery ends it.

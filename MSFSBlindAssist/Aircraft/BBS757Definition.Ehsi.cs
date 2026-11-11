@@ -1,7 +1,11 @@
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Aircraft.BBS757;
 using MSFSBlindAssist.Forms.BBS757;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.Services;
 using MSFSBlindAssist.Services.BBS757;
+using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -10,7 +14,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// position inputs come from it through the registry, so the definition streams each once, hidden where nothing carries it
 /// already, [VAR-7]), the "EHSI messages" Ctrl+M row, Alt+N, which opens the one "Captain EHSI" window while the reader can
 /// run and falls back to the AI read of the screen when it cannot (S15), and Ctrl+W, which says the active waypoint at once.
-/// Opening the window says nothing itself: its title and list are what the screen reader says (CORE-7).
+/// Opening the window says nothing itself: its title and list are what the screen reader says (CORE-7). Below the list
+/// the window holds the Captain EFIS controls (<see cref="EhsiControls"/>), which show the cockpit and write as the
+/// main panel does; the reader still speaks nothing for a mode, range or switch change.
 /// </summary>
 public partial class BBS757Definition
 {
@@ -37,6 +43,193 @@ public partial class BBS757Definition
     // visible, and they must come from a full reading.
     private bool _ehsiOpening;
 
+    /// <summary>The sim and announcer of the latest Alt+N; the window's EFIS controls write through them.</summary>
+    private (SimConnectManager Sim, ScreenReaderAnnouncer Announcer)? _ehsiPress;
+
+    /// <summary>Each positional EFIS control the window holds, by node: what shows a cockpit value on it.</summary>
+    private Dictionary<string, Action<double>>? _ehsiFollowers;
+
+    /// <summary>The same controls by state var, the name the cockpit watch reports a change under.</summary>
+    private Dictionary<string, string>? _ehsiNodeByStateVar;
+
+    // True while a control is set to the cockpit's value: its change handler must not write that value back.
+    private bool _ehsiFollowing;
+
+    /// <summary>The Captain EFIS drop-downs, with their labels' text: mode, then range.</summary>
+    private static readonly (string Node, string Caption)[] EhsiSelectors =
+    {
+        ("B757_ADI_1_CTR_KNOB", "&Mode"),
+        ("B757_ADI_1_TFC_KNOB", "&Range"),
+    };
+
+    /// <summary>The Captain EFIS momentary buttons.</summary>
+    private static readonly (string Node, string Caption)[] EhsiButtons =
+    {
+        ("B757_ADI_1_CTR_BUTTON", "&CTR"),
+        ("B757_ADI_1_TFC_BUTTON", "&TFC"),
+    };
+
+    /// <summary>The Captain EFIS map switches, each with a mnemonic no other control in the window takes.</summary>
+    private static readonly (string Node, string Caption)[] EhsiToggles =
+    {
+        ("B757_ADI_1_WXR_BUTTON", "&WXR"),
+        ("B757_ADI_1_TERR_BUTTON", "T&ERR"),
+        ("B757_ADI_1_NAV-AID_BUTTON", "&NAV AID"),
+        ("B757_ADI_1_APRT_BUTTON", "&APRT"),
+        ("B757_ADI_1_DATA_BUTTON", "&DATA"),
+        ("B757_ADI_1_WPT_BUTTON", "W&PT"),
+    };
+
+    /// <summary>
+    /// The Captain EFIS controls that change what the EHSI shows, under the window's list: the mode and range
+    /// drop-downs, CTR and TFC, and the six map switches as check boxes. Each control shows the cockpit, not a fixed
+    /// caption: <see cref="ShowEhsiCockpitState"/> on every Alt+N, then every delivery of its node
+    /// (<see cref="FollowEhsiControl"/>) and every change the cockpit watch reports (<see cref="FollowEhsiCockpit"/>).
+    /// A pilot's change writes through the main panel's own entry, <see cref="HandleUIVariableSet"/>, so it settles,
+    /// refuses aloud, marks its own write and reads back exactly as the panel does, and says nothing NVDA has not
+    /// said (CORE-7). A node missing from the map leaves its control out with a warning.
+    /// </summary>
+    private FlowLayoutPanel EhsiControls()
+    {
+        var panel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            MaximumSize = new Size(520, 0),   // the list's width: ten controls wrap onto rows below it
+            Name = "EHSI controls",
+            AccessibleName = "EHSI controls",
+        };
+        var followers = new Dictionary<string, Action<double>>(StringComparer.Ordinal);
+        var byStateVar = new Dictionary<string, string>(StringComparer.Ordinal);
+        void Add(Control c)
+        {
+            c.TabIndex = panel.Controls.Count;
+            panel.Controls.Add(c);
+        }
+        Bbs757Control? Find(string node)
+        {
+            if (_byNode.TryGetValue(node, out var control)) return control;
+            Log.Warn("BBS757", $"EHSI window: {node} is not in the control map; its control is left out.");
+            return null;
+        }
+        void Follows(Bbs757Control control, Action<double> show)
+        {
+            followers[control.Node] = show;
+            if (!string.IsNullOrWhiteSpace(control.StateVar)) byStateVar[control.StateVar!] = control.Node;
+        }
+
+        foreach (var (node, caption) in EhsiSelectors)
+        {
+            if (Find(node) is not { } control) continue;
+            string name = caption.Replace("&", "", StringComparison.Ordinal);
+            Add(new Label { Text = caption, AutoSize = true, Name = node + " label", Margin = new Padding(3, 7, 0, 3) });
+            var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Name = node, AccessibleName = name, Width = 90 };
+            foreach (var p in control.Positions) combo.Items.Add(p.Label);
+            // Every step NVDA's arrows commit is handed on, as the panel's combo does: the panel's pick settles
+            // (PickSettleMs) and writes only the last.
+            combo.SelectedIndexChanged += (_, _) =>
+            {
+                if (_ehsiFollowing || combo.SelectedIndex < 0) return;
+                SetFromEhsiWindow(control, control.Positions[combo.SelectedIndex].Value);
+            };
+            Add(combo);
+            Follows(control, value =>
+            {
+                int i = Bbs757Rpn.PositionIndex(control, value);
+                if (i >= 0 && combo.SelectedIndex != i) combo.SelectedIndex = i;
+            });
+        }
+
+        foreach (var (node, caption) in EhsiButtons)
+        {
+            if (Find(node) is not { } control) continue;
+            var button = new Button { Text = caption, AutoSize = true, Name = node };
+            button.Click += (_, _) => SetFromEhsiWindow(control, 1);
+            Add(button);
+        }
+
+        foreach (var (node, caption) in EhsiToggles)
+        {
+            if (Find(node) is not { } control) continue;
+            if (control.Positions.Count != 2)
+            {
+                Log.Warn("BBS757", $"EHSI window: {node} has {control.Positions.Count} positions, not off and on; its check box is left out.");
+                continue;
+            }
+            var box = new CheckBox { Text = caption, AutoSize = true, Name = node };
+            box.CheckedChanged += (_, _) =>
+            {
+                if (_ehsiFollowing) return;
+                SetFromEhsiWindow(control, control.Positions[box.Checked ? 1 : 0].Value);
+            };
+            Add(box);
+            Follows(control, value =>
+            {
+                int i = Bbs757Rpn.PositionIndex(control, value);
+                if (i >= 0) box.Checked = i == 1;
+            });
+        }
+
+        _ehsiFollowers = followers;
+        _ehsiNodeByStateVar = byStateVar;
+        return panel;
+    }
+
+    /// <summary>A window control's change, handed to the main panel's own write entry for its node (with the latest
+    /// Alt+N's sim and announcer), so nothing about it differs from the same pick on the panel.</summary>
+    private void SetFromEhsiWindow(Bbs757Control control, double value)
+    {
+        if (_ehsiPress is not { } now || !GetVariables().TryGetValue(control.Node, out var def)) return;
+        HandleUIVariableSet(control.Node, value, def, now.Sim, now.Announcer);
+    }
+
+    /// <summary>
+    /// Alt+N: every control shows the value SimConnect last delivered for its node, then each node is read again, as
+    /// the panel reads its controls when it opens; the answers reach the controls through
+    /// <see cref="FollowEhsiControl"/>. A control with a pick in flight is left as the pilot set it.
+    /// </summary>
+    private void ShowEhsiCockpitState(SimConnectManager sim)
+    {
+        if (_ehsiFollowers is not { } followers) return;
+        var io = WriteIoFor(sim);
+        foreach (var node in followers.Keys.ToList())
+        {
+            if (IsPickPending(node)) continue;
+            if (io.Cached(node) is double value) FollowEhsiControl(node, value);
+            io.RequestRead(node);
+        }
+    }
+
+    /// <summary>
+    /// A delivery of a node the window holds (ProcessSimVarUpdate calls this after it has consumed any delivery a
+    /// pick in flight owns): the control shows it, without writing it back and without moving focus. Nothing is
+    /// spoken here; a focused control's new value is NVDA's to read.
+    /// </summary>
+    private void FollowEhsiControl(string node, double value)
+    {
+        if (_ehsiFollowers is not { } followers || !followers.TryGetValue(node, out var show)) return;
+        if (_ehsiWindow is not { IsDisposed: false }) return;
+        _ehsiFollowing = true;
+        try { show(value); }
+        finally { _ehsiFollowing = false; }
+    }
+
+    /// <summary>
+    /// The cockpit watch's changes, by state var (the pilot turned the real knob, pressed a switch, or a preset moved
+    /// it): each control the window holds shows its new value, unless a pick of it is in flight (its value then is
+    /// the pick's to settle).
+    /// </summary>
+    private void FollowEhsiCockpit(IReadOnlyDictionary<string, double> changes)
+    {
+        if (_ehsiNodeByStateVar is not { } nodes) return;
+        foreach (var (name, value) in changes)
+        {
+            if (nodes.TryGetValue(name, out var node) && !IsPickPending(node)) FollowEhsiControl(node, value);
+        }
+    }
+
     /// <summary>
     /// What Ctrl+W says: the monitor's latest reading, whether or not the window is open. While there is none the line
     /// says why: "display dark" while the screen is dark, else the monitor's own reason (its status line's words), and
@@ -59,6 +252,7 @@ public partial class BBS757Definition
         {
             if (Ehsi.KeyFallsBackToAi()) return context.AiRead();
             context.Hotkeys.ExitOutputHotkeyMode();
+            _ehsiPress = (context.Sim, context.Announcer);   // a window shown again may come with a new context
             _ehsiOpening = true;
             try
             {
@@ -66,9 +260,10 @@ public partial class BBS757Definition
                 Ehsi.Tick();
                 if (_ehsiWindow is not { IsDisposed: false } window)
                 {
-                    window = _ehsiWindow = new BBS757DisplayForm(Bbs757EhsiDisplay.Name, "Captain EHSI", Ehsi.View);
+                    window = _ehsiWindow = new BBS757DisplayForm(Bbs757EhsiDisplay.Name, "Captain EHSI", Ehsi.View, EhsiControls());
                     r.OwnWindow(window);
                 }
+                ShowEhsiCockpitState(context.Sim);
                 window.ShowForm();
             }
             finally
