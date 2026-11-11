@@ -180,9 +180,9 @@ Each is drawn only if it is within range + 10 NM of the map's center.
     centered, the rectangle below y = height × 0.14. The screen's own edges cut too: not centered, 352 pixels either
     side (60.5 % of the range) and 157 below the aircraft (27 %).
   - The VNAV points, airports and background items also need distance ≤ range + 10 NM from the center.
-  - Captures against the reading: MAP at range 10 and 40, KOLM (37.5 NM, 87° right) is not on the screen: 37.5 NM is
+  - Captures against the reading: MAP at range 10 and 40, KOLM (37.5 NM, 86° right (86.5°)) is not on the screen: 37.5 NM is
     beyond 60.5 % of 40 sideways; at 160 it is, with BTG and the approach at the right edge (102 to 113 NM, 50° to
-    56° right), their labels cut by the edge. PLAN at 80 centered on KOLM: KSEA (37.5 NM at 41°) falls 528 pixels
+    56° right), their labels cut by the edge. PLAN at 80 centered on KOLM: KSEA (37.6 NM at 41°) falls 528 pixels
     from the circle's center and is cut, as the capture shows (only a corner of its label); T/C 13.4 NM at 41° and
     T/D 17.3 NM at 170° are drawn where computed.
 
