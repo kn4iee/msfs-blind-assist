@@ -124,19 +124,19 @@
 
 ## Execution record
 
-- **Status:** claimed; Tasks 0-9 done but for the push: deployed to `C:\MSFSBA-B757` with the generator-7 layout, the in-sim checks passed on the owner's flight (2026-11-11); waiting on the owner's word to push `B757` and the private branch and publish the layout
+- **Status:** landed (2026-11-11) at the owner's word ("Please push and publish this plan's work"), with the generator-7 757 layout published and the older 757 file removed from the `layouts` branch; the in-sim checks passed on the owner's flight
 - **Claimed by:** Robin Kipp (robin24), 2026-11-11
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-11, from `B757` ba06e4d2c (plans 23, 24 and 25 landed, no gate in any 757 reader)
-- **Landed:**
-- **Tests at landing:**
+- **Landed:** 2026-11-11, a fast-forward of `B757` from 2ef29dc6a (nothing else had landed meanwhile). Shared lines: `ehsi` last in the module's readers (fma, efb, lowerEicas, upperEicas, ehsi) and in `Bbs757Recipes.All`; `GeneratorVersion.Current` 7; rules B757-36 to B757-39 in the new rule file `b757-ehsi`. Deployed to `C:\MSFSBA-B757` (b1e328840) with its layout.
+- **Tests at landing:** the app suite 24,886 passed, 0 failed (at b1e328840, the last code commit); the solution builds with 0 errors; the toolkit suite 606 passed (private).
 - **Tasks:** 0 claim (cb87d1378), 1 measure (2ef29dc6a), 2 layout record (c6e520818), 3 recipe (private
   `feature/b757-displays`: merge 75affa1b9, 79f77ded8, 0f2e028b4; not pushed), 4 sampler (7695e7fba, 33de441f9,
   c89d877c9), 5 geometry (e7432173c, ac2eb8dd5), 6 rows and words (30d692692, c1e4ef13d), 7 window and keys
   (02ccc999a), 8 rules B757-36 to B757-39 in a new rule file `b757-ehsi` (dc4ab516d), the whole-plan review's fixes
   (31299e8c3). Each task reviewed by a fresh reviewer, then one whole-plan review. Open: Task 9 (live checks, the
   generator version, deploy, publish).
-- **Waiting on the owner:** the word to push `B757` and the private branch and to publish the generator-7 layout.
+- **Waiting on the owner:** nothing.
 - **In-sim results:** 2026-11-11, the owner's flight (cruise FL380 to FL400, a KDEN arrival loaded), build 537f002c9
   then b1e328840 in `C:\MSFSBA-B757`, the generator-7 layout installed (5 of 5 readers; the four display readers
   Running within 5 s, no corrupt reading in `bbs757-ehsi.log`).
@@ -206,4 +206,4 @@
   - **For plan 28** (not listed by this plan): S/C; the departure and arrival runway symbols; the green rings without a
     word and the altitude/time marker; the wind readout; origin and destination are told apart by code order in the
     recipe, and PLAN is named by elimination.
-- **Open at landing:**
+- **Open at landing:** nothing of this plan's. For plan 28 (written into its text): TERR, the wind readout, the runway symbols, S/C, the green rings without a word and the altitude/time marker. For plan 16: the handoff above (the rule file's row in CLAUDE.md, the guide and hotkey guide lines). Not heard in the sim: the wind, track up, a modification in flight, EXCESS DATA.
