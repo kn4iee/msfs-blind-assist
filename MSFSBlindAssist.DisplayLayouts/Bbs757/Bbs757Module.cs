@@ -13,6 +13,7 @@ public static class Bbs757Module
     public const string Efb = "efb";
     public const string LowerEicas = "lowerEicas";
     public const string UpperEicas = "upperEicas";
+    public const string Ehsi = "ehsi";
 
     public static ModuleDescription Description { get; } = new(
         "bbs757",
@@ -33,6 +34,9 @@ public static class Bbs757Module
             new LayoutReader<Bbs757UpperEicasLayout>(UpperEicas, "upper EICAS",
                 l => new ModuleAnchor(l.AnchorAddress, l.Anchor), (l, s) => l with { SourceFile = s },
                 Bbs757LayoutDescriptions.DescribeUpperEicas),
+            new LayoutReader<Bbs757EhsiLayout>(Ehsi, "EHSI",
+                l => new ModuleAnchor(l.AnchorAddress, l.Anchor), (l, s) => l with { SourceFile = s },
+                Bbs757LayoutDescriptions.DescribeEhsi),
         });
 
     /// <summary>The lower EICAS pages whose part could not be derived, with the generator's reason (each page is an

@@ -129,6 +129,51 @@ public static class Bbs757LayoutDescriptions
         return lines;
     }
 
+    public static IReadOnlyList<string> DescribeEhsi(Bbs757EhsiLayout l)
+    {
+        string H(uint v) => "0x" + v.ToString("x", CultureInfo.InvariantCulture);
+        string D(double v) => v.ToString("0.0###", CultureInfo.InvariantCulture);
+        string A(IEnumerable<int> v) => "[" + string.Join(", ", v.Select(x => x.ToString(CultureInfo.InvariantCulture))) + "]";
+        string f = l.SourceFile;
+        string p = $"file analysis: {f}: EHSI";
+        var lines = new List<string>
+        {
+            $"{p}: manager {H(l.ManagerBase)} span {l.ManagerSpan}, nd vptr {H(l.NdVptr)}",
+            $"{p} gauge and links: powered {l.Powered}, failed {l.Failed}, blanked {l.Blanked}, ndToEfis {l.NdToEfis}, " +
+            $"ndToSource {l.NdToSource}, ndToMcp {l.NdToMcp}, ndToRoute {l.NdToRoute}, sourceToIrs {l.SourceToIrs}, " +
+            $"efisMode {l.EfisMode}, efisCentered {l.EfisCentered}",
+            $"{p} nd values: range {l.Range}, rangeSelected {l.RangeSelected}, rangeChanging {l.RangeChanging}, " +
+            $"valid {l.Valid}, aligning {l.Aligning}, number {l.Number}, trackUp {l.TrackUp}, trueReference {l.TrueReference}, " +
+            $"width {l.Width}, height {l.Height}, longitude {l.Longitude}, latitude {l.Latitude}, " +
+            $"centerLatitude {l.CenterLatitude}, centerLongitude {l.CenterLongitude}, rotation {l.Rotation}, " +
+            $"screenX {l.ScreenX}, screenY {l.ScreenY}, dataSwitch {l.DataSwitch}, excessCount {l.ExcessCount}, " +
+            $"excessLimit {l.ExcessLimit}, originAirport {l.OriginAirport}, destinationAirport {l.DestinationAirport}, " +
+            $"airportLongitude {l.AirportLongitude}, airportLatitude {l.AirportLatitude}",
+            $"{p} others: mcpHeading {l.McpHeading}, irsGroundSpeed {l.IrsGroundSpeed}, clock {H(l.Clock)}, " +
+            $"radiusFactor {D(l.RadiusFactor)}, aircraftYFactor {D(l.AircraftYFactor)}, clipInset {D(l.ClipInset)}, " +
+            $"markerMargin {D(l.MarkerMargin)}, minEtaGroundSpeed {D(l.MinEtaGroundSpeed)}",
+            $"{p} route: routeLegs {l.RouteLegs}, routeFlownLegs {l.RouteFlownLegs}, legStride {l.LegStride}, " +
+            $"maxLegs {l.MaxLegs}, routeActive {l.RouteActive}, routeModified {l.RouteModified}, " +
+            $"routeModification {l.RouteModification}, routeId {l.RouteId}",
+            $"{p} leg: legLabel {l.LegLabel}, legKind {l.LegKind}, discontinuityKind {l.DiscontinuityKind}, " +
+            $"legPositions [{string.Join(", ", l.LegPositions.Select(x => $"{x.Kind}:{x.Latitude}/{x.Longitude}"))}], " +
+            $"legLatitude {l.LegLatitude}, legLongitude {l.LegLongitude}, legTerminator {l.LegTerminator}, " +
+            $"noSymbolTerminators {A(l.NoSymbolTerminators)}, manualTerminators {A(l.ManualTerminators)}, " +
+            $"legConstraintKind {l.LegConstraintKind}, legConstraintFirst {l.LegConstraintFirst}, " +
+            $"legConstraintSecond {l.LegConstraintSecond}, legEta {l.LegEta}",
+            $"{p} path: pathRegistry {H(l.PathRegistry)}, pathRegistryFirst {l.PathRegistryFirst}, pathNodeKey {l.PathNodeKey}, " +
+            $"pathNodeValue {l.PathNodeValue}, topOfClimbFlag {l.TopOfClimbFlag}, topOfClimbLatitude {l.TopOfClimbLatitude}, " +
+            $"topOfClimbLongitude {l.TopOfClimbLongitude}, topOfDescentFlagA {l.TopOfDescentFlagA}, " +
+            $"topOfDescentFlagB {l.TopOfDescentFlagB}, topOfDescentLatitude {l.TopOfDescentLatitude}, " +
+            $"topOfDescentLongitude {l.TopOfDescentLongitude}, endOfDescentLeg {l.EndOfDescentLeg}",
+            $"{p} words: hdg {l.HdgWord}, trk {l.TrkWord}, mag {l.MagWord}, true {l.TrueWord}, map {l.MapWord}, " +
+            $"nm {l.NmWord}, etaSuffix {l.EtaSuffix}, topOfClimb {l.TopOfClimbWord}, topOfDescent {l.TopOfDescentWord}, " +
+            $"endOfDescent {l.EndOfDescentWord}, excess {l.ExcessWord}",
+        };
+        Words(lines, f, "modes", l.Modes, "EHSI");
+        return lines;
+    }
+
     private static void Words(List<string> lines, string file, string column, Bbs757WordTable table, string display)
     {
         string body = string.Join(", ", table.Words.OrderBy(kv => kv.Key).Select(kv => $"{kv.Key}={kv.Value}"));

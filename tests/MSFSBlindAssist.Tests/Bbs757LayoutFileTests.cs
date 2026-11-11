@@ -182,6 +182,7 @@ public class Bbs757LayoutFileTests
             new ReaderResult(Bbs757Module.Fma, fma, null), new ReaderResult(Bbs757Module.Efb, efb, null),
             new ReaderResult(Bbs757Module.LowerEicas, Bbs757LowerEicasLayoutTests.Sample(), null),
             new ReaderResult(Bbs757Module.UpperEicas, Bbs757UpperEicasLayoutTests.Sample(), null),
+            new ReaderResult(Bbs757Module.Ehsi, Bbs757EhsiLayoutTests.Sample(), null),
         });
 
     [Fact]
@@ -489,7 +490,8 @@ public class Bbs757LayoutFileTests
         string[] gateFields = { "status", "statusWords", "fdWord", "fdCaptain", "fdFirstOfficer", "afdsToMcp", "mcpAltitude", "mcpHeading", "mcpValueType" };
         string old = WithoutFmaMembers(text, gateFields);
         Assert.DoesNotContain("\"statusWords\"", old, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"mcpHeading\"", old, StringComparison.Ordinal);
+        // Not the whole text: the EHSI's layout has an mcpHeading member of its own.
+        Assert.False(System.Text.Json.Nodes.JsonNode.Parse(old)!["readers"]![Bbs757Module.Fma]!["layout"]!.AsObject().ContainsKey("mcpHeading"));
         Assert.Contains("\"rollArmedWords\"", old, StringComparison.Ordinal);
         AssertRefusedForAMissingMember(old, gateFields);
         // Each alone too.
