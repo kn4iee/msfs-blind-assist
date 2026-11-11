@@ -679,6 +679,77 @@ public class Bbs757EhsiReaderTests
     }
 
     [Fact]
+    public void A_moved_from_empty_label_reads_empty_not_corrupt()
+    {
+        // Measured live: a discontinuity's label is 00000000 | 04000000 | 08000000 (byte 11 = 0: short, size 0), the
+        // stale words at +4 and +8 left by a move. Only the terminator word after the last code point is checked.
+        void Stale(byte[] b)
+        {
+            I32(b, Legs + L.LegStride + L.LegLabel, 0);
+            I32(b, Legs + L.LegStride + L.LegLabel + 4, 4);
+            I32(b, Legs + L.LegStride + L.LegLabel + 8, 8);
+        }
+        var route = Read(new Scene { Tweak = Stale }).Route!;
+        Assert.Equal(new Bbs757EhsiLeg("", 0, 0, true, 0, false, false, 0, 0, 0, -1), route[1]);
+        Assert.False(Read(new Scene { Tweak = Stale }, full: false).Corrupt);
+
+        // The same after one and two code points: only the bytes of the terminator word must be 0.
+        var scene = new Scene
+        {
+            RouteLegs = new[] { Kolm with { Label = "A" }, Kolm with { Label = "AB" } },
+            // Beyond the "A" terminator (+4): a stale word at +8 is none of the reader's business. (After "AB" the
+            // terminator is +8 to +10, and +11 is the size.)
+            Tweak = b => b[Legs + L.LegLabel + 8] = 8,
+        };
+        Assert.Equal(new[] { "A", "AB" }, Read(scene).Route!.Select(l => l.Label));
+
+        // A terminator that is not 0 is torn, short or long.
+        Corrupt(new Scene { RouteLegs = new[] { Kolm with { Label = "A" } }, Tweak = b => I32(b, Legs + L.LegLabel + 4, 7) });
+        Corrupt(new Scene { RouteLegs = new[] { Kolm with { Label = "AB" } }, Tweak = b => b[Legs + L.LegLabel + 9] = 1 });
+        Corrupt(new Scene { RouteLegs = new[] { Kolm with { Label = "" } }, Tweak = b => I32(b, Legs + L.LegLabel, 7) });
+    }
+
+    [Fact]
+    public void An_empty_long_string_is_checked_like_the_others()
+    {
+        // Size 0 in the long form: its pointer must still be inside the module and hold the terminator.
+        Corrupt(new Scene { Tweak = b => I32(b, Legs + L.LegLabel + 4, 0) });                  // data holds "KOLM", no terminator
+        Corrupt(new Scene { Tweak = b => { I32(b, Legs + L.LegLabel + 4, 0); I32(b, Legs + L.LegLabel, Outside); } });
+        var ok = Read(new Scene { Tweak = b => { I32(b, Legs + L.LegLabel + 4, 0); I32(b, Strings + 2 * StringPitch, 0); } });
+        Assert.Equal("", ok.Route![0].Label);
+    }
+
+    [Fact]
+    public void A_failed_read_through_a_pointer_is_corrupt_not_a_failed_read()
+    {
+        // Aimed at the module's last four bytes: the pointer's own word reads, the field behind it does not. The
+        // monitor must not re-locate the module for it.
+        uint tail = Size - 4;
+        Corrupt(new Scene { Tweak = b => I32(b, Nd + L.NdToEfis, tail) }, full: false);
+        Corrupt(new Scene { Tweak = b => I32(b, Nd + L.NdToMcp, tail) }, full: false);
+        Corrupt(new Scene { Tweak = b => I32(b, Nd + L.NdToSource, tail) }, full: false);
+        Corrupt(new Scene { Tweak = b => I32(b, Source + L.SourceToIrs, tail) }, full: false);
+        Corrupt(new Scene { Tweak = b => I32(b, Nd + L.NdToRoute, tail) }, full: false);
+        Corrupt(new Scene { Tweak = b => I32(b, Nd + L.NdToRoute, tail) });
+    }
+
+    [Fact]
+    public void An_end_of_descent_on_a_discontinuity_draws_nothing_and_is_not_corrupt()
+    {
+        var all = Read(new Scene { EndOfDescent = 1 });   // Live(): leg 1 is the discontinuity
+        Assert.False(all.Corrupt);
+        Assert.Equal(new[] { "T/C", "T/D", "KSEA", "KPDX" }, all.Points!.Select(p => p.Word));
+    }
+
+    [Fact]
+    public void The_excess_count_is_unsigned_and_never_negative()
+    {
+        Assert.Equal(int.MaxValue, Read(new Scene { Tweak = b => I32(b, Nd + L.ExcessCount, -1) }, full: false).ExcessCount);
+        Assert.Equal(int.MaxValue, Read(new Scene { Tweak = b => I32(b, Nd + L.ExcessCount, int.MinValue) }, full: false).ExcessCount);
+        Assert.Equal(120, Read(new Scene { ExcessCount = 120 }, full: false).ExcessCount);
+    }
+
+    [Fact]
     public void A_label_beyond_the_basic_plane_reads_whole()
     {
         var scene = new Scene { RouteLegs = new[] { Kolm with { Label = "A\U0001F600B" } } };

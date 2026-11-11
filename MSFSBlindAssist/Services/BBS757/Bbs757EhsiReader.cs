@@ -93,16 +93,11 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             return true;
         }
 
-        // The fixed fields: any that cannot be read means the memory moved or went away.
+        // The fields at the nd itself and the static clock: one that cannot be read means the memory moved or went away.
+        // A read through a pointer (the EFIS panel, the source, the MCP, the IRS, the route) that fails is only a torn
+        // pointer (the selected IRS changes with the source switch): a corrupt reading, never a re-locate.
         if (!Link(nd, l.NdToEfis, out uint efis) || !Link(nd, l.NdToSource, out uint source) || !Link(nd, l.NdToMcp, out uint mcp)
-            || !Link(nd, l.NdToRoute, out uint route))
-            return false;
-        if (!Good(efis) || !Good(source) || !Good(mcp) || !Good(route))
-        {
-            reading = Bad(full);
-            return true;
-        }
-        if (!Int(efis, l.EfisMode, out int modeValue) || !Flag(efis, l.EfisCentered, out bool centered)
+            || !Link(nd, l.NdToRoute, out uint route)
             || !F64(nd, l.Range, out double range) || !Flag(nd, l.RangeChanging, out bool rangeChanging)
             || !Flag(nd, l.Valid, out bool valid) || !Flag(nd, l.Aligning, out bool aligning)
             || !F32(nd, l.Number, out float number) || !Int(nd, l.TrackUp, out int trackUp)
@@ -111,18 +106,28 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             || !F64(nd, l.Latitude, out double latitude) || !F64(nd, l.CenterLatitude, out double centerLatitude)
             || !F64(nd, l.CenterLongitude, out double centerLongitude) || !F64(nd, l.Rotation, out double rotation)
             || !F64(nd, l.ScreenX, out double screenX) || !F64(nd, l.ScreenY, out double screenY)
-            || !Flag(nd, l.DataSwitch, out bool dataSwitch) || !Int(nd, l.ExcessCount, out int excessCount)
-            || !F64(mcp, l.McpHeading, out double bug) || !Link(source, l.SourceToIrs, out uint irs)
+            || !Flag(nd, l.DataSwitch, out bool dataSwitch) || !Int(nd, l.ExcessCount, out int excessRaw)
             || !_memory.TryReadDouble(l.Clock, out double clock))
             return false;
+        // The count is a u32: a wild value clamps, never reads negative.
+        int excessCount = (int)Math.Min((uint)excessRaw, int.MaxValue);
+
+        if (!Good(efis) || !Good(source) || !Good(mcp) || !Good(route)
+            || !Int(efis, l.EfisMode, out int modeValue) || !Flag(efis, l.EfisCentered, out bool centered)
+            || !F64(mcp, l.McpHeading, out double bug) || !Link(source, l.SourceToIrs, out uint irs))
+        {
+            reading = Bad(full);
+            return true;
+        }
 
         double groundSpeed = 0;
         bool hasIrs = irs != 0;
-        if (hasIrs)
+        // A selected IRS pointer outside the module, or a ground speed that cannot be read through it, is torn; a null
+        // one is simply no IRS (the draw returns black).
+        if (hasIrs && (!Good(irs) || !F64(irs, l.IrsGroundSpeed, out groundSpeed)))
         {
-            // A selected IRS pointer outside the module is torn; a null one is simply no IRS (the draw returns black).
-            if (!Good(irs)) { reading = Bad(full); return true; }
-            if (!F64(irs, l.IrsGroundSpeed, out groundSpeed)) return false;
+            reading = Bad(full);
+            return true;
         }
 
         if (!l.Modes.Words.TryGetValue(modeValue, out string? mode) || !AllFinite(range, number, width, height, longitude, latitude,
@@ -304,11 +309,13 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
         {
             length = s[StringBytes - 1];
             if (length > 2) return false;
-            // The terminator after two code points shares its last byte with the size byte (+11): only the bytes before
-            // it are the terminator.
+            // The terminator word follows the last code point and nothing beyond it is read: a moved-from string keeps
+            // stale words after it (a discontinuity's label is 0, 4, 8 with byte 11 = 0). After two code points the
+            // terminator word shares its last byte with the size byte (+11), so only the bytes before it count.
             units = new byte[(length + 1) * Word];
             s[..(length * Word)].CopyTo(units);
-            if (!s[(length * Word)..(StringBytes - 1)].IndexOfAnyExcept((byte)0).Equals(-1)) return false;
+            int terminatorEnd = Math.Min((length + 1) * Word, StringBytes - 1);
+            if (s[(length * Word)..terminatorEnd].IndexOfAnyExcept((byte)0) >= 0) return false;
         }
         else
         {
@@ -316,7 +323,7 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             uint size = BinaryPrimitives.ReadUInt32LittleEndian(s[Word..]);
             if (size > MaxLabelLength) return false;
             length = (int)size;
-            if (length == 0) return true;
+            // An empty long string still has its pointer and terminator: checked like any other.
             units = new byte[(length + 1) * Word];
             if (!_memory.TryRead(data, units)) return false;
         }
@@ -384,7 +391,9 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
                 int own = route.Legs.Count - route.Flown;
                 if (endLeg >= own) return false;
                 var leg = route.Legs[route.Flown + endLeg];
-                list.Add(new Bbs757EhsiPoint(l.EndOfDescentWord, false, leg.Latitude, leg.Longitude));
+                // A discontinuity has no position: nothing to draw there (not torn).
+                if (!leg.Discontinuity)
+                    list.Add(new Bbs757EhsiPoint(l.EndOfDescentWord, false, leg.Latitude, leg.Longitude));
             }
         }
         foreach (int record in new[] { l.OriginAirport, l.DestinationAirport })
