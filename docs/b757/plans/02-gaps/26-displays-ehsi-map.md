@@ -130,8 +130,33 @@
 - **Started:** 2026-11-11, from `B757` ba06e4d2c (plans 23, 24 and 25 landed, no gate in any 757 reader)
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
+- **Tasks:** 0 (claim) and 1 (measure) done, 2026-11-11: `docs/b757/evidence/displays-ehsi.md`. Tasks 2-9 open.
+- **Waiting on the owner:** two decisions from Task 1's findings ("Changed from the plan" below) before Task 6: what
+  Ctrl+W and the top row say, given that the screen draws no waypoint name there; and whether S/C is computed or left
+  unread.
 - **In-sim results:**
-- **Changed from the plan:**
+- **Changed from the plan:** from Task 1's measurements (the evidence file has each):
+  - **The top line draws no waypoint name:** left the distance and `NM`, right the ETA and `z` ("37.5NM", "------z").
+    The active waypoint is leg 0 of the route, magenta on the map. So Ctrl+W's "KPDX, 1533.3z, 23.0 NM" and the row
+    "Top right: KPDX, …" are not what the screen shows as one line: the owner decides the wording.
+  - **The ETA is dashes under 100 kt ground speed**, so always on the ground.
+  - **Distances:** the top line uses the haversine formula with R = 6,371,000 m and 1852 m a NM; the map's projection
+    the spherical law of cosines with 6371 km and 1.852. Great circle both; no rhumb line.
+  - **The map's clip is not the range:** a circle of 88.7 % of the range around the aircraft's screen point (in PLAN
+    too, where the map's center is elsewhere), and the screen's edges (60.5 % of the range either side, 27 % behind).
+    `OnMap` takes the mode, the centered flag, the range and the item's screen point, not a distance and an angle alone.
+  - **CTR** (`u8 efis+348`) changes the clip and the scale labels: the reading carries it.
+  - **Heading up is the default;** track up is a tablet option (`i32 nd+756`). "Ahead" is off the rotation the nd
+    keeps (`f64 nd+1208`), read, not derived.
+  - **PLAN's center** is read from the nd (`f64 nd+1176`, `+1184`), which the CDU sets; the reader does not need the
+    CDU.
+  - **A modification** is a second route (`route+1620`, `+1624`) drawn white dashed beside the active one; an inactive
+    route is cyan dashed. The rows say which.
+  - **A leg's name** is the UTF-32 label at +1608, not the string at +0 (empty for navaids).
+  - **S/C has no stored position:** BlueBird computes it each frame. T/C, T/D and E/D are stored.
+  - **Messages:** only `EXCESS DATA` and the `HDG`/`TRK` and `MAP` failure flags belong to this plan; with DATA on
+    (`u8 nd+209`) each waypoint gains its constraint and ETA lines, which Task 6 lists as drawn.
+  - **The position** the draw takes is `PLANE LATITUDE` and `PLANE LONGITUDE` for the top line and the IRS's copy in
+    the nd for the map; equal to the sixth decimal parked. Task 9 compares them in flight before choosing.
+  - **Not measured (needs a flight):** the ETA above 100 kt, the wind, track up, a waypoint being passed, S/C.
 - **Open at landing:**
