@@ -5,6 +5,7 @@
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.BBS757;
 using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.SimConnect;
 using Xunit;
 using static MSFSBlindAssist.Tests.Bbs757EhsiTextTests;
 
@@ -40,9 +41,32 @@ public class Bbs757EhsiDisplayTests
         Assert.Equal("MSFSBA_BBS757_EHSI_MESSAGES", reader.MuteKey);
         Assert.Equal("bbs757-ehsi", reader.LogChannel);
         Assert.Equal(500, reader.TickMs);
-        // No simulator input: the position is the nd's own copy (B757-30).
-        Assert.Empty(reader.SimInputs);
         Assert.False(new Bbs757EhsiDisplay().FullWanted());
+    }
+
+    [Fact]
+    public void The_reader_takes_the_simulators_position_for_the_top_line()
+    {
+        // S10: BlueBird's top line reads PLANE LATITUDE and PLANE LONGITUDE fresh, so the sampler takes them as inputs,
+        // never as a check of memory (B757-30).
+        var inputs = new[]
+        {
+            new Bbs757SimInput("PLANE LATITUDE", "PLANE LATITUDE", SimVarType.SimVar, "degrees"),
+            new Bbs757SimInput("PLANE LONGITUDE", "PLANE LONGITUDE", SimVarType.SimVar, "degrees"),
+        };
+        IBbs757DisplayReader<Bbs757EhsiLayout, Bbs757EhsiReading> reader = new Bbs757EhsiDisplay();
+        Assert.Equal(inputs, Bbs757EhsiDisplay.SimInputs);
+        Assert.Equal(inputs, reader.SimInputs);
+        Assert.False(Bbs757EhsiDisplay.SimInputs is Bbs757SimInput[], "the inputs cannot be changed through a cast");
+
+        // The monitor asks the simulator for exactly these each tick and hands them to the sampler.
+        var f = new Flight(Light()).RunUntilRunning();
+        Assert.NotEmpty(f.Env.KeysAsked);
+        Assert.All(f.Env.KeysAsked, key => Assert.Contains(key, new[] { "PLANE LATITUDE", "PLANE LONGITUDE" }));
+        Assert.Contains("PLANE LATITUDE", f.Env.KeysAsked);
+        Assert.Contains("PLANE LONGITUDE", f.Env.KeysAsked);
+        Assert.Equal(47.442946, f.Sampler.Seen[^1]["PLANE LATITUDE"]);
+        Assert.Equal(-122.303648, f.Sampler.Seen[^1]["PLANE LONGITUDE"]);
     }
 
     [Fact]
@@ -140,6 +164,15 @@ public class Bbs757EhsiDisplayTests
     {
         public Bbs757EhsiReading Reading { get; set; } = reading;
 
+        /// <summary>The simulator's values of each read the monitor made, oldest first.</summary>
+        public List<Bbs757SimValues> Seen { get; } = new();
+
+        public bool TryRead(Bbs757SimValues sim, out Bbs757EhsiReading read)
+        {
+            Seen.Add(sim);
+            return TryRead(out read);
+        }
+
         public bool TryRead(out Bbs757EhsiReading read)
         {
             read = Reading;
@@ -184,6 +217,10 @@ public class Bbs757EhsiDisplayTests
             Monitor = new Bbs757DisplayMonitor<Bbs757EhsiLayout, Bbs757EhsiReading>(new OverScript(Display, Sampler));
             Env = new Bbs757DisplayMonitorTests.FakeEnvironment
             {
+                Simulator = new Bbs757SimValues(new Dictionary<string, double>
+                {
+                    ["PLANE LATITUDE"] = 47.442946, ["PLANE LONGITUDE"] = -122.303648,
+                }),
                 Analyse = () => Task.FromResult(new ModuleAnalysis(new[] { Build(Layout) }, null)),
             };
             foreach (string key in muted) Env.Muted.Add(key);
@@ -277,22 +314,22 @@ public class Bbs757EhsiDisplayTests
         f.Tick();
         Assert.Equal(new[] { "EHSI: MAP, range 80", "Top: HDG 119 M" }, f.Monitor.View());
 
-        f.Show(Ehsi() with { Mode = "PLAN", Range = 80, Map = PlanFrame, Centered = true });
+        f.Show(InMode(Ehsi(), "PLAN") with { Range = 80, Map = PlanFrame, Centered = true });
         f.Tick(4);
         Assert.Contains("EHSI: PLAN, range 80, centered", f.Monitor.View());
         Assert.Contains("Map: T/C, 13.4 NM north-east of KOLM", f.Monitor.View());
 
-        f.Show(Ehsi() with { Mode = "VOR" });
+        f.Show(InMode(Ehsi(), "VOR"));
         f.Tick(4);
         Assert.Contains("VOR mode: not read yet", f.Monitor.View());
 
         // With the IRS off and EXCESS DATA up, a mode change does not speak the MAP flag or the message it hides.
-        f.Show(Ehsi() with { Valid = false, ExcessCount = 100, Mode = "VOR" });
+        f.Show(InMode(Ehsi(), "VOR") with { Valid = false, ExcessCount = 100 });
         f.Tick(6);
         int said = f.Spoken.Length;
         f.Show(Ehsi() with { Valid = false, ExcessCount = 100 });
         f.Tick(6);
-        f.Show(Ehsi() with { Valid = false, ExcessCount = 100, Mode = "PLAN", Map = PlanFrame });
+        f.Show(InMode(Ehsi(), "PLAN") with { Valid = false, ExcessCount = 100, Map = PlanFrame });
         f.Tick(6);
         Assert.Equal(said, f.Spoken.Length);
 

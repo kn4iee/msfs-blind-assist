@@ -1,12 +1,14 @@
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// The Captain's EHSI as a reader of <see cref="Bbs757DisplayMonitor{TLayout, TReading}"/>: its layouts from the shared
-/// module session's builds, a <see cref="Bbs757EhsiReader"/> per located build on its own lease (no simulator input: the
-/// position is the nd's own copy, and nothing is compared with a simulator value, B757-30), the screen's own power, its
+/// module session's builds, a <see cref="Bbs757EhsiReader"/> per located build on its own lease, which takes the
+/// aircraft's position where BlueBird's top line does (S10, <see cref="SimInputs"/>; nothing is compared with a simulator
+/// value, B757-30), the screen's own power, its
 /// words (<see cref="Bbs757EhsiText"/>) on one Ctrl+M row, which also carries the active waypoint's line and the monitor's
 /// status lines, and the Ctrl+W line. Every sampler it makes asks <see cref="FullWanted"/> at each reading whether to read
 /// the route too. Called on the UI thread only.
@@ -24,6 +26,17 @@ public sealed class Bbs757EhsiDisplay : IBbs757DisplayReader<Bbs757EhsiLayout, B
     /// asked by every sampler this display made at each of its readings, so setting it later takes effect at once.
     /// False until the definition sets it.</summary>
     public Func<bool> FullWanted { get; set; } = () => false;
+
+    /// <summary>The two simulator variables the sampler takes, where BlueBird's top line does (S10): the aircraft's
+    /// position, which the top line's distance reads fresh on each draw. Inputs, never compared with memory (B757-30);
+    /// the map keeps the nd's own copy.</summary>
+    public static IReadOnlyList<Bbs757SimInput> SimInputs { get; } = Array.AsReadOnly(new[]
+    {
+        new Bbs757SimInput(Bbs757EhsiReader.LatitudeKey, Bbs757EhsiReader.LatitudeKey, SimVarType.SimVar, "degrees"),
+        new Bbs757SimInput(Bbs757EhsiReader.LongitudeKey, Bbs757EhsiReader.LongitudeKey, SimVarType.SimVar, "degrees"),
+    });
+
+    IReadOnlyList<Bbs757SimInput> IBbs757DisplayReader<Bbs757EhsiLayout, Bbs757EhsiReading>.SimInputs => SimInputs;
 
     string IBbs757DisplayReader<Bbs757EhsiLayout, Bbs757EhsiReading>.Name => Name;
 

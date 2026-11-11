@@ -235,13 +235,19 @@ public class Bbs757EhsiReaderTests
         Assert.Equal(full, reading.Route is not null && reading.Route.Count == 0);
         Assert.Null(reading.Modification);
         Assert.Equal(full, reading.Points is not null && reading.Points.Count == 0);
-        // The map's constants are the layout's in every reading, so the rows never need the layout.
+        // The map's constants and BlueBird's words are the layout's in every reading, so the rows never need the layout.
         Assert.Equal(LayoutConstants, reading.Constants);
+        Assert.Equal(LayoutWords, reading.Words);
+        Assert.Equal(-1, reading.ModeValue);
+        Assert.Equal(-1, reading.ActiveIndex);
         return reading;
     }
 
     /// <summary>The sample layout's map constants, as every reading carries them.</summary>
     private static readonly Bbs757EhsiConstants LayoutConstants = new(0.6775, 0.8175, 66, 10, 100, 100);
+
+    /// <summary>The sample layout's words, as every reading carries them.</summary>
+    private static readonly Bbs757EhsiWords LayoutWords = new("HDG", "TRK", "M", "TRU", "MAP", "NM", "z", "T/C", "T/D", "E/D", "EXCESS DATA");
 
     // ---- the light set ----
 
@@ -267,6 +273,10 @@ public class Bbs757EhsiReaderTests
         Assert.Equal(1512.38, reading.Clock);
         Assert.Equal(new Bbs757EhsiMap(47.442946, -122.303648, 134.43, 352, 702.2, 704, 859), reading.Map);
         Assert.Equal(LayoutConstants, reading.Constants);
+        Assert.Equal(LayoutWords, reading.Words);
+        Assert.Equal(2, reading.ModeValue);
+        // A light reading holds no route, so no index into it.
+        Assert.Equal(-1, reading.ActiveIndex);
         Assert.True(reading.RouteActive);
         Assert.False(reading.DataSwitch);
         Assert.Equal(3, reading.ExcessCount);
@@ -307,7 +317,8 @@ public class Bbs757EhsiReaderTests
         Assert.Equal(new[] { "KOLM", "", "OLM", "BTG", "KPDX" }, all.Route!.Select(l => l.Label));
         Assert.Null(all.Modification);
         Assert.NotNull(all.Points);
-        Assert.Equal(light with { Route = all.Route, Points = all.Points }, all);
+        Assert.Equal(0, all.ActiveIndex);
+        Assert.Equal(light with { Route = all.Route, Points = all.Points, ActiveIndex = 0 }, all);
     }
 
     [Fact]
@@ -368,6 +379,11 @@ public class Bbs757EhsiReaderTests
         var all = Read(scene);
         Assert.False(all.Corrupt);
         Assert.Empty(all.Route!);
+        Assert.Equal(-1, all.ActiveIndex);
+        // Flown legs but none of the route's own: still no active leg.
+        var flownOnly = Read(new Scene { FlownLegs = new[] { Btg }, RouteLegs = Array.Empty<TLeg>(), HasRegistry = false });
+        Assert.Null(flownOnly.Active);
+        Assert.Equal(-1, flownOnly.ActiveIndex);
     }
 
     [Fact]
@@ -375,8 +391,78 @@ public class Bbs757EhsiReaderTests
     {
         var scene = new Scene { FlownLegs = new[] { Btg }, RouteLegs = new[] { Kolm, Kpdx } };
         Assert.Equal("KOLM", Read(scene, full: false).Active!.Value.Label);
-        // The full route is the flown legs, then the route's own.
-        Assert.Equal(new[] { "BTG", "KOLM", "KPDX" }, Read(scene).Route!.Select(l => l.Label));
+        Assert.Equal(-1, Read(scene, full: false).ActiveIndex);
+        // The full route is the flown legs, then the route's own; the active leg's index counts the flown ones.
+        var all = Read(scene);
+        Assert.Equal(new[] { "BTG", "KOLM", "KPDX" }, all.Route!.Select(l => l.Label));
+        Assert.Equal(1, all.ActiveIndex);
+
+        // A flown copy of the active leg in front: the index still names the route's own leg 0.
+        var copy = Read(new Scene { FlownLegs = new[] { Kolm }, RouteLegs = new[] { Kolm, Kpdx } });
+        Assert.Equal(copy.Route![0], copy.Route[1]);
+        Assert.Equal(1, copy.ActiveIndex);
+    }
+
+    // ---- the top line's position (S10: the simulator's, where BlueBird's draw takes it) ----
+
+    private static Bbs757SimValues Position(double? latitude, double? longitude)
+    {
+        var values = new Dictionary<string, double>();
+        if (latitude is { } lat) values["PLANE LATITUDE"] = lat;
+        if (longitude is { } lon) values["PLANE LONGITUDE"] = lon;
+        return new Bbs757SimValues(values);
+    }
+
+    private static Bbs757EhsiReading ReadWith(Scene scene, Bbs757SimValues sim, bool full = false)
+    {
+        using var r = Reader(scene.Build(), full);
+        IBbs757DisplaySampler<Bbs757EhsiReading> sampler = r;
+        Assert.True(sampler.TryRead(sim, out var reading));
+        return reading;
+    }
+
+    [Fact]
+    public void The_top_lines_position_is_the_simulators_when_given()
+    {
+        var reading = ReadWith(new Scene(), Position(47.5, -122.4));
+        Assert.False(reading.Corrupt);
+        Assert.Equal((47.5, -122.4), (reading.Latitude, reading.Longitude));
+        // The map keeps the nd's own copy of the IRS position: an input, never compared with it (B757-30).
+        Assert.Equal((47.442946, -122.303648), (reading.Map.CenterLatitude, reading.Map.CenterLongitude));
+        Assert.Equal(reading, ReadWith(new Scene(), Position(47.5, -122.4), full: false));
+
+        // In a full reading too.
+        var all = ReadWith(new Scene(), Position(47.5, -122.4), full: true);
+        Assert.Equal((47.5, -122.4), (all.Latitude, all.Longitude));
+    }
+
+    [Theory]
+    [InlineData(null, -122.4)]
+    [InlineData(47.5, null)]
+    [InlineData(null, null)]
+    [InlineData(double.NaN, -122.4)]
+    [InlineData(47.5, double.PositiveInfinity)]
+    [InlineData(91.0, -122.4)]
+    [InlineData(47.5, -180.5)]
+    public void A_missing_or_unusable_simulator_position_keeps_the_nds_copy(double? latitude, double? longitude)
+    {
+        var reading = ReadWith(new Scene(), Position(latitude, longitude));
+        Assert.False(reading.Corrupt);
+        Assert.Equal((47.442946, -122.303648), (reading.Latitude, reading.Longitude));
+    }
+
+    [Fact]
+    public void The_reading_without_simulator_values_keeps_the_nds_copy_and_a_dark_one_its_defaults()
+    {
+        Assert.Equal((47.442946, -122.303648), (Read(new Scene(), full: false).Latitude, Read(new Scene(), full: false).Longitude));
+        var dark = ReadWith(new Scene { Powered = false }, Position(47.5, -122.4));
+        Assert.False(dark.Powered);
+        Assert.Equal((0.0, 0.0), (dark.Latitude, dark.Longitude));
+        Assert.Equal(-1, dark.ModeValue);
+        Assert.Equal(LayoutWords, dark.Words);
+        var torn = ReadWith(new Scene { Mode = 77 }, Position(47.5, -122.4));
+        Assert.True(torn.Corrupt);
+        Assert.Equal((0.0, 0.0), (torn.Latitude, torn.Longitude));
     }
 
     // ---- a pending modification ----

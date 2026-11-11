@@ -11,7 +11,9 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// follows it); the EFIS panel, the instrument source (and through it the selected IRS), the MCP and the route hang off
 /// it. Owns its lease of the simulator handle. Every read is bounds-checked against committed module memory (WASM-4),
 /// re-walked each call, and the regions are asked about once per reading (WASM-15). Nothing is compared with a simulator
-/// value (B757-30): the aircraft's position is the nd's own copy, which the draw uses.
+/// value (B757-30): the map's center is the nd's own copy of the IRS position, which the map draw uses, and the top
+/// line's position is the simulator's <c>PLANE LATITUDE</c> and <c>PLANE LONGITUDE</c>, which the top line's draw reads
+/// (S10), taken as inputs when the monitor gives them.
 /// <para>Each reading holds the light set: the screen's fields and <see cref="Bbs757EhsiReading.Active"/>, the leg the
 /// top line is drawn to. The route, the pending modification and the map's points are read only when
 /// <see cref="FullWanted"/> says so. The route walk is all or nothing (the same idea as the upper EICAS's, B757-35): any
@@ -48,10 +50,20 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
         Layout = layout;
         _constants = new Bbs757EhsiConstants(layout.RadiusFactor, layout.AircraftYFactor, layout.ClipInset, layout.MarkerMargin,
             layout.MinEtaGroundSpeed, layout.ExcessLimit);
+        _words = new Bbs757EhsiWords(layout.HdgWord, layout.TrkWord, layout.MagWord, layout.TrueWord, layout.MapWord,
+            layout.NmWord, layout.EtaSuffix, layout.TopOfClimbWord, layout.TopOfDescentWord, layout.EndOfDescentWord,
+            layout.ExcessWord);
     }
 
     /// <summary>The layout's map constants, carried in every reading (powered or not) so the rows need no layout.</summary>
     private readonly Bbs757EhsiConstants _constants;
+
+    /// <summary>The layout's words, carried in every reading (powered or not) so the rows need no layout.</summary>
+    private readonly Bbs757EhsiWords _words;
+
+    /// <summary>The top line's position inputs (S10): BlueBird's top line reads these simulator variables fresh on each
+    /// draw, so the reader takes them where the monitor gives them, never comparing them with memory (B757-30).</summary>
+    public const string LatitudeKey = "PLANE LATITUDE", LongitudeKey = "PLANE LONGITUDE";
 
     /// <summary>The Captain's nd: the first manager pointer whose target carries its vptr. False when none in the
     /// manager's span does (the module is not where the anchor said, not ready, or not this build).</summary>
@@ -74,16 +86,27 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
 
     /// <summary>The reading of a screen that is not powered: every field its default, not corrupt (a dark screen's
     /// fields hold anything, and it is never spoken).</summary>
-    private Bbs757EhsiReading Dark => new(false, null, false, 0, false, false, false, 0, false, false, 0, 0, 0,
-        0, 0, default, _constants, null, false, false, 0, null, null, null, Corrupt: false);
+    private Bbs757EhsiReading Dark => new(false, null, -1, false, 0, false, false, false, 0, false, false, 0, 0, 0,
+        0, 0, default, _constants, _words, null, -1, false, false, 0, null, null, null, Corrupt: false);
 
     /// <summary>The reading of a torn or out-of-range read: powered (it is lit), nothing else, and an empty route and
     /// points in a full reading, never a partial one.</summary>
-    private Bbs757EhsiReading Bad(bool full) => new(true, null, false, 0, false, false, false, 0, false, false, 0, 0, 0,
-        0, 0, default, _constants, null, false, false, 0, full ? Array.Empty<Bbs757EhsiLeg>() : null, null,
+    private Bbs757EhsiReading Bad(bool full) => new(true, null, -1, false, 0, false, false, false, 0, false, false, 0, 0, 0,
+        0, 0, default, _constants, _words, null, -1, false, false, 0, full ? Array.Empty<Bbs757EhsiLeg>() : null, null,
         full ? Array.Empty<Bbs757EhsiPoint>() : null, Corrupt: true);
 
-    public bool TryRead(out Bbs757EhsiReading reading)
+    /// <summary>A reading with the top line's position from the nd's own copy (no simulator values).</summary>
+    public bool TryRead(out Bbs757EhsiReading reading) => Read(null, out reading);
+
+    /// <summary>A reading with the top line's position from the simulator's <see cref="LatitudeKey"/> and
+    /// <see cref="LongitudeKey"/> when both are given, finite and in range; else the nd's own copy. The map's center stays
+    /// the nd's.</summary>
+    public bool TryRead(Bbs757SimValues sim, out Bbs757EhsiReading reading) => Read(SimPosition(sim), out reading);
+
+    private static (double Latitude, double Longitude)? SimPosition(Bbs757SimValues sim) =>
+        sim[LatitudeKey] is double lat && sim[LongitudeKey] is double lon && InRange(lat, lon) ? (lat, lon) : null;
+
+    private bool Read((double Latitude, double Longitude)? position, out Bbs757EhsiReading reading)
     {
         reading = null!;
         var l = Layout;
@@ -163,6 +186,8 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             return true;
         }
         var activeLeg = pending ? modificationRead!.First : routeRead!.First;
+        // The route's own leg 0 in the full list, after the flown legs; none in a light reading or an empty route.
+        int activeIndex = full && routeRead!.First is not null ? routeRead.Flown : -1;
 
         IReadOnlyList<Bbs757EhsiLeg>? routeLegs = null, modificationLegs = null;
         IReadOnlyList<Bbs757EhsiPoint>? points = null;
@@ -179,11 +204,12 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
         }
 
         reading = new Bbs757EhsiReading(
-            Powered: true, Mode: mode, Centered: centered, Range: range, RangeChanging: rangeChanging,
+            Powered: true, Mode: mode, ModeValue: modeValue, Centered: centered, Range: range, RangeChanging: rangeChanging,
             Valid: valid && hasIrs, Aligning: aligning, Number: number, TrackUp: trackUp != 0, TrueReference: trueReference != 0,
-            HeadingBug: bug, Latitude: latitude, Longitude: longitude, GroundSpeed: groundSpeed, Clock: clock,
+            HeadingBug: bug, Latitude: position?.Latitude ?? latitude, Longitude: position?.Longitude ?? longitude,
+            GroundSpeed: groundSpeed, Clock: clock,
             Map: new Bbs757EhsiMap(centerLatitude, centerLongitude, rotation, screenX, screenY, width, height),
-            Constants: _constants, Active: activeLeg, RouteActive: routeActive, DataSwitch: dataSwitch, ExcessCount: excessCount,
+            Constants: _constants, Words: _words, Active: activeLeg, ActiveIndex: activeIndex, RouteActive: routeActive, DataSwitch: dataSwitch, ExcessCount: excessCount,
             Route: routeLegs, Modification: modificationLegs, Points: points, Corrupt: false);
         return true;
     }

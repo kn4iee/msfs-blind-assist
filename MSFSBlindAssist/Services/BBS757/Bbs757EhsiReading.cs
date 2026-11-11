@@ -26,6 +26,22 @@ public readonly record struct Bbs757EhsiConstants(
     double MinEtaGroundSpeed,
     int ExcessLimit);
 
+/// <summary>BlueBird's words as the screen prints them, the layout's word fields, carried in every reading so the rows
+/// need no layout: the heading line's HDG, TRK, M and TRU, the MAP flag, the top line's NM and ETA suffix, the VNAV points'
+/// words and EXCESS DATA. A default reading's words are null.</summary>
+public readonly record struct Bbs757EhsiWords(
+    string Hdg,
+    string Trk,
+    string Mag,
+    string True,
+    string Map,
+    string Nm,
+    string EtaSuffix,
+    string TopOfClimb,
+    string TopOfDescent,
+    string EndOfDescent,
+    string Excess);
+
 /// <summary>One leg of a route as BlueBird draws it: its label (empty for a discontinuity), its position in degrees (0, 0
 /// for a discontinuity, which is its own leg: nothing is drawn or invented across it), its path terminator,
 /// <see cref="Manual"/> (a manual-termination leg, whose top-line distance is dashes), <see cref="Symbol"/> (whether the
@@ -51,12 +67,18 @@ public readonly record struct Bbs757EhsiPoint(string Word, bool Airport, double 
 /// <see cref="Modification"/> and <see cref="Points"/> null and still carries <see cref="Active"/>: the leg the top line
 /// uses (leg 0 of the modification while one is pending). <see cref="Powered"/> false: every other field is its default and
 /// the reading is not corrupt (a dark screen holds anything). <see cref="Corrupt"/>: a torn or out-of-range read, with
-/// no route, modification or points at all (never partial). <see cref="Constants"/> is the layout's in every reading,
-/// powered or not.
+/// no route, modification or points at all (never partial). <see cref="Constants"/> and <see cref="Words"/> are the
+/// layout's in every reading, powered or not. <see cref="ModeValue"/> is BlueBird's EFIS mode value (-1 when not powered
+/// or corrupt); <see cref="Mode"/> is the layout's word for it. <see cref="Latitude"/> and <see cref="Longitude"/> are the
+/// top line's position: the simulator's <c>PLANE LATITUDE</c> and <c>PLANE LONGITUDE</c> when the monitor gave them (as
+/// BlueBird's top line reads them), else the nd's own copy of the IRS position, which the map's center always is.
+/// <see cref="ActiveIndex"/> is the index in <see cref="Route"/> of the route's own leg 0 (after the flown legs), -1 when
+/// it has none or in a light reading.
 /// </summary>
 public sealed record Bbs757EhsiReading(
     bool Powered,
     string? Mode,
+    int ModeValue,
     bool Centered,
     double Range,
     bool RangeChanging,
@@ -72,7 +94,9 @@ public sealed record Bbs757EhsiReading(
     double Clock,
     Bbs757EhsiMap Map,
     Bbs757EhsiConstants Constants,
+    Bbs757EhsiWords Words,
     Bbs757EhsiLeg? Active,
+    int ActiveIndex,
     bool RouteActive,
     bool DataSwitch,
     int ExcessCount,

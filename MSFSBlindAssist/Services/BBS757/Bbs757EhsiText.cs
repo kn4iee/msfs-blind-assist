@@ -7,19 +7,22 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// what the screen draws (docs/b757/evidence/displays-ehsi.md, Steps 2 and 3): a map item only inside BlueBird's own clip
 /// (<see cref="Bbs757EhsiGeometry.OnScreen"/>), rows top to bottom, BlueBird's printed words and formats ("NM", the
 /// top line's "z", the DATA ETA's "Z", "HDG", "TRU", "EXCESS DATA"), every number culture-invariant. Pure, and never throws
-/// for any reading a sampler returns, a corrupt one included. The map's constants come with the reading
-/// (<see cref="Bbs757EhsiReading.Constants"/>); the words are BlueBird's, as the evidence records them.
+/// for any reading a sampler returns, a corrupt one included. The map's constants and BlueBird's words come with the
+/// reading (<see cref="Bbs757EhsiReading.Constants"/>, <see cref="Bbs757EhsiReading.Words"/>, the layout's); what the
+/// screen does in each mode follows BlueBird's mode value (<see cref="Bbs757EhsiReading.ModeValue"/>), and the mode is
+/// shown by the layout's word (<see cref="Bbs757EhsiReading.Mode"/>).
 /// </summary>
 public static class Bbs757EhsiText
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // The modes as the layout's word table names them.
-    private const string MapMode = "MAP", PlanMode = "PLAN", VorMode = "VOR", IlsMode = "ILS";
+    /// <summary>BlueBird's EFIS mode values (measured, evidence Step 2): the enum the layout's <c>Modes</c> word table is
+    /// keyed by. Any other value draws none of these modes' items.</summary>
+    internal enum EhsiMode { Vor = 0, Ils = 1, Map = 2, Plan = 3 }
 
-    // BlueBird's words on the screen.
-    private const string HdgWord = "HDG", TrkWord = "TRK", MagWord = "M", TrueWord = "TRU", MapFlagWord = "MAP", NmWord = "NM",
-        EtaSuffix = "z", DataEtaSuffix = "Z", ExcessWord = "EXCESS DATA", NoNumber = "---";
+    // Not layout words: the DATA ETA's "Z" and the constraint letters are the draw's own literals (evidence Step 3,
+    // "Constraint and time"); the "---" of a heading not valid while aligning is the top line's own dashes.
+    private const string DataEtaSuffix = "Z", AboveLetter = "A", BelowLetter = "B", NoNumber = "---";
 
     private const string Unavailable = "EHSI waypoint unavailable: ";
     private const string NoReadingYet = "no reading yet";
@@ -58,37 +61,43 @@ public static class Bbs757EhsiText
     public static IReadOnlyList<string> Rows(Bbs757EhsiReading r)
     {
         if (!r.Powered) return new[] { "EHSI: dark" };
+        var w = r.Words;
         var rows = new List<string>
         {
             "EHSI: " + ModeWord(r) + ", range " + Number(r.Range) + (r.Centered ? ", centered" : ""),
         };
         if (r.Valid)
-            rows.Add("Top: " + HeadingWord(r) + " " + ThreeDigits(r.Number) + " " + (r.TrueReference ? TrueWord : MagWord));
+            rows.Add("Top: " + HeadingWord(r) + " " + ThreeDigits(r.Number) + " " + Word(r.TrueReference ? w.True : w.Mag));
         else
         {
             if (r.Aligning) rows.Add("Top: " + NoNumber);
             rows.Add("Flag: " + HeadingWord(r));
-            if (r.Mode == MapMode) rows.Add("Flag: " + MapFlagWord);
+            if (Is(r, EhsiMode.Map)) rows.Add("Flag: " + Word(w.Map));
         }
         if (r.RangeChanging) return rows;
-        if (r.Mode is VorMode or IlsMode)
+        if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils))
         {
-            rows.Add(r.Mode + " mode: not read yet");
+            rows.Add(ModeWord(r) + " mode: not read yet");
             return rows;
         }
 
         double? distance = Distance(r);
-        rows.Add("Top left: " + (distance is { } nm ? Bbs757EhsiGeometry.TopLineText(nm) + " " + NmWord : "no distance"));
-        rows.Add("Top right: " + (Eta(r, distance) is { } eta ? eta + EtaSuffix : "no ETA"));
+        rows.Add("Top left: " + (distance is { } nm ? Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(w.Nm) : "no distance"));
+        rows.Add("Top right: " + (Eta(r, distance) is { } eta ? eta + Word(w.EtaSuffix) : "no ETA"));
         rows.AddRange(MapRows(r));
         if (r.Valid) rows.Add("Heading bug: " + ThreeDigits(r.HeadingBug) + ", " + Relative(r.HeadingBug, r.Number));
-        rows.Add(Excess(r) ? "Message: " + ExcessWord : "Messages: none");
+        rows.Add(Excess(r) ? "Message: " + Word(w.Excess) : "Messages: none");
         return rows;
     }
 
+    /// <summary>A layout word, empty when the reading carries none (a default reading).</summary>
+    private static string Word(string? word) => word ?? "";
+
+    private static bool Is(Bbs757EhsiReading r, EhsiMode mode) => r.ModeValue == (int)mode;
+
     private static string ModeWord(Bbs757EhsiReading r) => r.Mode ?? Bbs757WordTable.Unrecognised;
 
-    private static string HeadingWord(Bbs757EhsiReading r) => r.TrackUp ? TrkWord : HdgWord;
+    private static string HeadingWord(Bbs757EhsiReading r) => Word(r.TrackUp ? r.Words.Trk : r.Words.Hdg);
 
     /// <summary>BlueBird's <c>round % 360</c> in three digits ("119"; 360 → "000"); not a number: "---".</summary>
     private static string ThreeDigits(double value)
@@ -125,11 +134,11 @@ public static class Bbs757EhsiText
         return Math.Round(abs, MidpointRounding.AwayFromZero).ToString("F0", Inv) + "° " + (off < 0 ? "left" : "right");
     }
 
-    private static bool MapOrPlan(string? mode) => mode is MapMode or PlanMode;
+    private static bool MapOrPlan(Bbs757EhsiReading r) => Is(r, EhsiMode.Map) || Is(r, EhsiMode.Plan);
 
     /// <summary>EXCESS DATA: drawn in MAP and PLAN when the frame's count of background items reaches the layout's limit.</summary>
     private static bool Excess(Bbs757EhsiReading r) =>
-        r.Powered && MapOrPlan(r.Mode) && r.ExcessCount >= r.Constants.ExcessLimit;
+        r.Powered && MapOrPlan(r) && r.ExcessCount >= r.Constants.ExcessLimit;
 
     // ---- the map ----
 
@@ -137,21 +146,20 @@ public static class Bbs757EhsiText
 
     private static IEnumerable<string> MapRows(Bbs757EhsiReading r)
     {
-        bool plan = r.Mode == PlanMode;
-        if (!((r.Mode == MapMode && r.Valid) || plan) || r.Route is null) return Array.Empty<string>();
+        bool plan = Is(r, EhsiMode.Plan);
+        if (!((Is(r, EhsiMode.Map) && r.Valid) || plan) || r.Route is null) return Array.Empty<string>();
 
         var items = new List<MapItem>();
         bool pending = r.Modification is not null;
         string? center = plan ? CenterName(r) : null;
 
-        // The route's legs: "active" marks only the leg the top line uses, and only while the route is active and no
-        // modification is pending (the modification's own rows show the leg the top line then uses).
-        bool activeMarked = false;
-        foreach (var leg in r.Route)
+        // The route's legs: "active" marks only the leg the top line uses (the route's own leg 0, by its index: a flown
+        // copy of it is not active), and only while the route is active and no modification is pending (the
+        // modification's own rows show the leg the top line then uses).
+        for (int i = 0; i < r.Route.Count; i++)
         {
-            bool active = r.RouteActive && !pending && !activeMarked && r.Active is { } a && a == leg;
-            activeMarked |= active;
-            AddLeg(items, r, leg, r.RouteActive ? "Map: " : "Map, inactive route: ", active, center);
+            bool active = r.RouteActive && !pending && i == r.ActiveIndex;
+            AddLeg(items, r, r.Route[i], r.RouteActive ? "Map: " : "Map, inactive route: ", active, center);
         }
         foreach (var leg in r.Modification ?? Array.Empty<Bbs757EhsiLeg>())
             AddLeg(items, r, leg, "Map, modification: ", false, center);
@@ -217,10 +225,10 @@ public static class Bbs757EhsiText
         return leg.ConstraintKind switch
         {
             1 => first,
-            2 => first + "A",
-            3 => first + "B",
-            4 => second + "A" + first + "B",
-            5 => second + "A",
+            2 => first + AboveLetter,
+            3 => first + BelowLetter,
+            4 => second + AboveLetter + first + BelowLetter,
+            5 => second + AboveLetter,
             _ => null,
         };
     }
@@ -243,12 +251,12 @@ public static class Bbs757EhsiText
         var flags = new List<Item>(2);
         if (!r.Powered || r.Valid) return flags;
         flags.Add(new Item(HeadingFlag, HeadingWord(r)));
-        if (r.Mode == MapMode) flags.Add(new Item(MapFlag, MapFlagWord));
+        if (Is(r, EhsiMode.Map)) flags.Add(new Item(MapFlag, Word(r.Words.Map)));
         return flags;
     }
 
     private static List<Item> Messages(Bbs757EhsiReading r) =>
-        Excess(r) ? new List<Item> { new(ExcessMessage, ExcessWord) } : new List<Item>();
+        Excess(r) ? new List<Item> { new(ExcessMessage, Word(r.Words.Excess)) } : new List<Item>();
 
     /// <summary>
     /// What changed from <paramref name="heard"/> to <paramref name="now"/>, all on the one Ctrl+M row
@@ -268,11 +276,11 @@ public static class Bbs757EhsiText
     public static IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757EhsiReading heard, Bbs757EhsiReading now, bool withPrefix)
     {
         var lines = new List<Bbs757SpokenLine>();
-        bool sameMode = string.Equals(heard.Mode, now.Mode, StringComparison.Ordinal);
+        bool sameMode = heard.ModeValue == now.ModeValue;
         bool Comparable(Item item) => item.Key switch
         {
             MapFlag => sameMode,
-            ExcessMessage => sameMode || (MapOrPlan(heard.Mode) && MapOrPlan(now.Mode)),
+            ExcessMessage => sameMode || (MapOrPlan(heard) && MapOrPlan(now)),
             _ => true,
         };
         Diff(lines, Messages(heard), Messages(now), "EHSI message: ", "EHSI message gone: ", Comparable);
@@ -299,8 +307,8 @@ public static class Bbs757EhsiText
     {
         if (r.Active is not { } a) return "no active waypoint";
         string name = WaypointName(a);
-        if (!MapOrPlan(r.Mode) || Distance(r) is not { } nm) return name;
-        return name + ", " + Math.Truncate(nm).ToString("F0", Inv) + " " + NmWord;
+        if (!MapOrPlan(r) || Distance(r) is not { } nm) return name;
+        return name + ", " + Math.Truncate(nm).ToString("F0", Inv) + " " + Word(r.Words.Nm);
     }
 
     /// <summary>The active leg's name as the pilot hears it: its label, "discontinuity" for a discontinuity or an empty
@@ -323,10 +331,10 @@ public static class Bbs757EhsiText
         if (!r.Powered) return Unavailable + DisplayDark;
         if (r.Active is not { } a) return NoActiveWaypoint;
         string name = WaypointName(a);
-        if (r.Mode is VorMode or IlsMode) return name + ", EHSI in " + r.Mode + " mode";
+        if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils)) return name + ", EHSI in " + ModeWord(r) + " mode";
         if (Distance(r) is not { } nm) return name + ", no distance, no ETA";
-        return name + ", " + Bbs757EhsiGeometry.TopLineText(nm) + " " + NmWord + ", "
-            + (Eta(r, nm) is { } eta ? eta + EtaSuffix : "no ETA");
+        return name + ", " + Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(r.Words.Nm) + ", "
+            + (Eta(r, nm) is { } eta ? eta + Word(r.Words.EtaSuffix) : "no ETA");
     }
 
     /// <summary>The Ctrl+W line while the monitor may have no reading: <paramref name="unavailableReason"/> (the monitor's

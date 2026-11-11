@@ -33,23 +33,32 @@ public class Bbs757EhsiTextTests
 
     /// <summary>The measured scene in a full reading: MAP at 160, the IRS aligned, parked, the route KOLM, a
     /// discontinuity, BTG, KPDX active, T/C, T/D and both airports.</summary>
+    /// <summary>The sample layout's words (BlueBird's own, as the screen prints them).</summary>
+    internal static readonly Bbs757EhsiWords W = new("HDG", "TRK", "M", "TRU", "MAP", "NM", "z", "T/C", "T/D", "E/D", "EXCESS DATA");
+
     internal static Bbs757EhsiReading Ehsi() => new(
-        Powered: true, Mode: "MAP", Centered: false, Range: 160, RangeChanging: false, Valid: true, Aligning: false,
-        Number: 119.39, TrackUp: false, TrueReference: false, HeadingBug: 147, Latitude: 47.442946, Longitude: -122.303648,
-        GroundSpeed: 0, Clock: 1512.38, Map: MapFrame, Constants: K, Active: Kolm, RouteActive: true, DataSwitch: false,
-        ExcessCount: 0, Route: new[] { Kolm, Disc, Btg, Kpdx }, Modification: null,
-        Points: new[] { TopOfClimb, TopOfDescent, Ksea, KpdxAirport }, Corrupt: false);
+        Powered: true, Mode: "MAP", ModeValue: 2, Centered: false, Range: 160, RangeChanging: false, Valid: true,
+        Aligning: false, Number: 119.39, TrackUp: false, TrueReference: false, HeadingBug: 147, Latitude: 47.442946,
+        Longitude: -122.303648, GroundSpeed: 0, Clock: 1512.38, Map: MapFrame, Constants: K, Words: W, Active: Kolm,
+        ActiveIndex: 0, RouteActive: true, DataSwitch: false, ExcessCount: 0, Route: new[] { Kolm, Disc, Btg, Kpdx },
+        Modification: null, Points: new[] { TopOfClimb, TopOfDescent, Ksea, KpdxAirport }, Corrupt: false);
 
     /// <summary>The same scene in a light reading (no route, modification or points).</summary>
-    internal static Bbs757EhsiReading Light() => Ehsi() with { Route = null, Points = null };
+    internal static Bbs757EhsiReading Light() => Ehsi() with { Route = null, Points = null, ActiveIndex = -1 };
 
-    internal static Bbs757EhsiReading Dark() => new(false, null, false, 0, false, false, false, 0, false, false, 0, 0, 0, 0, 0,
-        default, K, null, false, false, 0, null, null, null, Corrupt: false);
+    internal static Bbs757EhsiReading Dark() => new(false, null, -1, false, 0, false, false, false, 0, false, false, 0, 0, 0, 0,
+        0, default, K, W, null, -1, false, false, 0, null, null, null, Corrupt: false);
 
-    internal static Bbs757EhsiReading Corrupt() => new(true, null, false, 0, false, false, false, 0, false, false, 0, 0, 0, 0, 0,
-        default, K, null, false, false, 0, Array.Empty<Bbs757EhsiLeg>(), null, Array.Empty<Bbs757EhsiPoint>(), Corrupt: true);
+    internal static Bbs757EhsiReading Corrupt() => new(true, null, -1, false, 0, false, false, false, 0, false, false, 0, 0, 0, 0,
+        0, default, K, W, null, -1, false, false, 0, Array.Empty<Bbs757EhsiLeg>(), null, Array.Empty<Bbs757EhsiPoint>(),
+        Corrupt: true);
 
-    private static Bbs757EhsiReading Plan() => Ehsi() with { Mode = "PLAN", Range = 80, Map = PlanFrame };
+    /// <summary><paramref name="r"/> in the mode the layout's word table names <paramref name="word"/>, with BlueBird's
+    /// value for it (0 VOR, 1 ILS, 2 MAP, 3 PLAN).</summary>
+    internal static Bbs757EhsiReading InMode(Bbs757EhsiReading r, string word) =>
+        r with { Mode = word, ModeValue = Array.IndexOf(new[] { "VOR", "ILS", "MAP", "PLAN" }, word) };
+
+    private static Bbs757EhsiReading Plan() => InMode(Ehsi(), "PLAN") with { Range = 80, Map = PlanFrame };
 
     private static string[] MapRows(Bbs757EhsiReading r) => Bbs757EhsiText.Rows(r).Where(row => row.StartsWith("Map", StringComparison.Ordinal)).ToArray();
 
@@ -111,9 +120,63 @@ public class Bbs757EhsiTextTests
     {
         // Plan 28's: the header and the heading line, then the one row, and nothing more.
         Assert.Equal(new[] { $"EHSI: {mode}, range 160", "Top: HDG 119 M", $"{mode} mode: not read yet" },
-            Bbs757EhsiText.Rows(Ehsi() with { Mode = mode }));
+            Bbs757EhsiText.Rows(InMode(Ehsi(), mode)));
         Assert.Equal(new[] { $"EHSI: {mode}, range 160, centered", "Flag: HDG", $"{mode} mode: not read yet" },
-            Bbs757EhsiText.Rows(Ehsi() with { Mode = mode, Centered = true, Valid = false }));
+            Bbs757EhsiText.Rows(InMode(Ehsi(), mode) with { Centered = true, Valid = false }));
+    }
+
+    [Fact]
+    public void The_mode_is_branched_on_by_its_value_and_shown_by_its_word()
+    {
+        // The word is the layout's; what the screen does follows BlueBird's value: a renamed word still reads its mode.
+        Assert.Equal(new[] { "EHSI: V0R, range 160", "Top: HDG 119 M", "V0R mode: not read yet" },
+            Bbs757EhsiText.Rows(Ehsi() with { Mode = "V0R", ModeValue = 0 }));
+        Assert.Contains("Map: T/C, 13.4 NM north-east of KOLM", MapRows(Plan() with { Mode = "PLN" }));
+        Assert.Equal("KOLM, EHSI in L0C mode", Bbs757EhsiText.WaypointLine(Light() with { Mode = "L0C", ModeValue = 1 }));
+        // A value outside the four: no map, no VOR row, no MAP flag.
+        var other = Ehsi() with { ModeValue = 7, Valid = false };
+        Assert.DoesNotContain(Bbs757EhsiText.Rows(other), r => r.StartsWith("Map", StringComparison.Ordinal) || r.Contains("not read yet", StringComparison.Ordinal));
+        Assert.DoesNotContain("Flag: MAP", Bbs757EhsiText.Rows(other));
+    }
+
+    [Fact]
+    public void Every_word_the_screen_prints_is_the_layouts()
+    {
+        // A BlueBird update that renames its words: the rows, the spoken lines and Ctrl+W follow the layout.
+        var words = new Bbs757EhsiWords("HDG2", "TRK2", "MAG", "TRUE", "MAP2", "nm", "Z9", "TC", "TD", "ED", "EXCESS  DATA2");
+        var r = Ehsi() with { Words = words, GroundSpeed = 250, ExcessCount = 100 };
+        var rows = Bbs757EhsiText.Rows(r);
+        Assert.Contains("Top: HDG2 119 MAG", rows);
+        Assert.Contains("Top left: 37.5 nm", rows);
+        Assert.Contains("Top right: 1521.4Z9", rows);
+        Assert.Contains("Message: EXCESS  DATA2", rows);
+        Assert.Contains("Top: TRK2 119 TRUE", Bbs757EhsiText.Rows(r with { TrackUp = true, TrueReference = true }));
+        Assert.Equal(new[] { "EHSI: MAP, range 160", "Flag: TRK2", "Flag: MAP2" },
+            Bbs757EhsiText.Rows(r with { Valid = false, TrackUp = true }).Take(3));
+        Assert.Equal("KOLM, 37.5 nm, 1521.4Z9", Bbs757EhsiText.WaypointLine(r));
+        Assert.Equal(new[] { "EHSI message: EXCESS  DATA2", "EHSI flag: HDG2, MAP2", "EHSI: KOLM, 37 nm" },
+            Texts(Bbs757EhsiText.Changes(r with { ExcessCount = 0, Active = Btg }, r with { Valid = false }, true)));
+
+        // A default reading's words are null: printed empty, never a throw.
+        var none = Ehsi() with { Words = default, ExcessCount = 100, GroundSpeed = 250 };
+        Assert.Contains("Top:  119 ", Bbs757EhsiText.Rows(none));
+        Assert.Contains("Top left: 37.5 ", Bbs757EhsiText.Rows(none));
+        Assert.Contains("Message: ", Bbs757EhsiText.Rows(none));
+        Assert.Equal("KOLM, 37.5 , 1521.4", Bbs757EhsiText.WaypointLine(none));
+        Assert.NotEmpty(Bbs757EhsiText.Changes(none with { ExcessCount = 0 }, none with { Valid = false }, true));
+    }
+
+    [Fact]
+    public void The_top_line_is_from_the_readings_position_not_the_maps_center()
+    {
+        // The reading's Latitude and Longitude are the simulator's (the sampler's inputs); the map's center is the nd's
+        // IRS copy. The top line and Ctrl+W take the first, the map rows the second.
+        var moved = Ehsi() with { Latitude = 47.2, Longitude = -122.6 };
+        string expected = Bbs757EhsiGeometry.TopLineText(Bbs757EhsiGeometry.TopLineDistance(47.2, -122.6, Kolm.Latitude, Kolm.Longitude));
+        Assert.NotEqual("37.5", expected);
+        Assert.Contains("Top left: " + expected + " NM", Bbs757EhsiText.Rows(moved));
+        Assert.Equal("KOLM, " + expected + " NM, no ETA", Bbs757EhsiText.WaypointLine(moved));
+        Assert.Contains("Map: KOLM, active, 37.5 NM, 86° right", MapRows(moved));
     }
 
     [Theory]
@@ -225,6 +288,14 @@ public class Bbs757EhsiTextTests
         var hold = MapRows(Ehsi() with { Active = Btg, Route = new[] { Btg, Kpdx, Btg } });
         Assert.Equal(1, hold.Count(r => r.Contains("BTG, active,", StringComparison.Ordinal)));
         Assert.Equal(2, hold.Count(r => r.Contains("BTG", StringComparison.Ordinal)));
+
+        // A flown copy of the active leg in front: "active" goes by the reading's index (the route's own leg 0), never
+        // by value.
+        var flown = MapRows(Ehsi() with { Route = new[] { Kolm, Kolm, Kpdx }, ActiveIndex = 1, Points = Array.Empty<Bbs757EhsiPoint>() });
+        Assert.Equal(new[] { "Map: KPDX, 112.0 NM, 52° right", "Map: KOLM, 37.5 NM, 86° right", "Map: KOLM, active, 37.5 NM, 86° right" }, flown);
+        // No active index (-1) or one past the list: nothing active.
+        Assert.DoesNotContain(MapRows(Ehsi() with { ActiveIndex = -1 }), r => r.Contains(", active,", StringComparison.Ordinal));
+        Assert.DoesNotContain(MapRows(Ehsi() with { ActiveIndex = 9 }), r => r.Contains(", active,", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -335,8 +406,8 @@ public class Bbs757EhsiTextTests
         Assert.Equal(new[] { "EHSI message gone: EXCESS DATA" }, Texts(Bbs757EhsiText.Changes(lit with { ExcessCount = 120 }, lit, true)));
         Assert.Equal(new[] { "EHSI flag: HDG, MAP" }, Texts(Bbs757EhsiText.Changes(lit, lit with { Valid = false }, true)));
         Assert.Equal(new[] { "EHSI flag gone: HDG, MAP" }, Texts(Bbs757EhsiText.Changes(lit with { Valid = false }, lit, true)));
-        Assert.Equal(new[] { "EHSI flag: TRK" }, Texts(Bbs757EhsiText.Changes(lit with { Mode = "PLAN", TrackUp = true },
-            lit with { Mode = "PLAN", TrackUp = true, Valid = false }, true)));
+        Assert.Equal(new[] { "EHSI flag: TRK" }, Texts(Bbs757EhsiText.Changes(InMode(lit, "PLAN") with { TrackUp = true },
+            InMode(lit, "PLAN") with { TrackUp = true, Valid = false }, true)));
         // Both at once, messages first; the words are the same after "resumed".
         var both = Texts(Bbs757EhsiText.Changes(lit, lit with { Valid = false, ExcessCount = 100 }, false));
         Assert.Equal(new[] { "EHSI message: EXCESS DATA", "EHSI flag: HDG, MAP" }, both);
@@ -349,11 +420,11 @@ public class Bbs757EhsiTextTests
     {
         // MAP to PLAN with the IRS off: the MAP flag goes with the mode, not with the IRS; MAP to VOR: EXCESS DATA too.
         var off = Light() with { Valid = false, ExcessCount = 100 };
-        Assert.Empty(Bbs757EhsiText.Changes(off, off with { Mode = "PLAN" }, true));
-        Assert.Empty(Bbs757EhsiText.Changes(off, off with { Mode = "VOR" }, true));
-        Assert.Empty(Bbs757EhsiText.Changes(off with { Mode = "VOR" }, off, true));
+        Assert.Empty(Bbs757EhsiText.Changes(off, InMode(off, "PLAN"), true));
+        Assert.Empty(Bbs757EhsiText.Changes(off, InMode(off, "VOR"), true));
+        Assert.Empty(Bbs757EhsiText.Changes(InMode(off, "VOR"), off, true));
         // The heading flag is every mode's: still spoken across a mode change.
-        Assert.Equal(new[] { "EHSI flag gone: HDG" }, Texts(Bbs757EhsiText.Changes(off, Light() with { Mode = "PLAN", ExcessCount = 100 }, true)));
+        Assert.Equal(new[] { "EHSI flag gone: HDG" }, Texts(Bbs757EhsiText.Changes(off, InMode(Light(), "PLAN") with { ExcessCount = 100 }, true)));
     }
 
     [Fact]
@@ -371,7 +442,7 @@ public class Bbs757EhsiTextTests
         Assert.Single(disc);
         Assert.StartsWith("EHSI: discontinuity, ", disc[0]);
         // In VOR and ILS the top line shows DME: the waypoint without a distance.
-        Assert.Equal(new[] { "EHSI: KOLM" }, Texts(Bbs757EhsiText.Changes(lit with { Mode = "VOR", Active = Btg }, lit with { Mode = "VOR" }, true)));
+        Assert.Equal(new[] { "EHSI: KOLM" }, Texts(Bbs757EhsiText.Changes(InMode(lit, "VOR") with { Active = Btg }, InMode(lit, "VOR"), true)));
         // The same label at a new position (the aircraft moving, the leg re-read) is no change.
         Assert.Empty(Bbs757EhsiText.Changes(lit, lit with { Active = Kolm with { Latitude = 46.97 }, Latitude = 47.3 }, true));
     }
@@ -382,7 +453,7 @@ public class Bbs757EhsiTextTests
         var lit = Ehsi();
         foreach (var now in new[]
         {
-            lit with { Mode = "PLAN", Map = PlanFrame }, lit with { Range = 40 }, lit with { Centered = true },
+            InMode(lit, "PLAN") with { Map = PlanFrame }, lit with { Range = 40 }, lit with { Centered = true },
             lit with { DataSwitch = true }, lit with { Number = 200 }, lit with { HeadingBug = 10 }, lit with { TrackUp = true },
             lit with { TrueReference = true }, lit with { RouteActive = false }, lit with { RangeChanging = true },
             lit with { Route = new[] { Kolm, Kpdx } }, lit with { Modification = new[] { Kolm, Btg } },
@@ -403,12 +474,12 @@ public class Bbs757EhsiTextTests
         Assert.Equal("No active waypoint", Bbs757EhsiText.WaypointLine(Light() with { Active = null }));
         Assert.StartsWith("discontinuity, ", Bbs757EhsiText.WaypointLine(Light() with { Active = Disc }));
         Assert.StartsWith("discontinuity, ", Bbs757EhsiText.WaypointLine(Light() with { Active = Kolm with { Label = "" } }));
-        Assert.Equal("KOLM, EHSI in VOR mode", Bbs757EhsiText.WaypointLine(Light() with { Mode = "VOR" }));
-        Assert.Equal("KOLM, EHSI in ILS mode", Bbs757EhsiText.WaypointLine(Light() with { Mode = "ILS" }));
-        Assert.Equal("No active waypoint", Bbs757EhsiText.WaypointLine(Light() with { Mode = "ILS", Active = null }));
+        Assert.Equal("KOLM, EHSI in VOR mode", Bbs757EhsiText.WaypointLine(InMode(Light(), "VOR")));
+        Assert.Equal("KOLM, EHSI in ILS mode", Bbs757EhsiText.WaypointLine(InMode(Light(), "ILS")));
+        Assert.Equal("No active waypoint", Bbs757EhsiText.WaypointLine(InMode(Light(), "ILS") with { Active = null }));
         Assert.Equal("EHSI waypoint unavailable: display dark", Bbs757EhsiText.WaypointLine(Dark()));
         // PLAN draws the same top line.
-        Assert.Equal("KOLM, 37.5 NM, no ETA", Bbs757EhsiText.WaypointLine(Light() with { Mode = "PLAN" }));
+        Assert.Equal("KOLM, 37.5 NM, no ETA", Bbs757EhsiText.WaypointLine(InMode(Light(), "PLAN")));
     }
 
     [Fact]
@@ -422,7 +493,8 @@ public class Bbs757EhsiTextTests
         Assert.NotNull(Bbs757EhsiText.Changes(corrupt, Ehsi(), false));
         // Wild values a torn read could still give never throw either.
         var wild = Ehsi() with { Range = 0, Number = double.NaN, HeadingBug = double.PositiveInfinity, Map = default,
-            Constants = default, Clock = double.NaN, GroundSpeed = 500, Mode = "XYZ" };
+            Constants = default, Words = default, Clock = double.NaN, GroundSpeed = 500, Mode = "XYZ", ModeValue = 99,
+            ActiveIndex = 99 };
         Assert.NotEmpty(Bbs757EhsiText.Rows(wild));
         Assert.NotNull(Bbs757EhsiText.WaypointLine(wild));
         Assert.NotNull(Bbs757EhsiText.Changes(wild, Ehsi(), true));
