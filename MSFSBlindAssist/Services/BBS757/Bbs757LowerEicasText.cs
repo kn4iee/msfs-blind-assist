@@ -87,12 +87,6 @@ public static class Bbs757LowerEicasText
         return rows;
     }
 
-    /// <summary>The whole display in one line: the page phrase, then every row but "Page:" (the phrase says it), joined
-    /// with ", ".</summary>
-    public static string DescribeAll(Bbs757LowerEicasReading reading) =>
-        string.Join(", ", new[] { PagePhrase(reading.Page) }
-            .Concat(Rows(reading).Where(r => KindOf(reading) != Blank && !r.StartsWith("Page: ", StringComparison.Ordinal))));
-
     // ---- engine page -----------------------------------------------------------------------------------------
 
     private static List<string> EnginePageRows(Bbs757LowerEicasRaw raw)

@@ -38,7 +38,8 @@ public interface IBbs757DisplayMonitor : IDisposable
 /// sampler finding its objects by vptr with every read inside the module, and the reading not
 /// <see cref="IBbs757Reading.Corrupt"/>. No simulator value ever judges it; a reader's
 /// <see cref="IBbs757DisplayReader{TLayout, TReading}.SimInputs"/> only feed its sampler (S10). Each change is spoken once
-/// it has settled for 300 ms. Nothing is spoken while the display is dark or for 10 s after it powers up, and the first
+/// it has settled for 300 ms. No change is spoken while the display is dark or for 10 s after it powers up (status lines
+/// are: "resumed" as soon as a dark candidate runs after a heard stop, "stopped" when memory is lost), and the first
 /// good reading after Start or Restart, after any wait for the simulator, and after the display was dark or powering up,
 /// is a silent baseline (S4). Silence must never pass for "no change": every way the reader stops is spoken once (the
 /// memory lost for 10 s, ten corrupt readings, the search window running out, a final reason), "resumed" carries whatever
@@ -57,7 +58,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     internal const long SlowRetryMs = 30_000;
     internal const long LostStopMs = 10_000;
 
-    /// <summary>How long a candidate has, from its first read, to give a reading that is not corrupt before it is dropped.</summary>
+    /// <summary>How long a candidate has, from the moment it is tried (a tick before its first read), to give a reading
+    /// that is not corrupt before it is dropped.</summary>
     internal const long VerifyMs = 2_000;
 
     internal const int CorruptTickLimit = 10;
@@ -87,10 +89,9 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private long? _lostAtMs; // when the memory was lost while running, until it runs again (the 10 s stop)
     private long? _downSinceMs; // the memory lost while running since then, until it runs again
 
-    // The candidate being read and those waiting, each waiting one with what it knew of the display's power. The monitor
-    // owns them all and disposes each once.
+    // The candidate being read and those waiting. The monitor owns them all and disposes each once.
     private IBbs757DisplaySampler<TReading>? _sampler;
-    private readonly Queue<(IBbs757DisplaySampler<TReading> Sampler, bool? LastLit, long? LitSinceMs)> _candidates = new();
+    private readonly Queue<IBbs757DisplaySampler<TReading>> _candidates = new();
     private long _candidateStartMs;
 
     // The display's power (S4) as the sampler being read sees it, from its readings that are not corrupt.
@@ -363,8 +364,9 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         var found = SamplersIn(location);
         if (found.Count > 0)
         {
-            // Each starts from what is known of the display's power now; they are tried in this order.
-            foreach (var sampler in found) _candidates.Enqueue((sampler, _lastLit, _litSinceMs));
+            // Tried in this order; each starts from what is known of the display's power now (nothing changes it while a
+            // candidate only reads corrupt, and a failed read or a reading that is not corrupt ends the trying).
+            foreach (var sampler in found) _candidates.Enqueue(sampler);
             StartNextCandidate(Invariant($"{found.Count} candidate(s) found"));
             return;
         }
@@ -412,7 +414,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     private void StartNextCandidate(string reason)
     {
-        (_sampler, _lastLit, _litSinceMs) = _candidates.Dequeue();
+        _sampler = _candidates.Dequeue();
         _candidateStartMs = _env!.NowMs;
         Go(State.Verifying, reason);
     }
@@ -434,7 +436,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         var verdict = Judge(now, reading);
         if (verdict != Verdict.Corrupt)
         {
-            while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue().Sampler);
+            while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue());
             EnterRunning(reading, quiet: verdict == Verdict.Quiet, "a reading that is not corrupt");
             return;
         }
@@ -728,7 +730,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     {
         DisposeQuietly(_sampler);
         _sampler = null;
-        while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue().Sampler);
+        while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue());
         _changeAtMs = null;
 
         var locate = _locate;

@@ -78,6 +78,4 @@ public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEi
         Bbs757UpperEicasSpeech.Changes(heard, now);
 
     public IReadOnlyList<string> Rows(Bbs757UpperEicasReading reading) => Bbs757UpperEicasSpeech.Rows(reading);
-
-    public string DescribeAll(Bbs757UpperEicasReading reading) => Bbs757UpperEicasSpeech.DescribeAll(reading);
 }

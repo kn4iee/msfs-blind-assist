@@ -54,6 +54,4 @@ public sealed class Bbs757LowerEicasDisplay : IBbs757DisplayReader<Bbs757LowerEi
         Bbs757LowerEicasText.Changes(heard, now, withPrefix).Select(text => new Bbs757SpokenLine(MuteKey, text)).ToArray();
 
     public IReadOnlyList<string> Rows(Bbs757LowerEicasReading reading) => Bbs757LowerEicasText.Rows(reading);
-
-    public string DescribeAll(Bbs757LowerEicasReading reading) => Bbs757LowerEicasText.DescribeAll(reading);
 }

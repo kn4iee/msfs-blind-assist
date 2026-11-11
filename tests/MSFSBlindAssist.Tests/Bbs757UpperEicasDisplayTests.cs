@@ -141,12 +141,10 @@ public class Bbs757UpperEicasDisplayTests
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
     [InlineData("en-US")]
-    public void Rows_and_describe_all_are_the_upper_eicas_speech(string culture)
+    public void Rows_are_the_upper_eicas_speech(string culture)
     {
         var reading = Eicas(new[] { ShutdownL, ParkingBrake });
         Assert.Equal(TestCulture.Run(culture, () => Bbs757UpperEicasSpeech.Rows(reading)), TestCulture.Run(culture, () => Reader().Rows(reading)));
-        Assert.Equal("EPR: 1.03, 1.03. N1: 19.9, 19.9. EGT: 358, 360. Thrust reference: TO. EPR reference: 1.71, 1.71. " +
-            "TAT: +11c. Caution: L ENG SHUTDOWN. Advisory: PARKING BRAKE.", TestCulture.Run(culture, () => Reader().DescribeAll(reading)));
     }
 
     // ---- through the monitor ----
@@ -198,8 +196,6 @@ public class Bbs757UpperEicasDisplayTests
             _real.Changes(heard, now, withPrefix);
 
         public IReadOnlyList<string> Rows(Bbs757UpperEicasReading reading) => _real.Rows(reading);
-
-        public string DescribeAll(Bbs757UpperEicasReading reading) => _real.DescribeAll(reading);
     }
 
     /// <summary>One flight: the monitor on the real reader, the session's build with the upper EICAS layout, the manual

@@ -146,8 +146,6 @@ public class Bbs757LowerEicasDisplayTests
         Assert.Contains("HYD QTY: L 0.98, C 0.97, R 1.00", rows);
         Assert.Contains("FF: 1.6, 1.6", rows); // kilograms, one decimal, a point
         Assert.Contains("RUD: 12 % right", rows);
-        string all = TestCulture.Run(culture, () => display.DescribeAll(reading));
-        Assert.StartsWith("STATUS page, HYD QTY: L 0.98, C 0.97, R 1.00", all);
     }
 
     [Fact]
@@ -155,9 +153,7 @@ public class Bbs757LowerEicasDisplayTests
     {
         var display = new Bbs757LowerEicasDisplay();
         Assert.Equal(new[] { "Lower EICAS: blank" }, display.Rows(R(0)));
-        Assert.Equal("blank", display.DescribeAll(R(0)));
         Assert.Equal(new[] { "Page: engine" }, display.Rows(R(1)));
-        Assert.Equal("engine page", display.DescribeAll(R(1))); // the page is said once: Rows keeps its "Page:" row
     }
 
     // ---- through the monitor ------------------------------------------------------------------------------------
@@ -178,7 +174,6 @@ public class Bbs757LowerEicasDisplayTests
         public bool? Lit(Bbs757LowerEicasReading r) => _inner.Lit(r);
         public IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757LowerEicasReading a, Bbs757LowerEicasReading b, bool p) => _inner.Changes(a, b, p);
         public IReadOnlyList<string> Rows(Bbs757LowerEicasReading r) => _inner.Rows(r);
-        public string DescribeAll(Bbs757LowerEicasReading r) => _inner.DescribeAll(r);
 
         private sealed class Sampler(Scripted owner) : IBbs757DisplaySampler<Bbs757LowerEicasReading>
         {

@@ -103,9 +103,6 @@ public interface IBbs757DisplayReader<TLayout, TReading>
 
     /// <summary>The display window's rows for a reading.</summary>
     IReadOnlyList<string> Rows(TReading reading);
-
-    /// <summary>The whole display in one line.</summary>
-    string DescribeAll(TReading reading);
 }
 
 /// <summary>

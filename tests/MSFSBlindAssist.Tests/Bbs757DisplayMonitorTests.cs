@@ -256,8 +256,9 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     [Fact]
     public void A_running_reader_never_stops_for_a_simulator_value()
     {
-        // A reader's input (S10, as the upper EICAS's manual thrust flag) is taken, never judged: whatever it reads, or
-        // missing, the reader runs, shows and speaks as before. Only ten corrupt readings, or a failed read, stop it.
+        // A reader's input (S10, as the upper EICAS's manual thrust flag) is taken, never judged: whatever it reads, the
+        // reader runs, shows and speaks as before. Only ten corrupt readings, or a failed read, stop it. (An input with no
+        // cached value is the environment's silent wait for the simulator, ReadSimulator null: not this test's.)
         var input = Bbs757SimInput.LVar("X_INPUT");
         var h = New(input).Start();
         var s = h.RunUntilRunning();
@@ -271,9 +272,6 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
             Assert.Equal(new[] { i < 300 ? "X: A" : "X: B" }, h.Monitor.View());
             Assert.False(h.Monitor.KeyFallsBackToAi());
         }
-        h.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double>());
-        h.Tick(50);
-        Assert.Equal("Running", h.State);
         Assert.Equal(new[] { "X: B" }, h.Env.Spoken); // the change, and nothing else
 
         // Ten corrupt readings stop it...
@@ -1306,8 +1304,6 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
                 : new[] { new Bbs757SpokenLine("MUTE_X", withPrefix ? "X: " + now : now.ToString()) };
 
         public IReadOnlyList<string> Rows(FakeReading reading) => new[] { "X: " + reading };
-
-        public string DescribeAll(FakeReading reading) => "X: " + reading;
     }
 
     internal sealed class FakeEnvironment : IBbs757DisplayEnvironment

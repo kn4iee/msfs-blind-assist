@@ -53,9 +53,6 @@ public static class Bbs757FmaSpeech
         $"AFDS: {r.Status ?? None}",
     };
 
-    /// <summary>The whole FMA, one sentence per row.</summary>
-    public static string DescribeAll(Bbs757FmaReading r) => string.Join(". ", Rows(r)) + ".";
-
     /// <summary>Each column showing a value with no word, with its raw value, for the log.</summary>
     public static IEnumerable<(string Column, int Value)> Unrecognised(Bbs757FmaReading r)
     {

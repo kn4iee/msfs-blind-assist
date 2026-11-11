@@ -189,8 +189,6 @@ public class Bbs757FmaSpeechTests
         // The Captain's F/D off with no CMD: only the A/T column is drawn (R5).
         Assert.Equal(new[] { "A/T: SPD", "Roll: none", "Pitch: none", "AFDS: none" },
             TestCulture.Run(culture, () => Bbs757FmaSpeech.Rows(R(Cruise with { Status = 2, FdCaptain = false }))));
-        Assert.Equal("A/T: SPD. Roll: LNAV, armed LOC. Pitch: VNAV PTH, armed G/S. AFDS: CMD.",
-            TestCulture.Run(culture, () => Bbs757FmaSpeech.DescribeAll(R(Cruise))));
     }
 
     [Theory]

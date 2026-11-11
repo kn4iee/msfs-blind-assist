@@ -154,9 +154,6 @@ public static class Bbs757UpperEicasSpeech
         return rows;
     }
 
-    /// <summary>The whole display, one sentence per row.</summary>
-    public static string DescribeAll(Bbs757UpperEicasReading r) => string.Join(". ", Rows(r)) + ".";
-
     private static Bbs757SpokenLine OnMessages(string text) => new(Bbs757UpperEicasDisplay.MessagesKey, text);
 
     /// <summary>Each message id in <paramref name="r"/>, true when any of its entries is uncancelled.</summary>

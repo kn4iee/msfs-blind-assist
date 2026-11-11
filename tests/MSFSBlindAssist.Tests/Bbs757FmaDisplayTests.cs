@@ -121,13 +121,11 @@ public class Bbs757FmaDisplayTests
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
     [InlineData("en-US")]
-    public void Rows_and_describe_all_are_the_fma_speech(string culture)
+    public void Rows_are_the_fma_speech(string culture)
     {
         var reading = Bbs757FmaReader.Decode(Bbs757FmaSpeechTests.Layout, Bbs757FmaSpeechTests.Cruise);
         Assert.Equal(new[] { "A/T: SPD", "Roll: LNAV, armed LOC", "Pitch: VNAV PTH, armed G/S", "AFDS: CMD" },
             TestCulture.Run(culture, () => Reader().Rows(reading)));
-        Assert.Equal("A/T: SPD. Roll: LNAV, armed LOC. Pitch: VNAV PTH, armed G/S. AFDS: CMD.",
-            TestCulture.Run(culture, () => Reader().DescribeAll(reading)));
     }
 
     [Fact]

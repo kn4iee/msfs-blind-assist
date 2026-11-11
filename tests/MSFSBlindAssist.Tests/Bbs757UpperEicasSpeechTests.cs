@@ -387,7 +387,6 @@ public class Bbs757UpperEicasSpeechTests
             "Communication: CABIN ALERT",
         };
         Assert.Equal(rows, Rows(culture, r));
-        Assert.Equal(string.Join(". ", rows) + ".", TestCulture.Run(culture, () => Bbs757UpperEicasSpeech.DescribeAll(r)));
         Assert.Equal("Warning: L ENGINE FIRE", Assert.Single(Rows(culture, Eicas(new[] { FireL })), row => row.StartsWith("Warning", StringComparison.Ordinal)));
         // No message: one row says so.
         Assert.Equal("Messages: none", Rows(culture, Eicas())[^1]);

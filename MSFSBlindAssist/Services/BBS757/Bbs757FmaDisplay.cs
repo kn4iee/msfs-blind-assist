@@ -76,8 +76,6 @@ public sealed class Bbs757FmaDisplay : IBbs757DisplayReader<Bbs757FmaLayout, Bbs
 
     public IReadOnlyList<string> Rows(Bbs757FmaReading reading) => Bbs757FmaSpeech.Rows(reading);
 
-    public string DescribeAll(Bbs757FmaReading reading) => Bbs757FmaSpeech.DescribeAll(reading);
-
     /// <summary>Each value with no word, once per column and value (a word BlueBird added in an update).</summary>
     private void LogNoWord(Bbs757FmaReading reading)
     {
