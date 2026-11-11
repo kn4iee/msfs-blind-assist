@@ -18,6 +18,7 @@
 - **Not read yet (S12):** in VOR or ILS mode the header rows read and one row "VOR mode: not read yet" (or "ILS mode: not read yet") stands for the rest until plan 28; TCAS traffic, the map options' items and the VOR/ILS rows are plan 28's.
 - **Ctrl+W (S13):** `HotkeyAction.ReadNDWaypoint` says the top line as drawn ("KPDX, 1533.3z, 23.0 NM"), interrupting, whether or not the window is open; "No active waypoint"; "EHSI waypoint unavailable: <reason>" while the reader cannot run. It is the only key this plan adds; the hotkey guide's line is plan 16's.
 - **Shared lines (S16):** `ehsi` at the end of the module's readers and its recipe at the end of `Bbs757Recipes.All`; the next `GeneratorVersion.Current` at landing.
+- **No gate (the owner, 2026-11-11, [B757-30]):** S3's comparison with the simulator is gone from every 757 reader; this reader never compares memory with a simulator value. Trust is structural only: the layout for this build, the objects found by vptr, every read inside the module, and `Corrupt`. A simulator variable is only an input where BlueBird's draw takes one (S10, the reader's `SimInputs`). Comparing with the simulator while measuring (Task 1) is still a good way to identify a field.
 - **Owned files:** new `MSFSBlindAssist/Services/BBS757/Bbs757Ehsi*.cs`, `MSFSBlindAssist.DisplayLayouts/Bbs757/Bbs757EhsiLayout.cs`, its dump in `Bbs757LayoutDescriptions.cs`, its reader line in `Bbs757Module.cs`, `MSFSBlindAssist/Aircraft/BBS757Definition.Ehsi.cs`, `tests/MSFSBlindAssist.Tests/Bbs757Ehsi*Tests.cs`, `docs/b757/evidence/displays-ehsi.md`, its rule lines; private `Bbs757EhsiRecipe.cs`, its fixture and tests, its line in `Bbs757Recipes.cs`. Plan 28 takes them over once this plan has landed.
 
 ## Review Focus
@@ -41,7 +42,7 @@
 - [ ] **Step 1: The objects.** In the current build: the Captain's `nd` object (static slot 0xf1364 in the probed build) and how a recipe reaches it without names (the gauge manager, as the FMA's pfd, by the nd class vptr), `nd`'s pointers to `fms`, the route, the EFIS control panel and the instrument source selector.
 - [ ] **Step 2: Mode, range, heading and track.** Their fields and words (the mode draw's HDG, TRK, MAP, PLAN, VOR, ILS, EXP and the like; the range values), against the EFIS panel's L:vars (the control map's EFIS mode and range selectors' `state_var`), each set once (owner's go-ahead; put back).
 - [ ] **Step 3: The top line and the map items.** With a route entered (KSEA-KPDX and a direct-to, owner's go-ahead): the top line's draw (function 23425 in the probed build): which fields or computations give the waypoint, ETA and distance, and the formula (great circle or rhumb, the ETA from ground speed); the legs' fields (ident, position, the discontinuity marker, a leg's kind); T/C, T/D, S/C, E/D (function 23448: their positions or distances along the route); the heading bug; the map's clip at each range in MAP and PLAN; the messages (function 23406 and the others: every word drawn); a capture of the EHSI view (`PrintWindow`) beside each reading.
-- [ ] **Step 4: The gate.** The mode and range against the EFIS L:vars; the FMS position (where the draw takes the aircraft's position) against `PLANE LATITUDE` and `PLANE LONGITUDE`, the largest difference seen on the ground and in a turn (a recorded flight if the owner flies one), and the tolerance.
+- [ ] **Step 4: The position.** Where the draw takes the aircraft's position (the FMS position in memory, or a simulator variable, which then is an S10 input), identified against `PLANE LATITUDE` and `PLANE LONGITUDE` on the ground and in a turn; nothing is compared at run time ([B757-30]).
 - [ ] **Step 5:** Write the evidence (no snapshot); commit `docs(b757): plan 26's EHSI measurements`.
 
 ### Task 2: The layout record
@@ -49,7 +50,7 @@
 **Files:** create `MSFSBlindAssist.DisplayLayouts/Bbs757/Bbs757EhsiLayout.cs`; modify `Bbs757Module.cs` (`public const string Ehsi = "ehsi";`, its reader last), `Bbs757LayoutDescriptions.cs` (`DescribeEhsi`); test `Bbs757EhsiLayoutTests.cs`
 
 **Interfaces:**
-- Produces: `Bbs757EhsiLayout` with the anchor and manager, the nd vptr, the route's chain and leg fields (`LegStride`, `LegIdent`, `LegLatitude`, `LegLongitude`, the discontinuity test, `MaxLegs`), mode and range fields with `Bbs757WordTable Modes` and the range table, the heading, track and heading bug fields, the top line's sources, the VNAV markers' fields, the messages' fields and words, the position fields for the gate; content equality.
+- Produces: `Bbs757EhsiLayout` with the anchor and manager, the nd vptr, the route's chain and leg fields (`LegStride`, `LegIdent`, `LegLatitude`, `LegLongitude`, the discontinuity test, `MaxLegs`), mode and range fields with `Bbs757WordTable Modes` and the range table, the heading, track and heading bug fields, the top line's sources, the VNAV markers' fields, the messages' fields and words, the position fields the draw takes; content equality.
 
 - [ ] **Step 1: Write the failing tests:** `The_ehsi_layout_round_trips_byte_identical` (de-DE, sv-SE), `A_file_without_the_ehsi_reader_reads_as_missing`. **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS and the full suite. **Step 5:** Commit `feat(b757): the EHSI layout record`.
 
@@ -79,16 +80,16 @@
 - [ ] **Step 1: Write the failing tests:** `Distance_and_bearing_match_the_measured_route` (Task 1's KSEA-KPDX values), `Bearings_wrap_across_the_date_line` (Review Focus), `Off_top_is_signed_left_minus`, `The_clip_matches_each_measured_range`, `Places_format_invariantly_under_de_DE_and_sv_SE`.
 - [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. **Step 5:** Commit `feat(b757): the EHSI's geometry`.
 
-### Task 6: The gate, the rows and the reader
+### Task 6: The rows and the reader
 
-**Files:** `Bbs757EhsiGate.cs`, `Bbs757EhsiText.cs`, `Bbs757EhsiDisplay.cs`; tests `Bbs757EhsiGateTests.cs`, `Bbs757EhsiTextTests.cs`, `Bbs757EhsiDisplayTests.cs`
+**Files:** `Bbs757EhsiText.cs`, `Bbs757EhsiDisplay.cs`; tests `Bbs757EhsiTextTests.cs`, `Bbs757EhsiDisplayTests.cs`
 
 **Interfaces:**
 - Produces: `Bbs757EhsiDisplay` with `public Func<bool> FullWanted { get; set; }` (handed to every sampler it makes; false until Task 7 sets it), `Name = "EHSI"`, `LogChannel = "bbs757-ehsi"`, `TickMs = 500`, `MuteKey = "MSFSBA_BBS757_EHSI_MESSAGES"` (row "EHSI messages", which also carries the active waypoint line); `public string WaypointLine()` for Ctrl+W; `Bbs757EhsiText.Rows(reading)`: "EHSI: MAP, range 40", "Top: TRK 079", "Top right: KPDX, 1533.3z, 23.0 NM", "Map: <waypoint>, <place>" per drawn leg, "Map: T/D, <place>", "Map: heading bug, <n>° right", "Message: <word>" each or "Messages: none"; in VOR or ILS the header and "VOR mode: not read yet".
 - Changes: "EHSI message: <words>", "EHSI message gone: <words>" (items of one settle joined), "EHSI: <waypoint>, <whole NM> NM" when the active waypoint changes, "EHSI: no active waypoint".
 
-- [ ] **Step 1: Write the failing tests:** gate `Passes_when_mode_range_and_position_match_within_3_s`, `A_position_off_by_more_than_the_tolerance_fails`; text `Rows_follow_the_screen_top_to_bottom`, `Only_items_on_the_map_are_listed`, `Vor_mode_says_not_read_yet`, `Numbers_and_times_format_as_drawn_under_de_DE_and_sv_SE`; display `Quick_sequencing_says_only_the_waypoint_it_rests_on` (Review Focus), `A_mode_or_range_change_is_shown_not_spoken` (Review Focus), `No_route_reads_no_active_waypoint` (Review Focus), `A_new_message_is_spoken_once`, `The_waypoint_line_while_unavailable_names_the_reason`.
-- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. **Step 5:** Commit `feat(b757): the EHSI's gate, rows and words`.
+- [ ] **Step 1: Write the failing tests:** text `Rows_follow_the_screen_top_to_bottom`, `Only_items_on_the_map_are_listed`, `Vor_mode_says_not_read_yet`, `Numbers_and_times_format_as_drawn_under_de_DE_and_sv_SE`; display `Quick_sequencing_says_only_the_waypoint_it_rests_on` (Review Focus), `A_mode_or_range_change_is_shown_not_spoken` (Review Focus), `No_route_reads_no_active_waypoint` (Review Focus), `A_new_message_is_spoken_once`, `The_waypoint_line_while_unavailable_names_the_reason`.
+- [ ] **Step 2:** FAIL. **Step 3:** Implement. **Step 4:** PASS. **Step 5:** Commit `feat(b757): the EHSI's rows and words`.
 
 ### Task 7: The window, Alt+N, Ctrl+W and Ctrl+M
 
@@ -97,7 +98,7 @@
 **Interfaces:**
 - Produces: `partial void RegisterEhsi(Bbs757DisplayRegistry r)`: the monitor, the Ctrl+M row, `HotkeyAction.ReadDisplayND` (fallback `context.AiRead()`, else `BBS757DisplayForm("EHSI", "Captain EHSI", monitor.View)`; the display's `FullWanted` is the window's `Visible`), and `HotkeyAction.ReadNDWaypoint` (`context.Announcer.AnnounceImmediate(display.WaypointLine())`, from the latest light reading).
 
-- [ ] **Step 1:** Register the gate's simulator variables hidden where not already (count, at most 4; [VAR-7]). **Step 2: Write the failing tests:** `Alt_N_opens_the_ehsi_window_while_the_reader_runs`, `Alt_N_falls_back_to_the_ai_read_when_unavailable`, `Ctrl_W_says_the_top_line_interrupting`, `Ctrl_W_answers_with_the_window_closed`, `The_ctrl_m_row_is_listed`. **Step 3:** FAIL. **Step 4:** Implement. **Step 5:** PASS and the full suite. **Step 6:** Commit `feat(b757): the EHSI window on Alt+N, its waypoint on Ctrl+W`.
+- [ ] **Step 1:** Declare the simulator inputs the draw takes, if Task 1 found any (S10, the display's `SimInputs`; the definition registers each hidden where not already, [VAR-7]). **Step 2: Write the failing tests:** `Alt_N_opens_the_ehsi_window_while_the_reader_runs`, `Alt_N_falls_back_to_the_ai_read_when_unavailable`, `Ctrl_W_says_the_top_line_interrupting`, `Ctrl_W_answers_with_the_window_closed`, `The_ctrl_m_row_is_listed`. **Step 3:** FAIL. **Step 4:** Implement. **Step 5:** PASS and the full suite. **Step 6:** Commit `feat(b757): the EHSI window on Alt+N, its waypoint on Ctrl+W`.
 
 ### Task 8: Rules
 

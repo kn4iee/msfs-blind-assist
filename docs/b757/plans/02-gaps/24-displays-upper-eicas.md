@@ -124,17 +124,19 @@ Claude's own checks at Task 8 (read-only, the logs): a cold-and-dark load left d
 - **The window's buttons** (the owner's request after check 3): Cancel (Alt+C), Recall (Alt+R) and Max Ind (Alt+M)
   after the list, each pressing as the panel does ("Cancel pressed", then the reader's own line); the guide's Alt+E
   paragraph names them.
-- **Plan 16's in-sim pass** takes this plan's deferred checks (the owner, 2026-11-10: no full flight then), added to its
-  Task 5: "Thrust reference: CLB" after takeoff and "CRZ" at cruise; Ctrl+M "EICAS messages" off silences the messages
-  only; the landing roll with reverse thrust says "Thrust reference: none", then the reference again; at the shutdown,
-  the battery off says neither "EICAS announcements unavailable" nor "stopped" (Claude reads `bbs757-upper-eicas.log`).
+- **Plan 16's in-sim pass** had taken this plan's deferred checks; they ran on the owner's flight of 2026-11-10 (the
+  In-sim results below), so they left plan 16's Task 5 again: nothing of this plan's is left for it.
+- **After landing, from that flight (the owner's rulings, 2026-11-11):** the EICAS advisory FMC MESSAGE is never
+  announced, as the CDU window's "CDU Messages While Closed" already speaks the FMC's message (the window still lists
+  it); and no 757 display reader compares memory with the simulator any more ([B757-30]), so the readers' "values do
+  not match the simulator" stop is gone. The guide and `docs/b757.md` describe the readers without a gate.
 
 ## Execution record
 
 - **Status:** landed (2026-11-10) at the owner's word ("please go ahead and close out the plan and push"), with the
   generator-6 757 layout published and the older 757 files removed from the `layouts` branch; in-sim checks 1-3 and
-  the window's buttons passed on the PW2000 variant; check 4 (a flight) and the shutdown check moved to plan 16's
-  in-sim pass at the owner's request
+  the window's buttons passed on the PW2000 variant; check 4 (a flight) and the shutdown check, first moved to plan 16's
+  in-sim pass at the owner's request, passed on his flight of 2026-11-10
 - **Claimed by:** Robin Kipp (robin24), 2026-11-09
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-09, from `B757` 9c1ab1c0a (plan 23 landed, every check passed)
@@ -155,14 +157,23 @@ Claude's own checks at Task 8 (read-only, the logs): a cold-and-dark load left d
   8 done; then the window's buttons (the owner's request), reviewed. Task 6 Step 1 (the gate variables): 3 added,
   `TURB ENG N1:1`, `TURB ENG N1:2` (percent, streaming off the batch beside the status display's rows of those names)
   and `L:BBS757_THRREF_PULL`.
-- **Waiting on the owner:** nothing; plan 16's in-sim pass holds the deferred checks.
+- **Waiting on the owner:** nothing; the deferred checks passed on his flight of 2026-11-10.
 - **In-sim results:** 2026-11-10, `C:\MSFSBA-B757` at 1f4c1f44b, then f16667a7d for the buttons, the PW2000 variant
   ("BlueBird 757-200 PW N/W"): cold and dark, the reader held quietly 3 minutes and said nothing, the objects already
   in place while dark; check 1 passed ("announcements exactly as described"); check 2 passed (the Alt+E window as
   memory predicted it: EPR 1.00, N1 20.8, EGT, Thrust reference TO, EPR reference 1.41, TAT +8c, Advisory PARKING
   BRAKE; no "stopped" through the PW engine start, so the gate holds on the PW2000 as on the RB211); check 3 passed,
   and the owner kept "Cancel pressed" and "Recall pressed" beside the reader's lines; the window's Cancel, Recall and
-  Max Ind passed ("All as expected").
+  Max Ind passed ("All as expected"). Check 4 and the shutdown check passed on the owner's flight of 2026-11-10 22:03 to
+  2026-11-11 01:09 (`C:\MSFSBA-B757` at dd94650f4, cold and dark to shut down at MMUN, FL390), the owner's "Everything
+  worked as expected" beside a once-a-second read-only recording of memory and the simulator: the TMC went TO, CLB 1
+  at 1,400 ft, CRZ at FL390, G/A on the approach; the reversers stayed stowed on the landing roll, and the right one
+  alone deployed for about 7 s at a standstill (the reverser state BlueBird hides the reference on, as on a roll; the
+  owner heard nothing amiss); the upper EICAS and FMA readers ran
+  from 22:04 to the app's close at 01:09 with no stop line, the battery off at 01:09:23 included. The Ctrl+M mute was
+  not run live: the owner confirmed it from the code ("can be confirmed from our own code"). What the flight found was
+  plan 25's: the lower EICAS's N2 gate stopped the reader at both engine starts (22:23:46 and 22:25:05, about 2 s and
+  6 s), heard as "stopped".
 - **Changed from the plan:** the reading carries what Task 1 measured: no page count (BlueBird draws "PAGE n" only, no
   "of n"), each message's cancelled and on-screen state, per-engine colors, the in-flight start block, TAI and REV
   rows, max memories and the reference EPR; the window's rows follow the screen's words ("TAT: +11c"). Engine values
@@ -179,3 +190,14 @@ Claude's own checks at Task 8 (read-only, the logs): a cold-and-dark load left d
   the screen hides).
 - **Rulings made while working:** in the SDD ledger (git-ignored, `.superpowers/sdd/24-displays-upper-eicas/progress.md`,
   R1-R51) and the commit messages.
+- **After landing (2026-11-11, the owner's rulings after the flight):** 3976b33cf: the EICAS advisory FMC MESSAGE is
+  never said as new or gone (the CDU window speaks the FMC's message), but the window lists it, and CANC's count and
+  RECALL's read-back include it, as they read back what the press did; " FMC" is still said. bfdf4f957: no 757 display
+  reader compares memory with the simulator any more ([B757-30] rewritten; the FMA, upper and lower EICAS gates and
+  their tests deleted; the Mismatched state, the 3 s history and the quiet hold gone from `Bbs757DisplayMonitor`): a
+  reading is trusted on structure alone, the first candidate whose read succeeds and is not corrupt runs at once, a dark
+  one included ("display not powered", its power-up a silent baseline), and one with no reading that is not corrupt for
+  2 s is dropped. The readers' simulator variables are now only inputs the draw takes (S10, `SimInputs`: the upper
+  EICAS's `L:BBS757_THRREF_PULL`); the layouts keep their gate fields (no generator change, no layout republished).
+  Plans 26 and 27 lost their gate tasks. Waiting on the owner: nothing; Claude reads the readers' logs at the next 757
+  session (each reaches Running with "a reading that is not corrupt").

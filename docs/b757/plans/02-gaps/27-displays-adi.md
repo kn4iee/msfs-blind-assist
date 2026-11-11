@@ -16,7 +16,8 @@
 - **The FMA stays one reader:** the ADI window's first rows are plan 23's `Fma.View()`; this reader never reads the FMA itself; Ctrl+P keeps its FMA list.
 - **Alt+P's fallback (S15):** while this reader cannot run (unavailable, or stopped for 10 s), Alt+P goes to the AI read of the ADI as today, whatever the FMA does.
 - **Never BlueBird's aurals:** nothing this reader says repeats a callout BlueBird plays (its minimums and altitude callouts, its windshear and terrain aurals, per `docs/b757.md` "Take-off callouts" and the October survey §9); the window still lists every flag drawn.
-- **Read from the draw's source (S10)**; the simulator variables the draw takes are registered hidden (at most 10 added; Task 6 counts them).
+- **Read from the draw's source (S10)**; the simulator variables the draw takes are the display's `SimInputs`, registered hidden (at most 10 added; Task 6 counts them).
+- **No gate (the owner, 2026-11-11, [B757-30]):** S3's comparison with the simulator is gone from every 757 reader; this reader never compares memory with a simulator value. Trust is structural only: the layout for this build, the objects found by vptr, every read inside the module, and `Corrupt`. Comparing with the simulator while measuring (Task 1) is still a good way to identify a field.
 - **Shared lines (S16):** `adi` at the end of the module's readers and its recipe at the end of `Bbs757Recipes.All`; the next `GeneratorVersion.Current` at landing.
 - **Owned files:** new `MSFSBlindAssist/Services/BBS757/Bbs757Adi*.cs`, `MSFSBlindAssist.DisplayLayouts/Bbs757/Bbs757AdiLayout.cs`, its dump and reader line, `MSFSBlindAssist/Aircraft/BBS757Definition.Adi.cs`, `tests/MSFSBlindAssist.Tests/Bbs757Adi*Tests.cs`, `docs/b757/evidence/displays-adi.md`, its rule lines, and in `Aircraft/BBS757/Bbs757DisplayReads.cs` nothing (the Alt+P row stays as the fallback); private `Bbs757AdiRecipe.cs`, its fixture and tests, its line in `Bbs757Recipes.cs`.
 
@@ -39,7 +40,7 @@
 **Files:** `docs/b757/evidence/displays-adi.md`
 
 - [ ] **Step 1:** Every item the ADI draws besides the FMA (from the draw functions above and a capture of the ADI view, `PrintWindow`): its words, format, blanking, flag conditions and source (memory field, or simulator variable), on the ground cold and dark, powered, with the ILS tuned at a runway (owner's go-ahead for the radios), and from a recorded approach if the owner flies one.
-- [ ] **Step 2:** The ADI's power state; the gate's value (S3): radio altitude against `RADIO HEIGHT`, or pitch and bank against `PLANE PITCH DEGREES` and `PLANE BANK DEGREES`, with tolerances. **Step 3:** Write the evidence; commit `docs(b757): plan 27's ADI measurements`.
+- [ ] **Step 2:** The ADI's power state. **Step 3:** Write the evidence; commit `docs(b757): plan 27's ADI measurements`.
 
 ### Task 2: The layout record
 
@@ -49,7 +50,7 @@
 
 ### Task 3 [private repo]: The recipe
 
-- [ ] **Steps:** merge the app branch in; tests `Derives_each_adi_part`, `A_part_it_cannot_derive_is_missing_not_a_failure`, `No_gate_value_fails_the_reader`; implement; toolkit suite; generate from the installed file (every field equals Task 1's, the other readers unchanged), copy to `%APPDATA%`; commit `feat(bbs757): the ADI recipe` (private, not pushed).
+- [ ] **Steps:** merge the app branch in; tests `Derives_each_adi_part`, `A_part_it_cannot_derive_is_missing_not_a_failure`; implement; toolkit suite; generate from the installed file (every field equals Task 1's, the other readers unchanged), copy to `%APPDATA%`; commit `feat(bbs757): the ADI recipe` (private, not pushed).
 
 ### Task 4: The sampler
 
@@ -57,14 +58,14 @@
 
 - [ ] **Steps 1-5:** `Bbs757AdiReading` (`IBbs757Reading`) holds each part's values as drawn and its flags; tests on `FakeProcessMemory` with Task 1's readings through the layout (`Reads_each_part_as_drawn`, `A_read_outside_the_module_is_lost`); commit `feat(b757): read the ADI from memory`.
 
-### Task 5: The gate, the rows and the reader
+### Task 5: The rows and the reader
 
-**Files:** `Bbs757AdiGate.cs`, `Bbs757AdiText.cs`, `Bbs757AdiDisplay.cs`; tests `Bbs757AdiGateTests.cs`, `Bbs757AdiTextTests.cs`, `Bbs757AdiDisplayTests.cs`
+**Files:** `Bbs757AdiText.cs`, `Bbs757AdiDisplay.cs`; tests `Bbs757AdiTextTests.cs`, `Bbs757AdiDisplayTests.cs`
 
 **Interfaces:**
 - Produces: `Bbs757AdiDisplay` with `Name = "ADI"`, `LogChannel = "bbs757-adi"`, `TickMs = 500`, `MuteKey = "MSFSBA_BBS757_ADI_MESSAGES"` (row "ADI messages"); `Bbs757AdiText.Rows(reading)` in screen order, each row starting with where it sits ("Left:", "Center:", "Right:", "Bottom:", as Task 1 places them); changes "ADI flag: <word>", "ADI flag gone: <word>".
 
-- [ ] **Step 1: Write the failing tests:** `Passes_when_the_gate_value_matches_within_3_s`, `A_flag_replaces_its_instruments_value` (Review Focus), `A_pinned_pointer_reads_full_scale` (Review Focus), `Radio_altitude_above_its_range_is_blank` (Review Focus), `No_line_repeats_a_bluebird_callout`, `Numbers_format_as_drawn_under_de_DE_and_sv_SE`. **Steps 2-5:** FAIL, implement, PASS, commit `feat(b757): the ADI's gate, rows and words`.
+- [ ] **Step 1: Write the failing tests:** `A_flag_replaces_its_instruments_value` (Review Focus), `A_pinned_pointer_reads_full_scale` (Review Focus), `Radio_altitude_above_its_range_is_blank` (Review Focus), `No_line_repeats_a_bluebird_callout`, `Numbers_format_as_drawn_under_de_DE_and_sv_SE`. **Steps 2-5:** FAIL, implement, PASS, commit `feat(b757): the ADI's rows and words`.
 
 ### Task 6: The window, Alt+P and Ctrl+M
 
