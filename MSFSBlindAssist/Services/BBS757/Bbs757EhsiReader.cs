@@ -289,26 +289,31 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
         return at >= 0 && at + StringBytes <= block.Length && TryReadString(block.AsSpan(at, StringBytes), out label);
     }
 
-    /// <summary>A libc++ <c>std::u32string</c> (wasm32, the default layout), given its 12 bytes: the low bit of the first
-    /// byte set is the long form (capacity, size, data pointer); clear is the short form (the size in the first byte's
-    /// upper bits, at most one code point, inline after it). The text is at most <see cref="MaxLabelLength"/> code
-    /// points, each a Unicode scalar value other than 0, followed by the 0 terminator libc++ keeps. False when torn.</summary>
+    /// <summary>A <c>std::u32string</c> given its 12 bytes, in the libc++ alternate layout this build uses for its strings
+    /// (measured live 2026-11-11; the narrow strings read the same way in <c>ModuleEfbMemory.ReadStdString</c>): byte +11's
+    /// high bit is the long flag. Long: data pointer +0, size in code points +4, capacity with the top bit +8. Short:
+    /// byte +11 is the size (0 to 2) and the code points are inline from +0. Either way the text is at most
+    /// <see cref="MaxLabelLength"/> code points, each a Unicode scalar value other than 0, followed by the 0 terminator
+    /// libc++ keeps. False when torn.</summary>
     private bool TryReadString(ReadOnlySpan<byte> s, out string text)
     {
         text = "";
         int length;
         byte[] units;
-        if ((s[0] & 1) == 0)
+        if ((s[StringBytes - 1] & 0x80) == 0)
         {
-            length = s[0] >> 1;
-            if (length > 1) return false;
+            length = s[StringBytes - 1];
+            if (length > 2) return false;
+            // The terminator after two code points shares its last byte with the size byte (+11): only the bytes before
+            // it are the terminator.
             units = new byte[(length + 1) * Word];
-            s.Slice(Word, units.Length).CopyTo(units);
+            s[..(length * Word)].CopyTo(units);
+            if (!s[(length * Word)..(StringBytes - 1)].IndexOfAnyExcept((byte)0).Equals(-1)) return false;
         }
         else
         {
+            uint data = BinaryPrimitives.ReadUInt32LittleEndian(s);
             uint size = BinaryPrimitives.ReadUInt32LittleEndian(s[Word..]);
-            uint data = BinaryPrimitives.ReadUInt32LittleEndian(s[(2 * Word)..]);
             if (size > MaxLabelLength) return false;
             length = (int)size;
             if (length == 0) return true;

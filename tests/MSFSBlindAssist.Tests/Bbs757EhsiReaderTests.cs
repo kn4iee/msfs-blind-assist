@@ -179,23 +179,24 @@ public class Bbs757EhsiReaderTests
             F64(b, at + L.AirportLongitude, lon);
         }
 
-        /// <summary>A libc++ std::u32string (wasm32): the short form holds at most one code point inline after its size
-        /// byte; the long form is (capacity with the long bit, size, data pointer).</summary>
+        /// <summary>A std::u32string in BlueBird's libc++ alternate layout (measured live): the long form (byte 11's top bit
+        /// set) is (data pointer, size, capacity | 0x80000000); the short form holds up to two code points inline from +0,
+        /// byte 11 their count.</summary>
         private void PutString(byte[] b, long at, string text)
         {
             var runes = text.EnumerateRunes().ToArray();
-            if (runes.Length <= 1)
+            if (runes.Length <= 2)
             {
-                b[at] = (byte)(runes.Length << 1);
-                if (runes.Length == 1) I32(b, at + 4, runes[0].Value);
+                for (int k = 0; k < runes.Length; k++) I32(b, at + 4 * k, runes[k].Value);
+                b[at + 11] = (byte)runes.Length;
                 return;
             }
             uint data = _next;
             _next += StringPitch;
             for (int k = 0; k < runes.Length; k++) I32(b, data + 4 * (uint)k, runes[k].Value);
-            I32(b, at, ((runes.Length + 1) << 1) | 1);
+            I32(b, at, data);
             I32(b, at + 4, runes.Length);
-            I32(b, at + 8, data);
+            I32(b, at + 8, unchecked((int)(0x80000000u | (uint)(runes.Length + 1))));
         }
     }
 
@@ -631,16 +632,34 @@ public class Bbs757EhsiReaderTests
         Corrupt(new Scene { RouteLegs = new[] { Kolm with { Label = new string('A', 33) } } }, full: false);
 
         // A long label whose data pointer is null or outside the module, or holds a surrogate.
-        Corrupt(new Scene { Tweak = b => I32(b, Legs + L.LegLabel + 8, Outside) });
-        Corrupt(new Scene { Tweak = b => I32(b, Legs + L.LegLabel + 8, 0) });
+        Corrupt(new Scene { Tweak = b => I32(b, Legs + L.LegLabel, Outside) });
+        Corrupt(new Scene { Tweak = b => I32(b, Legs + L.LegLabel, 0) });
         // (The airports' names come first in the string area, so leg 0's label data is the third.)
         Corrupt(new Scene { Tweak = b => I32(b, Strings + 2 * StringPitch, 0xD800) });
+        // A missing terminator ("KOLM" is four code points: the fifth must be 0), a long form with a size over the cap
+        // and a short form with a size over two.
+        Corrupt(new Scene { Tweak = b => I32(b, Strings + 2 * StringPitch + 16, 'X') });
+        Corrupt(new Scene { Tweak = b => I32(b, Legs + L.LegLabel + 4, 33) });
+        Corrupt(new Scene { Tweak = b => b[Legs + L.LegLabel + 11] = 3 });
+    }
+
+    [Fact]
+    public void Strings_are_in_blue_birds_alternate_layout()
+    {
+        // Measured live: a long string is {pointer, size, capacity | 0x80000000}; byte 11 is the long flag.
+        var bytes = new Scene().Build();
+        long label = Legs + L.LegLabel;
+        Assert.Equal(0x80, bytes[label + 11] & 0x80);
+        Assert.Equal(4, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan((int)label + 4)));
+        Assert.Equal(0x80000005u, BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan((int)label + 8)));
+        // The discontinuity's empty label: byte 11 = 0.
+        Assert.Equal(0, bytes[Legs + L.LegStride + L.LegLabel + 11]);
     }
 
     [Fact]
     public void A_label_outside_the_first_leg_is_corrupt_in_the_full_reading_only()
     {
-        void Break(byte[] b) => I32(b, Legs + 3 * L.LegStride + L.LegLabel + 8, Outside);
+        void Break(byte[] b) => I32(b, Legs + 3 * L.LegStride + L.LegLabel, Outside);
         Corrupt(new Scene { Tweak = Break });
         // The light reading reads only leg 0: the screen's top line does not touch the others.
         Assert.False(Read(new Scene { Tweak = Break }, full: false).Corrupt);
@@ -649,8 +668,14 @@ public class Bbs757EhsiReaderTests
     [Fact]
     public void A_short_and_a_long_label_both_read()
     {
-        var scene = new Scene { RouteLegs = new[] { Kolm with { Label = "A" }, Kolm with { Label = "" }, Kolm with { Label = "KOLM" } } };
-        Assert.Equal(new[] { "A", "", "KOLM" }, Read(scene).Route!.Select(l => l.Label));
+        var scene = new Scene
+        {
+            RouteLegs = new[]
+            {
+                Kolm with { Label = "A" }, Kolm with { Label = "" }, Kolm with { Label = "AB" }, Kolm with { Label = "KOLM" },
+            },
+        };
+        Assert.Equal(new[] { "A", "", "AB", "KOLM" }, Read(scene).Route!.Select(l => l.Label));
     }
 
     [Fact]
