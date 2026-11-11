@@ -318,7 +318,7 @@ public class Bbs757DisplaysWiringTests
     }
 
     [Fact]
-    public void The_only_display_input_is_the_manual_thrust_flag()
+    public void The_display_inputs_are_the_manual_thrust_flag_and_the_ehsis_position()
     {
         // B757-30: the FMA's F/D switches and MCP targets and the lower EICAS's N2 and page, once gate variables, are no
         // longer read for the readers; the upper EICAS's manual thrust reference flag (S10) is the one input, read from one
@@ -327,7 +327,9 @@ public class Bbs757DisplaysWiringTests
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
 
-        Assert.Equal(new[] { "BBS757_THRREF_PULL" }, keys.Keys);
+        // Plan 26 added the EHSI's two position inputs (PLANE LATITUDE and PLANE LONGITUDE, S10): the readers' inputs now
+        // are exactly these three, the thrust flag being the only L:var.
+        Assert.Equal(new[] { "BBS757_THRREF_PULL", "PLANE LATITUDE", "PLANE LONGITUDE" }, keys.Keys);
         var carrier = vars[keys["BBS757_THRREF_PULL"]];
         Assert.Equal(("BBS757_THRREF_PULL", SimVarType.LVar), (carrier.Name, carrier.Type));
         Assert.Equal(UpdateFrequency.Continuous, carrier.UpdateFrequency);
@@ -336,9 +338,9 @@ public class Bbs757DisplaysWiringTests
         Assert.True(vars.Values.Count(v => v.Name == "BBS757_THRREF_PULL" && ContinuousBatchLayout.RidesBatch(v)) <= 1);
         Assert.All(vars.Where(kv => kv.Key.StartsWith(BBS757Definition.DisplayInputCopyPrefix, StringComparison.Ordinal)), kv =>
         {
-            Assert.Equal(BBS757Definition.DisplayInputCopyPrefix + "BBS757_THRREF_PULL", kv.Key);
+            Assert.Contains(kv.Key[BBS757Definition.DisplayInputCopyPrefix.Length..], keys.Keys);
             Assert.True(kv.Value.ExcludeFromMonitorManager);
-            Assert.Equal("BBS757_THRREF_PULL (display reader input)", kv.Value.DisplayName);
+            Assert.EndsWith(" (display reader input)", kv.Value.DisplayName);
         });
         foreach (string gone in new[] { "TURB ENG N1:1", "TURB ENG N1:2", "TURB ENG N2:1", "TURB ENG N2:2", "BBS_ECAM_Mode",
             "BBS_FD1_SWITCH", "BBS_FD2_SWITCH", "BBS_AP_TARGET_ALTITUDE", "BBS_AP_TARGET_HEADING" })

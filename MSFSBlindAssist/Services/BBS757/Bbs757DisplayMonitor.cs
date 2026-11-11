@@ -131,6 +131,21 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     /// while the display is dark or powering up.</summary>
     public TReading? Latest => ShowsReading ? _current : default;
 
+    /// <summary>Why <see cref="Latest"/> is null, in the words of the status rows without the reader's name, or null while
+    /// it holds a reading or the monitor was never started: "display dark" while it runs and the display is dark, the final
+    /// or stop reason once there is one, "waiting for the simulator", else "starting" (searching, or the display powering
+    /// up). For a key that answers at once with the reason, such as Ctrl+W on the EHSI.</summary>
+    public string? NoReadingReason => _state switch
+    {
+        State.Stopped => null,
+        _ when ShowsReading => null,
+        State.Unavailable => _reason,
+        _ when _stopReason is { } heard => heard,
+        State.Running or State.Verifying when _lastLit == false => "display dark",
+        State.WaitingForSimulator => "waiting for the simulator",
+        _ => "starting",
+    };
+
     /// <summary>The reader's rows of the latest good reading while running and the display shows it, else null.</summary>
     public IReadOnlyList<string>? RowsWhileRunning() => ShowsReading ? _reader.Rows(_current) : null;
 
