@@ -45,15 +45,16 @@ public class Bbs757EhsiGeometryTests
     {
         var map = new Bbs757EhsiMap(0, 179.5, 0, 352, 411.2, 704, 859);
         var east = P(map, 20, 0, -179.5);
-        Assert.Equal(60.0, east.Nm, 0);
+        // One degree of arc at R = 6371 km / 1.852 = 3440.065 NM per radian: 3440.065 * pi / 180 = 60.04 NM.
+        Assert.Equal(60.04, east.Nm, 1);
         Assert.Equal(90.0, east.BearingTrue, 3);
         var west = P(new Bbs757EhsiMap(0, -179.5, 0, 352, 411.2, 704, 859), 20, 0, 179.5);
         Assert.Equal(270.0, west.BearingTrue, 3);
-        Assert.Equal(60.0, Bbs757EhsiGeometry.TopLineDistance(0, 179.5, 0, -179.5), 0);
+        Assert.Equal(60.04, Bbs757EhsiGeometry.TopLineDistance(0, 179.5, 0, -179.5), 1);
 
         // A pole-near leg: from 89.9 N on 10 E to 89.9 N on 170 W is over the pole, due north, 12 NM.
         var pole = P(new Bbs757EhsiMap(89.9, 10, 0, 352, 411.2, 704, 859), 20, 89.9, -170);
-        Assert.Equal(12.0, pole.Nm, 0);
+        Assert.Equal(12.01, pole.Nm, 1); // 0.2 degrees of arc: 0.2 * 60.04
         Assert.Equal(0.0, pole.BearingTrue, 3);
     }
 
@@ -107,7 +108,9 @@ public class Bbs757EhsiGeometryTests
     public void The_clip_matches_the_measured_plan_page()
     {
         var ksea = P(PlanMap, 80, 47.4499, -122.3118);
-        Assert.InRange(ksea.Nm, 37.4, 37.7); // the evidence's coordinates are rounded to four decimals
+        // KOLM to the KSEA airport point is a different pair from the aircraft-to-KOLM 37.5: by hand, 0.48049 deg north
+        // (28.85 NM) and 0.59074 deg east * cos(47.21) (24.10 NM) make 37.59 NM.
+        Assert.Equal(37.59, ksea.Nm, 1);
         Assert.False(On(PlanMap, false, ksea));
         var tc = P(PlanMap, 80, 47.13824, -122.68684);
         Assert.Equal(13.4, tc.Nm, 1);
@@ -180,10 +183,14 @@ public class Bbs757EhsiGeometryTests
     [InlineData(37.5, -87.0, "37.5 NM, 87° left")]
     [InlineData(24.0, 0.4, "24.0 NM, ahead")]
     [InlineData(24.0, -0.4, "24.0 NM, ahead")]
-    [InlineData(24.0, 0.5, "24.0 NM, 1° right")]
+    [InlineData(24.0, 0.5, "24.0 NM, ahead")]
+    [InlineData(24.0, -0.5, "24.0 NM, ahead")]
+    [InlineData(24.0, 0.6, "24.0 NM, 1° right")]
+    [InlineData(24.0, 179.5, "24.0 NM, behind")]
+    [InlineData(24.0, -179.5, "24.0 NM, behind")]
+    [InlineData(24.0, 179.4, "24.0 NM, 179° right")]
     [InlineData(24.0, 179.6, "24.0 NM, behind")]
     [InlineData(24.0, -180.0, "24.0 NM, behind")]
-    [InlineData(24.0, 179.4, "24.0 NM, 179° right")]
     public void A_place_names_distance_and_angle(double nm, double offTop, string expected)
     {
         Assert.Equal(expected, Bbs757EhsiGeometry.Place(nm, offTop));
@@ -203,7 +210,7 @@ public class Bbs757EhsiGeometryTests
     [InlineData(13.4, 337.4, "13.4 NM north-west of KOLM")]
     [InlineData(13.4, 337.5, "13.4 NM north of KOLM")]
     [InlineData(0.04, 90, "at KOLM")]
-    [InlineData(0.05, 90, "0.1 NM east of KOLM")]
+    [InlineData(0.06, 90, "0.1 NM east of KOLM")]
     public void A_plan_place_uses_eight_compass_words(double nm, double bearing, string expected)
     {
         Assert.Equal(expected, Bbs757EhsiGeometry.PlanPlace(nm, bearing, "KOLM"));

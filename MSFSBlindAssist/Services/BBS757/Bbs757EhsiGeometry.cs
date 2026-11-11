@@ -141,15 +141,16 @@ public static class Bbs757EhsiGeometry
 
     /// <summary>
     /// A place on the map for the pilot: "37.5 NM, 87° right". The distance has one decimal; the angle is rounded to
-    /// whole degrees, "left" for a negative <paramref name="offTop"/>. Within half a degree of straight ahead it says
-    /// "ahead", within half a degree of straight behind "behind".
+    /// whole degrees, "left" for a negative <paramref name="offTop"/>. Within half a degree of straight ahead
+    /// (inclusive) it says "ahead", within half a degree of straight behind (inclusive) "behind", so it never says
+    /// "0°" or "180°".
     /// </summary>
     public static string Place(double nm, double offTop)
     {
         string distance = nm.ToString("F1", CultureInfo.InvariantCulture);
         double abs = Math.Abs(offTop);
-        if (abs < AlignedDegrees) return $"{distance} NM, ahead";
-        if (abs > 180.0 - AlignedDegrees) return $"{distance} NM, behind";
+        if (abs <= AlignedDegrees) return $"{distance} NM, ahead";
+        if (abs >= 180.0 - AlignedDegrees) return $"{distance} NM, behind";
         string degrees = Math.Round(abs, MidpointRounding.AwayFromZero).ToString("F0", CultureInfo.InvariantCulture);
         return $"{distance} NM, {degrees}° {(offTop < 0 ? "left" : "right")}";
     }
