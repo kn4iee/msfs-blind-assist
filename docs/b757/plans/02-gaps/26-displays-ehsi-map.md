@@ -120,11 +120,11 @@
 ## Handoff to plan 16
 
 - **Pilot-facing:** "Alt+N opens the 757's EHSI: the route, the active waypoint and the VNAV points, with distances and bearings; Ctrl+W says the active waypoint." Changelog `feature`; the guide's 757 displays part and its keys.
-- **docs/b757.md:** the EHSI reader; Alt+N's fallback. **CLAUDE.md:** the 757 row of "Where things live" names the new rule file `b757-ehsi` (rules B757-36 to B757-39, full text `docs/invariants/b757-ehsi.md`). **Guide:** Ctrl+W in the first 10 s after the displays power up answers "EHSI waypoint unavailable: starting". **HotkeyGuides/BBS757_Hotkeys.txt:** Alt+N's line and the new Ctrl+W line.
+- **docs/b757.md:** the EHSI reader; Alt+N's fallback. **CLAUDE.md:** the 757 row of "Where things live" names the new rule file `b757-ehsi` (rules B757-36 to B757-39, full text `docs/invariants/b757-ehsi.md`). **Guide and hotkey guide:** the EHSI window's controls and their Alt keys (M, R, C, T, W, E, N, A, D, P); **Guide:** Ctrl+W in the first 10 s after the displays power up answers "EHSI waypoint unavailable: starting". **HotkeyGuides/BBS757_Hotkeys.txt:** Alt+N's line and the new Ctrl+W line.
 
 ## Execution record
 
-- **Status:** claimed; Tasks 0-8 done and the whole-plan review passed (2026-11-11), not yet pushed: the code lands with its regenerated layout at the owner's word (Task 9)
+- **Status:** claimed; Tasks 0-9 done but for the push: deployed to `C:\MSFSBA-B757` with the generator-7 layout, the in-sim checks passed on the owner's flight (2026-11-11); waiting on the owner's word to push `B757` and the private branch and publish the layout
 - **Claimed by:** Robin Kipp (robin24), 2026-11-11
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-11, from `B757` ba06e4d2c (plans 23, 24 and 25 landed, no gate in any 757 reader)
@@ -136,13 +136,27 @@
   (02ccc999a), 8 rules B757-36 to B757-39 in a new rule file `b757-ehsi` (dc4ab516d), the whole-plan review's fixes
   (31299e8c3). Each task reviewed by a fresh reviewer, then one whole-plan review. Open: Task 9 (live checks, the
   generator version, deploy, publish).
-- **Waiting on the owner:** the word to deploy to `C:\MSFSBA-B757` with the regenerated layout (MSFSBA closed), then
-  to push `B757` and the private branch and publish the layout; the in-sim checks.
-- **In-sim results:**
+- **Waiting on the owner:** the word to push `B757` and the private branch and to publish the generator-7 layout.
+- **In-sim results:** 2026-11-11, the owner's flight (cruise FL380 to FL400, a KDEN arrival loaded), build 537f002c9
+  then b1e328840 in `C:\MSFSBA-B757`, the generator-7 layout installed (5 of 5 readers; the four display readers
+  Running within 5 s, no corrupt reading in `bbs757-ehsi.log`).
+  - Check 1 passed: at BATIK "EHSI: SPS" with its distance, once; Alt+N's rows at range 10 as memory held them; at
+    range 40 "Map: SPS, active, 5.5 NM, 5° right".
+  - Check 2 passed: Ctrl+W named the active waypoint with the top line's distance and ETA.
+  - Check 3 passed for T/D: listed at range 160, ahead, once inside the map's edge. No EXCESS DATA arose.
+  - Check 4 (the Ctrl+M mute) marked from the code at the owner's word, not flown: the monitor speaks a line only when
+    its row is not muted (`Bbs757DisplayMonitor`, the `IsMuted` test before `Speak`), and Ctrl+W calls
+    `AnnounceImmediate` with no mute test; pinned by `A_muted_row_says_nothing_and_the_window_still_shows` and
+    `Ctrl_W_still_answers_with_the_ctrl_m_row_muted`.
+  - The window's controls (below): the Range drop-down arrowed several steps wrote once and only NVDA spoke; Alt+D
+    toggled DATA and the active row gained its ETA.
+  - Read from memory on the same flight: the nd's position equals the simulator's, passed legs move to the flown
+    vector (12 by HALEN), the path registry stayed at 4 entries.
+  - Not heard: the wind, track up, a modification in flight, EXCESS DATA, the ETA wrapping midnight.
 - **Changed from the plan:** from Task 1's measurements (the evidence file has each):
   - **The top line draws no waypoint name:** left the distance and `NM`, right the ETA and `z` ("37.5NM", "------z").
     The active waypoint is leg 0 of the route, magenta on the map. So Ctrl+W's "KPDX, 1533.3z, 23.0 NM" and the row
-    "Top right: KPDX, …" are not what the screen shows as one line: the owner decides the wording.
+    "Top right: KPDX, …" are not what the screen shows as one line (the owner's wording is below).
   - **The ETA is dashes under 100 kt ground speed**, so always on the ground.
   - **Distances:** the top line uses the haversine formula with R = 6,371,000 m and 1852 m a NM; the map's projection
     the spherical law of cosines with 6371 km and 1.852. Great circle both; no rhumb line.
@@ -161,7 +175,7 @@
   - **Messages:** only `EXCESS DATA` and the `HDG`/`TRK` and `MAP` failure flags belong to this plan; with DATA on
     (`u8 nd+209`) each waypoint gains its constraint and ETA lines, which Task 6 lists as drawn.
   - **The position** the draw takes is `PLANE LATITUDE` and `PLANE LONGITUDE` for the top line and the IRS's copy in
-    the nd for the map; equal to the sixth decimal parked. Task 9 compares them in flight before choosing.
+    the nd for the map; equal to the sixth decimal parked. Equal in flight too (below).
   - **Measured read only on the owner's flight (2026-11-11):** the nd's position is the simulator's in flight, passed
     legs move to the flown vector, the ground speed is knots. Still unheard: the rows and lines against the screen in
     flight, the wind, track up.
@@ -182,6 +196,13 @@
     - `Bbs757DisplayMonitor` (plan 23's, frozen) gained one read-only member, `NoReadingReason`, so Ctrl+W can tell
       "display dark" from the reader's own reason; nothing else reads it. Plans 27 and 28 inherit it.
     - Two tests of other readers were widened by the line a new reader and its two inputs force.
+  - **Added at the owner's request on his flight (Task 10, ef6f8e6c8, b1e328840):** the Alt+N window holds the Captain's
+    EFIS controls under its list, as the upper EICAS window holds its buttons: Mode and Range (drop-down lists), CTR
+    and TFC (buttons), WXR, TERR, NAV AID, APRT, DATA, WPT (check boxes). Each shows the cockpit's state and follows
+    it; a set goes through the main panel's own path (`HandleUIVariableSet`), so nothing more is spoken than from the
+    panel. For the controls to follow the cockpit, one hook line each went into `BBS757Definition.Announcements.cs`
+    (plan 13's) and `BBS757Definition.Interaction.cs` (plan 03's), and `BBS757DisplayForm` grows taller when its
+    controls need it (the upper EICAS window is unchanged).
   - **For plan 28** (not listed by this plan): S/C; the departure and arrival runway symbols; the green rings without a
     word and the altitude/time marker; the wind readout; origin and destination are told apart by code order in the
     recipe, and PLAN is named by elimination.
