@@ -12,8 +12,6 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// <item><see cref="Values"/>: the gauge rows in screen order (EPR, N1, EGT, TAT, then TAI, REV, EPR reference, N1 max and
 /// EGT max only while drawn); <see cref="ThrustReference"/> as drawn, null when nothing is drawn;
 /// <see cref="Envelope"/> the in-flight start block's lines, empty when it is not drawn.</item>
-/// <item><see cref="GateN1Left"/>/<see cref="GateN1Right"/>: each engine's N1 as BlueBird keeps it (never the alternate),
-/// the value the gate compares with the simulator's.</item>
 /// <item><see cref="Powered"/>: the screen is lit; everything else is carried whatever the power.</item>
 /// </list>
 /// Every number is formatted with the invariant culture. Equality is content equality (lists by sequence, doubles by
@@ -31,8 +29,6 @@ public sealed record Bbs757UpperEicasReading(
     IReadOnlyList<Bbs757EicasValue> Values,
     string? ThrustReference,
     IReadOnlyList<string> Envelope,
-    double GateN1Left,
-    double GateN1Right,
     bool Powered,
     bool Corrupt) : IBbs757Reading
 {
@@ -50,8 +46,6 @@ public sealed record Bbs757UpperEicasReading(
                 && Values.SequenceEqual(other.Values)
                 && string.Equals(ThrustReference, other.ThrustReference, StringComparison.Ordinal)
                 && Envelope.SequenceEqual(other.Envelope, StringComparer.Ordinal)
-                && GateN1Left.Equals(other.GateN1Left)
-                && GateN1Right.Equals(other.GateN1Right)
                 && Powered == other.Powered
                 && Corrupt == other.Corrupt));
 
@@ -69,8 +63,6 @@ public sealed record Bbs757UpperEicasReading(
         foreach (var v in Values) h.Add(v);
         h.Add(ThrustReference, StringComparer.Ordinal);
         foreach (string line in Envelope) h.Add(line, StringComparer.Ordinal);
-        h.Add(GateN1Left);
-        h.Add(GateN1Right);
         h.Add(Powered);
         h.Add(Corrupt);
         return h.ToHashCode();

@@ -1,15 +1,14 @@
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.WasmMemory;
-using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// The 757's upper EICAS as a reader of <see cref="Bbs757DisplayMonitor{TLayout, TReading}"/>: its layouts from the
-/// shared module session's builds, a <see cref="Bbs757UpperEicasReader"/> per located build on its own lease, the gate
-/// (<see cref="Bbs757UpperEicasGate"/>: each engine's N1 against the simulator's), the screen's own power, and its words
-/// (<see cref="Bbs757UpperEicasSpeech"/>) on three Ctrl+M rows: the messages (which also carry the monitor's status
-/// lines), the thrust reference and the engine gauge colors. Called on the UI thread only.
+/// shared module session's builds, a <see cref="Bbs757UpperEicasReader"/> per located build on its own lease, which takes
+/// BlueBird's manual thrust reference flag where the draw does (S10, its one simulator input, never a check), the
+/// screen's own power, and its words (<see cref="Bbs757UpperEicasSpeech"/>) on three Ctrl+M rows: the messages (which
+/// also carry the monitor's status lines), the thrust reference and the engine gauge colors. Called on the UI thread only.
 /// </summary>
 public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>
 {
@@ -33,19 +32,11 @@ public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEi
     /// <summary>The row of the monitor's status lines ("unavailable", "stopped", "resumed"): the messages'.</summary>
     public const string MuteKey = MessagesKey;
 
-    /// <summary>The simulator's variables the gate compares memory with, then the manual thrust reference flag the
-    /// sampler takes where BlueBird's draw does (S10).</summary>
-    public static IReadOnlyList<string> GateKeys { get; } = Array.AsReadOnly(new[]
+    /// <summary>The one simulator variable the sampler takes, where BlueBird's draw does (S10): the manual thrust reference
+    /// flag, BlueBird's L:var.</summary>
+    public static IReadOnlyList<Bbs757SimInput> SimInputs { get; } = Array.AsReadOnly(new[]
     {
-        Bbs757UpperEicasGate.N1LeftKey, Bbs757UpperEicasGate.N1RightKey, Bbs757UpperEicasReader.ManualKey,
-    });
-
-    /// <summary>The variable behind each of <see cref="GateKeys"/>: the two N1s are stock simulator variables in percent,
-    /// never L:vars of that name ([VAR-2]); the manual flag is BlueBird's L:var.</summary>
-    public static IReadOnlyList<Bbs757GateVariable> GateVariables { get; } = Array.AsReadOnly(new[]
-    {
-        Stock(Bbs757UpperEicasGate.N1LeftKey), Stock(Bbs757UpperEicasGate.N1RightKey),
-        Bbs757GateVariable.LVar(Bbs757UpperEicasReader.ManualKey),
+        Bbs757SimInput.LVar(Bbs757UpperEicasReader.ManualKey),
     });
 
     string IBbs757DisplayReader<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>.Name => Name;
@@ -56,9 +47,7 @@ public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEi
 
     int IBbs757DisplayReader<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>.TickMs => TickMs;
 
-    IReadOnlyList<string> IBbs757DisplayReader<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>.GateKeys => GateKeys;
-
-    IReadOnlyList<Bbs757GateVariable> IBbs757DisplayReader<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>.GateVariables => GateVariables;
+    IReadOnlyList<Bbs757SimInput> IBbs757DisplayReader<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>.SimInputs => SimInputs;
 
     /// <summary>The distinct upper EICAS layouts of the analyzed builds, in file order; a build without one is skipped
     /// (another reader's layout found it).</summary>
@@ -79,12 +68,9 @@ public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEi
         return new Bbs757UpperEicasReader(module.Memory, module.AcquireLease(), layout);
     }
 
-    public bool Passes(IReadOnlyList<(long AtMs, Bbs757UpperEicasReading Reading)> history, Bbs757SimValues sim) =>
-        Bbs757UpperEicasGate.Passes(history, sim);
-
-    /// <summary>The screen's own power, as the reading decoded it: never null, so a dark screen is never compared and its
+    /// <summary>The screen's own power, as the reading decoded it: never null, so a dark screen is never spoken and its
     /// power-up messages are a silent baseline (S4).</summary>
-    public bool? Lit(Bbs757UpperEicasReading reading, Bbs757SimValues sim) => reading.Powered;
+    public bool? Lit(Bbs757UpperEicasReading reading) => reading.Powered;
 
     /// <summary>Each line on its own row; <paramref name="withPrefix"/> changes nothing: "EICAS warning: …" names the
     /// display, and "Thrust reference: …" has no prefix.</summary>
@@ -94,6 +80,4 @@ public sealed class Bbs757UpperEicasDisplay : IBbs757DisplayReader<Bbs757UpperEi
     public IReadOnlyList<string> Rows(Bbs757UpperEicasReading reading) => Bbs757UpperEicasSpeech.Rows(reading);
 
     public string DescribeAll(Bbs757UpperEicasReading reading) => Bbs757UpperEicasSpeech.DescribeAll(reading);
-
-    private static Bbs757GateVariable Stock(string key) => new(key, key, SimVarType.SimVar, "percent");
 }

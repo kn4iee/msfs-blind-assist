@@ -174,7 +174,7 @@ public partial class BBS757Definition : BaseAircraftDefinition
         AddThrustVariables(vars);         // plan 15
         AddFirstOfficerVariables(vars);   // plan 10
 
-        // The display readers' gate variables, batched; last, so it sees every other registration (BBS757Definition.Displays.cs).
+        // The display readers' simulator inputs, batched; last, so it sees every other registration (BBS757Definition.Displays.cs).
         AddDisplayVariables(vars);        // plan 23
 
         Log.Info("BBS757", $"Built {vars.Count} variables from {Map.Controls.Count} controls and {Map.Status.Count} status rows.");

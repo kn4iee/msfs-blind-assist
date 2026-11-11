@@ -3,17 +3,14 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// <summary>
 /// One read of the 757's lower EICAS: the page shown (<see cref="PageValue"/> as stored, <see cref="Page"/> its word:
 /// "engine", "STATUS", "engine off", "blank"; null while the display is not drawing), the rows of that page as drawn
-/// (<see cref="Bbs757LowerEicasText.PageRows"/>), the STATUS list's messages newest first (read whatever the page), each
-/// engine's HP spool for the gate, and whether the display draws. <see cref="Corrupt"/> is a torn or out-of-range
-/// reading, never spoken, shown or a baseline.
+/// (<see cref="Bbs757LowerEicasText.PageRows"/>), the STATUS list's messages newest first (read whatever the page), and
+/// whether the display draws. <see cref="Corrupt"/> is a torn or out-of-range reading, never spoken, shown or a baseline.
 /// </summary>
 public sealed record Bbs757LowerEicasReading(
     int PageValue,
     string? Page,
     IReadOnlyList<string> PageRows,
     IReadOnlyList<string> StatusMessages,
-    double LeftHpSpool,
-    double RightHpSpool,
     bool Powered,
     bool Corrupt) : IBbs757Reading;
 

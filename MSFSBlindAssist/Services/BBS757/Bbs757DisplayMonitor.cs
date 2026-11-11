@@ -22,27 +22,30 @@ public interface IBbs757DisplayMonitor : IDisposable
     /// <summary>The display window's rows: the reader's while running, else one status row.</summary>
     IReadOnlyList<string> View();
 
-    /// <summary>The reader's gate variables (<see cref="IBbs757DisplayReader{TLayout, TReading}.GateVariables"/>), which
+    /// <summary>The reader's simulator inputs (<see cref="IBbs757DisplayReader{TLayout, TReading}.SimInputs"/>), which
     /// the registry records so the definition puts each on SimConnect's batch: never listed apart from the reader.</summary>
-    IReadOnlyList<Bbs757GateVariable> GateVariables { get; }
+    IReadOnlyList<Bbs757SimInput> SimInputs { get; }
 }
 
 /// <summary>
 /// Reads one BlueBird 757 display from BBS752.wasm's memory and speaks its changes: the PMDG 737 FMA monitor's state
 /// machine and timings (S1), made generic over an <see cref="IBbs757DisplayReader{TLayout, TReading}"/>. Ticked every
-/// <see cref="IBbs757DisplayReader{TLayout, TReading}.TickMs"/> on the UI thread, it waits while the simulator gives no
-/// gate values, has the shared module session analyse the installed files and locate the module's memory (through
-/// <see cref="IBbs757DisplayEnvironment"/>, off the UI thread, polled with <see cref="Task.IsCompleted"/> and never
-/// continued), trusts a candidate only once a reading passes the one gate (<see cref="Judge"/>), then speaks each change
-/// once it has settled for 300 ms. Only a good reading is spoken, shown or becomes the baseline. The first good reading
-/// after Start or Restart, after any wait for the simulator, and after the display was dark or powering up, is a silent
-/// baseline (S4). Silence must never
-/// pass for "no change": every way the reader stops is spoken once (the memory lost for 10 s, no good reading for 2 s,
-/// ten corrupt readings, the search window running out, a final reason), "resumed" carries whatever changed meanwhile,
-/// and <see cref="View"/> repeats the stop line the pilot heard. Memory not found and values that do not match are never
-/// final: after the 120 s search window the reader keeps searching every 30 s. The status lines are muted by the reader's
-/// Ctrl+M row, each change line by its own; a mute silences speech, never the window. Errors never escape a tick: they
-/// are logged and end in Unavailable, and Restart recovers.
+/// <see cref="IBbs757DisplayReader{TLayout, TReading}.TickMs"/> on the UI thread, it waits while the simulator is not up
+/// (disconnected, no flight, another aircraft), has the shared module session analyse the installed files and locate the
+/// module's memory (through <see cref="IBbs757DisplayEnvironment"/>, off the UI thread, polled with
+/// <see cref="Task.IsCompleted"/> and never continued), and runs on a candidate's first reading that is not corrupt.
+/// A reading is trusted on structure alone (B757-30): the layout the generator derived for this exact BBS752.wasm, the
+/// sampler finding its objects by vptr with every read inside the module, and the reading not
+/// <see cref="IBbs757Reading.Corrupt"/>. No simulator value ever judges it; a reader's
+/// <see cref="IBbs757DisplayReader{TLayout, TReading}.SimInputs"/> only feed its sampler (S10). Each change is spoken once
+/// it has settled for 300 ms. Nothing is spoken while the display is dark or for 10 s after it powers up, and the first
+/// good reading after Start or Restart, after any wait for the simulator, and after the display was dark or powering up,
+/// is a silent baseline (S4). Silence must never pass for "no change": every way the reader stops is spoken once (the
+/// memory lost for 10 s, ten corrupt readings, the search window running out, a final reason), "resumed" carries whatever
+/// changed meanwhile, and <see cref="View"/> repeats the stop line the pilot heard. Memory not found is never final: after
+/// the 120 s search window the reader keeps searching every 30 s. The status lines are muted by the reader's Ctrl+M row,
+/// each change line by its own; a mute silences speech, never the window. Errors never escape a tick: they are logged and
+/// end in Unavailable, and Restart recovers.
 /// </summary>
 public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMonitor
     where TLayout : class
@@ -53,19 +56,19 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     internal const long LocateGiveUpMs = 120_000;
     internal const long SlowRetryMs = 30_000;
     internal const long LostStopMs = 10_000;
-    internal const long MismatchToleranceMs = 2_000;
+
+    /// <summary>How long a candidate has, from its first read, to give a reading that is not corrupt before it is dropped.</summary>
+    internal const long VerifyMs = 2_000;
+
     internal const int CorruptTickLimit = 10;
 
-    /// <summary>How far back the gate's readings reach: the simulator's value may lag the memory's.</summary>
-    internal const long HistoryMs = 3_000;
-
-    /// <summary>After the display powers up, nothing is compared for this long, so power-up is never spoken (S4).</summary>
+    /// <summary>After the display powers up, nothing is spoken for this long, so power-up is never spoken (S4).</summary>
     internal const long LitQuietMs = 10_000;
 
-    private enum State { Stopped, WaitingForSimulator, Analyzing, Locating, Verifying, Running, Mismatched, Unavailable }
+    private enum State { Stopped, WaitingForSimulator, Analyzing, Locating, Verifying, Running, Unavailable }
 
-    /// <summary>What the one gate makes of a reading.</summary>
-    private enum Verdict { Corrupt, Quiet, Fails, Passes }
+    /// <summary>What a reading is: torn or out of range, dark or powering up, or good.</summary>
+    private enum Verdict { Corrupt, Quiet, Good }
 
     private readonly IBbs757DisplayReader<TLayout, TReading> _reader;
     private IBbs757DisplayEnvironment? _env;
@@ -81,16 +84,14 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private long? _lastAttemptMs;
     private int _attempts;
     private bool _slowRetry; // the 120 s window ran out and was spoken: search every 30 s until found
-    private long? _lostAtMs; // when the memory was lost while running, until it verifies again (the 10 s stop)
-    private long? _downSinceMs; // stopped (a mismatch, or the memory lost while running) since then, until it runs again
+    private long? _lostAtMs; // when the memory was lost while running, until it runs again (the 10 s stop)
+    private long? _downSinceMs; // the memory lost while running since then, until it runs again
 
     // The candidate being read and those waiting, each waiting one with what it knew of the display's power. The monitor
     // owns them all and disposes each once.
     private IBbs757DisplaySampler<TReading>? _sampler;
     private readonly Queue<(IBbs757DisplaySampler<TReading> Sampler, bool? LastLit, long? LitSinceMs)> _candidates = new();
     private long _candidateStartMs;
-    private long? _holdSinceMs; // the candidate has read quiet since then: the search window pauses meanwhile
-    private readonly List<(long AtMs, TReading Reading)> _history = new();
 
     // The display's power (S4) as the sampler being read sees it, from its readings that are not corrupt.
     private bool? _lastLit;      // at the last such reading; null when nothing is known, or with no power state
@@ -101,7 +102,6 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private TReading _spoken = default!;  // what the pilot last heard (or would have, unmuted)
     private TReading _current = default!; // the latest good reading, for the window
     private long? _changeAtMs;
-    private long _lastPassMs;
     private int _corruptTicks;
     private bool _everRunning;
     private string? _stopReason; // the reason in the stop line the pilot heard (or would have, unmuted), until it runs again
@@ -111,20 +111,20 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private bool _resumeOwed;
     private string _reason = Bbs757DisplayReasons.InternalError; // why unavailable, or the search window's last failure
 
-    // The reader's gate variables, and their keys as each tick reads the simulator with them.
-    private readonly IReadOnlyList<Bbs757GateVariable> _gates;
-    private readonly IReadOnlyList<string> _gateKeys;
+    // The reader's simulator inputs (S10), and their keys as each tick reads the simulator with them.
+    private readonly IReadOnlyList<Bbs757SimInput> _inputs;
+    private readonly IReadOnlyList<string> _inputKeys;
 
     public Bbs757DisplayMonitor(IBbs757DisplayReader<TLayout, TReading> reader)
     {
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
-        _gates = Array.AsReadOnly(reader.GateVariables.ToArray());
-        _gateKeys = Array.AsReadOnly(_gates.Select(g => g.Key).ToArray());
+        _inputs = Array.AsReadOnly(reader.SimInputs.ToArray());
+        _inputKeys = Array.AsReadOnly(_inputs.Select(i => i.Key).ToArray());
     }
 
     internal string StateName => _state.ToString();
 
-    public IReadOnlyList<Bbs757GateVariable> GateVariables => _gates;
+    public IReadOnlyList<Bbs757SimInput> SimInputs => _inputs;
 
     /// <summary>The latest good reading while running and the display shows it, else default: never the last lit reading
     /// while the display is dark or powering up.</summary>
@@ -133,11 +133,10 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     /// <summary>The reader's rows of the latest good reading while running and the display shows it, else null.</summary>
     public IReadOnlyList<string>? RowsWhileRunning() => ShowsReading ? _reader.Rows(_current) : null;
 
-    /// <summary>The reader's rows while running; otherwise one row saying why not. Never a reading the gate has not
-    /// passed, and never muted. Once a stop line has been said it repeats it until the reader runs again, never
-    /// "starting" after the pilot heard "stopped"; after a mismatch it adds the last good reading, which may be stale,
-    /// so only as "last known". While it runs and the newest reading is dark, "not powered"; while it powers up (lit,
-    /// still quiet), "starting": neither is spoken (S4).</summary>
+    /// <summary>The reader's rows while running; otherwise one row saying why not. Never a corrupt reading, and never
+    /// muted. Once a stop line has been said it repeats it until the reader runs again, never "starting" after the pilot
+    /// heard "stopped". While it runs and the newest reading is dark, "not powered"; while it powers up (lit, still quiet),
+    /// "starting": neither is spoken (S4).</summary>
     public IReadOnlyList<string> View() => RowsWhileRunning() ?? new[] { StatusRow() };
 
     /// <summary>Running, and the newest reading that is not corrupt is neither dark nor powering up: what the display
@@ -146,9 +145,9 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     /// <summary>
     /// Whether the reader's display key goes straight to the AI read (S15) instead of opening the window: not started,
-    /// unavailable, its search window ran out, or stopped (a mismatch, or the memory lost while running) for
-    /// <see cref="LostStopMs"/> or longer. False while it waits for the simulator, starts, runs, or is stopped for less:
-    /// the window opens and says so.
+    /// unavailable, its search window ran out, or the memory lost while running for <see cref="LostStopMs"/> or longer.
+    /// False while it waits for the simulator, starts, runs, or has been searching again for less: the window opens and
+    /// says so.
     /// </summary>
     public bool KeyFallsBackToAi()
     {
@@ -219,18 +218,11 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     private string StatusRow() => _state switch
     {
         State.Unavailable => Bbs757DisplaySpeech.Unavailable(_reader.Name, _reason),
-        State.Mismatched => HeardStopLine(Bbs757DisplayReasons.Mismatch),
-        _ when _stopReason is { } heard => HeardStopLine(heard),
+        _ when _stopReason is { } heard => StopLine(heard),
         State.WaitingForSimulator => Bbs757DisplaySpeech.Waiting(_reader.Name),
         State.Running or State.Verifying when _lastLit == false => Bbs757DisplaySpeech.Unpowered(_reader.Name),
         _ => Bbs757DisplaySpeech.Starting(_reader.Name), // starting, or running while the display powers up
     };
-
-    /// <summary>The stop line the pilot heard, for the window: after a mismatch, with the last good reading.</summary>
-    private string HeardStopLine(string reason) =>
-        _everRunning && reason == Bbs757DisplayReasons.Mismatch
-            ? Bbs757DisplaySpeech.Stopped(_reader.Name, reason) + ". Last known: " + _reader.DescribeAll(_current)
-            : StopLine(reason);
 
     private void OnTimerTick(object? sender, EventArgs e) => Tick();
 
@@ -255,7 +247,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     private void Step(IBbs757DisplayEnvironment env)
     {
-        var sim = env.ReadSimulator(_gateKeys);
+        // Null while the simulator is not up, whether or not the reader takes any input: the silent wait.
+        var sim = env.ReadSimulator(_inputKeys);
         if (sim is null)
         {
             // Disconnected, or another aircraft loaded: drop the memory, keep the layouts (and an analysis in flight).
@@ -268,7 +261,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
                 // silent baseline, never the difference between the flights. A stop heard before is still answered
                 // by "resumed" (_resumeOwed), alone.
                 _rebaseline = true;
-                Go(State.WaitingForSimulator, "the simulator's values are not available");
+                Go(State.WaitingForSimulator, "the simulator is not available");
             }
             return;
         }
@@ -280,7 +273,6 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
             case State.Locating: OnLocating(env); break;
             case State.Verifying: OnVerifying(env, sim.Value); break;
             case State.Running: OnRunning(env, sim.Value); break;
-            case State.Mismatched: OnMismatched(env, sim.Value); break;
         }
     }
 
@@ -347,8 +339,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         {
             if (!_slowRetry && now - _locateStartMs >= LocateGiveUpMs)
             {
-                // Not final: a long load, or a reload whose values lag, can outlast the window. Say so once, then keep
-                // searching, slowly and silently, until found, Stop or Restart.
+                // Not final: a long load, or a reload, can outlast the window. Say so once, then keep searching, slowly
+                // and silently, until found, Stop or Restart.
                 _slowRetry = true;
                 Log(Invariant($"{_reason} after {_attempts} attempt(s); searching every {SlowRetryMs / 1000} s"));
                 SayStopped(_reason);
@@ -371,7 +363,7 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         var found = SamplersIn(location);
         if (found.Count > 0)
         {
-            // Each starts from what is known of the display's power now.
+            // Each starts from what is known of the display's power now; they are tried in this order.
             foreach (var sampler in found) _candidates.Enqueue((sampler, _lastLit, _litSinceMs));
             StartNextCandidate(Invariant($"{found.Count} candidate(s) found"));
             return;
@@ -422,93 +414,72 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
     {
         (_sampler, _lastLit, _litSinceMs) = _candidates.Dequeue();
         _candidateStartMs = _env!.NowMs;
-        _holdSinceMs = null;
-        _history.Clear();
         Go(State.Verifying, reason);
     }
 
+    /// <summary>
+    /// The candidate's first reading that is not corrupt runs it, whatever the display's power: dark or powering up, the
+    /// window says so and nothing is spoken until the power-up quiet ends (S4). The others are disposed: the first in
+    /// queue order that reads wins. A failed read drops it at once; a candidate that has read only corrupt readings for
+    /// <see cref="VerifyMs"/> is dropped too.
+    /// </summary>
     private void OnVerifying(IBbs757DisplayEnvironment env, Bbs757SimValues sim)
     {
         long now = env.NowMs;
         if (!_sampler!.TryRead(sim, out var reading))
         {
-            EndHold(now);
             DropCandidate(readFailed: true);
             return;
         }
-        var verdict = Judge(now, reading, sim);
-        if (verdict == Verdict.Quiet)
-        {
-            // Not compared: neither trusted nor dropped (a cold-and-dark load would otherwise search again and again), and
-            // the search window pauses. Held 2 s while another candidate waits, it goes to the back of the queue, so a
-            // wrong one that decodes "dark" never starves the rest; alone, it holds. It has its 2 s once the display counts.
-            _holdSinceMs ??= now;
-            _candidateStartMs = now;
-            if (_candidates.Count > 0 && now - _holdSinceMs >= MismatchToleranceMs) RequeueCandidate(now);
-            return;
-        }
-        EndHold(now);
-        if (verdict == Verdict.Passes)
+        var verdict = Judge(now, reading);
+        if (verdict != Verdict.Corrupt)
         {
             while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue().Sampler);
-            EnterRunning(reading, "the memory agrees with the simulator");
+            EnterRunning(reading, quiet: verdict == Verdict.Quiet, "a reading that is not corrupt");
             return;
         }
-        if (now - _candidateStartMs >= MismatchToleranceMs) DropCandidate(readFailed: false);
-    }
-
-    /// <summary>A quiet hold ends: its time does not count toward the 120 s search window.</summary>
-    private void EndHold(long now)
-    {
-        if (_holdSinceMs is not { } since) return;
-        _locateStartMs += now - since;
-        _holdSinceMs = null;
-    }
-
-    /// <summary>The quiet candidate goes to the back of the queue with what it knows of the display's power; its 2 s
-    /// start afresh when it comes up again.</summary>
-    private void RequeueCandidate(long now)
-    {
-        EndHold(now);
-        _candidates.Enqueue((_sampler!, _lastLit, _litSinceMs));
-        _sampler = null;
-        StartNextCandidate("quiet for 2 s while another candidate waits; trying the next");
+        if (now - _candidateStartMs >= VerifyMs) DropCandidate(readFailed: false);
     }
 
     /// <summary>
     /// The candidate failed. A wrong layout usually fails the read itself (its pointer lies outside the module), so the
     /// next candidate is tried before searching again: a new search would return the same ones. With none left, it
-    /// searches again in the same window, which remembers why: a failed read is "memory not found", a disagreement
-    /// "values do not match".
+    /// searches again in the same window, which remembers why: a failed read is "memory not found", only corrupt
+    /// readings "unexpected values".
     /// </summary>
     private void DropCandidate(bool readFailed)
     {
         DisposeQuietly(_sampler);
         _sampler = null;
-        _reason = readFailed ? Bbs757DisplayReasons.MemoryNotFound : Bbs757DisplayReasons.Mismatch;
-        string why = readFailed ? "the memory read failed" : "no good reading (matching the simulator, not corrupt) for 2 s";
+        _reason = readFailed ? Bbs757DisplayReasons.MemoryNotFound : Bbs757DisplayReasons.UnexpectedValues;
+        string why = readFailed ? "the memory read failed" : "no reading that is not corrupt for 2 s";
         if (_candidates.Count > 0)
             StartNextCandidate($"{why}; trying the next candidate");
         else
             BeginLocating(newWindow: false, $"{why}; searching again");
     }
 
-    private void EnterRunning(TReading reading, string reason)
+    /// <summary>
+    /// Runs on <paramref name="reading"/>, which is not corrupt; <paramref name="quiet"/> when it is dark or powering up.
+    /// The first good reading after Start or Restart, after a wait for the simulator, or after the display was dark or
+    /// powering up, is the baseline, never spoken as a change; only "resumed" when a stop heard (before a reload or a wait
+    /// too) is unanswered. Later, what changed while the reader was not running is told, never swallowed: after
+    /// "resumed", whose change parts take no prefix of their own, or with its prefix after a quick, silent search, or
+    /// when the status row is muted.
+    /// </summary>
+    private void EnterRunning(TReading reading, bool quiet, string reason)
     {
-        // The first good reading after Start or Restart, after a wait for the simulator, or after the display was dark or
-        // powering up, is the baseline, never spoken as a change; only "resumed" when a stop heard (before a reload or a
-        // wait too) is unanswered. Later, what
-        // changed while the reader was not running is told, never swallowed: after "resumed", whose change parts take
-        // no prefix of their own, or with its prefix after a quick, silent search, or when the status row is muted.
+        var env = _env!;
         bool heardStop = _resumeOwed; // in this session, or before a reload
-        bool sayResumed = heardStop && !_env!.IsMuted(_reader.MuteKey);
+        bool sayResumed = heardStop && !env.IsMuted(_reader.MuteKey);
         var missed = _everRunning && !_rebaseline && !Same(_spoken, reading)
             ? _reader.Changes(_spoken, reading, withPrefix: !sayResumed)
             : Array.Empty<Bbs757SpokenLine>();
         _spoken = _current = reading;
-        _rebaseline = false;
+        // A quiet reading is never the baseline: the first good reading after the quiet is. Kept here, never left to
+        // the next quiet tick to set again: a power-up quiet can end at the very next reading.
+        _rebaseline = quiet;
         _changeAtMs = null;
-        _lastPassMs = _env!.NowMs;
         _corruptTicks = 0;
         _everRunning = true;
         _stopReason = null;
@@ -521,8 +492,8 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         {
             // The pilot heard "stopped" or "unavailable": tell them it reads again, however it got here, with the
             // unmuted rows' changes.
-            var parts = missed.Where(line => !_env.IsMuted(line.MuteKey)).Select(line => line.Text);
-            _env.Speak(string.Join(", ", parts.Prepend(Bbs757DisplaySpeech.Resumed(_reader.Name))));
+            var parts = missed.Where(line => !env.IsMuted(line.MuteKey)).Select(line => line.Text);
+            env.Speak(string.Join(", ", parts.Prepend(Bbs757DisplaySpeech.Resumed(_reader.Name))));
         }
         else
         {
@@ -530,11 +501,13 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         }
     }
 
+    /// <summary>Only a corrupt reading (ten in a row: unavailable until a reload) or a failed read (the memory lost)
+    /// stops a running reader; a quiet one waits; every other reading is good.</summary>
     private void OnRunning(IBbs757DisplayEnvironment env, Bbs757SimValues sim)
     {
         long now = env.NowMs;
         if (!TryReadRunning(now, sim, out var reading)) return;
-        var verdict = Judge(now, reading, sim);
+        var verdict = Judge(now, reading);
         if (verdict == Verdict.Corrupt)
         {
             // Never shown or spoken; ten in a row stop the reader until a reload, which then says "resumed".
@@ -548,24 +521,12 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
             return;
         }
         _corruptTicks = 0;
-        switch (verdict)
+        if (verdict == Verdict.Quiet)
         {
-            case Verdict.Quiet:
-                // Not compared: neither a pass nor a mismatch, and an open settle window closes unspoken.
-                _lastPassMs = now;
-                _changeAtMs = null;
-                return;
-            case Verdict.Fails:
-                if (now - _lastPassMs >= MismatchToleranceMs)
-                {
-                    _changeAtMs = null;
-                    _downSinceMs ??= now;
-                    Go(State.Mismatched, "the memory has not matched the simulator for 2 s");
-                    SayStopped(Bbs757DisplayReasons.Mismatch);
-                }
-                return; // an open settle window keeps its start; the next good reading speaks
+            // Dark or powering up: neither shown nor spoken, and an open settle window closes unspoken.
+            _changeAtMs = null;
+            return;
         }
-        _lastPassMs = now;
         _current = reading;
         if (_rebaseline)
         {
@@ -578,53 +539,40 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         SpeakSettledChange(now);
     }
 
-    private void OnMismatched(IBbs757DisplayEnvironment env, Bbs757SimValues sim)
-    {
-        long now = env.NowMs;
-        if (!TryReadRunning(now, sim, out var reading)) return;
-        // The first good reading resumes, and "resumed" carries what changed while stopped.
-        if (Judge(now, reading, sim) == Verdict.Passes) EnterRunning(reading, "the memory agrees with the simulator again");
-    }
-
-    /// <summary>A failed read means the memory moved or went away: search again, silently at first. From Running, a
-    /// search that has not verified within 10 s says "stopped"; from Mismatched it was said.</summary>
+    /// <summary>A failed read means the memory moved or went away: search again, silently at first; a search that has
+    /// not found the memory again within 10 s says "stopped".</summary>
     private bool TryReadRunning(long now, Bbs757SimValues sim, out TReading reading)
     {
         if (_sampler!.TryRead(sim, out reading)) return true;
-        if (_state == State.Running)
-        {
-            _lostAtMs = now;
-            _downSinceMs ??= now;
-        }
+        _lostAtMs = now;
+        _downSinceMs ??= now;
         BeginLocating(newWindow: true, "the memory read failed; searching again");
         return false;
     }
 
     /// <summary>
-    /// The one gate (S3, S4). A corrupt reading counts for nothing and is never remembered. A reading while the display is
-    /// unpowered, or less than <see cref="LitQuietMs"/> after it powered up, is quiet: not compared, neither a pass nor a
-    /// failure, and the next good reading becomes the baseline silently. Any other is good when the reader's
-    /// <see cref="IBbs757DisplayReader{TLayout, TReading}.Passes"/> agrees with the simulator over the last
-    /// <see cref="HistoryMs"/>.
+    /// What a reading is (S4): corrupt (torn or out of range) counts for nothing and leaves the power state as it was; a
+    /// reading while the display is unpowered, or less than <see cref="LitQuietMs"/> after it powered up, is quiet:
+    /// neither shown nor spoken, and the next good reading becomes the baseline silently. Any other is good. No simulator
+    /// value takes part (B757-30).
     /// </summary>
-    private Verdict Judge(long now, TReading reading, Bbs757SimValues sim)
+    private Verdict Judge(long now, TReading reading)
     {
         if (reading.Corrupt) return Verdict.Corrupt;
-        Remember(now, reading);
-        if (IsQuiet(now, reading, sim))
+        if (IsQuiet(now, reading))
         {
             _rebaseline = true;
             return Verdict.Quiet;
         }
-        return _reader.Passes(_history, sim) ? Verdict.Passes : Verdict.Fails;
+        return Verdict.Good;
     }
 
     /// <summary>Whether the display is unpowered or powered up less than <see cref="LitQuietMs"/> ago. A display already lit
     /// when nothing is known of its power (the session's first reading) counts at once: its power-up was not seen, and
     /// that reading is a silent baseline.</summary>
-    private bool IsQuiet(long now, TReading reading, Bbs757SimValues sim)
+    private bool IsQuiet(long now, TReading reading)
     {
-        bool? lit = _reader.Lit(reading, sim);
+        bool? lit = _reader.Lit(reading);
         if (lit is not { } on)
         {
             _lastLit = null;
@@ -670,14 +618,6 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
 
     private static bool Same(TReading a, TReading b) => EqualityComparer<TReading>.Default.Equals(a, b);
 
-    private void Remember(long now, TReading reading)
-    {
-        _history.Add((now, reading));
-        int stale = 0;
-        while (stale < _history.Count && now - _history[stale].AtMs > HistoryMs) stale++;
-        if (stale > 0) _history.RemoveRange(0, stale);
-    }
-
     private void BeginSession(string reason)
     {
         ResetSession();
@@ -700,13 +640,13 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         _spoken = _current = default!;
     }
 
-    /// <summary>A search after the memory was lost while running that has not verified within 10 s says "stopped", so a
-    /// long search never passes for "no change"; recovery says "resumed" with what changed.</summary>
+    /// <summary>A search after the memory was lost while running that has not found it again within 10 s says "stopped",
+    /// so a long search never passes for "no change"; recovery says "resumed" with what changed.</summary>
     private void SayIfLostTooLong(long now)
     {
         if (_lostAtMs is not { } lost || now - lost < LostStopMs) return;
         _lostAtMs = null;
-        Log(Invariant($"the memory has not verified within {LostStopMs / 1000} s of being lost"));
+        Log(Invariant($"the memory has not been found again within {LostStopMs / 1000} s of being lost"));
         SayStopped(Bbs757DisplayReasons.MemoryNotFound);
     }
 
@@ -789,8 +729,6 @@ public sealed class Bbs757DisplayMonitor<TLayout, TReading> : IBbs757DisplayMoni
         DisposeQuietly(_sampler);
         _sampler = null;
         while (_candidates.Count > 0) DisposeQuietly(_candidates.Dequeue().Sampler);
-        _holdSinceMs = null;
-        _history.Clear();
         _changeAtMs = null;
 
         var locate = _locate;

@@ -438,8 +438,8 @@ public partial class BBS757Definition
     {
         WarnOnceIfNestMissing(announcer);
         if (IsPickPending(varName)) return true;
-        // A display reader's gate value: read from the cache, never spoken (BBS757Definition.Displays.cs).
-        if (IsDisplayGateCopy(varName)) return true;   // plan 23
+        // A display reader's input: read from the cache, never spoken (BBS757Definition.Displays.cs).
+        if (IsDisplayInputCopy(varName)) return true;   // plan 23
         // The gap plans' rows (BBS757Definition.Hooks.cs); the first to claim a delivery ends it.
         bool handled = false;
         ProcessRadioUpdate(varName, value, announcer, ref handled);                   // plan 04

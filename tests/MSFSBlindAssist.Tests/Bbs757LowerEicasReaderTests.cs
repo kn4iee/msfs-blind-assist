@@ -132,8 +132,6 @@ public class Bbs757LowerEicasReaderTests
         Assert.Equal("blank", blank.Page);
         Assert.Empty(blank.PageRows);
         Assert.Equal("blank", Read(Memory(page: 9)).Page);
-        Assert.Equal(77.0, engine.LeftHpSpool);
-        Assert.Equal(77.0, engine.RightHpSpool);
     }
 
     [Fact]
@@ -282,7 +280,9 @@ public class Bbs757LowerEicasReaderTests
         var status = Read(bytes, layout);
         Assert.Equal(new[] { "STATUS page: not read: no list" }, status.PageRows);
         Assert.Empty(status.StatusMessages);
-        Assert.Equal(77.0, status.LeftHpSpool);
+        Assert.False(status.Corrupt);   // the HP spools are still read and range-checked without an engine page part
+        var badSpool = Read(Memory(tweak: b => PutD(b, Left + (uint)Layout.EngineToData + 24, double.NaN)), layout);
+        Assert.True(badSpool.Corrupt);
     }
 
     [Fact]
@@ -340,14 +340,27 @@ public class Bbs757LowerEicasReaderTests
     }
 
     [Fact]
-    public void A_pratt_and_whitney_engine_gates_on_its_n2_and_has_no_n3_row()
+    public void A_pratt_and_whitney_engines_hp_spool_is_its_n2_and_it_has_no_n3_row()
     {
         var reading = Read(Memory(tweak: b =>
         {
             Put(b, Left + (uint)Layout.EngineType, 1);
             PutD(b, Left + (uint)Layout.EngineToData + 16, 65.5);
         }));
-        Assert.Equal(65.5, reading.LeftHpSpool);
+        Assert.False(reading.Corrupt);
         Assert.DoesNotContain(reading.PageRows, r => r.StartsWith("N3"));
+
+        // Its HP spool, range-checked first, is the N2 field: a PW's N2 that is not a number is that spool's fault.
+        var lines = new List<string>();
+        var bytes = Memory(tweak: b =>
+        {
+            Put(b, Left + (uint)Layout.EngineType, 1);
+            PutD(b, Left + (uint)Layout.EngineToData + 16, double.NaN);
+        });
+        var src = new FakeProcessMemory().Add(new MemoryRegion(Base, Base, (ulong)bytes.Length, true, true, true), bytes);
+        using var r = new Bbs757LowerEicasReader(new ModuleMemory(src, Base), src, Layout, lines.Add);
+        Assert.True(r.TryRead(default, out var bad));
+        Assert.True(bad.Corrupt);
+        Assert.Contains("left HP spool", Assert.Single(lines));
     }
 }

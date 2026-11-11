@@ -1,5 +1,6 @@
-// The 757 definition's lower EICAS seam (plan 25 Task 6): the monitor, its Ctrl+M row, its gate variables on the batch, and
-// Alt+S, which opens the one "Lower EICAS" window while the reader runs and falls back to the AI read when it cannot.
+// The 757 definition's lower EICAS seam (plan 25 Task 6): the monitor, which takes no simulator input (B757-30), its
+// Ctrl+M row, and Alt+S, which opens the one "Lower EICAS" window while the reader runs and falls back to the AI read when
+// it cannot.
 
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
@@ -86,64 +87,21 @@ public class Bbs757LowerEicasWiringTests
     }
 
     [Fact]
-    public void The_gate_variables_are_registered_hidden_and_counted()
+    public void The_lower_eicas_takes_no_simulator_input_and_adds_no_variable()
     {
+        // Its N2 and page gate is gone (B757-30, the owner's flight of 2026-11-10): the reader takes nothing of the
+        // simulator's, so the definition adds no copy for it. The copy-building it used (an input whose name the Engines
+        // panel's N2 rows stream off the batch) is still covered against a list of inputs, in Bbs757DisplaysWiringTests.
         var def = new BBS757Definition();
         var vars = def.GetVariables();
-        var keys = def.DisplayCacheKeys();
 
-        foreach (string key in Bbs757LowerEicasDisplay.GateKeys)
-            Assert.Contains(key, def.Displays.GateVariables.Select(g => g.Key));
-
-        // Every gate variable resolves to one batched variable, hidden from Ctrl+M when it is a copy ([VAR-7], [VAR-9]).
-        var copies = new List<string>();
-        foreach (string key in Bbs757LowerEicasDisplay.GateKeys)
-        {
-            var cacheKey = keys[key];
-            Assert.StartsWith("BBS757_", cacheKey);
-            if (cacheKey.StartsWith(BBS757Definition.DisplayGateCopyPrefix, StringComparison.Ordinal))
-            {
-                copies.Add(cacheKey);
-                Assert.True(vars[cacheKey].ExcludeFromMonitorManager);
-            }
-        }
-        // The count this plan adds (the plan allows at most 8).
-        Assert.Equal(new[]
-        {
-            BBS757Definition.DisplayGateCopyPrefix + Bbs757LowerEicasGate.LeftN2Key,
-            BBS757Definition.DisplayGateCopyPrefix + Bbs757LowerEicasGate.RightN2Key,
-            BBS757Definition.DisplayGateCopyPrefix + Bbs757LowerEicasGate.PageKey,
-        }, copies);
-        Assert.Equal(SimVarType.SimVar, vars[copies[0]].Type);
-        Assert.Equal("percent", vars[copies[0]].Units);
-        Assert.Equal(SimVarType.LVar, vars[copies[2]].Type);
-        Assert.Single(vars.Values, v => v.Name == "BBS_ECAM_Mode" && ContinuousBatchLayout.RidesBatch(v));
-    }
-
-    [Fact]
-    public void The_n2_gate_copies_stream_off_the_batch_because_the_engines_panel_already_streams_those_names()
-    {
-        var def = new BBS757Definition();
-        var vars = def.GetVariables();
-        var keys = def.DisplayCacheKeys();
-
-        foreach (var (gateKey, rowKey) in new[]
-                 {
-                     (Bbs757LowerEicasGate.LeftN2Key, "BBS757_ENG1_N2"), (Bbs757LowerEicasGate.RightN2Key, "BBS757_ENG2_N2"),
-                 })
-        {
-            var row = vars[rowKey];   // the Engines panel's silent row: Continuous, not announced, so never on the batch
-            Assert.Equal(UpdateFrequency.Continuous, row.UpdateFrequency);
-            Assert.False(ContinuousBatchLayout.RidesBatch(row));
-            var copy = vars[keys[gateKey]];
-            Assert.Equal(row.Name, copy.Name);
-            Assert.True(copy.ExcludeFromBatch);
-            Assert.Equal(UpdateFrequency.Continuous, copy.UpdateFrequency);   // streams on its own subscription
-            Assert.True(copy.IsAnnounced);
-            Assert.False(ContinuousBatchLayout.RidesBatch(copy));
-        }
-        // The page copy has no such twin: it rides the batch.
-        Assert.False(vars[keys[Bbs757LowerEicasGate.PageKey]].ExcludeFromBatch);
+        Assert.Empty(LowerMonitor(def).SimInputs);
+        IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading> reader = new Bbs757LowerEicasDisplay();
+        Assert.Empty(reader.SimInputs);
+        foreach (string gone in new[] { "BBS757_LOWER_EICAS_N2_1", "BBS757_LOWER_EICAS_N2_2", "BBS_ECAM_Mode" })
+            Assert.DoesNotContain(BBS757Definition.DisplayInputCopyPrefix + gone, vars.Keys);
+        Assert.DoesNotContain(vars.Values, v => v.Name.StartsWith("TURB ENG N2", StringComparison.Ordinal)
+            && v.DisplayName.EndsWith("(display reader input)", StringComparison.Ordinal));
     }
 
     // ENGINE and STATUS buttons (Task 9): built in memory, never from the generated map's labels.

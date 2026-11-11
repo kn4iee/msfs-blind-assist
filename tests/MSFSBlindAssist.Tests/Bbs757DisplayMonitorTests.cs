@@ -1,11 +1,13 @@
 // The 757's display monitor: the one state machine every BlueBird 757 memory reader drives (the PMDG 737 FMA
 // monitor's, made generic over a reader). Driven by a fake reader, environment and samplers with a settable clock
-// (100 ms per Tick()): no simulator, no timer, no module memory.
+// (100 ms per Tick()): no simulator, no timer, no module memory. A reading is trusted on structure alone (B757-30): the
+// sampler read it and it is not corrupt; no simulator value ever judges it.
 
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.BBS757;
 using MSFSBlindAssist.Services.PMDG;
 using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.SimConnect;
 using Xunit;
 
 namespace MSFSBlindAssist.Tests;
@@ -15,8 +17,8 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     private const string LogChannel = "bbs757-x";
     private const string StartingRow = "X reader starting";
     private const string WaitingRow = "X reader waiting for the simulator";
+    private const string UnpoweredRow = "X display not powered";
 
-    private const string StoppedMismatch = "X announcements stopped: values do not match the simulator";
     private const string StoppedNotFound = "X announcements stopped: aircraft memory not found";
     private const string StoppedUnexpected = "X announcements stopped: unexpected values";
     private const string UnavailableNotFound = "X announcements unavailable: aircraft memory not found";
@@ -53,11 +55,24 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
                 Assert.True(s.DisposeCount <= 1, $"a sampler was disposed {s.DisposeCount} times");
     }
 
-    private Harness New()
+    private Harness New(params Bbs757SimInput[] inputs)
     {
-        var h = new Harness();
+        var h = new Harness(inputs);
         _readers.Add(h.Reader);
         return h;
+    }
+
+    /// <summary>The memory lost while running and not found for 11 s ("stopped" at 10 s), then found again reading
+    /// <paramref name="next"/>; returns the sampler the reader runs on again.</summary>
+    private static FakeSampler LoseAndFind(Harness h, FakeReading next)
+    {
+        h.Tick(60); // past the 5 s between searches
+        h.Env.Locate = NotFound;
+        h.Reader.Samplers.Single(s => !s.Disposed).Fail = true;
+        h.Tick(110);
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(next);
+        h.Env.Locate = Found;
+        return h.RunUntilRunning(100);
     }
 
     [Fact]
@@ -73,22 +88,45 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         Assert.Equal(0, h.Env.AnalyseCalls);
         Assert.Equal(0, h.Env.LocateCalls);
         Assert.Equal(new[] { WaitingRow }, h.Monitor.View());
-        Assert.Contains("L:X_GATE", h.Env.KeysAsked); // it asked for the gate's variables
+        Assert.Equal(300, h.Env.ReadCalls); // asked every tick, though the reader takes no input of its own
+        Assert.Empty(h.Env.KeysAsked);
     }
 
     [Fact]
-    public void The_monitor_reads_the_simulator_by_its_readers_gate_variables()
+    public void The_monitor_reads_the_simulator_by_its_readers_inputs()
     {
-        // A reader that declares none of its own reads each of its GateKeys as an L:var of that name, with no units.
-        var h = New().Start();
-        Assert.Equal(new[] { new Bbs757GateVariable("L:X_GATE", "L:X_GATE", MSFSBlindAssist.SimConnect.SimVarType.LVar, null) },
-            h.Monitor.GateVariables);
+        // A reader's inputs (S10) are read under their keys every tick; an L:var input is BlueBird's, with no units.
+        var h = New(Bbs757SimInput.LVar("X_INPUT")).Start();
+        Assert.Equal(new[] { new Bbs757SimInput("X_INPUT", "X_INPUT", SimVarType.LVar, null) }, h.Monitor.SimInputs);
         h.Tick(3);
-        Assert.Equal(new[] { "L:X_GATE", "L:X_GATE", "L:X_GATE" }, h.Env.KeysAsked); // by each variable's key, every tick
+        Assert.Equal(new[] { "X_INPUT", "X_INPUT", "X_INPUT" }, h.Env.KeysAsked);
     }
 
     [Fact]
-    public void The_first_passing_reading_is_a_silent_baseline()
+    public void A_reading_that_is_not_corrupt_runs_without_any_simulator_value()
+    {
+        // The FMA's and the lower EICAS's case: the reader takes no input, so nothing of the simulator's is asked for,
+        // and its first reading that is not corrupt runs at once.
+        var h = New().Start();
+        Assert.Empty(h.Monitor.SimInputs);
+        h.TickUntil(() => h.State == "Verifying");
+        h.Tick(); // its first reading
+
+        Assert.Equal("Running", h.State);
+        Assert.Contains(h.Env.Logged, l => l.Line == "Verifying -> Running: a reading that is not corrupt");
+        Assert.Equal(new[] { "X: A" }, h.Monitor.View());
+        Assert.Empty(h.Env.KeysAsked);
+
+        // Whatever the simulator holds is never looked at.
+        h.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double> { ["TURB ENG N2:1"] = double.NaN });
+        h.Tick(100);
+        Assert.Equal("Running", h.State);
+        Assert.Empty(h.Env.Spoken);
+        Assert.Empty(h.Env.KeysAsked);
+    }
+
+    [Fact]
+    public void The_first_reading_is_a_silent_baseline()
     {
         var h = New().Start();
         h.RunUntilRunning();
@@ -142,32 +180,119 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
-    public void A_failing_candidate_gives_way_to_the_next()
+    public void A_candidate_with_no_reading_that_is_not_corrupt_for_2_s_is_dropped()
     {
         var h = New();
         var one = new FakeLayout("one");
         var two = new FakeLayout("two");
         h.Reader.Layouts = new[] { one, two };
-        h.Reader.MakeSampler = (_, layout) => h.Reader.NewSampler(layout == one ? R("WRONG") : R("A"));
+        h.Reader.MakeSampler = (_, layout) => h.Reader.NewSampler(layout == one ? Corrupt("Z") : R("A"));
         h.Start();
         h.TickUntil(() => h.State == "Verifying");
         var first = h.Reader.Samplers[0];
 
-        h.Tick(19); // the first candidate never passes, but has its 2 s
+        h.Tick(19); // the first candidate reads only corrupt, but has its 2 s
         Assert.Equal("Verifying", h.State);
         Assert.False(first.Disposed);
         Assert.True(first.Reads >= 19, $"{first.Reads} reads");
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View()); // a corrupt reading is never shown
 
-        var running = h.RunUntilRunning(5);
+        var running = h.RunUntilRunning(5); // then the next candidate runs
         Assert.Same(h.Reader.Samplers[1], running);
         Assert.True(first.Disposed);
         Assert.Equal(1, h.Env.LocateCalls); // the next candidate, not a new search
+        Assert.Contains(h.Env.Logged,
+            l => l.Line == "Verifying -> Verifying: no reading that is not corrupt for 2 s; trying the next candidate");
         Assert.Empty(h.Env.Spoken);
         Assert.Equal(new[] { "X: A" }, h.Monitor.View());
+
+        // Alone, it searches again in the same window, which then runs out with the reason it remembers.
+        var alone = New();
+        alone.Reader.MakeSampler = (_, _) => alone.Reader.NewSampler(Corrupt("Z"));
+        alone.Start();
+        alone.Tick(1300); // past the 120 s window
+        Assert.True(alone.Env.LocateCalls > 20, $"{alone.Env.LocateCalls} searches");
+        Assert.All(alone.Reader.Samplers.SkipLast(1), s => Assert.True(s.Disposed));
+        Assert.NotEqual("Running", alone.State);
+        Assert.Equal(new[] { "X announcements unavailable: unexpected values" }, alone.Env.Spoken);
     }
 
     [Fact]
-    public void Unlit_readings_are_not_compared_and_lighting_up_waits_10_s()
+    public void The_first_candidate_that_reads_wins()
+    {
+        // Two candidates, both reading: the first in queue order runs, the other is disposed unread.
+        var one = new FakeLayout("one");
+        var two = new FakeLayout("two");
+        var h = New();
+        h.Reader.Layouts = new[] { one, two };
+        h.Reader.MakeSampler = (_, layout) => h.Reader.NewSampler(layout == one ? R("A") : R("B"));
+        h.Start();
+        var running = h.RunUntilRunning();
+        Assert.Same(h.Reader.Samplers[0], running);
+        Assert.True(h.Reader.Samplers[1].Disposed);
+        Assert.Equal(0, h.Reader.Samplers[1].Reads);
+        Assert.Contains(h.Env.Logged, l => l.Line == "Locating -> Verifying: 2 candidate(s) found");
+        Assert.Equal(new[] { "X: A" }, h.Monitor.View());
+
+        // The first's read fails: the second runs, from the same search.
+        var f = New();
+        f.Reader.Layouts = new[] { one, two };
+        f.Reader.MakeSampler = (_, layout) =>
+        {
+            var s = f.Reader.NewSampler(layout == one ? R("A") : R("B"));
+            s.Fail = layout == one;
+            return s;
+        };
+        f.Start();
+        var second = f.RunUntilRunning();
+        Assert.Same(f.Reader.Samplers[1], second);
+        Assert.True(f.Reader.Samplers[0].Disposed);
+        Assert.Equal(1, f.Env.LocateCalls);
+        Assert.Contains(f.Env.Logged, l => l.Line == "Verifying -> Verifying: the memory read failed; trying the next candidate");
+        Assert.Equal(new[] { "X: B" }, f.Monitor.View());
+        Assert.Empty(f.Env.Spoken);
+    }
+
+    [Fact]
+    public void A_running_reader_never_stops_for_a_simulator_value()
+    {
+        // A reader's input (S10, as the upper EICAS's manual thrust flag) is taken, never judged: whatever it reads, or
+        // missing, the reader runs, shows and speaks as before. Only ten corrupt readings, or a failed read, stop it.
+        var input = Bbs757SimInput.LVar("X_INPUT");
+        var h = New(input).Start();
+        var s = h.RunUntilRunning();
+        double[] values = { 0, 1, -1, 1e9, double.NaN, double.PositiveInfinity, 0.5, 42 };
+        for (int i = 0; i < 600; i++) // a minute
+        {
+            h.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double> { ["X_INPUT"] = values[i % values.Length] });
+            if (i == 300) s.Reading = R("B");
+            h.Tick();
+            Assert.Equal("Running", h.State);
+            Assert.Equal(new[] { i < 300 ? "X: A" : "X: B" }, h.Monitor.View());
+            Assert.False(h.Monitor.KeyFallsBackToAi());
+        }
+        h.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double>());
+        h.Tick(50);
+        Assert.Equal("Running", h.State);
+        Assert.Equal(new[] { "X: B" }, h.Env.Spoken); // the change, and nothing else
+
+        // Ten corrupt readings stop it...
+        s.Reading = Corrupt("Z");
+        h.Tick(10);
+        Assert.Equal("Unavailable", h.State);
+        Assert.Equal(new[] { "X: B", StoppedUnexpected }, h.Env.Spoken);
+
+        // ...and a failed read sends it searching.
+        var lost = New(input).Start();
+        var t = lost.RunUntilRunning();
+        t.Fail = true;
+        lost.Tick();
+        Assert.Equal("Locating", lost.State);
+        Assert.True(t.Disposed);
+    }
+
+    [Fact]
+    public void Unlit_readings_are_never_spoken_and_lighting_up_waits_10_s()
     {
         var h = New();
         h.Reader.LitNow = true;
@@ -180,7 +305,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         s.Reading = R("C");
         h.Tick(30);
         Assert.Empty(h.Env.Spoken);
-        Assert.Equal("Running", h.State); // not compared: never a mismatch either
+        Assert.Equal("Running", h.State); // dark is quiet, never a stop
 
         long t = h.Env.NowMs; // the next tick reads at t
         h.Reader.LitNow = true;
@@ -207,26 +332,25 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     [Fact]
     public void A_sampler_is_given_each_ticks_simulator_values()
     {
-        // Where the draw takes a simulator variable, the reader takes the same one (S10): the values read for the gate
-        // this tick reach the sampler, in every state that reads memory.
-        var h = New();
+        // Where the draw takes a simulator variable, the reader takes the same one (S10): the inputs read this tick
+        // reach the sampler, in every state that reads memory.
+        var h = New(Bbs757SimInput.LVar("X_INPUT"));
         var seen = new List<Bbs757SimValues>();
         h.Reader.Wrap = inner => new SimRecordingSampler(inner, seen);
         h.Start();
         var states = new HashSet<string>();
         for (int i = 0; i < 60; i++)
         {
-            if (i == 30) h.Reader.SimAgrees = false; // stopped on a mismatch 2 s later
-            h.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double> { ["L:X_GATE"] = i });
+            h.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double> { ["X_INPUT"] = i });
             int before = seen.Count;
             string state = h.State;
             h.Tick();
             if (seen.Count == before) continue;
             Assert.Equal(before + 1, seen.Count); // one read a tick
-            Assert.Equal(i, seen[^1]["L:X_GATE"]); // with this tick's values
+            Assert.Equal(i, seen[^1]["X_INPUT"]); // with this tick's values
             states.Add(state);
         }
-        Assert.Equal(new[] { "Mismatched", "Running", "Verifying" }, states.Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "Running", "Verifying" }, states.Order(StringComparer.Ordinal));
         Assert.DoesNotContain(h.Env.Logged, l => l.Line.Contains("internal error"));
     }
 
@@ -243,13 +367,13 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         h.Reader.LitNow = false; // the display goes dark
         h.Tick();
         Assert.Equal("Running", h.State);
-        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View());
+        Assert.Equal(new[] { UnpoweredRow }, h.Monitor.View());
         Assert.Null(h.Monitor.RowsWhileRunning());
         Assert.Equal(default(FakeReading), h.Monitor.Latest);
         Assert.False(h.Monitor.KeyFallsBackToAi()); // the reader runs: the window opens and says so
         s.Reading = R("B");
         h.Tick(300);
-        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View());
+        Assert.Equal(new[] { UnpoweredRow }, h.Monitor.View());
 
         h.Reader.LitNow = true; // powering up: quiet for 10 s
         h.Tick(); // t
@@ -260,7 +384,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         h.Tick(99); // to t+9.9 s
         Assert.Equal(new[] { StartingRow }, h.Monitor.View());
 
-        h.Tick(); // t+10 s: the first trusted reading, a silent baseline
+        h.Tick(); // t+10 s: the first good reading, a silent baseline
         Assert.Equal(new[] { "X: B" }, h.Monitor.View());
         Assert.Equal(R("B"), h.Monitor.Latest);
         Assert.Empty(h.Env.Spoken); // neither row is ever spoken (S4)
@@ -268,18 +392,78 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
-    public void A_dark_display_while_verifying_shows_not_powered()
+    public void A_dark_candidate_runs_at_once_and_its_power_up_is_a_silent_baseline()
     {
-        // A session that starts with the display dark never verifies (the reading is quiet and holds the candidate):
-        // the window says so, never "starting" for as long as the display is dark.
+        // A cold-and-dark load: the first reading is dark and not corrupt, so the reader runs at once and its window says
+        // the display is not powered; nothing is spoken through the power-up, and the first reading after the 10 s quiet
+        // is a silent baseline (S4).
         var h = New();
         h.Reader.LitNow = false;
         h.Start();
-        for (int i = 0; i < 300 && h.State != "Verifying"; i++) h.Tick();
+        h.TickUntil(() => h.State == "Verifying");
+        h.Tick(); // its first reading
+        Assert.Equal("Running", h.State);
+        Assert.Equal(new[] { UnpoweredRow }, h.Monitor.View());
+        Assert.Null(h.Monitor.RowsWhileRunning());
+        Assert.False(h.Monitor.KeyFallsBackToAi());
+
+        h.Tick(600); // a minute cold and dark
+        Assert.Equal("Running", h.State);
+        Assert.Equal(1, h.Env.LocateCalls);
+        var s = Assert.Single(h.Reader.Samplers);
+        Assert.False(s.Disposed);
+        Assert.Equal(new[] { UnpoweredRow }, h.Monitor.View());
+
+        h.Reader.LitNow = true; // it powers up, and what it shows changes inside the quiet
+        s.Reading = R("B");
+        h.Tick(50);
+        s.Reading = R("C");
+        h.Tick(50); // lit for 9.9 s
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View());
+
+        h.Tick(); // lit for 10 s: the baseline, silent
+        Assert.Equal(new[] { "X: C" }, h.Monitor.View());
+        h.Tick(20);
+        Assert.Empty(h.Env.Spoken);
+
+        s.Reading = R("D"); // later changes are spoken
+        h.Tick(5);
+        Assert.Equal(new[] { "X: D" }, h.Env.Spoken);
+    }
+
+    [Fact]
+    public void Running_on_a_powering_up_reading_keeps_the_next_good_one_a_silent_baseline()
+    {
+        // A candidate whose first reading is still in the power-up quiet runs at once. The quiet may end at its very next
+        // reading, which must still be the silent baseline, never a change from the powering-up one: entering Running
+        // on a quiet reading keeps the rebaseline, it does not rely on another quiet tick setting it again.
+        var h = New();
+        h.Reader.LitNow = true;
+        h.Start();
+        var s = h.RunUntilRunning(); // A
+        h.Tick(60); // past the 5 s between searches
+        h.Reader.LitNow = false;
+        h.Tick(); // dark
+        h.Reader.LitNow = true;
+        long litAt = h.Env.NowMs;
+        h.Tick(); // it powers up: quiet until litAt + 10 s
+        h.Tick(96);
+        Assert.Equal(litAt + 9_700, h.Env.NowMs);
+
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("B")); // what the display shows as it powers up
+        s.Fail = true;
+        h.Tick(); // litAt + 9.7 s: the memory lost, a new search
+        Assert.Equal("Locating", h.State);
+        h.Tick(); // + 9.8 s: found
         Assert.Equal("Verifying", h.State);
-        h.Tick(10);
-        Assert.Equal("Verifying", h.State);
-        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View());
+        h.Tick(); // + 9.9 s: its first reading, still powering up: it runs at once
+        Assert.Equal("Running", h.State);
+        Assert.Equal(new[] { StartingRow }, h.Monitor.View());
+
+        h.Reader.Samplers.Single(x => !x.Disposed).Reading = R("C");
+        h.Tick(); // + 10 s: the quiet ends, and the first good reading is the baseline
+        Assert.Equal(new[] { "X: C" }, h.Monitor.View());
+        h.Tick(20);
         Assert.Empty(h.Env.Spoken);
     }
 
@@ -298,83 +482,6 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
             Assert.Equal(R(shown[3..]), h.Monitor.Latest);
         }
         Assert.Equal(new[] { "X: B" }, h.Env.Spoken);
-    }
-
-    [Fact]
-    public void Unlit_at_the_first_reading_holds_the_candidate_until_10_s_after_it_lights()
-    {
-        // A cold-and-dark load: the reading counts for nothing, so the candidate is neither trusted nor dropped (a drop
-        // would search again every few seconds and end the search window with "values do not match").
-        var h = New();
-        h.Reader.LitNow = false;
-        h.Start();
-        h.Tick(600); // a minute cold and dark
-        Assert.Equal("Verifying", h.State);
-        Assert.Equal(1, h.Env.LocateCalls);
-        Assert.False(Assert.Single(h.Reader.Samplers).Disposed);
-        Assert.Equal(new[] { "X display not powered" }, h.Monitor.View()); // dark while verifying: not "starting"
-
-        h.Reader.LitNow = true;
-        h.Reader.Samplers[0].Reading = R("B");
-        h.Tick(100); // lit for 9.9 s
-        Assert.Equal("Verifying", h.State);
-        Assert.Equal(new[] { StartingRow }, h.Monitor.View()); // lit, powering up
-
-        h.Tick(); // lit for 10 s: trusted, and a silent baseline
-        Assert.Equal("Running", h.State);
-        Assert.Empty(h.Env.Spoken);
-        Assert.Equal(new[] { "X: B" }, h.Monitor.View());
-    }
-
-    [Fact]
-    public void A_dark_candidate_gives_way_to_the_next_which_runs_once_lit()
-    {
-        // A wrong candidate that reads cleanly and decodes "dark" is never trusted, and never holds the others from their
-        // turn: held 2 s while another waits, it goes to the back of the queue. Each keeps its own view of the power.
-        var h = New();
-        var one = new FakeLayout("one");
-        var two = new FakeLayout("two");
-        h.Reader.Layouts = new[] { one, two };
-        h.Reader.MakeSampler = (_, layout) => h.Reader.NewSampler(layout == one ? R("DARK") : R("OFF"));
-        h.Reader.LitOf = r => r.Value is not ("DARK" or "OFF");
-        h.Start();
-        h.Tick(300); // 30 s, both dark: they take turns, silently
-        Assert.Equal("Verifying", h.State);
-        Assert.Equal(2, h.Reader.Samplers.Count);
-        Assert.All(h.Reader.Samplers, s => Assert.False(s.Disposed));
-        Assert.All(h.Reader.Samplers, s => Assert.True(s.Reads > 50, $"{s.Reads} reads"));
-
-        var first = h.Reader.Samplers[0];
-        var second = h.Reader.Samplers[1];
-        second.Reading = R("A"); // the second one's display lights; the first reads dark forever
-        var running = h.RunUntilRunning(200); // its 10 s quiet, counted across the turns it is not read
-        Assert.Same(second, running);
-        Assert.True(first.Disposed);
-        Assert.Equal(1, h.Env.LocateCalls); // the same two candidates throughout, no new search
-        Assert.Empty(h.Env.Spoken);
-        Assert.Equal(new[] { "X: A" }, h.Monitor.View());
-    }
-
-    [Fact]
-    public void A_long_dark_hold_leaves_the_search_window_for_after_power_up()
-    {
-        // Five minutes cold and dark, then the display lights and the candidate disagrees: the search goes on every 5 s,
-        // because the dark time never counted toward the 120 s window (else it would already be the 30 s slow retry).
-        var h = New();
-        h.Reader.LitNow = false;
-        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("WRONG"));
-        h.Start();
-        h.Tick(3000); // 5 minutes
-        Assert.Equal("Verifying", h.State);
-        Assert.Equal(1, h.Env.LocateCalls);
-
-        h.Reader.LitNow = true;
-        h.Tick(600); // a minute lit: 10 s quiet, then each candidate disagrees for its 2 s
-        var after = h.Env.LocateTimes.Skip(1).ToArray();
-        Assert.True(after.Length >= 8, $"{after.Length} attempts after power-up");
-        Assert.All(after.Zip(after.Skip(1)), p => Assert.Equal(5000, p.Second - p.First));
-        Assert.NotEqual("Running", h.State);
-        Assert.Empty(h.Env.Spoken);
     }
 
     [Fact]
@@ -399,7 +506,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     {
         var h = New();
         Assert.Equal(new[] { StartingRow }, h.Monitor.View()); // not started yet
-        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("WRONG"));
+        h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(Corrupt("Z"));
         h.Start();
 
         var seen = new HashSet<string>();
@@ -418,41 +525,6 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     // ---- stops, recovery and status lines ----
-
-    [Fact]
-    public void No_passing_reading_for_2_s_stops_with_the_mismatch_line()
-    {
-        var h = New().Start();
-        var s = h.RunUntilRunning();
-        h.Tick(5); // the last passing reading
-        h.Reader.SimAgrees = false; // the display still reads A, but the simulator disagrees
-        h.Tick(19);
-        Assert.Empty(h.Env.Spoken); // inside the 2 s tolerance
-        Assert.Equal("Running", h.State);
-
-        h.Tick();
-        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
-        Assert.Equal("Mismatched", h.State);
-        h.Tick(100);
-        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken); // once
-
-        // The window repeats the line the pilot heard, with the last good reading only as "last known".
-        string heard = StoppedMismatch + ". Last known: X: A";
-        Assert.Equal(new[] { heard }, h.Monitor.View());
-        Assert.Null(h.Monitor.RowsWhileRunning());
-        Assert.Equal(default(FakeReading), h.Monitor.Latest);
-
-        // Still the line heard while it searches again or waits for the simulator: never "starting" after "stopped".
-        s.Fail = true;
-        h.Tick();
-        Assert.Equal("Locating", h.State);
-        Assert.Equal(new[] { heard }, h.Monitor.View());
-        h.Env.Simulator = null;
-        h.Tick();
-        Assert.Equal("WaitingForSimulator", h.State);
-        Assert.Equal(new[] { heard }, h.Monitor.View());
-        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
-    }
 
     [Fact]
     public void Ten_corrupt_readings_stop_with_unexpected_values()
@@ -557,36 +629,25 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
                 new Bbs757SpokenLine("MUTE_X", (withPrefix ? "X: " : "") + now + " armed"),
             };
             h.Start();
-            var s = h.RunUntilRunning(); // A
-            h.Reader.SimAgrees = false;
-            h.Tick(30); // stopped at A
-            s.Reading = R("B");
-            h.Tick(30); // B while stopped: not a good reading, so not spoken yet...
-            Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
+            h.RunUntilRunning(); // A
 
-            h.Reader.SimAgrees = true; // ...but never swallowed: the first good reading tells it, after "resumed"
-            h.Tick();
-            Assert.Equal("Running", h.State);
+            // The memory lost for longer than 10 s ("stopped"), found again at B: what changed is never swallowed, the
+            // first good reading tells it after "resumed".
+            LoseAndFind(h, R("B"));
             h.Tick(30);
             string expected = Resumed + ", " +
                 string.Join(", ", h.Reader.Changes(R("A"), R("B"), withPrefix: false).Select(l => l.Text));
             Assert.Equal("X announcements resumed, A to B, B armed", expected);
-            Assert.Equal(new[] { StoppedMismatch, expected }, h.Env.Spoken);
+            Assert.Equal(new[] { StoppedNotFound, expected }, h.Env.Spoken);
 
-            // The memory lost for longer than 10 s, found again at C.
-            h.Tick(60);
-            h.Env.Locate = NotFound;
-            s.Fail = true;
-            h.Tick(110);
-            h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("C"));
-            h.Env.Locate = Found;
-            h.RunUntilRunning(100);
+            // Lost again, found at C.
+            LoseAndFind(h, R("C"));
             h.Tick(20);
             return h.Env.Spoken;
         });
         Assert.Equal(new[]
         {
-            StoppedMismatch, "X announcements resumed, A to B, B armed",
+            StoppedNotFound, "X announcements resumed, A to B, B armed",
             StoppedNotFound, "X announcements resumed, B to C, C armed",
         }, spoken);
     }
@@ -596,7 +657,6 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
     [Theory]
     [InlineData("lost")]
-    [InlineData("mismatch")]
     [InlineData("corrupt")]
     [InlineData("never found")]
     public void A_stop_heard_before_a_reload_is_answered_by_resumed_alone(string how)
@@ -615,13 +675,6 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
                 heard = StoppedNotFound;
                 break;
             }
-            case "mismatch":
-                h.RunUntilRunning();
-                h.Reader.SimAgrees = false;
-                h.Tick(30);
-                h.Reader.SimAgrees = true;
-                heard = StoppedMismatch;
-                break;
             case "corrupt": // ten corrupt readings: the one stop that waits for a new flight
             {
                 var s = h.RunUntilRunning();
@@ -661,11 +714,10 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     {
         // Selecting the 757 again (a new environment) or leaving it starts afresh: no "resumed".
         var h = New().Start();
-        h.RunUntilRunning();
-        h.Reader.SimAgrees = false;
-        h.Tick(30);
-        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
-        h.Reader.SimAgrees = true;
+        var s = h.RunUntilRunning();
+        s.Reading = Corrupt("Z");
+        h.Tick(10);
+        Assert.Equal(new[] { StoppedUnexpected }, h.Env.Spoken);
 
         var first = h.Env;
         var next = how == "Stop" ? first : new FakeEnvironment();
@@ -674,7 +726,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         for (int i = 0; i < 20 && h.State != "Running"; i++) { h.Monitor.Tick(); next.NowMs += 100; }
         Assert.Equal("Running", h.State);
         for (int i = 0; i < 30; i++) { h.Monitor.Tick(); next.NowMs += 100; }
-        Assert.Equal(new[] { StoppedMismatch }, first.Spoken);
+        Assert.Equal(new[] { StoppedUnexpected }, first.Spoken);
         if (how == "Start") Assert.Empty(next.Spoken);
     }
 
@@ -682,7 +734,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     public void Another_aircraft_loaded_waits_silently()
     {
         var h = New().Start();
-        var gate = h.Env.Simulator;
+        var values = h.Env.Simulator;
         var s = h.RunUntilRunning();
         h.Tick(60);
         h.Env.Locate = NotFound;
@@ -701,7 +753,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
         // Without a reload too: the memory lost, then the simulator's values gone, is silent, and so is the new search
         // once they return (the loss was answered by the wait, which starts a new window).
-        h.Env.Simulator = gate;
+        h.Env.Simulator = values;
         h.Env.Locate = Found;
         var again = h.RunUntilRunning(10);
         h.Tick(60);
@@ -710,7 +762,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         h.Tick();
         h.Env.Simulator = null;
         h.Tick(6000);
-        h.Env.Simulator = gate;
+        h.Env.Simulator = values;
         h.Tick(600); // a minute of searching
         Assert.Empty(h.Env.Spoken);
         Assert.Equal("Locating", h.State);
@@ -723,35 +775,37 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         // difference between the two flights (S4).
         var h = New().Start();
         h.RunUntilRunning(); // A
-        var gate = h.Env.Simulator;
+        var values = h.Env.Simulator;
         h.Env.Simulator = null;
         h.Tick(60);
         Assert.Equal("WaitingForSimulator", h.State);
         h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("B")); // the next flight's display differs
-        h.Env.Simulator = gate;
+        h.Env.Simulator = values;
         h.RunUntilRunning(100);
         h.Tick(30);
         Assert.Empty(h.Env.Spoken);
         Assert.Equal(new[] { "X: B" }, h.Monitor.View());
 
         // A stop the pilot heard before the wait is answered by "resumed" alone, as after a reload.
-        h.Reader.SimAgrees = false;
-        h.Tick(30);
-        Assert.Equal(new[] { StoppedMismatch }, h.Env.Spoken);
-        h.Reader.SimAgrees = true;
+        h.Tick(60);
+        h.Env.Locate = NotFound;
+        h.Reader.Samplers.Single(s => !s.Disposed).Fail = true;
+        h.Tick(110);
+        Assert.Equal(new[] { StoppedNotFound }, h.Env.Spoken);
         h.Env.Simulator = null;
         h.Tick(60);
         h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("C"));
-        h.Env.Simulator = gate;
+        h.Env.Locate = Found;
+        h.Env.Simulator = values;
         h.RunUntilRunning(100);
         h.Tick(30);
-        Assert.Equal(new[] { StoppedMismatch, Resumed }, h.Env.Spoken);
+        Assert.Equal(new[] { StoppedNotFound, Resumed }, h.Env.Spoken);
         Assert.Equal(new[] { "X: C" }, h.Monitor.View());
 
         // Later changes are spoken again.
         h.Reader.Samplers.Single(s => !s.Disposed).Reading = R("D");
         h.Tick(5);
-        Assert.Equal(new[] { StoppedMismatch, Resumed, "X: D" }, h.Env.Spoken);
+        Assert.Equal(new[] { StoppedNotFound, Resumed, "X: D" }, h.Env.Spoken);
     }
 
     [Theory]
@@ -876,7 +930,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         var (spoken, views) = Flight(New());
         Assert.Equal(new[]
         {
-            "X: B", StoppedMismatch, Resumed + ", C", StoppedNotFound,
+            "X: B", StoppedNotFound, Resumed + ", C", StoppedUnexpected,
             "X announcements unavailable: no access to the simulator",
         }, spoken);
 
@@ -896,19 +950,21 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
             s.Reading = R("B"); // a change
             h.Tick(5);
             Look();
-            h.Reader.SimAgrees = false; // stopped
-            h.Tick(30);
-            Look();
-            s.Reading = R("C"); // resumed, with what changed
-            h.Reader.SimAgrees = true;
-            h.Tick(5);
-            Look();
             h.Tick(60);
-            h.Env.Locate = NotFound; // lost for 10 s
+            h.Env.Locate = NotFound; // lost for 10 s: stopped
             s.Fail = true;
             h.Tick(110);
             Look();
-            h.Env.Locate = NoAccess; // unavailable
+            h.Reader.MakeSampler = (_, _) => h.Reader.NewSampler(R("C")); // resumed, with what changed
+            h.Env.Locate = Found;
+            var next = h.RunUntilRunning(100);
+            h.Tick(5);
+            Look();
+            next.Reading = Corrupt("Z"); // ten corrupt readings: stopped until a reload
+            h.Tick(10);
+            Look();
+            h.Env.Locate = NoAccess; // the reload's search: unavailable
+            h.Monitor.Restart();
             h.Tick(60);
             Look();
             Assert.Equal("Unavailable", h.State);
@@ -933,31 +989,19 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         Assert.Equal(new[] { "B: C" }, h.Env.Spoken);
 
         // "resumed" joins only the unmuted rows' parts.
-        h.Reader.SimAgrees = false;
-        h.Tick(30);
-        s.Reading = R("D");
-        h.Reader.SimAgrees = true;
-        h.Tick(5);
-        Assert.Equal(new[] { "B: C", StoppedMismatch, Resumed + ", b D" }, h.Env.Spoken);
+        LoseAndFind(h, R("D"));
+        Assert.Equal(new[] { "B: C", StoppedNotFound, Resumed + ", b D" }, h.Env.Spoken);
 
         // Both rows muted: "resumed" alone.
         h.Env.Muted.Add("ROW_B");
-        h.Reader.SimAgrees = false;
-        h.Tick(30);
-        s.Reading = R("E");
-        h.Reader.SimAgrees = true;
-        h.Tick(5);
-        Assert.Equal(new[] { "B: C", StoppedMismatch, Resumed + ", b D", StoppedMismatch, Resumed }, h.Env.Spoken);
+        LoseAndFind(h, R("E"));
+        Assert.Equal(new[] { "B: C", StoppedNotFound, Resumed + ", b D", StoppedNotFound, Resumed }, h.Env.Spoken);
 
         // The status row muted: no stop or "resumed", but an unmuted row still tells what changed meanwhile, as a change.
         h.Env.Muted.Remove("ROW_B");
         h.Env.Muted.Add("MUTE_X");
-        h.Reader.SimAgrees = false;
-        h.Tick(30);
-        s.Reading = R("F");
-        h.Reader.SimAgrees = true;
-        h.Tick(5);
-        Assert.Equal(new[] { "B: C", StoppedMismatch, Resumed + ", b D", StoppedMismatch, Resumed, "B: F" }, h.Env.Spoken);
+        LoseAndFind(h, R("F"));
+        Assert.Equal(new[] { "B: C", StoppedNotFound, Resumed + ", b D", StoppedNotFound, Resumed, "B: F" }, h.Env.Spoken);
     }
 
     [Fact]
@@ -965,30 +1009,16 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     {
         var h = New();
         Assert.True(h.Monitor.KeyFallsBackToAi()); // not started: the AI read
-        var gate = h.Env.Simulator;
+        var values = h.Env.Simulator;
         h.Env.Simulator = null;
         h.Start();
         h.Tick(100);
         Assert.False(h.Monitor.KeyFallsBackToAi()); // waiting: the window says so
-        h.Env.Simulator = gate;
+        h.Env.Simulator = values;
         h.Tick();
         Assert.Equal("Analyzing", h.State);
         Assert.False(h.Monitor.KeyFallsBackToAi()); // starting
         var s = h.RunUntilRunning();
-        Assert.False(h.Monitor.KeyFallsBackToAi());
-
-        // Stopped on a mismatch: the window for 10 s, then the AI read.
-        h.Reader.SimAgrees = false;
-        h.TickUntil(() => h.State == "Mismatched");
-        long stoppedAt = h.Env.NowMs - 100;
-        Assert.False(h.Monitor.KeyFallsBackToAi());
-        h.Env.NowMs = stoppedAt + 9_999;
-        Assert.False(h.Monitor.KeyFallsBackToAi());
-        h.Env.NowMs = stoppedAt + 10_000;
-        Assert.True(h.Monitor.KeyFallsBackToAi());
-        h.Reader.SimAgrees = true;
-        h.Tick();
-        Assert.Equal("Running", h.State);
         Assert.False(h.Monitor.KeyFallsBackToAi());
 
         // The memory lost: the window while it searches, the AI read from 10 s, through the slow retry.
@@ -1071,7 +1101,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         Assert.Equal(2, h.Reader.Samplers.Count);
         Assert.All(h.Reader.Samplers, s => Assert.Equal(1, s.DisposeCount));
 
-        // Running (the waiting candidate dropped when the first passed), then stopped.
+        // Running (the waiting candidate dropped when the first read), then stopped.
         h.Start();
         h.RunUntilRunning();
         Assert.Equal(4, h.Reader.Samplers.Count);
@@ -1118,10 +1148,14 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
     private sealed class Harness
     {
-        public Harness() => Monitor = new Bbs757DisplayMonitor<FakeLayout, FakeReading>(Reader);
+        public Harness(params Bbs757SimInput[] inputs)
+        {
+            Reader = new FakeReader(inputs);
+            Monitor = new Bbs757DisplayMonitor<FakeLayout, FakeReading>(Reader);
+        }
 
         public FakeEnvironment Env { get; } = new();
-        public FakeReader Reader { get; } = new();
+        public FakeReader Reader { get; }
         public Bbs757DisplayMonitor<FakeLayout, FakeReading> Monitor { get; }
         public string State => Monitor.StateName;
 
@@ -1217,13 +1251,18 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
     internal sealed class FakeReader : IBbs757DisplayReader<FakeLayout, FakeReading>
     {
-        public FakeReader() => MakeSampler = (_, _) => NewSampler(R("A"));
+        /// <param name="inputs">The simulator variables the reader takes (S10); none by default, as the FMA.</param>
+        public FakeReader(params Bbs757SimInput[] inputs)
+        {
+            SimInputs = inputs;
+            MakeSampler = (_, _) => NewSampler(R("A"));
+        }
 
         public string Name => "X";
         public string MuteKey => "MUTE_X";
         public string LogChannel => Bbs757DisplayMonitorTests.LogChannel;
         public int TickMs => 100;
-        public IReadOnlyList<string> GateKeys { get; } = new[] { "L:X_GATE" };
+        public IReadOnlyList<Bbs757SimInput> SimInputs { get; }
 
         public IReadOnlyList<FakeLayout> Layouts { get; set; } = new[] { new FakeLayout("one") };
 
@@ -1237,9 +1276,6 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
         /// <summary>When set, the power state as decoded from the reading itself.</summary>
         public Func<FakeReading, bool?>? LitOf { get; set; }
-
-        /// <summary>False: the simulator disagrees with every reading (the gate fails, whatever memory holds).</summary>
-        public bool SimAgrees { get; set; } = true;
 
         /// <summary>When set, the change lines; by default one line on the status row, "X: " + now with the prefix and
         /// the bare reading without it.</summary>
@@ -1262,11 +1298,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
         public IBbs757DisplaySampler<FakeReading>? SamplerFor(LocatedModule module, FakeLayout layout) =>
             MakeSampler(module, layout) is { } sampler ? Wrap?.Invoke(sampler) ?? sampler : null;
 
-        /// <summary>A reading "WRONG" never agrees with the simulator, nor does any while <see cref="SimAgrees"/> is false.</summary>
-        public bool Passes(IReadOnlyList<(long AtMs, FakeReading Reading)> history, Bbs757SimValues sim) =>
-            SimAgrees && history.Count > 0 && history[^1].Reading.Value != "WRONG";
-
-        public bool? Lit(FakeReading reading, Bbs757SimValues sim) => LitOf is { } of ? of(reading) : LitNow;
+        public bool? Lit(FakeReading reading) => LitOf is { } of ? of(reading) : LitNow;
 
         public IReadOnlyList<Bbs757SpokenLine> Changes(FakeReading heard, FakeReading now, bool withPrefix) =>
             ChangesOf is { } of
@@ -1292,10 +1324,16 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
         public long NowMs { get; set; }
 
-        /// <summary>What every read of the simulator returns (null: disconnected, or another aircraft).</summary>
-        public Bbs757SimValues? Simulator { get; set; } = new Bbs757SimValues(new Dictionary<string, double> { ["L:X_GATE"] = 1 });
+        /// <summary>What every read of the simulator returns (null: disconnected, no flight, or another aircraft); by
+        /// default a simulator that is up, with no value of any reader input.</summary>
+        public Bbs757SimValues? Simulator { get; set; } = new Bbs757SimValues(new Dictionary<string, double>());
 
+        /// <summary>Every key the monitor asked the simulator for, in order.</summary>
         public List<string> KeysAsked { get; } = new();
+
+        /// <summary>How many times the monitor read the simulator.</summary>
+        public int ReadCalls { get; private set; }
+
         public HashSet<string> Muted { get; } = new();
 
         /// <summary>One per module session; settable so several monitors share one, as the definition wires them.</summary>
@@ -1312,6 +1350,7 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
 
         public Bbs757SimValues? ReadSimulator(IReadOnlyList<string> keys)
         {
+            ReadCalls++;
             KeysAsked.AddRange(keys);
             return Simulator;
         }

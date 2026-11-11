@@ -4,9 +4,10 @@ namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// One read of the 757 FMA: the words the Captain's ADI draws (null = blank, <see cref="Bbs757WordTable.Unrecognised"/>
-/// for a value with no word), the raw field values behind them (for change detection, "unrecognised" and the gate's
-/// structural check), the two F/D switch bytes and the MCP's selected altitude (feet) and heading (degrees) for the
-/// gate. <see cref="Corrupt"/> is a torn or out-of-range reading, never spoken, shown or a baseline.
+/// for a value with no word), the raw field values behind them (for change detection, "unrecognised" and the range
+/// check), the two F/D switch bytes (the Captain's decides what the strip draws), and the MCP's selected altitude (feet)
+/// and heading (degrees), read with the rest and range-checked, never compared with the simulator (B757-30).
+/// <see cref="Corrupt"/> is a torn or out-of-range reading, never spoken, shown or a baseline.
 /// </summary>
 public readonly record struct Bbs757FmaReading(
     string? AutoThrottle,

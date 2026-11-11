@@ -1,6 +1,6 @@
 // The 757 FMA as one reader of the 757's display monitor: its names, keys and log, its layouts and samplers from the
-// shared module session, its gate, no power state, and its words; then the monitor driving it over synthetic module
-// memory, so a change BlueBird writes is spoken as the pilot would hear it.
+// shared module session, no simulator input and no power state, and its words; then the monitor driving it over synthetic
+// module memory, so a change BlueBird writes is spoken as the pilot would hear it.
 
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.BBS757;
@@ -16,15 +16,6 @@ public class Bbs757FmaDisplayTests
     private static Bbs757FmaDisplay Display(List<string>? log = null) => new(line => log?.Add(line));
 
     private static IBbs757DisplayReader<Bbs757FmaLayout, Bbs757FmaReading> Reader(List<string>? log = null) => Display(log);
-
-    private static Bbs757SimValues Sim(double fd1 = 1, double fd2 = 0, double altitude = 35000, double heading = 65) =>
-        new(new Dictionary<string, double>
-        {
-            ["BBS_FD1_SWITCH"] = fd1,
-            ["BBS_FD2_SWITCH"] = fd2,
-            ["BBS_AP_TARGET_ALTITUDE"] = altitude,
-            ["BBS_AP_TARGET_HEADING"] = heading,
-        });
 
     private static ModuleBuild Build(object? fma, string layoutFile = "BBS752.json") =>
         new(Bbs757Module.Description, "BBS752.wasm", layoutFile,
@@ -63,29 +54,19 @@ public class Bbs757FmaDisplayTests
     }
 
     [Fact]
-    public void The_gate_reads_the_two_fd_switches_and_the_mcp_altitude_and_heading()
+    public void The_fma_takes_no_simulator_input()
     {
-        var keys = new[] { "BBS_FD1_SWITCH", "BBS_FD2_SWITCH", "BBS_AP_TARGET_ALTITUDE", "BBS_AP_TARGET_HEADING" };
-        Assert.Equal(keys, Bbs757FmaDisplay.GateKeys);
-        Assert.Equal(keys, Reader().GateKeys);
-        Assert.False(Bbs757FmaDisplay.GateKeys is string[], "the keys cannot be changed through a cast");
-    }
-
-    [Fact]
-    public void Passes_is_the_fma_gate()
-    {
-        var reading = Bbs757FmaReader.Decode(Layout, Bbs757FmaSpeechTests.Cruise with { FdFirstOfficer = false });
-        var history = new[] { (0L, reading) };
-        Assert.True(Reader().Passes(history, Sim()));
-        Assert.False(Reader().Passes(history, Sim(fd2: 1)));
+        // B757-30: its F/D switch and MCP target gate is gone; the FMA reads memory alone.
+        Assert.Empty(Reader().SimInputs);
+        Assert.Empty(new Bbs757DisplayMonitor<Bbs757FmaLayout, Bbs757FmaReading>(Display()).SimInputs);
     }
 
     [Fact]
     public void The_fma_has_no_power_state()
     {
         var reading = Bbs757FmaReader.Decode(Layout, Bbs757FmaSpeechTests.Cruise);
-        Assert.Null(Reader().Lit(reading, Sim()));
-        Assert.Null(Reader().Lit(default, Sim()));
+        Assert.Null(Reader().Lit(reading));
+        Assert.Null(Reader().Lit(default));
     }
 
     [Fact]
@@ -152,15 +133,15 @@ public class Bbs757FmaDisplayTests
     [Fact]
     public void The_monitor_speaks_an_fma_change_read_from_memory()
     {
-        // The whole path: the session's build and location, the gate against the simulator's variables, a silent
-        // baseline, then a change BlueBird writes (SPD to EPR) spoken once, with the "FMA: " prefix, after it settles.
+        // The whole path: the session's build and location, the first reading that is not corrupt a silent baseline (no
+        // simulator value asked for), then a change BlueBird writes (SPD to EPR) spoken once, with the "FMA: " prefix,
+        // after it settles.
         var bytes = Bbs757FmaReaderTests.Memory();
         var handle = new CountingHandle();
         var build = Build(Layout);
         var located = Located(build, bytes, handle, out var sessionLease);
         var env = new Bbs757DisplayMonitorTests.FakeEnvironment
         {
-            Simulator = Sim(),
             Analyse = () => Task.FromResult(new ModuleAnalysis(new[] { build }, null)),
             Locate = () => Task.FromResult(new ModuleLocation(new[] { located }, null)),
         };
@@ -181,7 +162,7 @@ public class Bbs757FmaDisplayTests
         Assert.Equal("Running", monitor.StateName);
         Assert.Empty(env.Spoken);
         Assert.Equal(new[] { "A/T: SPD", "Roll: LNAV, armed LOC", "Pitch: TO, armed G/S", "AFDS: CMD" }, monitor.View());
-        Assert.Contains("BBS_AP_TARGET_HEADING", env.KeysAsked);
+        Assert.Empty(env.KeysAsked);   // memory alone
 
         Bbs757FmaReaderTests.Put(bytes, Bbs757FmaReaderTests.Tmc + 444, 2);
         Tick(10);

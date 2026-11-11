@@ -55,7 +55,7 @@ public class Bbs757UpperEicasSpeechTests
         var list = messages ?? Array.Empty<Bbs757EicasMessage>();
         return new Bbs757UpperEicasReading(list, Page: 1, PageShown: false, PageLine: null, Recall: false, RecallLine: null, RecallTime: recallTime,
             Cancelled: list.Count(m => m.Cancelled), Values: Idle, ThrustReference: thrust, Envelope: Array.Empty<string>(),
-            GateN1Left: 19.93, GateN1Right: 19.93, Powered: powered, Corrupt: false);
+            Powered: powered, Corrupt: false);
     }
 
     /// <summary><paramref name="r"/> with its row of <paramref name="row"/>'s label replaced, or added after the others.</summary>
@@ -347,7 +347,7 @@ public class Bbs757UpperEicasSpeechTests
             Gauge(r, V("REV", "REV", "REV", "amber", "amber")), Gauge(r, V("EPR reference", "1.65", "1.65")),
             Gauge(r, V("N1 max", "109.2", null)), Gauge(r, V("EGT max", "870", null)), Without(r, "EPR reference"),
             r with { Envelope = new[] { "IN-FLT START", "FL 250 260-360 KTS" } }, r with { Page = 2, PageShown = true, PageLine = "PAGE 2" },
-            r with { Recall = true, RecallLine = "RECALL" }, r with { GateN1Left = 88.25, GateN1Right = 88.1 },
+            r with { Recall = true, RecallLine = "RECALL" },
             Eicas(new[] { BleedL with { Shown = false }, ParkingBrake }),
         };
         foreach (var now in quiet) Assert.Empty(Said(culture, r, now));

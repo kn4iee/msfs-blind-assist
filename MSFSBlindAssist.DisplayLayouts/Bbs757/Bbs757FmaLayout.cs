@@ -10,7 +10,6 @@ public static class Bbs757DisplayReasons
     public const string FilesNotFound = "BlueBird 757 files not found";
     public const string MemoryNotFound = "aircraft memory not found";
     public const string NoAccess = "no access to the simulator";
-    public const string Mismatch = "values do not match the simulator";
     public const string UnexpectedValues = "unexpected values";
     public const string InternalError = "internal error, see the log";
 

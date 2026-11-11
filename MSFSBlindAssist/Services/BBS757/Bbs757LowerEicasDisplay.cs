@@ -5,8 +5,8 @@ namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// The 757's lower EICAS as a reader of <see cref="Bbs757DisplayMonitor{TLayout, TReading}"/>: its layouts from the shared
-/// module session's builds, a <see cref="Bbs757LowerEicasReader"/> per located build on its own lease, the gate
-/// (<see cref="Bbs757LowerEicasGate"/>), the display's power as its lit state, and BlueBird's words
+/// module session's builds, a <see cref="Bbs757LowerEicasReader"/> per located build on its own lease, which reads memory
+/// alone (no simulator input), the display's power as its lit state, and BlueBird's words
 /// (<see cref="Bbs757LowerEicasText"/>). Every line it says, page changes and status lines alike, is on the one
 /// "EICAS status messages" row. Called on the UI thread only.
 /// </summary>
@@ -20,12 +20,6 @@ public sealed class Bbs757LowerEicasDisplay : IBbs757DisplayReader<Bbs757LowerEi
     /// <summary>The Ctrl+M row's label.</summary>
     public const string MonitorRowLabel = "EICAS status messages";
 
-    /// <summary>The simulator's variables the gate compares memory with.</summary>
-    public static IReadOnlyList<string> GateKeys { get; } = Array.AsReadOnly(new[]
-    {
-        Bbs757LowerEicasGate.LeftN2Key, Bbs757LowerEicasGate.RightN2Key, Bbs757LowerEicasGate.PageKey,
-    });
-
     string IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>.Name => Name;
 
     string IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>.MuteKey => MuteKey;
@@ -33,11 +27,6 @@ public sealed class Bbs757LowerEicasDisplay : IBbs757DisplayReader<Bbs757LowerEi
     string IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>.LogChannel => LogChannel;
 
     int IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>.TickMs => TickMs;
-
-    IReadOnlyList<string> IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>.GateKeys => GateKeys;
-
-    IReadOnlyList<Bbs757GateVariable> IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>.GateVariables =>
-        Bbs757LowerEicasGate.Variables;
 
     /// <summary>The distinct lower EICAS layouts of the analyzed builds, in file order; a build without one is skipped.</summary>
     public IReadOnlyList<Bbs757LowerEicasLayout> LayoutsIn(ModuleAnalysis analysis)
@@ -58,11 +47,8 @@ public sealed class Bbs757LowerEicasDisplay : IBbs757DisplayReader<Bbs757LowerEi
         return new Bbs757LowerEicasReader(module.Memory, module.AcquireLease(), layout);
     }
 
-    public bool Passes(IReadOnlyList<(long AtMs, Bbs757LowerEicasReading Reading)> history, Bbs757SimValues sim) =>
-        Bbs757LowerEicasGate.Passes(history, sim);
-
     /// <summary>The display is lit while it draws.</summary>
-    public bool? Lit(Bbs757LowerEicasReading reading, Bbs757SimValues sim) => reading.Powered;
+    public bool? Lit(Bbs757LowerEicasReading reading) => reading.Powered;
 
     public IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757LowerEicasReading heard, Bbs757LowerEicasReading now, bool withPrefix) =>
         Bbs757LowerEicasText.Changes(heard, now, withPrefix).Select(text => new Bbs757SpokenLine(MuteKey, text)).ToArray();

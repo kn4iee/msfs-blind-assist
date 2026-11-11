@@ -238,7 +238,6 @@ public class Bbs757UpperEicasReaderTests
             V("EPR reference", "1.71", "1.71"),
         }, eicas.Values);
         Assert.Empty(eicas.Envelope);
-        Assert.Equal((19.930, 19.930), (eicas.GateN1Left, eicas.GateN1Right));
     }
 
     [Fact]
@@ -302,7 +301,6 @@ public class Bbs757UpperEicasReaderTests
         Flag(bytes, EngineLeft + L.EngineN1AlternateFlags[flag], true);
         var eicas = Read(bytes);
         Assert.Equal(V("N1", "26.5", "19.9"), Row(eicas, "N1"));
-        Assert.Equal(19.930, eicas.GateN1Left);   // the gate's value is never the alternate
     }
 
     public enum Tear
@@ -1138,7 +1136,7 @@ public class Bbs757UpperEicasReaderTests
     [Theory]
     [InlineData("clock", true)]
     [InlineData("recall time", true)]
-    [InlineData("gate N1", true)]
+    [InlineData("an invalid engine's own N1", true)]
     [InlineData("EPR", true)]
     [InlineData("EPR beyond a float", true)]
     [InlineData("EGT", true)]
@@ -1168,7 +1166,7 @@ public class Bbs757UpperEicasReaderTests
         {
             "clock" => raw with { Clock = double.PositiveInfinity },
             "recall time" => raw with { RecallTime = nan },
-            "gate N1" => raw with { Right = IdleLeft with { N1 = nan, Valid = 2 } },
+            "an invalid engine's own N1" => raw with { Right = IdleLeft with { N1 = nan, Valid = 2 } },
             "EPR" => raw with { Left = IdleLeft with { Epr = double.NegativeInfinity } },
             "EPR beyond a float" => raw with { Left = IdleLeft with { Epr = 1e39 } },
             "EGT" => raw with { Left = IdleLeft with { Egt = nan } },
@@ -1212,7 +1210,6 @@ public class Bbs757UpperEicasReaderTests
         Assert.Equal(new[] { V("EPR", null, null), V("N1", null, "19.9"), V("EGT", null, "357"), V("TAT", null) }, eicas.Values);
         Assert.False(eicas.Recall);
         Assert.Equal("TO", eicas.ThrustReference);
-        Assert.True(double.IsNaN(eicas.GateN1Left));   // the gate's value stays raw; a dark screen is never compared
         Assert.Equal(LiveList.Length, eicas.Messages.Count);
         Assert.False(Read(Place(dark)).Corrupt);
 
@@ -1260,8 +1257,6 @@ public class Bbs757UpperEicasReaderTests
         Assert.NotEqual(a, a with { Envelope = ["IN-FLT START"] });
         Assert.NotEqual(a, a with { ThrustReference = "TO 1" });
         Assert.NotEqual(a, a with { RecallTime = 4023.9 });
-        Assert.NotEqual(a, a with { GateN1Left = 19.931 });
-        Assert.NotEqual(a, a with { GateN1Right = 19.931 });
         Assert.NotEqual(a, a with { Page = 2 });
         Assert.NotEqual(a, a with { PageShown = true });
         Assert.NotEqual(a, a with { PageLine = "PAGE 1" });

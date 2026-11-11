@@ -7,10 +7,10 @@ namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// The 757's flight mode annunciator as a reader of <see cref="Bbs757DisplayMonitor{TLayout, TReading}"/>: its layouts
-/// from the shared module session's builds, a <see cref="Bbs757FmaReader"/> per located build on its own lease, the gate
-/// (<see cref="Bbs757FmaGate"/>), no power state, and the 737's words (<see cref="Bbs757FmaSpeech"/>). A value with no
-/// word is logged once per column and value on the reader's own log, the first time a change sees it. Called on the UI
-/// thread only.
+/// from the shared module session's builds, a <see cref="Bbs757FmaReader"/> per located build on its own lease, which
+/// reads memory alone (no simulator input), no power state, and the 737's words (<see cref="Bbs757FmaSpeech"/>). A value
+/// with no word is logged once per column and value on the reader's own log, the first time a change sees it. Called on
+/// the UI thread only.
 /// </summary>
 public sealed class Bbs757FmaDisplay : IBbs757DisplayReader<Bbs757FmaLayout, Bbs757FmaReading>
 {
@@ -21,12 +21,6 @@ public sealed class Bbs757FmaDisplay : IBbs757DisplayReader<Bbs757FmaLayout, Bbs
 
     /// <summary>The Ctrl+M row's label.</summary>
     public const string MonitorRowLabel = "Flight Mode Annunciator";
-
-    /// <summary>The simulator's variables the gate compares memory with.</summary>
-    public static IReadOnlyList<string> GateKeys { get; } = Array.AsReadOnly(new[]
-    {
-        Bbs757FmaGate.FdCaptainKey, Bbs757FmaGate.FdFirstOfficerKey, Bbs757FmaGate.AltitudeKey, Bbs757FmaGate.HeadingKey,
-    });
 
     private readonly Action<string> _log;
     private readonly HashSet<(string Column, int Value)> _loggedNoWord = new();
@@ -48,8 +42,6 @@ public sealed class Bbs757FmaDisplay : IBbs757DisplayReader<Bbs757FmaLayout, Bbs
 
     int IBbs757DisplayReader<Bbs757FmaLayout, Bbs757FmaReading>.TickMs => TickMs;
 
-    IReadOnlyList<string> IBbs757DisplayReader<Bbs757FmaLayout, Bbs757FmaReading>.GateKeys => GateKeys;
-
     /// <summary>The distinct FMA layouts of the analyzed builds, in file order; a build without one is skipped (another
     /// reader's layout found it).</summary>
     public IReadOnlyList<Bbs757FmaLayout> LayoutsIn(ModuleAnalysis analysis)
@@ -69,11 +61,8 @@ public sealed class Bbs757FmaDisplay : IBbs757DisplayReader<Bbs757FmaLayout, Bbs
         return new Bbs757FmaReader(module.Memory, module.AcquireLease(), layout);
     }
 
-    public bool Passes(IReadOnlyList<(long AtMs, Bbs757FmaReading Reading)> history, Bbs757SimValues sim) =>
-        Bbs757FmaGate.Passes(history, sim);
-
     /// <summary>The FMA has no power state of its own.</summary>
-    public bool? Lit(Bbs757FmaReading reading, Bbs757SimValues sim) => null;
+    public bool? Lit(Bbs757FmaReading reading) => null;
 
     /// <summary>One line on the FMA's Ctrl+M row ("FMA: Roll: LOC, Pitch: G/S"; without "FMA: " after "resumed"), or none
     /// when nothing BlueBird draws changed.</summary>

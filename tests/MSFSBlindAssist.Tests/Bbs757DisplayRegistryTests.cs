@@ -27,54 +27,57 @@ public class Bbs757DisplayRegistryTests
         Assert.False(registry.TryHandle(HotkeyAction.ReadDisplayLowerECAM, default));
     }
 
-    private static readonly Bbs757GateVariable Latitude = new("PLANE LATITUDE", "PLANE LATITUDE", SimVarType.SimVar, "degrees");
+    private static readonly Bbs757SimInput Latitude = new("PLANE LATITUDE", "PLANE LATITUDE", SimVarType.SimVar, "degrees");
 
     [Fact]
-    public void Each_readers_gate_variables_are_recorded_once_in_registration_order()
+    public void Each_readers_inputs_are_recorded_once_in_registration_order()
     {
         // Taken from each monitor (its reader's), so they can never disagree with the reader's.
         var registry = new Bbs757DisplayRegistry();
 
-        registry.Add(new GateMonitor(Bbs757GateVariable.LVar("L_A"), Bbs757GateVariable.LVar("L_B")));
-        registry.Add(new GateMonitor());   // a reader with no gate variable
-        registry.Add(new GateMonitor(Bbs757GateVariable.LVar("L_B"), Latitude, Bbs757GateVariable.LVar("L_C")));
-        registry.Add(new GateMonitor(Latitude with { Units = "Degrees" }));   // the same variable: units in any case
+        registry.Add(new InputMonitor(Bbs757SimInput.LVar("L_A"), Bbs757SimInput.LVar("L_B")));
+        registry.Add(new InputMonitor());   // a reader with no input
+        registry.Add(new InputMonitor(Bbs757SimInput.LVar("L_B"), Latitude, Bbs757SimInput.LVar("L_C")));
+        registry.Add(new InputMonitor(Latitude with { Units = "Degrees" }));   // the same variable: units in any case
 
-        Assert.Equal(new[] { "L_A", "L_B", "PLANE LATITUDE", "L_C" }, registry.GateVariables.Select(g => g.Key));
-        Assert.Equal(Latitude, registry.GateVariables[2]);
+        Assert.Equal(new[] { "L_A", "L_B", "PLANE LATITUDE", "L_C" }, registry.SimInputs.Select(i => i.Key));
+        Assert.Equal(Latitude, registry.SimInputs[2]);
         Assert.Equal(4, registry.Monitors.Count);
     }
 
     [Fact]
-    public void A_gate_key_declared_as_another_variable_is_refused_whole()
+    public void An_input_key_declared_as_another_variable_is_refused_whole()
     {
         var registry = new Bbs757DisplayRegistry();
-        var pitch = new Bbs757GateVariable("PITCH", "PLANE PITCH DEGREES", SimVarType.SimVar, "degrees");
-        registry.Add(new GateMonitor(pitch));
+        var pitch = new Bbs757SimInput("PITCH", "PLANE PITCH DEGREES", SimVarType.SimVar, "degrees");
+        registry.Add(new InputMonitor(pitch));
 
         // One key, two variables: a wiring error, and nothing of that reader is registered.
         Assert.Throws<InvalidOperationException>(() =>
-            registry.Add(new GateMonitor(Bbs757GateVariable.LVar("L_NEW"), pitch with { Units = "radians" })));
-        Assert.Throws<InvalidOperationException>(() => registry.Add(new GateMonitor(Bbs757GateVariable.LVar("PITCH"))));
-        // Not a gate variable: an event, a stock variable with no units, no key.
-        Assert.Throws<ArgumentException>(() => registry.Add(new GateMonitor(new Bbs757GateVariable("E", "E", SimVarType.Event, null))));
-        Assert.Throws<ArgumentException>(() => registry.Add(new GateMonitor(new Bbs757GateVariable("S", "S", SimVarType.SimVar, null))));
-        Assert.Throws<ArgumentException>(() => registry.Add(new GateMonitor(new Bbs757GateVariable("", "S", SimVarType.LVar, null))));
+            registry.Add(new InputMonitor(Bbs757SimInput.LVar("L_NEW"), pitch with { Units = "radians" })));
+        Assert.Throws<InvalidOperationException>(() => registry.Add(new InputMonitor(Bbs757SimInput.LVar("PITCH"))));
+        // Not a reader input: an event, a stock variable with no units, no key.
+        Assert.Throws<ArgumentException>(() => registry.Add(new InputMonitor(new Bbs757SimInput("E", "E", SimVarType.Event, null))));
+        Assert.Throws<ArgumentException>(() => registry.Add(new InputMonitor(new Bbs757SimInput("S", "S", SimVarType.SimVar, null))));
+        Assert.Throws<ArgumentException>(() => registry.Add(new InputMonitor(new Bbs757SimInput("", "S", SimVarType.LVar, null))));
 
         Assert.Single(registry.Monitors);
-        Assert.Equal(new[] { pitch }, registry.GateVariables);
+        Assert.Equal(new[] { pitch }, registry.SimInputs);
     }
 
     [Fact]
-    public void The_fma_registers_its_gate_variables()
+    public void Only_the_upper_eicas_takes_a_simulator_input()
     {
+        // B757-30: no reader judges memory by a simulator value. The FMA and the lower EICAS read memory alone; the upper
+        // EICAS takes BlueBird's manual thrust reference flag where its draw does (S10).
         var def = new BBS757Definition();
+        var lower = def.Displays.Monitors.OfType<Bbs757DisplayMonitor<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>>().Single();
 
-        // The FMA declares none of its own: each of its GateKeys is BlueBird's L:var of that name (the default).
-        var expected = Bbs757FmaDisplay.GateKeys.Select(Bbs757GateVariable.LVar).ToArray();
-        Assert.All(expected, g => Assert.Equal((SimVarType.LVar, (string?)null), (g.Type, g.Units)));
-        Assert.Equal(expected, def.Fma.GateVariables);
-        Assert.Equal(expected, def.Displays.GateVariables.Take(expected.Length));
+        Assert.Empty(def.Fma.SimInputs);
+        Assert.Empty(lower.SimInputs);
+        Assert.Equal(new[] { Bbs757SimInput.LVar("BBS757_THRREF_PULL") }, def.UpperEicas.SimInputs);
+        Assert.Contains(Bbs757SimInput.LVar("BBS757_THRREF_PULL"), def.Displays.SimInputs);
+        Assert.DoesNotContain(def.Displays.SimInputs, i => i.Name.StartsWith("TURB ENG", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -142,10 +145,10 @@ public class Bbs757DisplayRegistryTests
         Assert.Single(speech.All);
     }
 
-    /// <summary>A monitor whose reader declares <paramref name="gates"/>.</summary>
-    private sealed class GateMonitor(params Bbs757GateVariable[] gates) : IBbs757DisplayMonitor
+    /// <summary>A monitor whose reader declares <paramref name="inputs"/>.</summary>
+    private sealed class InputMonitor(params Bbs757SimInput[] inputs) : IBbs757DisplayMonitor
     {
-        public IReadOnlyList<Bbs757GateVariable> GateVariables { get; } = gates;
+        public IReadOnlyList<Bbs757SimInput> SimInputs { get; } = inputs;
         public void Start(IBbs757DisplayEnvironment env) { }
         public void Restart() { }
         public void Stop() { }

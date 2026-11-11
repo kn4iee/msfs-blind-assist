@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// The app's side of every 757 display monitor (<see cref="Bbs757DisplayMonitor{TLayout, TReading}"/>), one per module
-/// session, shared by every reader on it: the simulator's gate values from SimConnect's batch cache, the 757's Ctrl+M rows,
+/// session, shared by every reader on it: the readers' simulator inputs from SimConnect's batch cache, the 757's Ctrl+M rows,
 /// the non-interrupting announce (S5), the readers' named logs, and the session's one file analysis and memory search
 /// (WASM-11) with its one "display files could not be loaded" notice (S14). The monitor calls every member on the UI
 /// thread except <see cref="Log"/>, which an abandoned job's clean-up may call from a pool thread (the log is safe from
@@ -28,7 +28,7 @@ public sealed class Bbs757DisplayEnvironment : IBbs757DisplayEnvironment
     private readonly ScreenReaderAnnouncer _announcer;
     private readonly ModuleSession _session;
 
-    /// <param name="cacheKeys">Each gate variable's <see cref="Bbs757GateVariable.Key"/>, to the key of the variable whose
+    /// <param name="cacheKeys">Each reader input's <see cref="Bbs757SimInput.Key"/>, to the key of the variable whose
     /// cached value it is (<c>BBS757Definition.DisplayCacheKeys</c>).</param>
     public Bbs757DisplayEnvironment(SimConnectManager sim, ScreenReaderAnnouncer announcer, ModuleSession session,
         Bbs757DisplayFilesNotice filesNotice, IReadOnlyDictionary<string, string> cacheKeys)
@@ -69,10 +69,11 @@ public sealed class Bbs757DisplayEnvironment : IBbs757DisplayEnvironment
         title is not null && title.Contains(TitleMark, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The cached values of the gate variables whose <see cref="Bbs757GateVariable.Key"/>s are <paramref name="keys"/>,
-    /// each under its key (an L:var's or a stock variable's alike); null, so the monitor waits silently, while the
-    /// simulator is disconnected, while no flight runs (the "Sim" system event: the menus, a flight's load), while the
-    /// loaded title is no 757's (another aircraft under the 757 profile), or while a key has no value yet. The connection
+    /// The cached values of the reader inputs whose <see cref="Bbs757SimInput.Key"/>s are <paramref name="keys"/>, each
+    /// under its key (an L:var's or a stock variable's alike); null, so the monitor waits silently, while the simulator is
+    /// disconnected, while no flight runs (the "Sim" system event: the menus, a flight's load), while the loaded title is
+    /// no 757's (another aircraft under the 757 profile), or while a key has no value yet. With no keys (a reader that
+    /// takes no input: the FMA, the lower EICAS) it is the same wait, and otherwise an empty set of values. The connection
     /// is checked first, before anything else is read ([WASM-7]'s order): a closed simulator leaves the last title and
     /// values in place, and without the check the monitor would search memory that is gone and say "unavailable: aircraft
     /// memory not found" two minutes later. The flight comes next for the same reason: in the menus the title stays the last

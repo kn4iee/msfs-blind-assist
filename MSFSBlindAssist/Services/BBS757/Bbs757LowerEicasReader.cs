@@ -56,9 +56,9 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
 
     public bool TryRead(out Bbs757LowerEicasReading reading) => TryRead(default, out reading);
 
-    /// <summary>The sampler takes no simulator value itself (the gate compares it afterwards); false when the object or a
-    /// pointer it needs cannot be reached, otherwise a reading, <see cref="Bbs757LowerEicasReading.Corrupt"/> when a value
-    /// or the status list is out of range.</summary>
+    /// <summary>The sampler takes no simulator value (memory alone); false when the object or a pointer it needs cannot be
+    /// reached, otherwise a reading, <see cref="Bbs757LowerEicasReading.Corrupt"/> when a value or the status list is out
+    /// of range.</summary>
     public bool TryRead(Bbs757SimValues sim, out Bbs757LowerEicasReading reading)
     {
         reading = default!;
@@ -67,7 +67,8 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
         if (!TryFindLower(out uint lower)) return false;
         if (!Ptr(lower, L.LeftEngine, out uint left) || !Ptr(lower, L.RightEngine, out uint right)) return false;
 
-        // The draw takes the type from the left engine (lower+264 = left type == 0).
+        // The draw takes the type from the left engine (lower+264 = left type == 0). Each engine's HP spool (an RR's N3,
+        // a PW's N2: the FF draw's input) is a fixed field, read and range-checked here whatever the page.
         if (!Int(left, L.EngineType, out int type)) return false;
         bool rr = type == 0;
         int hpOffset = rr ? L.HpSpoolRr : L.HpSpoolPw;
@@ -145,8 +146,6 @@ public sealed class Bbs757LowerEicasReader : IBbs757DisplaySampler<Bbs757LowerEi
             Page: powered ? Bbs757LowerEicasText.PageWord(Layout, page) : null,
             PageRows: rows,
             StatusMessages: bad ? Array.Empty<string>() : messages,
-            LeftHpSpool: leftHp,
-            RightHpSpool: rightHp,
             Powered: powered,
             Corrupt: bad);
         return true;

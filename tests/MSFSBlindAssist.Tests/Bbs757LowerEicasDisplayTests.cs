@@ -1,17 +1,28 @@
 // The 757 lower EICAS as one reader of the 757's display monitor: its names and keys, its spoken lines (page changes
-// and STATUS messages, S11), its window rows, and the shared monitor settling its changes.
+// and STATUS messages, S11), its window rows, and the shared monitor settling its changes, never judging a reading by a
+// simulator value (B757-30).
 
+using System.Globalization;
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.BBS757;
 using MSFSBlindAssist.Services.WasmMemory;
 using Xunit;
-using static MSFSBlindAssist.Tests.Bbs757LowerEicasGateTests;
 
 namespace MSFSBlindAssist.Tests;
 
 public class Bbs757LowerEicasDisplayTests
 {
     private const string Key = "MSFSBA_BBS757_STATUS_MESSAGES";
+
+    /// <summary>A reading of <paramref name="page"/> (1 engine, 2 STATUS, 3 engine off, else blank) with its page word,
+    /// <paramref name="rows"/> as drawn and <paramref name="messages"/> in the STATUS list.</summary>
+    internal static Bbs757LowerEicasReading R(int page = 1, bool corrupt = false, string[]? messages = null, bool powered = true,
+        string[]? rows = null)
+    {
+        string? word = !powered ? null : page switch { 1 => "engine", 2 => "STATUS", 3 => "engine off", _ => "blank" };
+        return new Bbs757LowerEicasReading(page, word, rows ?? Array.Empty<string>(), messages ?? Array.Empty<string>(),
+            powered, corrupt);
+    }
 
     private static Bbs757LowerEicasReading Status(params string[] messages) => R(page: 2, messages: messages);
 
@@ -28,12 +39,10 @@ public class Bbs757LowerEicasDisplayTests
         Assert.Equal("bbs757-lower-eicas", Bbs757LowerEicasDisplay.LogChannel);
         Assert.Equal(250, Bbs757LowerEicasDisplay.TickMs);
         Assert.Equal("EICAS status messages", Bbs757LowerEicasDisplay.MonitorRowLabel);
-        Assert.Equal(new[] { "BBS757_LOWER_EICAS_N2_1", "BBS757_LOWER_EICAS_N2_2", "BBS_ECAM_Mode" }, Bbs757LowerEicasDisplay.GateKeys);
         IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading> reader = new Bbs757LowerEicasDisplay();
-        Assert.Equal(3, reader.GateVariables.Count);
-        Assert.Equal("percent", reader.GateVariables[0].Units);
-        Assert.True(reader.Lit(R(), default));
-        Assert.False(reader.Lit(R(powered: false), default));
+        Assert.Empty(reader.SimInputs);   // memory alone: its N2 and page gate is gone (B757-30)
+        Assert.True(reader.Lit(R()));
+        Assert.False(reader.Lit(R(powered: false)));
     }
 
     [Fact]
@@ -44,9 +53,9 @@ public class Bbs757LowerEicasDisplayTests
         Assert.Equal(new[] { "Lower EICAS: engine page off" }, Texts(Changes(R(1), R(3))));
         Assert.Equal(new[] { "Lower EICAS: blank" }, Texts(Changes(R(1), R(0))));
         Assert.Equal(new[] { "STATUS page" }, Texts(Changes(R(1), R(2), prefix: false)));
-        // Two values of one kind are the same page.
+        // Two values of one kind are the same page, and the page's rows (an N2 spooling) are never spoken.
         Assert.Empty(Changes(R(0), R(9)));
-        Assert.Empty(Changes(R(1), R(1, left: 70)));
+        Assert.Empty(Changes(R(1, rows: new[] { "N2: 70.0, 70.0" }), R(1, rows: new[] { "N2: 71.2, 70.0" })));
     }
 
     [Fact]
@@ -112,10 +121,10 @@ public class Bbs757LowerEicasDisplayTests
         var layout = Bbs757LowerEicasLayoutTests.Sample() with { Status = null, StatusMissing = "no list" };
         var raw = new Bbs757LowerEicasRaw(2, true, false, true, null, null, Array.Empty<string>());
         var rows = Bbs757LowerEicasText.PageRows(layout, raw);
-        var reading = new Bbs757LowerEicasReading(2, "STATUS", rows, Array.Empty<string>(), 77, 77, true, false);
+        var reading = new Bbs757LowerEicasReading(2, "STATUS", rows, Array.Empty<string>(), true, false);
         Assert.Equal(new[] { "Page: STATUS", "STATUS page: not read: no list" }, new Bbs757LowerEicasDisplay().Rows(reading));
         // It speaks nothing of its own: the same page again, and no message.
-        Assert.Empty(Changes(reading, reading with { LeftHpSpool = 76 }));
+        Assert.Empty(Changes(reading, reading with { PageRows = rows.ToArray() }));
     }
 
     [Theory]
@@ -130,7 +139,7 @@ public class Bbs757LowerEicasDisplayTests
             new double[] { 3000, 2880, 2950 }, -55, 0, 0.75, true, true, 1850, 0, 1760, 0.123, 0, 0, 0, new uint[8]);
         var raw = new Bbs757LowerEicasRaw(2, true, false, false, new[] { engine, engine }, status, new[] { "WARN ELEX" });
         var reading = new Bbs757LowerEicasReading(2, "STATUS", Bbs757LowerEicasText.PageRows(layout, raw),
-            new[] { "WARN ELEX" }, 77, 77, true, false);
+            new[] { "WARN ELEX" }, true, false);
         var display = new Bbs757LowerEicasDisplay();
         var rows = TestCulture.Run(culture, () => display.Rows(reading));
         Assert.Equal("Page: STATUS", rows[0]);
@@ -153,22 +162,20 @@ public class Bbs757LowerEicasDisplayTests
 
     // ---- through the monitor ------------------------------------------------------------------------------------
 
-    /// <summary>The lower EICAS reader's words and gate with a scripted sampler in place of memory.</summary>
+    /// <summary>The lower EICAS reader's words, power and (no) inputs with a scripted sampler in place of memory.</summary>
     private sealed class Scripted : IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>
     {
-        private readonly Bbs757LowerEicasDisplay _inner = new();
+        private readonly IBbs757DisplayReader<Bbs757LowerEicasLayout, Bbs757LowerEicasReading> _inner = new Bbs757LowerEicasDisplay();
         public Bbs757LowerEicasReading Current = R(1);
 
         public string Name => Bbs757LowerEicasDisplay.Name;
         public string MuteKey => Bbs757LowerEicasDisplay.MuteKey;
         public string LogChannel => Bbs757LowerEicasDisplay.LogChannel;
         public int TickMs => Bbs757LowerEicasDisplay.TickMs;
-        public IReadOnlyList<string> GateKeys => Bbs757LowerEicasDisplay.GateKeys;
-        public IReadOnlyList<Bbs757GateVariable> GateVariables => Bbs757LowerEicasGate.Variables;
+        public IReadOnlyList<Bbs757SimInput> SimInputs => _inner.SimInputs;
         public IReadOnlyList<Bbs757LowerEicasLayout> LayoutsIn(ModuleAnalysis analysis) => new[] { Bbs757LowerEicasLayoutTests.Sample() };
         public IBbs757DisplaySampler<Bbs757LowerEicasReading>? SamplerFor(LocatedModule module, Bbs757LowerEicasLayout layout) => new Sampler(this);
-        public bool Passes(IReadOnlyList<(long AtMs, Bbs757LowerEicasReading Reading)> h, Bbs757SimValues s) => _inner.Passes(h, s);
-        public bool? Lit(Bbs757LowerEicasReading r, Bbs757SimValues s) => _inner.Lit(r, s);
+        public bool? Lit(Bbs757LowerEicasReading r) => _inner.Lit(r);
         public IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757LowerEicasReading a, Bbs757LowerEicasReading b, bool p) => _inner.Changes(a, b, p);
         public IReadOnlyList<string> Rows(Bbs757LowerEicasReading r) => _inner.Rows(r);
         public string DescribeAll(Bbs757LowerEicasReading r) => _inner.DescribeAll(r);
@@ -191,7 +198,7 @@ public class Bbs757LowerEicasDisplayTests
         Bbs757DisplayMonitorTests.FakeEnvironment Env, Action<int> Tick) Run()
     {
         var reader = new Scripted();
-        var env = new Bbs757DisplayMonitorTests.FakeEnvironment { Simulator = Sim() };
+        var env = new Bbs757DisplayMonitorTests.FakeEnvironment();
         var monitor = new Bbs757DisplayMonitor<Bbs757LowerEicasLayout, Bbs757LowerEicasReading>(reader);
         monitor.Start(env, startTimer: false);
         void Tick(int n)
@@ -215,7 +222,6 @@ public class Bbs757LowerEicasDisplayTests
         Assert.Empty(env.Spoken);
 
         reader.Current = R(2);
-        env.Simulator = Sim(mode: 2);
         tick(1);
         Assert.Empty(env.Spoken); // not yet settled
         tick(6);
@@ -235,7 +241,6 @@ public class Bbs757LowerEicasDisplayTests
         foreach (int page in new[] { 2, 1, 3 })
         {
             reader.Current = R(page);
-            env.Simulator = Sim(mode: page);
             tick(1);
         }
         tick(6);
@@ -243,10 +248,8 @@ public class Bbs757LowerEicasDisplayTests
 
         // A change and back inside the settle says nothing.
         reader.Current = R(1);
-        env.Simulator = Sim(mode: 1);
         tick(1);
         reader.Current = R(3);
-        env.Simulator = Sim(mode: 3);
         tick(8);
         Assert.Single(env.Spoken);
     }
@@ -257,7 +260,6 @@ public class Bbs757LowerEicasDisplayTests
         var (reader, monitor, env, tick) = Run();
         env.Muted.Add(Key);
         reader.Current = R(2);
-        env.Simulator = Sim(mode: 2);
         tick(8);
         Assert.Empty(env.Spoken);
         Assert.Equal("Page: STATUS", monitor.View()[0]);
@@ -268,12 +270,43 @@ public class Bbs757LowerEicasDisplayTests
     {
         var (reader, monitor, env, tick) = Run();
         reader.Current = Status("WARN ELEX");
-        env.Simulator = Sim(mode: 2);
         tick(8);
         Assert.Equal(new[] { "Lower EICAS: STATUS page" }, env.Spoken);
 
         reader.Current = Status("L EICAS CMPTR", "WARN ELEX");
         tick(8);
         Assert.Equal(new[] { "Lower EICAS: STATUS page", "Status: L EICAS CMPTR" }, env.Spoken);
+    }
+
+    // The owner's flight of 2026-11-10: at each engine start the N2 BlueBird draws spooled faster than the simulator's
+    // TURB ENG N2 followed, and the gate of the time said "Lower EICAS announcements stopped: values do not match the
+    // simulator" while the display was right. The reader reads memory alone now (B757-30): an engine page whose N2 rises
+    // while the simulator's lags far behind, or reads anything at all, says nothing, and the reader runs throughout.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    [InlineData("en-US")]
+    public void An_engine_start_speaks_no_stop_line(string culture)
+    {
+        var (spoken, view, asked) = TestCulture.Run(culture, () =>
+        {
+            var (reader, monitor, env, tick) = Run();
+            for (int i = 0; i <= 240; i++) // a minute of the start, a reading every 250 ms
+            {
+                double n2 = Math.Min(62.0, i * 0.5); // memory: the N2 the engine page draws, up to idle
+                double lagging = Math.Max(0, n2 - 8); // the simulator's, well behind
+                reader.Current = R(1, rows: new[] { "N2: " + n2.ToString("F1", CultureInfo.InvariantCulture) + ", 0.0" });
+                env.Simulator = new Bbs757SimValues(new Dictionary<string, double>
+                {
+                    ["TURB ENG N2:1"] = lagging, ["TURB ENG N2:2"] = 0, ["BBS_ECAM_Mode"] = 3,
+                });
+                tick(1);
+                Assert.Equal("Running", monitor.StateName);
+            }
+            return (env.Spoken, monitor.View(), env.KeysAsked.ToArray());
+        });
+        Assert.Empty(spoken); // no stop line, and the N2 itself is never spoken
+        Assert.Equal(new[] { "Page: engine", "N2: 62.0, 0.0" }, view);
+        Assert.Empty(asked); // nothing of the simulator's is even read
     }
 }

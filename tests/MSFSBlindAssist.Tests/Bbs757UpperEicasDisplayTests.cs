@@ -1,6 +1,7 @@
-// The 757 upper EICAS as one reader of the 757's display monitor: its names, rows and log, its gate variables, its
-// layouts and samplers from the shared module session, its gate and power, and its words; then the monitor driving the
-// real reader over scripted readings, so the settle, the power-up quiet and the Ctrl+M rows act as the pilot hears them.
+// The 757 upper EICAS as one reader of the 757's display monitor: its names, rows and log, its one simulator input, its
+// layouts and samplers from the shared module session, its power, and its words; then the monitor driving the real reader
+// over scripted readings, so the settle, the power-up quiet and the Ctrl+M rows act as the pilot hears them, and no
+// simulator value ever stops it (B757-30).
 
 using MSFSBlindAssist.DisplayLayouts;
 using MSFSBlindAssist.Services.BBS757;
@@ -19,13 +20,8 @@ public class Bbs757UpperEicasDisplayTests
 
     private static IBbs757DisplayReader<Bbs757UpperEicasLayout, Bbs757UpperEicasReading> Reader() => new Bbs757UpperEicasDisplay();
 
-    private static Bbs757SimValues Sim(double left = 19.93, double right = 19.93, double manual = 0) =>
-        new(new Dictionary<string, double>
-        {
-            ["TURB ENG N1:1"] = left,
-            ["TURB ENG N1:2"] = right,
-            ["BBS757_THRREF_PULL"] = manual,
-        });
+    private static Bbs757SimValues Sim(double manual = 0) =>
+        new(new Dictionary<string, double> { ["BBS757_THRREF_PULL"] = manual });
 
     private static ModuleBuild Build(Bbs757UpperEicasLayout? layout, string layoutFile = "BBS752.json") =>
         new(Bbs757Module.Description, "BBS752.wasm", layoutFile,
@@ -61,31 +57,23 @@ public class Bbs757UpperEicasDisplayTests
     }
 
     [Fact]
-    public void The_gate_reads_both_engines_n1_and_the_manual_thrust_flag()
+    public void The_reader_takes_only_the_manual_thrust_flag()
     {
-        var keys = new[] { "TURB ENG N1:1", "TURB ENG N1:2", "BBS757_THRREF_PULL" };
-        Assert.Equal(keys, Bbs757UpperEicasDisplay.GateKeys);
-        Assert.Equal(keys, Reader().GateKeys);
-        Assert.False(Bbs757UpperEicasDisplay.GateKeys is string[], "the keys cannot be changed through a cast");
-
-        // The N1s are the stock variables in percent ([VAR-2]), the manual flag BlueBird's L:var, each under its key.
-        var variables = new[]
-        {
-            new Bbs757GateVariable("TURB ENG N1:1", "TURB ENG N1:1", SimVarType.SimVar, "percent"),
-            new Bbs757GateVariable("TURB ENG N1:2", "TURB ENG N1:2", SimVarType.SimVar, "percent"),
-            new Bbs757GateVariable("BBS757_THRREF_PULL", "BBS757_THRREF_PULL", SimVarType.LVar, null),
-        };
-        Assert.Equal(variables, Reader().GateVariables);
-        Assert.Equal(keys, Reader().GateVariables.Select(v => v.Key));
-        Assert.Equal(variables, new Bbs757DisplayMonitor<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>(new Bbs757UpperEicasDisplay()).GateVariables);
+        // S10: BlueBird's draw takes its L:var, so the sampler does, as an input; the N1s once compared are gone (B757-30).
+        var inputs = new[] { new Bbs757SimInput("BBS757_THRREF_PULL", "BBS757_THRREF_PULL", SimVarType.LVar, null) };
+        Assert.Equal(inputs, Bbs757UpperEicasDisplay.SimInputs);
+        Assert.Equal(inputs, Reader().SimInputs);
+        Assert.False(Bbs757UpperEicasDisplay.SimInputs is Bbs757SimInput[], "the inputs cannot be changed through a cast");
+        Assert.Equal(inputs, new Bbs757DisplayMonitor<Bbs757UpperEicasLayout, Bbs757UpperEicasReading>(new Bbs757UpperEicasDisplay()).SimInputs);
     }
 
     [Fact]
-    public void Passes_is_the_upper_eicas_gate()
+    public void Unpowered_is_not_lit()
     {
-        var history = new[] { (0L, Eicas()) };
-        Assert.True(Reader().Passes(history, Sim()));
-        Assert.False(Reader().Passes(history, Sim(right: 33.2)));
+        // The display's power is the reading's (powered, not failed, not timed blank, no computer blank), never "no power
+        // state": a dark screen is never spoken, so its power-up is never spoken either (S4).
+        Assert.False(Reader().Lit(Eicas(powered: false)));
+        Assert.True(Reader().Lit(Eicas(powered: true)));
     }
 
     [Fact]
@@ -198,16 +186,13 @@ public class Bbs757UpperEicasDisplayTests
         public string MuteKey => _real.MuteKey;
         public string LogChannel => _real.LogChannel;
         public int TickMs => _real.TickMs;
-        public IReadOnlyList<string> GateKeys => _real.GateKeys;
-        public IReadOnlyList<Bbs757GateVariable> GateVariables => _real.GateVariables;
+        public IReadOnlyList<Bbs757SimInput> SimInputs => _real.SimInputs;
 
         public IReadOnlyList<Bbs757UpperEicasLayout> LayoutsIn(ModuleAnalysis analysis) => _real.LayoutsIn(analysis);
 
         public IBbs757DisplaySampler<Bbs757UpperEicasReading>? SamplerFor(LocatedModule module, Bbs757UpperEicasLayout layout) => sampler;
 
-        public bool Passes(IReadOnlyList<(long AtMs, Bbs757UpperEicasReading Reading)> history, Bbs757SimValues sim) => _real.Passes(history, sim);
-
-        public bool? Lit(Bbs757UpperEicasReading reading, Bbs757SimValues sim) => _real.Lit(reading, sim);
+        public bool? Lit(Bbs757UpperEicasReading reading) => _real.Lit(reading);
 
         public IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757UpperEicasReading heard, Bbs757UpperEicasReading now, bool withPrefix) =>
             _real.Changes(heard, now, withPrefix);
@@ -217,8 +202,8 @@ public class Bbs757UpperEicasDisplayTests
         public string DescribeAll(Bbs757UpperEicasReading reading) => _real.DescribeAll(reading);
     }
 
-    /// <summary>One flight: the monitor on the real reader, the session's build with the upper EICAS layout, the
-    /// simulator's N1 as memory's, a tick every 250 ms (the reader's own interval).</summary>
+    /// <summary>One flight: the monitor on the real reader, the session's build with the upper EICAS layout, the manual
+    /// thrust flag off, a tick every 250 ms (the reader's own interval).</summary>
     private sealed class Flight
     {
         public Flight(Bbs757UpperEicasReading first, params string[] muted)
@@ -297,22 +282,22 @@ public class Bbs757UpperEicasDisplayTests
     }
 
     // Review Focus: the messages BlueBird posts as the screen lights are what a pilot sees on any power-up, not changes:
-    // after the 10 s quiet the first trusted reading is a silent baseline, at a cold start and after a power loss.
+    // after the 10 s quiet the first good reading is a silent baseline, at a cold start and after a power loss.
     [Fact]
     public void Powering_up_makes_the_first_messages_a_silent_baseline()
     {
         var f = new Flight(Eicas(powered: false));
         f.Tick(40); // ten seconds cold and dark
-        Assert.Equal("Verifying", f.State);
-        // A dark display reads "not powered" while its reader verifies (plan 25's monitor change), as it does running.
+        // A dark reading is not corrupt: the reader runs at once, and its window says the display is not powered.
+        Assert.Equal("Running", f.State);
         Assert.Equal(new[] { "EICAS display not powered" }, f.Monitor.View());
 
         var lit = Eicas(new[] { ShutdownL, ShutdownR, HydPress, BleedL, BleedR, ParkingBrake });
         f.Show(lit);
         f.Tick(40); // lit, still in its 10 s quiet
-        Assert.Equal("Verifying", f.State);
-        f.Tick(); // 10 s lit: trusted, a silent baseline
-        Assert.Equal("Running", f.State);
+        Assert.Equal(new[] { "EICAS reader starting" }, f.Monitor.View());
+        f.Tick(); // 10 s lit: a silent baseline
+        Assert.Contains("Caution: HYD SYS PRESS", f.Monitor.View());
         f.Tick(20);
         Assert.Empty(f.Spoken);
         Assert.Contains("Caution: HYD SYS PRESS", f.Monitor.View());
@@ -379,117 +364,74 @@ public class Bbs757UpperEicasDisplayTests
     public void The_messages_row_also_mutes_the_status_lines(string muted, bool said)
     {
         var f = new Flight(Eicas(new[] { ParkingBrake }), muted.Length == 0 ? Array.Empty<string>() : new[] { muted }).RunUntilRunning();
-        f.Env.Simulator = Sim(right: 40); // the simulator's right N1 disagrees with memory for longer than 2 s
+        f.Show(Eicas(new[] { ParkingBrake }) with { Corrupt = true }); // ten corrupt readings in a row
         f.Tick(12);
-        Assert.Equal("Mismatched", f.State);
-        Assert.Equal(said ? new[] { "EICAS announcements stopped: values do not match the simulator" } : Array.Empty<string>(), f.Spoken);
+        Assert.Equal("Unavailable", f.State);
+        Assert.Equal(said ? new[] { "EICAS announcements stopped: unexpected values" } : Array.Empty<string>(), f.Spoken);
     }
 
-    // Review Focus: the measured engine starts, which set the gate's tolerance. At light-off the simulator's N1 jumps
-    // for about a second (right 33.2 % while memory holds 26.3 %, left 32.7 % against 26.2 %) and otherwise matches
-    // memory. No reading in the window comes within 2.5 %, so the gate fails those ticks; the monitor's 2 s grace
-    // (MismatchToleranceMs) carries them: the reader stays running and says no "stopped" at either start.
+    // The measured engine starts (plan 24): while N1 rises memory leads the simulator by about 0.5 s, and at light-off the
+    // simulator's N1 jumps for about a second (right 33.2 % while memory holds 26.3 %). The reader no longer reads the
+    // simulator's N1 at all (B757-30): whatever it does, the reader runs throughout and says no "stopped"; an N1 value is
+    // never spoken (S8), so nothing is said.
     [Fact]
-    public void An_engine_start_light_off_says_no_stopped()
+    public void An_engine_start_says_no_stopped_whatever_the_simulators_n1()
     {
-        var right = new EngineStart(left: false, other: 0);
-        right.Rise(26.3);
-        right.Jump(26.3, 33.2, ticks: 4);
-        right.Settle(26.3);
-        var left = new EngineStart(left: true, other: 19.93, after: right);
-        left.Rise(26.2);
-        left.Jump(26.2, 32.7, ticks: 4);
-        left.Settle(26.2);
-        Assert.Equal(4, right.Failing); // the gate failed every jump tick of each start...
-        Assert.Equal(4, left.Failing);
-        Assert.Equal("Running", right.Flight.State); // ...and the reader ran throughout, silent
-        Assert.Empty(right.Flight.Spoken);
+        var f = new Flight(N1(0, 0)).RunUntilRunning();
+        foreach (var (memory, simulator) in new[]
+        {
+            (5.0, 3.0), (10.0, 7.5), (15.0, 12.0), (20.0, 17.0), (24.0, 21.0), (26.3, 24.0),
+            (26.3, 33.2), (26.3, 33.2), (26.3, 33.2), (26.3, 33.2), (26.3, 33.2), (26.3, 33.2), (26.3, 33.2), (26.3, 33.2),
+            (25.0, 26.3), (23.0, 25.0), (21.0, 23.0), (19.93, 21.0), (19.93, 19.93),
+        })
+        {
+            f.Show(N1(0, memory));
+            f.Env.Simulator = new Bbs757SimValues(new Dictionary<string, double>
+            {
+                ["TURB ENG N1:1"] = 0, ["TURB ENG N1:2"] = simulator, ["BBS757_THRREF_PULL"] = 0,
+            });
+            f.Tick();
+            Assert.Equal("Running", f.State);
+        }
+        f.Tick(20);
+        Assert.Equal("Running", f.State);
+        Assert.Empty(f.Spoken);
+        Assert.Contains("N1: 0.0, 19.9", f.Monitor.View());
+        Assert.DoesNotContain("TURB ENG N1:1", f.Env.KeysAsked);
+        Assert.DoesNotContain("TURB ENG N1:2", f.Env.KeysAsked);
 
-        // The same jump held for 2 s stops: the grace, not the gate, carries a light-off.
-        var held = new EngineStart(left: false, other: 0);
-        held.Rise(26.3);
-        held.Jump(26.3, 33.2, ticks: 7); // 1.75 s since the last good reading: still running
-        Assert.Empty(held.Flight.Spoken);
-        held.Jump(26.3, 33.2, ticks: 1, running: false); // 2 s
-        Assert.Equal("Mismatched", held.Flight.State);
-        Assert.Equal(new[] { "EICAS announcements stopped: values do not match the simulator" }, held.Flight.Spoken);
+        static Bbs757UpperEicasReading N1(double left, double right) =>
+            Gauge(Eicas(), V("N1", left.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+                right.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)));
     }
 
-    /// <summary>One engine starting, on the flight of the start <c>after</c> or else a new one with both engines off; the
-    /// other engine at <c>other</c> % N1 in memory and the simulator alike; one 250 ms tick per value. It keeps the
-    /// monitor's window beside it (shared with the start before) to count the ticks the gate fails.</summary>
-    private sealed class EngineStart
+    [Fact]
+    public void The_manual_thrust_flag_changing_never_stops_the_reader()
     {
-        private readonly bool _left;
-        private readonly double _other;
-        private readonly List<(long AtMs, Bbs757UpperEicasReading Reading)> _history;
-
-        public EngineStart(bool left, double other, EngineStart? after = null)
+        // The input feeds the thrust reference (S10), never a check: flipping it, or any value it reads, leaves the reader
+        // running; only what the reading itself shows is spoken.
+        var f = new Flight(Eicas(new[] { ParkingBrake })).RunUntilRunning();
+        double[] values = { 1, 0, double.NaN, 5, -1, 0.4, 0.6 };
+        for (int i = 0; i < 200; i++)
         {
-            _left = left;
-            _other = other;
-            _history = after?._history ?? new();
-            if (after is null)
-            {
-                Flight = new Flight(At(0, 0));
-                Flight.Env.Simulator = Sim(left: 0, right: 0);
-                Flight.RunUntilRunning();
-            }
-            else
-            {
-                Flight = after.Flight;
-            }
+            f.Env.Simulator = Sim(manual: values[i % values.Length]);
+            f.Tick();
+            Assert.Equal("Running", f.State);
         }
-
-        public Flight Flight { get; }
-
-        /// <summary>The ticks the gate failed.</summary>
-        public int Failing { get; private set; }
-
-        /// <summary>N1 rising to light-off, memory and the simulator agreeing.</summary>
-        public void Rise(double lightOff)
-        {
-            foreach (double n1 in new[] { 5.0, 10.0, 15.0, 20.0, 24.0, lightOff }) Tick(n1, n1);
-        }
-
-        /// <summary>Memory holding <paramref name="memory"/> while the simulator reads <paramref name="simulator"/>.</summary>
-        public void Jump(double memory, double simulator, int ticks, bool running = true)
-        {
-            for (int i = 0; i < ticks; i++) Tick(memory, simulator, running);
-        }
-
-        /// <summary>N1 settling from light-off to idle, memory and the simulator agreeing.</summary>
-        public void Settle(double lightOff)
-        {
-            foreach (double n1 in new[] { lightOff, 25.0, 23.0, 21.0, 19.93, 19.93, 19.93, 19.93 }) Tick(n1, n1);
-        }
-
-        private Bbs757UpperEicasReading At(double left, double right) => Eicas() with { GateN1Left = left, GateN1Right = right };
-
-        private void Tick(double memory, double simulator, bool running = true)
-        {
-            var reading = _left ? At(memory, _other) : At(_other, memory);
-            var sim = _left ? Sim(simulator, _other) : Sim(_other, simulator);
-            long now = Flight.Env.NowMs;
-            _history.Add((now, reading));
-            _history.RemoveAll(h => now - h.AtMs > Bbs757UpperEicasGate.WindowMs);
-            if (!Bbs757UpperEicasGate.Passes(_history, sim)) Failing++;
-            Flight.Show(reading);
-            Flight.Env.Simulator = sim;
-            Flight.Tick();
-            if (running) Assert.Equal("Running", Flight.State);
-        }
+        Assert.Empty(f.Spoken); // the scripted reading never changed
+        Assert.Contains("Advisory: PARKING BRAKE", f.Monitor.View());
     }
 
     [Fact]
     public void The_sampler_is_given_the_manual_thrust_flag_through_the_monitor()
     {
         // S10: BlueBird's draw takes L:BBS757_THRREF_PULL, so each read the monitor makes carries this tick's value (the
-        // reader decodes MAN from it, Bbs757UpperEicasReaderTests), beside the gate's N1s.
+        // reader decodes MAN from it, Bbs757UpperEicasReaderTests), and nothing else of the simulator's.
         var f = new Flight(Eicas()).RunUntilRunning();
         Assert.NotEmpty(f.Sampler.Seen);
         Assert.All(f.Sampler.Seen, sim => Assert.Equal(0, sim["BBS757_THRREF_PULL"]));
-        Assert.Contains("BBS757_THRREF_PULL", f.Env.KeysAsked);
+        Assert.All(f.Env.KeysAsked, key => Assert.Equal("BBS757_THRREF_PULL", key));
+        Assert.NotEmpty(f.Env.KeysAsked);
 
         f.Env.Simulator = Sim(manual: 1);
         int reads = f.Sampler.Seen.Count;
@@ -497,7 +439,5 @@ public class Bbs757UpperEicasDisplayTests
         Assert.Equal(reads + 1, f.Sampler.Seen.Count);
         var seen = f.Sampler.Seen[^1];
         Assert.Equal(1, seen["BBS757_THRREF_PULL"]);
-        Assert.Equal(19.93, seen["TURB ENG N1:1"]);
-        Assert.Equal(19.93, seen["TURB ENG N1:2"]);
     }
 }

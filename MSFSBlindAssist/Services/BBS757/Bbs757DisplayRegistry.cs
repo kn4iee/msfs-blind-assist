@@ -21,7 +21,7 @@ internal sealed class Bbs757DisplayRegistry
 {
     private readonly List<IBbs757DisplayMonitor> _monitors = new();
     private readonly List<MonitorRow> _rows = new();
-    private readonly List<Bbs757GateVariable> _gates = new();
+    private readonly List<Bbs757SimInput> _inputs = new();
     private readonly Dictionary<HotkeyAction, Func<Bbs757KeyContext, bool>> _keys = new();
     private readonly List<Form> _windows = new();
 
@@ -31,45 +31,45 @@ internal sealed class Bbs757DisplayRegistry
     /// <summary>Every reader's Ctrl+M rows, in registration order.</summary>
     public IReadOnlyList<MonitorRow> Rows => _rows;
 
-    /// <summary>Every reader's gate variables (its monitor's <see cref="IBbs757DisplayMonitor.GateVariables"/>), each key
+    /// <summary>Every reader's simulator inputs (its monitor's <see cref="IBbs757DisplayMonitor.SimInputs"/>), each key
     /// once, in registration order: the definition puts each on the continuous batch and reads it from there.</summary>
-    public IReadOnlyList<Bbs757GateVariable> GateVariables => _gates;
+    public IReadOnlyList<Bbs757SimInput> SimInputs => _inputs;
 
     /// <summary>
-    /// A reader's monitor, with the gate variables its reader declares (taken from the monitor, so they can never differ
-    /// from the reader's). A key two readers share must name the same variable; a gate variable must be an L:var or a
-    /// stock variable with its units. Either mistake is a wiring error, so it throws, and registers nothing of the reader.
+    /// A reader's monitor, with the simulator inputs its reader declares (taken from the monitor, so they can never differ
+    /// from the reader's). A key two readers share must name the same variable; an input must be an L:var or a stock
+    /// variable with its units. Either mistake is a wiring error, so it throws, and registers nothing of the reader.
     /// </summary>
     public void Add(IBbs757DisplayMonitor monitor)
     {
         ArgumentNullException.ThrowIfNull(monitor);
-        var gates = monitor.GateVariables ?? throw new ArgumentException("the monitor has no gate variables list", nameof(monitor));
-        var added = new List<Bbs757GateVariable>();
-        foreach (var gate in gates)
+        var inputs = monitor.SimInputs ?? throw new ArgumentException("the monitor has no simulator inputs list", nameof(monitor));
+        var added = new List<Bbs757SimInput>();
+        foreach (var input in inputs)
         {
-            Check(gate);
-            var known = _gates.Concat(added).Where(g => string.Equals(g.Key, gate.Key, StringComparison.Ordinal)).ToList();
-            if (known.Count == 0) added.Add(gate);
-            else if (!known[0].SameVariable(gate))
+            Check(input);
+            var known = _inputs.Concat(added).Where(i => string.Equals(i.Key, input.Key, StringComparison.Ordinal)).ToList();
+            if (known.Count == 0) added.Add(input);
+            else if (!known[0].SameVariable(input))
                 throw new InvalidOperationException(
-                    $"757 display gate key {gate.Key} is already {Describe(known[0])}, not {Describe(gate)}.");
+                    $"757 display input key {input.Key} is already {Describe(known[0])}, not {Describe(input)}.");
         }
-        _gates.AddRange(added);
+        _inputs.AddRange(added);
         _monitors.Add(monitor);
     }
 
-    private static void Check(Bbs757GateVariable gate)
+    private static void Check(Bbs757SimInput input)
     {
-        if (string.IsNullOrEmpty(gate.Key) || string.IsNullOrEmpty(gate.Name))
-            throw new ArgumentException("a 757 display gate variable needs a key and a name");
-        if (gate.Type is not (SimVarType.LVar or SimVarType.SimVar))
-            throw new ArgumentException($"757 display gate variable {gate.Key} is a {gate.Type}: only an L:var or a stock variable");
-        if (gate.Type == SimVarType.SimVar && string.IsNullOrEmpty(gate.Units))
-            throw new ArgumentException($"757 display gate variable {gate.Key} is a stock variable with no units");
+        if (string.IsNullOrEmpty(input.Key) || string.IsNullOrEmpty(input.Name))
+            throw new ArgumentException("a 757 display reader input needs a key and a name");
+        if (input.Type is not (SimVarType.LVar or SimVarType.SimVar))
+            throw new ArgumentException($"757 display reader input {input.Key} is a {input.Type}: only an L:var or a stock variable");
+        if (input.Type == SimVarType.SimVar && string.IsNullOrEmpty(input.Units))
+            throw new ArgumentException($"757 display reader input {input.Key} is a stock variable with no units");
     }
 
-    private static string Describe(Bbs757GateVariable gate) =>
-        gate.Type == SimVarType.LVar ? $"L:{gate.Name}" : $"{gate.Name} in {gate.Units}";
+    private static string Describe(Bbs757SimInput input) =>
+        input.Type == SimVarType.LVar ? $"L:{input.Name}" : $"{input.Name} in {input.Units}";
 
     /// <summary>The handler of <paramref name="action"/>: true when it took the key. One per key: two readers on one key
     /// is a wiring error, so a second throws.</summary>

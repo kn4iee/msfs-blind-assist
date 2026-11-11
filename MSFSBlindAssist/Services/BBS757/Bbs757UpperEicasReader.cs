@@ -97,7 +97,7 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
 
     /// <summary>The out value of a failed read: never shown, spoken or a baseline.</summary>
     private static readonly Bbs757UpperEicasReading NotRead = new(Array.Empty<Bbs757EicasMessage>(), 0, false, null, false,
-        null, 0, 0, Array.Empty<Bbs757EicasValue>(), null, Array.Empty<string>(), 0, 0, false, Corrupt: true);
+        null, 0, 0, Array.Empty<Bbs757EicasValue>(), null, Array.Empty<string>(), false, Corrupt: true);
 
     private readonly ModuleMemory _memory;
     private readonly IDisposable _ownedSource;
@@ -544,15 +544,15 @@ public sealed class Bbs757UpperEicasReader : IBbs757DisplaySampler<Bbs757UpperEi
                     envelope.Add(Invariant($"{layout.EnvelopeFl} {row.Fl} {row.Min}-{row.Max} {layout.EnvelopeKts}"));
         }
 
-        // The gate's values stay raw: a lit reading's must be numbers, and a dark one is never compared.
+        // Each engine's own N1, whatever is drawn (the alternate, or nothing on an invalid engine), must be a number while
+        // the screen is lit: a range check of the reading (B757-30's Corrupt), never compared with the simulator.
         _ = Use(raw.Left.N1);
         _ = Use(raw.Right.N1);
-        double gateLeft = raw.Left.N1, gateRight = raw.Right.N1;
         // PAGE and RECALL in the layout's words; the draw's column padding before the number is dropped.
         string? pageLine = pageShown ? layout.PageWord + " " + raw.Page.ToString(Inv) : null;
         string? recallLine = recall ? layout.RecallWord : null;
         return new Bbs757UpperEicasReading(messages.AsReadOnly(), raw.Page, pageShown, pageLine, recall, recallLine,
-            raw.RecallTime, cancelled, values.AsReadOnly(), thrust, envelope.AsReadOnly(), gateLeft, gateRight, powered, corrupt);
+            raw.RecallTime, cancelled, values.AsReadOnly(), thrust, envelope.AsReadOnly(), powered, corrupt);
     }
 
     /// <summary>A readout's whole number, truncated toward zero (EGT, as BlueBird's <c>trunc</c>).</summary>

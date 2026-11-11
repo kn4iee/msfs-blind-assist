@@ -164,16 +164,41 @@ public class Bbs757DisplaysWiringTests
             flightRunning: () => { asked.Add("flight"); return true; },
             title: () => { asked.Add("title"); return BlueBirdTitle; },
             cached: key => { asked.Add(key); return 1; },
-            cacheKeys: Bbs757FmaDisplay.GateKeys.ToDictionary(k => k, k => k),
+            cacheKeys: new Dictionary<string, string> { ["L_A"] = "L_A" },
             settings: () => new UserSettings(), new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
 
-        Assert.Null(env.ReadSimulator(Bbs757FmaDisplay.GateKeys));
+        Assert.Null(env.ReadSimulator(new[] { "L_A" }));
+        Assert.Null(env.ReadSimulator(Array.Empty<string>()));   // a reader with no input waits the same
         Assert.Empty(asked);   // neither the flight, the title nor a value is read while disconnected
 
         // The app's own manager, never connected here.
         var real = new Bbs757DisplayEnvironment(new SimConnectManager(IntPtr.Zero), new SpeechCapture(), session,
             new Bbs757DisplayFilesNotice(), new Dictionary<string, string>());
-        Assert.Null(real.ReadSimulator(Bbs757FmaDisplay.GateKeys));
+        Assert.Null(real.ReadSimulator(Array.Empty<string>()));
+    }
+
+    [Fact]
+    public void With_no_inputs_the_environment_still_waits_while_disconnected_no_flight_runs_or_another_title_is_loaded()
+    {
+        // The FMA and the lower EICAS take no simulator input: their monitors' silent wait still comes from this null.
+        using var session = NewSession();
+        bool connected = false, flight = true;
+        string? title = BlueBirdTitle;
+        var env = new Bbs757DisplayEnvironment(() => connected, () => flight, () => title, _ => null,
+            new Dictionary<string, string>(), () => new UserSettings(), new SpeechCapture(), session, new Bbs757DisplayFilesNotice());
+        var none = Array.Empty<string>();
+
+        Assert.Null(env.ReadSimulator(none));   // disconnected
+        connected = true;
+        flight = false;
+        Assert.Null(env.ReadSimulator(none));   // the menus, or a flight's load
+        flight = true;
+        title = "FenixA320 BAW";
+        Assert.Null(env.ReadSimulator(none));   // another aircraft under the 757 profile
+        title = BlueBirdTitle;
+        var values = env.ReadSimulator(none);   // up: no value of any input, and nothing to wait for
+        Assert.NotNull(values);
+        Assert.Empty(values!.Value.Values);
     }
 
     [Fact]
@@ -207,8 +232,8 @@ public class Bbs757DisplaysWiringTests
         var fake = new Bbs757DisplayMonitorTests.FakeEnvironment();
         bool flight = true;
         var real = new Bbs757DisplayEnvironment(() => true, () => flight, () => BlueBirdTitle, _ => 1,
-            new Dictionary<string, string> { ["L:X_GATE"] = "CACHE_X" }, () => new UserSettings(), new SpeechCapture(), session,
-            new Bbs757DisplayFilesNotice());
+            new Dictionary<string, string>(), () => new UserSettings(), new SpeechCapture(), session,
+            new Bbs757DisplayFilesNotice());   // the fake reader takes no input, as the FMA
         var env = new SimulatorFrom(real, fake);
         var reader = new Bbs757DisplayMonitorTests.FakeReader();
         var monitor = new Bbs757DisplayMonitor<Bbs757DisplayMonitorTests.FakeLayout, Bbs757DisplayMonitorTests.FakeReading>(reader);
@@ -249,7 +274,7 @@ public class Bbs757DisplaysWiringTests
     }
 
     [Fact]
-    public void The_environment_reads_each_gate_value_from_its_batched_copy()
+    public void The_environment_reads_each_input_value_from_its_batched_copy()
     {
         using var session = NewSession();
         var cache = new Dictionary<string, double> { ["CACHE_A"] = 1, ["CACHE_B"] = 35000 };
@@ -260,7 +285,7 @@ public class Bbs757DisplaysWiringTests
         Assert.NotNull(values);
         Assert.Equal(1, values!.Value["L_A"]);
         Assert.Equal(35000, values.Value["L_B"]);
-        // A value not delivered yet, or a key with no batched copy: nothing to compare with, so the monitor waits.
+        // A value not delivered yet, or a key with no batched copy: nothing to give the sampler, so the monitor waits.
         Assert.Null(env.ReadSimulator(new[] { "L_A", "L_C" }));
         Assert.Null(env.ReadSimulator(new[] { "L_A", "L_UNREGISTERED" }));
     }
@@ -293,38 +318,43 @@ public class Bbs757DisplaysWiringTests
     }
 
     [Fact]
-    public void Every_fma_gate_key_rides_the_batch_once()
+    public void The_only_display_input_is_the_manual_thrust_flag()
     {
-        // Step 1: the F/D switches were on-request map controls, so each has a hidden batched copy; the MCP's altitude and
-        // heading already ride the batch for the autoflight call-outs, so they have none ([VAR-7]: one batched var a name).
+        // B757-30: the FMA's F/D switches and MCP targets and the lower EICAS's N2 and page, once gate variables, are no
+        // longer read for the readers; the upper EICAS's manual thrust reference flag (S10) is the one input, read from one
+        // streamed variable, hidden from Ctrl+M when it is a copy ([VAR-9]).
         var def = new BBS757Definition();
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
 
-        foreach (string gate in Bbs757FmaDisplay.GateKeys)
+        Assert.Equal(new[] { "BBS757_THRREF_PULL" }, keys.Keys);
+        var carrier = vars[keys["BBS757_THRREF_PULL"]];
+        Assert.Equal(("BBS757_THRREF_PULL", SimVarType.LVar), (carrier.Name, carrier.Type));
+        Assert.Equal(UpdateFrequency.Continuous, carrier.UpdateFrequency);
+        Assert.True(carrier.IsAnnounced);   // streamed: on the batch, or on its own subscription
+        Assert.True(ContinuousBatchLayout.RidesBatch(carrier) || carrier.ExcludeFromBatch);
+        Assert.True(vars.Values.Count(v => v.Name == "BBS757_THRREF_PULL" && ContinuousBatchLayout.RidesBatch(v)) <= 1);
+        Assert.All(vars.Where(kv => kv.Key.StartsWith(BBS757Definition.DisplayInputCopyPrefix, StringComparison.Ordinal)), kv =>
         {
-            var batched = vars.Where(kv => kv.Value.Name == gate && ContinuousBatchLayout.RidesBatch(kv.Value)).ToList();
-            var only = Assert.Single(batched);
-            Assert.Equal(only.Key, keys[gate]);
-            Assert.Equal(SimVarType.LVar, only.Value.Type);
-        }
-        Assert.Equal(Bbs757AutoflightAnnouncements.HeadingWatchKey, keys[Bbs757FmaGate.HeadingKey]);
-        Assert.Equal(Bbs757AutoflightAnnouncements.AltitudeWatchKey, keys[Bbs757FmaGate.AltitudeKey]);
-        foreach (string fd in new[] { Bbs757FmaGate.FdCaptainKey, Bbs757FmaGate.FdFirstOfficerKey })
-        {
-            var copy = vars[keys[fd]];
-            Assert.True(copy.ExcludeFromMonitorManager);   // no Ctrl+M row: it is never spoken ([VAR-9])
-            Assert.Equal(UpdateFrequency.Continuous, copy.UpdateFrequency);
-            Assert.True(copy.IsAnnounced);                 // what puts it on the batch
-        }
+            Assert.Equal(BBS757Definition.DisplayInputCopyPrefix + "BBS757_THRREF_PULL", kv.Key);
+            Assert.True(kv.Value.ExcludeFromMonitorManager);
+            Assert.Equal("BBS757_THRREF_PULL (display reader input)", kv.Value.DisplayName);
+        });
+        foreach (string gone in new[] { "TURB ENG N1:1", "TURB ENG N1:2", "TURB ENG N2:1", "TURB ENG N2:2", "BBS_ECAM_Mode",
+            "BBS_FD1_SWITCH", "BBS_FD2_SWITCH", "BBS_AP_TARGET_ALTITUDE", "BBS_AP_TARGET_HEADING" })
+            Assert.DoesNotContain(BBS757Definition.DisplayInputCopyPrefix + gone, vars.Keys);
+        Assert.DoesNotContain(vars.Keys, k => k.StartsWith("BBS757_DISPLAY_GATE_", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void A_gate_copy_is_consumed_silently()
+    public void An_input_copy_is_consumed_silently()
     {
+        const string input = "BBS_TEST_READER_INPUT";
         var def = new BBS757Definition { NestRunning = () => true };
+        def.Displays.Add(new FakeMonitor { SimInputs = new[] { Bbs757SimInput.LVar(input) } });
         var speech = new SpeechCapture();
-        string copy = def.DisplayCacheKeys()[Bbs757FmaGate.FdCaptainKey];
+        string copy = def.DisplayCacheKeys()[input];
+        Assert.Equal(BBS757Definition.DisplayInputCopyPrefix + input, copy);
 
         Assert.True(def.ProcessSimVarUpdate(copy, 1, speech));
         Assert.True(def.ProcessSimVarUpdate(copy, 0, speech));
@@ -333,56 +363,93 @@ public class Bbs757DisplaysWiringTests
     }
 
     [Fact]
-    public void A_later_readers_gate_key_gets_its_copy_and_cache_key()
+    public void A_later_readers_input_gets_its_copy_and_cache_key()
     {
-        // As a later plan's seam registers its reader (S16), with its own gate variables: nothing in Displays.cs lists them.
-        const string gate = "BBS_TEST_READER_GATE";
+        // As a later plan's seam registers its reader (S16), with its own inputs: nothing in Displays.cs lists them.
+        const string input = "BBS_TEST_READER_INPUT";
+        const string heading = "BBS_AP_TARGET_HEADING";   // the MCP's heading, on the batch for the autoflight call-outs
         var def = new BBS757Definition();
         def.Displays.Add(new FakeMonitor
         {
-            GateVariables = new[] { Bbs757GateVariable.LVar(gate), Bbs757GateVariable.LVar(Bbs757FmaGate.HeadingKey) },
+            SimInputs = new[] { Bbs757SimInput.LVar(input), Bbs757SimInput.LVar(heading) },
         });
 
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
 
-        Assert.Equal(BBS757Definition.DisplayGateCopyPrefix + gate, keys[gate]);
-        var copy = vars[keys[gate]];
-        Assert.Equal(gate, copy.Name);
+        Assert.Equal(BBS757Definition.DisplayInputCopyPrefix + input, keys[input]);
+        var copy = vars[keys[input]];
+        Assert.Equal(input, copy.Name);
         Assert.Equal(SimVarType.LVar, copy.Type);
         Assert.True(ContinuousBatchLayout.RidesBatch(copy));
         Assert.True(copy.ExcludeFromMonitorManager);
         // A key another variable already carries on the batch gets no copy, and is read from that variable.
-        Assert.Equal(Bbs757AutoflightAnnouncements.HeadingWatchKey, keys[Bbs757FmaGate.HeadingKey]);
-        Assert.DoesNotContain(BBS757Definition.DisplayGateCopyPrefix + Bbs757FmaGate.HeadingKey, vars.Keys);
-        // Every registered gate variable resolves to a variable of its name, and no name rides the batch twice ([VAR-7]);
-        // one a Continuous variable already streams (the Engines panel's N2 rows, plan 25) is read from its own copy, off the batch.
-        Assert.All(def.Displays.GateVariables, g =>
+        Assert.Equal(Bbs757AutoflightAnnouncements.HeadingWatchKey, keys[heading]);
+        Assert.DoesNotContain(BBS757Definition.DisplayInputCopyPrefix + heading, vars.Keys);
+        // Every registered input resolves to a variable of its name, and no name rides the batch twice ([VAR-7]).
+        Assert.All(def.Displays.SimInputs, i =>
         {
-            var cache = vars[keys[g.Key]];
-            Assert.Equal(g.Name, cache.Name);
+            var cache = vars[keys[i.Key]];
+            Assert.Equal(i.Name, cache.Name);
             Assert.Equal(UpdateFrequency.Continuous, cache.UpdateFrequency);   // it streams
             Assert.True(cache.IsAnnounced);
-            Assert.True(vars.Values.Count(v => v.Name == g.Name && ContinuousBatchLayout.RidesBatch(v)) <= 1);
+            Assert.True(vars.Values.Count(v => v.Name == i.Name && ContinuousBatchLayout.RidesBatch(v)) <= 1);
             Assert.True(ContinuousBatchLayout.RidesBatch(cache) || cache.ExcludeFromBatch);   // on the batch, or its own subscription
         });
-        Assert.Equal(def.Displays.GateVariables.Select(g => g.Key).OrderBy(k => k, StringComparer.Ordinal),
+        Assert.Equal(def.Displays.SimInputs.Select(i => i.Key).OrderBy(k => k, StringComparer.Ordinal),
             keys.Keys.OrderBy(k => k, StringComparer.Ordinal));
     }
 
     [Fact]
-    public void A_later_readers_stock_gate_variable_gets_a_stock_copy_read_through_its_key()
+    public void A_stock_input_a_continuous_row_streams_unannounced_gets_its_copy_off_the_batch()
     {
-        // Plans 25-27 gate on stock variables: a hidden copy of the declared type and units, never an L:var of that name
-        // ([VAR-2]), and its cached value reaches ReadSimulator under the reader's key.
-        var latitude = new Bbs757GateVariable("PLANE LATITUDE", "PLANE LATITUDE", SimVarType.SimVar, "degrees");
+        // Plan 25's case, kept now no reader takes N2 ([VAR-7]): the Engines panel's N2 rows stream TURB ENG N2:1 and :2
+        // unannounced, so never on the batch, yet the batch counts every Continuous name. An input of that name gets its
+        // own copy that streams on its own subscription into the same cache, off the batch; an L:var input with no such
+        // twin rides the batch.
         var def = new BBS757Definition();
-        def.Displays.Add(new FakeMonitor { GateVariables = new[] { latitude } });
+        var left = new Bbs757SimInput("BBS757_TEST_N2_1", "TURB ENG N2:1", SimVarType.SimVar, "percent");
+        var right = new Bbs757SimInput("BBS757_TEST_N2_2", "TURB ENG N2:2", SimVarType.SimVar, "percent");
+        var page = Bbs757SimInput.LVar("BBS_ECAM_Mode");
+        def.Displays.Add(new FakeMonitor { SimInputs = new[] { left, right, page } });
 
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
 
-        Assert.Equal(BBS757Definition.DisplayGateCopyPrefix + latitude.Key, keys[latitude.Key]);
+        foreach (var (input, rowKey) in new[] { (left, "BBS757_ENG1_N2"), (right, "BBS757_ENG2_N2") })
+        {
+            var row = vars[rowKey];   // the Engines panel's silent row: Continuous, not announced, so never on the batch
+            Assert.Equal(UpdateFrequency.Continuous, row.UpdateFrequency);
+            Assert.False(ContinuousBatchLayout.RidesBatch(row));
+            Assert.Equal(BBS757Definition.DisplayInputCopyPrefix + input.Key, keys[input.Key]);
+            var copy = vars[keys[input.Key]];
+            Assert.Equal(row.Name, copy.Name);
+            Assert.Equal((SimVarType.SimVar, "percent"), (copy.Type, copy.Units));
+            Assert.True(copy.ExcludeFromBatch);
+            Assert.Equal(UpdateFrequency.Continuous, copy.UpdateFrequency);   // streams on its own subscription
+            Assert.True(copy.IsAnnounced);
+            Assert.True(copy.ExcludeFromMonitorManager);
+            Assert.False(ContinuousBatchLayout.RidesBatch(copy));
+        }
+        // The page copy has no such twin: it rides the batch, once.
+        var pageCopy = vars[keys[page.Key]];
+        Assert.False(pageCopy.ExcludeFromBatch);
+        Assert.Single(vars.Values, v => v.Name == "BBS_ECAM_Mode" && ContinuousBatchLayout.RidesBatch(v));
+    }
+
+    [Fact]
+    public void A_later_readers_stock_input_gets_a_stock_copy_read_through_its_key()
+    {
+        // A stock input: a hidden copy of the declared type and units, never an L:var of that name ([VAR-2]), and its
+        // cached value reaches ReadSimulator under the reader's key.
+        var latitude = new Bbs757SimInput("PLANE LATITUDE", "PLANE LATITUDE", SimVarType.SimVar, "degrees");
+        var def = new BBS757Definition();
+        def.Displays.Add(new FakeMonitor { SimInputs = new[] { latitude } });
+
+        var vars = def.GetVariables();
+        var keys = def.DisplayCacheKeys();
+
+        Assert.Equal(BBS757Definition.DisplayInputCopyPrefix + latitude.Key, keys[latitude.Key]);
         var copy = vars[keys[latitude.Key]];
         Assert.Equal(("PLANE LATITUDE", SimVarType.SimVar, "degrees"), (copy.Name, copy.Type, copy.Units));
         Assert.True(ContinuousBatchLayout.RidesBatch(copy));
@@ -398,15 +465,15 @@ public class Bbs757DisplaysWiringTests
     }
 
     [Fact]
-    public void A_stock_gate_variable_reuses_a_batched_one_of_the_same_name_type_and_units()
+    public void A_stock_input_reuses_a_batched_one_of_the_same_name_type_and_units()
     {
-        // ELEVATOR TRIM POSITION in degrees already rides the batch (the trim announcements): a gate in degrees, in any
+        // ELEVATOR TRIM POSITION in degrees already rides the batch (the trim announcements): an input in degrees, in any
         // case, is read from it with no copy. One in other units gets its own copy, off the batch, so no two batched
         // variables share the name ([VAR-7]), streaming into the same cache on its own subscription.
         var def = new BBS757Definition();
-        var degrees = new Bbs757GateVariable("TRIM_DEG", "ELEVATOR TRIM POSITION", SimVarType.SimVar, "Degrees");
-        var radians = new Bbs757GateVariable("TRIM_RAD", "ELEVATOR TRIM POSITION", SimVarType.SimVar, "radians");
-        def.Displays.Add(new FakeMonitor { GateVariables = new[] { degrees, radians } });
+        var degrees = new Bbs757SimInput("TRIM_DEG", "ELEVATOR TRIM POSITION", SimVarType.SimVar, "Degrees");
+        var radians = new Bbs757SimInput("TRIM_RAD", "ELEVATOR TRIM POSITION", SimVarType.SimVar, "radians");
+        def.Displays.Add(new FakeMonitor { SimInputs = new[] { degrees, radians } });
 
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
@@ -414,9 +481,9 @@ public class Bbs757DisplaysWiringTests
         Assert.True(ContinuousBatchLayout.RidesBatch(vars["MON_ElevatorTrim"]));
         Assert.Equal("degrees", vars["MON_ElevatorTrim"].Units);
         Assert.Equal("MON_ElevatorTrim", keys[degrees.Key]);
-        Assert.DoesNotContain(BBS757Definition.DisplayGateCopyPrefix + degrees.Key, vars.Keys);
+        Assert.DoesNotContain(BBS757Definition.DisplayInputCopyPrefix + degrees.Key, vars.Keys);
 
-        Assert.Equal(BBS757Definition.DisplayGateCopyPrefix + radians.Key, keys[radians.Key]);
+        Assert.Equal(BBS757Definition.DisplayInputCopyPrefix + radians.Key, keys[radians.Key]);
         var copy = vars[keys[radians.Key]];
         Assert.Equal((SimVarType.SimVar, "radians"), (copy.Type, copy.Units));
         Assert.False(ContinuousBatchLayout.RidesBatch(copy));
@@ -490,7 +557,7 @@ public class Bbs757DisplaysWiringTests
     {
         public List<string> Calls { get; } = new();
         public CoherentBbs757TabletClient? TabletClient { get; init; }
-        public IReadOnlyList<Bbs757GateVariable> GateVariables { get; init; } = Array.Empty<Bbs757GateVariable>();
+        public IReadOnlyList<Bbs757SimInput> SimInputs { get; init; } = Array.Empty<Bbs757SimInput>();
 
         public void Start(IBbs757DisplayEnvironment env) => Calls.Add("start");
         public void Restart() => Calls.Add("restart");
@@ -500,7 +567,7 @@ public class Bbs757DisplaysWiringTests
         public void Dispose() => Stop();
     }
 
-    /// <summary>The real environment, with the simulator up and every gate value read as 1.</summary>
+    /// <summary>The real environment, with the simulator up and every input read as 1.</summary>
     private sealed class SimulatorUp : IBbs757DisplayEnvironment
     {
         private readonly IBbs757DisplayEnvironment _inner;

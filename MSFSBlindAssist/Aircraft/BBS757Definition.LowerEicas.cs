@@ -10,10 +10,9 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
-/// Plan 25's seam (S16): the 757's lower EICAS read from BBS752.wasm's memory. It registers the monitor (whose gate
-/// variables, <c>TURB ENG N2:1</c>, <c>TURB ENG N2:2</c> and <c>L:BBS_ECAM_Mode</c>, the registry takes and puts on the
-/// batch), the "EICAS status messages" Ctrl+M row, and Alt+S, which opens the one "Lower EICAS" window while the reader
-/// can run and falls back to the AI read of the screen when it cannot (S15).
+/// Plan 25's seam (S16): the 757's lower EICAS read from BBS752.wasm's memory alone (it takes no simulator input). It
+/// registers the monitor, the "EICAS status messages" Ctrl+M row, and Alt+S, which opens the one "Lower EICAS" window
+/// while the reader can run and falls back to the AI read of the screen when it cannot (S15).
 /// </summary>
 public partial class BBS757Definition
 {
@@ -27,7 +26,7 @@ public partial class BBS757Definition
 
     /// <summary>
     /// The window's controls area: Engine then Status, each pressing BlueBird's key through the control map's own press.
-    /// <paramref name="readerRuns"/> says whether the lower EICAS reader has a passing reading right now.
+    /// <paramref name="readerRuns"/> says whether the lower EICAS reader shows a reading right now.
     /// </summary>
     internal FlowLayoutPanel LowerEicasButtons(Func<bool> readerRuns, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {

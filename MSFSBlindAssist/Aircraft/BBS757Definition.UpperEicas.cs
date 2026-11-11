@@ -10,7 +10,7 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
-/// The 757's upper EICAS (plan 24): its monitor (the gate variables come from the reader through the registry, never
+/// The 757's upper EICAS (plan 24): its monitor (its simulator input comes from the reader through the registry, never
 /// registered by hand), its three Ctrl+M rows, and Alt+E, which opens the "Upper EICAS" window or, when the reader cannot
 /// run, falls back to the AI read (S15). The key speaks nothing itself: the window's title and list are what the screen
 /// reader says (CORE-7).

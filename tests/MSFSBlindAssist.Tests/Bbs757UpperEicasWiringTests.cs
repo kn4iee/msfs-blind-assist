@@ -163,36 +163,26 @@ public class Bbs757UpperEicasWiringTests
     }
 
     [Fact]
-    public void The_upper_eicas_gate_variables_ride_the_batch_once_each()
+    public void The_manual_thrust_flag_input_rides_the_batch_once()
     {
-        // Step 1, as plan 23's registry is built: it turns the reader's gate variables into hidden copies; each is read
-        // from one streamed variable, one already on the batch or a hidden copy, which streams on its own subscription
-        // when a Continuous row of its name exists (the status display's TURB ENG N1 rows), so no name is batched twice
-        // ([VAR-7]); at most 3 are plan 24's.
+        // The reader's one simulator input (S10), BlueBird's L:var where its draw takes it, never a check (B757-30): read
+        // from one streamed variable, one already on the batch or a hidden copy, so no name is batched twice ([VAR-7]).
+        // The N1s it once compared with are not read at all.
         var def = new BBS757Definition();
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
 
-        foreach (var gate in Bbs757UpperEicasDisplay.GateVariables)
-        {
-            var carrier = vars[keys[gate.Key]];
-            Assert.Equal(gate.Name, carrier.Name);
-            Assert.Equal(gate.Type, carrier.Type);
-            Assert.Equal(UpdateFrequency.Continuous, carrier.UpdateFrequency);
-            Assert.True(carrier.IsAnnounced);   // streamed: on the batch or on its own subscription
-            if (gate.Type == SimVarType.SimVar) Assert.Equal("percent", carrier.Units, ignoreCase: true);
-            Assert.True(vars.Count(kv => kv.Value.Name == gate.Name && ContinuousBatchLayout.RidesBatch(kv.Value)) <= 1);
-        }
-        Assert.Equal(3, Bbs757UpperEicasDisplay.GateVariables.Count);
-
-        var copies = Bbs757UpperEicasDisplay.GateKeys.Where(k => keys[k].StartsWith(BBS757Definition.DisplayGateCopyPrefix, StringComparison.Ordinal)).ToList();
-        Assert.InRange(copies.Count, 0, 3);
-        foreach (string k in copies)
-        {
-            var copy = vars[keys[k]];
-            Assert.True(copy.ExcludeFromMonitorManager);   // none is announced or listed in Ctrl+M ([VAR-9])
-            Assert.Equal(UpdateFrequency.Continuous, copy.UpdateFrequency);
-        }
+        var input = Assert.Single(Bbs757UpperEicasDisplay.SimInputs);
+        Assert.Equal(Bbs757SimInput.LVar("BBS757_THRREF_PULL"), input);
+        var carrier = vars[keys[input.Key]];
+        Assert.Equal((input.Name, SimVarType.LVar), (carrier.Name, carrier.Type));
+        Assert.Equal(UpdateFrequency.Continuous, carrier.UpdateFrequency);
+        Assert.True(carrier.IsAnnounced);   // streamed: on the batch or on its own subscription
+        Assert.True(vars.Count(kv => kv.Value.Name == input.Name && ContinuousBatchLayout.RidesBatch(kv.Value)) <= 1);
+        if (keys[input.Key].StartsWith(BBS757Definition.DisplayInputCopyPrefix, StringComparison.Ordinal))
+            Assert.True(carrier.ExcludeFromMonitorManager);   // a copy is never announced or listed in Ctrl+M ([VAR-9])
+        Assert.DoesNotContain(BBS757Definition.DisplayInputCopyPrefix + "TURB ENG N1:1", vars.Keys);
+        Assert.DoesNotContain(BBS757Definition.DisplayInputCopyPrefix + "TURB ENG N1:2", vars.Keys);
     }
 
     // ---- The window's cockpit buttons (task 8b) ------------------------------------------------
