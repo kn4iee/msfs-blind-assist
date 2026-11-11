@@ -30,6 +30,11 @@ public static class Bbs757UpperEicasSpeech
     private const string CancelledMark = " (cancelled)";
     private const string NoMessages = "Messages: none";
 
+    /// <summary>The advisory saying the FMC has a scratchpad message, which the CDU window already speaks ("CDU Messages
+    /// While Closed"): never said as new or gone (the owner, after the 2026-11-10 flight), but listed, counted by CANC and
+    /// read back by RECALL.</summary>
+    internal const string FmcMessageText = "FMC MESSAGE";
+
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     /// <summary>The levels in the order their new messages are said, each with the start of its line and its row's
@@ -54,7 +59,7 @@ public static class Bbs757UpperEicasSpeech
     /// "EICAS caution: …", "EICAS: …".</item>
     /// <item>Gone: each message uncancelled in <paramref name="heard"/> and no longer in the list, in its order there:
     /// "EICAS gone: A, B". A cancelled message leaving was not on the screen and says nothing; one being cancelled is
-    /// not gone.</item>
+    /// not gone. Neither line ever says <see cref="FmcMessageText"/>, which the CDU window speaks.</item>
     /// <item>Cancelled, CANC's read-back: "EICAS: 3 messages cancelled", the messages uncancelled before and cancelled
     /// now.</item>
     /// <item>Recall, RECALL's read-back, when its time changed (each press stamps it): "EICAS recall: " and the
@@ -80,12 +85,12 @@ public static class Bbs757UpperEicasSpeech
         bool CancelledBefore(int id) => before.TryGetValue(id, out bool up) && !up;
 
         // 1. New: grouped by level (the groups keep the screen's order within, and OrderBy is stable).
-        var fresh = Uncancelled(now).Where(m => !before.ContainsKey(m.Id) || (CancelledBefore(m.Id) && !recallPressed));
+        var fresh = Uncancelled(now).Where(m => SaidNewOrGone(m) && (!before.ContainsKey(m.Id) || (CancelledBefore(m.Id) && !recallPressed)));
         foreach (var level in fresh.GroupBy(m => LevelIndex(m.Level)).OrderBy(g => g.Key))
             lines.Add(OnMessages(LineStart(level.Key) + Texts(level)));
 
         // 2. Gone.
-        var gone = Uncancelled(heard).Where(m => !after.ContainsKey(m.Id)).ToList();
+        var gone = Uncancelled(heard).Where(m => SaidNewOrGone(m) && !after.ContainsKey(m.Id)).ToList();
         if (gone.Count > 0) lines.Add(OnMessages(GoneLine + Texts(gone)));
 
         // 3. Cancelled.
@@ -172,6 +177,9 @@ public static class Bbs757UpperEicasSpeech
     }
 
     private static string Texts(IEnumerable<Bbs757EicasMessage> messages) => string.Join(", ", messages.Select(m => Spoken(m.Text)));
+
+    /// <summary>Every message but <see cref="FmcMessageText"/>, which the CDU window speaks.</summary>
+    private static bool SaidNewOrGone(Bbs757EicasMessage m) => !string.Equals(Spoken(m.Text), FmcMessageText, StringComparison.Ordinal);
 
     /// <summary>BlueBird's text with its leading space (an advisory's or communication message's indent) dropped.</summary>
     private static string Spoken(string? text) => (text ?? "").Trim();

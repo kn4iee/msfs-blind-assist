@@ -167,6 +167,31 @@ public class Bbs757UpperEicasSpeechTests
             Said(culture, Eicas(new[] { FireL, BleedL }), Eicas(new[] { FireL, Cancelled(BleedL) })));
     }
 
+    // The owner's ruling after the 2026-11-10 flight: the CDU window already speaks the FMC's scratchpad message ("CDU
+    // Messages While Closed"), so the EICAS advisory that says one is waiting is never said as new or gone. The window
+    // lists it, and CANC's count and RECALL's read-back still include it: they read back what the press did.
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    [InlineData("en-US")]
+    public void Fmc_message_is_never_said_as_new_or_gone(string culture)
+    {
+        var fmc = Advisory(150, " FMC MESSAGE");
+        Assert.Empty(Said(culture, Eicas(), Eicas(new[] { fmc })));
+        Assert.Empty(Said(culture, Eicas(new[] { fmc }), Eicas()));
+        // Posted or gone with other messages: only theirs are said.
+        Assert.Equal(new[] { Msg("EICAS: L PACK OFF") }, Said(culture, Eicas(), Eicas(new[] { PackL, fmc })));
+        Assert.Equal(new[] { Msg("EICAS gone: L PACK OFF") }, Said(culture, Eicas(new[] { PackL, fmc }), Eicas()));
+        // Only a message reading exactly FMC MESSAGE: the FMC's own fault advisory is still said.
+        Assert.Equal(new[] { Msg("EICAS: FMC") }, Said(culture, Eicas(), Eicas(new[] { Advisory(151, " FMC") })));
+        // Listed, counted by CANC and read back by RECALL.
+        Assert.Contains("Advisory: FMC MESSAGE", Rows(culture, Eicas(new[] { fmc })));
+        Assert.Equal(new[] { Msg("EICAS: 1 message cancelled") },
+            Said(culture, Eicas(new[] { fmc }), Eicas(new[] { Cancelled(fmc) })));
+        Assert.Equal(new[] { Msg("EICAS recall: FMC MESSAGE") },
+            Said(culture, Eicas(new[] { Cancelled(fmc) }, recallTime: 1000), Eicas(new[] { fmc }, recallTime: 1975.767)));
+    }
+
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
