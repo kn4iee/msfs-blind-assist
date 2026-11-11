@@ -16,7 +16,11 @@ public partial class BBS757Definition
 {
     private Bbs757DisplayMonitor<Bbs757EhsiLayout, Bbs757EhsiReading>? _ehsi;
 
-    /// <summary>The EHSI's display; its <see cref="Bbs757EhsiDisplay.FullWanted"/> is whether the window is showing.</summary>
+    // EhsiDisplay and Ehsi are internal init so a test can supply a scripted monitor (over its own display) in place of the
+    // real ones; RegisterEhsi sets FullWanted on whichever display is injected, so the injected one follows the window too.
+
+    /// <summary>The EHSI's display; its <see cref="Bbs757EhsiDisplay.FullWanted"/> is whether the window is opening or
+    /// showing.</summary>
     internal Bbs757EhsiDisplay EhsiDisplay { get; init; } = new();
 
     /// <summary>The EHSI's monitor, on <see cref="EhsiDisplay"/>; a test may start it on a scripted sampler.</summary>
@@ -28,6 +32,10 @@ public partial class BBS757Definition
 
     // Made on the first Alt+N that finds the reader running; owned by the registry, so a switch away closes it for good.
     private BBS757DisplayForm? _ehsiWindow;
+
+    // True from the moment Alt+N opens the window until it is shown: the window's first rows are built before it is
+    // visible, and they must come from a full reading.
+    private bool _ehsiOpening;
 
     /// <summary>
     /// What Ctrl+W says: the monitor's latest reading, whether or not the window is open. While there is none the line
@@ -42,20 +50,31 @@ public partial class BBS757Definition
 
     partial void RegisterEhsi(Bbs757DisplayRegistry r)
     {
-        // The route is read only while the window shows; a window hidden by Escape reads light again at once.
-        EhsiDisplay.FullWanted = () => _ehsiWindow is { IsDisposed: false, Visible: true };
+        // The route is read from the moment Alt+N is pressed and while the window shows; a window hidden (Escape, a
+        // close) or disposed reads light again at once.
+        EhsiDisplay.FullWanted = () => _ehsiOpening || _ehsiWindow is { IsDisposed: false, Visible: true };
         r.Add(Ehsi);
         r.AddMonitorRow(new MonitorRow(Bbs757EhsiDisplay.MuteKey, "EHSI messages"));
         r.OnKey(HotkeyAction.ReadDisplayND, context =>
         {
             if (Ehsi.KeyFallsBackToAi()) return context.AiRead();
             context.Hotkeys.ExitOutputHotkeyMode();
-            if (_ehsiWindow is not { IsDisposed: false } window)
+            _ehsiOpening = true;
+            try
             {
-                window = _ehsiWindow = new BBS757DisplayForm(Bbs757EhsiDisplay.Name, "Captain EHSI", Ehsi.View);
-                r.OwnWindow(window);
+                // One reading now, full, so the window's first rows already list the map instead of a second later.
+                Ehsi.Tick();
+                if (_ehsiWindow is not { IsDisposed: false } window)
+                {
+                    window = _ehsiWindow = new BBS757DisplayForm(Bbs757EhsiDisplay.Name, "Captain EHSI", Ehsi.View);
+                    r.OwnWindow(window);
+                }
+                window.ShowForm();
             }
-            window.ShowForm();
+            finally
+            {
+                _ehsiOpening = false;
+            }
             return true;
         });
         // A key press is always answered, so no Ctrl+M row mutes it; it interrupts, as a pilot's own request does.

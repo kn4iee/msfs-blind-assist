@@ -76,8 +76,39 @@ public class Bbs757EhsiWiringTests
         rig.Press(HotkeyAction.ReadDisplayND);
         Assert.True(rig.Def.EhsiDisplay.FullWanted());
 
+        // A close by the pilot (the title bar, Alt+F4) hides the window: the route is not read.
+        rig.Press(HotkeyAction.ReadDisplayND);
+        Assert.True(rig.Def.EhsiDisplay.FullWanted());
+        form.Close();
+        Assert.False(form.IsDisposed);
+        Assert.False(rig.Def.EhsiDisplay.FullWanted());
+
+        rig.Press(HotkeyAction.ReadDisplayND);
         form.CloseForGood();
         Assert.False(rig.Def.EhsiDisplay.FullWanted());
+    }
+
+    [Fact]
+    public void FullWanted_is_true_when_the_windows_first_rows_are_built_and_they_list_the_map()
+    {
+        using var rig = new Rig(started: false);
+        var f = rig.Lit(Light());
+        // The sampler reads the full set only while the display wants it, as the real one does.
+        f.Sampler.Script = () => f.Display.FullWanted() ? Ehsi() : Light();
+        Assert.False(f.Display.FullWanted());
+
+        rig.Press(HotkeyAction.ReadDisplayND);
+
+        var form = Assert.Single(rig.Def.Displays.Windows.OfType<BBS757DisplayForm>());
+        Assert.NotEmpty(f.Script.RowsWanted);
+        Assert.All(f.Script.RowsWanted, Assert.True);
+        // The first list already holds the route: a reading was taken as the key was pressed, not a second later.
+        Assert.Contains("Map: KOLM, active, 37.5 NM, 86° right", f.Script.FirstRows!);
+        Assert.DoesNotContain("Map: reading", f.Script.FirstRows!);
+        Assert.Empty(rig.Speech.All);
+
+        form.Hide();
+        Assert.False(f.Display.FullWanted());
     }
 
     [Fact]
@@ -273,7 +304,8 @@ public class Bbs757EhsiWiringTests
         public Flight(Bbs757EhsiReading first, bool muted)
         {
             Sampler = new Sampler(first);
-            Monitor = new Bbs757DisplayMonitor<Bbs757EhsiLayout, Bbs757EhsiReading>(new OverScript(Display, Sampler));
+            Script = new OverScript(Display, Sampler);
+            Monitor = new Bbs757DisplayMonitor<Bbs757EhsiLayout, Bbs757EhsiReading>(Script);
             Env = new Bbs757DisplayMonitorTests.FakeEnvironment
             {
                 Simulator = new Bbs757SimValues(new Dictionary<string, double>
@@ -292,6 +324,7 @@ public class Bbs757EhsiWiringTests
 
         public Bbs757EhsiDisplay Display { get; } = new();
         public Sampler Sampler { get; }
+        public OverScript Script { get; }
         public Bbs757DisplayMonitor<Bbs757EhsiLayout, Bbs757EhsiReading> Monitor { get; }
         public Bbs757DisplayMonitorTests.FakeEnvironment Env { get; }
 
@@ -317,11 +350,14 @@ public class Bbs757EhsiWiringTests
     {
         public Bbs757EhsiReading Reading { get; set; } = reading;
 
+        /// <summary>When set, each read's reading instead of <see cref="Reading"/>.</summary>
+        public Func<Bbs757EhsiReading>? Script { get; set; }
+
         public bool TryRead(Bbs757SimValues sim, out Bbs757EhsiReading read) => TryRead(out read);
 
         public bool TryRead(out Bbs757EhsiReading read)
         {
-            read = Reading;
+            read = Script?.Invoke() ?? Reading;
             return true;
         }
 
@@ -333,6 +369,12 @@ public class Bbs757EhsiWiringTests
     private sealed class OverScript(Bbs757EhsiDisplay real, Sampler sampler) : IBbs757DisplayReader<Bbs757EhsiLayout, Bbs757EhsiReading>
     {
         private readonly IBbs757DisplayReader<Bbs757EhsiLayout, Bbs757EhsiReading> _real = real;
+
+        /// <summary>The display's <see cref="Bbs757EhsiDisplay.FullWanted"/> at each time the rows were built.</summary>
+        public List<bool> RowsWanted { get; } = new();
+
+        /// <summary>The first rows built.</summary>
+        public IReadOnlyList<string>? FirstRows { get; private set; }
 
         public string Name => _real.Name;
         public string MuteKey => _real.MuteKey;
@@ -346,7 +388,13 @@ public class Bbs757EhsiWiringTests
         public IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757EhsiReading heard, Bbs757EhsiReading now, bool withPrefix) =>
             _real.Changes(heard, now, withPrefix);
 
-        public IReadOnlyList<string> Rows(Bbs757EhsiReading reading) => _real.Rows(reading);
+        public IReadOnlyList<string> Rows(Bbs757EhsiReading reading)
+        {
+            RowsWanted.Add(real.FullWanted());
+            var rows = _real.Rows(reading);
+            FirstRows ??= rows;
+            return rows;
+        }
     }
 
     private sealed class NoFiles : IModuleHost

@@ -390,6 +390,48 @@ public sealed class Bbs757DisplayMonitorTests : IDisposable
     }
 
     [Fact]
+    public void No_reading_reason_is_starting_while_the_display_powers_up()
+    {
+        var h = New();
+        h.Reader.LitNow = true;
+        h.Start();
+        h.RunUntilRunning();
+        Assert.Null(h.Monitor.NoReadingReason); // a reading is shown
+
+        h.Reader.LitNow = false;
+        h.Tick();
+        Assert.Equal("display dark", h.Monitor.NoReadingReason);
+
+        h.Reader.LitNow = true; // powering up: lit, still in the 10 s quiet
+        h.Tick();
+        Assert.Equal("Running", h.State);
+        Assert.Equal("starting", h.Monitor.NoReadingReason);
+        h.Tick(99);
+        Assert.Equal("starting", h.Monitor.NoReadingReason);
+
+        h.Tick(); // the quiet ends: a reading again
+        Assert.Null(h.Monitor.NoReadingReason);
+    }
+
+    [Fact]
+    public void No_reading_reason_is_null_for_a_stopped_monitor()
+    {
+        var h = New();
+        Assert.Null(h.Monitor.NoReadingReason); // never started
+
+        h.Reader.LitNow = true;
+        h.Start();
+        h.RunUntilRunning();
+        h.Reader.LitNow = false;
+        h.Tick();
+        Assert.Equal("display dark", h.Monitor.NoReadingReason);
+
+        h.Monitor.Stop();
+        Assert.Equal("Stopped", h.State);
+        Assert.Null(h.Monitor.NoReadingReason);
+    }
+
+    [Fact]
     public void A_dark_candidate_runs_at_once_and_its_power_up_is_a_silent_baseline()
     {
         // A cold-and-dark load: the first reading is dark and not corrupt, so the reader runs at once and its window says

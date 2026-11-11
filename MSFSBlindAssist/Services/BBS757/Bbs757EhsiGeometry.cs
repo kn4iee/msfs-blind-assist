@@ -35,7 +35,7 @@ public static class Bbs757EhsiGeometry
         { "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" };
 
     /// <summary>The top line's distance from the aircraft to the active waypoint in nautical miles: the haversine with
-    /// R = 6,371,000 m, divided by 1852 (the evidence's step 3). The asin argument is clamped so rounding cannot give NaN.</summary>
+    /// R = 6,371,000 m, divided by 1852 (measured in BlueBird's top-line draw). The asin argument is clamped so rounding cannot give NaN.</summary>
     public static double TopLineDistance(double lat1, double lon1, double lat2, double lon2)
     {
         double p1 = lat1 * DegreesToRadians, p2 = lat2 * DegreesToRadians;

@@ -32,8 +32,10 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
     /// a longer one is a torn read.</summary>
     private const int MaxLabelLength = 32;
 
-    /// <summary>How many nodes the path registry walk visits before it gives up (the registry holds one per route).</summary>
-    private const int MaxPathNodes = 64;
+    /// <summary>The path registry walk's cycle guard: how many nodes it visits before it gives up and finds no path. The
+    /// registry keeps a node for each route id a flight's edits made (measured live: 9, 10, 11 and 12 at once), so this is
+    /// far above any real list; reaching it is "no path", never corrupt.</summary>
+    private const int MaxPathNodes = 4096;
 
     private readonly ModuleMemory _memory;
     private readonly IDisposable _ownedSource;
@@ -148,11 +150,14 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             return true;
         }
 
-        double groundSpeed = 0;
-        bool hasIrs = irs != 0;
-        // A selected IRS pointer outside the module, or a ground speed that cannot be read through it, is torn; a null
-        // one is simply no IRS (the draw returns black).
-        if (hasIrs && (!Good(irs) || !F64(irs, l.IrsGroundSpeed, out groundSpeed)))
+        // A null selected IRS pointer is no IRS: BlueBird's draw returns a black screen, so the reading is the dark one
+        // (not corrupt). One outside the module, or a ground speed that cannot be read through it, is torn.
+        if (irs == 0)
+        {
+            reading = Dark;
+            return true;
+        }
+        if (!Good(irs) || !F64(irs, l.IrsGroundSpeed, out double groundSpeed))
         {
             reading = Bad(full);
             return true;
@@ -205,7 +210,7 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
 
         reading = new Bbs757EhsiReading(
             Powered: true, Mode: mode, ModeValue: modeValue, Centered: centered, Range: range, RangeChanging: rangeChanging,
-            Valid: valid && hasIrs, Aligning: aligning, Number: number, TrackUp: trackUp != 0, TrueReference: trueReference != 0,
+            Valid: valid, Aligning: aligning, Number: number, TrackUp: trackUp != 0, TrueReference: trueReference != 0,
             HeadingBug: bug, Latitude: position?.Latitude ?? latitude, Longitude: position?.Longitude ?? longitude,
             GroundSpeed: groundSpeed, Clock: clock,
             Map: new Bbs757EhsiMap(centerLatitude, centerLongitude, rotation, screenX, screenY, width, height),
@@ -393,7 +398,7 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
     // ---- the points ----
 
     /// <summary>The map's points in the order the screen draws them: T/C (its flag set), T/D (both flags set), E/D (the
-    /// route's own leg the path names; one beyond the legs is torn), then the origin and destination airports (one with no
+    /// route's own leg the path names; none for one beyond the legs), then the origin and destination airports (one with no
     /// name is not drawn). With no path registry entry for the route there are no T/C, T/D or E/D. False when torn.</summary>
     private bool TryPoints(uint nd, int routeId, RouteRead route, out IReadOnlyList<Bbs757EhsiPoint> points)
     {
@@ -416,21 +421,21 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
                 if (!Position(path, l.TopOfDescentLatitude, l.TopOfDescentLongitude, out double lat, out double lon)) return false;
                 list.Add(new Bbs757EhsiPoint(l.TopOfDescentWord, false, lat, lon));
             }
-            if (endLeg >= 0)
+            // The index counts the route's own legs, after any flown ones in the list. The path is recomputed apart from
+            // the legs and can lag them: an index past the route's own legs draws no E/D (not torn).
+            int own = route.Legs.Count - route.Flown;
+            if (endLeg >= 0 && endLeg < own)
             {
-                // The index counts the route's own legs, after any flown ones in the list.
-                int own = route.Legs.Count - route.Flown;
-                if (endLeg >= own) return false;
                 var leg = route.Legs[route.Flown + endLeg];
                 // A discontinuity has no position: nothing to draw there (not torn).
                 if (!leg.Discontinuity)
                     list.Add(new Bbs757EhsiPoint(l.EndOfDescentWord, false, leg.Latitude, leg.Longitude));
             }
         }
+        Span<byte> header = stackalloc byte[StringBytes];
         foreach (int record in new[] { l.OriginAirport, l.DestinationAirport })
         {
             if (!At(nd, record, out uint at)) return false;
-            Span<byte> header = stackalloc byte[StringBytes];
             if (!_memory.TryRead(at, header) || !TryReadString(header, out string name)) return false;
             if (name.Length == 0) continue;
             if (!Position(at, l.AirportLatitude, l.AirportLongitude, out double lat, out double lon)) return false;
@@ -441,7 +446,8 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
     }
 
     /// <summary>The route's path object: the registry's node whose key is the route's id, its value the path. Not found
-    /// is not torn; a node or the value outside the module, or the walk reaching its cap without an end, is.</summary>
+    /// is not torn, and neither is the walk reaching its cycle guard (<see cref="MaxPathNodes"/>): both are no path. A node
+    /// or the value outside the module is torn.</summary>
     private bool TryFindPath(int routeId, out uint path, out bool found)
     {
         path = 0;
@@ -461,7 +467,8 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             }
             node = next;
         }
-        return false;
+        // The cycle guard: a list this long (or one that loops) holds no path for the route.
+        return true;
     }
 
     private bool Position(uint b, int latitudeAt, int longitudeAt, out double latitude, out double longitude)

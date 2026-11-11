@@ -1,7 +1,8 @@
 namespace MSFSBlindAssist.Services.BBS757;
 
-/// <summary>One kind of leg whose position is not at <see cref="Bbs757EhsiLayout.LegLatitude"/> and
-/// <see cref="Bbs757EhsiLayout.LegLongitude"/>: the leg's kind value and the offsets of its latitude and longitude.</summary>
+/// <summary>One entry of <see cref="Bbs757EhsiLayout.LegPositions"/>, which holds one per leg kind whose position is not
+/// at <see cref="Bbs757EhsiLayout.LegLatitude"/> and <see cref="Bbs757EhsiLayout.LegLongitude"/>: the kind value it
+/// applies to and the offsets of that kind's latitude and longitude in the leg.</summary>
 public readonly record struct Bbs757EhsiLegPosition(int Kind, int Latitude, int Longitude);
 
 /// <summary>

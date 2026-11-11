@@ -65,8 +65,9 @@ public readonly record struct Bbs757EhsiPoint(string Word, bool Airport, double 
 /// <summary>
 /// The Captain's EHSI as read from memory. A light reading (every tick) leaves <see cref="Route"/>,
 /// <see cref="Modification"/> and <see cref="Points"/> null and still carries <see cref="Active"/>: the leg the top line
-/// uses (leg 0 of the modification while one is pending). <see cref="Powered"/> false: every other field is its default and
-/// the reading is not corrupt (a dark screen holds anything). <see cref="Corrupt"/>: a torn or out-of-range read, with
+/// uses (leg 0 of the modification while one is pending). <see cref="Powered"/> false (the screen dark, or no IRS selected,
+/// when BlueBird draws it black): every other field is its default and the reading is not corrupt (a dark screen holds
+/// anything). <see cref="Corrupt"/>: a torn or out-of-range read, with
 /// no route, modification or points at all (never partial). <see cref="Constants"/> and <see cref="Words"/> are the
 /// layout's in every reading, powered or not. <see cref="ModeValue"/> is BlueBird's EFIS mode value (-1 when not powered
 /// or corrupt); <see cref="Mode"/> is the layout's word for it. <see cref="Latitude"/> and <see cref="Longitude"/> are the

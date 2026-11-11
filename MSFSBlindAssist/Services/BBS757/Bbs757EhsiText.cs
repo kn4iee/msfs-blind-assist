@@ -4,7 +4,7 @@ namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// What the 757 EHSI window lists, what the reader says by itself and the Ctrl+W line, from one reading (plan 26). Only
-/// what the screen draws (docs/b757/evidence/displays-ehsi.md, Steps 2 and 3): a map item only inside BlueBird's own clip
+/// what the screen draws (measured on BlueBird's draw; docs/invariants/b757-ehsi.md): a map item only inside BlueBird's own clip
 /// (<see cref="Bbs757EhsiGeometry.OnScreen"/>), rows top to bottom, BlueBird's printed words and formats ("NM", the
 /// top line's "z", the DATA ETA's "Z", "HDG", "TRU", "EXCESS DATA"), every number culture-invariant. Pure, and never throws
 /// for any reading a sampler returns, a corrupt one included. The map's constants and BlueBird's words come with the
@@ -16,12 +16,12 @@ public static class Bbs757EhsiText
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    /// <summary>BlueBird's EFIS mode values (measured, evidence Step 2): the enum the layout's <c>Modes</c> word table is
+    /// <summary>BlueBird's EFIS mode values (measured): the enum the layout's <c>Modes</c> word table is
     /// keyed by. Any other value draws none of these modes' items.</summary>
     internal enum EhsiMode { Vor = 0, Ils = 1, Map = 2, Plan = 3 }
 
-    // Not layout words: the DATA ETA's "Z" and the constraint letters are the draw's own literals (evidence Step 3,
-    // "Constraint and time"); the "---" of a heading not valid while aligning is the top line's own dashes.
+    // Not layout words: the DATA ETA's "Z" and the constraint letters are the draw's own literals (measured in its
+    // constraint and time draw); the "---" of a heading not valid while aligning is the top line's own dashes.
     private const string DataEtaSuffix = "Z", AboveLetter = "A", BelowLetter = "B", NoNumber = "---";
 
     private const string Unavailable = "EHSI waypoint unavailable: ";
@@ -30,6 +30,9 @@ public static class Bbs757EhsiText
     private const string NoActiveWaypoint = "No active waypoint";
     private const string DiscontinuityName = "discontinuity";
     private const string UnnamedWaypoint = "unnamed waypoint";
+
+    /// <summary>The one map row of a light reading (no route read) where the map rows would be.</summary>
+    private const string MapReading = "Map: reading";
 
     /// <summary>Half a degree: within it of straight ahead (or behind) the bug reads "ahead" (or "behind"), as a place does.</summary>
     private const double AlignedDegrees = 0.5;
@@ -49,6 +52,8 @@ public static class Bbs757EhsiText
     /// then "Flag: HDG" (or TRK), and in MAP "Flag: MAP". While the range changes, nothing more.</item>
     /// <item>VOR and ILS: "VOR mode: not read yet" (plan 28's), and nothing more. MAP and PLAN: "Top left: 37.5 NM" (or
     /// "no distance") and "Top right: 1533.3z" (or "no ETA").</item>
+    /// <item>In MAP while valid or in PLAN, a light reading (no route read): "Map: reading", alone. A full reading lists
+    /// its map rows (none when nothing is on the map).</item>
     /// <item>Map rows, in a full reading, in MAP while valid or in PLAN, by their place on the screen (top to bottom, left to
     /// right): each leg with a symbol ("Map: KOLM, active, 37.5 NM, 87° right"; an inactive route's "Map, inactive route: ",
     /// a pending modification's "Map, modification: "; with DATA on its constraint and ETA as drawn), and the points
@@ -147,18 +152,20 @@ public static class Bbs757EhsiText
     private static IEnumerable<string> MapRows(Bbs757EhsiReading r)
     {
         bool plan = Is(r, EhsiMode.Plan);
-        if (!((Is(r, EhsiMode.Map) && r.Valid) || plan) || r.Route is null) return Array.Empty<string>();
+        if (!((Is(r, EhsiMode.Map) && r.Valid) || plan)) return Array.Empty<string>();
+        // A light reading holds no route: the map is drawn but not read yet (the window's first second).
+        if (r.Route is null) return new[] { MapReading };
 
         var items = new List<MapItem>();
-        bool pending = r.Modification is not null;
         string? center = plan ? CenterName(r) : null;
 
-        // The route's legs: "active" marks only the leg the top line uses (the route's own leg 0, by its index: a flown
-        // copy of it is not active), and only while the route is active and no modification is pending (the
-        // modification's own rows show the leg the top line then uses).
+        // The route's legs: "active" marks the route's own leg 0 (by its index: a flown copy of it is not active) while the
+        // route is active, a modification pending or not: the screen keeps the active route magenta with its leg 0
+        // magenta and draws a pending modification white dashed beside it (measured). The modification's legs are never
+        // marked active.
         for (int i = 0; i < r.Route.Count; i++)
         {
-            bool active = r.RouteActive && !pending && i == r.ActiveIndex;
+            bool active = r.RouteActive && i == r.ActiveIndex;
             AddLeg(items, r, r.Route[i], r.RouteActive ? "Map: " : "Map, inactive route: ", active, center);
         }
         foreach (var leg in r.Modification ?? Array.Empty<Bbs757EhsiLeg>())

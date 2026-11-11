@@ -101,8 +101,8 @@ public class Bbs757EhsiTextTests
         Assert.Equal(new[] { "Map: T/C, 24.0 NM, 86° right", "Map: KSEA airport, 0.5 NM, 173° left" }, MapRows(Ehsi() with { Range = 40 }));
         Assert.Equal(new[] { "Map: KSEA airport, 0.5 NM, 173° left" }, MapRows(Ehsi() with { Range = 10 }));
 
-        // A light reading has no route: no map rows, the top line still read.
-        Assert.Empty(MapRows(Light()));
+        // A light reading has no route: one "Map: reading" row where the map rows go, the top line still read.
+        Assert.Equal(new[] { "Map: reading" }, MapRows(Light()));
         Assert.Contains("Top left: 37.5 NM", Bbs757EhsiText.Rows(Light()));
 
         // MAP needs the IRS valid (the map fields are zeroed); PLAN does not.
@@ -274,15 +274,19 @@ public class Bbs757EhsiTextTests
         // Points are not the route's: plain "Map: ".
         Assert.Contains("Map: T/C, 24.0 NM, 86° right", inactive);
 
-        // A pending modification: its legs "Map, modification: ", the route's drawn as well, and nothing marked active
-        // (the top line uses the modification's leg 0, which its own row shows).
+        // A pending modification: its legs "Map, modification: ", none marked active, and the route's drawn as well, its
+        // own leg 0 still "active" (measured: the active route stays magenta with its leg 0 magenta, the modification
+        // white dashed beside it).
         var modified = Ehsi() with { Active = Kolm, Modification = new[] { Kolm, Btg, Kpdx } };
         var rows = MapRows(modified);
         Assert.Contains("Map, modification: KOLM, 37.5 NM, 86° right", rows);
-        Assert.Contains("Map: KOLM, 37.5 NM, 86° right", rows);
+        Assert.Contains("Map: KOLM, active, 37.5 NM, 86° right", rows);
         Assert.Contains("Map, modification: BTG, 102.5 NM, 52° right", rows);
         Assert.Contains("Map: BTG, 102.5 NM, 52° right", rows);
-        Assert.DoesNotContain(rows, r => r.Contains(", active,", StringComparison.Ordinal));
+        Assert.Equal(1, rows.Count(r => r.Contains(", active,", StringComparison.Ordinal)));
+        Assert.DoesNotContain(rows, r => r.StartsWith("Map, modification: ", StringComparison.Ordinal) && r.Contains(", active,", StringComparison.Ordinal));
+        // An inactive route with a modification pending: nothing active.
+        Assert.DoesNotContain(MapRows(modified with { RouteActive = false }), r => r.Contains(", active,", StringComparison.Ordinal));
 
         // Only the active leg says "active": BTG later in the route is not, even when it is the same waypoint twice.
         var hold = MapRows(Ehsi() with { Active = Btg, Route = new[] { Btg, Kpdx, Btg } });
@@ -310,6 +314,30 @@ public class Bbs757EhsiTextTests
         // A VM leg draws no symbol: no row.
         var vm = Leg("(800)", 47.45, -122.31, 19);
         Assert.DoesNotContain(MapRows(Ehsi() with { Route = new[] { Kolm, vm } }), r => r.Contains("(800)", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_light_reading_lists_map_reading_where_the_map_rows_would_be()
+    {
+        const string Reading = "Map: reading";
+        // MAP while valid, and PLAN (valid or not): the one row, after the top line, before the heading bug.
+        var map = Bbs757EhsiText.Rows(Light());
+        Assert.Equal(new[] { "Top right: no ETA", Reading, "Heading bug: 147, 28° right" },
+            map.SkipWhile(r => r != "Top right: no ETA").Take(3));
+        Assert.Contains(Reading, Bbs757EhsiText.Rows(InMode(Light(), "PLAN")));
+        Assert.Contains(Reading, Bbs757EhsiText.Rows(InMode(Light(), "PLAN") with { Valid = false }));
+
+        // Not where the screen draws no map: VOR, ILS, dark, the range changing, MAP while not valid.
+        Assert.DoesNotContain(Reading, Bbs757EhsiText.Rows(InMode(Light(), "VOR")));
+        Assert.DoesNotContain(Reading, Bbs757EhsiText.Rows(InMode(Light(), "ILS")));
+        Assert.DoesNotContain(Reading, Bbs757EhsiText.Rows(Dark()));
+        Assert.DoesNotContain(Reading, Bbs757EhsiText.Rows(Light() with { RangeChanging = true }));
+        Assert.DoesNotContain(Reading, Bbs757EhsiText.Rows(Light() with { Valid = false }));
+
+        // A full reading never shows it, even with nothing on the map.
+        Assert.DoesNotContain(Reading, Bbs757EhsiText.Rows(Ehsi()));
+        Assert.Empty(MapRows(Ehsi() with { Route = Array.Empty<Bbs757EhsiLeg>(), Points = Array.Empty<Bbs757EhsiPoint>() }));
+        Assert.Empty(MapRows(Plan() with { Route = Array.Empty<Bbs757EhsiLeg>(), Points = Array.Empty<Bbs757EhsiPoint>() }));
     }
 
     [Theory]

@@ -554,17 +554,56 @@ public class Bbs757EhsiReaderTests
     }
 
     [Fact]
-    public void An_end_of_descent_beyond_the_legs_is_corrupt()
+    public void An_end_of_descent_beyond_the_legs_draws_nothing_and_is_not_corrupt()
     {
-        Corrupt(new Scene { EndOfDescent = 5 });
-        Corrupt(new Scene { EndOfDescent = 200 });
+        // The path is recomputed apart from the legs and can lag them: an index past the route's own legs is no E/D.
+        foreach (int index in new[] { 5, 200 })
+        {
+            var all = Read(new Scene { EndOfDescent = index });
+            Assert.False(all.Corrupt);
+            Assert.Equal(new[] { "T/C", "T/D", "KSEA", "KPDX" }, all.Points!.Select(p => p.Word));
+            Assert.Equal(5, all.Route!.Count);
+        }
     }
 
     [Fact]
-    public void A_path_registry_that_never_ends_is_corrupt()
+    public void A_path_registry_that_never_ends_gives_no_points_and_is_not_corrupt()
     {
-        // A node that points at itself: the walk stops at its cap and the reading is corrupt, never a hang.
-        Corrupt(new Scene { Tweak = b => { I32(b, Node, Node); I32(b, Node + L.PathNodeKey, 98); I32(b, DecoyNode, Node); } });
+        // A node that points at itself: the walk stops at its cycle guard, never a hang, and finds no path: no T/C, T/D
+        // or E/D, the rest of the reading as it is.
+        var all = Read(new Scene
+        {
+            EndOfDescent = 0,
+            Tweak = b => { I32(b, Node, Node); I32(b, Node + L.PathNodeKey, 98); I32(b, DecoyNode, Node); },
+        });
+        Assert.False(all.Corrupt);
+        Assert.Equal(new[] { "KSEA", "KPDX" }, all.Points!.Select(p => p.Word));
+        Assert.Equal(5, all.Route!.Count);
+    }
+
+    [Fact]
+    public void The_routes_path_after_many_stale_nodes_is_found()
+    {
+        // The registry keeps a node for every route id a flight's edits made (live: 9, 10, 11 and 12 at once): the
+        // route's own sits after 100 stale ones here.
+        const uint Stale = 0x1B000, Pitch = 0x10;
+        var all = Read(new Scene
+        {
+            EndOfDescent = 0,
+            Tweak = b =>
+            {
+                I32(b, L.PathRegistry + L.PathRegistryFirst, Stale);
+                for (uint i = 0; i < 100; i++)
+                {
+                    uint at = Stale + i * Pitch;
+                    I32(b, at, i == 99 ? Node : at + Pitch);
+                    I32(b, at + L.PathNodeKey, 1000 + i);
+                    I32(b, at + L.PathNodeValue, Decoy);
+                }
+            },
+        });
+        Assert.False(all.Corrupt);
+        Assert.Equal(new[] { "T/C", "T/D", "E/D", "KSEA", "KPDX" }, all.Points!.Select(p => p.Word));
     }
 
     [Fact]
@@ -641,12 +680,21 @@ public class Bbs757EhsiReaderTests
     }
 
     [Fact]
-    public void No_selected_irs_is_zero_ground_speed_and_not_valid_and_not_corrupt()
+    public void No_selected_irs_is_the_dark_reading_and_not_corrupt()
     {
-        var reading = Read(new Scene { HasIrs = false }, full: false);
-        Assert.False(reading.Corrupt);
-        Assert.Equal(0, reading.GroundSpeed);
-        Assert.False(reading.Valid);
+        // BlueBird's draw returns a black screen while the source selects no IRS: nothing is lit to list.
+        foreach (bool full in new[] { false, true })
+        {
+            var reading = Read(new Scene { HasIrs = false }, full);
+            Assert.False(reading.Corrupt);
+            Assert.False(reading.Powered);
+            Assert.False(reading.Valid);
+            Assert.Null(reading.Mode);
+            Assert.Null(reading.Active);
+            Assert.Null(reading.Route);
+            Assert.Null(reading.Points);
+            Assert.Equal(0, reading.GroundSpeed);
+        }
     }
 
     [Fact]

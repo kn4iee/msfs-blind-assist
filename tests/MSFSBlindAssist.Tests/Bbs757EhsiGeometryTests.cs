@@ -5,7 +5,7 @@ using Xunit;
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>The EHSI's geometry: BlueBird's top-line haversine, its law-of-cosines map projection and clip, and the
-/// words for a place. Every number is one the evidence measured on the live screen.</summary>
+/// words for a place. Every number is one measured on the live screen.</summary>
 public class Bbs757EhsiGeometryTests
 {
     private const double RadiusFactor = 0.6775, AircraftYFactor = 0.8175, ClipInset = 66, MinGroundSpeed = 100;
