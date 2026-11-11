@@ -198,6 +198,25 @@ Each is drawn only if it is within range + 10 NM of the map's center.
   simulator input; if the IRS position drifts from the simulator's, the top line needs `PLANE LATITUDE` and
   `PLANE LONGITUDE` as inputs, since that is what the draw takes.
 
+## In flight, read only (the owner's own flight, 2026-11-11 about 17:57Z)
+
+The owner was in cruise (FL380 over the Gulf of Mexico, heading 320, MSFSBA running) while the plan's code was under
+review; memory was read, nothing was written and nothing installed.
+
+- **The position:** the nd's copy read 24.919594, −90.172232, then the simulator's `PLANE LATITUDE` and
+  `PLANE LONGITUDE` 24.920356, −90.172817, then the nd 24.920966, −90.173287 (about 0.1 NM a second at 402 kt): the
+  simulator's value lies between the two memory reads, so the IRS copy is the simulator's position in flight too.
+- **Ground speed:** `f64 irs+3952` 401.75 against `GROUND VELOCITY` 401.69: knots.
+- **Passed legs move to the flown vector:** `route+680` held 4 legs (ENEBA, NOSUG, OMVIP, KEHLI) and `route+668` began
+  with KELPP, the leg flown to: leg 0 of +668 is the active waypoint in flight, and its index in the walk is the flown
+  count.
+- **The top line computed from the fields:** KELPP 167.0 NM, the clock 1757.15, 401.75 kt → `1822.1z` by the traced
+  formula. No capture was taken (the owner's view); Task 9 compares the row with the screen.
+- **The path registry** still held four entries (ids 12, 11, 10, 9) hours after the session's edits: stale entries
+  stay, and the list had not grown in flight.
+- **Wind:** the show flag (1008842) read 1 with 70 kt from 287°: the readout is drawn in cruise (plan 28's).
+- T/C's flag was 0 past the top of climb, T/D's flags 0 with the descent not yet computed on this route, E/D −1.
+
 ## The route flown through the states
 
 | State | Legs read from memory | Screen |

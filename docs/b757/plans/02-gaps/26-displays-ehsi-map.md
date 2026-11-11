@@ -120,20 +120,24 @@
 ## Handoff to plan 16
 
 - **Pilot-facing:** "Alt+N opens the 757's EHSI: the route, the active waypoint and the VNAV points, with distances and bearings; Ctrl+W says the active waypoint." Changelog `feature`; the guide's 757 displays part and its keys.
-- **docs/b757.md:** the EHSI reader; Alt+N's fallback. **HotkeyGuides/BBS757_Hotkeys.txt:** Alt+N's line and the new Ctrl+W line.
+- **docs/b757.md:** the EHSI reader; Alt+N's fallback. **CLAUDE.md:** the 757 row of "Where things live" names the new rule file `b757-ehsi` (rules B757-36 to B757-39, full text `docs/invariants/b757-ehsi.md`). **Guide:** Ctrl+W in the first 10 s after the displays power up answers "EHSI waypoint unavailable: starting". **HotkeyGuides/BBS757_Hotkeys.txt:** Alt+N's line and the new Ctrl+W line.
 
 ## Execution record
 
-- **Status:** claimed
+- **Status:** claimed; Tasks 0-8 done and the whole-plan review passed (2026-11-11), not yet pushed: the code lands with its regenerated layout at the owner's word (Task 9)
 - **Claimed by:** Robin Kipp (robin24), 2026-11-11
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-11, from `B757` ba06e4d2c (plans 23, 24 and 25 landed, no gate in any 757 reader)
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:** 0 (claim) and 1 (measure) done, 2026-11-11: `docs/b757/evidence/displays-ehsi.md`. Tasks 2-9 open.
-- **Waiting on the owner:** two decisions from Task 1's findings ("Changed from the plan" below) before Task 6: what
-  Ctrl+W and the top row say, given that the screen draws no waypoint name there; and whether S/C is computed or left
-  unread.
+- **Tasks:** 0 claim (cb87d1378), 1 measure (2ef29dc6a), 2 layout record (c6e520818), 3 recipe (private
+  `feature/b757-displays`: merge 75affa1b9, 79f77ded8, 0f2e028b4; not pushed), 4 sampler (7695e7fba, 33de441f9,
+  c89d877c9), 5 geometry (e7432173c, ac2eb8dd5), 6 rows and words (30d692692, c1e4ef13d), 7 window and keys
+  (02ccc999a), 8 rules B757-36 to B757-39 in a new rule file `b757-ehsi` (dc4ab516d), the whole-plan review's fixes
+  (31299e8c3). Each task reviewed by a fresh reviewer, then one whole-plan review. Open: Task 9 (live checks, the
+  generator version, deploy, publish).
+- **Waiting on the owner:** the word to deploy to `C:\MSFSBA-B757` with the regenerated layout (MSFSBA closed), then
+  to push `B757` and the private branch and publish the layout; the in-sim checks.
 - **In-sim results:**
 - **Changed from the plan:** from Task 1's measurements (the evidence file has each):
   - **The top line draws no waypoint name:** left the distance and `NM`, right the ETA and `z` ("37.5NM", "------z").
@@ -158,5 +162,27 @@
     (`u8 nd+209`) each waypoint gains its constraint and ETA lines, which Task 6 lists as drawn.
   - **The position** the draw takes is `PLANE LATITUDE` and `PLANE LONGITUDE` for the top line and the IRS's copy in
     the nd for the map; equal to the sixth decimal parked. Task 9 compares them in flight before choosing.
-  - **Not measured (needs a flight):** the ETA above 100 kt, the wind, track up, a waypoint being passed, S/C.
+  - **Measured read only on the owner's flight (2026-11-11):** the nd's position is the simulator's in flight, passed
+    legs move to the flown vector, the ground speed is knots. Still unheard: the rows and lines against the screen in
+    flight, the wind, track up.
+  - **The owner's decisions (2026-11-11):** Ctrl+W says the active waypoint's name first, then the top line
+    ("KOLM, 37.5 NM, no ETA"). S/C is left unread (recommended to the owner, who answered the Ctrl+W question only).
+  - **Decided while working** (each with its reason in the commits and rule texts):
+    - The top line's position is `PLANE LATITUDE` and `PLANE LONGITUDE` as simulator inputs, as BlueBird's draw takes
+      them ([B757-39]); the map rows use the nd's own center.
+    - BlueBird's words and the map constants travel in the reading from the layout; modes branch on the efis value.
+    - A flag is spoken as "EHSI flag: HDG, MAP" / "EHSI flag gone: …"; the heading bug is its own row; a flag or
+      message that comes or goes only because the pilot changed the mode is not spoken.
+    - A pilot's own DIRECT TO or ERASE speaks the new active waypoint once: the top line changed.
+    - "active" marks the route's leg 0 also while a modification is pending (the screen keeps it magenta).
+    - A waypoint row while the route is not read yet (the first moment after Alt+N): "Map: reading".
+    - Navaid legs read their primary position only (a second one 0.03 NM away exists for some).
+    - Not corrupt, only missing: no path-registry entry (the walk's cycle guard is 4096), an E/D index past the legs.
+      No IRS selected reads as dark (BlueBird draws black).
+    - `Bbs757DisplayMonitor` (plan 23's, frozen) gained one read-only member, `NoReadingReason`, so Ctrl+W can tell
+      "display dark" from the reader's own reason; nothing else reads it. Plans 27 and 28 inherit it.
+    - Two tests of other readers were widened by the line a new reader and its two inputs force.
+  - **For plan 28** (not listed by this plan): S/C; the departure and arrival runway symbols; the green rings without a
+    word and the altitude/time marker; the wind readout; origin and destination are told apart by code order in the
+    recipe, and PLAN is named by elimination.
 - **Open at landing:**
