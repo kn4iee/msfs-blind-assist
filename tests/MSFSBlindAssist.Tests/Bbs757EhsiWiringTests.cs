@@ -3,6 +3,7 @@
 // active waypoint at once, interrupting, with the window open or not. The window is a real WinForms form, as in the
 // upper EICAS wiring tests; the lit-display cases drive the real monitor over a scripted sampler.
 
+using System.Reflection;
 using System.Windows.Forms;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.BBS757;
@@ -525,6 +526,92 @@ public class Bbs757EhsiWiringTests
 
         Assert.Empty(rig.Speech.All);
         Assert.Equal(new[] { "CTR pressed", "ND Range unavailable" }, later.All);
+    }
+
+    // ---- Fix round 1: the follow hooks never cost another line ----
+
+    private static FieldInfo PrivateField(string name)
+    {
+        var field = typeof(BBS757Definition).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.True(field is not null, $"BBS757Definition has no private field {name}: this test sets it; follow its rename");
+        return field;
+    }
+
+    [Fact]
+    public void A_control_that_throws_while_following_leaves_the_variables_processing_intact()
+    {
+        using var rig = new Rig(started: true);
+        var w = OpenControls(rig);
+        bool expected;
+        using (var plain = new Rig(started: true)) expected = plain.Def.ProcessSimVarUpdate(RangeNode, 4, plain.Speech);
+        w.Combo(RangeNode).SelectedIndexChanged += (_, _) => throw new InvalidOperationException("injected");
+
+        bool handled = true;
+        var thrown = Record.Exception(() => handled = rig.Def.ProcessSimVarUpdate(RangeNode, 4, rig.Speech));
+
+        Assert.Null(thrown);
+        Assert.Equal(expected, handled);
+        // The guard was let go: the next delivery shows, writing nothing, and a pilot's change still writes.
+        rig.Deliver("B757_ADI_1_WXR_BUTTON", 1);
+        Assert.True(w.Check("B757_ADI_1_WXR_BUTTON").Checked);
+        Assert.Empty(rig.Io.Writes);
+        w.Check("B757_ADI_1_DATA_BUTTON").Checked = true;
+        Assert.Single(rig.Io.Writes);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_control_that_throws_while_following_leaves_the_cockpit_watchs_announcements_intact()
+    {
+        using var rig = new Rig(started: true);
+        var w = OpenControls(rig);
+        var (lights, switches) = rig.Def.CockpitWatched();
+        var other = switches.First(s => s.Panel != "Captain EFIS" && s.Positions.Count >= 2);
+        long now = 0;
+        var cockpit = new Bbs757CockpitAnnouncements(lights, switches, () => now);
+        cockpit.Settle();
+        now = Bbs757CockpitAnnouncements.SettleQuietMs + 1;
+        PrivateField("_cockpit").SetValue(rig.Def, cockpit);
+        PrivateField("_cockpitAnnouncer").SetValue(rig.Def, rig.Speech);
+        w.Combo(RangeNode).SelectedIndexChanged += (_, _) => throw new InvalidOperationException("injected");
+
+        var thrown = Record.Exception(() => rig.Def.OnCockpitLvarsChanged(new Dictionary<string, double>
+        {
+            ["BBS_ND1_Range_Index"] = 4, [other.StateVar!] = other.Positions[1].Value,
+        }));
+
+        Assert.Null(thrown);
+        Assert.Contains($"{other.Label} {other.Positions[1].Label}", rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_change_with_no_variable_for_its_node_sends_nothing_and_shows_the_cockpit_again()
+    {
+        using var rig = new Rig(started: true);
+        var w = OpenControls(rig);
+        Assert.True(rig.Def.GetVariables().Remove(RangeNode));
+
+        w.Combo(RangeNode).SelectedIndex = 5;
+
+        Assert.Empty(rig.Io.Writes);
+        Assert.Equal("40 NM", Shown(w.Combo(RangeNode)));
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_change_with_no_alt_n_context_sends_nothing_and_shows_the_cockpit_again()
+    {
+        using var rig = new Rig(started: true);
+        var w = OpenControls(rig);
+        PrivateField("_ehsiPress").SetValue(rig.Def, null);
+
+        w.Check("B757_ADI_1_WXR_BUTTON").Checked = true;
+        w.Combo(ModeNode).SelectedIndex = 0;
+
+        Assert.Empty(rig.Io.Writes);
+        Assert.False(w.Check("B757_ADI_1_WXR_BUTTON").Checked);
+        Assert.Equal("MAP", Shown(w.Combo(ModeNode)));
+        Assert.Empty(rig.Speech.All);
     }
 
     // ---- the rig ----

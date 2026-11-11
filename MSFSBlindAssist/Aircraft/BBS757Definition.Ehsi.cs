@@ -178,11 +178,22 @@ public partial class BBS757Definition
     }
 
     /// <summary>A window control's change, handed to the main panel's own write entry for its node (with the latest
-    /// Alt+N's sim and announcer), so nothing about it differs from the same pick on the panel.</summary>
+    /// Alt+N's sim and announcer), so nothing about it differs from the same pick on the panel. When it cannot be
+    /// handed on (no Alt+N context, or a node with no variable), nothing is sent, a warning is logged, and the control
+    /// goes back to the cockpit's state as a refused pick's does, so it never shows a state the cockpit does not have.</summary>
     private void SetFromEhsiWindow(Bbs757Control control, double value)
     {
-        if (_ehsiPress is not { } now || !GetVariables().TryGetValue(control.Node, out var def)) return;
-        HandleUIVariableSet(control.Node, value, def, now.Sim, now.Announcer);
+        if (_ehsiPress is { } now && GetVariables().TryGetValue(control.Node, out var def))
+        {
+            HandleUIVariableSet(control.Node, value, def, now.Sim, now.Announcer);
+            return;
+        }
+        Log.Warn("BBS757", $"EHSI window: {control.Node} " +
+            (_ehsiPress is null ? "has no Alt+N context" : "has no variable") + "; nothing sent.");
+        if ((_ehsiPress?.Sim ?? Sim) is not { } sim) return;
+        var io = WriteIoFor(sim);
+        if (io.Cached(control.Node) is double cockpit) FollowEhsiControl(control.Node, cockpit);
+        io.RequestRead(control.Node);
     }
 
     /// <summary>
@@ -205,7 +216,9 @@ public partial class BBS757Definition
     /// <summary>
     /// A delivery of a node the window holds (ProcessSimVarUpdate calls this after it has consumed any delivery a
     /// pick in flight owns): the control shows it, without writing it back and without moving focus. Nothing is
-    /// spoken here; a focused control's new value is NVDA's to read.
+    /// spoken here; a focused control's new value is NVDA's to read. Never throws: it runs inside ProcessSimVarUpdate
+    /// and the cockpit watch's report, so a control that fails is logged and the variable's own processing, or the
+    /// report's announcements, go on.
     /// </summary>
     private void FollowEhsiControl(string node, double value)
     {
@@ -213,21 +226,26 @@ public partial class BBS757Definition
         if (_ehsiWindow is not { IsDisposed: false }) return;
         _ehsiFollowing = true;
         try { show(value); }
+        catch (Exception ex) { Log.Warn("BBS757", $"EHSI window: {node} did not show the cockpit's value: {ex.Message}"); }
         finally { _ehsiFollowing = false; }
     }
 
     /// <summary>
     /// The cockpit watch's changes, by state var (the pilot turned the real knob, pressed a switch, or a preset moved
     /// it): each control the window holds shows its new value, unless a pick of it is in flight (its value then is
-    /// the pick's to settle).
+    /// the pick's to settle). Never throws: plan 13's announcements of the same report come after it.
     /// </summary>
     private void FollowEhsiCockpit(IReadOnlyDictionary<string, double> changes)
     {
-        if (_ehsiNodeByStateVar is not { } nodes) return;
-        foreach (var (name, value) in changes)
+        try
         {
-            if (nodes.TryGetValue(name, out var node) && !IsPickPending(node)) FollowEhsiControl(node, value);
+            if (_ehsiNodeByStateVar is not { } nodes) return;
+            foreach (var (name, value) in changes)
+            {
+                if (nodes.TryGetValue(name, out var node) && !IsPickPending(node)) FollowEhsiControl(node, value);
+            }
         }
+        catch (Exception ex) { Log.Warn("BBS757", $"EHSI window: the cockpit watch's report was not shown: {ex.Message}"); }
     }
 
     /// <summary>
