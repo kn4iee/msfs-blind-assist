@@ -21,7 +21,8 @@ public class A350MfdClearTests
         { "", true, null, false, MfdClearAction.ClearMessage, "Info cleared" },
         // then the selected line.
         { "", false, Field, false, MfdClearAction.ClearField, "Cleared" },
-        { "", false, GreyField, false, MfdClearAction.Unavailable, "Unavailable" },
+        // A grey field is still cleared: the FMS says if it refuses (final review: grey is inferred, never block).
+        { "", false, GreyField, false, MfdClearAction.ClearField, "Cleared" },
         { "", false, Key, false, MfdClearAction.CannotBeCleared, "Cannot be cleared" },
         { "", false, null, false, MfdClearAction.KccuClr, null },
         // A box of spaces is empty (Review Focus 5).
@@ -29,7 +30,7 @@ public class A350MfdClearTests
         { "   ", true, Field, false, MfdClearAction.ClearMessage, "Info cleared" },
         // Delete: the selected line alone, whatever the box and the message hold.
         { "VCBI", true, Field, true, MfdClearAction.ClearField, "Cleared" },
-        { "", false, GreyField, true, MfdClearAction.Unavailable, "Unavailable" },
+        { "", false, GreyField, true, MfdClearAction.ClearField, "Cleared" },
         { "", true, Key, true, MfdClearAction.CannotBeCleared, "Cannot be cleared" },
         { "VCBI", true, null, true, MfdClearAction.Nothing, null },
     };
@@ -50,6 +51,16 @@ public class A350MfdClearTests
 
     [Fact]
     public void No_page_read_shows_no_message() => Assert.False(MSFSBlindAssist.Forms.A350.A350MfdWindow.MessageShown(Array.Empty<MfdLine>()));
+
+    // While an MFD action runs, Backspace still empties the box and says what cannot be cleared; only a press waits, said aloud (final review).
+    [Theory]
+    [InlineData(MfdClearAction.ClearMessage, true)]
+    [InlineData(MfdClearAction.ClearField, true)]
+    [InlineData(MfdClearAction.KccuClr, true)]
+    [InlineData(MfdClearAction.ClearScratchpadBox, false)]
+    [InlineData(MfdClearAction.CannotBeCleared, false)]
+    [InlineData(MfdClearAction.Nothing, false)]
+    public void Only_a_press_needs_the_mfd(MfdClearAction action, bool needs) => Assert.Equal(needs, A350MfdClear.NeedsMfd(action));
 
     // A dimmed key is no field: the A380 window asks "a field?" before "dimmed?".
     [Fact]

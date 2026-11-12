@@ -166,6 +166,9 @@ public sealed class A350MfdWindow : Form
 
     private const string Caption = "A350 MFD";
 
+    /// <summary>What the list shows for a page drawn with its title alone (half drawn): the MFD has power, so never "off".</summary>
+    internal const string NoLines = "No lines on this page.";
+
     private System.Windows.Forms.Timer NewGoToTimer()
     {
         var timer = new System.Windows.Forms.Timer { Interval = 100 };
@@ -297,7 +300,9 @@ public sealed class A350MfdWindow : Form
             return (Array.Empty<MfdLine>(), Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
         var lines = A350MfdPage.KeepReadable(before ?? Array.Empty<MfdLine>(), A350MfdPage.Read(cap, side));
         var listed = lines.Where(l => l.Kind != "title").ToList();
-        return (lines, listed, listed.Count == 0 ? new[] { "The MFD is off: no power." } : listed.Select(A350MfdPage.Shown).ToList());
+        if (lines.Count == 0)
+            return (lines, listed, new[] { "The MFD is off: no power." });
+        return (lines, listed, listed.Count == 0 ? new[] { NoLines } : listed.Select(A350MfdPage.Shown).ToList());
     }
 
     /// <summary>A line's row in the list (<see cref="PageLines"/>' Listed): one less after the title, which has none.</summary>
@@ -325,8 +330,9 @@ public sealed class A350MfdWindow : Form
             return;
         }
         var line = _listed[i];
-        // A dimmed control does nothing for a sighted pilot either (the A380 window's "Unavailable").
-        if (A350MfdWording.IsDimmed(line))
+        // A dimmed key or list item does nothing for a sighted pilot either (the A380 window's "Unavailable"); a grey field still
+        // takes an entry, and the FMS says if it refuses it.
+        if (A350MfdWording.IsUnavailable(line))
         {
             _announcer.AnnounceImmediate("Unavailable");
             return;
@@ -356,10 +362,15 @@ public sealed class A350MfdWindow : Form
     /// then the FMS message (the KCCU's CLR), then the selected field (a click, the word CLR typed, ENTER); Delete the selected field alone.</summary>
     private async Task ClearKeyAsync(bool delete)
     {
-        if (_input.Busy) return;   // the action running already says how it went
         int i = _list.SelectedIndex;
         var selected = i >= 0 && i < _listed.Count ? _listed[i] : null;
         var (action, say) = A350MfdClear.Decide(_scratchpad.Text, MessageShown(_lines), selected, delete);
+        // A press waits on an action already running, said aloud, never dropped unheard (as PressPage); the box's own outcomes never wait.
+        if (A350MfdClear.NeedsMfd(action) && _input.Busy)
+        {
+            _announcer.AnnounceImmediate("The MFD is still busy with the last entry; press the key again");
+            return;
+        }
         switch (action)
         {
             case MfdClearAction.ClearScratchpadBox:

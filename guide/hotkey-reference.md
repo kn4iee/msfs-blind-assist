@@ -414,12 +414,13 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 
 ### MFD window (Input Shift+M) {#hk-a350-mfd}
 
-- **Up**, **Down** — Move through the lines.
-- **Enter** — Act on the line: a field takes what you typed in the scratchpad box, anything else is clicked.
-- **Tab** — To the scratchpad box.
-- **Backspace** (in the list) — CLR. **Page Up**, **Page Down** — Scroll.
+- **Up**, **Down** — Move through the lines: each says its text, what it is (edit, button, combo box...) and its state, with no colour.
+- **Enter** — Act on the line: a field takes what you typed in the scratchpad box (said back as it is sent), anything else is clicked. A dimmed key says "Unavailable".
+- **Alt+S** (or **Tab**) — To the scratchpad box. **Escape** there empties it.
+- **Backspace** (in the list) — Clear: the scratchpad box, else the FMS message, else the field you are on. **Delete** — Clear the field you are on.
+- **Page Up**, **Page Down** — Page an open list, or the page ("Previous page", "Next page"). **Ctrl+Up**, **Ctrl+Down**, **Ctrl+Left**, **Ctrl+Right** — The KCCU's arrows.
 - **F5** — Refresh. **Escape** — Close.
-- **Alt+I** INIT, **Alt+F** F-PLN, **Alt+E** PERF, **Alt+L** FUEL, **Alt+R** RAD NAV, **Alt+P** SEC, **Alt+D** DIR, **Alt+A** ATC, **Alt+V** SURV, **Alt+C** CLR, **Alt+T** DEST, **Alt+G** PROG, **Alt+M** MAILBOX, **Alt+K** C/L MENU, **Alt+N** NOTEPAD, **Alt+O** DATA, **Alt+U** MENU, **Alt+B** AIRPORT, **Alt+Y** REF, **Alt+S** OIS, **Alt+X** ESC.
+- **Alt+I** INIT, **Alt+F** F-PLN, **Alt+E** PERF, **Alt+L** FUEL, **Alt+R** RAD NAV, **Alt+P** SEC, **Alt+D** DIR, **Alt+A** ATC, **Alt+V** SURV, **Alt+C** CLR, **Alt+T** DEST, **Alt+G** PROG, **Alt+M** MAILBOX, **Alt+K** C/L MENU, **Alt+N** NOTEPAD, **Alt+O** DATA, **Alt+U** MENU, **Alt+B** AIRPORT, **Alt+Y** REF, **Alt+W** OIS, **Alt+X** ESC.
 
 ### RMP window (Input Ctrl+Shift+R) {#hk-a350-rmp}
 

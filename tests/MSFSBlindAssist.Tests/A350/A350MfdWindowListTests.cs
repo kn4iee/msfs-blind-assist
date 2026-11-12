@@ -69,6 +69,23 @@ public class A350MfdWindowListTests
     [Fact]
     public void No_line_has_no_row() => Assert.Null(A350MfdWindow.ListedIndex(Titled, null));
 
+    // Final review: a half-drawn page with its title alone said "The MFD is off: no power." under a title just announced.
+    [Fact]
+    public void A_page_with_only_its_title_is_no_unpowered_mfd()
+    {
+        var cap = A350Fixtures.Capture("mfd_init_empty.json");
+        var titleOnly = cap with
+        {
+            Elements = Array.Empty<DrawnElement>(),
+            Texts = cap.Texts.Where(t => t.X < 836 && t.Y >= 108 && t.Y < 150 && t.ColourName == "black").ToList(),
+        };
+        var (lines, listed, shown) = A350MfdWindow.PageLines(titleOnly, 0, dark: false);
+        Assert.Equal("title", Assert.Single(lines).Kind);
+        Assert.Empty(listed);
+        Assert.Equal(new[] { A350MfdWindow.NoLines }, shown);
+        Assert.Equal(new[] { "The MFD is off: no power." }, A350MfdWindow.PageLines(cap with { Texts = Array.Empty<DrawnText>(), Elements = Array.Empty<DrawnElement>() }, 0, dark: false).Shown);
+    }
+
     [Fact]
     public void A_dark_or_absent_screen_lists_nothing_to_press()
     {

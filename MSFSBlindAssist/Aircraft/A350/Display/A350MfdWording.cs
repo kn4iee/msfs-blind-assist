@@ -32,7 +32,10 @@ public static class A350MfdWording
     /// <summary>What the pilot hears of a line of <paramref name="kind"/> the reader spoke as <paramref name="spoken"/>.</summary>
     public static string Speak(string kind, string spoken)
     {
-        string s = Note.Replace(spoken, m => m.Groups["c"].Value == "magenta" ? $", {m.Groups["name"].Value} constraint" : "");
+        // A note is said only where it is a constraint: magenta's, or a constraint's star in another colour ("ALT constraint cyan"),
+        // whose constraint stays and whose colour goes; any other note is a colour alone.
+        string s = Note.Replace(spoken, m => m.Groups["name"].Value is var name && m.Groups["c"].Value == "magenta" ? $", {name} constraint"
+            : name.EndsWith(" constraint", StringComparison.Ordinal) ? $", {name}" : "");
         s = Bracketed.Replace(s, "");
         s = Segment.Replace(s, m => Word(kind, spoken, m.Groups["c"].Value) is { } word ? ", " + word : "");
         return s.Trim();
@@ -50,6 +53,11 @@ public static class A350MfdWording
     /// <summary>A grey control, or one the reader read unavailable: the A380 window says "dimmed".</summary>
     public static bool IsDimmed(MfdLine line) =>
         Regex.IsMatch(line.Spoken, @", grey(?=,|;|$)") || line.Spoken.EndsWith(", unavailable", StringComparison.Ordinal);
+
+    /// <summary>A dimmed control a press would do nothing on, so Enter says "Unavailable" (the A380 window's): a grey key, list item,
+    /// opener, tab, option or check box. A grey field or F-PLN row is never refused: grey there is a colour the reader infers, not a
+    /// disabled flag, so the pilot's entry goes to the FMS, which says if it refuses it (final review; never block).</summary>
+    public static bool IsUnavailable(MfdLine line) => IsDimmed(line) && line.Kind is not ("field" or "scratchpad" or "waypoint");
 
     private const string ScratchpadPrefix = "Scratchpad: ";
 

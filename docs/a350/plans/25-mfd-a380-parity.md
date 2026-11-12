@@ -185,8 +185,8 @@ Kept in this file only, so no other plan's push ever touches it.
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-12
 - **Worked by:** Claude (Opus 5.5), inline (superpowers:executing-plans)
 - **Started:** 2026-11-12, from `98e1fa23d`
-- **Landed:** 2026-11-12, offline (final review below)
-- **Tests at landing:** the suite without `ClaudeRulesHookTests` 22,117/22,117; the A350 tests 2,390
+- **Landed:** 2026-11-13, offline; final review (a fresh reviewer): no critical finding, five important ones fixed test-first
+- **Tests at landing:** the suite without `ClaudeRulesHookTests` 22,136/22,136; `ClaudeRulesHookTests` 203/203
 - **Tasks:** 1 `4875c28dd` (`A350MfdWording`), 2 `3679521` (`Shown` in the A380 window's words), 3 `3a56b61` (the list without the
   title, the caption, "Previous page"/"Next page"), 4 `2b51467` (Backspace, Delete, Enter, Escape, Alt+S, Alt+W), 5 `a9babc8` (the
   messages and the status display uncoloured), the field clear corrected `c51ac1f68`, 6 the rule [A350-16] and the docs
@@ -194,7 +194,9 @@ Kept in this file only, so no other plan's push ever touches it.
 - **In-sim results:** none: built offline, as the owner asked
 - **Changed from the plan:** a field is cleared with the word CLR typed and ENTER, not the KCCU's CLR key and ENTER (the KCCU's CLR only
   empties an entry being typed, live 2026-10-30, `831860a18`); the messages' spoken words are made in the two message observers, whose
-  returns are only spoken; the title also stands in the window's caption
+  returns are only spoken; the title also stands in the window's caption; a grey field is never refused (grey is a colour read, not
+  the A380's disabled flag: Enter and Delete act and the FMS says if it refuses), so `MfdClearAction.Unavailable` is gone; Backspace and
+  Delete say the MFD is busy rather than nothing; a title-only page lists "No lines on this page."
 - **Rulings made while working:** the ATC mailbox window is no MFD page and keeps its words; Backspace with nothing to clear presses the
   KCCU's CLR silently (the window's old key, not the A380's BACKSPACE); the scratchpad line itself "Cannot be cleared"; a typed entry is
   said back once the MFD took it; the titled-page test uses the TMPY F-PLN (ACTIVE's open menu covers the title bar)

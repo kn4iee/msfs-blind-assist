@@ -381,7 +381,7 @@ MFD (the A350's flight management, its checklists and datalink):
              "temporary", "constraint", "dimmed"). The page's title is said as the page
              changes and stays in the window's title. Up/Down move; Enter acts on the
              line: a field takes what you typed in the scratchpad box (Alt+S, type,
-             Enter), anything else is clicked; a dimmed line says "Unavailable".
+             Enter), anything else is clicked; a dimmed key says "Unavailable".
              Backspace clears the box, else the FMS message, else the field; Delete
              clears the field (CLR typed into it). PageUp/PageDown page a list or say
              "Previous page"/"Next page" as they scroll. Ctrl+arrows are the KCCU's

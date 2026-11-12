@@ -43,6 +43,9 @@ public class A350MfdWordingTests
         "DB612   C119° 116° 1   154  *2000  01:55 FPA -3.0, ALT constraint met")]
     [InlineData("waypoint", "DER22   BASU1D 034° 1, yellow, overfly, ident white", "DER22   BASU1D 034° 1, temporary, overfly")]
     [InlineData("waypoint", "BI611   BASU1D 279° 6   210  3290   00:02, green, right turn", "BI611   BASU1D 279° 6   210  3290   00:02, right turn")]
+    // A constraint's star in a colour other than magenta (met) or amber (missed): the constraint stays, its colour goes (final review).
+    [InlineData("waypoint", "BI613   BASU1D 295° 4        *5000  00:05, green, ALT constraint cyan", "BI613   BASU1D 295° 4        *5000  00:05, ALT constraint")]
+    [InlineData("waypoint", "BI613   BASU1D 295° 4   *210  5000  00:05, green, SPD constraint white", "BI613   BASU1D 295° 4   *210  5000  00:05, SPD constraint")]
     public void A_colour_becomes_the_owners_word_or_nothing(string kind, string spoken, string said) =>
         Assert.Equal(said, A350MfdWording.Speak(kind, spoken));
 
@@ -88,6 +91,19 @@ public class A350MfdWordingTests
         Assert.NotEmpty(read);
         Assert.DoesNotContain(read, l => ColourWord.IsMatch(l));
     }
+
+    // A grey key, list item, opener or check box does nothing for a sighted pilot either: "Unavailable". A grey field is a colour the
+    // reader infers, not a disabled flag: Enter and Delete still act on it and the FMS says if it refuses (final review: never block).
+    [Theory]
+    [InlineData("button", "DELETE ALL * button, grey", false, true)]
+    [InlineData("menuitem", "DEPARTURE button, grey", false, true)]
+    [InlineData("button", "TRANS button, grey", true, true)]
+    [InlineData("checkbox", "AUTO check box, not checked, unavailable", false, true)]
+    [InlineData("field", "LEVEL: FL required, grey", false, false)]
+    [InlineData("field", "CI: 30, grey", false, false)]
+    [InlineData("button", "ACTIVATE * APPR button, amber", false, false)]
+    public void Only_a_dimmed_control_is_unavailable(string kind, string spoken, bool opener, bool unavailable) =>
+        Assert.Equal(unavailable, A350MfdWording.IsUnavailable(new MfdLine(kind, spoken, 0, 0, Opener: opener)));
 
     private static readonly Regex ColourWord = new(@"\b(white|green|cyan|amber|magenta|yellow|grey|black|red|blue)\b", RegexOptions.Compiled);
 
