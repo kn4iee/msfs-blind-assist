@@ -35,13 +35,14 @@ public static partial class Bbs757EhsiText
     /// The wind, in MAP, VOR and ILS while the IRS is valid (never PLAN): "Bottom left: wind 70 kt from 30° left" (the
     /// speed truncated as drawn; where it comes from against the top of the map: the wind direction minus the map's
     /// rotation, "from ahead", "from behind"), or the screen's dashes, "Bottom left: wind ---", while BlueBird's show flag
-    /// is clear or the ground speed is under its minimum (the reader takes the flag as BlueBird left it and never redoes its
-    /// hysteresis). Shown but with a wind input not delivered yet: "Bottom left: wind not read yet", never a stale speed.
+    /// is clear (the reader takes the flag as BlueBird left it: the draw itself clears it under its minimum ground speed, and
+    /// the reader never redoes that test or the speed's hysteresis). Shown but with a wind input not delivered yet: "Bottom
+    /// left: wind not read yet", never a stale speed.
     /// </summary>
     private static void WindRow(List<string> rows, Bbs757EhsiReading r)
     {
         if (r.MapExtras is not { } x || !r.Valid || !(Is(r, EhsiMode.Map) || Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils))) return;
-        if (!x.WindShown || !(x.GroundSpeed >= x.WindMinGroundSpeed))
+        if (!x.WindShown)
         {
             rows.Add("Bottom left: wind " + Word(x.NoWindWord));
             return;

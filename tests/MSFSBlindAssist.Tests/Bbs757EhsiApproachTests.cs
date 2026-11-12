@@ -156,7 +156,8 @@ public class Bbs757EhsiApproachTests
     private const string BugRow = "Heading bug: 147, 28° right";
 
     /// <summary>The scene's wind (plan 28's map extras): its show flag clear in memory, so the screen's dashes, at the
-    /// bottom left after the rose's rows.</summary>
+    /// bottom left (0.048 W, 0.895 H): after the rose's rows, before TO/FROM at the same height further right (0.835 W),
+    /// the LOC flag (0.9 H) and the receiver's label and ILS frequency 31 px lower.</summary>
     private const string NoWindRow = "Bottom left: wind ---";
 
     // ---- the rows ----
@@ -173,9 +174,9 @@ public class Bbs757EhsiApproachTests
             EtaRow(),
             "Center: course pointer 187, 68° right",
             "Center: deviation 0.5 dots right",
+            NoWindRow,
             "Bottom right: TO",
             "Bottom left: VOR L",
-            NoWindRow,
             "Bearing pointer 1: VOR L, SEA, 74° right",
             BugRow,
         }, Rows(r));
@@ -215,9 +216,9 @@ public class Bbs757EhsiApproachTests
             "Center: course pointer 164, 45° right",
             "Center: deviation at full scale, right",
             "Right side: glideslope at full scale, above",
+            NoWindRow,
             "Bottom left: ILS",
             "Bottom right: 110.30",
-            NoWindRow,
             BugRow,
         }, Rows(r));
 
@@ -255,9 +256,9 @@ public class Bbs757EhsiApproachTests
             EtaRow(),
             "Center: course pointer 215, 96° right",
             "Center: no deviation bar",
+            NoWindRow,
             "Bottom left: ILS",
             "Bottom right: ------",
-            NoWindRow,
             BugRow,
         }, Rows(Read(new Approach(), mode: 1)));
 
@@ -279,8 +280,8 @@ public class Bbs757EhsiApproachTests
             EtaRow(),
             "Center: course pointer 130, 11° right",
             "Center: no deviation bar",
-            "Bottom left: VOR L",
             NoWindRow,
+            "Bottom left: VOR L",
             BugRow,
         }, Rows(Read(new Approach(), mode: 0)));
     }
@@ -364,10 +365,10 @@ public class Bbs757EhsiApproachTests
             "Center: no deviation bar",
             "Center: no deviation scale",
             "Right side: G/S flag",
+            NoWindRow,
             "Bottom: LOC flag",
             "Bottom left: ILS",
             "Bottom right: ------",
-            NoWindRow,
             BugRow,
         }, Rows(failedReading));
         var lines = Bbs757EhsiText.Changes(lostReading, failedReading, true);

@@ -228,7 +228,6 @@ public partial class Bbs757EhsiLayoutTests
             };
             var changed = (T)ctor.Invoke(args);
             Assert.False(sample.Equals(changed), $"{typeof(T).Name}.Equals ignores {parameters[i].Name}");
-            Assert.NotEqual(sample.GetHashCode(), changed.GetHashCode());
         }
         object?[] same = parameters.Select(p => typeof(T).GetProperty(p.Name!)!.GetValue(sample) switch
         {
@@ -237,6 +236,8 @@ public partial class Bbs757EhsiLayoutTests
             var v => v,
         }).ToArray();
         Assert.Equal(sample, (T)ctor.Invoke(same));
+        // Equal parts hash alike (the contract); unequal ones may collide, so their hashes are not compared.
+        Assert.Equal(sample.GetHashCode(), ((T)ctor.Invoke(same)).GetHashCode());
     }
 
     /// <summary>A part with every constructor argument distinct and not its type's default: whole numbers from the

@@ -19,8 +19,8 @@ public sealed partial class Bbs757EhsiReader
     /// are read only then, and only in MAP and PLAN. The map extras' runways and deceleration points too (the route's path
     /// by <paramref name="routeId"/>); their TERR and wind in every reading, with the wind and gear from
     /// <paramref name="sim"/>. The map guides in a full reading in MAP and PLAN (the range arc and the VNAV deviation in MAP
-    /// only).</summary>
-    private bool TryParts(uint nd, uint source, int modeValue, bool full, Bbs757EhsiLoopScene? map, int routeId,
+    /// only, the range arc only while <paramref name="irsValid"/>).</summary>
+    private bool TryParts(uint nd, uint source, int modeValue, bool full, bool irsValid, Bbs757EhsiLoopScene? map, int routeId,
         Bbs757SimValues? sim, out PartsRead parts)
     {
         parts = null!;
@@ -38,7 +38,7 @@ public sealed partial class Bbs757EhsiReader
         if (l.MapExtras is { } x && !TryMapExtras(nd, source, x, full, mapOrPlan, routeId, sim, out extras)) return false;
         Bbs757EhsiMapGuidesReading? guides = null;
         if (l.MapGuides is { } g && full && mapOrPlan
-            && !TryMapGuides(nd, source, g, modeValue == (int)Bbs757EhsiText.EhsiMode.Map, routeId, out guides))
+            && !TryMapGuides(nd, source, g, modeValue == (int)Bbs757EhsiText.EhsiMode.Map, irsValid, routeId, out guides))
             return false;
         parts = new PartsRead(approach, l.Approach is null ? l.ApproachMissing : null, tcas, l.Tcas is null ? l.TcasMissing : null,
             options, extras, guides);

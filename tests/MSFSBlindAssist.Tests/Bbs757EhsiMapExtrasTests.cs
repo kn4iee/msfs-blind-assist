@@ -199,12 +199,27 @@ public class Bbs757EhsiMapExtrasTests
         Assert.True(Read(new Extras { Terr = true, Altitude = double.NaN }).Corrupt);
         Assert.True(Read(new Extras { Terr = true, VerticalSpeed = double.PositiveInfinity }).Corrupt);
         Assert.True(Read(new Extras { Tweak = b => F64(b, Nd + X.TerrHandle + X.HandleValue, double.NaN) }).Corrupt);
-        Assert.True(Read(new Extras { Tweak = b => I32(b, Source + X.SourceToAdc, Outside) }).Corrupt);
+        Assert.True(Read(new Extras { Terr = true, Tweak = b => I32(b, Source + X.SourceToAdc, Outside) }).Corrupt);
+    }
+
+    [Fact]
+    public void Terr_off_never_reads_the_air_data_computer()
+    {
+        // The colors are the only use of the adc's altitude and vertical speed: with the button off they are not read, so
+        // a value that is not a number, or an adc pointer outside the module, is not torn. In PLAN, where the map guides'
+        // altitude range arc (which reads the same adc) is not read.
+        Assert.False(Read(new Extras { Altitude = double.NaN }, mode: 3).Corrupt);
+        Assert.False(Read(new Extras { VerticalSpeed = double.PositiveInfinity }, mode: 3).Corrupt);
+        Assert.False(Read(new Extras { Tweak = b => I32(b, Source + X.SourceToAdc, Outside) }, mode: 3).Corrupt);
+        Assert.Equal(Bbs757EhsiTerrainColor.None, Read(new Extras { Altitude = double.NaN }, mode: 3).MapExtras!.Highest.Color);
+        // The button on: the same values are torn.
+        Assert.True(Read(new Extras { Terr = true, Altitude = double.NaN }, mode: 3).Corrupt);
     }
 
     // ---- the wind ----
 
-    // Review Focus: under 100 kt or with the flag clear the row reads dashes, never a stale speed.
+    // Review Focus: with the flag clear the row reads dashes, never a stale speed. BlueBird's draw clears the flag under
+    // 100 kt of ground speed itself, so the flag alone decides.
     [Fact]
     public void Wind_reads_dashes_when_the_screen_does()
     {
@@ -218,13 +233,16 @@ public class Bbs757EhsiMapExtrasTests
         Assert.Equal(new[] { "Bottom left: wind 70 kt from behind" }, Starting(Read(shown, sim: Sim(windDirection: 314.43)), "Bottom left: wind"));
         Assert.Equal(new[] { "Bottom left: wind 70 kt from 30° left" }, Starting(Read(shown, sim: Sim(windDirection: 104.43)), "Bottom left: wind"));
 
-        // The flag clear (the live parked case: 2 kt from 40°), or the ground speed under 100 kt: the dashes, whatever
-        // the simulator's wind says.
+        // The flag clear (the live parked case: 2 kt from 40°; or under 100 kt of ground speed, where BlueBird's draw
+        // clears it): the dashes, whatever the simulator's wind says.
         Assert.Equal(new[] { "Bottom left: wind ---" }, Starting(Read(new Extras(), sim: Sim(windSpeed: 2, windDirection: 40)), "Bottom left: wind"));
-        Assert.Equal(new[] { "Bottom left: wind ---" }, Starting(Read(new Extras { WindShown = true, GroundSpeed = 99.9 }), "Bottom left: wind"));
-        Assert.Equal(new[] { "Bottom left: wind ---" }, Starting(Read(new Extras { WindShown = true, GroundSpeed = double.NaN }), "Bottom left: wind"));
+        Assert.Equal(new[] { "Bottom left: wind ---" }, Starting(Read(new Extras { GroundSpeed = 99.9 }), "Bottom left: wind"));
         Assert.Equal(new[] { "Bottom left: wind ---" }, Starting(Read(new Extras(), sim: Sim(null, null)), "Bottom left: wind"));
-        Assert.Equal(new[] { "Bottom left: wind 70 kt from 153° right" }, Starting(Read(new Extras { WindShown = true, GroundSpeed = 100 }), "Bottom left: wind"));
+        // The flag set: the wind, whatever the nd's ground speed holds (the reader never redoes the draw's test).
+        Assert.Equal(new[] { "Bottom left: wind 70 kt from 153° right" }, Starting(Read(new Extras { WindShown = true, GroundSpeed = 99.9 }), "Bottom left: wind"));
+        var nan = Read(new Extras { WindShown = true, GroundSpeed = double.NaN });
+        Assert.False(nan.Corrupt);
+        Assert.Equal(new[] { "Bottom left: wind 70 kt from 153° right" }, Starting(nan, "Bottom left: wind"));
 
         // Shown, but an input not delivered yet: not read yet, never a speed.
         foreach (var sim in new[] { Sim(windSpeed: null), Sim(windDirection: null), Sim(null, null), Sim(windSpeed: double.NaN) })

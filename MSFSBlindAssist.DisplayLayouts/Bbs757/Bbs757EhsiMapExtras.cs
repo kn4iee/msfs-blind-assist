@@ -13,7 +13,9 @@ public readonly record struct Bbs757EhsiCapabilityChoice(int Capability, int Lat
 /// <see cref="HandleValue"/>; the picture byte; the two elevations, s16 feet, in the record at the static
 /// <see cref="TerrainStatic"/> + <see cref="TerrainRecords"/> + side × <see cref="TerrainSideStride"/>, side 0 while
 /// the nd's <see cref="DisplaySide"/> holds <see cref="CaptainSide"/>; their colors from the adc's altitude and vertical
-/// speed and the draw's thresholds), the wind (the static show byte <see cref="WindShown"/>, the nd's ground speed),
+/// speed and the draw's thresholds), the wind (the static show byte <see cref="WindShown"/>; the nd's
+/// <see cref="GroundSpeed"/> and <see cref="WindMinGroundSpeed"/> describe the test BlueBird's draw folds into that byte,
+/// and the reader decides by the byte alone),
 /// the two runway records in the nd, the deceleration points (vectors of <see cref="DecelerationStride"/>-byte points in
 /// the path object, at most <see cref="MaxDecelerationPoints"/> in the walk) and the leg capability set plan 26's leg
 /// positions lacked (an unordered set in the leg: first node and size, the node's next pointer and value, at most

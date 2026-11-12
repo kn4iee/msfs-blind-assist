@@ -142,8 +142,10 @@ public sealed partial class Bbs757EhsiReader
     /// The station a VOR panel's bearing pointer points at, as BlueBird's draw picks it: in ILS mode the panel's ILS-mode
     /// station, and only while that station's frequency equals the panel's manual one (whole × 100 + fraction); in the
     /// other modes the panel's station. In every mode only a station whose kind is one of the layout's VOR kinds; else 0
-    /// (no pointer). A station outside the module is torn. BlueBird also needs the station in reception (f47465): that is
-    /// not modeled, so a station out of range still reads as pointed at.
+    /// (no pointer). A station outside the module is torn. Two conditions BlueBird also tests are not modeled: the station
+    /// in reception (f47465), and the VOR panel's electrical power (f36730, tested in BlueBird's station getter: without
+    /// power the getter returns no station while the panel's field keeps it). So a station out of range, or on an
+    /// unpowered panel, still reads as pointed at.
     /// </summary>
     private bool TryVorStation(uint panel, Bbs757EhsiApproach a, bool ilsMode, out uint station)
     {

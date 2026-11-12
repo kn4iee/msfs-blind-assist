@@ -269,9 +269,13 @@ public sealed partial class Bbs757EhsiReader
     /// The VOR course lines (f23431), VOR L then VOR R: drawn only for a manually tuned receiver (the autotune byte clear),
     /// through its station when the station's kind is one of the layout's course line kinds, the course is a number and the
     /// station's frequency equals the receiver's manual one (whole × 100 + fraction). VOR R is skipped when it has VOR L's
-    /// station and the same course modulo 180 (one line). BlueBird also needs the station in reception (f47465): that is
-    /// not modeled, so a station out of range still reads as drawn. A null panel or station is no line; one outside the
-    /// module is torn.
+    /// station and the same course modulo 180 (one line), as measured in the draw (23431): the second receiver is compared
+    /// only with a line already drawn, and BlueBird's "same station" is the same frequency, the same ident and a position
+    /// within 1e-6, which the reader takes as the same station record (pointer). Two conditions BlueBird also tests are not
+    /// modeled: the station in reception (f47465), and the VOR panel's electrical power (f36730, tested in BlueBird's
+    /// station getter: without power the getter returns no station while the panel's field keeps it). So a station out of
+    /// range, or on an unpowered panel, still reads as drawn. A null panel or station is no line; one outside the module
+    /// is torn.
     /// </summary>
     private bool TryCourseLines(uint fms, Bbs757EhsiMapOptions o, List<Bbs757EhsiCourseLine> lines)
     {

@@ -1,7 +1,8 @@
 // BlueBird's map option loop (23406) replayed as a pure function: one item from each switched-on list per round, the range
 // + 10 NM test, the kind, class, tuned, origin and destination, route and NDB-distance skips, the stop at the count limit
 // at a round's end, when every list is used up, or after the round limit. The lists are shaped like plan 28's live ones at
-// the KSEA gate (nearest first; the idents and distances the evidence lists), placed on this test's map frame.
+// the KSEA gate (nearest first; the idents and distances the evidence lists), placed on this test's map frame. One airport
+// is made up: KRNT is not in the evidence's list, added to reach the measured count of airports within range + 10 (6).
 
 using MSFSBlindAssist.Services.BBS757;
 using Xunit;
@@ -85,7 +86,6 @@ public class Bbs757EhsiMapOptionsLoopTests
     {
         var waypoints = Enumerable.Range(1, 1525).Select(i => Point("W" + i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture), Math.Min(29.9, i * 0.25), i * 7)).ToArray();
         var (drawn, count) = Bbs757EhsiMapOptionsLoop.Run(Lists(LiveNavaids(), LiveAirports(), waypoints), Scene(20), Rules);
-        Assert.InRange(count, 100, 102);
         Assert.Equal(100, count);
         Assert.Equal(count, drawn.Count);
         // Interleaved one from each list per round, in draw order: round 1's navaid (ISNQ) is not drawn and its airport

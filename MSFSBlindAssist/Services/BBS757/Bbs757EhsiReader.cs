@@ -216,7 +216,7 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
         // map options' loop measures from the nd's own map and aircraft position (never the simulator's), against the
         // routes and airports just read.
         var mapScene = full ? MapScene(map, range, latitude, longitude, routeLegs, modificationLegs, points) : null;
-        if (!TryParts(nd, source, modeValue, full, mapScene, routeId, sim, out var parts))
+        if (!TryParts(nd, source, modeValue, full, valid, mapScene, routeId, sim, out var parts))
         {
             reading = Bad(full);
             return true;

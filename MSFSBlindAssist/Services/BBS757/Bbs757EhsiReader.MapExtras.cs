@@ -4,9 +4,9 @@ namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// The rest of the map (plan 28's <see cref="Bbs757EhsiMapExtras"/>). Light, every reading: TERR (the button's L:var from
-/// its handle's cached value, the picture byte, the two elevations and their colors from the air data computer's altitude
-/// and vertical speed, BlueBird's thresholds and the simulator's <see cref="GearKey"/>) and the wind (the static show
-/// flag as BlueBird left it, the nd's ground speed, the simulator's <see cref="WindSpeedKey"/> and
+/// its handle's cached value, the picture byte, the two elevations and, while the button is on, their colors from the air
+/// data computer's altitude and vertical speed, BlueBird's thresholds and the simulator's <see cref="GearKey"/>) and the
+/// wind (the static show flag as BlueBird left it, which alone decides, the simulator's <see cref="WindSpeedKey"/> and
 /// <see cref="WindDirectionKey"/>). Full, in MAP and PLAN: the two runway records and the route path's two deceleration
 /// vectors, walked all or nothing (B757-36). The simulator values are inputs where BlueBird's draw takes them (S10), never
 /// compared with memory (B757-30). A null object pointer is none; one outside the module, a name that is not text, a
@@ -22,9 +22,10 @@ public sealed partial class Bbs757EhsiReader
     {
         reading = null;
         if (x.TerrainDivisor <= 0) return false;
+        // The wind's show flag alone says what the screen shows: BlueBird's draw clears it under its minimum ground speed
+        // itself, so the reader never reads the nd's ground speed for it.
         if (!Flag(nd, x.TerrainPicture, out bool picture)
-            || !Int(nd, x.DisplaySide, out int side) || !_memory.TryReadByte(x.WindShown, out byte windShown)
-            || !F64(nd, x.GroundSpeed, out double groundSpeed))
+            || !Int(nd, x.DisplaySide, out int side) || !_memory.TryReadByte(x.WindShown, out byte windShown))
             return false;
         // The nd keeps its own copy of the TERR button's handle (66 bytes, at the nd): its value is at +HandleValue.
         if (!At(nd, x.TerrHandle, out uint handle) || !F64(handle, x.HandleValue, out double terrValue) || !double.IsFinite(terrValue))
@@ -37,7 +38,10 @@ public sealed partial class Bbs757EhsiReader
             return false;
         short highest = unchecked((short)highestRaw), lowest = unchecked((short)lowestRaw);
 
-        if (!TryTerrainAltitude(source, x, out double? altitude)) return false;
+        // The adc's altitude and vertical speed only color the numbers TERR shows: read only while its button is on.
+        bool terr = terrValue != 0;
+        double? altitude = null;
+        if (terr && !TryTerrainAltitude(source, x, out altitude)) return false;
         double? gear = Input(sim, GearKey);
         var highestNumber = TerrainNumber(highest, altitude, gear, x);
         var lowestNumber = TerrainNumber(lowest, altitude, gear, x);
@@ -57,9 +61,8 @@ public sealed partial class Bbs757EhsiReader
         }
 
         reading = new Bbs757EhsiMapExtrasReading(
-            Terr: terrValue != 0, TerrainPicture: picture, Highest: highestNumber, Lowest: lowestNumber,
-            WindShown: windShown != 0, GroundSpeed: groundSpeed, WindMinGroundSpeed: x.WindMinGroundSpeed,
-            WindSpeed: Input(sim, WindSpeedKey), WindDirection: Input(sim, WindDirectionKey),
+            Terr: terr, TerrainPicture: picture, Highest: highestNumber, Lowest: lowestNumber,
+            WindShown: windShown != 0, WindSpeed: Input(sim, WindSpeedKey), WindDirection: Input(sim, WindDirectionKey),
             Runways: runways, DecelerationStarts: starts, DecelerationEnds: ends,
             TerrWord: x.TerrWord, NoWindWord: x.NoWindWord);
         return true;

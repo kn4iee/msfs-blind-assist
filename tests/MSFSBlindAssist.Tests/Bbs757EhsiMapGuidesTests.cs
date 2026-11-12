@@ -165,7 +165,8 @@ public class Bbs757EhsiMapGuidesTests
         Assert.Equal(new[] { new Bbs757EhsiFixEntry(300, 300), new Bbs757EhsiFixEntry(null, 15) }, fix.Entries);
 
         // The 300 NM circle where its near side is on the screen: range 320 with the map turned so that side (21.5° true
-        // from the aircraft, 281 NM) is straight up.
+        // from the aircraft, 281 NM) is straight up. The margin is small: the nearest sample (the circle's 20° point) is
+        // 511.0 px from the aircraft against the clip's 516.0 px (859 × 0.6775 - 66), 5.0 px or 2.7 NM inside.
         Assert.Contains("Map: fix TCM, circle 300 NM", Starting(Read(new Guides { Fix1 = Tcm }, range: 320, scene: Rotated(21.5)), "Map: fix"));
 
         // Never spoken; the light reading reads no guides; VOR and ILS draw none.
@@ -263,12 +264,13 @@ public class Bbs757EhsiMapGuidesTests
         Assert.False(Torn(new Guides { Fix1 = Tcm }));
         Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => I32(b, Fms + G.FmsFix1, Outside) }));
         Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => I32(b, Nd + G.NdToFms, Outside) }));
-        // The entries: end before begin, not whole entries, over the draw's count, a radial or distance out of range,
-        // storage outside the module.
+        // The entries: end before begin, not whole entries, a radial or distance out of range, storage outside the module
+        // (a vector longer than the draw takes included).
         Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => I32(b, Fms + G.FmsFix1Entries + 4, Entries1 - 8) }));
         Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => I32(b, Fms + G.FmsFix1Entries + 4, Entries1 + 12) }));
-        Assert.True(Torn(new Guides { Fix1 = Tcm with { Entries = new[] { (1, 1), (2, 2), (3, 3), (4, 4) } } }));
         Assert.False(Torn(new Guides { Fix1 = Tcm with { Entries = new[] { (1, 1), (2, 2), (3, 3) } } }));
+        uint pastModule = Entries1 + (uint)(((Size - Entries1) / G.FixEntryStride + 1) * G.FixEntryStride);
+        Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => I32(b, Fms + G.FmsFix1Entries + 4, pastModule) }));
         Assert.True(Torn(new Guides { Fix1 = Tcm with { Entries = new[] { (361, -1) } } }));
         Assert.True(Torn(new Guides { Fix1 = Tcm with { Entries = new[] { (-1, -2) } } }));
         Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => { I32(b, Fms + G.FmsFix1Entries, Outside); I32(b, Fms + G.FmsFix1Entries + 4, Outside + 16); } }));
@@ -279,6 +281,19 @@ public class Bbs757EhsiMapGuidesTests
         Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => I32(b, FixObject1 + P.MapExtras!.LegCapabilityCount, 5) }));
         // In PLAN too.
         Assert.True(Torn(new Guides { Fix1 = Tcm, Tweak = b => I32(b, Fms + G.FmsFix1, Outside) }, mode: 3));
+    }
+
+    [Fact]
+    public void A_fix_entries_vector_longer_than_the_draw_takes_reads_its_first_entries()
+    {
+        // The draw takes the layout's FixEntries (3) and stops: a fourth entry is not on the screen, never corrupt, and its
+        // values are not checked.
+        var four = Read(new Guides { Fix1 = Tcm with { Entries = new[] { (1, 1), (2, 2), (3, 3), (400, -7) } } });
+        Assert.False(four.Corrupt);
+        Assert.Equal(new[] { new Bbs757EhsiFixEntry(1, 1), new Bbs757EhsiFixEntry(2, 2), new Bbs757EhsiFixEntry(3, 3) },
+            four.MapGuides!.Fixes.Single().Entries);
+        // The first three still checked.
+        Assert.True(Read(new Guides { Fix1 = Tcm with { Entries = new[] { (1, 1), (361, 2), (3, 3), (4, 4) } } }).Corrupt);
     }
 
     // ---- the off-path descent circles ----
@@ -381,6 +396,11 @@ public class Bbs757EhsiMapGuidesTests
         Assert.True(Read(new Guides { Track = double.PositiveInfinity }).Corrupt);
         Assert.True(Read(new Guides { Tweak = b => I32(b, Nd + G.NdToAirGround, Outside) }).Corrupt);
         Assert.False(Read(new Guides { Selected = 10000, Altitude = double.NaN, VerticalSpeed = 1500 }, mode: 3).Corrupt);
+        // In MAP with the IRS not valid the draw uses none of them: never read, so never torn.
+        Assert.False(Read(new Guides { Track = double.PositiveInfinity }, scene: s => s.Valid = false).Corrupt);
+        Assert.False(Read(new Guides { Selected = 10000, Altitude = double.NaN, VerticalSpeed = 1500 }, scene: s => s.Valid = false).Corrupt);
+        Assert.False(Read(new Guides { Tweak = b => I32(b, Nd + G.NdToAirGround, Outside) }, scene: s => s.Valid = false).Corrupt);
+        Assert.Null(Read(climb, scene: s => s.Valid = false).MapGuides!.Arc);
     }
 
     // ---- the VNAV path deviation ----

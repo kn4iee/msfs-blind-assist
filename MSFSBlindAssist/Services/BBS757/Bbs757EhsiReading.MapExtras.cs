@@ -18,8 +18,9 @@ public readonly record struct Bbs757EhsiMapPoint(double Latitude, double Longitu
 /// <summary>
 /// The rest of the map (plan 28's map extras) as the nd draws it. Light, in every reading: the TERR button
 /// (<see cref="Terr"/>, its L:var's cached value non-zero), the terrain picture's byte, the two elevations with their
-/// colors; the wind's show flag as BlueBird left it, the nd's ground speed, and the two wind inputs (null: not delivered
-/// yet), with the layout's minimum ground speed. Full, in MAP and PLAN only (null otherwise): the departure and arrival
+/// colors (none while the button is off: the adc is not read then); the wind's show flag as BlueBird left it (BlueBird's
+/// draw clears it under its minimum ground speed, so it alone decides) and the two wind inputs (null: not delivered yet).
+/// Full, in MAP and PLAN only (null otherwise): the departure and arrival
 /// runways (an empty name draws none, so is not in the list) and the deceleration points: where the next deceleration
 /// starts and where it ends. The words are the layout's.
 /// </summary>
@@ -29,8 +30,6 @@ public sealed record Bbs757EhsiMapExtrasReading(
     Bbs757EhsiTerrainNumber Highest,
     Bbs757EhsiTerrainNumber Lowest,
     bool WindShown,
-    double GroundSpeed,
-    double WindMinGroundSpeed,
     double? WindSpeed,
     double? WindDirection,
     IReadOnlyList<Bbs757EhsiRunway>? Runways,

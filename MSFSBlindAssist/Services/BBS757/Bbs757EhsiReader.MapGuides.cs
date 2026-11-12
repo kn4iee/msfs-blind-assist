@@ -6,15 +6,16 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// The map's guides (plan 28's <see cref="Bbs757EhsiMapGuides"/>), full reading only. In MAP and PLAN, through the FMS:
 /// the two FIX pages (each its on byte, a leg-shaped fix object placed by the leg position rule, its name, its entries
 /// vector) and the off-path descent circles (on, both valid bytes, the point, the two radii). In MAP: the altitude range arc
-/// (the MCP's selected altitude, the air data computer's indicated altitude and vertical speed, the air/ground system's
-/// on-ground byte, the selected IRS's ground speed and true track, from the nd's own position) and the VNAV path deviation
+/// while the IRS is valid (the MCP's selected altitude, the air data computer's indicated altitude and vertical speed, the
+/// air/ground system's on-ground byte, the selected IRS's ground speed and true track, from the nd's own position; not read
+/// otherwise, as the draw uses none of it then) and the VNAV path deviation
 /// (the route's path object while its phase is the descent). Walked all or nothing (B757-36): a pointer outside the module,
 /// a torn vector, a count over the layout's cap, a name that is not text, a value not finite or out of range is torn. A
 /// null object pointer is none. Nothing here is compared with the simulator (B757-30).
 /// </summary>
 public sealed partial class Bbs757EhsiReader
 {
-    private bool TryMapGuides(uint nd, uint source, Bbs757EhsiMapGuides g, bool map, int routeId,
+    private bool TryMapGuides(uint nd, uint source, Bbs757EhsiMapGuides g, bool map, bool irsValid, int routeId,
         out Bbs757EhsiMapGuidesReading? reading)
     {
         reading = null;
@@ -34,7 +35,9 @@ public sealed partial class Bbs757EhsiReader
 
         Bbs757EhsiRangeArc? arc = null;
         double? deviation = null;
-        if (map && (!TryRangeArc(nd, source, g, out arc) || !TryPathDeviation(routeId, g, out deviation))) return false;
+        // The range arc's inputs only while the IRS is valid: the draw never uses them otherwise, so they are not read.
+        if (map && irsValid && !TryRangeArc(nd, source, g, out arc)) return false;
+        if (map && !TryPathDeviation(routeId, g, out deviation)) return false;
 
         reading = new Bbs757EhsiMapGuidesReading(fixes.AsReadOnly(), offpath, arc, deviation, g.DeviationClamp,
             new Bbs757EhsiRadialDashes(g.RadialStart, g.RadialDashes, g.RadialDashStep, g.RadialDashLength));
@@ -78,16 +81,20 @@ public sealed partial class Bbs757EhsiReader
         return true;
     }
 
-    /// <summary>A FIX page's entries vector: at most the layout's <c>FixEntries</c> (the draw takes that many), each a
-    /// radial and a distance, the layout's none value read as null. Torn: a vector over the cap or changed while read, a
-    /// radial outside 0 to 360 or a negative distance that is not the none value.</summary>
+    /// <summary>A FIX page's entries vector: its first entries up to the layout's <c>FixEntries</c> (the draw takes that
+    /// many and stops, so a longer vector is not torn: the rest is not on the screen and not read), each a radial and a
+    /// distance, the layout's none value read as null. Torn: end before begin, not a whole number of entries, storage
+    /// outside the module (all of it, the unread rest too), a vector changed while read, a radial outside 0 to 360 or a
+    /// negative distance that is not the none value.</summary>
     private bool TryFixEntries(uint fms, int entriesAt, Bbs757EhsiMapGuides g, out IReadOnlyList<Bbs757EhsiFixEntry> entries)
     {
         entries = Array.Empty<Bbs757EhsiFixEntry>();
         int stride = g.FixEntryStride;
         if (g.FixEntryRadial < 0 || g.FixEntryDistance < 0 || g.FixEntryRadial + Word > stride || g.FixEntryDistance + Word > stride
-            || !Header(fms, entriesAt, out var header) || !Entries(header, stride, g.FixEntries, out uint count))
+            || !Header(fms, entriesAt, out var header) || !Entries(header, stride, int.MaxValue, out uint stored)
+            || (stored > 0 && !_memory.IsInsideModule(header.Begin, header.End - header.Begin)))
             return false;
+        uint count = Math.Min(stored, (uint)Math.Max(0, g.FixEntries));
         var list = new List<Bbs757EhsiFixEntry>((int)count);
         if (count > 0)
         {

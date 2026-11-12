@@ -13,6 +13,28 @@ public static partial class Bbs757EhsiText
 
     private const string LocFlagKey = "loc", GlideslopeFlagKey = "glideslope";
 
+    /// <summary>
+    /// The rows of VOR and ILS mode after the mode and the top line's heading (<see cref="Rows"/>): the DME at the top left
+    /// (or the part's not-read row), plan 26's ETA at the top right (expanded only: the full rose draws none), TERR's rows
+    /// (or the map extras' not-read row), the TCAS block, the rose's rows (<see cref="ApproachRows"/>), the bottom rows by
+    /// their place (the wind at 0.895 H on the left, then <see cref="ApproachBottomRows"/>), the bearing pointers, then
+    /// plan 26's heading bug.
+    /// </summary>
+    private static void VorIlsRows(List<string> rows, Bbs757EhsiReading r, double? distance)
+    {
+        if (r.Approach is { } a) rows.Add(DmeRow(r, a));
+        else NotRead(rows, ApproachPart, r.ApproachMissing);
+        if (!r.Centered) rows.Add(EtaRow(r, distance));
+        TerrRows(rows, r);
+        NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
+        TcasRows(rows, r);
+        if (r.Approach is { } rose) ApproachRows(rows, r, rose);
+        WindRow(rows, r);
+        if (r.Approach is { } bottom) ApproachBottomRows(rows, r, bottom);
+        if (r.Approach is { } pointers) BearingPointerRows(rows, r, pointers);
+        if (r.Valid) rows.Add(HeadingBugRow(r));
+    }
+
     /// <summary>The top line's left field in VOR and ILS: "Top left: DME 12.3" (one decimal under 100, the integer from
     /// 100, as drawn) or the screen's dashes, "Top left: DME ---". ILS mode shows the ILS DME, VOR mode the VOR's.</summary>
     private static string DmeRow(Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
@@ -26,10 +48,9 @@ public static partial class Bbs757EhsiText
     /// <summary>
     /// The rose's rows, top to bottom: the course pointer ("Center: course pointer 187, 68° right"), the deviation
     /// ("Center: deviation 0.5 dots right", "centered", "at full scale, right"; "Center: no deviation bar" while the bar is
-    /// not drawn), ILS without its dots "Center: no deviation scale" as a row of its own, in ILS while the glideslope scale shows "Right side:
-    /// glideslope 1.2 dots above" (or "no glideslope pointer"), the ILS flags in place ("Right side: G/S flag", "Bottom: LOC
-    /// flag"), VOR's "Bottom right: TO" or "FROM", the receiver's label ("Bottom left: VOR L", "VOR R", "ILS") and ILS's
-    /// frequency ("Bottom right: 110.30", or the dashes).
+    /// not drawn), ILS without its dots "Center: no deviation scale" as a row of its own, in ILS while the glideslope scale
+    /// shows "Right side: glideslope 1.2 dots above" (or "no glideslope pointer"), and ILS's G/S flag in place ("Right side:
+    /// G/S flag", above the scale's center). The bottom rows are <see cref="ApproachBottomRows"/>'.
     /// </summary>
     private static void ApproachRows(List<string> rows, Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
     {
@@ -53,6 +74,21 @@ public static partial class Bbs757EhsiText
                     ? "Right side: glideslope " + Deflection(a.GlideslopeDeviation, a.GlideslopePin, 1, "above", "below")
                     : "Right side: no glideslope pointer");
             if (a.GlideslopeFlag) rows.Add("Right side: " + Word(w.Glideslope) + " flag");
+        }
+    }
+
+    /// <summary>
+    /// The bottom rows after the wind (which sits at the bottom left of the same height as TO/FROM, so before it), top to
+    /// bottom then left to right as the evidence measures them: VOR's "Bottom right: TO" or "FROM" (0.895 H), ILS's LOC
+    /// flag ("Bottom: LOC flag", 0.9 H), the receiver's label ("Bottom left: VOR L", "VOR R", "ILS") and ILS's frequency
+    /// ("Bottom right: 110.30", or the dashes), both 31 px lower.
+    /// </summary>
+    private static void ApproachBottomRows(List<string> rows, Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
+    {
+        var w = a.Words;
+        bool ils = Is(r, EhsiMode.Ils);
+        if (ils)
+        {
             if (a.LocFlag) rows.Add("Bottom: " + Word(w.Loc) + " flag");
         }
         else if (a.ToFrom != Bbs757EhsiToFrom.None)
@@ -80,7 +116,9 @@ public static partial class Bbs757EhsiText
     /// The bearing pointers, every mode but PLAN while the IRS is valid: "Bearing pointer 1: VOR L, SEA, 74° right" (or
     /// "ahead", "behind": the angle only, as the screen draws an arrow and no distance; the station's bearing from the
     /// map's center against its rotation, unclipped: the pointer points at it wherever it is), "Bearing pointer 2: ADF R"
-    /// for an ADF the layout gives no position for. No row for a pointer with no station.
+    /// for an ADF the layout gives no position for. No row for a pointer with no station. The expanded view clips the
+    /// pointer to the area above the aircraft (rect 0, 0, W, the center's y); the row is listed regardless, as the pointer
+    /// runs through the center and its head or its tail always shows there.
     /// </summary>
     private static void BearingPointerRows(List<string> rows, Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
     {

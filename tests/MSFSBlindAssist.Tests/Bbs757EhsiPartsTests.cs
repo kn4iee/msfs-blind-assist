@@ -25,18 +25,20 @@ public class Bbs757EhsiPartsTests
     public void A_missing_part_lists_not_read_with_its_reason()
     {
         // A layout file from before plan 28: every part missing with the file's reason, in MAP each where its rows start
-        // (TCAS's left block, the map's own parts before the map's items, the bearing pointers before the heading bug).
+        // (TERR's beside the top right, TCAS's left block, the map's own parts before the map's items, the bearing pointers
+        // before the heading bug).
         var old = Bbs757EhsiLayoutTests.Sample();
         var map = Rows(old, mode: 2);
         Assert.Equal(new[]
         {
+            "TERR, wind and runways: not read: not in this layout file",
             "TCAS: not read: not in this layout file",
             "Map options: not read: not in this layout file",
-            "TERR, wind and runways: not read: not in this layout file",
             "FIX, descent and altitude guides: not read: not in this layout file",
             "VOR and ILS: not read: not in this layout file",
         }, NotRead(map));
-        Assert.StartsWith("Top right: ", map[Array.IndexOf(map, "TCAS: not read: not in this layout file") - 1], StringComparison.Ordinal);
+        Assert.StartsWith("Top right: ", map[Array.IndexOf(map, "TERR, wind and runways: not read: not in this layout file") - 1], StringComparison.Ordinal);
+        Assert.Equal("TCAS: not read: not in this layout file", map[Array.IndexOf(map, "TERR, wind and runways: not read: not in this layout file") + 1]);
         Assert.StartsWith("Heading bug: ", map[Array.IndexOf(map, "VOR and ILS: not read: not in this layout file") + 1], StringComparison.Ordinal);
 
         // In VOR and ILS the approach's row replaces its whole picture, from the top left; no map options or guides. The
@@ -50,8 +52,8 @@ public class Bbs757EhsiPartsTests
                 "Top: HDG 119 M",
                 "VOR and ILS: not read: not in this layout file",
                 rows[3],
-                "TCAS: not read: not in this layout file",
                 "TERR, wind and runways: not read: not in this layout file",
+                "TCAS: not read: not in this layout file",
                 "Heading bug: 147, 28° right",
             }, rows);
             Assert.StartsWith("Top right: ", rows[3], StringComparison.Ordinal);
@@ -60,15 +62,15 @@ public class Bbs757EhsiPartsTests
         // PLAN draws no bearing pointers; MAP with the IRS not valid draws no map and no pointers.
         Assert.Equal(new[]
         {
+            "TERR, wind and runways: not read: not in this layout file",
             "TCAS: not read: not in this layout file",
             "Map options: not read: not in this layout file",
-            "TERR, wind and runways: not read: not in this layout file",
             "FIX, descent and altitude guides: not read: not in this layout file",
         }, NotRead(Rows(old, mode: 3)));
         Assert.Equal(new[]
         {
-            "TCAS: not read: not in this layout file",
             "TERR, wind and runways: not read: not in this layout file",
+            "TCAS: not read: not in this layout file",
         }, NotRead(Rows(old, mode: 2, valid: false)));
 
         // Each part with its own reason: the recipe's failing step. The parts read from a layout that has them list no
@@ -83,9 +85,9 @@ public class Bbs757EhsiPartsTests
         };
         Assert.Equal(new[]
         {
+            "TERR, wind and runways: not read: terrain static not found",
             "TCAS: not read: traffic vector not found",
             "Map options: not read: navaid list not found",
-            "TERR, wind and runways: not read: terrain static not found",
             "FIX, descent and altitude guides: not read: fix: no fms",
             "VOR and ILS: not read: course field not found",
         }, NotRead(Rows(missing, mode: 2)));

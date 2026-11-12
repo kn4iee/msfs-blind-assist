@@ -20,9 +20,8 @@ public static partial class Bbs757EhsiText
     /// keyed by. Any other value draws none of these modes' items.</summary>
     internal enum EhsiMode { Vor = 0, Ils = 1, Map = 2, Plan = 3 }
 
-    // Not layout words: the DATA ETA's "Z" and the constraint letters are the draw's own literals (measured in its
-    // constraint and time draw); the "---" of a heading not valid while aligning is the top line's own dashes.
-    private const string DataEtaSuffix = "Z", AboveLetter = "A", BelowLetter = "B", NoNumber = "---";
+    // Not a layout word: the "---" of a heading not valid while aligning is the top line's own dashes.
+    private const string NoNumber = "---";
 
     private const string Unavailable = "EHSI waypoint unavailable: ";
     private const string NoReadingYet = "no reading yet";
@@ -50,13 +49,14 @@ public static partial class Bbs757EhsiText
     /// <item>"EHSI: MAP, range 160" (", centered" when centered).</item>
     /// <item>Valid: "Top: HDG 119 M" (TRK with track up, TRU for a true reference). Not valid: "Top: ---" while aligning,
     /// then "Flag: HDG" (or TRK), and in MAP "Flag: MAP". While the range changes, nothing more.</item>
-    /// <item>VOR and ILS (plan 28's approach part, <see cref="ApproachRows"/>): "Top left: DME 0.5", "Top right: 1533.3z"
+    /// <item>VOR and ILS (plan 28's approach part, <see cref="VorIlsRows"/>): "Top left: DME 0.5", "Top right: 1533.3z"
     /// (or "no ETA"; expanded only), the TCAS block (<see cref="TcasRows"/>), the rose's rows, the bearing pointers and,
     /// while valid, the heading bug, and nothing more. MAP and PLAN: "Top left: 37.5 NM" (or "no distance") and "Top
     /// right: 1533.3z" (or "no ETA"), then the TCAS block.</item>
     /// <item>Plan 28's map extras (<see cref="TerrRows"/>, <see cref="WindRow"/>): TERR's rows after the top line, before
-    /// the TCAS block; the wind after VOR and ILS's rose rows (before the bearing pointers), and in MAP after the map's
-    /// rows and the bearing pointers; the runways and the deceleration points among the map's items. The map guides
+    /// the TCAS block; the wind in VOR and ILS among the bottom rows by its place (before TO/FROM, the LOC flag, the
+    /// receiver's label and the ILS frequency), and in MAP after the map's rows and the bearing pointers; the runways and
+    /// the deceleration points among the map's items. The map guides
     /// (<see cref="AddMapGuides"/>) among the map's items too, and in MAP the VNAV path deviation right after them.</item>
     /// <item>A part of plan 28's not read, with a reason: "TCAS: not read: not in this layout file", one row where the
     /// part's rows would start, only in the modes where it shows something.</item>
@@ -94,28 +94,17 @@ public static partial class Bbs757EhsiText
         double? distance = Distance(r);
         if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils))
         {
-            // Plan 28's VOR and ILS picture (Bbs757EhsiText.Approach.cs): the DME at the top left, plan 26's ETA at the top
-            // right (expanded only: the full rose draws none), the TCAS block, the rose's own rows, then plan 26's heading bug.
-            if (r.Approach is { } a) rows.Add(DmeRow(r, a));
-            else NotRead(rows, ApproachPart, r.ApproachMissing);
-            if (!r.Centered) rows.Add(EtaRow(r, distance));
-            TerrRows(rows, r);
-            TcasRows(rows, r);
-            NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
-            if (r.Approach is { } approach) ApproachRows(rows, r, approach);
-            WindRow(rows, r);
-            if (r.Approach is { } pointers) BearingPointerRows(rows, r, pointers);
-            if (r.Valid) rows.Add(HeadingBugRow(r));
+            VorIlsRows(rows, r, distance);
             return rows;
         }
 
         rows.Add("Top left: " + (distance is { } nm ? Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(w.Nm) : "no distance"));
         rows.Add(EtaRow(r, distance));
         TerrRows(rows, r);
+        NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
         TcasRows(rows, r);
         bool mapDrawn = MapDrawn(r);
         if (mapDrawn) NotRead(rows, MapOptionsPart, r.MapOptionsMissing);
-        NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
         if (mapDrawn) NotRead(rows, MapGuidesPart, r.MapGuidesMissing);
         rows.AddRange(MapRows(r));
         VnavDeviationRow(rows, r);
@@ -276,25 +265,7 @@ public static partial class Bbs757EhsiText
         return "the center";
     }
 
-    /// <summary>A leg's constraint as the DATA switch draws it: kind 1 "2300", 2 "2300A", 3 "2300B", 4 "<second>A<first>B",
-    /// 5 "<second>A"; none for any other kind.</summary>
-    private static string? Constraint(Bbs757EhsiLeg leg)
-    {
-        string first = leg.ConstraintFirst.ToString(Inv), second = leg.ConstraintSecond.ToString(Inv);
-        return leg.ConstraintKind switch
-        {
-            1 => first,
-            2 => first + AboveLetter,
-            3 => first + BelowLetter,
-            4 => second + AboveLetter + first + BelowLetter,
-            5 => second + AboveLetter,
-            _ => null,
-        };
-    }
-
-    /// <summary>A leg's ETA as the DATA switch draws it: HHMM truncated, four digits, "Z" ("1518Z"); none below 0.</summary>
-    private static string? DataEta(double eta) =>
-        double.IsFinite(eta) && eta >= 0 && eta < int.MaxValue ? ((int)Math.Truncate(eta)).ToString("D4", Inv) + DataEtaSuffix : null;
+    // The DATA switch's constraint and ETA texts: Bbs757EhsiText.Data.cs.
 
     // ---- what is spoken ----
 
