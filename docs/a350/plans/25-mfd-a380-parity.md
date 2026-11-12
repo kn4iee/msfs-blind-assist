@@ -181,10 +181,10 @@ A fresh reviewer on the most capable model reads the plan's range; Critical and 
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** Francesco Tissera, with Claude, 2026-11-12
+- **Worked by:** Claude (Opus 5.5), inline (superpowers:executing-plans)
+- **Started:** 2026-11-12, from `98e1fa23d`
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
