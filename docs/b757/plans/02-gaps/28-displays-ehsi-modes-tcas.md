@@ -118,12 +118,12 @@ against captures in each mode, the switches, the tuned station, the course line,
 
 ## Execution record
 
-- **Status:** built, reviewed and deployed to `C:\MSFSBA-B757` (2026-11-12); not pushed, the layout not published: both wait for the owner's word, and the in-sim checks for a flight
+- **Status:** landed (2026-11-12) at the owner's word ("Push and publish"), with the generator-8 757 layout published; the in-sim checks wait for the owner's flight
 - **Claimed by:** Robin Kipp (robin24), 2026-11-12
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-12, from `B757` 22d54e0d0 (plan 26 landed)
-- **Landed:**
-- **Tests at landing:** (before landing) the app suite 25,032 passed, 0 failed, at d9398c68f; the solution builds with 0 errors; the toolkit suite 701 passed (private, at 82cf62bcb; unchanged by the version raise).
+- **Landed:** 2026-11-12, a fast-forward of `B757` from the claim 353488970 (nothing else had landed meanwhile). Shared lines: no new reader (the `ehsi` reader gained five optional parts); `GeneratorVersion.Current` 8; rules B757-40 to B757-49 in `b757-ehsi`. Deployed to `C:\MSFSBA-B757` (d9398c68f) with its layout.
+- **Tests at landing:** the app suite 25,032 passed, 0 failed, at d9398c68f; the solution builds with 0 errors; the toolkit suite 701 passed (private, at 82cf62bcb; unchanged by the version raise).
 - **Tasks:** 0 claim (353488970); 1 measure (56198a036, e64ff937c); 2 the layout's parts (04013dd56; fields added
   or removed by 789c49788, ef1091d22, 041f5f4e9); 3 the recipe, in the private `feature/b757-displays` (not pushed):
   TCAS 77868fe05 and 56fd0b1e9, VOR and ILS 973917282, 74e579f14, 713baedf2 and 885cf50ba, map options 8815cef7e and
@@ -133,8 +133,7 @@ against captures in each mode, the switches, the tuned station, the course line,
   f34b4e4ea; 5 rules B757-40 to B757-49 (f2c14fc05, 03e3c7a6e); 6 no picture button (the owner); the whole-plan
   review's fixes 041f5f4e9, 0000b345c and d9398c68f; 7 the live checks and the deploy (below). Each dispatch reviewed
   by a fresh reviewer, each fix round re-reviewed, then one whole-plan review of the app branch.
-- **Waiting on the owner:** the word to push `B757` and publish the generator-8 757 layout (and to push the private
-  branch); the in-sim checks above; whether `TRAFFIC` stays spoken (check 3).
+- **Waiting on the owner:** the in-sim checks above; whether `TRAFFIC` stays spoken (check 3).
 - **In-sim results:** none yet (the owner's flight). The controller's ground checks, 2026-11-12, parked at KSEA,
   MSFSBA closed: the app's own reader and rows run read-only against the simulator with the generator-8 layout, each
   compared with a capture of the EHSI:
