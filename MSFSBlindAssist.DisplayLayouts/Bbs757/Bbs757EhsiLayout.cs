@@ -1,3 +1,7 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using MSFSBlindAssist.DisplayLayouts;
+
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>One entry of <see cref="Bbs757EhsiLayout.LegPositions"/>, which holds one per leg kind whose position is not
@@ -15,7 +19,8 @@ public readonly record struct Bbs757EhsiLegPosition(int Kind, int Latitude, int 
 /// vectors hold <see cref="LegStride"/>-byte legs; <see cref="PathRegistry"/>, <see cref="Clock"/> are static addresses
 /// and the other offsets are into the object named in their group (the nd, the EFIS panel, the MCP, the IRS, a leg, the
 /// path object or an airport record). <see cref="RadiusFactor"/> to <see cref="MinEtaGroundSpeed"/> are the draw's own
-/// constants, as values. Equality compares every field by content (the lists and tables too) except
+/// constants, as values. Plan 28's parts (<see cref="Approach"/> to <see cref="MapGuides"/>) are optional, each null
+/// with its reason. Equality compares every field by content (the lists, tables and parts too) except
 /// <see cref="SourceFile"/>, so the same build installed twice gives one layout.
 /// </summary>
 public sealed record Bbs757EhsiLayout(
@@ -111,8 +116,46 @@ public sealed record Bbs757EhsiLayout(
     string TopOfClimbWord,
     string TopOfDescentWord,
     string EndOfDescentWord,
-    string ExcessWord)
+    string ExcessWord) : IJsonOnSerializing, IJsonOnDeserialized
 {
+    /// <summary>The reason a part is missing when the file was written before the parts existed (or the record was
+    /// built without them).</summary>
+    public const string NotInFile = "not in this layout file";
+
+    /// <summary>Plan 28's five optional parts, each null exactly when its reason (<c>…Missing</c>) is not. They are the
+    /// only members a layout file may lack (<see cref="LayoutFileOptionalAttribute"/>): a file without them loads with
+    /// every part null and the reason <see cref="NotInFile"/>.</summary>
+    [LayoutFileOptional] public Bbs757EhsiApproach? Approach { get; init; }
+    [LayoutFileOptional] public string? ApproachMissing { get; init; } = NotInFile;
+    [LayoutFileOptional] public Bbs757EhsiTcas? Tcas { get; init; }
+    [LayoutFileOptional] public string? TcasMissing { get; init; } = NotInFile;
+    [LayoutFileOptional] public Bbs757EhsiMapOptions? MapOptions { get; init; }
+    [LayoutFileOptional] public string? MapOptionsMissing { get; init; } = NotInFile;
+    [LayoutFileOptional] public Bbs757EhsiMapExtras? MapExtras { get; init; }
+    [LayoutFileOptional] public string? MapExtrasMissing { get; init; } = NotInFile;
+    [LayoutFileOptional] public Bbs757EhsiMapGuides? MapGuides { get; init; }
+    [LayoutFileOptional] public string? MapGuidesMissing { get; init; } = NotInFile;
+
+    void IJsonOnSerializing.OnSerializing() => CheckParts();
+
+    void IJsonOnDeserialized.OnDeserialized() => CheckParts();
+
+    /// <summary>Refuses a layout whose part and reason are both set or both null, so neither a generator nor a damaged
+    /// file can give a part with no reason to be missing, or a missing one with no reason.</summary>
+    private void CheckParts()
+    {
+        static void Check(object? part, string? missing, string name)
+        {
+            if ((part is null) == (missing is null))
+                throw new JsonException($"EHSI part {name}: {(part is null ? "neither the part nor why it is missing" : "both the part and a reason it is missing")}");
+        }
+        Check(Approach, ApproachMissing, "approach");
+        Check(Tcas, TcasMissing, "tcas");
+        Check(MapOptions, MapOptionsMissing, "mapOptions");
+        Check(MapExtras, MapExtrasMissing, "mapExtras");
+        Check(MapGuides, MapGuidesMissing, "mapGuides");
+    }
+
     public bool Equals(Bbs757EhsiLayout? other) =>
         other is not null
         && AnchorAddress == other.AnchorAddress
@@ -206,7 +249,17 @@ public sealed record Bbs757EhsiLayout(
         && string.Equals(TopOfClimbWord, other.TopOfClimbWord, StringComparison.Ordinal)
         && string.Equals(TopOfDescentWord, other.TopOfDescentWord, StringComparison.Ordinal)
         && string.Equals(EndOfDescentWord, other.EndOfDescentWord, StringComparison.Ordinal)
-        && string.Equals(ExcessWord, other.ExcessWord, StringComparison.Ordinal);
+        && string.Equals(ExcessWord, other.ExcessWord, StringComparison.Ordinal)
+        && Equals(Approach, other.Approach)
+        && string.Equals(ApproachMissing, other.ApproachMissing, StringComparison.Ordinal)
+        && Equals(Tcas, other.Tcas)
+        && string.Equals(TcasMissing, other.TcasMissing, StringComparison.Ordinal)
+        && Equals(MapOptions, other.MapOptions)
+        && string.Equals(MapOptionsMissing, other.MapOptionsMissing, StringComparison.Ordinal)
+        && Equals(MapExtras, other.MapExtras)
+        && string.Equals(MapExtrasMissing, other.MapExtrasMissing, StringComparison.Ordinal)
+        && Equals(MapGuides, other.MapGuides)
+        && string.Equals(MapGuidesMissing, other.MapGuidesMissing, StringComparison.Ordinal);
 
     public override int GetHashCode()
     {
@@ -303,6 +356,16 @@ public sealed record Bbs757EhsiLayout(
         h.Add(TopOfDescentWord, StringComparer.Ordinal);
         h.Add(EndOfDescentWord, StringComparer.Ordinal);
         h.Add(ExcessWord, StringComparer.Ordinal);
+        h.Add(Approach);
+        h.Add(ApproachMissing, StringComparer.Ordinal);
+        h.Add(Tcas);
+        h.Add(TcasMissing, StringComparer.Ordinal);
+        h.Add(MapOptions);
+        h.Add(MapOptionsMissing, StringComparer.Ordinal);
+        h.Add(MapExtras);
+        h.Add(MapExtrasMissing, StringComparer.Ordinal);
+        h.Add(MapGuides);
+        h.Add(MapGuidesMissing, StringComparer.Ordinal);
         return h.ToHashCode();
     }
 }

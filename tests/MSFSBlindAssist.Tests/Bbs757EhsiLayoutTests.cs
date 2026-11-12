@@ -8,8 +8,8 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>The EHSI layout record round-trips through the generic layout file format, byte-identical under any
 /// culture (WASM-21), a file lacking its reader or one of its members is refused (WASM-26), and its equality covers
-/// every field but the source file.</summary>
-public class Bbs757EhsiLayoutTests
+/// every field but the source file. Plan 28's optional parts: Bbs757EhsiLayoutPartsTests.cs.</summary>
+public partial class Bbs757EhsiLayoutTests
 {
     private static readonly ModuleDescription Module = Bbs757Module.Description;
 

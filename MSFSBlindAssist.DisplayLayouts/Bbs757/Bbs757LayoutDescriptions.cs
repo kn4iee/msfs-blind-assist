@@ -171,8 +171,83 @@ public static class Bbs757LayoutDescriptions
             $"endOfDescent {l.EndOfDescentWord}, excess {l.ExcessWord}",
         };
         Words(lines, f, "modes", l.Modes, "EHSI");
+        Part(lines, p, "VOR and ILS", l.Approach, l.ApproachMissing, a =>
+            $"vorCourse {a.VorCourse}, vorDeviation {a.VorDeviation}, vorDeviationValid {a.VorDeviationValid}, " +
+            $"toFrom {a.ToFrom} (to {a.ToValue}, from {a.FromValue}), vorDme {a.VorDme}, vorDmeValid {a.VorDmeValid}, " +
+            $"ilsCourse {a.IlsCourse}, localizerDeviation {a.LocalizerDeviation}, localizerBar {a.LocalizerBar}, " +
+            $"ilsDots {a.IlsDots}, ilsTest {a.IlsTest}, ilsFrequency {a.IlsFrequency}, noIlsFrequency {D(a.NoIlsFrequency)}, " +
+            $"locFlag {a.LocFlag}, glideslopeFlag {a.GlideslopeFlag}, displaySide {a.DisplaySide}, captainSide {a.CaptainSide}, " +
+            $"ndToPfd {a.NdToPfd}, pfdToIls {a.PfdToIls}, glideslopeDeviation {a.GlideslopeDeviation}, " +
+            $"glideslopeScale {a.GlideslopeScale}, glideslopePointer {a.GlideslopePointer}, glideslopeTest {a.GlideslopeTest}, " +
+            $"ndToDme {a.NdToDme}, dmePowered {a.DmePowered}, dmeFailed {a.DmeFailed}, dmeStation {a.DmeStation}, " +
+            $"dmeDistance {a.DmeDistance}, stationKind {a.StationKind}, ilsStationKind {a.IlsStationKind}, " +
+            $"sourceToIlsReceiver {a.SourceToIlsReceiver}, receiverToSignal {a.ReceiverToSignal}, signalBlock {a.SignalBlock}, " +
+            $"localizerReceived {a.LocalizerReceived}, rmiHandles {H(a.RmiLeftHandle)}/{H(a.RmiRightHandle)}, " +
+            $"handleValue {a.HandleValue}, rmiVor {a.RmiVor}, rmiAdf {a.RmiAdf}, ndToVor {a.NdToVorLeft}/{a.NdToVorRight}, " +
+            $"panelStation {a.PanelStation}, station ident {a.StationIdent} longitude {a.StationLongitude} latitude {a.StationLatitude}, " +
+            $"ndToAdf {a.NdToAdf}, adfPositions {a.AdfPositions}, adf {a.AdfLeft}/{a.AdfRight} position {a.AdfPosition}, " +
+            $"words {Q(a.VorLeftWord)} {Q(a.VorRightWord)} {Q(a.IlsWord)} {Q(a.ToWord)} {Q(a.FromWord)} {Q(a.DmeWord)} " +
+            $"{Q(a.NoFrequencyWord)} {Q(a.NoDmeWord)} {Q(a.LocWord)} {Q(a.GlideslopeWord)}, " +
+            $"deviationFullScale {D(a.DeviationFullScale)}, dotsPerUnit {D(a.DotsPerUnit)}, glideslopePin {D(a.GlideslopePin)}");
+        Part(lines, p, "TCAS", l.Tcas, l.TcasMissing, t =>
+            $"ndToTcas {t.NdToTcas}, powered {t.TcasPowered}, failed {t.TcasFailed}, level {t.TcasLevel}, " +
+            $"trafficAdvisory {t.TrafficAdvisory}, resolutionAdvisory {t.ResolutionAdvisory}, test {t.TcasTest}, " +
+            $"trafficSwitch {t.TrafficSwitch}, messagesAllowed {t.MessagesAllowed}, trafficList {t.TrafficList}, " +
+            $"trafficStride {t.TrafficStride}, maxTraffic {t.MaxTraffic}, entry kind {t.TrafficKind} trend {t.TrafficTrend} " +
+            $"altitude {t.TrafficAltitude} longitude {t.TrafficLongitude} latitude {t.TrafficLatitude}, " +
+            $"kinds {t.KindOther}/{t.KindProximate}/{t.KindAdvisory}/{t.KindResolution}, trends up {t.TrendUp} down {t.TrendDown}, " +
+            $"levels taOnly {t.TaOnlyLevel} taRa {t.TaRaLevel}, tagDivisor {D(t.TagDivisor)}, " +
+            $"words {Q(t.TcasWord)} {Q(t.FailWord)} {Q(t.OffWord)} {Q(t.TfcWord)} {Q(t.TaOnlyWord)} {Q(t.TestWord)} {Q(t.TrafficWord)}");
+        Part(lines, p, "map options", l.MapOptions, l.MapOptionsMissing, o =>
+            $"switches {o.NavAidSwitch}/{o.AirportSwitch}/{o.WaypointSwitch}, tuned {o.TunedLeft}/{o.TunedRight}, " +
+            $"ndToSuper {o.NdToSuper}, superToNavdb {o.SuperToNavdb}, ndToFms {o.NdToFms}, navaids {o.Navaids} " +
+            $"(ident {o.NavaidIdent}, frequency {o.NavaidFrequency}, kind {o.NavaidKind}, class {o.NavaidClass}, " +
+            $"longitude {o.NavaidLongitude}, latitude {o.NavaidLatitude}), airports {o.Airports} stride {o.AirportStride} " +
+            $"(name {o.AirportName}, longitude {o.AirportRecordLongitude}, latitude {o.AirportRecordLatitude}), " +
+            $"waypoints {o.Waypoints} (longitude {o.WaypointLongitude}, latitude {o.WaypointLatitude}, ident {o.WaypointIdent}), " +
+            $"ndbs {o.Ndbs} (ident {o.NdbIdent}, longitude {o.NdbLongitude}, latitude {o.NdbLatitude}), " +
+            $"fmsToVor {o.FmsToVorLeft}/{o.FmsToVorRight}, panel autotune {o.PanelAutotune} station {o.PanelStation} " +
+            $"course {o.PanelCourse} manual {o.PanelManualWhole}/{o.PanelManualFraction}, drawnKinds {A(o.DrawnKinds)}, " +
+            $"highClass {o.HighClass} above {D(o.HighClassAbove)}, ndbsAbove {D(o.NdbsAbove)}, ndbDistance {D(o.NdbDistance)}, " +
+            $"roundLimit {o.RoundLimit}, maxItems {o.MaxItems}");
+        Part(lines, p, "TERR, wind and runways", l.MapExtras, l.MapExtrasMissing, x =>
+            $"terrHandle {x.TerrHandle}, handleValue {x.HandleValue}, terrainPicture {x.TerrainPicture}, " +
+            $"displaySide {x.DisplaySide}, captainSide {x.CaptainSide}, terrainStatic {H(x.TerrainStatic)}, " +
+            $"terrainRecords {x.TerrainRecords} stride {x.TerrainSideStride} (highest {x.TerrainHighest}, lowest {x.TerrainLowest}), " +
+            $"terrainDivisor {x.TerrainDivisor}, sourceToAdc {x.SourceToAdc}, adc altitude {x.AdcAltitude} " +
+            $"verticalSpeed {x.AdcVerticalSpeed}, redAbove {D(x.RedAbove)}, amberAbove {D(x.AmberAbove)} " +
+            $"({D(x.AmberAboveGearDown)} gear down {D(x.GearDown)}), lookAhead below {D(x.LookAheadBelow)} " +
+            $"seconds {D(x.LookAheadSeconds)} floor {D(x.LookAheadFloor)}, windShown {H(x.WindShown)}, " +
+            $"groundSpeed {x.GroundSpeed}, windMinGroundSpeed {D(x.WindMinGroundSpeed)}, runways {x.DepartureRunway}/{x.ArrivalRunway} " +
+            $"(first {x.RunwayFirstLongitude}/{x.RunwayFirstLatitude}, second {x.RunwaySecondLongitude}/{x.RunwaySecondLatitude}, " +
+            $"name {x.RunwayName}), deceleration {x.DecelerationStart}/{x.DecelerationEnd} stride {x.DecelerationStride} " +
+            $"(longitude {x.DecelerationLongitude}, latitude {x.DecelerationLatitude}) max {x.MaxDecelerationPoints}, " +
+            $"legCapabilities first {x.LegCapabilityFirst} count {x.LegCapabilityCount} node next {x.CapabilityNodeNext} " +
+            $"value {x.CapabilityNodeValue} max {x.MaxCapabilities}, capabilityLegKind {x.CapabilityLegKind}, " +
+            $"capabilityChoices [{string.Join(", ", x.CapabilityChoices.Select(c => $"{c.Capability}:{c.Latitude}/{c.Longitude}{(c.UnlessZero ? " unless zero" : "")}"))}], " +
+            $"words {Q(x.TerrWord)} {Q(x.NoWindWord)}");
+        Part(lines, p, "FIX, descent and altitude guides", l.MapGuides, l.MapGuidesMissing, g =>
+            $"ndToFms {g.NdToFms}, fix on {g.FmsFix1On}/{g.FmsFix2On}, fix {g.FmsFix1}/{g.FmsFix2}, " +
+            $"entries {g.FmsFix1Entries}/{g.FmsFix2Entries}, fixEntryStride {g.FixEntryStride} (radial {g.FixEntryRadial}, " +
+            $"distance {g.FixEntryDistance}, none {g.FixEntryNone}), fixEntries {g.FixEntries}, legName {g.LegName}, " +
+            $"legNavaidName {g.LegNavaidName}, navaidLegKinds {A(g.NavaidLegKinds)}, fixRingRadius {D(g.FixRingRadius)}, " +
+            $"radial start {D(g.RadialStart)} dashes {g.RadialDashes} step {D(g.RadialDashStep)} length {D(g.RadialDashLength)}, " +
+            $"offpath on {g.OffpathOn} valid {g.OffpathValidA}/{g.OffpathValidB} latitude {g.OffpathLatitude} " +
+            $"longitude {g.OffpathLongitude} radii {g.OffpathCleanRadius}/{g.OffpathSpeedbrakeRadius}, " +
+            $"mcpAltitude {g.McpAltitude}, sourceToAdc {g.SourceToAdc}, adc indicatedAltitude {g.AdcIndicatedAltitude} " +
+            $"verticalSpeed {g.AdcVerticalSpeed}, ndToAirGround {g.NdToAirGround}, airGroundOnGround {g.AirGroundOnGround}, " +
+            $"irsTrueTrack {g.IrsTrueTrack}, arc minimums {D(g.ArcMinAltitudeDifference)} ft {D(g.ArcMinVerticalSpeed)} ft/min, " +
+            $"pathPhase {g.PathPhase} descent {g.DescentPhase}, pathDeviation {g.PathDeviation}, deviationClamp {D(g.DeviationClamp)}");
         return lines;
     }
+
+    /// <summary>One line for an optional EHSI part: its fields, or why it is missing.</summary>
+    private static void Part<T>(List<string> lines, string prefix, string name, T? part, string? missing, Func<T, string> fields)
+        where T : class =>
+        lines.Add(part is not null ? $"{prefix} {name}: {fields(part)}" : $"{prefix}: {name} missing: {missing}");
+
+    /// <summary>A word in quotes, so its leading spaces show.</summary>
+    private static string Q(string word) => "\"" + word + "\"";
 
     private static void Words(List<string> lines, string file, string column, Bbs757WordTable table, string display)
     {
