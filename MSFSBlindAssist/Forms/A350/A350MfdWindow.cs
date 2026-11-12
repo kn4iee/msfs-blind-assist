@@ -353,7 +353,7 @@ public sealed class A350MfdWindow : Form
     }
 
     /// <summary>Backspace and Delete on the list, as the A380's MFD window has them (<see cref="A350MfdClear.Decide"/>): the box's text,
-    /// then the FMS message (the KCCU's CLR), then the selected field (a click, CLR, ENTER); Delete the selected field alone.</summary>
+    /// then the FMS message (the KCCU's CLR), then the selected field (a click, the word CLR typed, ENTER); Delete the selected field alone.</summary>
     private async Task ClearKeyAsync(bool delete)
     {
         if (_input.Busy) return;   // the action running already says how it went

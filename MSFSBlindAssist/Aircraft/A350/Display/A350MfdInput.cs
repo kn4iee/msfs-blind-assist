@@ -180,26 +180,14 @@ public sealed class A350MfdInput
         finally { Volatile.Write(ref _acting, 0); }
     }
 
-    /// <summary>Clears a field (plan 25, the A380 window's Delete): clicks it, then presses CLR and ENTER, as the ND's BTV EXIT AT
-    /// field was set back to none (plan 08 evidence). Busy while another action runs, sending nothing; nothing pressed when the MFD
-    /// cannot be reached.</summary>
-    public async Task<MfdAction> ClearAsync(int side, float x, float y, CancellationToken ct = default)
-    {
-        if (Interlocked.Exchange(ref _acting, 1) == 1) return MfdAction.Busy;
-        try
-        {
-            if (!await ClickAsync(side, x, y, ct).ConfigureAwait(false))
-            {
-                Log.Debug("A350Display", FormattableString.Invariant($"MFD {side + 1}: clear at {x:0},{y:0} did not reach it"));
-                return MfdAction.Unreachable;
-            }
-            await PressAllAsync(side, new[] { "CLR" }, ct).ConfigureAwait(false);
-            SendKey(side, "ENTER");
-            Log.Debug("A350Display", FormattableString.Invariant($"MFD {side + 1}: cleared the field at {x:0},{y:0}"));
-            return MfdAction.Done;
-        }
-        finally { Volatile.Write(ref _acting, 0); }
-    }
+    /// <summary>The input the FMS deletes a field for: the word CLR typed in it (live 2026-10-30, commit 831860a18: 107 page handlers
+    /// compare it). The KCCU's CLR key only empties an entry being typed (FMGS::clearEntry).</summary>
+    public const string ClearWord = "CLR";
+
+    /// <summary>Clears a field (plan 25, the A380 window's Delete) as a pilot does on the MFD: clicks it, types the word CLR and presses
+    /// ENTER (<see cref="ActAsync"/>, so Busy while another action runs, sending nothing, and nothing typed when the MFD cannot be
+    /// reached).</summary>
+    public Task<MfdAction> ClearAsync(int side, float x, float y, CancellationToken ct = default) => ActAsync(side, x, y, ClearWord, ct);
 
     /// <summary>Moves a side's KCCU cursor to its ND, MFD or the ATC mailbox ([A350-4]: each takes the mouse only with the cursor on it).
     /// The cursor keys are ones the aircraft does not reset: held about 180 ms, then let go [A350-3] (the MFD key was only

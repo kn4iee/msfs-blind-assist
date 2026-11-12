@@ -189,18 +189,22 @@ public class A350MfdInputTests
         Assert.Equal("OIS", MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys[System.Windows.Forms.Keys.W]);
     }
 
-    // Plan 25 Task 4: a field is cleared as the ND's BTV field was (plan 08 evidence): the cursor to the MFD, a click on the field once
-    // it lands, then CLR and ENTER.
+    // Plan 25 Task 4: the FMS deletes a field when its input is the word CLR (live 2026-10-30, commit 831860a18: 107 page handlers
+    // compare it; RAD NAV's hand-tuned VOR went back to the FMS). The KCCU's CLR key only empties an entry being typed
+    // (FMGS::clearEntry), so CLR then ENTER clears nothing on the MFD: the cursor to the MFD, a click on the field once it lands,
+    // then C, L, R and ENTER.
     [Fact]
-    public async Task A_field_is_cleared_with_a_click_then_clr_and_enter()
+    public async Task A_field_is_cleared_with_the_word_clr_typed_into_it()
     {
         var (input, log) = Recorded();
         Assert.Equal(MfdAction.Done, await input.ClearAsync(0, 300, 200));
         Assert.Equal(new[]
         {
             "send 1 (>L:INI_MCDU1_MFD)", "wait 180", "send 0 (>L:INI_MCDU1_MFD)", "wait 50", "click 0 300 200", "wait 250",
-            "send 1 (>L:INI_MCDU1_CLR)", "wait 150", "send 1 (>L:INI_MCDU1_ENTER)",
+            "send 1 (>L:INI_MCDU1_C)", "wait 150", "send 1 (>L:INI_MCDU1_L)", "wait 150", "send 1 (>L:INI_MCDU1_R)", "wait 150",
+            "send 1 (>L:INI_MCDU1_ENTER)",
         }, log);
+        Assert.DoesNotContain("send 1 (>L:INI_MCDU1_CLR)", log);
     }
 
     [Fact]
@@ -222,6 +226,6 @@ public class A350MfdInputTests
         var log = new List<string>();
         var input = new A350MfdInput(rpn => log.Add("send " + rpn), (_, _) => Task.CompletedTask, (_, _, _, _) => Task.FromResult(false));
         Assert.Equal(MfdAction.Unreachable, await input.ClearAsync(0, 300, 200));
-        Assert.DoesNotContain(log, l => l.Contains("CLR") || l.Contains("ENTER"));
+        Assert.DoesNotContain(log, l => l.Contains("_C)") || l.Contains("ENTER"));
     }
 }

@@ -6,7 +6,7 @@ public enum MfdClearAction { ClearScratchpadBox, ClearMessage, ClearField, Canno
 /// <summary>
 /// Backspace and Delete in the MFD window as the A380's MFD window has them (plan 25; `FBWA380MCDUForm.PerformClear` and its
 /// Delete), on the A350's own keys. Backspace empties the window's scratchpad box when it holds text, else removes the FMS
-/// message (the KCCU's CLR, `docs/inibuilds-a350.md`), else clears the selected field (a click, CLR, ENTER:
+/// message (the KCCU's CLR, `docs/inibuilds-a350.md`), else clears the selected field (a click, the word CLR typed, ENTER:
 /// <see cref="A350MfdInput.ClearAsync"/>), else, with no line, presses the KCCU's CLR. Delete clears the selected field alone. A
 /// line that is no field "cannot be cleared"; a dimmed field is "unavailable" (the A380 asks "a field?" before "dimmed?").
 /// </summary>

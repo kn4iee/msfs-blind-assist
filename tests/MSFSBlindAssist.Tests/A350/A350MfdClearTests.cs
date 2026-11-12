@@ -4,7 +4,7 @@ namespace MSFSBlindAssist.Tests.A350;
 
 /// <summary>Plan 25 Task 4: Backspace and Delete in the MFD window as the A380's MFD window has them (`FBWA380MCDUForm.PerformClear`
 /// and its Delete), on the A350's own keys: the window's scratchpad box first, then the FMS message (the KCCU's CLR), then the
-/// selected field (clicked, CLR, ENTER: the ND's BTV field cleared so, plan 08 evidence).</summary>
+/// selected field (clicked, the word CLR typed, ENTER: the FMS deletes a field for that input, live 2026-10-30).</summary>
 public class A350MfdClearTests
 {
     private static readonly MfdLine Field = new("field", "CI: 25, cyan", 300, 200);
