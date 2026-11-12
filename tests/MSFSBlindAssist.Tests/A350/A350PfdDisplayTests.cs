@@ -217,12 +217,12 @@ public class A350PfdDisplayTests
     [Fact]
     public void The_mfd_window_shows_a_dark_screen_as_dark_with_no_line_to_click()
     {
-        var (lines, shown) = Forms.A350.A350MfdWindow.PageLines(Fixture("mfd_init_empty"), 0, dark: true);
+        var (lines, _, shown) = Forms.A350.A350MfdWindow.PageLines(Fixture("mfd_init_empty"), 0, dark: true);
         Assert.Empty(lines);
         Assert.Equal(new[] { IniBuildsA350Definition.DarkScreen }, shown);
-        var (litLines, litShown) = Forms.A350.A350MfdWindow.PageLines(Fixture("mfd_init_empty"), 0, dark: false);
+        var (litLines, litListed, litShown) = Forms.A350.A350MfdWindow.PageLines(Fixture("mfd_init_empty"), 0, dark: false);
         Assert.NotEmpty(litLines);
-        Assert.Equal(litLines.Select(A350MfdPage.Shown), litShown);   // each line with its role word (plan 09 Task 2)
+        Assert.Equal(litListed.Select(A350MfdPage.Shown), litShown);   // each row with its role word (plan 09 Task 2, plan 25)
     }
 
 
@@ -231,7 +231,7 @@ public class A350PfdDisplayTests
     [Fact]
     public void The_mfd_window_with_no_capture_has_no_line_to_click()
     {
-        var (lines, shown) = Forms.A350.A350MfdWindow.PageLines(null, 0, dark: false);
+        var (lines, _, shown) = Forms.A350.A350MfdWindow.PageLines(null, 0, dark: false);
         Assert.Empty(lines);
         Assert.Equal(new[] { IniBuildsA350Definition.NotAvailableYet }, shown);
     }

@@ -6,9 +6,11 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 namespace MSFSBlindAssist.Forms.A350;
 
 /// <summary>
-/// The A350 MFD as a window (Shift+M, A380 parity): the page's lines (A350MfdPage) in a list, kept in place as
-/// the page refreshes. Enter acts on the selected line: a field takes what is in the scratchpad box (clicked,
-/// typed on the KCCU, ENTER), anything else is clicked. Backspace presses CLR; PageUp/PageDown scroll; F5
+/// The A350 MFD as a window (Shift+M), at parity with the A380's MFD window (plan 25): the page's lines (A350MfdPage) in a list,
+/// each in the A380 window's words with no colour (<see cref="A350MfdPage.Shown"/>), kept in place as the page refreshes. The page's
+/// title is no row: it is said once as the page changes (the selection back to the first row) and stands in the window's caption.
+/// Enter acts on the selected line: a field takes what is in the scratchpad box (clicked, typed on the KCCU, ENTER), anything else
+/// is clicked. Backspace presses CLR; PageUp/PageDown page a list or scroll the page ("Previous page", "Next page"); F5
 /// refreshes; Alt+letter presses a KCCU page key. A new scratchpad message is spoken (<see cref="A350MfdWindowMessages"/>,
 /// handed over with the background's call-outs as the window opens and closes). The side box chooses the captain's or the
 /// first officer's MFD and KCCU.
@@ -53,7 +55,9 @@ public sealed class A350MfdWindow : Form
     private readonly A350SettledChoice _goToChoice = new(TimeSpan.FromMilliseconds(350));
     private System.Windows.Forms.Timer? _goToTimer;
     private readonly IntPtr _previousWindow;
-    private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>();
+    /// <summary>The page's lines as read, the title among them (what the page's change, a menu's opening and the messages are
+    /// judged on); <see cref="_listed"/>: the list's rows, the same lines without the title.</summary>
+    private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>(), _listed = Array.Empty<MfdLine>();
     private readonly A350MfdWindowMessages _messages;
     private readonly Action<string?>? _closed;
     private readonly Action? _openMailbox;
@@ -81,7 +85,7 @@ public sealed class A350MfdWindow : Form
         _closed = closed;
         _openMailbox = openMailbox;
 
-        Text = "A350 MFD";
+        Text = Caption;
         Size = new Size(820, 620);
         StartPosition = FormStartPosition.CenterScreen;
         MinimizeBox = false;
@@ -106,7 +110,7 @@ public sealed class A350MfdWindow : Form
         _list = new DisplayListBox
         {
             Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 2, AccessibleName = "MFD page",
-            AccessibleDescription = "Enter acts on the line; a field takes the scratchpad. Backspace CLR, PageUp and PageDown scroll, F5 refreshes, Alt plus a letter presses a page key.",
+            AccessibleDescription = ListDescription,
         };
         _list.SetText("Loading the MFD...");
 
@@ -148,6 +152,13 @@ public sealed class A350MfdWindow : Form
     }
 
     private int Side => _side.SelectedIndex < 0 ? 0 : _side.SelectedIndex;
+
+    /// <summary>The list's keys, as the A380 window's list says its own.</summary>
+    internal const string ListDescription = "Enter acts on the line; a field takes the scratchpad. Backspace clears, Delete clears a field, "
+        + "Control plus an arrow moves the KCCU cursor, PageUp and PageDown previous and next page, F5 refreshes, "
+        + "Alt plus a letter presses a page key, Alt plus S the scratchpad.";
+
+    private const string Caption = "A350 MFD";
 
     private System.Windows.Forms.Timer NewGoToTimer()
     {
@@ -230,18 +241,20 @@ public sealed class A350MfdWindow : Form
             }
             if (IsDisposed) return;
             var before = _lines;
-            (_lines, var shown) = PageLines(cap, Side, _isDark(Side), _linesSide == Side ? before : null);
+            (_lines, _listed, var shown) = PageLines(cap, Side, _isDark(Side), _linesSide == Side ? before : null);
             _linesSide = Side;
             _list.SetLines(shown);
-            // A new page says its title once and takes the selection to it, as the A380's MFD window does.
+            // The title is no row: the caption holds it, for a pilot who asks the window's name.
+            string caption = A350MfdPage.PageTitle(_lines) is { } pageTitle ? $"{Caption}: {A350MfdWording.Speak("title", pageTitle)}" : Caption;
+            if (Text != caption) Text = caption;
+            // A new page says its title once and takes the selection to its first row, as the A380's MFD window does.
             if (A350MfdPage.PageJustChanged(before, _lines) is { } title)
             {
-                _announcer.Announce(title);
-                int at = _lines.ToList().FindIndex(l => l.Spoken.StartsWith(title, StringComparison.Ordinal));
-                if (at >= 0 && at < _list.Items.Count) _list.SelectedIndex = at;
+                _announcer.Announce(A350MfdWording.Speak("title", title));
+                if (_list.Items.Count > 0) _list.SelectedIndex = 0;
             }
             // A menu that has just opened takes the selection to its first item, where a sighted pilot looks.
-            if (A350MfdPage.MenuJustOpened(before, _lines) is int first && first < _list.Items.Count)
+            if (ListedIndex(_lines, A350MfdPage.MenuJustOpened(before, _lines)) is int first && first < _list.Items.Count)
                 _list.SelectedIndex = first;
             // The FMS message, in the scratchpad or, on the checklists, in its place: said as it appears.
             if (_messages.Observe(_lines, _linesSide) is { } message)
@@ -264,19 +277,28 @@ public sealed class A350MfdWindow : Form
         }
     }
 
-    /// <summary>The page's lines (what Enter acts on) and what the list shows: a dark screen shows dark, with nothing
-    /// to click, as the status display reads it; with no capture (none yet, or none young enough) there is nothing to
-    /// click either (review 2026-10-29: Enter clicked where the last page had its fields). A line a torn text left unreadable
-    /// keeps its reading from <paramref name="before"/>, the same side's last lines.</summary>
-    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<string> Shown) PageLines(A350DrawCapture? cap, int side, bool dark,
-        IReadOnlyList<MfdLine>? before = null)
+    /// <summary>The page's lines, the list's rows (what Enter acts on: the lines without the title, which the A380's window says
+    /// rather than lists) and what the list shows, one per row: a dark screen shows dark, with nothing to click, as the status
+    /// display reads it; with no capture (none yet, or none young enough) there is nothing to click either (review 2026-10-29:
+    /// Enter clicked where the last page had its fields). A line a torn text left unreadable keeps its reading from
+    /// <paramref name="before"/>, the same side's last lines.</summary>
+    internal static (IReadOnlyList<MfdLine> Lines, IReadOnlyList<MfdLine> Listed, IReadOnlyList<string> Shown) PageLines(A350DrawCapture? cap,
+        int side, bool dark, IReadOnlyList<MfdLine>? before = null)
     {
         if (cap == null)
-            return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.NotAvailableYet });
+            return (Array.Empty<MfdLine>(), Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.NotAvailableYet });
         if (dark)
-            return (Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
+            return (Array.Empty<MfdLine>(), Array.Empty<MfdLine>(), new[] { Aircraft.IniBuildsA350Definition.DarkScreen });
         var lines = A350MfdPage.KeepReadable(before ?? Array.Empty<MfdLine>(), A350MfdPage.Read(cap, side));
-        return (lines, lines.Count == 0 ? new[] { "The MFD is off: no power." } : lines.Select(A350MfdPage.Shown).ToList());
+        var listed = lines.Where(l => l.Kind != "title").ToList();
+        return (lines, listed, listed.Count == 0 ? new[] { "The MFD is off: no power." } : listed.Select(A350MfdPage.Shown).ToList());
+    }
+
+    /// <summary>A line's row in the list (<see cref="PageLines"/>' Listed): one less after the title, which has none.</summary>
+    internal static int? ListedIndex(IReadOnlyList<MfdLine> lines, int? lineIndex)
+    {
+        if (lineIndex is not int i || i < 0 || i >= lines.Count || lines[i].Kind == "title") return null;
+        return i - lines.Take(i).Count(l => l.Kind == "title");
     }
 
     private async Task AfterActionAsync()
@@ -288,7 +310,7 @@ public sealed class A350MfdWindow : Form
     private async Task ActivateAsync()
     {
         int i = _list.SelectedIndex;
-        if (i < 0 || i >= _lines.Count) return;
+        if (i < 0 || i >= _listed.Count) return;
         if (_linesSide != Side)
         {
             // The list still shows the other side's page (its refresh is on its way): its places are not this side's.
@@ -296,7 +318,7 @@ public sealed class A350MfdWindow : Form
             await RefreshAsync(false);
             return;
         }
-        var line = _lines[i];
+        var line = _listed[i];
         string typed = _scratchpad.Text.Trim();
         bool types = line.Kind is "field" or "scratchpad" && typed.Length > 0;
         switch (await _input.ActAsync(Side, line.ClickX, line.ClickY, types ? typed : null))
@@ -332,7 +354,8 @@ public sealed class A350MfdWindow : Form
 
     /// <summary>PageDown and PageUp (plan 09 Task 4; the owner's answer to question 14): a long list open on the MFD pages a screen at a
     /// time with the KCCU's own DOWN and UP at the measured pace, read again once its draw shows it moved, the selection on its first
-    /// new row; at its end "End of list" (its top "Top of list") and nothing sent. With no list open they scroll the page as before.</summary>
+    /// new row; at its end "End of list" (its top "Top of list") and nothing sent. With no list open they scroll the page, saying
+    /// "Previous page" or "Next page" as the A380's window does (plan 25).</summary>
     private async Task PageAsync(bool down)
     {
         if (_input.Busy) return;
@@ -340,6 +363,7 @@ public sealed class A350MfdWindow : Form
         if (cap is not { Ok: true } || A350MfdPage.ListOf(cap, Side) is not { } list)
         {
             PressKey(down ? "SCROLL_DOWN" : "SCROLL_UP");
+            _announcer.Announce(down ? "Next page" : "Previous page");
             return;
         }
         if ((down ? A350MfdPage.PageDownPresses(list) : A350MfdPage.PageUpPresses(list)) is not int presses)
@@ -360,7 +384,7 @@ public sealed class A350MfdWindow : Form
                 // The first new row: under the rows kept going down, the top row going up.
                 int scrolled = Math.Abs(moved.First - list.First);
                 int row = down ? Math.Max(0, moved.Visible - scrolled) : 0;
-                var items = _lines.Select((l, i) => (l, i)).Where(p => p.l.Kind == "menuitem").ToList();
+                var items = _listed.Select((l, i) => (l, i)).Where(p => p.l.Kind == "menuitem").ToList();
                 if (row < items.Count && items[row].i < _list.Items.Count) _list.SelectedIndex = items[row].i;
                 return;
             }
