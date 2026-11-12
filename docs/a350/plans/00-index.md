@@ -53,6 +53,7 @@ someone else, that is Robin Kipp.
 | 22 | `22-atc-mailbox.md`: the mailbox's SEND and a real uplink with the owner's go-ahead; an uplink said with the window closed | early | 01 |
 | 23 | `23-ois-options.md`: every OPTIONS option on and off (handoff 3.2), the controls the cockpit hides explained | early | 01 |
 | 24 | `24-displays-decoded.md`: everything every display draws said, glyphs and symbols too, only junk dropped (owner, 2026-11-03) | late | 03, 04, 07, 08, 09 |
+| 25 | `25-mfd-a380-parity.md`: the MFD said as the A380's MFD window says its own: no colour words (amber field "required", yellow "temporary", magenta "constraint"), the A380's role words and keys (owner, 2026-11-12) | late | 09, 24 |
 
 ## File ownership
 
