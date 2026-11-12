@@ -224,7 +224,7 @@ public static class Bbs757LayoutDescriptions
             $"verticalSpeed {x.AdcVerticalSpeed}, redAbove {D(x.RedAbove)}, amberAbove {D(x.AmberAbove)} " +
             $"({D(x.AmberAboveGearDown)} gear down {D(x.GearDown)}), lookAhead below {D(x.LookAheadBelow)} " +
             $"seconds {D(x.LookAheadSeconds)} floor {D(x.LookAheadFloor)}, windShown {H(x.WindShown)}, " +
-            $"groundSpeed {x.GroundSpeed}, windMinGroundSpeed {D(x.WindMinGroundSpeed)}, runways {x.DepartureRunway}/{x.ArrivalRunway} " +
+            $"runways {x.DepartureRunway}/{x.ArrivalRunway} " +
             $"(first {x.RunwayFirstLongitude}/{x.RunwayFirstLatitude}, second {x.RunwaySecondLongitude}/{x.RunwaySecondLatitude}, " +
             $"name {x.RunwayName}), deceleration {x.DecelerationStart}/{x.DecelerationEnd} stride {x.DecelerationStride} " +
             $"(longitude {x.DecelerationLongitude}, latitude {x.DecelerationLatitude}) max {x.MaxDecelerationPoints}, " +
@@ -236,7 +236,7 @@ public static class Bbs757LayoutDescriptions
             $"ndToFms {g.NdToFms}, fix on {g.FmsFix1On}/{g.FmsFix2On}, fix {g.FmsFix1}/{g.FmsFix2}, " +
             $"entries {g.FmsFix1Entries}/{g.FmsFix2Entries}, fixEntryStride {g.FixEntryStride} (radial {g.FixEntryRadial}, " +
             $"distance {g.FixEntryDistance}, none {g.FixEntryNone}), fixEntries {g.FixEntries}, legName {g.LegName}, " +
-            $"legNavaidName {g.LegNavaidName}, navaidLegKinds {A(g.NavaidLegKinds)}, fixRingRadius {D(g.FixRingRadius)}, " +
+            $"legNavaidName {g.LegNavaidName}, navaidLegKinds {A(g.NavaidLegKinds)}, " +
             $"radial start {D(g.RadialStart)} dashes {g.RadialDashes} step {D(g.RadialDashStep)} length {D(g.RadialDashLength)}, " +
             $"offpath on {g.OffpathOn} valid {g.OffpathValidA}/{g.OffpathValidB} latitude {g.OffpathLatitude} " +
             $"longitude {g.OffpathLongitude} radii {g.OffpathCleanRadius}/{g.OffpathSpeedbrakeRadius}, " +

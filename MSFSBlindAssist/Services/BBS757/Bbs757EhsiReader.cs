@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using MSFSBlindAssist.Services.WasmMemory;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services.BBS757;
 
@@ -45,11 +46,15 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
     /// <summary>Whether this tick wants the full set (route, modification, points). Asked once per reading.</summary>
     public Func<bool> FullWanted { get; init; } = () => false;
 
-    public Bbs757EhsiReader(ModuleMemory memory, IDisposable ownedSource, Bbs757EhsiLayout layout)
+    /// <param name="log">Where a part's lasting tear and its recovery go (CORE-15): the EHSI channel unless a test injects
+    /// one.</param>
+    public Bbs757EhsiReader(ModuleMemory memory, IDisposable ownedSource, Bbs757EhsiLayout layout, Action<string>? log = null)
     {
         _memory = memory;
         _ownedSource = ownedSource;
         Layout = layout;
+        _log = log ?? (line => Log.Channel(Bbs757EhsiDisplay.LogChannel).Info(line));
+        _layoutProblems = LayoutProblems(layout);
         _constants = new Bbs757EhsiConstants(layout.RadiusFactor, layout.AircraftYFactor, layout.ClipInset, layout.MarkerMargin,
             layout.MinEtaGroundSpeed, layout.ExcessLimit);
         _words = new Bbs757EhsiWords(layout.HdgWord, layout.TrkWord, layout.MagWord, layout.TrueWord, layout.MapWord,
@@ -184,9 +189,27 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
         // The route the top line uses: the pending modification, else the route itself. In the light reading only the
         // leg 0 is read, and the route is not walked at all while a modification is pending.
         RouteRead? routeRead = null, modificationRead = null;
-        bool torn = false;
-        if (pending) torn = (modificationRead = Walk(modification, full)) is null;
-        if (!torn && (!pending || full)) torn = (routeRead = Walk(route, full)) is null;
+        _capabilityRuleOff = _capabilityTorn = false;
+        bool WalkRoutes()
+        {
+            routeRead = modificationRead = null;
+            if (pending && (modificationRead = Walk(modification, full)) is null) return false;
+            return (pending && !full) || (routeRead = Walk(route, full)) is not null;
+        }
+        bool torn = !WalkRoutes();
+        // A leg's capability set is the map extras' (Bbs757EhsiReader.Tears.cs): below their tear limit it tears the reading;
+        // at it, the legs are walked again by plan 26's rule, as with the part missing.
+        bool extrasTorn = false;
+        if (torn && _capabilityTorn)
+        {
+            extrasTorn = true;
+            if (AtLimit(Part.MapExtras))
+            {
+                _capabilityRuleOff = true;
+                torn = !WalkRoutes();
+            }
+            if (torn) Count(Part.MapExtras, true);
+        }
         if (torn)
         {
             reading = Bad(full);
@@ -212,11 +235,11 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
 
         var map = new Bbs757EhsiMap(centerLatitude, centerLongitude, rotation, screenX, screenY, width, height);
 
-        // Plan 28's parts (Bbs757EhsiReader.Parts.cs), in the same regions scope: one torn part is a corrupt reading. The
-        // map options' loop measures from the nd's own map and aircraft position (never the simulator's), against the
-        // routes and airports just read.
+        // Plan 28's parts (Bbs757EhsiReader.Parts.cs), in the same regions scope: one torn part is a corrupt reading until it
+        // has torn the limit of readings in a row (Bbs757EhsiReader.Tears.cs). The map options' loop measures from the nd's
+        // own map and aircraft position (never the simulator's), against the routes and airports just read.
         var mapScene = full ? MapScene(map, range, latitude, longitude, routeLegs, modificationLegs, points) : null;
-        if (!TryParts(nd, source, modeValue, full, valid, mapScene, routeId, sim, out var parts))
+        if (!TryParts(nd, source, modeValue, full, valid, mapScene, routeId, sim, extrasTorn, out var parts))
         {
             reading = Bad(full);
             return true;

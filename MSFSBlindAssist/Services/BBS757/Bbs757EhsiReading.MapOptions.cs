@@ -18,8 +18,9 @@ public readonly record struct Bbs757EhsiMapOption(
 /// kind word, so "VOR", "VOR/DME", "VORTAC", "TACAN" and "DME" are the app's names for the symbols.</summary>
 public readonly record struct Bbs757EhsiNavaidKinds(int Vor, int VorDme, int Vortac, int Tacan, int Dme);
 
-/// <summary>One VOR course line: the receiver (left or right), the course as the panel holds it, the station's ident.</summary>
-public readonly record struct Bbs757EhsiCourseLine(bool Left, double Course, string Station);
+/// <summary>One VOR course line: the receiver (left or right), the course as the panel holds it, the station's ident and
+/// position (the line runs through it).</summary>
+public readonly record struct Bbs757EhsiCourseLine(bool Left, double Course, string Station, double Latitude, double Longitude);
 
 /// <summary>
 /// The map options as the nd draws them, in a full reading in MAP and PLAN: the three EFIS switches; the tuned stations

@@ -109,6 +109,54 @@ public class Bbs757EhsiPartsTests
         Assert.Empty(NotRead(Bbs757EhsiText.Rows(Bbs757EhsiTextTests.Ehsi()).ToArray()));
     }
 
+    // What the light and full readings read is only what the mode can show: a torn value no row could show is never read,
+    // so it never turns a reading corrupt.
+    [Fact]
+    public void A_torn_value_the_mode_cannot_show_is_never_read()
+    {
+        var P = Bbs757EhsiApproachTests.P;
+        bool Torn(int mode, Action<byte[]> write, bool valid = true, bool full = true) =>
+            Bbs757EhsiReaderTests.Read(new Scene { Mode = mode, Range = 20, Valid = valid, Tweak = write }, full, P).Corrupt;
+
+        // The VOR and ILS picture: only in VOR and ILS (a torn PFD pointer); the bearing pointers in every mode but PLAN,
+        // while the IRS is valid (a torn VOR panel pointer).
+        void Pfd(byte[] b) { Bbs757EhsiApproachTests.VorSea().Write(b); I32(b, Nd + P.Approach!.NdToPfd, Outside); }
+        void Panel(byte[] b) { Bbs757EhsiApproachTests.VorSea().Write(b); I32(b, Nd + P.Approach!.NdToVorLeft, Outside); }
+        Assert.True(Torn(1, Pfd));
+        Assert.True(Torn(0, Pfd));
+        Assert.False(Torn(2, Pfd));
+        Assert.False(Torn(3, Pfd));
+        Assert.True(Torn(2, Panel));
+        Assert.True(Torn(0, Panel));
+        Assert.False(Torn(3, Panel));
+        Assert.False(Torn(2, Panel, valid: false));
+
+        // The traffic: only in MAP while the IRS is valid.
+        var tcas = new Bbs757EhsiTcasTests.Tcas { Traffic = new[] { new Bbs757EhsiTcasTests.Entry(4, 0, 100, 47.45, -122.3) } };
+        Assert.True(Torn(2, tcas.Write));
+        Assert.False(Torn(0, tcas.Write));
+        Assert.False(Torn(3, tcas.Write));
+        Assert.False(Torn(2, tcas.Write, valid: false));
+
+        // The map options, the runways, the FIX pages and the off-path circles: only while the map is drawn (MAP with the
+        // IRS valid, or PLAN).
+        void Options(byte[] b) => I32(b, Nd + P.MapOptions!.NdToSuper, Outside);
+        void Runway(byte[] b) => b[Nd + P.MapExtras!.DepartureRunway + P.MapExtras.RunwayName + 11] = 11;
+        var fix = new Bbs757EhsiMapGuidesTests.Guides
+        {
+            Fix1 = Bbs757EhsiMapGuidesTests.Tcm,
+            Tweak = b => I32(b, Bbs757EhsiMapOptionsTests.Fms + P.MapGuides!.FmsFix1, Outside),
+        };
+        var offpath = new Bbs757EhsiMapGuidesTests.Guides { OffpathOn = true, Clean = double.NaN };
+        foreach (var write in new Action<byte[]>[] { Options, Runway, fix.Write, offpath.Write })
+        {
+            Assert.True(Torn(2, write));
+            Assert.True(Torn(3, write));
+            Assert.False(Torn(2, write, valid: false));
+            Assert.False(Torn(0, write));
+        }
+    }
+
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
@@ -206,6 +254,6 @@ public class Bbs757EhsiPartsTests
         Assert.Contains("Center: deviation 1.2 dots left", rows);
         Assert.Contains("Right side: glideslope 1.2 dots below", rows);
         Assert.Contains("Map: proximate traffic, 3.8 NM, 11° left, +10 climbing", rows);
-        Assert.Contains("Right: TRAFFIC, amber", rows);
+        Assert.Contains("Right side: TRAFFIC, amber", rows);
     }
 }

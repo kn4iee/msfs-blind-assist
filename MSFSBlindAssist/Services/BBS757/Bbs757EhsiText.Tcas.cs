@@ -9,13 +9,16 @@ public static partial class Bbs757EhsiText
 {
     private const string TcasFailKey = "tcas-fail", TaOnlyKey = "ta-only", TcasOffKey = "tcas-off", TrafficKey = "traffic";
 
+    /// <summary>Where a TCAS row sits, in the words the glideslope and VNAV rows use.</summary>
+    private const string LeftSide = "Left side: ", RightSide = "Right side: ";
+
     /// <summary>The one map row of the TCAS self-test, which draws four fixed symbols instead of the list.</summary>
     private const string TestPattern = "Map: TCAS test pattern";
 
     /// <summary>
-    /// The left block and TRAFFIC, in screen order. The left block: line 1 ("Left: TFC", "Left: TCAS OFF" or "Left: TCAS
-    /// FAIL", the latter two over both lines), TEST over it ("Left: TEST"), line 2 ("Left: TA ONLY"). "Right: TRAFFIC,
-    /// amber" (or red for an RA) while the IRS is valid, at 0.38 of the height: above the left block when expanded (its
+    /// The left block and TRAFFIC, in screen order. The left block: line 1 ("Left side: TFC", "Left side: TCAS OFF" or
+    /// "Left side: TCAS FAIL", the latter two over both lines), TEST over it ("Left side: TEST"), line 2 ("Left side: TA
+    /// ONLY"). "Right side: TRAFFIC, amber" (or red for an RA) while the IRS is valid, at 0.38 of the height: above the left block when expanded (its
     /// top at 0.433), so first; below it when centered (0.199), so last. FAIL (failed or not powered) is drawn, and shows
     /// nothing below it, only where the nd's gate allows it; with the gate clear a failed TCAS draws by its level as a
     /// working one does. TFC and TCAS OFF only where the gate allows them, TA ONLY and TEST in every mode. No computer:
@@ -30,17 +33,17 @@ public static partial class Bbs757EhsiText
         }
         if (!t.Computer) return;
         var w = t.Words;
-        string? traffic = TrafficShown(r, t) ? "Right: " + Word(w.Traffic) + (t.ResolutionAdvisory ? ", red" : ", amber") : null;
+        string? traffic = TrafficShown(r, t) ? RightSide + Word(w.Traffic) + (t.ResolutionAdvisory ? ", red" : ", amber") : null;
         if (traffic is not null && !r.Centered) rows.Add(traffic);
         bool fail = FailShown(t);
-        if (fail) rows.Add("Left: " + Word(w.Tcas) + " " + Word(w.Fail));
+        if (fail) rows.Add(LeftSide + Word(w.Tcas) + " " + Word(w.Fail));
         else if (t.Level == Bbs757EhsiTcasLevel.Off)
         {
-            if (t.MessagesAllowed) rows.Add("Left: " + Word(w.Tcas) + " " + Word(w.Off));
+            if (t.MessagesAllowed) rows.Add(LeftSide + Word(w.Tcas) + " " + Word(w.Off));
         }
-        else if (t.TrafficSwitch && t.MessagesAllowed) rows.Add("Left: " + Word(w.Tfc));
-        if (t.Test) rows.Add("Left: " + Word(w.Test));
-        if (!fail && t.Level == Bbs757EhsiTcasLevel.TaOnly) rows.Add("Left: " + Word(w.TaOnly));
+        else if (t.TrafficSwitch && t.MessagesAllowed) rows.Add(LeftSide + Word(w.Tfc));
+        if (t.Test) rows.Add(LeftSide + Word(w.Test));
+        if (!fail && t.Level == Bbs757EhsiTcasLevel.TaOnly) rows.Add(LeftSide + Word(w.TaOnly));
         if (traffic is not null && r.Centered) rows.Add(traffic);
     }
 
@@ -63,7 +66,7 @@ public static partial class Bbs757EhsiText
     /// </summary>
     private static void AddTraffic(List<MapItem> items, Bbs757EhsiReading r)
     {
-        if (!Is(r, EhsiMode.Map) || r.Tcas is not { Computer: true } t || t.Traffic is null) return;
+        if (!Is(r, Bbs757EhsiMode.Map) || r.Tcas is not { Computer: true } t || t.Traffic is null) return;
         if (t.Test)
         {
             items.Add(new MapItem(r.Map.Height / 2, r.Map.Width / 2, TestPattern));

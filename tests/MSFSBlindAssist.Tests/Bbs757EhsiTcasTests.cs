@@ -96,7 +96,8 @@ public class Bbs757EhsiTcasTests
     }
 
     private static string[] Left(Bbs757EhsiReading r) =>
-        Bbs757EhsiText.Rows(r).Where(row => row.StartsWith("Left: ", StringComparison.Ordinal) || row.StartsWith("Right: ", StringComparison.Ordinal)).ToArray();
+        Bbs757EhsiText.Rows(r).Where(row => row.StartsWith("Left side: ", StringComparison.Ordinal)
+            || row.StartsWith("Right side: TRAFFIC", StringComparison.Ordinal)).ToArray();
 
     private static string[] TrafficRows(Bbs757EhsiReading r) =>
         Bbs757EhsiText.Rows(r).Where(row => row.StartsWith("Map: ", StringComparison.Ordinal)
@@ -172,7 +173,7 @@ public class Bbs757EhsiTcasTests
     {
         var reading = Read(new Tcas { Test = true, Ra = true, Tfc = true, Traffic = Live() });
         Assert.Equal(new[] { "Map: TCAS test pattern" }, TrafficRows(reading));
-        Assert.Equal(new[] { "Right: TRAFFIC, red", "Left: TFC", "Left: TEST", "Left: TA ONLY" }, Left(reading));
+        Assert.Equal(new[] { "Right side: TRAFFIC, red", "Left side: TFC", "Left side: TEST", "Left side: TA ONLY" }, Left(reading));
     }
 
     // ---- the messages ----
@@ -183,23 +184,23 @@ public class Bbs757EhsiTcasTests
         string[] Rows(Tcas t, int mode = 2, Action<Scene>? scene = null) => Left(Read(t, mode, full: false, scene));
 
         // TA ONLY, with TFC above it while the switch is on; TA/RA shows TFC alone.
-        Assert.Equal(new[] { "Left: TA ONLY" }, Rows(new Tcas()));
-        Assert.Equal(new[] { "Left: TFC", "Left: TA ONLY" }, Rows(new Tcas { Tfc = true }));
-        Assert.Equal(new[] { "Left: TFC" }, Rows(new Tcas { Tfc = true, Level = 2 }));
+        Assert.Equal(new[] { "Left side: TA ONLY" }, Rows(new Tcas()));
+        Assert.Equal(new[] { "Left side: TFC", "Left side: TA ONLY" }, Rows(new Tcas { Tfc = true }));
+        Assert.Equal(new[] { "Left side: TFC" }, Rows(new Tcas { Tfc = true, Level = 2 }));
         // Off: any level but BlueBird's two.
-        Assert.Equal(new[] { "Left: TCAS OFF" }, Rows(new Tcas { Level = 0, Tfc = true }));
-        Assert.Equal(new[] { "Left: TCAS OFF" }, Rows(new Tcas { Level = 5 }));
+        Assert.Equal(new[] { "Left side: TCAS OFF" }, Rows(new Tcas { Level = 0, Tfc = true }));
+        Assert.Equal(new[] { "Left side: TCAS OFF" }, Rows(new Tcas { Level = 5 }));
         // FAIL (failed, or not powered) and nothing below it.
-        Assert.Equal(new[] { "Left: TCAS FAIL" }, Rows(new Tcas { Failed = true, Tfc = true }));
-        Assert.Equal(new[] { "Left: TCAS FAIL" }, Rows(new Tcas { Powered = false, Level = 0 }));
+        Assert.Equal(new[] { "Left side: TCAS FAIL" }, Rows(new Tcas { Failed = true, Tfc = true }));
+        Assert.Equal(new[] { "Left side: TCAS FAIL" }, Rows(new Tcas { Powered = false, Level = 0 }));
         // TEST over whichever is drawn, after its first line.
-        Assert.Equal(new[] { "Left: TCAS OFF", "Left: TEST" }, Rows(new Tcas { Level = 0, Test = true }));
+        Assert.Equal(new[] { "Left side: TCAS OFF", "Left side: TEST" }, Rows(new Tcas { Level = 0, Test = true }));
         // TRAFFIC: amber for a TA, red for an RA, in every mode, only while the IRS is valid (expanded: above the left
         // block, so first).
-        Assert.Equal(new[] { "Right: TRAFFIC, amber", "Left: TA ONLY" }, Rows(new Tcas { Ta = true }));
-        Assert.Equal(new[] { "Right: TRAFFIC, red", "Left: TA ONLY" }, Rows(new Tcas { Ta = true, Ra = true }));
-        Assert.Equal(new[] { "Right: TRAFFIC, amber", "Left: TA ONLY" }, Rows(new Tcas { Ta = true }, mode: 3));
-        Assert.Equal(new[] { "Left: TA ONLY" }, Rows(new Tcas { Ta = true }, scene: s => s.Valid = false));
+        Assert.Equal(new[] { "Right side: TRAFFIC, amber", "Left side: TA ONLY" }, Rows(new Tcas { Ta = true }));
+        Assert.Equal(new[] { "Right side: TRAFFIC, red", "Left side: TA ONLY" }, Rows(new Tcas { Ta = true, Ra = true }));
+        Assert.Equal(new[] { "Right side: TRAFFIC, amber", "Left side: TA ONLY" }, Rows(new Tcas { Ta = true }, mode: 3));
+        Assert.Equal(new[] { "Left side: TA ONLY" }, Rows(new Tcas { Ta = true }, scene: s => s.Valid = false));
         // No TCAS computer: nothing at all.
         Assert.Empty(Rows(new Tcas { HasComputer = false, Ta = true, Test = true }));
     }
@@ -211,11 +212,11 @@ public class Bbs757EhsiTcasTests
     public void Traffic_comes_before_the_left_block_when_expanded(int mode)
     {
         var all = Bbs757EhsiText.Rows(Read(new Tcas { Ta = true, Tfc = true }, mode, full: false));
-        int traffic = Array.IndexOf(all.ToArray(), "Right: TRAFFIC, amber");
-        int left = Array.IndexOf(all.ToArray(), "Left: TFC");
+        int traffic = Array.IndexOf(all.ToArray(), "Right side: TRAFFIC, amber");
+        int left = Array.IndexOf(all.ToArray(), "Left side: TFC");
         Assert.True(traffic > 0 && left > 0);
         Assert.Equal(left - 1, traffic);
-        Assert.Equal(new[] { "Right: TRAFFIC, amber", "Left: TFC", "Left: TA ONLY" }, Left(Read(new Tcas { Ta = true, Tfc = true }, mode, full: false)));
+        Assert.Equal(new[] { "Right side: TRAFFIC, amber", "Left side: TFC", "Left side: TA ONLY" }, Left(Read(new Tcas { Ta = true, Tfc = true }, mode, full: false)));
     }
 
     [Theory]
@@ -225,7 +226,7 @@ public class Bbs757EhsiTcasTests
     {
         var r = Read(new Tcas { Ta = true, Tfc = true }, mode, full: false, scene: s => s.Centered = true);
         // The gate byte is this test's memory, set (BlueBird clears it in full VOR; the order is the same either way).
-        Assert.Equal(new[] { "Left: TFC", "Left: TA ONLY", "Right: TRAFFIC, amber" }, Left(r));
+        Assert.Equal(new[] { "Left side: TFC", "Left side: TA ONLY", "Right side: TRAFFIC, amber" }, Left(r));
     }
 
     [Fact]
@@ -233,9 +234,9 @@ public class Bbs757EhsiTcasTests
     {
         // Full VOR or ILS and PLAN clear the gate: TA ONLY, TEST and TRAFFIC still show.
         string[] Rows(Tcas t) => Left(Read(t, mode: 0, full: false));
-        Assert.Equal(new[] { "Left: TA ONLY" }, Rows(new Tcas { Gate = false, Tfc = true }));
+        Assert.Equal(new[] { "Left side: TA ONLY" }, Rows(new Tcas { Gate = false, Tfc = true }));
         Assert.Empty(Rows(new Tcas { Gate = false, Level = 0 }));
-        Assert.Equal(new[] { "Right: TRAFFIC, red", "Left: TEST" }, Rows(new Tcas { Gate = false, Level = 0, Test = true, Ra = true }));
+        Assert.Equal(new[] { "Right side: TRAFFIC, red", "Left side: TEST" }, Rows(new Tcas { Gate = false, Level = 0, Test = true, Ra = true }));
     }
 
     // TCAS FAIL is drawn, and hides the rest of the left block, only while the gate is set; with the gate clear a failed
@@ -254,14 +255,14 @@ public class Bbs757EhsiTcasTests
             }
             // Level 0: TCAS OFF is gated, so nothing; level 1: TA ONLY (ungated); level 2: TFC is gated, so nothing.
             Assert.Empty(Rows(T(0)));
-            Assert.Equal(new[] { "Left: TA ONLY" }, Rows(T(1)));
+            Assert.Equal(new[] { "Left side: TA ONLY" }, Rows(T(1)));
             Assert.Empty(Rows(T(2)));
             // The gate set: FAIL alone, at every level.
             foreach (int level in new[] { 0, 1, 2 })
             {
                 var gated = T(level);
                 gated.Gate = true;
-                Assert.Equal(new[] { "Left: TCAS FAIL" }, Rows(gated));
+                Assert.Equal(new[] { "Left side: TCAS FAIL" }, Rows(gated));
             }
         }
 
@@ -293,9 +294,13 @@ public class Bbs757EhsiTcasTests
         Assert.Equal(new[] { "EHSI message: TRAFFIC" }, Texts(Bbs757EhsiText.Changes(taOnly, Read(new Tcas { Ta = true }, full: false), true)));
         Assert.Equal(new[] { "EHSI message: TCAS FAIL", "EHSI message gone: TA ONLY" },
             Texts(Bbs757EhsiText.Changes(taOnly, Read(new Tcas { Failed = true }, full: false), true)));
-        // TFC is the pilot's switch and TEST the pilot's knob: shown, not spoken.
+        // TFC is the pilot's switch and TEST the pilot's knob: shown, not spoken. The self-test sets the RA byte as
+        // BlueBird's does (red TRAFFIC for its ten seconds): TRAFFIC is listed but neither spoken nor spoken gone.
         Assert.Empty(Bbs757EhsiText.Changes(taOnly, Read(new Tcas { Tfc = true }, full: false), true));
-        Assert.Empty(Bbs757EhsiText.Changes(taOnly, Read(new Tcas { Test = true }, full: false), true));
+        var selfTest = Read(new Tcas { Test = true, Ra = true }, full: false);
+        Assert.Contains("Right side: TRAFFIC, red", Left(selfTest));
+        Assert.Empty(Bbs757EhsiText.Changes(taOnly, selfTest, true));
+        Assert.Empty(Bbs757EhsiText.Changes(selfTest, taOnly, true));
 
         // From expanded MAP to full VOR the gate clears and TCAS OFF goes: nothing said, either way.
         var offInFullVor = Read(new Tcas { Level = 0, Gate = false }, mode: 0, full: false);

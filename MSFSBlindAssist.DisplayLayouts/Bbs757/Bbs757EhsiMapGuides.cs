@@ -28,7 +28,6 @@ public sealed record Bbs757EhsiMapGuides(
     int LegName,
     int LegNavaidName,
     IReadOnlyList<int> NavaidLegKinds,
-    double FixRingRadius,
     double RadialStart,
     int RadialDashes,
     double RadialDashStep,
@@ -71,7 +70,6 @@ public sealed record Bbs757EhsiMapGuides(
         && LegName == other.LegName
         && LegNavaidName == other.LegNavaidName
         && NavaidLegKinds.SequenceEqual(other.NavaidLegKinds)
-        && FixRingRadius == other.FixRingRadius
         && RadialStart == other.RadialStart
         && RadialDashes == other.RadialDashes
         && RadialDashStep == other.RadialDashStep
@@ -115,7 +113,6 @@ public sealed record Bbs757EhsiMapGuides(
         h.Add(LegName);
         h.Add(LegNavaidName);
         foreach (int k in NavaidLegKinds) h.Add(k);
-        h.Add(FixRingRadius);
         h.Add(RadialStart);
         h.Add(RadialDashes);
         h.Add(RadialDashStep);

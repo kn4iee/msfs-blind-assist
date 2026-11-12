@@ -523,6 +523,31 @@ public class Bbs757EhsiApproachTests
         }
     }
 
+    // The ILS self-test's amber: the deviation scale's dots while the ILS test byte is set, the glideslope scale while
+    // the PFD's test byte is. Listed by the scale they color, never spoken.
+    [Fact]
+    public void The_ils_self_test_lists_its_amber_scales()
+    {
+        var plain = IlsIsnq();
+        var tested = IlsIsnq();
+        tested.IlsTest = true;
+        tested.GlideslopeTest = true;
+        var rows = Rows(Read(tested, mode: 1));
+        int deviation = Array.IndexOf(rows, "Center: deviation at full scale, right");
+        Assert.Equal("Center: deviation scale amber", rows[deviation + 1]);
+        int glideslope = Array.IndexOf(rows, "Right side: glideslope at full scale, above");
+        Assert.Equal("Right side: glideslope scale amber", rows[glideslope + 1]);
+        Assert.DoesNotContain(Rows(Read(plain, mode: 1)), r => r.Contains("amber", StringComparison.Ordinal));
+        Assert.Empty(Bbs757EhsiText.Changes(Read(plain, mode: 1), Read(tested, mode: 1), true));
+
+        // No dots drawn (the scale's own row says so), or no glideslope scale: nothing amber to list.
+        tested.Dots = false;
+        tested.GlideslopeScale = false;
+        Assert.DoesNotContain(Rows(Read(tested, mode: 1)), r => r.Contains("amber", StringComparison.Ordinal));
+        // VOR mode draws neither scale's test.
+        Assert.DoesNotContain(Rows(Read(tested, mode: 0)), r => r.Contains("amber", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void The_reading_carries_the_approach_as_stored()
     {

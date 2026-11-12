@@ -1,7 +1,9 @@
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>Plan 28's parts: each read from its optional layout part, null with the layout's own reason when the part is
-/// missing. A part's walk is all or nothing (B757-36): one torn read makes the whole reading corrupt.</summary>
+/// missing, and read only in the modes that draw it (a value no row can show is never read: it could only add a way to turn
+/// corrupt). A part's walk is all or nothing (B757-36): a torn read makes the whole reading corrupt until the part has torn
+/// <see cref="TearLimit"/> readings in a row, then the part alone is not read (Bbs757EhsiReader.Tears.cs).</summary>
 public sealed partial class Bbs757EhsiReader
 {
     /// <summary>The parts of one reading and their reasons.</summary>
@@ -11,59 +13,97 @@ public sealed partial class Bbs757EhsiReader
         Bbs757EhsiTcasReading? Tcas,
         string? TcasMissing,
         Bbs757EhsiMapOptionsReading? MapOptions,
+        string? MapOptionsMissing,
         Bbs757EhsiMapExtrasReading? MapExtras,
-        Bbs757EhsiMapGuidesReading? MapGuides);
+        string? MapExtrasMissing,
+        Bbs757EhsiMapGuidesReading? MapGuides,
+        string? MapGuidesMissing);
 
-    /// <summary>Every part the layout holds; false when one is torn (the reading is then corrupt, B757-36).
-    /// <paramref name="map"/> is what the map options' loop measures against, given in a full reading only; the map options
-    /// are read only then, and only in MAP and PLAN. The map extras' runways and deceleration points too (the route's path
-    /// by <paramref name="routeId"/>); their TERR and wind in every reading, with the wind and gear from
-    /// <paramref name="sim"/>. The map guides in a full reading in MAP and PLAN (the range arc and the VNAV deviation in MAP
-    /// only, the range arc only while <paramref name="irsValid"/>).</summary>
+    /// <summary>
+    /// Every part the layout holds, each only where a row can show it: the VOR and ILS picture in VOR and ILS, the bearing
+    /// pointers in every mode but PLAN while <paramref name="irsValid"/>; the TCAS messages in every reading (drawn in every
+    /// mode), its traffic in a full reading in MAP while the IRS is valid; TERR and the wind in every reading; while the
+    /// map is drawn (MAP with the IRS valid, or PLAN) and the reading is full, the map options (against
+    /// <paramref name="map"/>), the runways and deceleration points (the route's path by <paramref name="routeId"/>), the
+    /// FIX pages and the off-path circles; in MAP the range arc (while the IRS is valid) and the VNAV deviation. The wind and
+    /// gear come from <paramref name="sim"/>. <paramref name="extrasTorn"/>: a leg's capability set tore this reading's
+    /// route walk, a tear of the map extras. False when a part tore below its limit (the reading is then corrupt).
+    /// </summary>
     private bool TryParts(uint nd, uint source, int modeValue, bool full, bool irsValid, Bbs757EhsiLoopScene? map, int routeId,
-        Bbs757SimValues? sim, out PartsRead parts)
+        Bbs757SimValues? sim, bool extrasTorn, out PartsRead parts)
     {
         parts = null!;
         var l = Layout;
+        bool vor = modeValue == (int)Bbs757EhsiMode.Vor, ils = modeValue == (int)Bbs757EhsiMode.Ils;
+        bool mapMode = modeValue == (int)Bbs757EhsiMode.Map, plan = modeValue == (int)Bbs757EhsiMode.Plan;
+        bool mapDrawn = (mapMode && irsValid) || plan;
+        var read = new bool[PartCount];
+        var torn = new bool[PartCount];
+
         Bbs757EhsiApproachReading? approach = null;
+        if (Usable(l.Approach, Part.Approach) is { } a && !plan)
+        {
+            read[(int)Part.Approach] = true;
+            torn[(int)Part.Approach] = !TryApproach(nd, source, a, vor || ils, ils, irsValid, out approach);
+        }
         Bbs757EhsiTcasReading? tcas = null;
+        if (Usable(l.Tcas, Part.Tcas) is { } t)
+        {
+            read[(int)Part.Tcas] = true;
+            torn[(int)Part.Tcas] = !TryTcas(nd, t, full && mapMode && irsValid, out tcas);
+        }
         Bbs757EhsiMapOptionsReading? options = null;
+        if (Usable(l.MapOptions, Part.MapOptions) is { } o && full && map is not null && mapDrawn)
+        {
+            read[(int)Part.MapOptions] = true;
+            torn[(int)Part.MapOptions] = !TryMapOptions(nd, o, map, out options);
+        }
         Bbs757EhsiMapExtrasReading? extras = null;
-        // ILS mode as the rows know it (Bbs757EhsiText's mode values): the VOR bearing pointers' station follows it.
-        bool ilsMode = modeValue == (int)Bbs757EhsiText.EhsiMode.Ils;
-        bool mapOrPlan = modeValue is (int)Bbs757EhsiText.EhsiMode.Map or (int)Bbs757EhsiText.EhsiMode.Plan;
-        if (l.Approach is { } a && !TryApproach(nd, source, a, ilsMode, out approach)) return false;
-        if (l.Tcas is { } t && !TryTcas(nd, t, full, out tcas)) return false;
-        if (l.MapOptions is { } o && full && map is not null && mapOrPlan && !TryMapOptions(nd, o, map, out options)) return false;
-        if (l.MapExtras is { } x && !TryMapExtras(nd, source, x, full, mapOrPlan, routeId, sim, out extras)) return false;
+        if (Usable(l.MapExtras, Part.MapExtras) is { } x)
+        {
+            read[(int)Part.MapExtras] = true;
+            // A capability tear on a leg already counts for this reading: the rest is not read.
+            torn[(int)Part.MapExtras] = extrasTorn || !TryMapExtras(nd, source, x, full && mapDrawn, routeId, sim, out extras);
+        }
         Bbs757EhsiMapGuidesReading? guides = null;
-        if (l.MapGuides is { } g && full && mapOrPlan
-            && !TryMapGuides(nd, source, g, modeValue == (int)Bbs757EhsiText.EhsiMode.Map, irsValid, routeId, out guides))
-            return false;
-        parts = new PartsRead(approach, l.Approach is null ? l.ApproachMissing : null, tcas, l.Tcas is null ? l.TcasMissing : null,
-            options, extras, guides);
+        if (Usable(l.MapGuides, Part.MapGuides) is { } g && full && (mapMode || plan))
+        {
+            read[(int)Part.MapGuides] = true;
+            torn[(int)Part.MapGuides] = !TryMapGuides(nd, source, g, mapMode, mapDrawn, irsValid, routeId, out guides);
+        }
+
+        // All or nothing until a part's tear has lasted: any part torn below its limit makes the reading corrupt.
+        bool corrupt = false;
+        for (int i = 0; i < PartCount; i++)
+            if (read[i] && torn[i] && !AtLimit((Part)i)) corrupt = true;
+        for (int i = 0; i < PartCount; i++)
+            if (read[i]) Count((Part)i, torn[i]);
+        if (corrupt) return false;
+
+        bool Over(Part p) => torn[(int)p];
+        parts = new PartsRead(
+            Over(Part.Approach) ? null : approach, Reason(l.Approach, l.ApproachMissing, Part.Approach, Over(Part.Approach)),
+            Over(Part.Tcas) ? null : tcas, Reason(l.Tcas, l.TcasMissing, Part.Tcas, Over(Part.Tcas)),
+            Over(Part.MapOptions) ? null : options, Reason(l.MapOptions, l.MapOptionsMissing, Part.MapOptions, Over(Part.MapOptions)),
+            Over(Part.MapExtras) ? null : extras, Reason(l.MapExtras, l.MapExtrasMissing, Part.MapExtras, Over(Part.MapExtras)),
+            Over(Part.MapGuides) ? null : guides, Reason(l.MapGuides, l.MapGuidesMissing, Part.MapGuides, Over(Part.MapGuides)));
         return true;
     }
 
-    /// <summary>The reading with its parts and their reasons; a part missing from the layout carries the layout's
-    /// reason.</summary>
-    private Bbs757EhsiReading WithParts(Bbs757EhsiReading reading, PartsRead parts)
+    /// <summary>The reading with its parts and their reasons.</summary>
+    private static Bbs757EhsiReading WithParts(Bbs757EhsiReading reading, PartsRead parts) => reading with
     {
-        var l = Layout;
-        return reading with
-        {
-            Approach = parts.Approach,
-            ApproachMissing = parts.ApproachMissing,
-            Tcas = parts.Tcas,
-            TcasMissing = parts.TcasMissing,
-            MapOptions = parts.MapOptions,
-            MapOptionsMissing = l.MapOptions is null ? l.MapOptionsMissing : null,
-            MapExtras = parts.MapExtras,
-            MapExtrasMissing = l.MapExtras is null ? l.MapExtrasMissing : null,
-            MapGuides = parts.MapGuides,
-            MapGuidesMissing = l.MapGuides is null ? l.MapGuidesMissing : null,
-        };
-    }
+        Approach = parts.Approach,
+        ApproachMissing = parts.ApproachMissing,
+        Tcas = parts.Tcas,
+        TcasMissing = parts.TcasMissing,
+        MapOptions = parts.MapOptions,
+        MapOptionsMissing = parts.MapOptionsMissing,
+        MapExtras = parts.MapExtras,
+        MapExtrasMissing = parts.MapExtrasMissing,
+        MapGuides = parts.MapGuides,
+        MapGuidesMissing = parts.MapGuidesMissing,
+    };
 
     /// <summary>A byte as stored (<see cref="Flag"/> reads one as set or clear).</summary>
     private bool U8(uint b, int offset, out byte v)

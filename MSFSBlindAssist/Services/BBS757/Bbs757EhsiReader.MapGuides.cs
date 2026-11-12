@@ -3,7 +3,8 @@ using System.Buffers.Binary;
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
-/// The map's guides (plan 28's <see cref="Bbs757EhsiMapGuides"/>), full reading only. In MAP and PLAN, through the FMS:
+/// The map's guides (plan 28's <see cref="Bbs757EhsiMapGuides"/>), full reading only. While the map is drawn (MAP with
+/// the IRS valid, or PLAN), through the FMS:
 /// the two FIX pages (each its on byte, a leg-shaped fix object placed by the leg position rule, its name, its entries
 /// vector) and the off-path descent circles (on, both valid bytes, the point, the two radii). In MAP: the altitude range arc
 /// while the IRS is valid (the MCP's selected altitude, the air data computer's indicated altitude and vertical speed, the
@@ -15,13 +16,17 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// </summary>
 public sealed partial class Bbs757EhsiReader
 {
-    private bool TryMapGuides(uint nd, uint source, Bbs757EhsiMapGuides g, bool map, bool irsValid, int routeId,
+    /// <param name="map">MAP mode: the range arc (while <paramref name="irsValid"/>) and the VNAV deviation are read.</param>
+    /// <param name="mapDrawn">The map is drawn (MAP with the IRS valid, or PLAN): the FIX pages and the off-path circles
+    /// are read; otherwise no row can show them.</param>
+    private bool TryMapGuides(uint nd, uint source, Bbs757EhsiMapGuides g, bool map, bool mapDrawn, bool irsValid, int routeId,
         out Bbs757EhsiMapGuidesReading? reading)
     {
         reading = null;
-        if (!Link(nd, g.NdToFms, out uint fms)) return false;
         var fixes = new List<Bbs757EhsiFix>(2);
         Bbs757EhsiOffpathCircles? offpath = null;
+        uint fms = 0;
+        if (mapDrawn && !Link(nd, g.NdToFms, out fms)) return false;
         if (fms != 0)
         {
             if (!Good(fms)) return false;
@@ -48,7 +53,8 @@ public sealed partial class Bbs757EhsiReader
     /// One FIX page: nothing while its on byte is clear or its fix pointer is null. The fix object is leg-shaped (plan 26's
     /// leg block): its kind, its position by the leg position rule (a navaid leg by its capability set,
     /// <see cref="LegPositionOffsets"/>), its name the narrow string at <c>LegNavaidName</c> for a navaid kind, else at
-    /// <c>LegName</c>. With the layout lacking the map extras the capability rule is unknown, and a navaid fix's own
+    /// <c>LegName</c>. With the layout lacking the map extras (or this reading taking the legs by plan 26's rule, the
+    /// map extras at their tear limit: <see cref="CapabilityRule"/>) the capability rule is unknown, and a navaid fix's own
     /// offsets read (0, 0) for a TACAN (measured: TCM): it is then given no position rather than a wrong one. False when
     /// torn.
     /// </summary>
@@ -63,12 +69,12 @@ public sealed partial class Bbs757EhsiReader
         var block = new byte[l.LegStride];
         if (!Good(at) || !_memory.TryRead(at, block) || !BlockInt(block, l.LegKind, out int kind)) return false;
         bool navaid = g.NavaidLegKinds.Contains(kind);
+        // Both name offsets are inside the leg, checked once with the layout (Bbs757EhsiReader.Tears.cs).
         int nameAt = navaid ? g.LegNavaidName : g.LegName;
-        if (nameAt < 0 || nameAt + StringBytes > block.Length || !TryReadNarrow(block.AsSpan(nameAt, StringBytes), out string name))
-            return false;
+        if (!TryReadNarrow(block.AsSpan(nameAt, StringBytes), out string name)) return false;
 
         Bbs757EhsiMapPoint? position = null;
-        if (!navaid || l.MapExtras is not null)
+        if (!navaid || CapabilityRule is not null)
         {
             if (!LegPositionOffsets(block, kind, out int latitudeAt, out int longitudeAt)
                 || !BlockDouble(block, latitudeAt, out double lat) || !BlockDouble(block, longitudeAt, out double lon)
@@ -89,9 +95,9 @@ public sealed partial class Bbs757EhsiReader
     private bool TryFixEntries(uint fms, int entriesAt, Bbs757EhsiMapGuides g, out IReadOnlyList<Bbs757EhsiFixEntry> entries)
     {
         entries = Array.Empty<Bbs757EhsiFixEntry>();
+        // The stride and the offsets inside it are checked once, with the layout (Bbs757EhsiReader.Tears.cs).
         int stride = g.FixEntryStride;
-        if (g.FixEntryRadial < 0 || g.FixEntryDistance < 0 || g.FixEntryRadial + Word > stride || g.FixEntryDistance + Word > stride
-            || !Header(fms, entriesAt, out var header) || !Entries(header, stride, int.MaxValue, out uint stored)
+        if (!Header(fms, entriesAt, out var header) || !Entries(header, stride, int.MaxValue, out uint stored)
             || (stored > 0 && !_memory.IsInsideModule(header.Begin, header.End - header.Begin)))
             return false;
         uint count = Math.Min(stored, (uint)Math.Max(0, g.FixEntries));

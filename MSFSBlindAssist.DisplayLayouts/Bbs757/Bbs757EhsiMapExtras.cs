@@ -13,9 +13,8 @@ public readonly record struct Bbs757EhsiCapabilityChoice(int Capability, int Lat
 /// <see cref="HandleValue"/>; the picture byte; the two elevations, s16 feet, in the record at the static
 /// <see cref="TerrainStatic"/> + <see cref="TerrainRecords"/> + side × <see cref="TerrainSideStride"/>, side 0 while
 /// the nd's <see cref="DisplaySide"/> holds <see cref="CaptainSide"/>; their colors from the adc's altitude and vertical
-/// speed and the draw's thresholds), the wind (the static show byte <see cref="WindShown"/>; the nd's
-/// <see cref="GroundSpeed"/> and <see cref="WindMinGroundSpeed"/> describe the test BlueBird's draw folds into that byte,
-/// and the reader decides by the byte alone),
+/// speed and the draw's thresholds), the wind (the static show byte <see cref="WindShown"/>, into which BlueBird's draw
+/// folds its minimum ground speed test: the reader decides by the byte alone),
 /// the two runway records in the nd, the deceleration points (vectors of <see cref="DecelerationStride"/>-byte points in
 /// the path object, at most <see cref="MaxDecelerationPoints"/> in the walk) and the leg capability set plan 26's leg
 /// positions lacked (an unordered set in the leg: first node and size, the node's next pointer and value, at most
@@ -45,8 +44,6 @@ public sealed record Bbs757EhsiMapExtras(
     double LookAheadSeconds,
     double LookAheadFloor,
     uint WindShown,
-    int GroundSpeed,
-    double WindMinGroundSpeed,
     int DepartureRunway,
     int ArrivalRunway,
     int RunwayFirstLongitude,
@@ -94,8 +91,6 @@ public sealed record Bbs757EhsiMapExtras(
         && LookAheadSeconds == other.LookAheadSeconds
         && LookAheadFloor == other.LookAheadFloor
         && WindShown == other.WindShown
-        && GroundSpeed == other.GroundSpeed
-        && WindMinGroundSpeed == other.WindMinGroundSpeed
         && DepartureRunway == other.DepartureRunway
         && ArrivalRunway == other.ArrivalRunway
         && RunwayFirstLongitude == other.RunwayFirstLongitude
@@ -144,8 +139,6 @@ public sealed record Bbs757EhsiMapExtras(
         h.Add(LookAheadSeconds);
         h.Add(LookAheadFloor);
         h.Add(WindShown);
-        h.Add(GroundSpeed);
-        h.Add(WindMinGroundSpeed);
         h.Add(DepartureRunway);
         h.Add(ArrivalRunway);
         h.Add(RunwayFirstLongitude);

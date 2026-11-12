@@ -15,7 +15,11 @@ public class Bbs757EhsiMapExtrasTests
     private static Bbs757EhsiMapExtras X => P.MapExtras!;
 
     // Where this test's memory puts the map extras' objects (beside the other parts').
-    private const uint Adc = 0x31000, StartPoints = 0x32000, EndPoints = 0x32100, Nodes = 0x33000;
+    internal const uint Adc = 0x31000, StartPoints = 0x32000, EndPoints = 0x32100, Nodes = 0x33000;
+
+    /// <summary>The nd's ground speed as measured (nd+736): BlueBird's wind draw tests it and folds the result into the show
+    /// byte; the layout holds no field for it, as the reader never reads it.</summary>
+    private const uint NdGroundSpeed = 736;
 
     /// <summary>The scene's route path (System.IO's Path shadows the reader tests' name).</summary>
     private const uint PathAt = Bbs757EhsiReaderTests.Path;
@@ -48,7 +52,7 @@ public class Bbs757EhsiMapExtrasTests
             F64(b, Adc + X.AdcAltitude, Altitude);
             F64(b, Adc + X.AdcVerticalSpeed, VerticalSpeed);
             Flag(b, X.WindShown, WindShown);
-            F64(b, Nd + X.GroundSpeed, GroundSpeed);
+            F64(b, Nd + NdGroundSpeed, GroundSpeed);   // the nd's own ground speed: never read (the show byte decides)
             PutRunway(b, Nd + (uint)X.DepartureRunway, Departure);
             PutRunway(b, Nd + (uint)X.ArrivalRunway, Arrival);
             PutPoints(b, PathAt + (uint)X.DecelerationStart, StartPoints, Starts);
@@ -139,8 +143,10 @@ public class Bbs757EhsiMapExtrasTests
             var on = Rows(Read(live, mode));
             Assert.Contains("Top right: TERR", on);
             Assert.Contains("Top right: terrain 031 red, 004 amber", on);
-            Assert.Equal(mode != 3, on.Contains("Map: terrain shown, not read"));
-            Assert.DoesNotContain("Map: terrain shown, not read", Rows(Read(live, mode, scene: s => s.Centered = true)));
+            // MAP has a map to show it on; VOR and ILS have none, so their row names the picture alone.
+            Assert.Equal(mode == 2, on.Contains("Map: terrain shown, not read"));
+            Assert.Equal(mode is 0 or 1, on.Contains("Terrain picture shown, not read"));
+            Assert.DoesNotContain(Rows(Read(live, mode, scene: s => s.Centered = true)), r => r.Contains("shown, not read", StringComparison.Ordinal));
         }
         // The button off, or the IRS not valid: nothing.
         Assert.Empty(Starting(Read(new Extras { Picture = true }), "Top right: T"));
@@ -357,11 +363,11 @@ public class Bbs757EhsiMapExtrasTests
 
     // ---- the leg position rule (plan 26's fix) ----
 
-    private static readonly (double Lat, double Lon) Primary = (47.2, -122.6), Second = (47.14767, -122.47504);
+    internal static readonly (double Lat, double Lon) Primary = (47.2, -122.6), Second = (47.14767, -122.47504);
 
     /// <summary>A route whose first leg is a navaid leg (kind 2) with both positions and a capability set; null values
     /// leave the set as <paramref name="nodes"/> chains it (for the torn cases).</summary>
-    private static Scene NavaidLeg(int[] capabilities, (double Lat, double Lon)? primary = null, (double Lat, double Lon)? second = null,
+    internal static Scene NavaidLeg(int[] capabilities, (double Lat, double Lon)? primary = null, (double Lat, double Lon)? second = null,
         Action<byte[]>? tweak = null)
     {
         var p = primary ?? Primary;

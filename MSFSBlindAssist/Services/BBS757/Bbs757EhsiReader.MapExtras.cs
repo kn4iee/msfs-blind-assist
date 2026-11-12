@@ -7,7 +7,7 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// its handle's cached value, the picture byte, the two elevations and, while the button is on, their colors from the air
 /// data computer's altitude and vertical speed, BlueBird's thresholds and the simulator's <see cref="GearKey"/>) and the
 /// wind (the static show flag as BlueBird left it, which alone decides, the simulator's <see cref="WindSpeedKey"/> and
-/// <see cref="WindDirectionKey"/>). Full, in MAP and PLAN: the two runway records and the route path's two deceleration
+/// <see cref="WindDirectionKey"/>). Full, while the map is drawn (MAP with the IRS valid, or PLAN): the two runway records and the route path's two deceleration
 /// vectors, walked all or nothing (B757-36). The simulator values are inputs where BlueBird's draw takes them (S10), never
 /// compared with memory (B757-30). A null object pointer is none; one outside the module, a name that is not text, a
 /// count over the cap or a position not finite and in range is torn.
@@ -17,11 +17,12 @@ public sealed partial class Bbs757EhsiReader
     /// <summary>The draw's simulator inputs (S10): the wind arrow and number, and the gear for TERR's amber threshold.</summary>
     public const string WindSpeedKey = "AMBIENT WIND VELOCITY", WindDirectionKey = "AMBIENT WIND DIRECTION", GearKey = "GEAR POSITION";
 
-    private bool TryMapExtras(uint nd, uint source, Bbs757EhsiMapExtras x, bool full, bool mapOrPlan, int routeId,
+    /// <param name="mapItems">Whether to read the runways and the deceleration points: a full reading while the map is
+    /// drawn (no row could show them otherwise, so they are not read).</param>
+    private bool TryMapExtras(uint nd, uint source, Bbs757EhsiMapExtras x, bool mapItems, int routeId,
         Bbs757SimValues? sim, out Bbs757EhsiMapExtrasReading? reading)
     {
         reading = null;
-        if (x.TerrainDivisor <= 0) return false;
         // The wind's show flag alone says what the screen shows: BlueBird's draw clears it under its minimum ground speed
         // itself, so the reader never reads the nd's ground speed for it.
         if (!Flag(nd, x.TerrainPicture, out bool picture)
@@ -48,7 +49,7 @@ public sealed partial class Bbs757EhsiReader
 
         IReadOnlyList<Bbs757EhsiRunway>? runways = null;
         IReadOnlyList<Bbs757EhsiMapPoint>? starts = null, ends = null;
-        if (full && mapOrPlan)
+        if (mapItems)
         {
             var list = new List<Bbs757EhsiRunway>(2);
             foreach (int at in new[] { x.DepartureRunway, x.ArrivalRunway })
@@ -143,10 +144,9 @@ public sealed partial class Bbs757EhsiReader
 
     private IReadOnlyList<Bbs757EhsiMapPoint>? PointVector(uint path, int offset, Bbs757EhsiMapExtras x)
     {
+        // The stride and the offsets inside it are checked once, with the layout (Bbs757EhsiReader.Tears.cs).
         int stride = x.DecelerationStride;
-        if (x.DecelerationLongitude < 0 || x.DecelerationLatitude < 0 || x.DecelerationLongitude + 2 * Word > stride
-            || x.DecelerationLatitude + 2 * Word > stride
-            || !Header(path, offset, out var header) || !Entries(header, stride, x.MaxDecelerationPoints, out uint count))
+        if (!Header(path, offset, out var header) || !Entries(header, stride, x.MaxDecelerationPoints, out uint count))
             return null;
         var points = new List<Bbs757EhsiMapPoint>((int)count);
         if (count > 0)
@@ -173,8 +173,8 @@ public sealed partial class Bbs757EhsiReader
     /// layout has <see cref="Bbs757EhsiMapExtras"/>, BlueBird's rule over the leg's capability set: the first of
     /// <c>CapabilityChoices</c> whose capability the set holds gives the offsets; one marked <c>UnlessZero</c> falls back
     /// to the kind's own offsets when its position reads (0, 0), as does a set matching none. Every other leg (and every
-    /// leg without the part): plan 26's rule, the kind's entry of <c>LegPositions</c>, else the plain offsets. False when
-    /// the set is torn.
+    /// leg without the part, or while its capability sets are at their tear limit: <see cref="CapabilityRule"/>): plan
+    /// 26's rule, the kind's entry of <c>LegPositions</c>, else the plain offsets. False when the set is torn.
     /// </summary>
     private bool LegPositionOffsets(byte[] block, int kind, out int latitudeAt, out int longitudeAt)
     {
@@ -188,8 +188,13 @@ public sealed partial class Bbs757EhsiReader
                 longitudeAt = p.Longitude;
                 break;
             }
-        if (l.MapExtras is not { } x || kind != x.CapabilityLegKind) return true;
-        if (!TryCapabilities(block, x, out var set)) return false;
+        if (CapabilityRule is not { } x || kind != x.CapabilityLegKind) return true;
+        if (!TryCapabilities(block, x, out var set))
+        {
+            // Counted against the map extras when it tore a route walk (Bbs757EhsiReader.Tears.cs).
+            _capabilityTorn = true;
+            return false;
+        }
         foreach (var choice in x.CapabilityChoices)
         {
             if (!set.Contains(choice.Capability)) continue;

@@ -1,12 +1,14 @@
 namespace MSFSBlindAssist.Services.BBS757;
 
-/// <summary>The TCAS (plan 28's <see cref="Bbs757EhsiTcas"/>): its messages' sources in every reading, the traffic list
-/// in a full one. The list is walked all or nothing (B757-36): a torn vector, an entry outside the module, more entries
+/// <summary>The TCAS (plan 28's <see cref="Bbs757EhsiTcas"/>): its messages' sources in every reading (drawn in every
+/// mode), the traffic list in a full one in MAP while the IRS is valid. The list is walked all or nothing (B757-36): a torn vector, an entry outside the module, more entries
 /// than the layout's cap, a kind that is not one of BlueBird's four, an altitude that is not a number or a position not
 /// finite and in range makes the reading corrupt. A null computer is none (the nd draws no TCAS), an empty list no
 /// traffic.</summary>
 public sealed partial class Bbs757EhsiReader
 {
+    /// <param name="full">Whether to walk the traffic list: a full reading in MAP while the IRS is valid, the only place
+    /// the screen draws it (a list no row can show is not read).</param>
     private bool TryTcas(uint nd, Bbs757EhsiTcas t, bool full, out Bbs757EhsiTcasReading? reading)
     {
         reading = null;
@@ -38,7 +40,8 @@ public sealed partial class Bbs757EhsiReader
     /// walked).</summary>
     private IReadOnlyList<Bbs757EhsiTraffic>? WalkTraffic(uint tcas, Bbs757EhsiTcas t)
     {
-        if (t.TrafficStride <= 0 || !Header(tcas, t.TrafficList, out var header)) return null;
+        // The stride and the cap are checked once, with the layout (Bbs757EhsiReader.Tears.cs).
+        if (!Header(tcas, t.TrafficList, out var header)) return null;
         if (header.End < header.Begin || (header.End - header.Begin) % (uint)t.TrafficStride != 0) return null;
         uint count = (header.End - header.Begin) / (uint)t.TrafficStride;
         if (count > (uint)Math.Max(0, t.MaxTraffic) || (count > 0 && header.Begin == 0)) return null;

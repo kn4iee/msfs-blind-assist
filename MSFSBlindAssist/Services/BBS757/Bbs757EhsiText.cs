@@ -16,10 +16,6 @@ public static partial class Bbs757EhsiText
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    /// <summary>BlueBird's EFIS mode values (measured): the enum the layout's <c>Modes</c> word table is
-    /// keyed by. Any other value draws none of these modes' items.</summary>
-    internal enum EhsiMode { Vor = 0, Ils = 1, Map = 2, Plan = 3 }
-
     // Not a layout word: the "---" of a heading not valid while aligning is the top line's own dashes.
     private const string NoNumber = "---";
 
@@ -46,7 +42,8 @@ public static partial class Bbs757EhsiText
     /// The window's rows, top to bottom, each only when the screen draws it:
     /// <list type="number">
     /// <item>Not powered: "EHSI: dark", alone.</item>
-    /// <item>"EHSI: MAP, range 160" (", centered" when centered).</item>
+    /// <item>"EHSI: MAP, range 160" (", centered" when centered); centered VOR and ILS, whose full rose draws no range
+    /// label, "EHSI: VOR, centered".</item>
     /// <item>Valid: "Top: HDG 119 M" (TRK with track up, TRU for a true reference). Not valid: "Top: ---" while aligning,
     /// then "Flag: HDG" (or TRK), and in MAP "Flag: MAP". While the range changes, nothing more.</item>
     /// <item>VOR and ILS (plan 28's approach part, <see cref="VorIlsRows"/>): "Top left: DME 0.5", "Top right: 1533.3z"
@@ -78,9 +75,11 @@ public static partial class Bbs757EhsiText
     {
         if (!r.Powered) return new[] { "EHSI: dark" };
         var w = r.Words;
+        // The full VOR and ILS rose draws no range label (MAP's half-range label is drawn in every other view): no range.
+        bool roseOnly = r.Centered && (Is(r, Bbs757EhsiMode.Vor) || Is(r, Bbs757EhsiMode.Ils));
         var rows = new List<string>
         {
-            "EHSI: " + ModeWord(r) + ", range " + Number(r.Range) + (r.Centered ? ", centered" : ""),
+            "EHSI: " + ModeWord(r) + (roseOnly ? "" : ", range " + Number(r.Range)) + (r.Centered ? ", centered" : ""),
         };
         if (r.Valid)
             rows.Add("Top: " + HeadingWord(r) + " " + ThreeDigits(r.Number) + " " + Word(r.TrueReference ? w.True : w.Mag));
@@ -88,11 +87,11 @@ public static partial class Bbs757EhsiText
         {
             if (r.Aligning) rows.Add("Top: " + NoNumber);
             rows.Add("Flag: " + HeadingWord(r));
-            if (Is(r, EhsiMode.Map)) rows.Add("Flag: " + Word(w.Map));
+            if (Is(r, Bbs757EhsiMode.Map)) rows.Add("Flag: " + Word(w.Map));
         }
         if (r.RangeChanging) return rows;
         double? distance = Distance(r);
-        if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils))
+        if (Is(r, Bbs757EhsiMode.Vor) || Is(r, Bbs757EhsiMode.Ils))
         {
             VorIlsRows(rows, r, distance);
             return rows;
@@ -109,7 +108,7 @@ public static partial class Bbs757EhsiText
         rows.AddRange(MapRows(r));
         VnavDeviationRow(rows, r);
         // The bearing pointers are drawn in MAP while the IRS is valid (never in PLAN).
-        if (Is(r, EhsiMode.Map) && r.Valid)
+        if (Is(r, Bbs757EhsiMode.Map) && r.Valid)
         {
             if (r.Approach is { } a) BearingPointerRows(rows, r, a);
             else NotRead(rows, ApproachPart, r.ApproachMissing);
@@ -131,7 +130,7 @@ public static partial class Bbs757EhsiText
     /// <summary>A layout word, empty when the reading carries none (a default reading).</summary>
     private static string Word(string? word) => word ?? "";
 
-    private static bool Is(Bbs757EhsiReading r, EhsiMode mode) => r.ModeValue == (int)mode;
+    private static bool Is(Bbs757EhsiReading r, Bbs757EhsiMode mode) => r.ModeValue == (int)mode;
 
     private static string ModeWord(Bbs757EhsiReading r) => r.Mode ?? Bbs757WordTable.Unrecognised;
 
@@ -172,7 +171,7 @@ public static partial class Bbs757EhsiText
         return Math.Round(abs, MidpointRounding.AwayFromZero).ToString("F0", Inv) + "° " + (off < 0 ? "left" : "right");
     }
 
-    private static bool MapOrPlan(Bbs757EhsiReading r) => Is(r, EhsiMode.Map) || Is(r, EhsiMode.Plan);
+    private static bool MapOrPlan(Bbs757EhsiReading r) => Is(r, Bbs757EhsiMode.Map) || Is(r, Bbs757EhsiMode.Plan);
 
     /// <summary>EXCESS DATA: drawn in MAP and PLAN when the frame's count of background items reaches the layout's limit.</summary>
     private static bool Excess(Bbs757EhsiReading r) =>
@@ -184,7 +183,7 @@ public static partial class Bbs757EhsiText
 
     private static IEnumerable<string> MapRows(Bbs757EhsiReading r)
     {
-        bool plan = Is(r, EhsiMode.Plan);
+        bool plan = Is(r, Bbs757EhsiMode.Plan);
         if (!MapDrawn(r)) return Array.Empty<string>();
         // A light reading holds no route: the map is drawn but not read yet (the window's first second).
         if (r.Route is null) return new[] { MapReading };
@@ -284,7 +283,7 @@ public static partial class Bbs757EhsiText
         if (!r.Valid)
         {
             flags.Add(new Item(HeadingFlag, HeadingWord(r)));
-            if (Is(r, EhsiMode.Map)) flags.Add(new Item(MapFlag, Word(r.Words.Map)));
+            if (Is(r, Bbs757EhsiMode.Map)) flags.Add(new Item(MapFlag, Word(r.Words.Map)));
         }
         ApproachFlags(flags, r);
         return flags;
@@ -314,7 +313,8 @@ public static partial class Bbs757EhsiText
     /// A flag or message that comes or goes only because the mode changed (the MAP flag, EXCESS DATA, LOC and G/S, which
     /// some modes do not draw; TCAS FAIL and TCAS OFF, which the nd's gate holds back in some, and a failed TCAS's TA ONLY,
     /// which shows where the gate holds FAIL back) is not spoken: the pilot
-    /// turned the selector, and the window shows it. Nothing else is ever spoken: no mode, range, CTR, DATA, heading, bug,
+    /// turned the selector, and the window shows it. TRAFFIC is not compared while either reading has the TCAS self-test
+    /// on (the test sets the RA byte, so red TRAFFIC shows for its ten seconds). Nothing else is ever spoken: no mode, range, CTR, DATA, heading, bug,
     /// route edit, map item, traffic, TFC or TCAS TEST. Going dark or lit is the monitor's.
     /// </summary>
     public static IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757EhsiReading heard, Bbs757EhsiReading now, bool withPrefix)
@@ -327,12 +327,15 @@ public static partial class Bbs757EhsiText
         // A failed TCAS shows TA ONLY only while the gate is clear (FAIL hides it): then TA ONLY comes and goes with the
         // gate too.
         bool eitherFailed = (heard.Tcas is { } h && Failed(h)) || (now.Tcas is { } n && Failed(n));
+        // The TCAS self-test sets the RA byte for its ten seconds (red TRAFFIC): the test is the pilot's own, not spoken.
+        bool eitherTesting = heard.Tcas?.Test == true || now.Tcas?.Test == true;
         bool Comparable(Item item) => item.Key switch
         {
             MapFlag or LocFlagKey or GlideslopeFlagKey => sameMode,
             ExcessMessage => sameMode || (MapOrPlan(heard) && MapOrPlan(now)),
             TcasFailKey or TcasOffKey => sameGate,
             TaOnlyKey => sameGate || !eitherFailed,
+            TrafficKey => !eitherTesting,
             _ => true,
         };
         Diff(lines, Messages(heard), Messages(now), "EHSI message: ", "EHSI message gone: ", Comparable);

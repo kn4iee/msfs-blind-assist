@@ -276,9 +276,29 @@ public class Bbs757EhsiMapOptionsTests
         var options = CourseOptions();
         options.Left = options.Left! with { Course = 7.4 };
         Assert.Equal(new[] { "Map: VOR L course 007 through SEA" }, OptionRows(Read(options, mode: 3)));
-        // VOR R's own line.
+        // VOR R's own line: PAE is off the screen (28.6 NM, 40° right); course 130 runs from it 10.6° right of down (130
+        // minus the heading number 119.39), passing 14 NM right of the aircraft. Range 40 shows that, range 20 (12 NM
+        // either side) does not.
         var right = new Options { Right = new Panel(false, Pae, 130, 110, 40) };
-        Assert.Equal(new[] { "Map: VOR R course 130 through PAE" }, OptionRows(Read(right)));
+        Assert.Equal(new[] { "Map: VOR R course 130 through PAE" }, OptionRows(Read(right, range: 40)));
+        Assert.Empty(OptionRows(Read(right)));
+    }
+
+    // The line runs both ways through its station: a course pointing away from the screen still reaches it behind the
+    // station. In PLAN (no magnetic variation to turn it with) a line is listed while its station is on the screen.
+    [Fact]
+    public void A_course_line_is_listed_only_where_it_crosses_the_screen()
+    {
+        var away = new Options { Right = new Panel(false, Pae, 310, 110, 40) };
+        Assert.Equal(new[] { "Map: VOR R course 310 through PAE" }, OptionRows(Read(away, range: 40)));
+        Assert.Empty(OptionRows(Read(away)));
+        // Course 159.39: 40° off the screen's up, PAE's own direction, so the line runs through the aircraft: listed at
+        // range 20 too.
+        Assert.Equal(new[] { "Map: VOR R course 159 through PAE" },
+            OptionRows(Read(new Options { Right = new Panel(false, Pae, 159.39, 110, 40) })));
+        // PLAN: PAE off the screen at range 20, so no line; on it at range 40.
+        Assert.Empty(OptionRows(Read(away, mode: 3)));
+        Assert.Equal(new[] { "Map: VOR R course 310 through PAE" }, OptionRows(Read(away, mode: 3, range: 40)));
     }
 
     [Fact]
@@ -361,7 +381,7 @@ public class Bbs757EhsiMapOptionsTests
         var waypoint = Lists();
         waypoint.Waypoint = true;
         Adds(All(waypoint), "Map: waypoint HAVHO, 3.0 NM, 30° right");
-        Adds(All(Lists(), tfc: true), "Left: TFC", "Map: traffic, 8.7 NM, 38° left, +07");
+        Adds(All(Lists(), tfc: true), "Left side: TFC", "Map: traffic, 8.7 NM, 38° left, +07");
         Adds(All(Lists(), terr: true), "Top right: TERR", "Top right: terrain 031 red, 004 amber", "Map: terrain shown, not read");
     }
 

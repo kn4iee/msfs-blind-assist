@@ -124,9 +124,10 @@ public class Bbs757EhsiTextTests
         Assert.Equal(new[] { $"EHSI: {mode}, range 160", "Top: HDG 119 M", "Top right: no ETA", "Heading bug: 147, 28° right" },
             Bbs757EhsiText.Rows(InMode(Ehsi(), mode)));
         Assert.Contains("Top right: 1521.4z", Bbs757EhsiText.Rows(InMode(Ehsi(), mode) with { GroundSpeed = 250 }));
-        Assert.Equal(new[] { $"EHSI: {mode}, range 160, centered", "Flag: HDG" },
+        // The full rose draws no range label: the header names no range there.
+        Assert.Equal(new[] { $"EHSI: {mode}, centered", "Flag: HDG" },
             Bbs757EhsiText.Rows(InMode(Ehsi(), mode) with { Centered = true, Valid = false }));
-        Assert.Equal(new[] { $"EHSI: {mode}, range 160, centered", "Top: HDG 119 M", "Heading bug: 147, 28° right" },
+        Assert.Equal(new[] { $"EHSI: {mode}, centered", "Top: HDG 119 M", "Heading bug: 147, 28° right" },
             Bbs757EhsiText.Rows(InMode(Ehsi(), mode) with { Centered = true }));
         // The part missing: its one row where its picture starts (the top left).
         Assert.Equal(new[]

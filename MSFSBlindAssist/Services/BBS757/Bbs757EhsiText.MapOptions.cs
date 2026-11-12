@@ -48,12 +48,49 @@ public static partial class Bbs757EhsiText
         : kind == k.Dme ? "DME"
         : NavaidWord;
 
+    /// <summary>A course line is sampled every this many pixels along it.</summary>
+    private const double CourseLineSamplePixels = 5;
+
+    /// <summary>The most samples along one course line.</summary>
+    private const int MaxCourseLineSamples = 1024;
+
     /// <summary>
     /// The VOR course lines, "Map: VOR L course 187 through SEA" (the course as its label prints it), after the map's
-    /// items. A line runs both ways through its station across the whole screen, and the reader has no magnetic variation
-    /// to project it, so it is listed whenever BlueBird draws it (the reading holds only those), with no on-screen test.
+    /// items, each only where it crosses the screen's clip (<see cref="CourseLineOnScreen"/>).
     /// </summary>
     private static IEnumerable<string> CourseLineRows(Bbs757EhsiReading r) =>
-        (r.MapOptions?.CourseLines ?? Array.Empty<Bbs757EhsiCourseLine>()).Select(line =>
+        (r.MapOptions?.CourseLines ?? Array.Empty<Bbs757EhsiCourseLine>()).Where(line => CourseLineOnScreen(r, line)).Select(line =>
             "Map: " + (line.Left ? VorLeftName : VorRightName) + " course " + ThreeDigits(line.Course) + " through " + line.Station);
+
+    /// <summary>
+    /// Whether a course line shows inside the clip. BlueBird draws it through its station both ways along the course plus
+    /// the magnetic variation at the station (f23494), clipped to the screen. In MAP the screen's up is the heading number
+    /// (<see cref="Bbs757EhsiReading.Number"/>, magnetic or true as the screen's own number), so the line runs at the course
+    /// minus that number from the station's pixel: sampled along the stretch of the line within half the screen's diagonal
+    /// of the point nearest the screen's center, which covers every pixel of it the screen can show, both ways. In PLAN
+    /// (true north up) the reader has no magnetic variation to turn the line with: it is listed while its station's point
+    /// is inside the clip.
+    /// </summary>
+    private static bool CourseLineOnScreen(Bbs757EhsiReading r, Bbs757EhsiCourseLine line)
+    {
+        var c = r.Constants;
+        var map = r.Map;
+        var (x, y, _, _) = Bbs757EhsiGeometry.Project(map, r.Range, c.RadiusFactor, line.Latitude, line.Longitude);
+        bool Inside(double px, double py) =>
+            Bbs757EhsiGeometry.OnScreen(map, r.Centered, px, py, c.RadiusFactor, c.AircraftYFactor, c.ClipInset);
+        if (Is(r, Bbs757EhsiMode.Plan)) return Inside(x, y);
+        double angle = (line.Course - r.Number) * Math.PI / 180.0;
+        if (!double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(angle) || !double.IsFinite(map.Width)
+            || !double.IsFinite(map.Height))
+            return false;
+        double sin = Math.Sin(angle), cos = Math.Cos(angle);
+        double half = Math.Sqrt(map.Width * map.Width + map.Height * map.Height) / 2;
+        // Along the line t pixels from the station: (x + t sin, y - t cos); nearest the screen's center at t0.
+        double t0 = (map.Width / 2 - x) * sin - (map.Height / 2 - y) * cos;
+        // A screen size no build has (a torn width) cannot spin: the samples are capped, spread wider.
+        double step = Math.Max(CourseLineSamplePixels, 2 * half / MaxCourseLineSamples);
+        for (double t = t0 - half; t <= t0 + half; t += step)
+            if (Inside(x + t * sin, y - t * cos)) return true;
+        return false;
+    }
 }

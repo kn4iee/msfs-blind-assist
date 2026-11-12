@@ -191,6 +191,46 @@ public class Bbs757EhsiMapGuidesTests
         Assert.Empty(Starting(Read(new Guides { Fix1 = small }, range: 10), "Map: fix"));
     }
 
+    // A large circle at a small range: 5-degree samples of a 300 NM circle are 26 NM apart, wider than the screen at range
+    // 10 or 20, so the samples follow the circle's size on the screen.
+    [Theory]
+    [InlineData(10)]
+    [InlineData(20)]
+    public void A_large_circle_crossing_the_screen_at_a_small_range_is_listed(double range)
+    {
+        // A fix 295 NM behind the aircraft: its 300 NM circle passes 5 NM ahead, across the screen.
+        var behind = Bbs757EhsiTcasTests.At(295, 180 - 2.5);
+        var crossing = new Fix("FAR", 4, behind, (0, 0), Array.Empty<int>(), new[] { (-1, 300) });
+        Assert.Equal(new[] { "Map: fix FAR, circle 300 NM" }, Starting(Read(new Guides { Fix1 = crossing }, range: range), "Map: fix"));
+        // 270 NM behind: the circle passes 30 NM ahead, off the screen.
+        var far = crossing with { Primary = Bbs757EhsiTcasTests.At(270, 180 - 2.5) };
+        Assert.Empty(Starting(Read(new Guides { Fix1 = far }, range: range), "Map: fix"));
+    }
+
+    [Fact]
+    public async Task A_radial_with_wild_dash_constants_ends()
+    {
+        // A dash length or step that is not a finite positive number is no radial on the screen, and the dash count is
+        // capped: the reading ends, whatever the layout holds.
+        var radialOnly = Tcm with { Entries = new[] { (300, -1) } };
+        foreach (var dashes in new Func<Bbs757EhsiMapGuides, Bbs757EhsiMapGuides>[]
+                 {
+                     g => g with { RadialDashLength = double.PositiveInfinity },
+                     g => g with { RadialDashLength = double.NaN },
+                     g => g with { RadialDashStep = double.PositiveInfinity },
+                     g => g with { RadialDashStep = 0 },
+                     g => g with { RadialDashes = int.MaxValue, RadialDashStep = 1e-9 },
+                 })
+        {
+            var layout = P with { MapGuides = dashes(G) };
+            var read = Task.Run(() => Read(new Guides { Fix1 = radialOnly }, range: 10, layout: layout));
+            Assert.Same(read, await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(10))));   // the sampling ends
+            var reading = await read;
+            Assert.False(reading.Corrupt);
+            Assert.Empty(Starting(reading, "Map: fix"));
+        }
+    }
+
     [Fact]
     public void A_radial_in_map_is_listed_only_where_its_dashes_reach_the_screen()
     {
@@ -401,6 +441,26 @@ public class Bbs757EhsiMapGuidesTests
         Assert.False(Read(new Guides { Selected = 10000, Altitude = double.NaN, VerticalSpeed = 1500 }, scene: s => s.Valid = false).Corrupt);
         Assert.False(Read(new Guides { Tweak = b => I32(b, Nd + G.NdToAirGround, Outside) }, scene: s => s.Valid = false).Corrupt);
         Assert.Null(Read(climb, scene: s => s.Valid = false).MapGuides!.Arc);
+    }
+
+    // Near-level flight: 1 ft/min toward an MCP altitude 5000 ft away passes BlueBird's 0.1 ft/min test, and the distance
+    // is tens of thousands of NM; its point goes round the globe and can come back onto the screen. Listed only within the
+    // drawn range plus the layout's margin.
+    [Fact]
+    public void A_range_arc_far_past_the_range_is_not_listed()
+    {
+        // Ground speed picked so the distance is the projection sphere's circumference plus 10 NM: the point lands 10 NM
+        // ahead, on the screen.
+        double circumference = 2 * Math.PI * 6371.0 / 1.852;
+        double groundSpeed = (circumference + 10) * 3600 / (5000 * 60);
+        var level = new Guides { Selected = 10000, Altitude = 5000, VerticalSpeed = 1 };
+        var reading = Read(level, scene: s => s.GroundSpeed = groundSpeed);
+        Assert.False(reading.Corrupt);
+        Assert.True(reading.MapGuides!.Arc!.Value.Distance > 20000);
+        Assert.Empty(Starting(reading, "Map: altitude"));
+        // A plausible descent at the same range: listed (40 + the 10 NM margin).
+        Assert.Equal(new[] { "Map: altitude range arc, 20.0 NM, ahead" },
+            Starting(Read(new Guides { Selected = 3000, Altitude = 11000, VerticalSpeed = -2000 }, scene: s => s.GroundSpeed = 300), "Map: altitude"));
     }
 
     // ---- the VNAV path deviation ----

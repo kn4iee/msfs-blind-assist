@@ -7,11 +7,21 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// </summary>
 public static partial class Bbs757EhsiText
 {
-    /// <summary>A circle is sampled at every this many degrees around its center (great-circle points, projected).</summary>
-    private const int CircleSampleDegrees = 5;
+    /// <summary>A circle's samples are at most this many pixels apart around it on the screen (great-circle points,
+    /// projected), and at least <see cref="MinCircleSamples"/> of them, at most <see cref="MaxCircleSamples"/>.</summary>
+    private const double CircleSamplePixels = 20;
+
+    /// <summary>A circle's fewest samples: every 5 degrees, for a circle small on the screen.</summary>
+    private const int MinCircleSamples = 72;
+
+    /// <summary>A circle's most samples, whatever its size: a 300 NM circle at range 10 then has about 54 px between them.</summary>
+    private const int MaxCircleSamples = 2048;
 
     /// <summary>A radial's dashes are sampled at least every this many pixels along each dash.</summary>
     private const double RadialSamplePixels = 5;
+
+    /// <summary>The most dashes of a radial looked at (the layout's count is 18): a wild layout value cannot spin.</summary>
+    private const int MaxRadialDashes = 256;
 
     /// <summary>
     /// The map guides among the map's items, in MAP and PLAN:
@@ -24,14 +34,15 @@ public static partial class Bbs757EhsiText
     /// <item>"Map: off-path descent circles, 45 NM and 38 NM around 30.2 NM, 15° left" (clean, then speedbrake, whole NM;
     /// the place of their center) while a sample of either is inside the clip.</item>
     /// <item>MAP while the IRS is valid: "Map: altitude range arc, 12.3 NM, ahead" (BlueBird's distance, one decimal, and the
-    /// direction of its point) while that point is inside the clip.</item>
+    /// direction of its point) while that distance is at most the range plus the layout's margin and the point is inside
+    /// the clip.</item>
     /// </list>
     /// A row that is not on its own point is ordered by its topmost sample on the screen.
     /// </summary>
     private static void AddMapGuides(List<MapItem> items, Bbs757EhsiReading r, string? center)
     {
         if (r.MapGuides is not { } g) return;
-        bool plan = Is(r, EhsiMode.Plan);
+        bool plan = Is(r, Bbs757EhsiMode.Plan);
         foreach (var fix in g.Fixes)
         {
             if (fix.Position is not { } p) continue;   // listed without a place: UnplacedGuideRows
@@ -66,7 +77,9 @@ public static partial class Bbs757EhsiText
             }
         }
 
-        if (g.Arc is { } arc && Is(r, EhsiMode.Map) && r.Valid)
+        // Within the drawn range plus the layout's margin only: in near-level flight BlueBird's distance runs to tens of
+        // thousands of NM and the point wraps the globe.
+        if (g.Arc is { } arc && Is(r, Bbs757EhsiMode.Map) && r.Valid && arc.Distance <= r.Range + r.Constants.MarkerMargin)
         {
             var c = r.Constants;
             var (x, y, _, bearing) = Bbs757EhsiGeometry.Project(r.Map, r.Range, c.RadiusFactor, arc.Point.Latitude, arc.Point.Longitude);
@@ -88,7 +101,7 @@ public static partial class Bbs757EhsiText
     /// layout's clamp.</summary>
     private static void VnavDeviationRow(List<string> rows, Bbs757EhsiReading r)
     {
-        if (r.MapGuides is not { PathDeviation: { } feet } g || !Is(r, EhsiMode.Map)) return;
+        if (r.MapGuides is not { PathDeviation: { } feet } g || !Is(r, Bbs757EhsiMode.Map)) return;
         long whole = (long)Math.Round(feet, MidpointRounding.AwayFromZero);
         rows.Add("Right side: VNAV path deviation " + whole.ToString(Inv) + " ft"
             + (Math.Abs(feet) >= g.DeviationClamp ? ", at full scale" : ""));
@@ -101,14 +114,21 @@ public static partial class Bbs757EhsiText
     private static (double X, double Y) Topmost((double X, double Y)? a, (double X, double Y)? b) =>
         a is not { } p ? b!.Value : b is not { } q ? p : (q.Y < p.Y || (q.Y == p.Y && q.X < p.X) ? q : p);
 
-    /// <summary>The topmost of a circle's samples inside the clip (every <see cref="CircleSampleDegrees"/> degrees,
-    /// <paramref name="nm"/> from its center along the great circle, projected), null when none is.</summary>
+    /// <summary>The topmost of a circle's samples inside the clip (<paramref name="nm"/> from its center along the great
+    /// circle, projected), null when none is. The samples are spaced by the circle's size on the screen, at most
+    /// <see cref="CircleSamplePixels"/> apart (within <see cref="MinCircleSamples"/> to <see cref="MaxCircleSamples"/>):
+    /// fixed 5-degree steps put a 300 NM circle's samples 26 NM apart, wider than the screen at range 10 or 20.</summary>
     private static (double X, double Y)? CircleOnScreen(Bbs757EhsiReading r, Bbs757EhsiMapPoint center, double nm)
     {
         var c = r.Constants;
+        double pixels = 2 * Math.PI * nm / r.Range * (r.Map.Height * c.RadiusFactor);
+        int samples = double.IsFinite(pixels)
+            ? (int)Math.Clamp(Math.Ceiling(pixels / CircleSamplePixels), MinCircleSamples, MaxCircleSamples)
+            : MinCircleSamples;
         (double X, double Y)? top = null;
-        for (int bearing = 0; bearing < 360; bearing += CircleSampleDegrees)
+        for (int i = 0; i < samples; i++)
         {
+            double bearing = 360.0 * i / samples;
             var (lat, lon) = Bbs757EhsiGeometry.Destination(center.Latitude, center.Longitude, bearing, nm);
             var (x, y, _, _) = Bbs757EhsiGeometry.Project(r.Map, r.Range, c.RadiusFactor, lat, lon);
             if (!Bbs757EhsiGeometry.OnScreen(r.Map, r.Centered, x, y, c.RadiusFactor, c.AircraftYFactor, c.ClipInset)) continue;
@@ -119,15 +139,19 @@ public static partial class Bbs757EhsiText
 
     /// <summary>The first sample along a radial's dashes inside the clip: from the fix's pixel, <paramref name="angle"/>
     /// degrees clockwise from the screen's up, each dash from its start for its length, sampled at least every
-    /// <see cref="RadialSamplePixels"/> and at both ends. Null when none is.</summary>
+    /// <see cref="RadialSamplePixels"/> and at both ends. Null when none is, and for a dash length or step that is not a
+    /// finite positive number; at most <see cref="MaxRadialDashes"/> dashes are looked at.</summary>
     private static (double X, double Y)? RadialOnScreen(Bbs757EhsiReading r, double fixX, double fixY, double angle,
         Bbs757EhsiRadialDashes dashes)
     {
-        if (!double.IsFinite(fixX) || !double.IsFinite(fixY) || !double.IsFinite(angle)) return null;
+        if (!double.IsFinite(fixX) || !double.IsFinite(fixY) || !double.IsFinite(angle) || !double.IsFinite(dashes.Start)
+            || !double.IsFinite(dashes.Length) || !double.IsFinite(dashes.Step) || !(dashes.Length > 0) || !(dashes.Step > 0))
+            return null;
         var c = r.Constants;
         double radians = angle * Math.PI / 180.0, sin = Math.Sin(radians), cos = Math.Cos(radians);
-        double length = Math.Max(0, dashes.Length);
-        for (int i = 0; i < dashes.Count; i++)
+        double length = dashes.Length;
+        int count = Math.Min(dashes.Count, MaxRadialDashes);
+        for (int i = 0; i < count; i++)
         {
             double start = dashes.Start + i * dashes.Step;
             for (double along = 0; ; along += RadialSamplePixels)

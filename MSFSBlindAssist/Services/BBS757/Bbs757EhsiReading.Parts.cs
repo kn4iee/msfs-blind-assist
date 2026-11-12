@@ -10,24 +10,28 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// </summary>
 public sealed partial record Bbs757EhsiReading
 {
-    /// <summary>The VOR and ILS picture and the bearing pointers (light: every reading).</summary>
+    /// <summary>The VOR and ILS picture (light: VOR and ILS only; its values the defaults in MAP) and the bearing pointers
+    /// (every mode but PLAN while the IRS is valid); null in PLAN. A reason of "unexpected values": the part has torn the
+    /// reader's limit of readings in a row (the same for every part).</summary>
     public Bbs757EhsiApproachReading? Approach { get; init; }
     public string? ApproachMissing { get; init; }
 
-    /// <summary>The TCAS messages (light) and the traffic (full).</summary>
+    /// <summary>The TCAS messages (light) and the traffic (full, MAP while the IRS is valid; null otherwise).</summary>
     public Bbs757EhsiTcasReading? Tcas { get; init; }
     public string? TcasMissing { get; init; }
 
-    /// <summary>The NAV AID, ARPT and WPT items, the tuned stations and the course lines (full: MAP and PLAN only).</summary>
+    /// <summary>The NAV AID, ARPT and WPT items, the tuned stations and the course lines (full, while the map is drawn: MAP
+    /// with the IRS valid, or PLAN).</summary>
     public Bbs757EhsiMapOptionsReading? MapOptions { get; init; }
     public string? MapOptionsMissing { get; init; }
 
-    /// <summary>TERR and the wind (light: every reading), the runways and the deceleration points (full: MAP and PLAN).</summary>
+    /// <summary>TERR and the wind (light: every reading), the runways and the deceleration points (full, while the map is
+    /// drawn).</summary>
     public Bbs757EhsiMapExtrasReading? MapExtras { get; init; }
     public string? MapExtrasMissing { get; init; }
 
-    /// <summary>The FIX pages, the off-path descent circles (full: MAP and PLAN), the altitude range arc and the VNAV path
-    /// deviation (full: MAP).</summary>
+    /// <summary>The FIX pages, the off-path descent circles (full, while the map is drawn), the altitude range arc and the
+    /// VNAV path deviation (full: MAP).</summary>
     public Bbs757EhsiMapGuidesReading? MapGuides { get; init; }
     public string? MapGuidesMissing { get; init; }
 }

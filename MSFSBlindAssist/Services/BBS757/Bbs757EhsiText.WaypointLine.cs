@@ -16,7 +16,7 @@ public static partial class Bbs757EhsiText
         if (!r.Powered) return Unavailable + DisplayDark;
         if (r.Active is not { } a) return NoActiveWaypoint;
         string name = WaypointName(a);
-        if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils)) return name + ", EHSI in " + ModeWord(r) + " mode";
+        if (Is(r, Bbs757EhsiMode.Vor) || Is(r, Bbs757EhsiMode.Ils)) return name + ", EHSI in " + ModeWord(r) + " mode";
         if (Distance(r) is not { } nm) return name + ", no distance, no ETA";
         return name + ", " + Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(r.Words.Nm) + ", "
             + (Eta(r, nm) is { } eta ? eta + Word(r.Words.EtaSuffix) : "no ETA");

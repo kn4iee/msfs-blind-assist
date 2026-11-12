@@ -3,9 +3,10 @@ using System.Text;
 
 namespace MSFSBlindAssist.Services.BBS757;
 
-/// <summary>The VOR and ILS picture (plan 28's <see cref="Bbs757EhsiApproach"/>), read in every reading: the nd's own
-/// fields, the PFD's glideslope, the DME, the localizer the selected receiver has, and the two bearing pointers (their VOR
-/// station by the EFIS mode, <see cref="TryVorStation"/>). Every offset, length and kind is the layout's. A null
+/// <summary>The VOR and ILS picture (plan 28's <see cref="Bbs757EhsiApproach"/>), read in every reading where a row can
+/// show it: in VOR and ILS mode the nd's own fields, the PFD's glideslope, the DME and the localizer the selected receiver
+/// has; in every mode but PLAN, while the IRS is valid, the two bearing pointers (their VOR station by the EFIS mode,
+/// <see cref="TryVorStation"/>). Every offset, length and kind is the layout's. A null
 /// object pointer is "none" (no glideslope, no DME, no pointer); one outside the module, a station ident that is not text
 /// or a position not finite and in range is torn.</summary>
 public sealed partial class Bbs757EhsiReader
@@ -17,9 +18,27 @@ public sealed partial class Bbs757EhsiReader
     /// <summary>The app's own guard on the layout's ident length (the stack buffer's size), not a BlueBird value.</summary>
     private const int MaxIdentLength = 64;
 
-    private bool TryApproach(uint nd, uint source, Bbs757EhsiApproach a, bool ilsMode, out Bbs757EhsiApproachReading? reading)
+    /// <param name="picture">Whether to read the VOR and ILS picture (VOR and ILS mode, the only ones that draw it); else
+    /// its values are the defaults and no row shows them.</param>
+    /// <param name="pointers">Whether to read the bearing pointers (every mode but PLAN, while the IRS is valid).</param>
+    private bool TryApproach(uint nd, uint source, Bbs757EhsiApproach a, bool picture, bool ilsMode, bool pointers,
+        out Bbs757EhsiApproachReading? reading)
     {
         reading = null;
+        Bbs757EhsiBearingPointer? pointer1 = null, pointer2 = null;
+        if (pointers && (!TryBearingPointer(nd, a, ilsMode, a.RmiLeftHandle, a.NdToVorLeft, a.AdfLeft, a.VorLeftWord, AdfLeftName, out pointer1)
+                || !TryBearingPointer(nd, a, ilsMode, a.RmiRightHandle, a.NdToVorRight, a.AdfRight, a.VorRightWord, AdfRightName, out pointer2)))
+            return false;
+        var words = new Bbs757EhsiApproachWords(a.VorLeftWord, a.VorRightWord, a.IlsWord, a.ToWord, a.FromWord, a.DmeWord,
+            a.NoFrequencyWord, a.NoDmeWord, a.LocWord, a.GlideslopeWord);
+        if (!picture)
+        {
+            reading = new Bbs757EhsiApproachReading(0, false, 0, Bbs757EhsiToFrom.None, false, 0, 0, false, 0, false, false, null,
+                false, false, false, false, false, 0, false, false, 0, pointer1, pointer2, words, a.DeviationFullScale,
+                a.DotsPerUnit, a.GlideslopePin);
+            return true;
+        }
+
         if (!F64(nd, a.VorCourse, out double vorCourse) || !F64(nd, a.VorDeviation, out double vorDeviation)
             || !Flag(nd, a.VorDeviationValid, out bool vorBar) || !Int(nd, a.ToFrom, out int toFrom)
             || !F64(nd, a.VorDme, out double vorDme) || !Flag(nd, a.VorDmeValid, out bool vorDmeValid)
@@ -53,10 +72,6 @@ public sealed partial class Bbs757EhsiReader
             if (received) shownFrequency = frequency;
         }
 
-        if (!TryBearingPointer(nd, a, ilsMode, a.RmiLeftHandle, a.NdToVorLeft, a.AdfLeft, a.VorLeftWord, AdfLeftName, out var pointer1)
-            || !TryBearingPointer(nd, a, ilsMode, a.RmiRightHandle, a.NdToVorRight, a.AdfRight, a.VorRightWord, AdfRightName, out var pointer2))
-            return false;
-
         var toFromValue = toFrom == a.ToValue ? Bbs757EhsiToFrom.To : toFrom == a.FromValue ? Bbs757EhsiToFrom.From : Bbs757EhsiToFrom.None;
         reading = new Bbs757EhsiApproachReading(
             VorCourse: vorCourse, VorBar: vorBar, VorDeviation: vorDeviation, ToFrom: toFromValue, VorDmeValid: vorDmeValid,
@@ -64,9 +79,7 @@ public sealed partial class Bbs757EhsiReader
             IlsTest: ilsTest, IlsFrequency: shownFrequency, LocFlag: locFlag, GlideslopeFlag: glideslopeFlag,
             CaptainSide: side == a.CaptainSide, GlideslopeScale: scale, GlideslopePointer: pointer,
             GlideslopeDeviation: glideslope, GlideslopeTest: glideslopeTest, IlsDmeValid: ilsDmeValid, IlsDme: ilsDme,
-            Pointer1: pointer1, Pointer2: pointer2,
-            Words: new Bbs757EhsiApproachWords(a.VorLeftWord, a.VorRightWord, a.IlsWord, a.ToWord, a.FromWord, a.DmeWord,
-                a.NoFrequencyWord, a.NoDmeWord, a.LocWord, a.GlideslopeWord),
+            Pointer1: pointer1, Pointer2: pointer2, Words: words,
             DeviationFullScale: a.DeviationFullScale, DotsPerUnit: a.DotsPerUnit, GlideslopePin: a.GlideslopePin);
         return true;
     }

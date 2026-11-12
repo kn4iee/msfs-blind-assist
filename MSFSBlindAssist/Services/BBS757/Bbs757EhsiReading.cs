@@ -14,6 +14,11 @@ public readonly record struct Bbs757EhsiMap(
     double Width,
     double Height);
 
+/// <summary>BlueBird's EFIS mode values (measured): the enum the layout's <c>Modes</c> word table is keyed by
+/// (<see cref="Bbs757EhsiReading.ModeValue"/>). Any other value draws none of these modes' items. The reader gates what it
+/// reads by it and the text what it lists.</summary>
+internal enum Bbs757EhsiMode { Vor = 0, Ils = 1, Map = 2, Plan = 3 }
+
 /// <summary>The draw's own constants, the layout's values, carried in every reading so the rows need no layout: the map's
 /// radius factor, the aircraft's Y factor and the clip inset (<see cref="Bbs757EhsiGeometry.Project"/>,
 /// <see cref="Bbs757EhsiGeometry.OnScreen"/>), the margin a point may lie beyond the range, the ground speed under which no

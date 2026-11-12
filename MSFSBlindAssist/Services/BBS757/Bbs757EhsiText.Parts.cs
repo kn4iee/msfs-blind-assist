@@ -16,5 +16,5 @@ public static partial class Bbs757EhsiText
     }
 
     /// <summary>Whether the map's items are drawn: MAP while the IRS is valid, or PLAN.</summary>
-    private static bool MapDrawn(Bbs757EhsiReading r) => (Is(r, EhsiMode.Map) && r.Valid) || Is(r, EhsiMode.Plan);
+    private static bool MapDrawn(Bbs757EhsiReading r) => (Is(r, Bbs757EhsiMode.Map) && r.Valid) || Is(r, Bbs757EhsiMode.Plan);
 }

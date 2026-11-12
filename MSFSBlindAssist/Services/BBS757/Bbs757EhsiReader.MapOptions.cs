@@ -148,12 +148,12 @@ public sealed partial class Bbs757EhsiReader
     private bool TryNavaid(uint at, out NavaidRecord record)
     {
         record = default;
+        // The ident's length and the offsets are checked once, with the layout (Bbs757EhsiReader.Tears.cs).
         var o = Layout.MapOptions!;
-        if (o.NavaidIdentLength is < 1 or > MaxIdentLength || o.NavaidIdent < 0) return false;
         int size = Max(o.NavaidIdent + o.NavaidIdentLength * Word, o.NavaidFrequency + 2, o.NavaidKind + 1, o.NavaidClass + 1,
             o.NavaidLongitude + 2 * Word, o.NavaidLatitude + 2 * Word);
         var block = new byte[size];
-        if (o.NavaidFrequency < 0 || o.NavaidKind < 0 || o.NavaidClass < 0 || !_memory.TryRead(at, block)
+        if (!_memory.TryRead(at, block)
             || !BlockDouble(block, o.NavaidLatitude, out double lat) || !BlockDouble(block, o.NavaidLongitude, out double lon)
             || !InRange(lat, lon) || !TryCodePoints(block.AsSpan(o.NavaidIdent, o.NavaidIdentLength * Word), out string ident, out _))
             return false;
@@ -168,7 +168,6 @@ public sealed partial class Bbs757EhsiReader
     private bool TryPlace(uint at, Bbs757EhsiMapItemKind kind, int identAt, int latitudeAt, int longitudeAt, out Bbs757EhsiMapOption item)
     {
         item = default;
-        if (identAt < 0) return false;
         var block = new byte[Max(identAt + IdentChunk * Word, latitudeAt + 2 * Word, longitudeAt + 2 * Word)];
         if (!_memory.TryRead(at, block) || !BlockDouble(block, latitudeAt, out double lat)
             || !BlockDouble(block, longitudeAt, out double lon) || !InRange(lat, lon))
@@ -214,8 +213,7 @@ public sealed partial class Bbs757EhsiReader
     private List<Bbs757EhsiLoopAirport>? WalkAirports(uint fms, Bbs757EhsiMapOptions o)
     {
         int stride = o.AirportStride;
-        if (o.AirportLabelLength < 1 || o.AirportName < 0 || o.AirportName + StringBytes > stride
-            || !Header(fms, o.Airports, out var header) || !Entries(header, stride, o.MaxItems, out uint count))
+        if (!Header(fms, o.Airports, out var header) || !Entries(header, stride, o.MaxItems, out uint count))
             return null;
         int take = (int)Math.Min(count, (uint)Math.Max(0, o.RoundLimit));
         var list = new List<Bbs757EhsiLoopAirport>(take);
@@ -302,7 +300,7 @@ public sealed partial class Bbs757EhsiReader
                 firstStation = station;
                 firstCourse = rounded;
             }
-            lines.Add(new Bbs757EhsiCourseLine(left, course, record.Ident));
+            lines.Add(new Bbs757EhsiCourseLine(left, course, record.Ident, record.Latitude, record.Longitude));
         }
         return true;
     }

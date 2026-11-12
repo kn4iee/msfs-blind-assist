@@ -12,14 +12,16 @@ public static partial class Bbs757EhsiText
     /// TERR, while the IRS is valid and the button is on, in every mode: "Top right: TERR", then "Top right: terrain 031
     /// red, 004 amber" (the highest, then the lowest, three digits as drawn, the color as drawn; no color word where the
     /// reader cannot tell), then, while BlueBird draws the terrain picture (not centered, not in PLAN), "Map: terrain
-    /// shown, not read": a picture, which the reader cannot list.
+    /// shown, not read" in MAP, "Terrain picture shown, not read" in VOR and ILS (no map there): a picture, which the
+    /// reader cannot list.
     /// </summary>
     private static void TerrRows(List<string> rows, Bbs757EhsiReading r)
     {
         if (r.MapExtras is not { Terr: true } x || !r.Valid) return;
         rows.Add("Top right: " + Word(x.TerrWord));
         rows.Add("Top right: terrain " + TerrainText(x.Highest) + ", " + TerrainText(x.Lowest));
-        if (x.TerrainPicture && !r.Centered && !Is(r, EhsiMode.Plan)) rows.Add("Map: terrain shown, not read");
+        if (x.TerrainPicture && !r.Centered && !Is(r, Bbs757EhsiMode.Plan))
+            rows.Add(Is(r, Bbs757EhsiMode.Map) ? "Map: terrain shown, not read" : "Terrain picture shown, not read");
     }
 
     private static string TerrainText(Bbs757EhsiTerrainNumber n) =>
@@ -41,7 +43,7 @@ public static partial class Bbs757EhsiText
     /// </summary>
     private static void WindRow(List<string> rows, Bbs757EhsiReading r)
     {
-        if (r.MapExtras is not { } x || !r.Valid || !(Is(r, EhsiMode.Map) || Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils))) return;
+        if (r.MapExtras is not { } x || !r.Valid || !(Is(r, Bbs757EhsiMode.Map) || Is(r, Bbs757EhsiMode.Vor) || Is(r, Bbs757EhsiMode.Ils))) return;
         if (!x.WindShown)
         {
             rows.Add("Bottom left: wind " + Word(x.NoWindWord));

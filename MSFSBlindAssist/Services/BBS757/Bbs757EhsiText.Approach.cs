@@ -39,7 +39,7 @@ public static partial class Bbs757EhsiText
     /// 100, as drawn) or the screen's dashes, "Top left: DME ---". ILS mode shows the ILS DME, VOR mode the VOR's.</summary>
     private static string DmeRow(Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
     {
-        bool ils = Is(r, EhsiMode.Ils);
+        bool ils = Is(r, Bbs757EhsiMode.Ils);
         bool valid = ils ? a.IlsDmeValid : a.VorDmeValid && double.IsFinite(a.VorDme) && a.VorDme >= 0;
         double nm = ils ? a.IlsDme : a.VorDme;
         return "Top left: " + Word(a.Words.Dme) + " " + (valid ? Bbs757EhsiGeometry.TopLineText(nm) : Word(a.Words.NoDme).Trim());
@@ -48,14 +48,16 @@ public static partial class Bbs757EhsiText
     /// <summary>
     /// The rose's rows, top to bottom: the course pointer ("Center: course pointer 187, 68° right"), the deviation
     /// ("Center: deviation 0.5 dots right", "centered", "at full scale, right"; "Center: no deviation bar" while the bar is
-    /// not drawn), ILS without its dots "Center: no deviation scale" as a row of its own, in ILS while the glideslope scale
-    /// shows "Right side: glideslope 1.2 dots above" (or "no glideslope pointer"), and ILS's G/S flag in place ("Right side:
+    /// not drawn), ILS without its dots "Center: no deviation scale" as a row of its own (with them, during the ILS
+    /// self-test, "Center: deviation scale amber"), in ILS while the glideslope scale shows "Right side: glideslope 1.2
+    /// dots above" (or "no glideslope pointer"; during its test "Right side: glideslope scale amber" after it), and ILS's
+    /// G/S flag in place ("Right side:
     /// G/S flag", above the scale's center). The bottom rows are <see cref="ApproachBottomRows"/>'.
     /// </summary>
     private static void ApproachRows(List<string> rows, Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
     {
         var w = a.Words;
-        bool ils = Is(r, EhsiMode.Ils);
+        bool ils = Is(r, Bbs757EhsiMode.Ils);
         double course = ils ? a.IlsCourse : a.VorCourse;
         rows.Add("Center: course pointer " + ThreeDigits(course) + ", " + Relative(course, r.Number));
 
@@ -66,13 +68,18 @@ public static partial class Bbs757EhsiText
             rows.Add("Center: deviation " + Deflection(deviation, a.DeviationFullScale, a.DotsPerUnit, "right", "left"));
         else rows.Add("Center: no deviation bar");
         if (ils && !a.IlsDots) rows.Add("Center: no deviation scale");
+        // The ILS self-test colors the dots amber: no other row names the scale while it is drawn.
+        else if (ils && a.IlsTest) rows.Add("Center: deviation scale amber");
 
         if (ils)
         {
             if (a.GlideslopeScale)
+            {
                 rows.Add(a.GlideslopePointer && double.IsFinite(a.GlideslopeDeviation)
                     ? "Right side: glideslope " + Deflection(a.GlideslopeDeviation, a.GlideslopePin, 1, "above", "below")
                     : "Right side: no glideslope pointer");
+                if (a.GlideslopeTest) rows.Add("Right side: glideslope scale amber");
+            }
             if (a.GlideslopeFlag) rows.Add("Right side: " + Word(w.Glideslope) + " flag");
         }
     }
@@ -86,7 +93,7 @@ public static partial class Bbs757EhsiText
     private static void ApproachBottomRows(List<string> rows, Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
     {
         var w = a.Words;
-        bool ils = Is(r, EhsiMode.Ils);
+        bool ils = Is(r, Bbs757EhsiMode.Ils);
         if (ils)
         {
             if (a.LocFlag) rows.Add("Bottom: " + Word(w.Loc) + " flag");
@@ -122,7 +129,7 @@ public static partial class Bbs757EhsiText
     /// </summary>
     private static void BearingPointerRows(List<string> rows, Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
     {
-        if (Is(r, EhsiMode.Plan) || !r.Valid) return;
+        if (Is(r, Bbs757EhsiMode.Plan) || !r.Valid) return;
         AddPointer(rows, r, 1, a.Pointer1);
         AddPointer(rows, r, 2, a.Pointer2);
     }
@@ -143,7 +150,7 @@ public static partial class Bbs757EhsiText
     /// <summary>ILS mode's flags: LOC and G/S, by the screen's words.</summary>
     private static void ApproachFlags(List<Item> flags, Bbs757EhsiReading r)
     {
-        if (!Is(r, EhsiMode.Ils) || r.Approach is not { } a) return;
+        if (!Is(r, Bbs757EhsiMode.Ils) || r.Approach is not { } a) return;
         if (a.LocFlag) flags.Add(new Item(LocFlagKey, Word(a.Words.Loc)));
         if (a.GlideslopeFlag) flags.Add(new Item(GlideslopeFlagKey, Word(a.Words.Glideslope)));
     }
