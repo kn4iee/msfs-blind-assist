@@ -4,10 +4,6 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// missing. A part's walk is all or nothing (B757-36): one torn read makes the whole reading corrupt.</summary>
 public sealed partial class Bbs757EhsiReader
 {
-    /// <summary>The reason a part whose layout part is present is not read: the parts this build does not read yet. The
-    /// map guides' task deletes it as it reads its part.</summary>
-    public const string NotReadYetInThisBuild = "not read yet in this build";
-
     /// <summary>The parts of one reading and their reasons.</summary>
     private sealed record PartsRead(
         Bbs757EhsiApproachReading? Approach,
@@ -15,13 +11,15 @@ public sealed partial class Bbs757EhsiReader
         Bbs757EhsiTcasReading? Tcas,
         string? TcasMissing,
         Bbs757EhsiMapOptionsReading? MapOptions,
-        Bbs757EhsiMapExtrasReading? MapExtras);
+        Bbs757EhsiMapExtrasReading? MapExtras,
+        Bbs757EhsiMapGuidesReading? MapGuides);
 
     /// <summary>Every part the layout holds; false when one is torn (the reading is then corrupt, B757-36).
     /// <paramref name="map"/> is what the map options' loop measures against, given in a full reading only; the map options
     /// are read only then, and only in MAP and PLAN. The map extras' runways and deceleration points too (the route's path
     /// by <paramref name="routeId"/>); their TERR and wind in every reading, with the wind and gear from
-    /// <paramref name="sim"/>.</summary>
+    /// <paramref name="sim"/>. The map guides in a full reading in MAP and PLAN (the range arc and the VNAV deviation in MAP
+    /// only).</summary>
     private bool TryParts(uint nd, uint source, int modeValue, bool full, Bbs757EhsiLoopScene? map, int routeId,
         Bbs757SimValues? sim, out PartsRead parts)
     {
@@ -38,13 +36,17 @@ public sealed partial class Bbs757EhsiReader
         if (l.Tcas is { } t && !TryTcas(nd, t, full, out tcas)) return false;
         if (l.MapOptions is { } o && full && map is not null && mapOrPlan && !TryMapOptions(nd, o, map, out options)) return false;
         if (l.MapExtras is { } x && !TryMapExtras(nd, source, x, full, mapOrPlan, routeId, sim, out extras)) return false;
+        Bbs757EhsiMapGuidesReading? guides = null;
+        if (l.MapGuides is { } g && full && mapOrPlan
+            && !TryMapGuides(nd, source, g, modeValue == (int)Bbs757EhsiText.EhsiMode.Map, routeId, out guides))
+            return false;
         parts = new PartsRead(approach, l.Approach is null ? l.ApproachMissing : null, tcas, l.Tcas is null ? l.TcasMissing : null,
-            options, extras);
+            options, extras, guides);
         return true;
     }
 
-    /// <summary>The reading with its parts and their reasons; a part missing from the layout carries the layout's reason,
-    /// and the parts not read yet carry <see cref="NotReadYetInThisBuild"/> while their layout part is present.</summary>
+    /// <summary>The reading with its parts and their reasons; a part missing from the layout carries the layout's
+    /// reason.</summary>
     private Bbs757EhsiReading WithParts(Bbs757EhsiReading reading, PartsRead parts)
     {
         var l = Layout;
@@ -58,7 +60,8 @@ public sealed partial class Bbs757EhsiReader
             MapOptionsMissing = l.MapOptions is null ? l.MapOptionsMissing : null,
             MapExtras = parts.MapExtras,
             MapExtrasMissing = l.MapExtras is null ? l.MapExtrasMissing : null,
-            MapGuidesMissing = l.MapGuides is null ? l.MapGuidesMissing : NotReadYetInThisBuild,
+            MapGuides = parts.MapGuides,
+            MapGuidesMissing = l.MapGuides is null ? l.MapGuidesMissing : null,
         };
     }
 

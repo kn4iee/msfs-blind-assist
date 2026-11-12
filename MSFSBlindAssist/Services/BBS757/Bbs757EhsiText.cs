@@ -56,7 +56,8 @@ public static partial class Bbs757EhsiText
     /// right: 1533.3z" (or "no ETA"), then the TCAS block.</item>
     /// <item>Plan 28's map extras (<see cref="TerrRows"/>, <see cref="WindRow"/>): TERR's rows after the top line, before
     /// the TCAS block; the wind after VOR and ILS's rose rows (before the bearing pointers), and in MAP after the map's
-    /// rows and the bearing pointers; the runways and the deceleration points among the map's items.</item>
+    /// rows and the bearing pointers; the runways and the deceleration points among the map's items. The map guides
+    /// (<see cref="AddMapGuides"/>) among the map's items too, and in MAP the VNAV path deviation right after them.</item>
     /// <item>A part of plan 28's not read, with a reason: "TCAS: not read: not in this layout file", one row where the
     /// part's rows would start, only in the modes where it shows something.</item>
     /// <item>In MAP while valid or in PLAN, a light reading (no route read): "Map: reading", alone. A full reading lists
@@ -117,6 +118,7 @@ public static partial class Bbs757EhsiText
         NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
         if (mapDrawn) NotRead(rows, MapGuidesPart, r.MapGuidesMissing);
         rows.AddRange(MapRows(r));
+        VnavDeviationRow(rows, r);
         // The bearing pointers are drawn in MAP while the IRS is valid (never in PLAN).
         if (Is(r, EhsiMode.Map) && r.Valid)
         {
@@ -224,11 +226,13 @@ public static partial class Bbs757EhsiText
         // Plan 28's map options and traffic (Bbs757EhsiText.MapOptions.cs, .Tcas.cs), among the map's items by their place.
         AddMapOptions(items, r, center);
         AddMapExtras(items, r, center);
+        AddMapGuides(items, r, center);
         AddTraffic(items, r);
 
         // Top to bottom, then left to right; OrderBy is stable, so one spot keeps the draw's order. The course lines, which
-        // cross the screen, after them.
-        return items.OrderBy(i => i.Y).ThenBy(i => i.X).Select(i => i.Text).Concat(CourseLineRows(r)).ToArray();
+        // cross the screen, after them, then a fix the reader cannot place.
+        return items.OrderBy(i => i.Y).ThenBy(i => i.X).Select(i => i.Text).Concat(CourseLineRows(r))
+            .Concat(UnplacedGuideRows(r)).ToArray();
     }
 
     private static void AddLeg(List<MapItem> items, Bbs757EhsiReading r, Bbs757EhsiLeg leg, string prefix, bool active, string? center)

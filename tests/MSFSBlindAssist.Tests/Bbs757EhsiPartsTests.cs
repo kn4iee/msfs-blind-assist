@@ -71,21 +71,22 @@ public class Bbs757EhsiPartsTests
             "TERR, wind and runways: not read: not in this layout file",
         }, NotRead(Rows(old, mode: 2, valid: false)));
 
-        // Each part with its own reason: the recipe's failing step, or (while its layout part is present) the parts this
-        // build does not read yet. The approach and TCAS read from a layout that has them list no "not read" row.
+        // Each part with its own reason: the recipe's failing step. The parts read from a layout that has them list no
+        // "not read" row.
         var missing = WithParts with
         {
             Approach = null, ApproachMissing = "course field not found",
             Tcas = null, TcasMissing = "traffic vector not found",
             MapOptions = null, MapOptionsMissing = "navaid list not found",
             MapExtras = null, MapExtrasMissing = "terrain static not found",
+            MapGuides = null, MapGuidesMissing = "fix: no fms",
         };
         Assert.Equal(new[]
         {
             "TCAS: not read: traffic vector not found",
             "Map options: not read: navaid list not found",
             "TERR, wind and runways: not read: terrain static not found",
-            "FIX, descent and altitude guides: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
+            "FIX, descent and altitude guides: not read: fix: no fms",
             "VOR and ILS: not read: course field not found",
         }, NotRead(Rows(missing, mode: 2)));
         // The map extras missing cost only their own rows: no TERR, wind, runway or deceleration row, in any mode.
@@ -96,11 +97,9 @@ public class Bbs757EhsiPartsTests
             Assert.DoesNotContain(rows, r => new[] { "Bottom left: wind", "Top right: TERR", "Top right: terrain", "Map: runway", "Map: deceleration" }
                 .Any(p => r.StartsWith(p, StringComparison.Ordinal)));
         }
-        Assert.Equal(new[]
-        {
-            "FIX, descent and altitude guides: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
-        }, NotRead(Rows(WithParts, mode: 2)));
-        Assert.Equal("not read yet in this build", Bbs757EhsiReader.NotReadYetInThisBuild);
+        // Every part present: no "not read" row in any mode.
+        foreach (int mode in new[] { 0, 1, 2, 3 })
+            Assert.Empty(NotRead(Rows(WithParts, mode)));
 
         // The light reading carries the reasons too.
         Assert.Equal(NotRead(Rows(missing, mode: 2)), NotRead(Rows(missing, mode: 2, full: false)));
@@ -158,12 +157,29 @@ public class Bbs757EhsiPartsTests
             [Bbs757EhsiReader.WindSpeedKey] = 70.9, [Bbs757EhsiReader.WindDirectionKey] = 287.4, [Bbs757EhsiReader.GearKey] = 0,
         }));
 
-        foreach (var reading in new[] { vor, ils, ilsOff, traffic, options, plan, extras })
+        // The map guides: TCM with its circle and radial, the off-path circles (45.5 NM reads 46), the range arc and the
+        // VNAV deviation, at range 160; and PLAN's places.
+        var guides = new Bbs757EhsiMapGuidesTests.Guides
+        {
+            Fix1 = Bbs757EhsiMapGuidesTests.Tcm, OffpathOn = true, Clean = 45.5, Selected = 10000, Altitude = 5000, VerticalSpeed = 1500,
+            Phase = 4, Deviation = -120.6,
+        };
+        var guided = Bbs757EhsiMapGuidesTests.Read(guides, range: 160);
+        var guidedPlan = Bbs757EhsiMapGuidesTests.Read(guides, mode: 3, range: 160);
+
+        foreach (var reading in new[] { vor, ils, ilsOff, traffic, options, plan, extras, guided, guidedPlan })
             Assert.Equal(TestCulture.Run("en-US", () => Bbs757EhsiText.Rows(reading)), TestCulture.Run(culture, () => Bbs757EhsiText.Rows(reading)));
 
         var rows = TestCulture.Run(culture, () => Bbs757EhsiText.Rows(vor).Concat(Bbs757EhsiText.Rows(ils)).Concat(Bbs757EhsiText.Rows(ilsOff))
             .Concat(Bbs757EhsiText.Rows(traffic)).Concat(Bbs757EhsiText.Rows(options)).Concat(Bbs757EhsiText.Rows(plan))
-            .Concat(Bbs757EhsiText.Rows(extras)).ToArray());
+            .Concat(Bbs757EhsiText.Rows(extras)).Concat(Bbs757EhsiText.Rows(guided)).Concat(Bbs757EhsiText.Rows(guidedPlan)).ToArray());
+        Assert.Contains("Map: fix TCM, 19.1 NM, 67° right", rows);
+        Assert.Contains("Map: fix TCM, circle 15 NM", rows);
+        Assert.Contains("Map: fix TCM, radial 300", rows);
+        Assert.Contains("Map: altitude range arc, 13.9 NM, ahead", rows);
+        Assert.Contains("Right side: VNAV path deviation -121 ft", rows);
+        Assert.Contains("Map: off-path descent circles, 46 NM and 38 NM around 111.6 NM, 52° right", rows);
+        Assert.Contains("Map: off-path descent circles, 46 NM and 38 NM around 111.6 NM south of the center", rows);
         Assert.Contains("Top right: TERR", rows);
         Assert.Contains("Top right: terrain 031 red, 004 amber", rows);
         Assert.Contains("Bottom left: wind 70 kt from 153° right", rows);

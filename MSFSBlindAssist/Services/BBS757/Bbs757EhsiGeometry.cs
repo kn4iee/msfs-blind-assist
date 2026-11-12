@@ -77,6 +77,21 @@ public static class Bbs757EhsiGeometry
     }
 
     /// <summary>
+    /// The point <paramref name="nm"/> nautical miles from (<paramref name="lat"/>, <paramref name="lon"/>) along the true
+    /// <paramref name="bearingTrue"/>, on the same sphere as <see cref="Project"/> (R = 6371 km, 1.852 km a mile): the
+    /// great-circle destination, its longitude folded to -180..180. For the map's circles and the altitude range arc.
+    /// </summary>
+    public static (double Latitude, double Longitude) Destination(double lat, double lon, double bearingTrue, double nm)
+    {
+        double d = nm * KilometersPerNauticalMile / ProjectionRadiusKilometers, b = bearingTrue * DegreesToRadians;
+        double p1 = lat * DegreesToRadians, l1 = lon * DegreesToRadians;
+        double p2 = Math.Asin(Math.Clamp(Math.Sin(p1) * Math.Cos(d) + Math.Cos(p1) * Math.Sin(d) * Math.Cos(b), -1.0, 1.0));
+        double l2 = l1 + Math.Atan2(Math.Sin(b) * Math.Sin(d) * Math.Cos(p1), Math.Cos(d) - Math.Sin(p1) * Math.Sin(p2));
+        double longitude = ((l2 / DegreesToRadians + 180.0) % 360.0 + 360.0) % 360.0 - 180.0;
+        return (p2 / DegreesToRadians, longitude);
+    }
+
+    /// <summary>
     /// BlueBird's clip (23406): the pixel must be inside the screen (0..Width, 0..Height) and, not centered, within
     /// Height * <paramref name="radiusFactor"/> - <paramref name="clipInset"/> pixels of the aircraft point
     /// (Width / 2, Height * <paramref name="aircraftYFactor"/>), in PLAN as well; centered, at or below

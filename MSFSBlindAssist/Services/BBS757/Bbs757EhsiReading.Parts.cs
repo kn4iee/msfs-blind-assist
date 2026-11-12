@@ -3,8 +3,8 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// <summary>
 /// Plan 28's five parts of the reading, each the reading of one optional layout part. A part is null when its layout part
 /// is missing, when this reading does not hold it, or (for a full-only part) in a light reading; its <c>…Missing</c>
-/// reason then says why where it is not simply "not in this reading": the layout part's own reason, or
-/// <see cref="Bbs757EhsiReader.NotReadYetInThisBuild"/>. A part with neither a reading nor a reason lists nothing (a dark or
+/// reason then says why where it is not simply "not in this reading": the layout part's own reason. A part with neither a
+/// reading nor a reason lists nothing (a dark or
 /// corrupt reading). The reasons travel in the reading so the rows need no layout, as <see cref="Words"/> and
 /// <see cref="Constants"/> do.
 /// </summary>
@@ -26,13 +26,11 @@ public sealed partial record Bbs757EhsiReading
     public Bbs757EhsiMapExtrasReading? MapExtras { get; init; }
     public string? MapExtrasMissing { get; init; }
 
+    /// <summary>The FIX pages, the off-path descent circles (full: MAP and PLAN), the altitude range arc and the VNAV path
+    /// deviation (full: MAP).</summary>
     public Bbs757EhsiMapGuidesReading? MapGuides { get; init; }
     public string? MapGuidesMissing { get; init; }
 }
-
-/// <summary>The FIX page, the off-path descent circles, the altitude range arc and the VNAV path deviation (plan 28's map
-/// guides; its reading is written by the map guides' task and holds nothing yet).</summary>
-public sealed record Bbs757EhsiMapGuidesReading;
 
 // ---- VOR and ILS ----
 
