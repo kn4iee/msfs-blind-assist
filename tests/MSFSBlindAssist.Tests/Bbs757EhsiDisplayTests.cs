@@ -319,9 +319,9 @@ public class Bbs757EhsiDisplayTests
         Assert.Contains("EHSI: PLAN, range 80, centered", f.Monitor.View());
         Assert.Contains("Map: T/C, 13.4 NM north-east of KOLM", f.Monitor.View());
 
-        f.Show(InMode(Ehsi(), "VOR"));
+        f.Show(InMode(Ehsi(), "VOR") with { ApproachMissing = "not in this layout file" });
         f.Tick(4);
-        Assert.Contains("VOR mode: not read yet", f.Monitor.View());
+        Assert.Contains("VOR and ILS: not read: not in this layout file", f.Monitor.View());
 
         // With the IRS off and EXCESS DATA up, a mode change does not speak the MAP flag or the message it hides.
         f.Show(InMode(Ehsi(), "VOR") with { Valid = false, ExcessCount = 100 });

@@ -74,9 +74,10 @@ public readonly record struct Bbs757EhsiPoint(string Word, bool Airport, double 
 /// top line's position: the simulator's <c>PLANE LATITUDE</c> and <c>PLANE LONGITUDE</c> when the monitor gave them (as
 /// BlueBird's top line reads them), else the nd's own copy of the IRS position, which the map's center always is.
 /// <see cref="ActiveIndex"/> is the index in <see cref="Route"/> of the route's own leg 0 (after the flown legs), -1 when
-/// it has none or in a light reading.
+/// it has none or in a light reading. Plan 28's parts (<see cref="Approach"/> and the rest) are in
+/// <c>Bbs757EhsiReading.Parts.cs</c>.
 /// </summary>
-public sealed record Bbs757EhsiReading(
+public sealed partial record Bbs757EhsiReading(
     bool Powered,
     string? Mode,
     int ModeValue,

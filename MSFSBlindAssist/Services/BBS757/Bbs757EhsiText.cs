@@ -12,7 +12,7 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// screen does in each mode follows BlueBird's mode value (<see cref="Bbs757EhsiReading.ModeValue"/>), and the mode is
 /// shown by the layout's word (<see cref="Bbs757EhsiReading.Mode"/>).
 /// </summary>
-public static class Bbs757EhsiText
+public static partial class Bbs757EhsiText
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -50,15 +50,20 @@ public static class Bbs757EhsiText
     /// <item>"EHSI: MAP, range 160" (", centered" when centered).</item>
     /// <item>Valid: "Top: HDG 119 M" (TRK with track up, TRU for a true reference). Not valid: "Top: ---" while aligning,
     /// then "Flag: HDG" (or TRK), and in MAP "Flag: MAP". While the range changes, nothing more.</item>
-    /// <item>VOR and ILS: "VOR mode: not read yet" (plan 28's), and nothing more. MAP and PLAN: "Top left: 37.5 NM" (or
-    /// "no distance") and "Top right: 1533.3z" (or "no ETA").</item>
+    /// <item>VOR and ILS (plan 28's approach part, <see cref="ApproachRows"/>): "Top left: DME 0.5", the TCAS block
+    /// (<see cref="TcasRows"/>), the rose's rows and the bearing pointers, and nothing more. MAP and PLAN: "Top left: 37.5 NM"
+    /// (or "no distance") and "Top right: 1533.3z" (or "no ETA"), then the TCAS block.</item>
+    /// <item>A part of plan 28's not read, with a reason: "TCAS: not read: not in this layout file", one row where the
+    /// part's rows would start, only in the modes where it shows something.</item>
     /// <item>In MAP while valid or in PLAN, a light reading (no route read): "Map: reading", alone. A full reading lists
     /// its map rows (none when nothing is on the map).</item>
     /// <item>Map rows, in a full reading, in MAP while valid or in PLAN, by their place on the screen (top to bottom, left to
     /// right): each leg with a symbol ("Map: KOLM, active, 37.5 NM, 87° right"; an inactive route's "Map, inactive route: ",
     /// a pending modification's "Map, modification: "; with DATA on its constraint and ETA as drawn), and the points
     /// within range + the margin ("Map: T/C, …", "Map: KSEA airport, …"). In PLAN the place is from the leg at the map's
-    /// center ("13.4 NM north-east of KOLM"), else "the center". A discontinuity draws nothing.</item>
+    /// center ("13.4 NM north-east of KOLM"), else "the center". A discontinuity draws nothing. In MAP, the TCAS traffic
+    /// among them.</item>
+    /// <item>MAP while valid: the bearing pointers.</item>
     /// <item>Valid: "Heading bug: 147, 28° right".</item>
     /// <item>"Message: EXCESS DATA" at the layout's count, else "Messages: none".</item>
     /// </list>
@@ -82,18 +87,52 @@ public static class Bbs757EhsiText
         if (r.RangeChanging) return rows;
         if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils))
         {
-            rows.Add(ModeWord(r) + " mode: not read yet");
+            // Plan 28's VOR and ILS picture (Bbs757EhsiText.Approach.cs): the DME, the TCAS block, then the rose's own rows.
+            if (r.Approach is { } a) rows.Add(DmeRow(r, a));
+            else NotRead(rows, ApproachPart, r.ApproachMissing);
+            TcasRows(rows, r);
+            NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
+            if (r.Approach is { } approach)
+            {
+                ApproachRows(rows, r, approach);
+                BearingPointerRows(rows, r, approach);
+            }
             return rows;
         }
 
         double? distance = Distance(r);
         rows.Add("Top left: " + (distance is { } nm ? Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(w.Nm) : "no distance"));
         rows.Add("Top right: " + (Eta(r, distance) is { } eta ? eta + Word(w.EtaSuffix) : "no ETA"));
+        TcasRows(rows, r);
+        bool mapDrawn = MapDrawn(r);
+        if (mapDrawn) NotRead(rows, MapOptionsPart, r.MapOptionsMissing);
+        NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
+        if (mapDrawn) NotRead(rows, MapGuidesPart, r.MapGuidesMissing);
         rows.AddRange(MapRows(r));
+        // The bearing pointers are drawn in MAP while the IRS is valid (never in PLAN).
+        if (Is(r, EhsiMode.Map) && r.Valid)
+        {
+            if (r.Approach is { } a) BearingPointerRows(rows, r, a);
+            else NotRead(rows, ApproachPart, r.ApproachMissing);
+        }
         if (r.Valid) rows.Add("Heading bug: " + ThreeDigits(r.HeadingBug) + ", " + Relative(r.HeadingBug, r.Number));
         rows.Add(Excess(r) ? "Message: " + Word(w.Excess) : "Messages: none");
         return rows;
     }
+
+    // Plan 28's parts as the pilot knows them, for the row of one not read.
+    private const string ApproachPart = "VOR and ILS", TcasPart = "TCAS", MapOptionsPart = "Map options",
+        MapExtrasPart = "TERR, wind and runways", MapGuidesPart = "FIX, descent and altitude guides";
+
+    /// <summary>A part's one row where its rows would start when it is not read and a reason says why: "TCAS: not read:
+    /// not in this layout file". No reason (a reading that does not hold the part): nothing.</summary>
+    private static void NotRead(List<string> rows, string part, string? reason)
+    {
+        if (reason is not null) rows.Add(part + ": not read: " + reason);
+    }
+
+    /// <summary>Whether the map's items are drawn: MAP while the IRS is valid, or PLAN.</summary>
+    private static bool MapDrawn(Bbs757EhsiReading r) => (Is(r, EhsiMode.Map) && r.Valid) || Is(r, EhsiMode.Plan);
 
     /// <summary>A layout word, empty when the reading carries none (a default reading).</summary>
     private static string Word(string? word) => word ?? "";
@@ -152,7 +191,7 @@ public static class Bbs757EhsiText
     private static IEnumerable<string> MapRows(Bbs757EhsiReading r)
     {
         bool plan = Is(r, EhsiMode.Plan);
-        if (!((Is(r, EhsiMode.Map) && r.Valid) || plan)) return Array.Empty<string>();
+        if (!MapDrawn(r)) return Array.Empty<string>();
         // A light reading holds no route: the map is drawn but not read yet (the window's first second).
         if (r.Route is null) return new[] { MapReading };
 
@@ -178,6 +217,9 @@ public static class Bbs757EhsiText
             string name = point.Airport ? point.Word + " airport" : point.Word;
             items.Add(new MapItem(at.Y, at.X, "Map: " + name + ", " + at.Place));
         }
+
+        // Plan 28's traffic (Bbs757EhsiText.Tcas.cs), among the map's items by its place.
+        AddTraffic(items, r);
 
         // Top to bottom, then left to right; OrderBy is stable, so one spot keeps the draw's order.
         return items.OrderBy(i => i.Y).ThenBy(i => i.X).Select(i => i.Text).ToArray();
@@ -252,42 +294,59 @@ public static class Bbs757EhsiText
 
     private const string HeadingFlag = "heading", MapFlag = "map", ExcessMessage = "excess";
 
-    /// <summary>The flags drawn, only while powered: the heading (or track) flag while not valid, and in MAP the MAP flag.</summary>
+    /// <summary>The flags drawn, only while powered: the heading (or track) flag while not valid, and in MAP the MAP flag;
+    /// then plan 28's ILS flags (LOC, G/S).</summary>
     private static List<Item> Flags(Bbs757EhsiReading r)
     {
-        var flags = new List<Item>(2);
-        if (!r.Powered || r.Valid) return flags;
-        flags.Add(new Item(HeadingFlag, HeadingWord(r)));
-        if (Is(r, EhsiMode.Map)) flags.Add(new Item(MapFlag, Word(r.Words.Map)));
+        var flags = new List<Item>(4);
+        if (!r.Powered) return flags;
+        if (!r.Valid)
+        {
+            flags.Add(new Item(HeadingFlag, HeadingWord(r)));
+            if (Is(r, EhsiMode.Map)) flags.Add(new Item(MapFlag, Word(r.Words.Map)));
+        }
+        ApproachFlags(flags, r);
         return flags;
     }
 
-    private static List<Item> Messages(Bbs757EhsiReading r) =>
-        Excess(r) ? new List<Item> { new(ExcessMessage, Word(r.Words.Excess)) } : new List<Item>();
+    /// <summary>The messages drawn: EXCESS DATA, then plan 28's TCAS messages.</summary>
+    private static List<Item> Messages(Bbs757EhsiReading r)
+    {
+        var messages = Excess(r) ? new List<Item> { new(ExcessMessage, Word(r.Words.Excess)) } : new List<Item>();
+        TcasMessages(messages, r);
+        return messages;
+    }
 
     /// <summary>
     /// What changed from <paramref name="heard"/> to <paramref name="now"/>, all on the one Ctrl+M row
     /// (<see cref="Bbs757EhsiDisplay.MuteKey"/>), in this order; the words are the same with or without
     /// <paramref name="withPrefix"/> ("EHSI" names the display):
     /// <list type="number">
-    /// <item>"EHSI message: EXCESS DATA", "EHSI message gone: EXCESS DATA".</item>
-    /// <item>"EHSI flag: HDG, MAP", "EHSI flag gone: HDG, MAP" (each change of one settle joined).</item>
+    /// <item>"EHSI message: EXCESS DATA", "EHSI message gone: EXCESS DATA"; plan 28's TCAS FAIL, TA ONLY, TCAS OFF and
+    /// TRAFFIC the same way.</item>
+    /// <item>"EHSI flag: HDG, MAP", "EHSI flag gone: HDG, MAP" (each change of one settle joined); plan 28's LOC and G/S
+    /// the same way.</item>
     /// <item>The active waypoint's label changing, while both are powered: "EHSI: KOLM, 37 NM" (whole NM, truncated;
     /// without the distance where the top line draws dashes, and in VOR and ILS, where it shows DME), or
     /// "EHSI: no active waypoint".</item>
     /// </list>
-    /// A flag or message that comes or goes only because the mode changed (the MAP flag, EXCESS DATA, which some modes do
-    /// not draw) is not spoken: the pilot turned the selector, and the window shows it. Nothing else is ever spoken: no
-    /// mode, range, CTR, DATA, heading, bug, route edit or map item. Going dark or lit is the monitor's.
+    /// A flag or message that comes or goes only because the mode changed (the MAP flag, EXCESS DATA, LOC and G/S, which
+    /// some modes do not draw; TCAS FAIL and TCAS OFF, which the nd's gate holds back in some) is not spoken: the pilot
+    /// turned the selector, and the window shows it. Nothing else is ever spoken: no mode, range, CTR, DATA, heading, bug,
+    /// route edit, map item, traffic, TFC or TCAS TEST. Going dark or lit is the monitor's.
     /// </summary>
     public static IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757EhsiReading heard, Bbs757EhsiReading now, bool withPrefix)
     {
         var lines = new List<Bbs757SpokenLine>();
         bool sameMode = heard.ModeValue == now.ModeValue;
+        // The TCAS messages the nd's gate holds back come and go with the EFIS mode alone: compared only while the gate
+        // is the same in both.
+        bool sameGate = heard.Tcas?.MessagesAllowed == now.Tcas?.MessagesAllowed;
         bool Comparable(Item item) => item.Key switch
         {
-            MapFlag => sameMode,
+            MapFlag or LocFlagKey or GlideslopeFlagKey => sameMode,
             ExcessMessage => sameMode || (MapOrPlan(heard) && MapOrPlan(now)),
+            TcasFailKey or TcasOffKey => sameGate,
             _ => true,
         };
         Diff(lines, Messages(heard), Messages(now), "EHSI message: ", "EHSI message gone: ", Comparable);

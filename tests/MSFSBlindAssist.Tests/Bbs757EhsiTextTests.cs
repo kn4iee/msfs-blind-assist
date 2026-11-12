@@ -116,26 +116,29 @@ public class Bbs757EhsiTextTests
     [Theory]
     [InlineData("VOR")]
     [InlineData("ILS")]
-    public void Vor_mode_says_not_read_yet(string mode)
+    public void Vor_and_ils_modes_list_their_part_never_the_map(string mode)
     {
-        // Plan 28's: the header and the heading line, then the one row, and nothing more.
-        Assert.Equal(new[] { $"EHSI: {mode}, range 160", "Top: HDG 119 M", $"{mode} mode: not read yet" },
-            Bbs757EhsiText.Rows(InMode(Ehsi(), mode)));
-        Assert.Equal(new[] { $"EHSI: {mode}, range 160, centered", "Flag: HDG", $"{mode} mode: not read yet" },
+        // The picture is plan 28's approach part (Bbs757EhsiApproachTests). A reading holding neither the part nor a reason
+        // lists the header and the heading line only: never MAP's top line, map items or heading bug row.
+        Assert.Equal(new[] { $"EHSI: {mode}, range 160", "Top: HDG 119 M" }, Bbs757EhsiText.Rows(InMode(Ehsi(), mode)));
+        Assert.Equal(new[] { $"EHSI: {mode}, range 160, centered", "Flag: HDG" },
             Bbs757EhsiText.Rows(InMode(Ehsi(), mode) with { Centered = true, Valid = false }));
+        // The part missing: its one row where its picture starts.
+        Assert.Equal(new[] { $"EHSI: {mode}, range 160", "Top: HDG 119 M", "VOR and ILS: not read: not in this layout file" },
+            Bbs757EhsiText.Rows(InMode(Ehsi(), mode) with { ApproachMissing = "not in this layout file" }));
     }
 
     [Fact]
     public void The_mode_is_branched_on_by_its_value_and_shown_by_its_word()
     {
         // The word is the layout's; what the screen does follows BlueBird's value: a renamed word still reads its mode.
-        Assert.Equal(new[] { "EHSI: V0R, range 160", "Top: HDG 119 M", "V0R mode: not read yet" },
-            Bbs757EhsiText.Rows(Ehsi() with { Mode = "V0R", ModeValue = 0 }));
+        Assert.Equal(new[] { "EHSI: V0R, range 160", "Top: HDG 119 M", "VOR and ILS: not read: x" },
+            Bbs757EhsiText.Rows(Ehsi() with { Mode = "V0R", ModeValue = 0, ApproachMissing = "x" }));
         Assert.Contains("Map: T/C, 13.4 NM north-east of KOLM", MapRows(Plan() with { Mode = "PLN" }));
         Assert.Equal("KOLM, EHSI in L0C mode", Bbs757EhsiText.WaypointLine(Light() with { Mode = "L0C", ModeValue = 1 }));
         // A value outside the four: no map, no VOR row, no MAP flag.
-        var other = Ehsi() with { ModeValue = 7, Valid = false };
-        Assert.DoesNotContain(Bbs757EhsiText.Rows(other), r => r.StartsWith("Map", StringComparison.Ordinal) || r.Contains("not read yet", StringComparison.Ordinal));
+        var other = Ehsi() with { ModeValue = 7, Valid = false, ApproachMissing = "x" };
+        Assert.DoesNotContain(Bbs757EhsiText.Rows(other), r => r.StartsWith("Map", StringComparison.Ordinal) || r.StartsWith("VOR and ILS", StringComparison.Ordinal));
         Assert.DoesNotContain("Flag: MAP", Bbs757EhsiText.Rows(other));
     }
 

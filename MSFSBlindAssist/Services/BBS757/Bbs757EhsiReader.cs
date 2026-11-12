@@ -21,7 +21,7 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// makes the whole reading <see cref="Bbs757EhsiReading.Corrupt"/>, never a partial route. False only when the nd cannot
 /// be found or one of its fixed fields cannot be read: the memory moved or went away.</para>
 /// </summary>
-public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
+public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
 {
     // A wasm32 pointer, i32 and UTF-32 code point are 4 bytes; a libc++ std::u32string is 12 bytes. Neither is BlueBird's:
     // every offset into BlueBird's own objects is a layout field.
@@ -208,6 +208,13 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             points = list;
         }
 
+        // Plan 28's parts (Bbs757EhsiReader.Parts.cs), in the same regions scope: one torn part is a corrupt reading.
+        if (!TryParts(nd, source, full, out var parts))
+        {
+            reading = Bad(full);
+            return true;
+        }
+
         reading = new Bbs757EhsiReading(
             Powered: true, Mode: mode, ModeValue: modeValue, Centered: centered, Range: range, RangeChanging: rangeChanging,
             Valid: valid, Aligning: aligning, Number: number, TrackUp: trackUp != 0, TrueReference: trueReference != 0,
@@ -216,6 +223,7 @@ public sealed class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiReading>
             Map: new Bbs757EhsiMap(centerLatitude, centerLongitude, rotation, screenX, screenY, width, height),
             Constants: _constants, Words: _words, Active: activeLeg, ActiveIndex: activeIndex, RouteActive: routeActive, DataSwitch: dataSwitch, ExcessCount: excessCount,
             Route: routeLegs, Modification: modificationLegs, Points: points, Corrupt: false);
+        reading = WithParts(reading, parts);
         return true;
     }
 

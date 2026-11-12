@@ -11,12 +11,13 @@ namespace MSFSBlindAssist.Tests;
 /// of range or more legs than the cap make one corrupt reading, never a partial route. A discontinuity is its own leg.</summary>
 public class Bbs757EhsiReaderTests
 {
-    private const ulong Base = 0x20000000;
-    private const int Size = 0x130000;
-    private const uint Outside = 0x200000;
+    internal const ulong Base = 0x20000000;
+    internal const int Size = 0x130000;
+    internal const uint Outside = 0x200000;
 
     // Where this test's memory puts each object; the statics (manager, registry, clock) are the sample layout's own.
-    private const uint Nd = 0x10000, Efis = 0x11000, Source = 0x12000, Irs = 0x13000, Mcp = 0x14000, Route = 0x15000,
+    // Plan 28's part tests (Bbs757EhsiApproachTests, Bbs757EhsiTcasTests) build on this scene through its Tweak.
+    internal const uint Nd = 0x10000, Efis = 0x11000, Source = 0x12000, Irs = 0x13000, Mcp = 0x14000, Route = 0x15000,
         ModRoute = 0x16000, Decoy = 0x17000, FoNd = 0x18000, Node = 0x19000, DecoyNode = 0x19100, Path = 0x1A000,
         Strings = 0x40000, Legs = 0x80000, ModLegs = 0xF0000, Flown = 0xF8000;
     private const uint NdSlot = 12 * 8, DecoySlot = 8 * 8, FoSlot = 14 * 8, DecoyVptr = 0x133d8, StringPitch = 0x100;
@@ -25,7 +26,7 @@ public class Bbs757EhsiReaderTests
     private static readonly Bbs757EhsiLayout L = Bbs757EhsiLayoutTests.Sample();
 
     /// <summary>One leg as BlueBird keeps it: kind, position, path terminator, constraint, ETA, label.</summary>
-    private sealed record TLeg(string Label, int Kind, double Lat, double Lon, int Terminator, int CKind = 0, int C1 = 0,
+    internal sealed record TLeg(string Label, int Kind, double Lat, double Lon, int Terminator, int CKind = 0, int C1 = 0,
         int C2 = 0, double Eta = -1);
 
     private static TLeg Kolm => new("KOLM", 4, 46.96941, -122.90254, 5, 1, 2300, 0, 1518.48);
@@ -42,7 +43,7 @@ public class Bbs757EhsiReaderTests
     private static TLeg[] Live() => new[] { Kolm, Discontinuity, Olm, Btg, Kpdx };
 
     /// <summary>One scene's memory: the sample layout's places, the objects at this test's addresses.</summary>
-    private sealed class Scene
+    internal sealed class Scene
     {
         public bool Powered = true, Failed, Blanked, Centered, RangeChanging, Valid = true, Aligning, DataSwitch, TrackUp,
             TrueReference, RouteActive = true, Modified, ModificationPointer = true, HasIrs = true, HasRegistry = true,
@@ -202,26 +203,28 @@ public class Bbs757EhsiReaderTests
 
     // ---- memory ----
 
-    private static void I32(byte[] b, long at, long v) => BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(checked((int)at)), unchecked((int)v));
+    internal static void I32(byte[] b, long at, long v) => BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(checked((int)at)), unchecked((int)v));
 
-    private static void F64(byte[] b, long at, double v) => BinaryPrimitives.WriteDoubleLittleEndian(b.AsSpan(checked((int)at)), v);
+    internal static void F64(byte[] b, long at, double v) => BinaryPrimitives.WriteDoubleLittleEndian(b.AsSpan(checked((int)at)), v);
 
-    private static void F32(byte[] b, long at, float v) => BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(checked((int)at)), v);
+    internal static void F32(byte[] b, long at, float v) => BinaryPrimitives.WriteSingleLittleEndian(b.AsSpan(checked((int)at)), v);
 
-    private static void Flag(byte[] b, long at, bool v) => b[checked((int)at)] = v ? (byte)1 : (byte)0;
+    internal static void Flag(byte[] b, long at, bool v) => b[checked((int)at)] = v ? (byte)1 : (byte)0;
 
-    private static FakeProcessMemory Backing(byte[] bytes) =>
+    internal static FakeProcessMemory Backing(byte[] bytes) =>
         new FakeProcessMemory().Add(new MemoryRegion(Base, Base, (ulong)bytes.Length, true, true, true), bytes);
 
-    private static Bbs757EhsiReader Reader(byte[] bytes, bool full, FakeProcessMemory? src = null)
+    internal static Bbs757EhsiReader Reader(byte[] bytes, bool full, FakeProcessMemory? src = null, Bbs757EhsiLayout? layout = null)
     {
         src ??= Backing(bytes);
-        return new Bbs757EhsiReader(new ModuleMemory(src, Base), src, L) { FullWanted = () => full };
+        return new Bbs757EhsiReader(new ModuleMemory(src, Base), src, layout ?? L) { FullWanted = () => full };
     }
 
-    private static Bbs757EhsiReading Read(Scene scene, bool full = true)
+    /// <summary>One reading of <paramref name="scene"/> through <paramref name="layout"/> (the sample layout, without plan
+    /// 28's parts, when null).</summary>
+    internal static Bbs757EhsiReading Read(Scene scene, bool full = true, Bbs757EhsiLayout? layout = null)
     {
-        using var r = Reader(scene.Build(), full);
+        using var r = Reader(scene.Build(), full, layout: layout);
         Assert.True(r.TryRead(out var reading));
         return reading;
     }
