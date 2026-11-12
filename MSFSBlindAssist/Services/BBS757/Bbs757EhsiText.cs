@@ -50,9 +50,10 @@ public static partial class Bbs757EhsiText
     /// <item>"EHSI: MAP, range 160" (", centered" when centered).</item>
     /// <item>Valid: "Top: HDG 119 M" (TRK with track up, TRU for a true reference). Not valid: "Top: ---" while aligning,
     /// then "Flag: HDG" (or TRK), and in MAP "Flag: MAP". While the range changes, nothing more.</item>
-    /// <item>VOR and ILS (plan 28's approach part, <see cref="ApproachRows"/>): "Top left: DME 0.5", the TCAS block
-    /// (<see cref="TcasRows"/>), the rose's rows and the bearing pointers, and nothing more. MAP and PLAN: "Top left: 37.5 NM"
-    /// (or "no distance") and "Top right: 1533.3z" (or "no ETA"), then the TCAS block.</item>
+    /// <item>VOR and ILS (plan 28's approach part, <see cref="ApproachRows"/>): "Top left: DME 0.5", "Top right: 1533.3z"
+    /// (or "no ETA"; expanded only), the TCAS block (<see cref="TcasRows"/>), the rose's rows, the bearing pointers and,
+    /// while valid, the heading bug, and nothing more. MAP and PLAN: "Top left: 37.5 NM" (or "no distance") and "Top
+    /// right: 1533.3z" (or "no ETA"), then the TCAS block.</item>
     /// <item>A part of plan 28's not read, with a reason: "TCAS: not read: not in this layout file", one row where the
     /// part's rows would start, only in the modes where it shows something.</item>
     /// <item>In MAP while valid or in PLAN, a light reading (no route read): "Map: reading", alone. A full reading lists
@@ -85,11 +86,14 @@ public static partial class Bbs757EhsiText
             if (Is(r, EhsiMode.Map)) rows.Add("Flag: " + Word(w.Map));
         }
         if (r.RangeChanging) return rows;
+        double? distance = Distance(r);
         if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils))
         {
-            // Plan 28's VOR and ILS picture (Bbs757EhsiText.Approach.cs): the DME, the TCAS block, then the rose's own rows.
+            // Plan 28's VOR and ILS picture (Bbs757EhsiText.Approach.cs): the DME at the top left, plan 26's ETA at the top
+            // right (expanded only: the full rose draws none), the TCAS block, the rose's own rows, then plan 26's heading bug.
             if (r.Approach is { } a) rows.Add(DmeRow(r, a));
             else NotRead(rows, ApproachPart, r.ApproachMissing);
+            if (!r.Centered) rows.Add(EtaRow(r, distance));
             TcasRows(rows, r);
             NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
             if (r.Approach is { } approach)
@@ -97,12 +101,12 @@ public static partial class Bbs757EhsiText
                 ApproachRows(rows, r, approach);
                 BearingPointerRows(rows, r, approach);
             }
+            if (r.Valid) rows.Add(HeadingBugRow(r));
             return rows;
         }
 
-        double? distance = Distance(r);
         rows.Add("Top left: " + (distance is { } nm ? Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(w.Nm) : "no distance"));
-        rows.Add("Top right: " + (Eta(r, distance) is { } eta ? eta + Word(w.EtaSuffix) : "no ETA"));
+        rows.Add(EtaRow(r, distance));
         TcasRows(rows, r);
         bool mapDrawn = MapDrawn(r);
         if (mapDrawn) NotRead(rows, MapOptionsPart, r.MapOptionsMissing);
@@ -115,24 +119,18 @@ public static partial class Bbs757EhsiText
             if (r.Approach is { } a) BearingPointerRows(rows, r, a);
             else NotRead(rows, ApproachPart, r.ApproachMissing);
         }
-        if (r.Valid) rows.Add("Heading bug: " + ThreeDigits(r.HeadingBug) + ", " + Relative(r.HeadingBug, r.Number));
+        if (r.Valid) rows.Add(HeadingBugRow(r));
         rows.Add(Excess(r) ? "Message: " + Word(w.Excess) : "Messages: none");
         return rows;
     }
 
-    // Plan 28's parts as the pilot knows them, for the row of one not read.
-    private const string ApproachPart = "VOR and ILS", TcasPart = "TCAS", MapOptionsPart = "Map options",
-        MapExtrasPart = "TERR, wind and runways", MapGuidesPart = "FIX, descent and altitude guides";
+    /// <summary>The top line's ETA: "Top right: 1533.3z", or "Top right: no ETA" where it draws its dashes (under the
+    /// minimum ground speed, or no distance).</summary>
+    private static string EtaRow(Bbs757EhsiReading r, double? distance) =>
+        "Top right: " + (Eta(r, distance) is { } eta ? eta + Word(r.Words.EtaSuffix) : "no ETA");
 
-    /// <summary>A part's one row where its rows would start when it is not read and a reason says why: "TCAS: not read:
-    /// not in this layout file". No reason (a reading that does not hold the part): nothing.</summary>
-    private static void NotRead(List<string> rows, string part, string? reason)
-    {
-        if (reason is not null) rows.Add(part + ": not read: " + reason);
-    }
-
-    /// <summary>Whether the map's items are drawn: MAP while the IRS is valid, or PLAN.</summary>
-    private static bool MapDrawn(Bbs757EhsiReading r) => (Is(r, EhsiMode.Map) && r.Valid) || Is(r, EhsiMode.Plan);
+    private static string HeadingBugRow(Bbs757EhsiReading r) =>
+        "Heading bug: " + ThreeDigits(r.HeadingBug) + ", " + Relative(r.HeadingBug, r.Number);
 
     /// <summary>A layout word, empty when the reading carries none (a default reading).</summary>
     private static string Word(string? word) => word ?? "";
@@ -331,7 +329,8 @@ public static partial class Bbs757EhsiText
     /// "EHSI: no active waypoint".</item>
     /// </list>
     /// A flag or message that comes or goes only because the mode changed (the MAP flag, EXCESS DATA, LOC and G/S, which
-    /// some modes do not draw; TCAS FAIL and TCAS OFF, which the nd's gate holds back in some) is not spoken: the pilot
+    /// some modes do not draw; TCAS FAIL and TCAS OFF, which the nd's gate holds back in some, and a failed TCAS's TA ONLY,
+    /// which shows where the gate holds FAIL back) is not spoken: the pilot
     /// turned the selector, and the window shows it. Nothing else is ever spoken: no mode, range, CTR, DATA, heading, bug,
     /// route edit, map item, traffic, TFC or TCAS TEST. Going dark or lit is the monitor's.
     /// </summary>
@@ -342,11 +341,15 @@ public static partial class Bbs757EhsiText
         // The TCAS messages the nd's gate holds back come and go with the EFIS mode alone: compared only while the gate
         // is the same in both.
         bool sameGate = heard.Tcas?.MessagesAllowed == now.Tcas?.MessagesAllowed;
+        // A failed TCAS shows TA ONLY only while the gate is clear (FAIL hides it): then TA ONLY comes and goes with the
+        // gate too.
+        bool eitherFailed = (heard.Tcas is { } h && Failed(h)) || (now.Tcas is { } n && Failed(n));
         bool Comparable(Item item) => item.Key switch
         {
             MapFlag or LocFlagKey or GlideslopeFlagKey => sameMode,
             ExcessMessage => sameMode || (MapOrPlan(heard) && MapOrPlan(now)),
             TcasFailKey or TcasOffKey => sameGate,
+            TaOnlyKey => sameGate || !eitherFailed,
             _ => true,
         };
         Diff(lines, Messages(heard), Messages(now), "EHSI message: ", "EHSI message gone: ", Comparable);
@@ -382,29 +385,5 @@ public static partial class Bbs757EhsiText
     private static string WaypointName(Bbs757EhsiLeg a) =>
         a.Discontinuity || a.Label.Length == 0 ? DiscontinuityName : a.Label;
 
-    // ---- Ctrl+W ----
-
-    /// <summary>
-    /// The Ctrl+W line from a reading, the owner's wording: the active waypoint's name, then the top line's distance and
-    /// ETA as drawn: "KOLM, 37.5 NM, 1533.3z"; "KOLM, 37.5 NM, no ETA"; a VM or FM leg "KOLM, no distance, no ETA"; no leg
-    /// "No active waypoint". In VOR and ILS the top line shows DME (plan 28's): "KOLM, EHSI in VOR mode". Not powered:
-    /// "EHSI waypoint unavailable: display dark"; a corrupt reading: "EHSI waypoint unavailable: no reading yet"
-    /// (<see cref="Bbs757EhsiDisplay.WaypointLine"/> names the monitor's reason instead).
-    /// </summary>
-    public static string WaypointLine(Bbs757EhsiReading r)
-    {
-        if (r.Corrupt) return Unavailable + NoReadingYet;
-        if (!r.Powered) return Unavailable + DisplayDark;
-        if (r.Active is not { } a) return NoActiveWaypoint;
-        string name = WaypointName(a);
-        if (Is(r, EhsiMode.Vor) || Is(r, EhsiMode.Ils)) return name + ", EHSI in " + ModeWord(r) + " mode";
-        if (Distance(r) is not { } nm) return name + ", no distance, no ETA";
-        return name + ", " + Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(r.Words.Nm) + ", "
-            + (Eta(r, nm) is { } eta ? eta + Word(r.Words.EtaSuffix) : "no ETA");
-    }
-
-    /// <summary>The Ctrl+W line while the monitor may have no reading: <paramref name="unavailableReason"/> (the monitor's
-    /// own, "no reading yet" when null) when there is none or it is corrupt.</summary>
-    internal static string WaypointLine(Bbs757EhsiReading? latest, string? unavailableReason) =>
-        latest is null || latest.Corrupt ? Unavailable + (unavailableReason ?? NoReadingYet) : WaypointLine(latest);
+    // The Ctrl+W line: Bbs757EhsiText.WaypointLine.cs.
 }

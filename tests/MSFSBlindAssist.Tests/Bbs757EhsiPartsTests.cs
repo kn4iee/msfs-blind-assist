@@ -39,16 +39,23 @@ public class Bbs757EhsiPartsTests
         Assert.StartsWith("Top right: ", map[Array.IndexOf(map, "TCAS: not read: not in this layout file") - 1], StringComparison.Ordinal);
         Assert.StartsWith("Heading bug: ", map[Array.IndexOf(map, "VOR and ILS: not read: not in this layout file") + 1], StringComparison.Ordinal);
 
-        // In VOR and ILS the approach's row replaces its whole picture, right after the header; no map options or guides.
+        // In VOR and ILS the approach's row replaces its whole picture, from the top left; no map options or guides. The
+        // top right ETA and the heading bug are plan 26's and stay.
         foreach (int mode in new[] { 0, 1 })
+        {
+            var rows = Rows(old, mode);
             Assert.Equal(new[]
             {
                 mode == 0 ? "EHSI: VOR, range 160" : "EHSI: ILS, range 160",
                 "Top: HDG 119 M",
                 "VOR and ILS: not read: not in this layout file",
+                rows[3],
                 "TCAS: not read: not in this layout file",
                 "TERR, wind and runways: not read: not in this layout file",
-            }, Rows(old, mode));
+                "Heading bug: 147, 28° right",
+            }, rows);
+            Assert.StartsWith("Top right: ", rows[3], StringComparison.Ordinal);
+        }
 
         // PLAN draws no bearing pointers; MAP with the IRS not valid draws no map and no pointers.
         Assert.Equal(new[]
@@ -126,7 +133,11 @@ public class Bbs757EhsiPartsTests
             .Concat(Bbs757EhsiText.Rows(traffic)).ToArray());
         Assert.Contains("Top left: DME 0.5", rows);
         Assert.Contains("Center: deviation 0.5 dots right", rows);
-        Assert.Contains("Bearing pointer 1: VOR L, SEA, 0.5 NM, 74° right", rows);
+        Assert.Contains("Bearing pointer 1: VOR L, SEA, 74° right", rows);
+        // VOR's top right ETA, as MAP's prints it.
+        string mapEta = Bbs757EhsiText.Rows(Bbs757EhsiApproachTests.Read(Bbs757EhsiApproachTests.VorSea(), mode: 2))
+            .Single(r => r.StartsWith("Top right: ", StringComparison.Ordinal));
+        Assert.Contains(mapEta, rows);
         Assert.Contains("Top left: DME 0.6", rows);
         Assert.Contains("Bottom right: 110.30", rows);
         Assert.Contains("Center: deviation 1.2 dots left", rows);

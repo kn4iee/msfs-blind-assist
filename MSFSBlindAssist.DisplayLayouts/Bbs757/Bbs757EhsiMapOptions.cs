@@ -9,7 +9,10 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// <see cref="AirportStride"/>-byte records at <see cref="Airports"/>) and the two VOR panels the course lines come
 /// from. The record and panel fields are offsets in their object. <see cref="DrawnKinds"/> to <see cref="RoundLimit"/>
 /// are the draw's constants (the margin and the count limit are the layout's <c>MarkerMargin</c> and
-/// <c>ExcessLimit</c>); <see cref="MaxItems"/> caps each list's walk. Equality compares every field by content.
+/// <c>ExcessLimit</c>): <see cref="DrawnKinds"/> the navaid kinds the draw's switch draws, <see cref="CourseLineKinds"/>
+/// the station kinds a VOR course line is drawn through, and <see cref="KindVor"/> to <see cref="KindDme"/> the kind
+/// values the app names in its rows (BlueBird prints no kind word: it draws a symbol per kind; the words are the app's
+/// names for the symbols). <see cref="MaxItems"/> caps each list's walk. Equality compares every field by content.
 /// </summary>
 public sealed record Bbs757EhsiMapOptions(
     int NavAidSwitch,
@@ -48,6 +51,12 @@ public sealed record Bbs757EhsiMapOptions(
     int PanelManualFraction,
     int PanelManualWhole,
     IReadOnlyList<int> DrawnKinds,
+    IReadOnlyList<int> CourseLineKinds,
+    int KindVor,
+    int KindVorDme,
+    int KindVortac,
+    int KindTacan,
+    int KindDme,
     int HighClass,
     double HighClassAbove,
     double NdbsAbove,
@@ -93,6 +102,12 @@ public sealed record Bbs757EhsiMapOptions(
         && PanelManualFraction == other.PanelManualFraction
         && PanelManualWhole == other.PanelManualWhole
         && DrawnKinds.SequenceEqual(other.DrawnKinds)
+        && CourseLineKinds.SequenceEqual(other.CourseLineKinds)
+        && KindVor == other.KindVor
+        && KindVorDme == other.KindVorDme
+        && KindVortac == other.KindVortac
+        && KindTacan == other.KindTacan
+        && KindDme == other.KindDme
         && HighClass == other.HighClass
         && HighClassAbove == other.HighClassAbove
         && NdbsAbove == other.NdbsAbove
@@ -139,6 +154,13 @@ public sealed record Bbs757EhsiMapOptions(
         h.Add(PanelManualFraction);
         h.Add(PanelManualWhole);
         foreach (int k in DrawnKinds) h.Add(k);
+        h.Add(-1);   // the two lists' boundary, so [0, 1] + [2] and [0] + [1, 2] hash apart
+        foreach (int k in CourseLineKinds) h.Add(k);
+        h.Add(KindVor);
+        h.Add(KindVorDme);
+        h.Add(KindVortac);
+        h.Add(KindTacan);
+        h.Add(KindDme);
         h.Add(HighClass);
         h.Add(HighClassAbove);
         h.Add(NdbsAbove);

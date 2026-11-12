@@ -13,11 +13,13 @@ public static partial class Bbs757EhsiText
     private const string TestPattern = "Map: TCAS test pattern";
 
     /// <summary>
-    /// The left block and TRAFFIC, in screen order: line 1 ("Left: TFC", "Left: TCAS OFF" or "Left: TCAS FAIL", the
-    /// latter two over both lines), TEST over it ("Left: TEST"), line 2 ("Left: TA ONLY"); then "Right: TRAFFIC, amber" (or
-    /// red for an RA) while the IRS is valid. FAIL (failed or not powered) shows nothing below it; TFC, TCAS OFF and FAIL
-    /// only where the nd's gate allows them, TA ONLY and TEST in every mode. No computer: nothing. The part missing: its
-    /// one row.
+    /// The left block and TRAFFIC, in screen order. The left block: line 1 ("Left: TFC", "Left: TCAS OFF" or "Left: TCAS
+    /// FAIL", the latter two over both lines), TEST over it ("Left: TEST"), line 2 ("Left: TA ONLY"). "Right: TRAFFIC,
+    /// amber" (or red for an RA) while the IRS is valid, at 0.38 of the height: above the left block when expanded (its
+    /// top at 0.433), so first; below it when centered (0.199), so last. FAIL (failed or not powered) is drawn, and shows
+    /// nothing below it, only where the nd's gate allows it; with the gate clear a failed TCAS draws by its level as a
+    /// working one does. TFC and TCAS OFF only where the gate allows them, TA ONLY and TEST in every mode. No computer:
+    /// nothing. The part missing: its one row.
     /// </summary>
     private static void TcasRows(List<string> rows, Bbs757EhsiReading r)
     {
@@ -28,11 +30,10 @@ public static partial class Bbs757EhsiText
         }
         if (!t.Computer) return;
         var w = t.Words;
-        bool fail = Failed(t);
-        if (fail)
-        {
-            if (t.MessagesAllowed) rows.Add("Left: " + Word(w.Tcas) + " " + Word(w.Fail));
-        }
+        string? traffic = TrafficShown(r, t) ? "Right: " + Word(w.Traffic) + (t.ResolutionAdvisory ? ", red" : ", amber") : null;
+        if (traffic is not null && !r.Centered) rows.Add(traffic);
+        bool fail = FailShown(t);
+        if (fail) rows.Add("Left: " + Word(w.Tcas) + " " + Word(w.Fail));
         else if (t.Level == Bbs757EhsiTcasLevel.Off)
         {
             if (t.MessagesAllowed) rows.Add("Left: " + Word(w.Tcas) + " " + Word(w.Off));
@@ -40,10 +41,15 @@ public static partial class Bbs757EhsiText
         else if (t.TrafficSwitch && t.MessagesAllowed) rows.Add("Left: " + Word(w.Tfc));
         if (t.Test) rows.Add("Left: " + Word(w.Test));
         if (!fail && t.Level == Bbs757EhsiTcasLevel.TaOnly) rows.Add("Left: " + Word(w.TaOnly));
-        if (TrafficShown(r, t)) rows.Add("Right: " + Word(w.Traffic) + (t.ResolutionAdvisory ? ", red" : ", amber"));
+        if (traffic is not null && r.Centered) rows.Add(traffic);
     }
 
+    /// <summary>The TCAS failed or not powered.</summary>
     private static bool Failed(Bbs757EhsiTcasReading t) => !t.Powered || t.Failed;
+
+    /// <summary>TCAS FAIL drawn: failed and the nd's gate set. With the gate clear a failed TCAS falls through to its
+    /// level.</summary>
+    private static bool FailShown(Bbs757EhsiTcasReading t) => Failed(t) && t.MessagesAllowed;
 
     /// <summary>TRAFFIC: a TA or an RA present, while the IRS is valid, in any mode.</summary>
     private static bool TrafficShown(Bbs757EhsiReading r, Bbs757EhsiTcasReading t) =>
@@ -102,8 +108,8 @@ public static partial class Bbs757EhsiText
     {
         if (!r.Powered || r.Tcas is not { Computer: true } t) return;
         var w = t.Words;
-        bool fail = Failed(t);
-        if (fail && t.MessagesAllowed) messages.Add(new Item(TcasFailKey, Word(w.Tcas) + " " + Word(w.Fail)));
+        bool fail = FailShown(t);
+        if (fail) messages.Add(new Item(TcasFailKey, Word(w.Tcas) + " " + Word(w.Fail)));
         if (!fail && t.Level == Bbs757EhsiTcasLevel.TaOnly) messages.Add(new Item(TaOnlyKey, Word(w.TaOnly)));
         if (!fail && t.Level == Bbs757EhsiTcasLevel.Off && t.MessagesAllowed)
             messages.Add(new Item(TcasOffKey, Word(w.Tcas) + " " + Word(w.Off)));

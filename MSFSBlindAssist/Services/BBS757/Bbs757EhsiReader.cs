@@ -209,7 +209,7 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
         }
 
         // Plan 28's parts (Bbs757EhsiReader.Parts.cs), in the same regions scope: one torn part is a corrupt reading.
-        if (!TryParts(nd, source, full, out var parts))
+        if (!TryParts(nd, source, modeValue, full, out var parts))
         {
             reading = Bad(full);
             return true;

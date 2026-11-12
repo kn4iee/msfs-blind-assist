@@ -181,11 +181,15 @@ public static class Bbs757LayoutDescriptions
             $"glideslopeScale {a.GlideslopeScale}, glideslopePointer {a.GlideslopePointer}, glideslopeTest {a.GlideslopeTest}, " +
             $"ndToDme {a.NdToDme}, dmePowered {a.DmePowered}, dmeFailed {a.DmeFailed}, dmeStation {a.DmeStation}, " +
             $"dmeDistance {a.DmeDistance}, stationKind {a.StationKind}, ilsStationKind {a.IlsStationKind}, " +
+            $"vorKinds {A(a.VorKinds)}, " +
             $"sourceToIlsReceiver {a.SourceToIlsReceiver}, receiverToSignal {a.ReceiverToSignal}, signalBlock {a.SignalBlock}, " +
             $"localizerReceived {a.LocalizerReceived}, rmiHandles {H(a.RmiLeftHandle)}/{H(a.RmiRightHandle)}, " +
             $"handleValue {a.HandleValue}, rmiVor {a.RmiVor}, rmiAdf {a.RmiAdf}, ndToVor {a.NdToVorLeft}/{a.NdToVorRight}, " +
-            $"panelStation {a.PanelStation}, station ident {a.StationIdent} longitude {a.StationLongitude} latitude {a.StationLatitude}, " +
-            $"ndToAdf {a.NdToAdf}, adfPositions {a.AdfPositions}, adf {a.AdfLeft}/{a.AdfRight} position {a.AdfPosition}, " +
+            $"panelStation {a.PanelStation} ils {a.PanelIlsStation} manual {a.PanelManualWhole}/{a.PanelManualFraction}, " +
+            $"station ident {a.StationIdent} length {a.StationIdentLength} frequency {a.StationFrequency} " +
+            $"longitude {a.StationLongitude} latitude {a.StationLatitude}, " +
+            $"ndToAdf {a.NdToAdf}, adfPositions {a.AdfPositions}, adf {a.AdfLeft}/{a.AdfRight} " +
+            $"longitude {a.AdfLongitude} latitude {a.AdfLatitude}, " +
             $"words {Q(a.VorLeftWord)} {Q(a.VorRightWord)} {Q(a.IlsWord)} {Q(a.ToWord)} {Q(a.FromWord)} {Q(a.DmeWord)} " +
             $"{Q(a.NoFrequencyWord)} {Q(a.NoDmeWord)} {Q(a.LocWord)} {Q(a.GlideslopeWord)}, " +
             $"deviationFullScale {D(a.DeviationFullScale)}, dotsPerUnit {D(a.DotsPerUnit)}, glideslopePin {D(a.GlideslopePin)}");
@@ -208,6 +212,8 @@ public static class Bbs757LayoutDescriptions
             $"ndbs {o.Ndbs} (ident {o.NdbIdent}, longitude {o.NdbLongitude}, latitude {o.NdbLatitude}), " +
             $"fmsToVor {o.FmsToVorLeft}/{o.FmsToVorRight}, panel autotune {o.PanelAutotune} station {o.PanelStation} " +
             $"course {o.PanelCourse} manual {o.PanelManualWhole}/{o.PanelManualFraction}, drawnKinds {A(o.DrawnKinds)}, " +
+            $"courseLineKinds {A(o.CourseLineKinds)}, kinds vor {o.KindVor} vorDme {o.KindVorDme} vortac {o.KindVortac} " +
+            $"tacan {o.KindTacan} dme {o.KindDme}, " +
             $"highClass {o.HighClass} above {D(o.HighClassAbove)}, ndbsAbove {D(o.NdbsAbove)}, ndbDistance {D(o.NdbDistance)}, " +
             $"roundLimit {o.RoundLimit}, maxItems {o.MaxItems}");
         Part(lines, p, "TERR, wind and runways", l.MapExtras, l.MapExtrasMissing, x =>

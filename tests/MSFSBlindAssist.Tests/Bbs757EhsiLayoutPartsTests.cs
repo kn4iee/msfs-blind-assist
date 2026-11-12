@@ -78,6 +78,13 @@ public partial class Bbs757EhsiLayoutTests
         Assert.Equal(2.2, sample.Approach.GlideslopePin);
         Assert.Equal(0.1, sample.MapGuides!.ArcMinVerticalSpeed);
         Assert.Equal(new[] { 0, 1, 2, 3, 6 }, sample.MapOptions!.DrawnKinds);
+        Assert.Equal(new[] { 0, 1, 2, 5 }, sample.MapOptions.CourseLineKinds);
+        Assert.Equal((0, 1, 2, 3, 6), (sample.MapOptions.KindVor, sample.MapOptions.KindVorDme, sample.MapOptions.KindVortac,
+            sample.MapOptions.KindTacan, sample.MapOptions.KindDme));
+        Assert.Equal(new[] { 0, 1, 2, 5 }, sample.Approach.VorKinds);
+        Assert.Equal((4, 16, 372, 780, 776, 24, 32), (sample.Approach.StationIdentLength, sample.Approach.StationFrequency,
+            sample.Approach.PanelIlsStation, sample.Approach.PanelManualWhole, sample.Approach.PanelManualFraction,
+            sample.Approach.AdfLongitude, sample.Approach.AdfLatitude));
         Assert.Equal(7, sample.MapExtras!.CapabilityChoices.Count);
         Assert.Equal(1448, sample.MapGuides.OffpathLatitude);
 
@@ -85,12 +92,15 @@ public partial class Bbs757EhsiLayoutTests
         Assert.NotEqual(SampleWithParts(), SampleWithParts() with { Approach = SampleWithParts().Approach! with { IlsCourse = 233 } });
         Assert.NotEqual(SampleWithParts(), SampleWithParts() with { Tcas = SampleWithParts().Tcas! with { TestWord = "TEST " } });
         Assert.NotEqual(SampleWithParts(), SampleWithParts() with { MapOptions = SampleWithParts().MapOptions! with { DrawnKinds = new[] { 0, 1, 2, 3 } } });
+        Assert.NotEqual(SampleWithParts(), SampleWithParts() with { MapOptions = SampleWithParts().MapOptions! with { CourseLineKinds = new[] { 0, 1, 2 } } });
+        Assert.NotEqual(SampleWithParts(), SampleWithParts() with { Approach = SampleWithParts().Approach! with { VorKinds = new[] { 0, 1, 2 } } });
         Assert.NotEqual(SampleWithParts(), SampleWithParts() with { MapExtras = SampleWithParts().MapExtras! with { CapabilityChoices = new[] { new Bbs757EhsiCapabilityChoice(0, 832, 840, false) } } });
         Assert.NotEqual(SampleWithParts(), SampleWithParts() with { MapGuides = SampleWithParts().MapGuides! with { DeviationClamp = 400.5 } });
         Assert.NotEqual(Sample(), Sample() with { TcasMissing = "another reason" });
         Assert.Equal(SampleWithParts(), SampleWithParts() with
         {
-            MapOptions = SampleWithParts().MapOptions! with { DrawnKinds = new[] { 0, 1, 2, 3, 6 } },
+            Approach = SampleWithParts().Approach! with { VorKinds = new[] { 0, 1, 2, 5 } },
+            MapOptions = SampleWithParts().MapOptions! with { DrawnKinds = new[] { 0, 1, 2, 3, 6 }, CourseLineKinds = new[] { 0, 1, 2, 5 } },
             MapExtras = SampleWithParts().MapExtras! with { CapabilityChoices = SampleWithParts().MapExtras!.CapabilityChoices.ToArray() },
         });
 
@@ -98,7 +108,12 @@ public partial class Bbs757EhsiLayoutTests
         var lines = Bbs757LayoutDescriptions.DescribeEhsi(sample);
         Assert.Contains(lines, l => l.Contains("EHSI VOR and ILS:", StringComparison.Ordinal) && l.Contains("glideslopePin 2.2", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Contains("EHSI TCAS:", StringComparison.Ordinal) && l.Contains("trafficStride 40", StringComparison.Ordinal));
-        Assert.Contains(lines, l => l.Contains("EHSI map options:", StringComparison.Ordinal) && l.Contains("drawnKinds [0, 1, 2, 3, 6]", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains("EHSI map options:", StringComparison.Ordinal) && l.Contains("drawnKinds [0, 1, 2, 3, 6]", StringComparison.Ordinal)
+            && l.Contains("courseLineKinds [0, 1, 2, 5], kinds vor 0 vorDme 1 vortac 2 tacan 3 dme 6", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains("EHSI VOR and ILS:", StringComparison.Ordinal) && l.Contains("vorKinds [0, 1, 2, 5]", StringComparison.Ordinal)
+            && l.Contains("panelStation 368 ils 372 manual 780/776", StringComparison.Ordinal)
+            && l.Contains("station ident 0 length 4 frequency 16", StringComparison.Ordinal)
+            && l.Contains("adf 0/0 longitude 24 latitude 32", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Contains("EHSI TERR, wind and runways:", StringComparison.Ordinal) && l.Contains("terrainStatic 0x11df30", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Contains("EHSI FIX, descent and altitude guides:", StringComparison.Ordinal) && l.Contains("fixEntryStride 8", StringComparison.Ordinal));
         Assert.Equal(TestCulture.Run("de-DE", () => Bbs757LayoutDescriptions.DescribeEhsi(sample)), lines);
@@ -254,10 +269,13 @@ public partial class Bbs757EhsiLayoutTests
             DisplaySide: 88, CaptainSide: 6,
             NdToPfd: 872, PfdToIls: 136, GlideslopeDeviation: 16, GlideslopeScale: 33, GlideslopePointer: 35, GlideslopeTest: 39,
             NdToDme: 856, DmePowered: 4, DmeFailed: 5, DmeStation: 352, DmeDistance: 360, StationKind: 32, IlsStationKind: 5,
+            VorKinds: new[] { 0, 1, 2, 5 },
             SourceToIlsReceiver: 736, ReceiverToSignal: 364, SignalBlock: 448, LocalizerReceived: 80,
             RmiLeftHandle: 1112416, RmiRightHandle: 1112488, HandleValue: 16, RmiVor: 0, RmiAdf: 1,
-            NdToVorLeft: 860, NdToVorRight: 864, PanelStation: 368, StationIdent: 0, StationLongitude: 40, StationLatitude: 48,
-            NdToAdf: 868, AdfPositions: false, AdfLeft: 0, AdfRight: 0, AdfPosition: 24,
+            NdToVorLeft: 860, NdToVorRight: 864, PanelStation: 368, PanelIlsStation: 372,
+            PanelManualFraction: 776, PanelManualWhole: 780,
+            StationIdent: 0, StationIdentLength: 4, StationFrequency: 16, StationLongitude: 40, StationLatitude: 48,
+            NdToAdf: 868, AdfPositions: false, AdfLeft: 0, AdfRight: 0, AdfLongitude: 24, AdfLatitude: 32,
             VorLeftWord: "VOR L", VorRightWord: "VOR R", IlsWord: "ILS", ToWord: "TO", FromWord: "FROM", DmeWord: "DME",
             NoFrequencyWord: "------", NoDmeWord: "  ---", LocWord: "LOC", GlideslopeWord: "G/S",
             DeviationFullScale: 1.0, DotsPerUnit: 2.0, GlideslopePin: 2.2),
@@ -281,7 +299,8 @@ public partial class Bbs757EhsiLayoutTests
             Ndbs: 256, NdbIdent: 0, NdbLongitude: 24, NdbLatitude: 32,
             FmsToVorLeft: 7884, FmsToVorRight: 7888, PanelAutotune: 740, PanelStation: 368, PanelCourse: 784,
             PanelManualFraction: 776, PanelManualWhole: 780,
-            DrawnKinds: new[] { 0, 1, 2, 3, 6 }, HighClass: 2, HighClassAbove: 40, NdbsAbove: 40, NdbDistance: 80,
+            DrawnKinds: new[] { 0, 1, 2, 3, 6 }, CourseLineKinds: new[] { 0, 1, 2, 5 },
+            KindVor: 0, KindVorDme: 1, KindVortac: 2, KindTacan: 3, KindDme: 6, HighClass: 2, HighClassAbove: 40, NdbsAbove: 40, NdbDistance: 80,
             RoundLimit: 500, MaxItems: 4096),
         MapOptionsMissing = null,
         MapExtras = new Bbs757EhsiMapExtras(

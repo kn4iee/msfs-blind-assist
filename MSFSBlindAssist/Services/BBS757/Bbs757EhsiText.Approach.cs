@@ -26,7 +26,7 @@ public static partial class Bbs757EhsiText
     /// <summary>
     /// The rose's rows, top to bottom: the course pointer ("Center: course pointer 187, 68° right"), the deviation
     /// ("Center: deviation 0.5 dots right", "centered", "at full scale, right"; "Center: no deviation bar" while the bar is
-    /// not drawn; ILS without its dots "Center: no deviation scale"), in ILS while the glideslope scale shows "Right side:
+    /// not drawn), ILS without its dots "Center: no deviation scale" as a row of its own, in ILS while the glideslope scale shows "Right side:
     /// glideslope 1.2 dots above" (or "no glideslope pointer"), the ILS flags in place ("Right side: G/S flag", "Bottom: LOC
     /// flag"), VOR's "Bottom right: TO" or "FROM", the receiver's label ("Bottom left: VOR L", "VOR R", "ILS") and ILS's
     /// frequency ("Bottom right: 110.30", or the dashes).
@@ -40,10 +40,11 @@ public static partial class Bbs757EhsiText
 
         bool bar = ils ? a.LocalizerBar : a.VorBar;
         double deviation = ils ? a.LocalizerDeviation : a.VorDeviation;
-        if (ils && !a.IlsDots) rows.Add("Center: no deviation scale");
-        else if (bar && double.IsFinite(deviation))
+        // The bar follows its own byte alone; ILS's dots are a byte of their own, their absence a row of its own.
+        if (bar && double.IsFinite(deviation))
             rows.Add("Center: deviation " + Deflection(deviation, a.DeviationFullScale, a.DotsPerUnit, "right", "left"));
         else rows.Add("Center: no deviation bar");
+        if (ils && !a.IlsDots) rows.Add("Center: no deviation scale");
 
         if (ils)
         {
@@ -76,9 +77,10 @@ public static partial class Bbs757EhsiText
     }
 
     /// <summary>
-    /// The bearing pointers, every mode but PLAN while the IRS is valid: "Bearing pointer 1: VOR L, SEA, 0.5 NM, 74° right"
-    /// (the station placed from the map's center and rotation, unclipped: the pointer points at it wherever it is), "Bearing
-    /// pointer 2: ADF R" for an ADF the layout gives no position for. No row for a pointer with no station.
+    /// The bearing pointers, every mode but PLAN while the IRS is valid: "Bearing pointer 1: VOR L, SEA, 74° right" (or
+    /// "ahead", "behind": the angle only, as the screen draws an arrow and no distance; the station's bearing from the
+    /// map's center against its rotation, unclipped: the pointer points at it wherever it is), "Bearing pointer 2: ADF R"
+    /// for an ADF the layout gives no position for. No row for a pointer with no station.
     /// </summary>
     private static void BearingPointerRows(List<string> rows, Bbs757EhsiReading r, Bbs757EhsiApproachReading a)
     {
@@ -94,8 +96,8 @@ public static partial class Bbs757EhsiText
         if (!string.IsNullOrEmpty(p.Ident)) text += ", " + p.Ident;
         if (p.Latitude is { } lat && p.Longitude is { } lon)
         {
-            var (_, _, nm, bearing) = Bbs757EhsiGeometry.Project(r.Map, 1, 1, lat, lon);
-            text += ", " + Bbs757EhsiGeometry.Place(nm, Bbs757EhsiGeometry.OffTop(bearing, r.Map.Rotation));
+            var (_, _, _, bearing) = Bbs757EhsiGeometry.Project(r.Map, 1, 1, lat, lon);
+            text += ", " + Bbs757EhsiGeometry.Angle(Bbs757EhsiGeometry.OffTop(bearing, r.Map.Rotation));
         }
         rows.Add(text);
     }

@@ -16,13 +16,15 @@ public sealed partial class Bbs757EhsiReader
         string? TcasMissing);
 
     /// <summary>Every part the layout holds; false when one is torn (the reading is then corrupt, B757-36).</summary>
-    private bool TryParts(uint nd, uint source, bool full, out PartsRead parts)
+    private bool TryParts(uint nd, uint source, int modeValue, bool full, out PartsRead parts)
     {
         parts = null!;
         var l = Layout;
         Bbs757EhsiApproachReading? approach = null;
         Bbs757EhsiTcasReading? tcas = null;
-        if (l.Approach is { } a && !TryApproach(nd, source, a, out approach)) return false;
+        // ILS mode as the rows know it (Bbs757EhsiText's mode values): the VOR bearing pointers' station follows it.
+        bool ilsMode = modeValue == (int)Bbs757EhsiText.EhsiMode.Ils;
+        if (l.Approach is { } a && !TryApproach(nd, source, a, ilsMode, out approach)) return false;
         if (l.Tcas is { } t && !TryTcas(nd, t, full, out tcas)) return false;
         parts = new PartsRead(approach, l.Approach is null ? l.ApproachMissing : null, tcas, l.Tcas is null ? l.TcasMissing : null);
         return true;

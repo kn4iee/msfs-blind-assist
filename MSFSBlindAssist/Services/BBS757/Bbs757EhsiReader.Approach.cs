@@ -4,7 +4,8 @@ using System.Text;
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>The VOR and ILS picture (plan 28's <see cref="Bbs757EhsiApproach"/>), read in every reading: the nd's own
-/// fields, the PFD's glideslope, the DME, the localizer the selected receiver has, and the two bearing pointers. A null
+/// fields, the PFD's glideslope, the DME, the localizer the selected receiver has, and the two bearing pointers (their VOR
+/// station by the EFIS mode, <see cref="TryVorStation"/>). Every offset, length and kind is the layout's. A null
 /// object pointer is "none" (no glideslope, no DME, no pointer); one outside the module, a station ident that is not text
 /// or a position not finite and in range is torn.</summary>
 public sealed partial class Bbs757EhsiReader
@@ -13,10 +14,10 @@ public sealed partial class Bbs757EhsiReader
     /// prints no word for it.</summary>
     private const string AdfLeftName = "ADF L", AdfRightName = "ADF R";
 
-    /// <summary>A navaid record's ident: this many UTF-32 code points, the unused ones 0.</summary>
-    private const int IdentLength = 4;
+    /// <summary>The app's own guard on the layout's ident length (the stack buffer's size), not a BlueBird value.</summary>
+    private const int MaxIdentLength = 64;
 
-    private bool TryApproach(uint nd, uint source, Bbs757EhsiApproach a, out Bbs757EhsiApproachReading? reading)
+    private bool TryApproach(uint nd, uint source, Bbs757EhsiApproach a, bool ilsMode, out Bbs757EhsiApproachReading? reading)
     {
         reading = null;
         if (!F64(nd, a.VorCourse, out double vorCourse) || !F64(nd, a.VorDeviation, out double vorDeviation)
@@ -52,8 +53,8 @@ public sealed partial class Bbs757EhsiReader
             if (received) shownFrequency = frequency;
         }
 
-        if (!TryBearingPointer(nd, a, a.RmiLeftHandle, a.NdToVorLeft, a.AdfLeft, a.VorLeftWord, AdfLeftName, out var pointer1)
-            || !TryBearingPointer(nd, a, a.RmiRightHandle, a.NdToVorRight, a.AdfRight, a.VorRightWord, AdfRightName, out var pointer2))
+        if (!TryBearingPointer(nd, a, ilsMode, a.RmiLeftHandle, a.NdToVorLeft, a.AdfLeft, a.VorLeftWord, AdfLeftName, out var pointer1)
+            || !TryBearingPointer(nd, a, ilsMode, a.RmiRightHandle, a.NdToVorRight, a.AdfRight, a.VorRightWord, AdfRightName, out var pointer2))
             return false;
 
         var toFromValue = toFrom == a.ToValue ? Bbs757EhsiToFrom.To : toFrom == a.FromValue ? Bbs757EhsiToFrom.From : Bbs757EhsiToFrom.None;
@@ -100,10 +101,10 @@ public sealed partial class Bbs757EhsiReader
     }
 
     /// <summary>One bearing pointer, by its selector's L:var (the cached value in its handle): on VOR the VOR panel's
-    /// station (none without one), on ADF the ADF, placed only while the layout gives its receivers' positions (none
-    /// without a receiver then); any other value draws none.</summary>
-    private bool TryBearingPointer(uint nd, Bbs757EhsiApproach a, uint handle, int ndToVor, int adfReceiver, string vorWord,
-        string adfName, out Bbs757EhsiBearingPointer? pointer)
+    /// station (<see cref="TryVorStation"/>; none without one), on ADF the ADF, placed only while the layout gives its
+    /// receivers' positions (none without a receiver then); any other value draws none.</summary>
+    private bool TryBearingPointer(uint nd, Bbs757EhsiApproach a, bool ilsMode, uint handle, int ndToVor, int adfReceiver,
+        string vorWord, string adfName, out Bbs757EhsiBearingPointer? pointer)
     {
         pointer = null;
         if (!F64(handle, a.HandleValue, out double selector)) return false;
@@ -111,9 +112,9 @@ public sealed partial class Bbs757EhsiReader
         {
             if (!Link(nd, ndToVor, out uint panel)) return false;
             if (panel == 0) return true;
-            if (!Good(panel) || !Link(panel, a.PanelStation, out uint station)) return false;
+            if (!Good(panel) || !TryVorStation(panel, a, ilsMode, out uint station)) return false;
             if (station == 0) return true;
-            if (!Good(station) || !TryIdent(station, a.StationIdent, out string ident)
+            if (!TryIdent(station, a.StationIdent, a.StationIdentLength, out string ident)
                 || !Position(station, a.StationLatitude, a.StationLongitude, out double lat, out double lon))
                 return false;
             pointer = new Bbs757EhsiBearingPointer(vorWord, ident, lat, lon);
@@ -131,22 +132,56 @@ public sealed partial class Bbs757EhsiReader
         if (adf == 0) return true;
         if (!Good(adf) || !Link(adf, adfReceiver, out uint receiver)) return false;
         if (receiver == 0) return true;
-        if (!Good(receiver) || !Position(receiver, a.AdfPosition + 2 * Word, a.AdfPosition, out double adfLat, out double adfLon))
+        if (!Good(receiver) || !Position(receiver, a.AdfLatitude, a.AdfLongitude, out double adfLat, out double adfLon))
             return false;
         pointer = new Bbs757EhsiBearingPointer(adfName, null, adfLat, adfLon);
         return true;
     }
 
-    /// <summary>A navaid record's ident: up to <see cref="IdentLength"/> UTF-32 code points, ended by the first 0; each a
-    /// Unicode scalar value. False when torn.</summary>
-    private bool TryIdent(uint station, int offset, out string ident)
+    /// <summary>
+    /// The station a VOR panel's bearing pointer points at, as BlueBird's draw picks it: in ILS mode the panel's ILS-mode
+    /// station, and only while that station's frequency equals the panel's manual one (whole × 100 + fraction); in the
+    /// other modes the panel's station. In every mode only a station whose kind is one of the layout's VOR kinds; else 0
+    /// (no pointer). A station outside the module is torn. BlueBird also needs the station in reception (f47465): that is
+    /// not modeled, so a station out of range still reads as pointed at.
+    /// </summary>
+    private bool TryVorStation(uint panel, Bbs757EhsiApproach a, bool ilsMode, out uint station)
+    {
+        if (!Link(panel, ilsMode ? a.PanelIlsStation : a.PanelStation, out station)) return false;
+        if (station == 0) return true;
+        if (!Good(station) || !U8(station, a.StationKind, out byte kind)) return false;
+        if (ilsMode)
+        {
+            if (!U16(station, a.StationFrequency, out ushort frequency) || !Int(panel, a.PanelManualWhole, out int whole)
+                || !Int(panel, a.PanelManualFraction, out int fraction))
+                return false;
+            if (frequency != (long)whole * 100 + fraction) station = 0;
+        }
+        if (!a.VorKinds.Contains(kind)) station = 0;
+        return true;
+    }
+
+    /// <summary>A 16-bit value as stored, little-endian.</summary>
+    private bool U16(uint b, int offset, out ushort v)
+    {
+        v = 0;
+        Span<byte> bytes = stackalloc byte[2];
+        if (!At(b, offset, out uint a) || !_memory.TryRead(a, bytes)) return false;
+        v = BinaryPrimitives.ReadUInt16LittleEndian(bytes);
+        return true;
+    }
+
+    /// <summary>A navaid record's ident: up to <paramref name="length"/> (the layout's) UTF-32 code points, ended by the
+    /// first 0; each a Unicode scalar value. False when torn, or for a length outside 1 to <see cref="MaxIdentLength"/>.</summary>
+    private bool TryIdent(uint station, int offset, int length, out string ident)
     {
         ident = "";
-        Span<byte> bytes = stackalloc byte[IdentLength * Word];
+        if (length is < 1 or > MaxIdentLength) return false;
+        Span<byte> bytes = stackalloc byte[length * Word];
         if (!At(station, offset, out uint at) || !_memory.TryRead(at, bytes)) return false;
-        var sb = new StringBuilder(IdentLength);
+        var sb = new StringBuilder(length);
         Span<char> utf16 = stackalloc char[2];
-        for (int i = 0; i < IdentLength; i++)
+        for (int i = 0; i < length; i++)
         {
             uint codePoint = BinaryPrimitives.ReadUInt32LittleEndian(bytes[(i * Word)..]);
             if (codePoint == 0) break;

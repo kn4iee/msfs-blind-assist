@@ -17,14 +17,14 @@ public class Bbs757EhsiApproachTests
     // Where this test's memory puts the approach's objects (the scene's own end below 0x1B000).
     internal const uint Pfd = 0x1B000, Dme = 0x1C000, IlsStation = 0x1D000, SeaStation = 0x1D100, PaeStation = 0x1D200,
         VorL = 0x1E000, VorR = 0x1E800, Receiver = 0x1F000, Signal = 0x20000, Adf = 0x21000, AdfLeft = 0x21800,
-        AdfRight = 0x21900;
+        AdfRight = 0x21900, IlsPanelStation = 0x1D300;
 
-    /// <summary>A navaid record: ident, kind byte, position.</summary>
-    internal sealed record Station(string Ident, int Kind, double Lat, double Lon);
+    /// <summary>A navaid record: ident, kind byte, position, frequency (MHz × 100).</summary>
+    internal sealed record Station(string Ident, int Kind, double Lat, double Lon, int Frequency = 0);
 
-    internal static readonly Station Sea = new("SEA", 2, 47.43538, -122.30978);
-    internal static readonly Station Isnq = new("ISNQ", 5, 47.43418, -122.31085);
-    internal static readonly Station Pae = new("PAE", 2, 47.91983, -122.27778);
+    internal static readonly Station Sea = new("SEA", 2, 47.43538, -122.30978, 11680);
+    internal static readonly Station Isnq = new("ISNQ", 5, 47.43418, -122.31085, 11030);
+    internal static readonly Station Pae = new("PAE", 2, 47.91983, -122.27778, 11040);
 
     /// <summary>The approach's memory as BlueBird keeps it, written over a <see cref="Scene"/> through its Tweak.</summary>
     internal sealed class Approach
@@ -34,8 +34,8 @@ public class Bbs757EhsiApproachTests
         public bool VorBar, VorDmeValid, LocalizerBar, Dots = true, IlsTest, LocFlag, GlideslopeFlag, GlideslopeScale,
             GlideslopePointer, GlideslopeTest, HasPfd = true, HasDme = true, DmePowered = true, DmeFailed, Received,
             HasReceiver = true, HasSignal = true;
-        public int ToFrom, Side = 6;
-        public Station? DmeStation, VorLStation, VorRStation;
+        public int ToFrom, Side = 6, ManualWhole = 116, ManualFraction = 80;
+        public Station? DmeStation, VorLStation, VorRStation, VorLIlsStation;
         public (double Lat, double Lon)? AdfLeftPosition, AdfRightPosition;
 
         public void Write(byte[] b)
@@ -85,23 +85,31 @@ public class Bbs757EhsiApproachTests
             I32(b, Nd + A.NdToAdf, Adf);
             I32(b, Adf + AdfLeftAt, AdfLeftPosition is null ? 0 : AdfLeft);
             I32(b, Adf + AdfRightAt, AdfRightPosition is null ? 0 : AdfRight);
-            if (AdfLeftPosition is { } lp) PutPosition(b, AdfLeft + A.AdfPosition, lp);
-            if (AdfRightPosition is { } rp) PutPosition(b, AdfRight + A.AdfPosition, rp);
+            if (AdfLeftPosition is { } lp) PutPosition(b, AdfLeft, lp);
+            if (AdfRightPosition is { } rp) PutPosition(b, AdfRight, rp);
+
+            // ILS mode's VOR station and the panel's manual frequency (VOR L only: VOR R's stays 0).
+            I32(b, VorL + A.PanelIlsStation, VorLIlsStation is null ? 0 : IlsPanelStation);
+            if (VorLIlsStation is { } ils) PutStation(b, IlsPanelStation, ils);
+            I32(b, VorL + A.PanelManualWhole, ManualWhole);
+            I32(b, VorL + A.PanelManualFraction, ManualFraction);
         }
 
         private static void PutStation(byte[] b, uint at, Station s)
         {
-            for (int i = 0; i < 4; i++) I32(b, at + A.StationIdent + 4 * i, i < s.Ident.Length ? s.Ident[i] : 0);
+            for (int i = 0; i < A.StationIdentLength; i++) I32(b, at + A.StationIdent + 4 * i, i < s.Ident.Length ? s.Ident[i] : 0);
             b[at + A.StationKind] = (byte)s.Kind;
+            b[at + A.StationFrequency] = (byte)(s.Frequency & 0xFF);
+            b[at + A.StationFrequency + 1] = (byte)(s.Frequency >> 8);
             F64(b, at + A.StationLongitude, s.Lon);
             F64(b, at + A.StationLatitude, s.Lat);
         }
 
-        /// <summary>An ADF station's position: the longitude, then the latitude (the layout's order for every position).</summary>
-        private static void PutPosition(byte[] b, long at, (double Lat, double Lon) p)
+        /// <summary>An ADF station's position at the layout's longitude and latitude.</summary>
+        private static void PutPosition(byte[] b, uint at, (double Lat, double Lon) p)
         {
-            F64(b, at, p.Lon);
-            F64(b, at + 8, p.Lat);
+            F64(b, at + A.AdfLongitude, p.Lon);
+            F64(b, at + A.AdfLatitude, p.Lat);
         }
     }
 
@@ -140,6 +148,13 @@ public class Bbs757EhsiApproachTests
 
     private static string[] Texts(IReadOnlyList<Bbs757SpokenLine> lines) => lines.Select(l => l.Text).ToArray();
 
+    /// <summary>The scene's top right ETA as plan 26's MAP top line prints it (the same clock, leg and ground speed).</summary>
+    private static string EtaRow() =>
+        Bbs757EhsiText.Rows(Read(new Approach(), mode: 2)).Single(r => r.StartsWith("Top right: ", StringComparison.Ordinal));
+
+    /// <summary>The scene's heading bug row (plan 26's): the bug 147 against the heading 119.</summary>
+    private const string BugRow = "Heading bug: 147, 28° right";
+
     // ---- the rows ----
 
     [Fact]
@@ -151,11 +166,13 @@ public class Bbs757EhsiApproachTests
             "EHSI: VOR, range 160",
             "Top: HDG 119 M",
             "Top left: DME 0.5",
+            EtaRow(),
             "Center: course pointer 187, 68° right",
             "Center: deviation 0.5 dots right",
             "Bottom right: TO",
             "Bottom left: VOR L",
-            "Bearing pointer 1: VOR L, SEA, 0.5 NM, 74° right",
+            "Bearing pointer 1: VOR L, SEA, 74° right",
+            BugRow,
         }, Rows(r));
 
         // FROM, the bar left of the course, the First Officer's side's label.
@@ -189,11 +206,13 @@ public class Bbs757EhsiApproachTests
             "EHSI: ILS, range 160",
             "Top: HDG 119 M",
             "Top left: DME 0.6",
+            EtaRow(),
             "Center: course pointer 164, 45° right",
             "Center: deviation at full scale, right",
             "Right side: glideslope at full scale, above",
             "Bottom left: ILS",
             "Bottom right: 110.30",
+            BugRow,
         }, Rows(r));
 
         // Unpinned: the localizer in dots of 2 a unit, the glideslope already in dots, positive up.
@@ -227,10 +246,12 @@ public class Bbs757EhsiApproachTests
             "EHSI: ILS, range 160",
             "Top: HDG 119 M",
             "Top left: DME ---",
+            EtaRow(),
             "Center: course pointer 215, 96° right",
             "Center: no deviation bar",
             "Bottom left: ILS",
             "Bottom right: ------",
+            BugRow,
         }, Rows(Read(new Approach(), mode: 1)));
 
         // A frequency with no station (110.50): the dashes too, the scale up with no pointer.
@@ -248,10 +269,59 @@ public class Bbs757EhsiApproachTests
             "EHSI: VOR, range 160",
             "Top: HDG 119 M",
             "Top left: DME ---",
+            EtaRow(),
             "Center: course pointer 130, 11° right",
             "Center: no deviation bar",
             "Bottom left: VOR L",
+            BugRow,
         }, Rows(Read(new Approach(), mode: 0)));
+    }
+
+    // Plan 26's rows the screen also draws in VOR and ILS: the top right ETA while not centered (expanded), never in the
+    // full rose (centered); the heading bug in every mode while valid.
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Vor_and_ils_list_the_eta_when_expanded_and_the_heading_bug(int mode)
+    {
+        var expanded = Rows(Read(VorSea(), mode));
+        Assert.Equal(EtaRow(), expanded[3]);
+        Assert.StartsWith("Top left: DME ", expanded[2], StringComparison.Ordinal);
+        Assert.Equal(BugRow, expanded[^1]);
+        Assert.DoesNotContain(expanded, r => r.StartsWith("Top left: ", StringComparison.Ordinal) && r.EndsWith(" NM", StringComparison.Ordinal));
+
+        var centered = Rows(Read(VorSea(), mode, scene: s => s.Centered = true));
+        Assert.DoesNotContain(centered, r => r.StartsWith("Top right: ", StringComparison.Ordinal));
+        Assert.Equal(BugRow, centered[^1]);
+
+        // The ETA's own dashes as plan 26 lists them: under the minimum ground speed.
+        Assert.Contains("Top right: no ETA", Rows(Read(VorSea(), mode, scene: s => s.GroundSpeed = 50)));
+        // No heading bug while the IRS is not valid (plan 26's).
+        Assert.DoesNotContain(Rows(Read(VorSea(), mode, scene: s => s.Valid = false)), r => r.StartsWith("Heading bug", StringComparison.Ordinal));
+    }
+
+    // The ILS deviation row follows the bar byte alone; the dots byte clear is its own row.
+    [Fact]
+    public void Ils_without_its_dots_still_shows_the_bar()
+    {
+        var noDots = IlsIsnq();
+        noDots.Dots = false;
+        noDots.LocalizerDeviation = -0.6;
+        var rows = Rows(Read(noDots, mode: 1));
+        int bar = Array.IndexOf(rows, "Center: deviation 1.2 dots left");
+        Assert.True(bar > 0);
+        Assert.Equal("Center: no deviation scale", rows[bar + 1]);
+
+        noDots.LocalizerBar = false;
+        rows = Rows(Read(noDots, mode: 1));
+        bar = Array.IndexOf(rows, "Center: no deviation bar");
+        Assert.True(bar > 0);
+        Assert.Equal("Center: no deviation scale", rows[bar + 1]);
+
+        // VOR mode has no ILS dots: never the row.
+        var vor = VorSea();
+        vor.Dots = false;
+        Assert.DoesNotContain("Center: no deviation scale", Rows(Read(vor, mode: 0)));
     }
 
     // Review Focus: losing the signal draws no flag, only the bar and the glideslope pointer go; a failed receiver with a
@@ -281,12 +351,15 @@ public class Bbs757EhsiApproachTests
             "EHSI: ILS, range 160",
             "Top: HDG 119 M",
             "Top left: DME ---",
+            EtaRow(),
             "Center: course pointer 215, 96° right",
+            "Center: no deviation bar",
             "Center: no deviation scale",
             "Right side: G/S flag",
             "Bottom: LOC flag",
             "Bottom left: ILS",
             "Bottom right: ------",
+            BugRow,
         }, Rows(failedReading));
         var lines = Bbs757EhsiText.Changes(lostReading, failedReading, true);
         Assert.All(lines, l => Assert.Equal(Bbs757EhsiDisplay.MuteKey, l.MuteKey));
@@ -309,16 +382,73 @@ public class Bbs757EhsiApproachTests
         // Both selectors on VOR: VOR L's station SEA, VOR R's PAE; placed from the nd's center and rotation (134.43).
         var both = VorSea();
         both.VorRStation = Pae;
+        // The angle only, as the screen draws it (an arrow, no distance).
         var rows = Rows(Read(both, mode: 0));
-        Assert.Contains("Bearing pointer 1: VOR L, SEA, 0.5 NM, 74° right", rows);
-        // PAE 28.65 NM north (bearing 002 true): 132° left of the map's up.
-        Assert.Contains("Bearing pointer 2: VOR R, PAE, 28.7 NM, 132° left", rows);
+        Assert.Contains("Bearing pointer 1: VOR L, SEA, 74° right", rows);
+        // PAE north (bearing 002 true): 132° left of the map's up.
+        Assert.Contains("Bearing pointer 2: VOR R, PAE, 132° left", rows);
         // In MAP too, after the map rows and before the heading bug.
         var map = Rows(Read(both, mode: 2, full: true));
-        int pointer = Array.IndexOf(map, "Bearing pointer 1: VOR L, SEA, 0.5 NM, 74° right");
+        int pointer = Array.IndexOf(map, "Bearing pointer 1: VOR L, SEA, 74° right");
         Assert.True(pointer > 0);
-        Assert.Equal("Bearing pointer 2: VOR R, PAE, 28.7 NM, 132° left", map[pointer + 1]);
+        Assert.Equal("Bearing pointer 2: VOR R, PAE, 132° left", map[pointer + 1]);
         Assert.StartsWith("Heading bug: ", map[pointer + 2], StringComparison.Ordinal);
+
+        // Straight ahead and straight behind: the place's words, without the distance.
+        var aheadBehind = VorSea();
+        var (aheadLat, aheadLon) = Bbs757EhsiTcasTests.At(20, 0);
+        var (behindLat, behindLon) = Bbs757EhsiTcasTests.At(20, 180);
+        aheadBehind.VorLStation = Sea with { Lat = aheadLat, Lon = aheadLon };
+        aheadBehind.VorRStation = Pae with { Lat = behindLat, Lon = behindLon };
+        rows = Rows(Read(aheadBehind, mode: 0));
+        Assert.Contains("Bearing pointer 1: VOR L, SEA, ahead", rows);
+        Assert.Contains("Bearing pointer 2: VOR R, PAE, behind", rows);
+    }
+
+    // In ILS mode the VOR pointer's station is the panel's ILS-mode one, drawn only while its frequency is the panel's
+    // manual one; in every mode only a station of a VOR kind (the layout's) draws a pointer.
+    [Fact]
+    public void Ils_mode_points_at_the_panels_ils_station_on_the_manual_frequency()
+    {
+        // ISNQ (110.30, kind 5) as VOR L's ILS-mode station, the manual frequency 110.30: the pointer, not SEA's.
+        var tuned = VorSea();
+        tuned.VorLIlsStation = Isnq;
+        tuned.ManualWhole = 110;
+        tuned.ManualFraction = 30;
+        var rows = Rows(Read(tuned, mode: 1));
+        Assert.Contains(rows, r => r.StartsWith("Bearing pointer 1: VOR L, ISNQ, ", StringComparison.Ordinal));
+        Assert.DoesNotContain(rows, r => r.Contains("SEA", StringComparison.Ordinal));
+        // The same panel in VOR mode: SEA (the panel's station) as before.
+        Assert.Contains("Bearing pointer 1: VOR L, SEA, 74° right", Rows(Read(tuned, mode: 0)));
+        // An ILS-mode station outside the module is torn.
+        var torn = new Scene { Mode = 1, Tweak = b => { tuned.Write(b); I32(b, VorL + A.PanelIlsStation, Outside); } };
+        Assert.True(Bbs757EhsiReaderTests.Read(torn, false, P).Corrupt);
+
+        // Another manual frequency (116.80): no pointer in ILS mode.
+        var other = VorSea();
+        other.VorLIlsStation = Isnq;
+        Assert.DoesNotContain(Rows(Read(other, mode: 1)), r => r.StartsWith("Bearing pointer 1", StringComparison.Ordinal));
+        // No ILS-mode station: none (SEA at the panel's station is not used in ILS mode).
+        Assert.DoesNotContain(Rows(Read(VorSea(), mode: 1)), r => r.StartsWith("Bearing pointer 1", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(3)]   // TACAN
+    [InlineData(6)]   // DME
+    public void A_station_of_no_vor_kind_draws_no_pointer(int kind)
+    {
+        var a = VorSea();
+        a.VorLStation = Sea with { Kind = kind };
+        a.VorRStation = Pae;
+        var rows = Rows(Read(a, mode: 0));
+        Assert.DoesNotContain(rows, r => r.StartsWith("Bearing pointer 1", StringComparison.Ordinal));
+        Assert.Contains("Bearing pointer 2: VOR R, PAE, 132° left", rows);
+        // In ILS mode too, with its frequency matching.
+        var ils = VorSea();
+        ils.VorLIlsStation = Isnq with { Kind = kind };
+        ils.ManualWhole = 110;
+        ils.ManualFraction = 30;
+        Assert.DoesNotContain(Rows(Read(ils, mode: 1)), r => r.StartsWith("Bearing pointer 1", StringComparison.Ordinal));
     }
 
     [Fact]

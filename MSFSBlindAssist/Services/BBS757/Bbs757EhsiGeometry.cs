@@ -145,14 +145,18 @@ public static class Bbs757EhsiGeometry
     /// (inclusive) it says "ahead", within half a degree of straight behind (inclusive) "behind", so it never says
     /// "0°" or "180°".
     /// </summary>
-    public static string Place(double nm, double offTop)
+    public static string Place(double nm, double offTop) =>
+        $"{nm.ToString("F1", CultureInfo.InvariantCulture)} NM, {Angle(offTop)}";
+
+    /// <summary>A place's angle words without its distance: "87° right", "ahead", "behind" (as <see cref="Place"/>), for
+    /// what the screen draws as a direction only (a bearing pointer).</summary>
+    public static string Angle(double offTop)
     {
-        string distance = nm.ToString("F1", CultureInfo.InvariantCulture);
         double abs = Math.Abs(offTop);
-        if (abs <= AlignedDegrees) return $"{distance} NM, ahead";
-        if (abs >= 180.0 - AlignedDegrees) return $"{distance} NM, behind";
+        if (abs <= AlignedDegrees) return "ahead";
+        if (abs >= 180.0 - AlignedDegrees) return "behind";
         string degrees = Math.Round(abs, MidpointRounding.AwayFromZero).ToString("F0", CultureInfo.InvariantCulture);
-        return $"{distance} NM, {degrees}° {(offTop < 0 ? "left" : "right")}";
+        return $"{degrees}° {(offTop < 0 ? "left" : "right")}";
     }
 
     /// <summary>
