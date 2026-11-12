@@ -81,3 +81,27 @@ not set: it is on STD."), never a write that would read back unchanged and be re
 ## A350-15
 
 The reader takes values straight from the copy's memory by addresses re-derived per version (the variable table's slots, the pause, the speeds); after an update a layout that looks right can read shifted values that are then spoken with confidence (the probe's sweeps once named every value 24 entries off while the table's own check passed). So at every start `A350FactsCheck` holds two parts against the A350's own L:vars as MSFSBA streams them: the table's slots (141 pairs agreed on 1.2.8 at the gate) and the variables the draws asked for. A part that disagrees withholds what it disproves for the session (`A350DisplayService.CheckFacts`: the table's pause reading) and the pilot hears it once (`A350DisplayStatus.FactsMismatch`); the variables' part keeps the displays reading. Nothing of it is kept between sessions, so a new version is checked the first time it flies (plan 03, Task 5, evidence 03).
+
+## A350-16
+
+The owner (2026-11-12): the MFD, "the FMS and everything else, but just the MFD", at full parity with the A380's MFD window in how
+things are announced, "the colours would have to be removed completely from the MFD". The A380's window says a line as
+"<text>, <role>[, state][, dimmed]" (`FBWA380MCDUForm.RoleWord`) and never a colour; its footer message alone. So the A350's MFD
+window, its FMS message call-outs and the status display's MFD entries go through `A350MfdWording`: `Speak` turns the reader's
+colours into the owner's words where the colour asks something of the pilot (amber on a field: "required", the owner's word for an
+entry the FMS needs, said once, as an empty amber box already reads "required"; yellow, the temporary flight plan: "temporary",
+never beside the word TMPY; magenta, a constraint: "constraint", also in an F-PLN row's note, "ALT constraint") and drops every
+other colour; `A350MfdPage.Shown` adds the A380 window's role words on top; `Message` says an FMS message as the A380 says its
+footer ("CHECK DATABASE CYCLE").
+
+The reader writes its colours in three forms, all in lowercase where the page's own texts are capitals (a "Green dot" label is the
+reader's, a GREEN waypoint the page's): a segment after a comma ("CI: required, amber"), a value's colour in brackets
+("LOCAL ETA AT DEST (white)"), and an F-PLN row's note naming a cell ("FPA white", "ident white", "ALT magenta"). The inventory
+of 222 captured pages (plan 25) found amber on fields, keys, texts and messages, yellow on the TMPY title, keys, fields, check
+boxes, texts and rows, magenta on notes and one text; `A350MfdWordingTests` sweeps every captured MFD page, both sides, for a
+colour word.
+
+`A350MfdPage.Read` keeps its colours: they are the reader's own facts (a grey key is `A350MfdWording.IsDimmed` and not offered,
+`A350MfdPages.Offered`; a message read ", black" is caught without its box, `A350MfdPage.NoMessageRead`; the FMS message
+observers compare raw reads). Strip them there and those checks go blind. The other displays (PFD, ND, E/WD, SD, RMP, mailbox)
+keep their colours: the owner scoped this to the MFD.

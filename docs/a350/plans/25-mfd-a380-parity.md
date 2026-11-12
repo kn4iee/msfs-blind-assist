@@ -181,14 +181,20 @@ A fresh reviewer on the most capable model reads the plan's range; Critical and 
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** claimed
+- **Status:** landed
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-12
 - **Worked by:** Claude (Opus 5.5), inline (superpowers:executing-plans)
 - **Started:** 2026-11-12, from `98e1fa23d`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-12, offline (final review below)
+- **Tests at landing:** the suite without `ClaudeRulesHookTests` 22,117/22,117; the A350 tests 2,390
+- **Tasks:** 1 `4875c28dd` (`A350MfdWording`), 2 `3679521` (`Shown` in the A380 window's words), 3 `3a56b61` (the list without the
+  title, the caption, "Previous page"/"Next page"), 4 `2b51467` (Backspace, Delete, Enter, Escape, Alt+S, Alt+W), 5 `a9babc8` (the
+  messages and the status display uncoloured), the field clear corrected `c51ac1f68`, 6 the rule [A350-16] and the docs
+- **Waiting on the owner:** the live check, `owner-steps.md` 2.4 item 4 (Delete and Backspace on a filled field, Alt+W, no colour)
+- **In-sim results:** none: built offline, as the owner asked
+- **Changed from the plan:** a field is cleared with the word CLR typed and ENTER, not the KCCU's CLR key and ENTER (the KCCU's CLR only
+  empties an entry being typed, live 2026-10-30, `831860a18`); the messages' spoken words are made in the two message observers, whose
+  returns are only spoken; the title also stands in the window's caption
+- **Rulings made while working:** the ATC mailbox window is no MFD page and keeps its words; Backspace with nothing to clear presses the
+  KCCU's CLR silently (the window's old key, not the A380's BACKSPACE); the scratchpad line itself "Cannot be cleared"; a typed entry is
+  said back once the MFD took it; the titled-page test uses the TMPY F-PLN (ACTIVE's open menu covers the title bar)

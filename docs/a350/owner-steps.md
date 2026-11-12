@@ -60,6 +60,12 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    A short runway at a big airport, with BTV armed for its end.
 3. **A deferred procedure (plan 16):** none of the 1.2.8 OIS failures makes one; if one appears in a flight, the DEFRD page reads it.
    (The automatic emergency descent was flown on 2026-11-03 and is off this list.)
+4. **The MFD window at A380 parity (plan 25, built offline 2026-11-12):** on the stand, Shift+M. (a) INIT: type a cost index in the
+   scratchpad box (Alt+S), Enter on CI, then **Delete** on CI: it should read empty (BA types CLR into the field and ENTER, as a pilot
+   does); then fill it again and clear it with **Backspace** from the list (box empty, no FMS message). (b) **Alt+W** opens the OIS
+   (Alt+S is now the scratchpad box). (c) Arrow through INIT, F-PLN (with a TMPY plan up) and PERF: no colour word anywhere, "required"
+   on the empty amber boxes, "temporary" on the TMPY plan's lines, the page title said once and in the window's title. (d) With an FMS
+   message up, Backspace says "Info cleared" and the message goes.
 
 ## 3. By ear (your judgement)
 

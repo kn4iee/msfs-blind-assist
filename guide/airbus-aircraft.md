@@ -782,24 +782,27 @@ The autopilot and knob keys are the A380's: Input Shift+A autopilot 1, Ctrl+O au
 
 ### MCDU {#mcdu-5}
 
-Like the A380, the A350 has MFDs instead of MCDUs, worked from the KCCU. Input Shift+M opens the MFD window ("A350 MFD"): the page as a list of lines, each with its value and colour. BA drives the real display underneath, so you never need the cursor or trackball.
+Like the A380, the A350 has MFDs instead of MCDUs, worked from the KCCU. Input Shift+M opens the MFD window ("A350 MFD"): the page as a list of lines, each said the way the A380's MFD window says its own: its text, then what it is (edit, button, combo box, tab, check box or radio button) and its state. No colour is said. A field the FMS needs says "required", the temporary flight plan "temporary", a constraint "constraint", and a control you cannot use now "dimmed". BA drives the real display underneath, so you never need the cursor or trackball.
 
 - Up and Down move through the lines. Enter acts on the line: a field takes what you typed in the scratchpad box (Tab to it, type, then Enter); anything else is clicked.
-- Backspace presses CLR, which clears what the MFD is typing. Page Up and Page Down scroll. Control and an arrow press the KCCU's own arrows, which move through an F-PLN line by line and through a list's options. F5 refreshes and Escape closes.
-- To delete a value, type CLR in the scratchpad box and press Enter on its field, as on an MCDU. For a navaid you tuned by hand on RAD NAV, do it on its ident line: the FMS tunes it again itself.
+- Up and Down move through the lines; what you type is said back as it is sent. Enter on a dimmed line says "Unavailable".
+- Backspace clears, as in the A380's window: the scratchpad box's text first ("Scratchpad cleared"), then the FMS message ("Info cleared"), then the field you are on ("Cleared"). Delete clears the field you are on. A line that is not a field says "Cannot be cleared", and a dimmed field "Unavailable".
+- Page Up and Page Down page through an open list, or scroll the page, saying "Previous page" and "Next page". Control and an arrow press the KCCU's own arrows, which move through an F-PLN line by line and through a list's options. F5 refreshes.
+- Alt+S takes you to the scratchpad box. Escape there empties it; anywhere else Escape closes the window.
+- To delete a value, press Delete on its field: BA types CLR into it and presses ENTER, as you would on an MCDU. Typing CLR in the scratchpad box and pressing Enter on the field does the same. For a navaid you tuned by hand on RAD NAV, do it on its ident line: the FMS tunes it again itself.
 - The **Side** box picks the captain's or the first officer's MFD, and the **Go to MFD page** list opens any page the MFD's menus reach.
-- Alt and a letter presses a KCCU page key: Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC, Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG, Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU, Alt+B AIRPORT, Alt+Y REF, Alt+S OIS and Alt+X ESC.
-- A new page says its title, and a menu that opens takes you to its first item.
+- Alt and a letter presses a KCCU page key: Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC, Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG, Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU, Alt+B AIRPORT, Alt+Y REF, Alt+W OIS and Alt+X ESC.
+- A new page says its title once and takes you to its first line. The title is not a line of the list: the window's own title holds it (your screen reader's "read title" key says it, with TMPY when the temporary flight plan is up). A menu that opens takes you to its first item.
 
 Reading the flight plan: each F-PLN waypoint is one line with its leg, labelled by the page's columns. A constraint says whether it is met, for example "ALT 5000 (constraint met)". Press Enter on a waypoint to open its revision menu.
 
 The MFD's own symbols are said in words. An arrow between two words of a key is the mode it switches to, for example "SPD to MACH". A triangle before a word is a delta, as in "delta FUEL".
 
-FCU BKUP, the last item of the MFD's application menu (the first line of the page), is the backup of the FCU and both EFIS control panels. Its keys stay grey and do nothing while the FCU works, as in the aircraft. Keys that share a name say their column, for example "SPD SELECTED button" and "MAG HDG MANAGED button".
+FCU BKUP, the last item of the MFD's application menu (the first line of the page), is the backup of the FCU and both EFIS control panels. Its keys stay grey and do nothing while the FCU works, as in the aircraft. Keys that share a name say their column, for example "SPD SELECTED, button" and "MAG HDG MANAGED, button".
 
 Now and then BA catches a label while the aircraft is redrawing it. It then says "unreadable" instead of the label. The window keeps showing that line as it last read it, and the next refresh, or F5, brings the label back.
 
-FMS messages, such as *"Scratchpad: NAV ACCURACY UPGRADED, white"*, are spoken as they appear: by the window while it is open, and in the background while it is closed. The background ones have their own Monitor Manager row, "FMS messages (MFD scratchpad)".
+FMS messages, such as *"NAV ACCURACY UPGRADED"*, are spoken as they appear: by the window while it is open, and in the background while it is closed. The background ones have their own Monitor Manager row, "FMS messages (MFD scratchpad)".
 
 The A350's normal checklists are on the MFD's C/L MENU (Alt+K in the window, or Output Ctrl+Shift+C). Each item is a button: Enter ticks it, and sensed items tick themselves.
 

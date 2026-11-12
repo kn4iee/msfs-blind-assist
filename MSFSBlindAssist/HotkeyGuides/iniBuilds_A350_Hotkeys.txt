@@ -102,8 +102,8 @@ What you set or press yourself is never repeated back to you.
                         or closed (Ctrl+E turns them off and on)
   FMA                   each column's change with its colours ("FMA vertical: SRS, green"), one
                         row per column
-  FMS messages          a message the FMS posts in the MFD scratchpad ("Scratchpad: NAV ACCURACY
-                        UPGRADED, white") while the MFD window is closed; the window says them
+  FMS messages          a message the FMS posts in the MFD scratchpad ("NAV ACCURACY UPGRADED")
+                        while the MFD window is closed; the window says them
                         itself while it is open
   PFD messages          each flag or message the PFD raises, one row each ("RWY TOO SHORT
                         call-out", "PULL UP call-out")
@@ -375,18 +375,24 @@ the pushbuttons beside it; the window's line kept current in a read-only box):
              unit it shows; both baros and the ISIS setting kept current)
 
 MFD (the A350's flight management, its checklists and datalink):
-  Shift+M    Open the MFD window (A380 parity): the MFD page as lines (menus, buttons,
-             tabs, fields with their values and colours, the scratchpad). Up/Down move;
-             Enter acts on the line: a field takes what you typed in the scratchpad box
-             (Tab to it, type, Enter), anything else is clicked. Backspace presses CLR,
-             PageUp/PageDown scroll, F5 refreshes, Escape closes. The Side box picks the
-             captain's or the first officer's MFD. A new FMS message is spoken (with the
-             window closed, the background says it). The Go to MFD page list opens any
-             page the menus reach. Alt+letter presses a KCCU page key:
+  Shift+M    Open the MFD window (A380 parity): the MFD page as lines, each said as the
+             A380's MFD window says its own (text, then edit, button, combo box, tab,
+             check box or radio button, and its state; no colour: "required",
+             "temporary", "constraint", "dimmed"). The page's title is said as the page
+             changes and stays in the window's title. Up/Down move; Enter acts on the
+             line: a field takes what you typed in the scratchpad box (Alt+S, type,
+             Enter), anything else is clicked; a dimmed line says "Unavailable".
+             Backspace clears the box, else the FMS message, else the field; Delete
+             clears the field (CLR typed into it). PageUp/PageDown page a list or say
+             "Previous page"/"Next page" as they scroll. Ctrl+arrows are the KCCU's
+             arrows. F5 refreshes; Escape empties the box, else closes. The Side box
+             picks the captain's or the first officer's MFD. A new FMS message is
+             spoken (with the window closed, the background says it). The Go to MFD
+             page list opens any page the menus reach. Alt+letter presses a KCCU key:
              Alt+I INIT, Alt+F F-PLN, Alt+E PERF, Alt+L FUEL, Alt+R RAD NAV, Alt+P SEC,
              Alt+D DIR, Alt+A ATC, Alt+V SURV, Alt+C CLR, Alt+T DEST, Alt+G PROG,
              Alt+M MAILBOX, Alt+K C/L MENU, Alt+N NOTEPAD, Alt+O DATA, Alt+U MENU,
-             Alt+B AIRPORT, Alt+Y REF, Alt+S OIS, Alt+X ESC.
+             Alt+B AIRPORT, Alt+Y REF, Alt+W OIS, Alt+X ESC.
   Ctrl+N     The MFD window opened on RAD NAV, where the A350 tunes its navaids (the
              PMDG 737's NAV radios key)
   Ctrl+Shift+D  The ATC mailbox window, where the A350 shows its CPDLC messages (the A32NX's
