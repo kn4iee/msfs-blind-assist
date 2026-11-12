@@ -22,16 +22,13 @@ public sealed partial record Bbs757EhsiReading
     public Bbs757EhsiMapOptionsReading? MapOptions { get; init; }
     public string? MapOptionsMissing { get; init; }
 
+    /// <summary>TERR and the wind (light: every reading), the runways and the deceleration points (full: MAP and PLAN).</summary>
     public Bbs757EhsiMapExtrasReading? MapExtras { get; init; }
     public string? MapExtrasMissing { get; init; }
 
     public Bbs757EhsiMapGuidesReading? MapGuides { get; init; }
     public string? MapGuidesMissing { get; init; }
 }
-
-/// <summary>TERR, the wind, the runways and the deceleration points (plan 28's map extras; its reading is written by the
-/// map extras' task and holds nothing yet).</summary>
-public sealed record Bbs757EhsiMapExtrasReading;
 
 /// <summary>The FIX page, the off-path descent circles, the altitude range arc and the VNAV path deviation (plan 28's map
 /// guides; its reading is written by the map guides' task and holds nothing yet).</summary>

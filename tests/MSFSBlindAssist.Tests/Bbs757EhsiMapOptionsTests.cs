@@ -330,14 +330,19 @@ public class Bbs757EhsiMapOptionsTests
             AirportList = new[] { new Place("KBFI", 5.2, -10) },
             WaypointList = new Place?[] { new Place("HAVHO", 3, 30) },
         };
-        string[] All(Options o, bool tfc = false) => Bbs757EhsiText.Rows(Read(new Options
+        string[] All(Options o, bool tfc = false, bool terr = false) => Bbs757EhsiText.Rows(Read(new Options
         {
             NavAid = o.NavAid, Airport = o.Airport, Waypoint = o.Waypoint, NavaidList = o.NavaidList, AirportList = o.AirportList,
             WaypointList = o.WaypointList,
-            Tweak = b => new Bbs757EhsiTcasTests.Tcas
+            Tweak = b =>
             {
-                Tfc = tfc, Traffic = new[] { new Bbs757EhsiTcasTests.Entry(0, 0, 739, Bbs757EhsiTcasTests.At(8.73, -37.6).Lat, Bbs757EhsiTcasTests.At(8.73, -37.6).Lon) },
-            }.Write(b),
+                new Bbs757EhsiTcasTests.Tcas
+                {
+                    Tfc = tfc, Traffic = new[] { new Bbs757EhsiTcasTests.Entry(0, 0, 739, Bbs757EhsiTcasTests.At(8.73, -37.6).Lat, Bbs757EhsiTcasTests.At(8.73, -37.6).Lon) },
+                }.Write(b);
+                // TERR's live elevations, the picture byte as BlueBird sets it with the button on.
+                new Bbs757EhsiMapExtrasTests.Extras { Terr = terr, Picture = terr }.Write(b);
+            },
         })).ToArray();
 
         var off = All(Lists());
@@ -357,6 +362,7 @@ public class Bbs757EhsiMapOptionsTests
         waypoint.Waypoint = true;
         Adds(All(waypoint), "Map: waypoint HAVHO, 3.0 NM, 30° right");
         Adds(All(Lists(), tfc: true), "Left: TFC", "Map: traffic, 8.7 NM, 38° left, +07");
+        Adds(All(Lists(), terr: true), "Top right: TERR", "Top right: terrain 031 red, 004 amber", "Map: terrain shown, not read");
     }
 
     // ---- all or nothing ----

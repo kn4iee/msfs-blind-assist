@@ -27,13 +27,18 @@ public sealed class Bbs757EhsiDisplay : IBbs757DisplayReader<Bbs757EhsiLayout, B
     /// False until the definition sets it.</summary>
     public Func<bool> FullWanted { get; set; } = () => false;
 
-    /// <summary>The two simulator variables the sampler takes, where BlueBird's top line does (S10): the aircraft's
-    /// position, which the top line's distance reads fresh on each draw. Inputs, never compared with memory (B757-30);
-    /// the map keeps the nd's own copy.</summary>
+    /// <summary>The simulator variables the sampler takes, where BlueBird's draw does (S10): the aircraft's position, which
+    /// the top line's distance reads fresh on each draw (the map keeps the nd's own copy); and plan 28's three, which the
+    /// map extras' draw reads through simulator handles with no value in memory: the wind's speed and direction (the
+    /// units BlueBird registers them in) and the gear position (in BlueBird's "Enum", which TERR's amber threshold
+    /// compares with the layout's gear-down value). Inputs, never compared with memory (B757-30).</summary>
     public static IReadOnlyList<Bbs757SimInput> SimInputs { get; } = Array.AsReadOnly(new[]
     {
         new Bbs757SimInput(Bbs757EhsiReader.LatitudeKey, Bbs757EhsiReader.LatitudeKey, SimVarType.SimVar, "degrees"),
         new Bbs757SimInput(Bbs757EhsiReader.LongitudeKey, Bbs757EhsiReader.LongitudeKey, SimVarType.SimVar, "degrees"),
+        new Bbs757SimInput(Bbs757EhsiReader.WindSpeedKey, Bbs757EhsiReader.WindSpeedKey, SimVarType.SimVar, "knots"),
+        new Bbs757SimInput(Bbs757EhsiReader.WindDirectionKey, Bbs757EhsiReader.WindDirectionKey, SimVarType.SimVar, "degrees"),
+        new Bbs757SimInput(Bbs757EhsiReader.GearKey, Bbs757EhsiReader.GearKey, SimVarType.SimVar, "enum"),
     });
 
     IReadOnlyList<Bbs757SimInput> IBbs757DisplayReader<Bbs757EhsiLayout, Bbs757EhsiReading>.SimInputs => SimInputs;

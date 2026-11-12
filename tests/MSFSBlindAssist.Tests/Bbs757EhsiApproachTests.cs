@@ -155,6 +155,10 @@ public class Bbs757EhsiApproachTests
     /// <summary>The scene's heading bug row (plan 26's): the bug 147 against the heading 119.</summary>
     private const string BugRow = "Heading bug: 147, 28° right";
 
+    /// <summary>The scene's wind (plan 28's map extras): its show flag clear in memory, so the screen's dashes, at the
+    /// bottom left after the rose's rows.</summary>
+    private const string NoWindRow = "Bottom left: wind ---";
+
     // ---- the rows ----
 
     [Fact]
@@ -171,6 +175,7 @@ public class Bbs757EhsiApproachTests
             "Center: deviation 0.5 dots right",
             "Bottom right: TO",
             "Bottom left: VOR L",
+            NoWindRow,
             "Bearing pointer 1: VOR L, SEA, 74° right",
             BugRow,
         }, Rows(r));
@@ -212,6 +217,7 @@ public class Bbs757EhsiApproachTests
             "Right side: glideslope at full scale, above",
             "Bottom left: ILS",
             "Bottom right: 110.30",
+            NoWindRow,
             BugRow,
         }, Rows(r));
 
@@ -251,6 +257,7 @@ public class Bbs757EhsiApproachTests
             "Center: no deviation bar",
             "Bottom left: ILS",
             "Bottom right: ------",
+            NoWindRow,
             BugRow,
         }, Rows(Read(new Approach(), mode: 1)));
 
@@ -273,6 +280,7 @@ public class Bbs757EhsiApproachTests
             "Center: course pointer 130, 11° right",
             "Center: no deviation bar",
             "Bottom left: VOR L",
+            NoWindRow,
             BugRow,
         }, Rows(Read(new Approach(), mode: 0)));
     }
@@ -359,6 +367,7 @@ public class Bbs757EhsiApproachTests
             "Bottom: LOC flag",
             "Bottom left: ILS",
             "Bottom right: ------",
+            NoWindRow,
             BugRow,
         }, Rows(failedReading));
         var lines = Bbs757EhsiText.Changes(lostReading, failedReading, true);
@@ -387,12 +396,13 @@ public class Bbs757EhsiApproachTests
         Assert.Contains("Bearing pointer 1: VOR L, SEA, 74° right", rows);
         // PAE north (bearing 002 true): 132° left of the map's up.
         Assert.Contains("Bearing pointer 2: VOR R, PAE, 132° left", rows);
-        // In MAP too, after the map rows and before the heading bug.
+        // In MAP too, after the map rows and before the wind and the heading bug.
         var map = Rows(Read(both, mode: 2, full: true));
         int pointer = Array.IndexOf(map, "Bearing pointer 1: VOR L, SEA, 74° right");
         Assert.True(pointer > 0);
         Assert.Equal("Bearing pointer 2: VOR R, PAE, 132° left", map[pointer + 1]);
-        Assert.StartsWith("Heading bug: ", map[pointer + 2], StringComparison.Ordinal);
+        Assert.Equal(NoWindRow, map[pointer + 2]);
+        Assert.StartsWith("Heading bug: ", map[pointer + 3], StringComparison.Ordinal);
 
         // Straight ahead and straight behind: the place's words, without the distance.
         var aheadBehind = VorSea();

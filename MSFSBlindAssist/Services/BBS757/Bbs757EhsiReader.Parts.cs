@@ -5,7 +5,7 @@ namespace MSFSBlindAssist.Services.BBS757;
 public sealed partial class Bbs757EhsiReader
 {
     /// <summary>The reason a part whose layout part is present is not read: the parts this build does not read yet. The
-    /// map extras' and map guides' tasks delete it as each reads its part.</summary>
+    /// map guides' task deletes it as it reads its part.</summary>
     public const string NotReadYetInThisBuild = "not read yet in this build";
 
     /// <summary>The parts of one reading and their reasons.</summary>
@@ -14,26 +14,32 @@ public sealed partial class Bbs757EhsiReader
         string? ApproachMissing,
         Bbs757EhsiTcasReading? Tcas,
         string? TcasMissing,
-        Bbs757EhsiMapOptionsReading? MapOptions);
+        Bbs757EhsiMapOptionsReading? MapOptions,
+        Bbs757EhsiMapExtrasReading? MapExtras);
 
     /// <summary>Every part the layout holds; false when one is torn (the reading is then corrupt, B757-36).
     /// <paramref name="map"/> is what the map options' loop measures against, given in a full reading only; the map options
-    /// are read only then, and only in MAP and PLAN.</summary>
-    private bool TryParts(uint nd, uint source, int modeValue, bool full, Bbs757EhsiLoopScene? map, out PartsRead parts)
+    /// are read only then, and only in MAP and PLAN. The map extras' runways and deceleration points too (the route's path
+    /// by <paramref name="routeId"/>); their TERR and wind in every reading, with the wind and gear from
+    /// <paramref name="sim"/>.</summary>
+    private bool TryParts(uint nd, uint source, int modeValue, bool full, Bbs757EhsiLoopScene? map, int routeId,
+        Bbs757SimValues? sim, out PartsRead parts)
     {
         parts = null!;
         var l = Layout;
         Bbs757EhsiApproachReading? approach = null;
         Bbs757EhsiTcasReading? tcas = null;
         Bbs757EhsiMapOptionsReading? options = null;
+        Bbs757EhsiMapExtrasReading? extras = null;
         // ILS mode as the rows know it (Bbs757EhsiText's mode values): the VOR bearing pointers' station follows it.
         bool ilsMode = modeValue == (int)Bbs757EhsiText.EhsiMode.Ils;
         bool mapOrPlan = modeValue is (int)Bbs757EhsiText.EhsiMode.Map or (int)Bbs757EhsiText.EhsiMode.Plan;
         if (l.Approach is { } a && !TryApproach(nd, source, a, ilsMode, out approach)) return false;
         if (l.Tcas is { } t && !TryTcas(nd, t, full, out tcas)) return false;
         if (l.MapOptions is { } o && full && map is not null && mapOrPlan && !TryMapOptions(nd, o, map, out options)) return false;
+        if (l.MapExtras is { } x && !TryMapExtras(nd, source, x, full, mapOrPlan, routeId, sim, out extras)) return false;
         parts = new PartsRead(approach, l.Approach is null ? l.ApproachMissing : null, tcas, l.Tcas is null ? l.TcasMissing : null,
-            options);
+            options, extras);
         return true;
     }
 
@@ -50,7 +56,8 @@ public sealed partial class Bbs757EhsiReader
             TcasMissing = parts.TcasMissing,
             MapOptions = parts.MapOptions,
             MapOptionsMissing = l.MapOptions is null ? l.MapOptionsMissing : null,
-            MapExtrasMissing = l.MapExtras is null ? l.MapExtrasMissing : NotReadYetInThisBuild,
+            MapExtras = parts.MapExtras,
+            MapExtrasMissing = l.MapExtras is null ? l.MapExtrasMissing : null,
             MapGuidesMissing = l.MapGuides is null ? l.MapGuidesMissing : NotReadYetInThisBuild,
         };
     }

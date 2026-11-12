@@ -102,15 +102,17 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
 
     /// <summary>A reading with the top line's position from the simulator's <see cref="LatitudeKey"/> and
     /// <see cref="LongitudeKey"/> when both are given, finite and in range; else the nd's own copy. The map's center stays
-    /// the nd's.</summary>
-    public bool TryRead(Bbs757SimValues sim, out Bbs757EhsiReading reading) => Read(SimPosition(sim), out reading);
+    /// the nd's. Plan 28's map extras take the wind and the gear from <paramref name="sim"/> too
+    /// (Bbs757EhsiReader.MapExtras.cs).</summary>
+    public bool TryRead(Bbs757SimValues sim, out Bbs757EhsiReading reading) => Read(sim, out reading);
 
     private static (double Latitude, double Longitude)? SimPosition(Bbs757SimValues sim) =>
         sim[LatitudeKey] is double lat && sim[LongitudeKey] is double lon && InRange(lat, lon) ? (lat, lon) : null;
 
-    private bool Read((double Latitude, double Longitude)? position, out Bbs757EhsiReading reading)
+    private bool Read(Bbs757SimValues? sim, out Bbs757EhsiReading reading)
     {
         reading = null!;
+        var position = sim is { } values ? SimPosition(values) : null;
         var l = Layout;
         bool full = FullWanted();
         using var regions = _memory.RememberRegions();
@@ -214,7 +216,7 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
         // map options' loop measures from the nd's own map and aircraft position (never the simulator's), against the
         // routes and airports just read.
         var mapScene = full ? MapScene(map, range, latitude, longitude, routeLegs, modificationLegs, points) : null;
-        if (!TryParts(nd, source, modeValue, full, mapScene, out var parts))
+        if (!TryParts(nd, source, modeValue, full, mapScene, routeId, sim, out var parts))
         {
             reading = Bad(full);
             return true;
@@ -316,15 +318,10 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
         double latitude = 0, longitude = 0;
         if (!discontinuity)
         {
-            int latitudeAt = l.LegLatitude, longitudeAt = l.LegLongitude;
-            foreach (var p in l.LegPositions)
-                if (p.Kind == kind)
-                {
-                    latitudeAt = p.Latitude;
-                    longitudeAt = p.Longitude;
-                    break;
-                }
-            if (!BlockDouble(block, latitudeAt, out latitude) || !BlockDouble(block, longitudeAt, out longitude)
+            // Plan 26's offsets by kind; a navaid leg by its capability set when the layout has plan 28's map extras
+            // (Bbs757EhsiReader.MapExtras.cs).
+            if (!LegPositionOffsets(block, kind, out int latitudeAt, out int longitudeAt)
+                || !BlockDouble(block, latitudeAt, out latitude) || !BlockDouble(block, longitudeAt, out longitude)
                 || !InRange(latitude, longitude))
                 return false;
         }

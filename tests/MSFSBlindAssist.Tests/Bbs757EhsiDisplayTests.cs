@@ -48,11 +48,15 @@ public class Bbs757EhsiDisplayTests
     public void The_reader_takes_the_simulators_position_for_the_top_line()
     {
         // S10: BlueBird's top line reads PLANE LATITUDE and PLANE LONGITUDE fresh, so the sampler takes them as inputs,
-        // never as a check of memory (B757-30).
+        // never as a check of memory (B757-30). Plan 28's map extras add the three their draw reads through simulator
+        // handles: the wind's speed and direction and the gear position, in the units BlueBird registers them in.
         var inputs = new[]
         {
             new Bbs757SimInput("PLANE LATITUDE", "PLANE LATITUDE", SimVarType.SimVar, "degrees"),
             new Bbs757SimInput("PLANE LONGITUDE", "PLANE LONGITUDE", SimVarType.SimVar, "degrees"),
+            new Bbs757SimInput("AMBIENT WIND VELOCITY", "AMBIENT WIND VELOCITY", SimVarType.SimVar, "knots"),
+            new Bbs757SimInput("AMBIENT WIND DIRECTION", "AMBIENT WIND DIRECTION", SimVarType.SimVar, "degrees"),
+            new Bbs757SimInput("GEAR POSITION", "GEAR POSITION", SimVarType.SimVar, "enum"),
         };
         IBbs757DisplayReader<Bbs757EhsiLayout, Bbs757EhsiReading> reader = new Bbs757EhsiDisplay();
         Assert.Equal(inputs, Bbs757EhsiDisplay.SimInputs);
@@ -62,9 +66,10 @@ public class Bbs757EhsiDisplayTests
         // The monitor asks the simulator for exactly these each tick and hands them to the sampler.
         var f = new Flight(Light()).RunUntilRunning();
         Assert.NotEmpty(f.Env.KeysAsked);
-        Assert.All(f.Env.KeysAsked, key => Assert.Contains(key, new[] { "PLANE LATITUDE", "PLANE LONGITUDE" }));
+        Assert.All(f.Env.KeysAsked, key => Assert.Contains(key, inputs.Select(i => i.Key)));
         Assert.Contains("PLANE LATITUDE", f.Env.KeysAsked);
         Assert.Contains("PLANE LONGITUDE", f.Env.KeysAsked);
+        foreach (var input in inputs) Assert.Contains(input.Key, f.Env.KeysAsked);
         Assert.Equal(47.442946, f.Sampler.Seen[^1]["PLANE LATITUDE"]);
         Assert.Equal(-122.303648, f.Sampler.Seen[^1]["PLANE LONGITUDE"]);
     }

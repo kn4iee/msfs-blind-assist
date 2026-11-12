@@ -217,16 +217,19 @@ public class Bbs757EhsiWiringTests
     }
 
     [Fact]
-    public void The_two_position_inputs_ride_the_batch_once_and_stay_under_the_ceiling()
+    public void The_ehsis_inputs_ride_the_batch_once_and_stay_under_the_ceiling()
     {
+        // Plan 26's two position inputs and plan 28's wind and gear: five, each streamed once in its own units.
         var def = new BBS757Definition();
         var vars = def.GetVariables();
         var keys = def.DisplayCacheKeys();
 
+        Assert.Equal(5, Bbs757EhsiDisplay.SimInputs.Count);
         foreach (var input in Bbs757EhsiDisplay.SimInputs)
         {
             var carrier = vars[keys[input.Key]];
-            Assert.Equal((input.Name, SimVarType.SimVar, "degrees"), (carrier.Name, carrier.Type, carrier.Units));
+            Assert.Equal((input.Name, SimVarType.SimVar), (carrier.Name, carrier.Type));
+            Assert.Equal(input.Units, carrier.Units, StringComparer.OrdinalIgnoreCase);
             Assert.Equal(UpdateFrequency.Continuous, carrier.UpdateFrequency);
             Assert.True(carrier.IsAnnounced);
             Assert.Single(vars, kv => kv.Value.Name == input.Name && ContinuousBatchLayout.RidesBatch(kv.Value));

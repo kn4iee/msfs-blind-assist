@@ -78,18 +78,26 @@ public class Bbs757EhsiPartsTests
             Approach = null, ApproachMissing = "course field not found",
             Tcas = null, TcasMissing = "traffic vector not found",
             MapOptions = null, MapOptionsMissing = "navaid list not found",
+            MapExtras = null, MapExtrasMissing = "terrain static not found",
         };
         Assert.Equal(new[]
         {
             "TCAS: not read: traffic vector not found",
             "Map options: not read: navaid list not found",
-            "TERR, wind and runways: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
+            "TERR, wind and runways: not read: terrain static not found",
             "FIX, descent and altitude guides: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
             "VOR and ILS: not read: course field not found",
         }, NotRead(Rows(missing, mode: 2)));
+        // The map extras missing cost only their own rows: no TERR, wind, runway or deceleration row, in any mode.
+        foreach (int mode in new[] { 0, 1, 2, 3 })
+        {
+            var rows = Rows(missing, mode);
+            Assert.Contains("TERR, wind and runways: not read: terrain static not found", rows);
+            Assert.DoesNotContain(rows, r => new[] { "Bottom left: wind", "Top right: TERR", "Top right: terrain", "Map: runway", "Map: deceleration" }
+                .Any(p => r.StartsWith(p, StringComparison.Ordinal)));
+        }
         Assert.Equal(new[]
         {
-            "TERR, wind and runways: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
             "FIX, descent and altitude guides: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
         }, NotRead(Rows(WithParts, mode: 2)));
         Assert.Equal("not read yet in this build", Bbs757EhsiReader.NotReadYetInThisBuild);
@@ -138,11 +146,30 @@ public class Bbs757EhsiPartsTests
             NavAid = true, NavaidList = new Bbs757EhsiMapOptionsTests.Nav?[] { Bbs757EhsiMapOptionsTests.Pae with { Nm = 12.34 } },
         }, mode: 3);
 
-        foreach (var reading in new[] { vor, ils, ilsOff, traffic, options, plan })
+        // The map extras: TERR, the wind (70.9 kt truncated, from 287.4° true), RW16L and the two green rings at range 20.
+        var extras = Bbs757EhsiMapExtrasTests.Read(new Bbs757EhsiMapExtrasTests.Extras
+        {
+            Terr = true, Picture = true, WindShown = true,
+            Departure = new Bbs757EhsiMapExtrasTests.Runway("16L", Bbs757EhsiTcasTests.At(2.04, -15), Bbs757EhsiTcasTests.At(3.9, -14)),
+            Starts = new[] { Bbs757EhsiTcasTests.At(6.06, 10) },
+            Ends = new[] { Bbs757EhsiTcasTests.At(9.04, 20) },
+        }, range: 20, sim: new Bbs757SimValues(new Dictionary<string, double>
+        {
+            [Bbs757EhsiReader.WindSpeedKey] = 70.9, [Bbs757EhsiReader.WindDirectionKey] = 287.4, [Bbs757EhsiReader.GearKey] = 0,
+        }));
+
+        foreach (var reading in new[] { vor, ils, ilsOff, traffic, options, plan, extras })
             Assert.Equal(TestCulture.Run("en-US", () => Bbs757EhsiText.Rows(reading)), TestCulture.Run(culture, () => Bbs757EhsiText.Rows(reading)));
 
         var rows = TestCulture.Run(culture, () => Bbs757EhsiText.Rows(vor).Concat(Bbs757EhsiText.Rows(ils)).Concat(Bbs757EhsiText.Rows(ilsOff))
-            .Concat(Bbs757EhsiText.Rows(traffic)).Concat(Bbs757EhsiText.Rows(options)).Concat(Bbs757EhsiText.Rows(plan)).ToArray());
+            .Concat(Bbs757EhsiText.Rows(traffic)).Concat(Bbs757EhsiText.Rows(options)).Concat(Bbs757EhsiText.Rows(plan))
+            .Concat(Bbs757EhsiText.Rows(extras)).ToArray());
+        Assert.Contains("Top right: TERR", rows);
+        Assert.Contains("Top right: terrain 031 red, 004 amber", rows);
+        Assert.Contains("Bottom left: wind 70 kt from 153° right", rows);
+        Assert.Contains("Map: runway 16L, 2.0 NM, 15° left", rows);
+        Assert.Contains("Map: deceleration starts, 6.1 NM, 10° right", rows);
+        Assert.Contains("Map: deceleration ends, 9.0 NM, 20° right", rows);
         Assert.Contains("Map: VORTAC SEA, tuned, 0.5 NM, 173° left", rows);
         Assert.Contains("Map: VOR/DME PAE, 12.3 NM, 40° right", rows);
         Assert.Contains("Map: airport KBFI, 5.3 NM, 10° left", rows);

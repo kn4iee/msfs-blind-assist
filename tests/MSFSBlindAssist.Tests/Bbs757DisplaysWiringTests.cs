@@ -328,9 +328,11 @@ public class Bbs757DisplaysWiringTests
         var keys = def.DisplayCacheKeys();
 
         // Plan 26 added the EHSI's two position inputs (PLANE LATITUDE and PLANE LONGITUDE, S10): the readers' inputs now
-        // are exactly these three, the thrust flag being the only L:var.
+        // are exactly these three, the thrust flag being the only L:var. Plan 28 added the EHSI's map extras' three (the
+        // wind's speed and direction, the gear position, S10): six.
         // As a set: a dictionary's key order is not part of its contract.
-        Assert.Equal(new[] { "BBS757_THRREF_PULL", "PLANE LATITUDE", "PLANE LONGITUDE" },
+        Assert.Equal(new[] { "AMBIENT WIND DIRECTION", "AMBIENT WIND VELOCITY", "BBS757_THRREF_PULL", "GEAR POSITION",
+                "PLANE LATITUDE", "PLANE LONGITUDE" },
             keys.Keys.Order(StringComparer.Ordinal));
         var carrier = vars[keys["BBS757_THRREF_PULL"]];
         Assert.Equal(("BBS757_THRREF_PULL", SimVarType.LVar), (carrier.Name, carrier.Type));

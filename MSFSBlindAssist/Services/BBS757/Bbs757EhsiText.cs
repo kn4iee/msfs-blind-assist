@@ -54,6 +54,9 @@ public static partial class Bbs757EhsiText
     /// (or "no ETA"; expanded only), the TCAS block (<see cref="TcasRows"/>), the rose's rows, the bearing pointers and,
     /// while valid, the heading bug, and nothing more. MAP and PLAN: "Top left: 37.5 NM" (or "no distance") and "Top
     /// right: 1533.3z" (or "no ETA"), then the TCAS block.</item>
+    /// <item>Plan 28's map extras (<see cref="TerrRows"/>, <see cref="WindRow"/>): TERR's rows after the top line, before
+    /// the TCAS block; the wind after VOR and ILS's rose rows (before the bearing pointers), and in MAP after the map's
+    /// rows and the bearing pointers; the runways and the deceleration points among the map's items.</item>
     /// <item>A part of plan 28's not read, with a reason: "TCAS: not read: not in this layout file", one row where the
     /// part's rows would start, only in the modes where it shows something.</item>
     /// <item>In MAP while valid or in PLAN, a light reading (no route read): "Map: reading", alone. A full reading lists
@@ -95,19 +98,19 @@ public static partial class Bbs757EhsiText
             if (r.Approach is { } a) rows.Add(DmeRow(r, a));
             else NotRead(rows, ApproachPart, r.ApproachMissing);
             if (!r.Centered) rows.Add(EtaRow(r, distance));
+            TerrRows(rows, r);
             TcasRows(rows, r);
             NotRead(rows, MapExtrasPart, r.MapExtrasMissing);
-            if (r.Approach is { } approach)
-            {
-                ApproachRows(rows, r, approach);
-                BearingPointerRows(rows, r, approach);
-            }
+            if (r.Approach is { } approach) ApproachRows(rows, r, approach);
+            WindRow(rows, r);
+            if (r.Approach is { } pointers) BearingPointerRows(rows, r, pointers);
             if (r.Valid) rows.Add(HeadingBugRow(r));
             return rows;
         }
 
         rows.Add("Top left: " + (distance is { } nm ? Bbs757EhsiGeometry.TopLineText(nm) + " " + Word(w.Nm) : "no distance"));
         rows.Add(EtaRow(r, distance));
+        TerrRows(rows, r);
         TcasRows(rows, r);
         bool mapDrawn = MapDrawn(r);
         if (mapDrawn) NotRead(rows, MapOptionsPart, r.MapOptionsMissing);
@@ -120,6 +123,7 @@ public static partial class Bbs757EhsiText
             if (r.Approach is { } a) BearingPointerRows(rows, r, a);
             else NotRead(rows, ApproachPart, r.ApproachMissing);
         }
+        WindRow(rows, r);
         if (r.Valid) rows.Add(HeadingBugRow(r));
         rows.Add(Excess(r) ? "Message: " + Word(w.Excess) : "Messages: none");
         return rows;
@@ -219,6 +223,7 @@ public static partial class Bbs757EhsiText
 
         // Plan 28's map options and traffic (Bbs757EhsiText.MapOptions.cs, .Tcas.cs), among the map's items by their place.
         AddMapOptions(items, r, center);
+        AddMapExtras(items, r, center);
         AddTraffic(items, r);
 
         // Top to bottom, then left to right; OrderBy is stable, so one spot keeps the draw's order. The course lines, which
