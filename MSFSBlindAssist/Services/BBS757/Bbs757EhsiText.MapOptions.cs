@@ -69,28 +69,35 @@ public static partial class Bbs757EhsiText
     /// minus that number from the station's pixel: sampled along the stretch of the line within half the screen's diagonal
     /// of the point nearest the screen's center, which covers every pixel of it the screen can show, both ways. In PLAN
     /// (true north up) the reader has no magnetic variation to turn the line with: it is listed while its station's point
-    /// is inside the clip.
+    /// is inside the clip. Not on the screen for a range not above 0 or any input that is not a finite number. The samples
+    /// are counted by an index up to <see cref="MaxCourseLineSamples"/>, never by adding a step to a far coordinate (at a
+    /// tiny range the station's pixel is so far out that adding a few pixels no longer changes it).
     /// </summary>
     private static bool CourseLineOnScreen(Bbs757EhsiReading r, Bbs757EhsiCourseLine line)
     {
         var c = r.Constants;
         var map = r.Map;
+        if (!(r.Range > 0) || !double.IsFinite(r.Range)) return false;
         var (x, y, _, _) = Bbs757EhsiGeometry.Project(map, r.Range, c.RadiusFactor, line.Latitude, line.Longitude);
+        if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
         bool Inside(double px, double py) =>
             Bbs757EhsiGeometry.OnScreen(map, r.Centered, px, py, c.RadiusFactor, c.AircraftYFactor, c.ClipInset);
         if (Is(r, Bbs757EhsiMode.Plan)) return Inside(x, y);
         double angle = (line.Course - r.Number) * Math.PI / 180.0;
-        if (!double.IsFinite(x) || !double.IsFinite(y) || !double.IsFinite(angle) || !double.IsFinite(map.Width)
-            || !double.IsFinite(map.Height))
-            return false;
+        if (!double.IsFinite(angle) || !double.IsFinite(map.Width) || !double.IsFinite(map.Height)) return false;
         double sin = Math.Sin(angle), cos = Math.Cos(angle);
         double half = Math.Sqrt(map.Width * map.Width + map.Height * map.Height) / 2;
         // Along the line t pixels from the station: (x + t sin, y - t cos); nearest the screen's center at t0.
         double t0 = (map.Width / 2 - x) * sin - (map.Height / 2 - y) * cos;
-        // A screen size no build has (a torn width) cannot spin: the samples are capped, spread wider.
-        double step = Math.Max(CourseLineSamplePixels, 2 * half / MaxCourseLineSamples);
-        for (double t = t0 - half; t <= t0 + half; t += step)
+        if (!double.IsFinite(half) || !double.IsFinite(t0)) return false;
+        // At most the cap of samples, spread wider for a screen size no build has (a torn width).
+        int samples = (int)Math.Clamp(Math.Ceiling(2 * half / CourseLineSamplePixels), 1, MaxCourseLineSamples);
+        double step = 2 * half / samples;
+        for (int i = 0; i <= samples; i++)
+        {
+            double t = t0 - half + i * step;
             if (Inside(x + t * sin, y - t * cos)) return true;
+        }
         return false;
     }
 }

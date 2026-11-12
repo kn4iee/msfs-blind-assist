@@ -157,6 +157,37 @@ public class Bbs757EhsiPartsTests
         }
     }
 
+    // Re-review finding 4 (B757-49): TERR is drawn in every mode but only while the IRS is valid; the wind in MAP, VOR and
+    // ILS while the IRS is valid, never in PLAN. A torn value there is never read anywhere else.
+    [Fact]
+    public void Terr_and_the_wind_are_read_only_where_they_are_drawn()
+    {
+        var P = Bbs757EhsiApproachTests.P;
+        var x = P.MapExtras!;
+        bool Torn(int mode, Action<byte[]>? write, bool valid = true, Bbs757EhsiLayout? layout = null, bool full = true) =>
+            Bbs757EhsiReaderTests.Read(new Scene { Mode = mode, Range = 20, Valid = valid, Tweak = write }, full, layout ?? P).Corrupt;
+
+        // TERR's button value not a number: torn in every mode while the IRS is valid, never read while it is not.
+        void Terr(byte[] b) => F64(b, Nd + x.TerrHandle + x.HandleValue, double.NaN);
+        foreach (int mode in new[] { 0, 1, 2, 3 })
+        {
+            Assert.True(Torn(mode, Terr));
+            Assert.False(Torn(mode, Terr, valid: false));
+            Assert.False(Torn(mode, Terr, valid: false, full: false));
+        }
+
+        // The wind's show byte where no module memory is: torn in MAP, VOR and ILS while the IRS is valid; never read in
+        // PLAN or while the IRS is not valid.
+        var wind = P with { MapExtras = x with { WindShown = Outside } };
+        foreach (int mode in new[] { 0, 1, 2 })
+        {
+            Assert.True(Torn(mode, null, layout: wind));
+            Assert.False(Torn(mode, null, valid: false, layout: wind));
+        }
+        Assert.False(Torn(3, null, layout: wind));
+        Assert.False(Torn(3, null, layout: wind, full: false));
+    }
+
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]

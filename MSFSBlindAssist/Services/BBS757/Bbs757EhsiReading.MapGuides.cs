@@ -17,7 +17,15 @@ public readonly record struct Bbs757EhsiRangeArc(double Distance, Bbs757EhsiMapP
 
 /// <summary>A FIX radial's dashed line on the screen, in the map's pixels (the layout's draw constants): the first dash's
 /// distance from the fix, how many dashes, the step from one dash's start to the next, and a dash's length.</summary>
-public readonly record struct Bbs757EhsiRadialDashes(double Start, int Count, double Step, double Length);
+public readonly record struct Bbs757EhsiRadialDashes(double Start, int Count, double Step, double Length)
+{
+    /// <summary>The most dashes the layout may give (its own count is 18): a wild layout value cannot spin the sampling.</summary>
+    public const int MaxCount = 256;
+
+    /// <summary>The farthest the layout's start, step and length may reach in pixels (its own are under 50): generous, and
+    /// still a bound.</summary>
+    public const double MaxPixels = 100_000;
+}
 
 /// <summary>
 /// The map's guides (plan 28's map guides), read in a full reading only. In MAP and PLAN: the FIX pages switched on with a

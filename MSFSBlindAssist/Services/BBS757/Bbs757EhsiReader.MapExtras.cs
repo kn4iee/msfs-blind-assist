@@ -3,10 +3,11 @@ using System.Buffers.Binary;
 namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
-/// The rest of the map (plan 28's <see cref="Bbs757EhsiMapExtras"/>). Light, every reading: TERR (the button's L:var from
-/// its handle's cached value, the picture byte, the two elevations and, while the button is on, their colors from the air
-/// data computer's altitude and vertical speed, BlueBird's thresholds and the simulator's <see cref="GearKey"/>) and the
-/// wind (the static show flag as BlueBird left it, which alone decides, the simulator's <see cref="WindSpeedKey"/> and
+/// The rest of the map (plan 28's <see cref="Bbs757EhsiMapExtras"/>). Light, only where they are drawn (B757-49): TERR
+/// while the IRS is valid, in every mode (the button's L:var from its handle's cached value, the picture byte, the two
+/// elevations and, while the button is on, their colors from the air data computer's altitude and vertical speed,
+/// BlueBird's thresholds and the simulator's <see cref="GearKey"/>), and the wind in MAP, VOR and ILS while the IRS is
+/// valid (the static show flag as BlueBird left it, which alone decides, the simulator's <see cref="WindSpeedKey"/> and
 /// <see cref="WindDirectionKey"/>). Full, while the map is drawn (MAP with the IRS valid, or PLAN): the two runway records and the route path's two deceleration
 /// vectors, walked all or nothing (B757-36). The simulator values are inputs where BlueBird's draw takes them (S10), never
 /// compared with memory (B757-30). A null object pointer is none; one outside the module, a name that is not text, a
@@ -19,33 +20,43 @@ public sealed partial class Bbs757EhsiReader
 
     /// <param name="mapItems">Whether to read the runways and the deceleration points: a full reading while the map is
     /// drawn (no row could show them otherwise, so they are not read).</param>
-    private bool TryMapExtras(uint nd, uint source, Bbs757EhsiMapExtras x, bool mapItems, int routeId,
-        Bbs757SimValues? sim, out Bbs757EhsiMapExtrasReading? reading)
+    /// <param name="terrDrawn">Whether TERR can show: while the IRS is valid, in every mode. Otherwise none of its values
+    /// is read (TERR off, no picture, zeros).</param>
+    /// <param name="windDrawn">Whether the wind can show: in MAP, VOR and ILS while the IRS is valid. Otherwise its show
+    /// flag is not read (clear).</param>
+    private bool TryMapExtras(uint nd, uint source, Bbs757EhsiMapExtras x, bool terrDrawn, bool windDrawn, bool mapItems,
+        int routeId, Bbs757SimValues? sim, out Bbs757EhsiMapExtrasReading? reading)
     {
         reading = null;
         // The wind's show flag alone says what the screen shows: BlueBird's draw clears it under its minimum ground speed
         // itself, so the reader never reads the nd's ground speed for it.
-        if (!Flag(nd, x.TerrainPicture, out bool picture)
-            || !Int(nd, x.DisplaySide, out int side) || !_memory.TryReadByte(x.WindShown, out byte windShown))
-            return false;
-        // The nd keeps its own copy of the TERR button's handle (66 bytes, at the nd): its value is at +HandleValue.
-        if (!At(nd, x.TerrHandle, out uint handle) || !F64(handle, x.HandleValue, out double terrValue) || !double.IsFinite(terrValue))
-            return false;
+        byte windShown = 0;
+        if (windDrawn && !_memory.TryReadByte(x.WindShown, out windShown)) return false;
 
-        // The two elevations: the side's record in the terrain static, s16 feet.
-        long record = (long)x.TerrainStatic + x.TerrainRecords + (side == x.CaptainSide ? 0 : 1) * (long)x.TerrainSideStride;
-        if (record < 0 || record > uint.MaxValue || !U16((uint)record, x.TerrainHighest, out ushort highestRaw)
-            || !U16((uint)record, x.TerrainLowest, out ushort lowestRaw))
-            return false;
-        short highest = unchecked((short)highestRaw), lowest = unchecked((short)lowestRaw);
+        bool terr = false, picture = false;
+        Bbs757EhsiTerrainNumber highestNumber = new(0, Bbs757EhsiTerrainColor.None), lowestNumber = highestNumber;
+        if (terrDrawn)
+        {
+            if (!Flag(nd, x.TerrainPicture, out picture) || !Int(nd, x.DisplaySide, out int side)) return false;
+            // The nd keeps its own copy of the TERR button's handle (66 bytes, at the nd): its value is at +HandleValue.
+            if (!At(nd, x.TerrHandle, out uint handle) || !F64(handle, x.HandleValue, out double terrValue) || !double.IsFinite(terrValue))
+                return false;
 
-        // The adc's altitude and vertical speed only color the numbers TERR shows: read only while its button is on.
-        bool terr = terrValue != 0;
-        double? altitude = null;
-        if (terr && !TryTerrainAltitude(source, x, out altitude)) return false;
-        double? gear = Input(sim, GearKey);
-        var highestNumber = TerrainNumber(highest, altitude, gear, x);
-        var lowestNumber = TerrainNumber(lowest, altitude, gear, x);
+            // The two elevations: the side's record in the terrain static, s16 feet.
+            long record = (long)x.TerrainStatic + x.TerrainRecords + (side == x.CaptainSide ? 0 : 1) * (long)x.TerrainSideStride;
+            if (record < 0 || record > uint.MaxValue || !U16((uint)record, x.TerrainHighest, out ushort highestRaw)
+                || !U16((uint)record, x.TerrainLowest, out ushort lowestRaw))
+                return false;
+            short highest = unchecked((short)highestRaw), lowest = unchecked((short)lowestRaw);
+
+            // The adc's altitude and vertical speed only color the numbers TERR shows: read only while its button is on.
+            terr = terrValue != 0;
+            double? altitude = null;
+            if (terr && !TryTerrainAltitude(source, x, out altitude)) return false;
+            double? gear = Input(sim, GearKey);
+            highestNumber = TerrainNumber(highest, altitude, gear, x);
+            lowestNumber = TerrainNumber(lowest, altitude, gear, x);
+        }
 
         IReadOnlyList<Bbs757EhsiRunway>? runways = null;
         IReadOnlyList<Bbs757EhsiMapPoint>? starts = null, ends = null;

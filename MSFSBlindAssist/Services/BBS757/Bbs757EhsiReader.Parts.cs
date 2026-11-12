@@ -22,7 +22,8 @@ public sealed partial class Bbs757EhsiReader
     /// <summary>
     /// Every part the layout holds, each only where a row can show it: the VOR and ILS picture in VOR and ILS, the bearing
     /// pointers in every mode but PLAN while <paramref name="irsValid"/>; the TCAS messages in every reading (drawn in every
-    /// mode), its traffic in a full reading in MAP while the IRS is valid; TERR and the wind in every reading; while the
+    /// mode), its traffic in a full reading in MAP while the IRS is valid; TERR while the IRS is valid and the wind in MAP,
+    /// VOR and ILS while the IRS is valid (as drawn); while the
     /// map is drawn (MAP with the IRS valid, or PLAN) and the reading is full, the map options (against
     /// <paramref name="map"/>), the runways and deceleration points (the route's path by <paramref name="routeId"/>), the
     /// FIX pages and the off-path circles; in MAP the range arc (while the IRS is valid) and the VNAV deviation. The wind and
@@ -63,7 +64,8 @@ public sealed partial class Bbs757EhsiReader
         {
             read[(int)Part.MapExtras] = true;
             // A capability tear on a leg already counts for this reading: the rest is not read.
-            torn[(int)Part.MapExtras] = extrasTorn || !TryMapExtras(nd, source, x, full && mapDrawn, routeId, sim, out extras);
+            torn[(int)Part.MapExtras] = extrasTorn
+                || !TryMapExtras(nd, source, x, irsValid, irsValid && (mapMode || vor || ils), full && mapDrawn, routeId, sim, out extras);
         }
         Bbs757EhsiMapGuidesReading? guides = null;
         if (Usable(l.MapGuides, Part.MapGuides) is { } g && full && (mapMode || plan))

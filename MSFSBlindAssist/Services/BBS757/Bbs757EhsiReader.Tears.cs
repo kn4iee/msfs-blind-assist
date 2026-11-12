@@ -86,6 +86,10 @@ public sealed partial class Bbs757EhsiReader
         static string Below(string name, int v) => v >= 0 ? "" : $"layout value {name} below 0";
         static string Inside(string name, int offset, int size, int block) =>
             offset >= 0 && (long)offset + size <= block ? "" : $"layout value {name} outside its block";
+        // A draw constant in pixels (the radial's dashes): finite and within a generous bound of the screen.
+        static string Pixels(string name, double v) =>
+            double.IsFinite(v) && Math.Abs(v) <= Bbs757EhsiRadialDashes.MaxPixels
+                ? "" : $"layout value {name} not a number within {Bbs757EhsiRadialDashes.MaxPixels.ToString(System.Globalization.CultureInfo.InvariantCulture)} pixels";
         static string? First(params string[] checks) => checks.FirstOrDefault(c => c.Length > 0);
 
         if (l.Approach is { } a)
@@ -126,7 +130,10 @@ public sealed partial class Bbs757EhsiReader
                 Below(nameof(g.FixEntries), g.FixEntries),
                 Inside(nameof(g.LegName), g.LegName, StringBytes, l.LegStride),
                 Inside(nameof(g.LegNavaidName), g.LegNavaidName, StringBytes, l.LegStride),
-                Below(nameof(g.RadialDashes), g.RadialDashes));
+                g.RadialDashes is >= 0 and <= Bbs757EhsiRadialDashes.MaxCount
+                    ? "" : $"layout value {nameof(g.RadialDashes)} not 0 to {Bbs757EhsiRadialDashes.MaxCount}",
+                Pixels(nameof(g.RadialStart), g.RadialStart), Pixels(nameof(g.RadialDashStep), g.RadialDashStep),
+                Pixels(nameof(g.RadialDashLength), g.RadialDashLength));
         return problems;
     }
 }

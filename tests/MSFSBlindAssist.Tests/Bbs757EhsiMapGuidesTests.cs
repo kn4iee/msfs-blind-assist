@@ -210,24 +210,27 @@ public class Bbs757EhsiMapGuidesTests
     [Fact]
     public async Task A_radial_with_wild_dash_constants_ends()
     {
-        // A dash length or step that is not a finite positive number is no radial on the screen, and the dash count is
-        // capped: the reading ends, whatever the layout holds.
+        // The sampler itself, whatever dash constants reach it (the layout check refuses these first: below): a dash
+        // length or step that is not a finite positive number is no radial on the screen, the dash count and the samples
+        // inside one dash are capped, so the rows end. TCM's radial 300 at range 10 points away from the screen.
         var radialOnly = Tcm with { Entries = new[] { (300, -1) } };
-        foreach (var dashes in new Func<Bbs757EhsiMapGuides, Bbs757EhsiMapGuides>[]
+        var good = Read(new Guides { Fix1 = radialOnly }, range: 10);
+        Assert.False(good.Corrupt);
+        foreach (var dashes in new[]
                  {
-                     g => g with { RadialDashLength = double.PositiveInfinity },
-                     g => g with { RadialDashLength = double.NaN },
-                     g => g with { RadialDashStep = double.PositiveInfinity },
-                     g => g with { RadialDashStep = 0 },
-                     g => g with { RadialDashes = int.MaxValue, RadialDashStep = 1e-9 },
+                     new Bbs757EhsiRadialDashes(27, 18, 46, double.PositiveInfinity),
+                     new Bbs757EhsiRadialDashes(27, 18, 46, double.NaN),
+                     new Bbs757EhsiRadialDashes(27, 18, double.PositiveInfinity, 30),
+                     new Bbs757EhsiRadialDashes(27, 18, 0, 30),
+                     new Bbs757EhsiRadialDashes(27, int.MaxValue, 1e-9, 30),
+                     new Bbs757EhsiRadialDashes(27, 18, 46, 1e15),
+                     new Bbs757EhsiRadialDashes(27, int.MaxValue, 46, 1e15),
                  })
         {
-            var layout = P with { MapGuides = dashes(G) };
-            var read = Task.Run(() => Read(new Guides { Fix1 = radialOnly }, range: 10, layout: layout));
-            Assert.Same(read, await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(10))));   // the sampling ends
-            var reading = await read;
-            Assert.False(reading.Corrupt);
-            Assert.Empty(Starting(reading, "Map: fix"));
+            var wild = good with { MapGuides = good.MapGuides! with { Dashes = dashes } };
+            var rows = Task.Run(() => Starting(wild, "Map: fix"));
+            Assert.Same(rows, await Task.WhenAny(rows, Task.Delay(TimeSpan.FromSeconds(10))));   // the sampling ends
+            Assert.Empty(await rows);
         }
     }
 

@@ -21,7 +21,11 @@ public static partial class Bbs757EhsiText
     private const double RadialSamplePixels = 5;
 
     /// <summary>The most dashes of a radial looked at (the layout's count is 18): a wild layout value cannot spin.</summary>
-    private const int MaxRadialDashes = 256;
+    private const int MaxRadialDashes = Bbs757EhsiRadialDashes.MaxCount;
+
+    /// <summary>The most samples inside one dash (the layout's 30 px dash takes 7): a wild dash length spreads them wider
+    /// instead of spinning.</summary>
+    private const int MaxRadialSamplesPerDash = 64;
 
     /// <summary>
     /// The map guides among the map's items, in MAP and PLAN:
@@ -140,7 +144,8 @@ public static partial class Bbs757EhsiText
     /// <summary>The first sample along a radial's dashes inside the clip: from the fix's pixel, <paramref name="angle"/>
     /// degrees clockwise from the screen's up, each dash from its start for its length, sampled at least every
     /// <see cref="RadialSamplePixels"/> and at both ends. Null when none is, and for a dash length or step that is not a
-    /// finite positive number; at most <see cref="MaxRadialDashes"/> dashes are looked at.</summary>
+    /// finite positive number; at most <see cref="MaxRadialDashes"/> dashes and <see cref="MaxRadialSamplesPerDash"/> samples
+    /// inside each are looked at (the layout check refuses wild values first: <c>Bbs757EhsiReader.LayoutProblems</c>).</summary>
     private static (double X, double Y)? RadialOnScreen(Bbs757EhsiReading r, double fixX, double fixY, double angle,
         Bbs757EhsiRadialDashes dashes)
     {
@@ -151,15 +156,16 @@ public static partial class Bbs757EhsiText
         double radians = angle * Math.PI / 180.0, sin = Math.Sin(radians), cos = Math.Cos(radians);
         double length = dashes.Length;
         int count = Math.Min(dashes.Count, MaxRadialDashes);
+        // Samples inside a dash: at least every RadialSamplePixels, both ends included, never more than the cap.
+        int steps = (int)Math.Clamp(Math.Ceiling(length / RadialSamplePixels), 1, MaxRadialSamplesPerDash);
         for (int i = 0; i < count; i++)
         {
             double start = dashes.Start + i * dashes.Step;
-            for (double along = 0; ; along += RadialSamplePixels)
+            for (int k = 0; k <= steps; k++)
             {
-                double d = start + Math.Min(along, length);
+                double d = start + length * k / steps;
                 double x = fixX + d * sin, y = fixY - d * cos;
                 if (Bbs757EhsiGeometry.OnScreen(r.Map, r.Centered, x, y, c.RadiusFactor, c.AircraftYFactor, c.ClipInset)) return (x, y);
-                if (along >= length) break;
             }
         }
         return null;

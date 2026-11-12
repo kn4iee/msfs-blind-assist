@@ -308,6 +308,26 @@ public class Bbs757EhsiTcasTests
         Assert.Empty(Bbs757EhsiText.Changes(offInFullVor, off, true));
     }
 
+    // Re-review finding 1: a part at its tear limit is null ("not read: unexpected values") for a while and then reads
+    // again. Its messages neither go nor come back with it: the screen did not change, the reader lost sight of it.
+    [Fact]
+    public void A_tcas_part_dropping_out_and_back_speaks_nothing()
+    {
+        var showing = Read(new Tcas { Ta = true });
+        Assert.Contains("Right side: TRAFFIC, amber", Left(showing));
+        Assert.Contains("Left side: TA ONLY", Left(showing));
+        var dropped = showing with { Tcas = null, TcasMissing = Bbs757EhsiReader.UnexpectedValues };
+        Assert.Empty(Bbs757EhsiText.Changes(showing, dropped, true));
+        Assert.Empty(Bbs757EhsiText.Changes(dropped, dropped, true));
+        Assert.Empty(Bbs757EhsiText.Changes(dropped, showing, true));
+        // Back with a different state: the new state is the baseline, silently (nothing was heard about it going).
+        var cleared = Read(new Tcas());
+        Assert.Empty(Bbs757EhsiText.Changes(dropped, cleared, true));
+        // A real change while the part is read in both is still spoken, once.
+        Assert.Equal(new[] { "EHSI message gone: TRAFFIC" }, Texts(Bbs757EhsiText.Changes(showing, cleared, true)));
+        Assert.Equal(new[] { "EHSI message: TRAFFIC" }, Texts(Bbs757EhsiText.Changes(cleared, showing, true)));
+    }
+
     // ---- all or nothing ----
 
     [Fact]

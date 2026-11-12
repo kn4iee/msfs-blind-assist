@@ -301,6 +301,30 @@ public class Bbs757EhsiMapOptionsTests
         Assert.Equal(new[] { "Map: VOR R course 310 through PAE" }, OptionRows(Read(away, mode: 3, range: 40)));
     }
 
+    // Re-review finding 2: a tiny positive range puts the station's pixel so far out that a step of a few pixels no longer
+    // moves the sample; the sampling still ends, and a non-finite course or a range not above 0 lists nothing.
+    [Theory]
+    [InlineData(1e-20, 310)]
+    [InlineData(1e-200, 310)]
+    [InlineData(0, 310)]
+    [InlineData(-40, 310)]
+    [InlineData(40, double.NaN)]
+    [InlineData(40, double.PositiveInfinity)]
+    public async Task A_course_line_sampling_ends_and_lists_nothing_for_wild_inputs(double range, double course)
+    {
+        var listed = Read(new Options { Right = new Panel(false, Pae, 310, 110, 40) }, range: 40);
+        Assert.Equal(new[] { "Map: VOR R course 310 through PAE" }, OptionRows(listed));
+        var o = listed.MapOptions!;
+        var wild = listed with
+        {
+            Range = range,
+            MapOptions = o with { CourseLines = o.CourseLines.Select(l => l with { Course = course }).ToArray() },
+        };
+        var rows = Task.Run(() => OptionRows(wild));
+        Assert.Same(rows, await Task.WhenAny(rows, Task.Delay(TimeSpan.FromSeconds(10))));   // the sampling ends
+        Assert.Empty(await rows);
+    }
+
     [Fact]
     public void Each_course_line_condition_failing_removes_the_line()
     {

@@ -314,7 +314,10 @@ public static partial class Bbs757EhsiText
     /// some modes do not draw; TCAS FAIL and TCAS OFF, which the nd's gate holds back in some, and a failed TCAS's TA ONLY,
     /// which shows where the gate holds FAIL back) is not spoken: the pilot
     /// turned the selector, and the window shows it. TRAFFIC is not compared while either reading has the TCAS self-test
-    /// on (the test sets the RA byte, so red TRAFFIC shows for its ten seconds). Nothing else is ever spoken: no mode, range, CTR, DATA, heading, bug,
+    /// on (the test sets the RA byte, so red TRAFFIC shows for its ten seconds). A part's flags or messages are compared only
+    /// while that part is read in both readings: one going null at its tear limit, or coming back, says nothing (the TCAS
+    /// words with <see cref="Bbs757EhsiReading.Tcas"/>, LOC and G/S with <see cref="Bbs757EhsiReading.Approach"/>).
+    /// Nothing else is ever spoken: no mode, range, CTR, DATA, heading, bug,
     /// route edit, map item, traffic, TFC or TCAS TEST. Going dark or lit is the monitor's.
     /// </summary>
     public static IReadOnlyList<Bbs757SpokenLine> Changes(Bbs757EhsiReading heard, Bbs757EhsiReading now, bool withPrefix)
@@ -329,13 +332,19 @@ public static partial class Bbs757EhsiText
         bool eitherFailed = (heard.Tcas is { } h && Failed(h)) || (now.Tcas is { } n && Failed(n));
         // The TCAS self-test sets the RA byte for its ten seconds (red TRAFFIC): the test is the pilot's own, not spoken.
         bool eitherTesting = heard.Tcas?.Test == true || now.Tcas?.Test == true;
+        // A part not read in either reading (at its tear limit, missing, or not read in that mode) says nothing of its
+        // flags or messages: the screen did not change, the reader lost sight of it. When it reads again its state is the
+        // new baseline, silently (the monitor advances its baseline when nothing is spoken).
+        bool tcasInBoth = heard.Tcas is not null && now.Tcas is not null;
+        bool approachInBoth = heard.Approach is not null && now.Approach is not null;
         bool Comparable(Item item) => item.Key switch
         {
-            MapFlag or LocFlagKey or GlideslopeFlagKey => sameMode,
+            LocFlagKey or GlideslopeFlagKey => sameMode && approachInBoth,
+            MapFlag => sameMode,
             ExcessMessage => sameMode || (MapOrPlan(heard) && MapOrPlan(now)),
-            TcasFailKey or TcasOffKey => sameGate,
-            TaOnlyKey => sameGate || !eitherFailed,
-            TrafficKey => !eitherTesting,
+            TcasFailKey or TcasOffKey => sameGate && tcasInBoth,
+            TaOnlyKey => (sameGate || !eitherFailed) && tcasInBoth,
+            TrafficKey => !eitherTesting && tcasInBoth,
             _ => true,
         };
         Diff(lines, Messages(heard), Messages(now), "EHSI message: ", "EHSI message gone: ", Comparable);

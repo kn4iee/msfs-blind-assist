@@ -384,6 +384,23 @@ public class Bbs757EhsiApproachTests
         Assert.Empty(Bbs757EhsiText.Changes(inVor, failedReading, true));
     }
 
+    // Re-review finding 1: the approach part at its tear limit is null for a while in ILS mode, then reads again. LOC and
+    // G/S neither go nor come back with it; a real change while it is read in both is still spoken once.
+    [Fact]
+    public void An_approach_part_dropping_out_and_back_speaks_nothing()
+    {
+        var flagged = Read(new Approach { IlsFrequency = 110.30, Dots = false, LocFlag = true, GlideslopeFlag = true }, mode: 1);
+        Assert.Contains("Bottom: LOC flag", Rows(flagged));
+        var dropped = flagged with { Approach = null, ApproachMissing = Bbs757EhsiReader.UnexpectedValues };
+        Assert.Empty(Bbs757EhsiText.Changes(flagged, dropped, true));
+        Assert.Empty(Bbs757EhsiText.Changes(dropped, flagged, true));
+        var clear = Read(IlsIsnq(), mode: 1);
+        Assert.Empty(Bbs757EhsiText.Changes(dropped, clear, true));
+        Assert.Empty(Bbs757EhsiText.Changes(clear, dropped, true));
+        Assert.Equal(new[] { "EHSI flag: LOC, G/S" }, Texts(Bbs757EhsiText.Changes(clear, flagged, true)));
+        Assert.Equal(new[] { "EHSI flag gone: LOC, G/S" }, Texts(Bbs757EhsiText.Changes(flagged, clear, true)));
+    }
+
     // ---- the bearing pointers ----
 
     [Fact]
