@@ -122,7 +122,7 @@ against captures in each mode, the switches, the tuned station, the course line,
 - **Claimed by:** Robin Kipp (robin24), 2026-11-12
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-12, from `B757` 22d54e0d0 (plan 26 landed)
-- **Landed:** 2026-11-12, a fast-forward of `B757` from the claim 353488970 (nothing else had landed meanwhile). Shared lines: no new reader (the `ehsi` reader gained five optional parts); `GeneratorVersion.Current` 8; rules B757-40 to B757-49 in `b757-ehsi`. Deployed to `C:\MSFSBA-B757` (d9398c68f) with its layout.
+- **Landed:** 2026-11-12, a fast-forward of `B757` from the claim 353488970 (nothing else had landed meanwhile). Shared lines: no new reader (the `ehsi` reader gained five optional parts); `GeneratorVersion.Current` 8; rules B757-40 to B757-49 in `b757-ehsi`. Deployed to `C:\MSFSBA-B757` (d9398c68f) with its layout. Private `feature/b757-displays` pushed at 77dd8df95; the generator-8 757 layout `…-5c145a6233d04a83.json` published (layouts 3f9604ef1) beside the generator-7 file, which still loads (the new parts are optional), so it stays; `LayoutBundle` passes on the branch with this build (2 files for bbs757, 3 for pmdg737).
 - **Tests at landing:** the app suite 25,032 passed, 0 failed, at d9398c68f; the solution builds with 0 errors; the toolkit suite 701 passed (private, at 82cf62bcb; unchanged by the version raise).
 - **Tasks:** 0 claim (353488970); 1 measure (56198a036, e64ff937c); 2 the layout's parts (04013dd56; fields added
   or removed by 789c49788, ef1091d22, 041f5f4e9); 3 the recipe, in the private `feature/b757-displays` (not pushed):
