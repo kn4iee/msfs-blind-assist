@@ -180,4 +180,48 @@ public class A350MfdInputTests
         Assert.Equal("INIT", MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys[System.Windows.Forms.Keys.I]);   // A380 letters
         Assert.Equal("FPLAN", MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys[System.Windows.Forms.Keys.F]);
     }
+
+    // Plan 25: Alt+S is the scratchpad, as in the A380's MFD window; the OIS key moves to Alt+W.
+    [Fact]
+    public void Alt_s_is_the_scratchpad_and_the_ois_is_alt_w()
+    {
+        Assert.DoesNotContain(System.Windows.Forms.Keys.S, MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys.Keys);
+        Assert.Equal("OIS", MSFSBlindAssist.Forms.A350.A350MfdWindow.PageKeys[System.Windows.Forms.Keys.W]);
+    }
+
+    // Plan 25 Task 4: a field is cleared as the ND's BTV field was (plan 08 evidence): the cursor to the MFD, a click on the field once
+    // it lands, then CLR and ENTER.
+    [Fact]
+    public async Task A_field_is_cleared_with_a_click_then_clr_and_enter()
+    {
+        var (input, log) = Recorded();
+        Assert.Equal(MfdAction.Done, await input.ClearAsync(0, 300, 200));
+        Assert.Equal(new[]
+        {
+            "send 1 (>L:INI_MCDU1_MFD)", "wait 180", "send 0 (>L:INI_MCDU1_MFD)", "wait 50", "click 0 300 200", "wait 250",
+            "send 1 (>L:INI_MCDU1_CLR)", "wait 150", "send 1 (>L:INI_MCDU1_ENTER)",
+        }, log);
+    }
+
+    [Fact]
+    public async Task A_clear_while_an_action_runs_is_busy_and_sends_nothing()
+    {
+        var click = new TaskCompletionSource<bool>();
+        var (input, log) = Recorded(click);
+        var first = input.ActAsync(0, 10, 20, "VCBI");
+        int before = log.Count;
+        Assert.Equal(MfdAction.Busy, await input.ClearAsync(0, 300, 200));
+        Assert.Equal(before, log.Count);
+        click.SetResult(true);
+        Assert.Equal(MfdAction.Done, await first);
+    }
+
+    [Fact]
+    public async Task A_clear_that_cannot_reach_the_mfd_sends_no_clr()
+    {
+        var log = new List<string>();
+        var input = new A350MfdInput(rpn => log.Add("send " + rpn), (_, _) => Task.CompletedTask, (_, _, _, _) => Task.FromResult(false));
+        Assert.Equal(MfdAction.Unreachable, await input.ClearAsync(0, 300, 200));
+        Assert.DoesNotContain(log, l => l.Contains("CLR") || l.Contains("ENTER"));
+    }
 }

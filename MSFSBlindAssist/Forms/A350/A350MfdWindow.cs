@@ -26,11 +26,13 @@ public sealed class A350MfdWindow : Form
         [Keys.I] = "INIT", [Keys.F] = "FPLAN", [Keys.E] = "PERF", [Keys.L] = "FUEL", [Keys.R] = "RADNAV",
         [Keys.P] = "SEC", [Keys.D] = "DIR", [Keys.A] = "ATC", [Keys.V] = "SURV", [Keys.C] = "CLR",
         [Keys.T] = "DEST", [Keys.G] = "PROG", [Keys.M] = "MAILBOX", [Keys.K] = "CL_MENU", [Keys.N] = "NOTEPAD",
-        [Keys.O] = "DATA", [Keys.U] = "MENU", [Keys.B] = "AIRPORT", [Keys.Y] = "REF", [Keys.X] = "ESC", [Keys.S] = "OIS",
+        [Keys.O] = "DATA", [Keys.U] = "MENU", [Keys.B] = "AIRPORT", [Keys.Y] = "REF", [Keys.X] = "ESC",
+        // Alt+S is the scratchpad, as in the A380's MFD window (plan 25): the OIS key is Alt+W.
+        [Keys.W] = "OIS",
     };
 
     /// <summary>The page buttons (plan 09 Task 1, the A380 window's two rows), each carrying its Alt letter as its mnemonic and pressing
-    /// the same KCCU key; the window's other Alt letters (N, U, B, Y, X, S) stay keys.</summary>
+    /// the same KCCU key; the window's other Alt letters (N, U, B, Y, X, W) stay keys.</summary>
     internal static readonly IReadOnlyList<(string Text, string Key)> PageButtons = new[]
     {
         ("&INIT", "INIT"), ("&F-PLN", "FPLAN"), ("P&ERF", "PERF"), ("FUE&L", "FUEL"), ("&RAD NAV", "RADNAV"), ("SEC (&P)", "SEC"),
@@ -114,7 +116,11 @@ public sealed class A350MfdWindow : Form
         };
         _list.SetText("Loading the MFD...");
 
-        _scratchpad = new TextBox { Dock = DockStyle.Bottom, TabIndex = 3, AccessibleName = "Scratchpad: type, then Enter on a field" };
+        _scratchpad = new TextBox
+        {
+            Dock = DockStyle.Bottom, TabIndex = 3, AccessibleName = "Scratchpad: type, then Enter on a field",
+            AccessibleDescription = "Enter sends it to the selected line's field. Escape clears it. Alt plus S comes back here.",
+        };
         var pageButtons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, TabIndex = 4, WrapContents = true };
         foreach (var (text, key) in PageButtons)
         {
@@ -319,6 +325,12 @@ public sealed class A350MfdWindow : Form
             return;
         }
         var line = _listed[i];
+        // A dimmed control does nothing for a sighted pilot either (the A380 window's "Unavailable").
+        if (A350MfdWording.IsDimmed(line))
+        {
+            _announcer.AnnounceImmediate("Unavailable");
+            return;
+        }
         string typed = _scratchpad.Text.Trim();
         bool types = line.Kind is "field" or "scratchpad" && typed.Length > 0;
         switch (await _input.ActAsync(Side, line.ClickX, line.ClickY, types ? typed : null))
@@ -332,9 +344,58 @@ public sealed class A350MfdWindow : Form
                 _announcer.AnnounceImmediate("The KCCU has no key for a character in " + typed);
                 return;
         }
-        if (types) _scratchpad.Clear();
+        if (types)
+        {
+            _scratchpad.Clear();
+            _announcer.Announce(typed);   // the entry said back as it is sent, as the A380 window says it
+        }
         await AfterActionAsync();
     }
+
+    /// <summary>Backspace and Delete on the list, as the A380's MFD window has them (<see cref="A350MfdClear.Decide"/>): the box's text,
+    /// then the FMS message (the KCCU's CLR), then the selected field (a click, CLR, ENTER); Delete the selected field alone.</summary>
+    private async Task ClearKeyAsync(bool delete)
+    {
+        if (_input.Busy) return;   // the action running already says how it went
+        int i = _list.SelectedIndex;
+        var selected = i >= 0 && i < _listed.Count ? _listed[i] : null;
+        var (action, say) = A350MfdClear.Decide(_scratchpad.Text, MessageShown(_lines), selected, delete);
+        switch (action)
+        {
+            case MfdClearAction.ClearScratchpadBox:
+                _scratchpad.Clear();
+                break;
+            case MfdClearAction.ClearMessage:
+            case MfdClearAction.KccuClr:
+                PressKey("CLR");
+                break;
+            case MfdClearAction.ClearField:
+                if (_linesSide != Side)
+                {
+                    _announcer.AnnounceImmediate("The list was the other side's MFD; reading this side's now");
+                    await RefreshAsync(false);
+                    return;
+                }
+                switch (await _input.ClearAsync(Side, selected!.ClickX, selected.ClickY))
+                {
+                    case MfdAction.Busy:
+                        return;
+                    case MfdAction.Unreachable:
+                        _announcer.AnnounceImmediate("The MFD cannot be reached: is the Coherent debugger running?");
+                        return;
+                }
+                _ = AfterActionAsync();
+                break;
+            case MfdClearAction.Nothing:
+                return;
+        }
+        if (say != null) _announcer.AnnounceImmediate(say);
+    }
+
+    /// <summary>Whether the MFD shows an FMS message in its scratchpad (or, on the checklists, in its place): a read with none is an
+    /// empty scratchpad, and a torn read or one without its box is no message (<see cref="A350MfdPage.NoMessageRead"/>).</summary>
+    internal static bool MessageShown(IReadOnlyList<MfdLine> lines) =>
+        A350MfdPage.Scratchpad(lines) is { } pad && pad != "Scratchpad: empty" && !A350MfdPage.NoMessageRead(pad);
 
     /// <summary>Shows a page as its KCCU page key does (A350Hotkeys.MfdPages: another aircraft's window key opening the
     /// window on the A350's own page). While a line's action runs the key is refused aloud, never dropped unheard (final
@@ -404,6 +465,12 @@ public sealed class A350MfdWindow : Form
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         var key = keyData & Keys.KeyCode;
+        // Alt+S: the scratchpad box (the A380 MFD window's key).
+        if (keyData == (Keys.Alt | Keys.S))
+        {
+            _scratchpad.Focus();
+            return true;
+        }
         if ((keyData & Keys.Alt) == Keys.Alt && PageKeys.TryGetValue(key, out var page))
         {
             PressKey(page);
@@ -420,13 +487,25 @@ public sealed class A350MfdWindow : Form
             switch (keyData)
             {
                 case Keys.Enter: _ = ActivateAsync(); return true;
-                case Keys.Back: PressKey("CLR"); return true;
+                case Keys.Back: _ = ClearKeyAsync(delete: false); return true;
+                case Keys.Delete: _ = ClearKeyAsync(delete: true); return true;
                 case Keys.PageUp: _ = PageAsync(down: false); return true;
                 case Keys.PageDown: _ = PageAsync(down: true); return true;
             }
         }
         if (keyData == Keys.F5) { _ = RefreshAsync(true); return true; }
-        if (keyData == Keys.Escape) { Close(); return true; }
+        if (keyData == Keys.Escape)
+        {
+            // In the scratchpad box with text, Escape empties it (the A380 window's); else it closes the window.
+            if (ActiveControl == _scratchpad && _scratchpad.Text.Length > 0)
+            {
+                _scratchpad.Clear();
+                _announcer.AnnounceImmediate("Scratchpad cleared");
+                return true;
+            }
+            Close();
+            return true;
+        }
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
