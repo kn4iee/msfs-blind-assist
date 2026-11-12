@@ -118,7 +118,7 @@ against captures in each mode, the switches, the tuned station, the course line,
 
 ## Execution record
 
-- **Status:** landed (2026-11-12) at the owner's word ("Push and publish"), with the generator-8 757 layout published; the owner's flight (KDEN to CYVR, 2026-11-12) passed what it exercised, results below
+- **Status:** done (2026-11-12): landed at the owner's word ("Push and publish"), with the generator-8 757 layout published; the owner's flight (KDEN to CYVR, 2026-11-12) passed what it exercised, results below; closed at his word the same day, the checks it did not exercise deferred (below)
 - **Claimed by:** Robin Kipp (robin24), 2026-11-12
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-12, from `B757` 22d54e0d0 (plan 26 landed)
@@ -133,7 +133,9 @@ against captures in each mode, the switches, the tuned station, the course line,
   f34b4e4ea; 5 rules B757-40 to B757-49 (f2c14fc05, 03e3c7a6e); 6 no picture button (the owner); the whole-plan
   review's fixes 041f5f4e9, 0000b345c and d9398c68f; 7 the live checks and the deploy (below). Each dispatch reviewed
   by a fresh reviewer, each fix round re-reviewed, then one whole-plan review of the app branch.
-- **Waiting on the owner:** the checks the flight did not exercise (below).
+- **Waiting on the owner:** nothing. The checks the flight did not exercise (CTR, a TO to FROM passage, terrain
+  colors and the gear boundary, OFFPATH DES and the FIX page in flight) are deferred, not required: the owner closed
+  the plan with "the remaining checks are for mostly edge case scenarios which can wait until some future point".
 - **In-sim results:** the owner's flight KDEN to CYVR, 2026-11-12, recorded beside the app by a throwaway read-only
   recorder (the app's own reader and rows once a second with the simulator's values, 3 h 46 min, about 13,500
   readings; never committed):
