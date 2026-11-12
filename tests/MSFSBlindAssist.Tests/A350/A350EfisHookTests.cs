@@ -124,7 +124,7 @@ public class A350EfisHookTests
         Assert.Empty(mfd);
         Assert.Equal(ticks, hooked);
         Assert.Equal(ticks, ctrs);
-        Assert.Equal(new[] { "FMA engagement: 1 FD 2, white", "Scratchpad: NAV ACCURACY UPGRADED, white" }, said);
+        Assert.Equal(new[] { "FMA engagement: 1 FD 2, white", "NAV ACCURACY UPGRADED" }, said);
     }
 
     // The FMA read starts a loaded flight's settle window, so a draw handed on after it already says so: the flight's first

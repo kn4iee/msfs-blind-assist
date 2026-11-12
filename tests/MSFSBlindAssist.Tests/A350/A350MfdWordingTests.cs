@@ -75,6 +75,20 @@ public class A350MfdWordingTests
     public void A_grey_control_is_dimmed(string kind, string spoken, bool dimmed) =>
         Assert.Equal(dimmed, A350MfdWording.IsDimmed(new MfdLine(kind, spoken, 0, 0)));
 
+    // The status display's MFD entries read the page as the window says it, with no colour (plan 25).
+    [Theory]
+    [InlineData("Captain MFD", 0)]
+    [InlineData("First Officer MFD", 1)]
+    public void The_status_displays_mfd_read_says_no_colour(string panel, int side)
+    {
+        var entry = MSFSBlindAssist.Aircraft.IniBuildsA350Definition.DisplayPanels.Single(p => p.Panel == panel);
+        var capture = A350Fixtures.Capture("mfd_fpln_tmpy_basu1d.json");
+        var read = entry.Read(capture);
+        Assert.Equal(A350MfdPage.Read(capture, side).Select(A350MfdWording.Speak), read);
+        Assert.NotEmpty(read);
+        Assert.DoesNotContain(read, l => ColourWord.IsMatch(l));
+    }
+
     private static readonly Regex ColourWord = new(@"\b(white|green|cyan|amber|magenta|yellow|grey|black|red|blue)\b", RegexOptions.Compiled);
 
     // Every captured MFD page, both sides: no line is said with a colour.

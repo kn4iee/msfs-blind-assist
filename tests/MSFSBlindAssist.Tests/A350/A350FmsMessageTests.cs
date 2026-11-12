@@ -20,8 +20,21 @@ public class A350FmsMessageAnnouncerTests
         Assert.Null(a.Observe(Page(null)));
         Assert.Null(a.Observe(Page(null)));   // the baseline
         Assert.Null(a.Observe(Page("NAV ACCURACY UPGRADED")));
-        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white", a.Observe(Page("NAV ACCURACY UPGRADED")));
+        // Said as the A380's MFD window says its footer: the message alone, no colour (plan 25).
+        Assert.Equal("NAV ACCURACY UPGRADED", a.Observe(Page("NAV ACCURACY UPGRADED")));
         Assert.Null(a.Observe(Page("NAV ACCURACY UPGRADED")));
+    }
+
+    // Plan 25: an amber message says its words, never its colour; the reads it compares keep theirs.
+    [Fact]
+    public void An_amber_message_is_said_without_its_colour()
+    {
+        var a = new A350FmsMessageAnnouncer();
+        Assert.Null(a.Observe(Page(null)));
+        Assert.Null(a.Observe(Page(null)));
+        Assert.Null(a.Observe(Boxed("CHECK DATABASE CYCLE", "amber")));
+        Assert.Equal("CHECK DATABASE CYCLE", a.Observe(Boxed("CHECK DATABASE CYCLE", "amber")));
+        Assert.Equal("Scratchpad: CHECK DATABASE CYCLE, amber", a.Agreed);
     }
 
     [Fact]
@@ -86,7 +99,7 @@ public class A350FmsMessageAnnouncerTests
         a.Observe(Page(null));
         Assert.Null(a.Observe(Page("NAV ACCURACY UPGRADED")));
         Assert.Null(a.Observe(Array.Empty<MfdLine>()));   // no page drawn: neither breaks nor makes an agreement
-        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white", a.Observe(Page("NAV ACCURACY UPGRADED")));
+        Assert.Equal("NAV ACCURACY UPGRADED", a.Observe(Page("NAV ACCURACY UPGRADED")));
     }
 
     [Fact]
@@ -115,7 +128,7 @@ public class A350FmsMessageMonitorTests
         Texts = Posted.Value.Texts.Select(t => t.Text == "NAV ACCURACY UPGRADED" ? t with { Text = " " } : t).ToList(),
     });
 
-    private const string Said = "Scratchpad: NAV ACCURACY UPGRADED, white";
+    private const string Said = "NAV ACCURACY UPGRADED";   // the A380 window's footer: the message alone (plan 25)
 
     private readonly List<string> _said = new();
     private readonly HashSet<string> _muted = new(StringComparer.Ordinal);
@@ -278,7 +291,7 @@ public class A350MfdWindowMessagesTests
     public void Its_first_read_is_said_against_the_background_s_agreed_read()
     {
         var w = new A350MfdWindowMessages("Scratchpad: empty");
-        Assert.Equal("Scratchpad: NAV ACCURACY UPGRADED, white", w.Observe(Page("NAV ACCURACY UPGRADED"), 0));
+        Assert.Equal("NAV ACCURACY UPGRADED", w.Observe(Page("NAV ACCURACY UPGRADED"), 0));
         Assert.Null(w.Observe(Page("NAV ACCURACY UPGRADED"), 0));
     }
 
@@ -287,7 +300,7 @@ public class A350MfdWindowMessagesTests
     {
         var w = new A350MfdWindowMessages(null);
         Assert.Null(w.Observe(Page("NAV ACCURACY UPGRADED"), 0));
-        Assert.Equal("Scratchpad: CHECK TAKEOFF DATA, white", w.Observe(Page("CHECK TAKEOFF DATA"), 0));
+        Assert.Equal("CHECK TAKEOFF DATA", w.Observe(Page("CHECK TAKEOFF DATA"), 0));
     }
 
     [Fact]

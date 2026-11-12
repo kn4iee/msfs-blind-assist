@@ -20,7 +20,8 @@ public sealed class A350FmsMessageAnnouncer
     /// <summary>The scratchpad two reads last agreed on, or null before the first agreement.</summary>
     public string? Agreed => _agreed;
 
-    /// <summary>The message to say now, or null.</summary>
+    /// <summary>The message to say now, or null: the message alone, as the A380's MFD window says its footer, with no colour
+    /// (<see cref="A350MfdWording.Message"/>, plan 25); the reads it compares keep theirs.</summary>
     public string? Observe(IReadOnlyList<MfdLine> lines)
     {
         // A torn read (A350MfdPage.Unreadable) is no read: two of them would agree (review 2026-10-30); nor one without the
@@ -33,7 +34,7 @@ public sealed class A350FmsMessageAnnouncer
             return null;
         var said = A350MfdPage.MessageJustArrived(_agreed, pad);
         _agreed = pad;
-        return said;
+        return said == null ? null : A350MfdWording.Message(said);
     }
 
     /// <summary>Takes <paramref name="pad"/> as agreed, as two agreeing reads would: an MFD window's last read as it closes,

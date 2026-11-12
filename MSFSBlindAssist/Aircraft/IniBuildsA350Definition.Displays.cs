@@ -32,9 +32,9 @@ public partial class IniBuildsA350Definition
         new("First Officer PFD", PfdFirstOfficerKey, "EFIS", 1, c => A350Pfd.Read(c, 1), "INI_RIGHT_EFIS_POWERED"),
         new("Captain ND", "A350_DISP_ND_CPT", "EFIS", 0, c => A350GroundDisplays.ReadNd(c, 0), "INI_LEFT_EFIS_POWERED"),
         new("First Officer ND", "A350_DISP_ND_FO", "EFIS", 1, c => A350GroundDisplays.ReadNd(c, 1), "INI_RIGHT_EFIS_POWERED"),
-        // The MFD as lines (A350MfdPage); its window operates them.
-        new("Captain MFD", "A350_DISP_MFD_CPT", "MFD", 0, c => A350MfdPage.Read(c, 0).Select(l => l.Spoken).ToList(), "INI_FMS_POWERED"),
-        new("First Officer MFD", "A350_DISP_MFD_FO", "MFD", 0, c => A350MfdPage.Read(c, 1).Select(l => l.Spoken).ToList(), "INI_FMS_POWERED"),
+        // The MFD as lines (A350MfdPage), in the words its window says them, with no colour (plan 25); its window operates them.
+        new("Captain MFD", "A350_DISP_MFD_CPT", "MFD", 0, c => A350MfdPage.Read(c, 0).Select(A350MfdWording.Speak).ToList(), "INI_FMS_POWERED"),
+        new("First Officer MFD", "A350_DISP_MFD_FO", "MFD", 0, c => A350MfdPage.Read(c, 1).Select(A350MfdWording.Speak).ToList(), "INI_FMS_POWERED"),
         new("FCU display", "A350_DISP_FCU", "FCU", 0, A350GroundDisplays.ReadFcu, "INI_FCU_DISPLAY_BRT"),
         new("RMP 1 display", "A350_DISP_RMP_1", "RMP", 0, A350GroundDisplays.ReadRmp, "INI_POTENTIOMETER_93"),
         new("RMP 2 display", "A350_DISP_RMP_2", "RMP", 1, A350GroundDisplays.ReadRmp, "INI_POTENTIOMETER_94"),

@@ -18,7 +18,9 @@ public sealed class A350MfdWindowMessages
     /// the captain's MFD only, so a read of the first officer's is never handed to it.</summary>
     public string? Captain { get; private set; }
 
-    /// <summary>The message to say now, or null, from a read of <paramref name="side"/>'s page (0 the captain's).</summary>
+    /// <summary>The message to say now, or null, from a read of <paramref name="side"/>'s page (0 the captain's): the message alone,
+    /// as the A380's MFD window says its footer, with no colour (<see cref="A350MfdWording.Message"/>, plan 25); the reads it compares
+    /// and hands back keep theirs.</summary>
     public string? Observe(IReadOnlyList<MfdLine> lines, int side)
     {
         var pad = A350MfdPage.Scratchpad(lines);
@@ -30,6 +32,6 @@ public sealed class A350MfdWindowMessages
             _last = pad;
             if (side == 0) Captain = pad;
         }
-        return said;
+        return said == null ? null : A350MfdWording.Message(said);
     }
 }
