@@ -103,14 +103,35 @@
 
 ## Execution record
 
-- **Status:** claimed
+- **Status:** in progress
 - **Claimed by:** Robin Kipp (robin24), 2026-11-12
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-12, from `B757` 22d54e0d0 (plan 26 landed)
 - **Landed:**
 - **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
+- **Tasks:** 0 claim (353488970), 1 measure (56198a036), 2 the layout's parts (04013dd56).
+- **Waiting on the owner:** nothing.
 - **In-sim results:**
-- **Changed from the plan:**
+- **Changed from the plan:** from Task 1's measurements (the evidence file has each):
+  - **No weather radar:** BlueBird's EHSI draws none; the WXR switch changes nothing on it (traced and captured). No
+    radar rows or labels, and WXR is not among the switches that change the list.
+  - **No course number, station name or VOR frequency is printed** in VOR or ILS: the course is its own row
+    ("Center: course pointer 187, <place>"), from the value the pointer is drawn from.
+  - **Traffic rows are in screen order** (Global Constraints), so Task 4's test is
+    `Traffic_is_listed_in_screen_order_and_not_spoken`.
+  - **The map options need BlueBird's loop replayed:** one item from each switched-on list per round, counted to
+    100; the reader replays it to list exactly the items drawn. The tuned VOR stations and the VOR course lines are
+    drawn with every switch off and are listed.
+  - **The green rings** are the start and the end of the next deceleration in the descent (named from the descent
+    profile's speed-change segments; no string names them): "Map: deceleration starts", "Map: deceleration ends".
+  - **The bearing pointers** (the RMI's two green pointers) belong to the VOR and ILS picture and are read.
+  - **The amber `VOR` flag is not read:** its condition is an electrical circuit lookup, not a field. LOC and G/S are.
+  - **A plan 26 defect, fixed here:** a navaid leg's position follows the leg's capability set; a TACAN-only leg read
+    0, 0 by the primary position.
+  - **L:vars the draw reads** come from BlueBird's variable handle in memory (the cached value); the simulator
+    inputs added are `AMBIENT WIND VELOCITY`, `AMBIENT WIND DIRECTION` and `GEAR POSITION` (3).
+  - **The owner's decisions (2026-11-12):** S/C and the FIX page's PRED ETA-ALT marker stay unread ("the Prog page
+    shows when there's a step climb coming up"). The FIX page's rings, circles and radials, the off-path descent
+    circles, the altitude range arc and the VNAV path deviation scale are added to this plan (a fifth optional layout
+    part, `MapGuides`, through Tasks 2 to 4). No "Describe the picture" button (Task 6: no).
 - **Open at landing:**
