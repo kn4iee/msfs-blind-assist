@@ -12,7 +12,8 @@ namespace MSFSBlindAssist.Services.BBS757;
 /// <c>ExcessLimit</c>): <see cref="DrawnKinds"/> the navaid kinds the draw's switch draws, <see cref="CourseLineKinds"/>
 /// the station kinds a VOR course line is drawn through, and <see cref="KindVor"/> to <see cref="KindDme"/> the kind
 /// values the app names in its rows (BlueBird prints no kind word: it draws a symbol per kind; the words are the app's
-/// names for the symbols). <see cref="MaxItems"/> caps each list's walk. Equality compares every field by content.
+/// names for the symbols). <see cref="NavaidIdentLength"/> is how many UTF-32 code points of a navaid's ident its label
+/// draws, <see cref="AirportLabelLength"/> how many characters of an airport's name. <see cref="MaxItems"/> caps each list's walk. Equality compares every field by content.
 /// </summary>
 public sealed record Bbs757EhsiMapOptions(
     int NavAidSwitch,
@@ -25,6 +26,7 @@ public sealed record Bbs757EhsiMapOptions(
     int NdToFms,
     int Navaids,
     int NavaidIdent,
+    int NavaidIdentLength,
     int NavaidFrequency,
     int NavaidKind,
     int NavaidClass,
@@ -33,6 +35,7 @@ public sealed record Bbs757EhsiMapOptions(
     int Airports,
     int AirportStride,
     int AirportName,
+    int AirportLabelLength,
     int AirportRecordLongitude,
     int AirportRecordLatitude,
     int Waypoints,
@@ -76,6 +79,7 @@ public sealed record Bbs757EhsiMapOptions(
         && NdToFms == other.NdToFms
         && Navaids == other.Navaids
         && NavaidIdent == other.NavaidIdent
+        && NavaidIdentLength == other.NavaidIdentLength
         && NavaidFrequency == other.NavaidFrequency
         && NavaidKind == other.NavaidKind
         && NavaidClass == other.NavaidClass
@@ -84,6 +88,7 @@ public sealed record Bbs757EhsiMapOptions(
         && Airports == other.Airports
         && AirportStride == other.AirportStride
         && AirportName == other.AirportName
+        && AirportLabelLength == other.AirportLabelLength
         && AirportRecordLongitude == other.AirportRecordLongitude
         && AirportRecordLatitude == other.AirportRecordLatitude
         && Waypoints == other.Waypoints
@@ -128,6 +133,7 @@ public sealed record Bbs757EhsiMapOptions(
         h.Add(NdToFms);
         h.Add(Navaids);
         h.Add(NavaidIdent);
+        h.Add(NavaidIdentLength);
         h.Add(NavaidFrequency);
         h.Add(NavaidKind);
         h.Add(NavaidClass);
@@ -136,6 +142,7 @@ public sealed record Bbs757EhsiMapOptions(
         h.Add(Airports);
         h.Add(AirportStride);
         h.Add(AirportName);
+        h.Add(AirportLabelLength);
         h.Add(AirportRecordLongitude);
         h.Add(AirportRecordLatitude);
         h.Add(Waypoints);

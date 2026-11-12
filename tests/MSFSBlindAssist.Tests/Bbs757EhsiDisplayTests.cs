@@ -383,6 +383,42 @@ public class Bbs757EhsiDisplayTests
         Assert.Equal(new[] { "EHSI message: EXCESS DATA", "EHSI message gone: EXCESS DATA" }, f.Spoken);
     }
 
+    // Review Focus (plan 28): BlueBird zeroes and rebuilds the map options' count inside each frame, so a reading can catch
+    // it just under or just over the limit. EXCESS DATA is spoken only once it has stood for the monitor's settle, and
+    // "gone" only once it has been away that long: a one-reading flicker either way says nothing.
+    [Fact]
+    public void Excess_data_that_flickers_is_spoken_once()
+    {
+        var f = new Flight(Light() with { ExcessCount = 99 }).RunUntilRunning();
+        f.Tick(4);
+        // Over the limit for one reading, three times: nothing.
+        for (int i = 0; i < 3; i++)
+        {
+            f.Show(Light() with { ExcessCount = 100 });
+            f.Tick();
+            f.Show(Light() with { ExcessCount = 99 });
+            f.Tick(2);
+        }
+        Assert.Empty(f.Spoken);
+        // It stands: once.
+        f.Show(Light() with { ExcessCount = 101 });
+        f.Tick(6);
+        Assert.Equal(new[] { "EHSI message: EXCESS DATA" }, f.Spoken);
+        // Under the limit for one reading, three times: nothing more.
+        for (int i = 0; i < 3; i++)
+        {
+            f.Show(Light() with { ExcessCount = 98 });
+            f.Tick();
+            f.Show(Light() with { ExcessCount = 100 });
+            f.Tick(2);
+        }
+        Assert.Equal(new[] { "EHSI message: EXCESS DATA" }, f.Spoken);
+        // Gone for good: once.
+        f.Show(Light() with { ExcessCount = 60 });
+        f.Tick(6);
+        Assert.Equal(new[] { "EHSI message: EXCESS DATA", "EHSI message gone: EXCESS DATA" }, f.Spoken);
+    }
+
     [Fact]
     public void A_muted_row_says_nothing_and_the_window_still_shows()
     {

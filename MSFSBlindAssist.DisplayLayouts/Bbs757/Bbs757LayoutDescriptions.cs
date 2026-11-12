@@ -205,9 +205,9 @@ public static class Bbs757LayoutDescriptions
         Part(lines, p, "map options", l.MapOptions, l.MapOptionsMissing, o =>
             $"switches {o.NavAidSwitch}/{o.AirportSwitch}/{o.WaypointSwitch}, tuned {o.TunedLeft}/{o.TunedRight}, " +
             $"ndToSuper {o.NdToSuper}, superToNavdb {o.SuperToNavdb}, ndToFms {o.NdToFms}, navaids {o.Navaids} " +
-            $"(ident {o.NavaidIdent}, frequency {o.NavaidFrequency}, kind {o.NavaidKind}, class {o.NavaidClass}, " +
+            $"(ident {o.NavaidIdent} length {o.NavaidIdentLength}, frequency {o.NavaidFrequency}, kind {o.NavaidKind}, class {o.NavaidClass}, " +
             $"longitude {o.NavaidLongitude}, latitude {o.NavaidLatitude}), airports {o.Airports} stride {o.AirportStride} " +
-            $"(name {o.AirportName}, longitude {o.AirportRecordLongitude}, latitude {o.AirportRecordLatitude}), " +
+            $"(name {o.AirportName} label {o.AirportLabelLength}, longitude {o.AirportRecordLongitude}, latitude {o.AirportRecordLatitude}), " +
             $"waypoints {o.Waypoints} (longitude {o.WaypointLongitude}, latitude {o.WaypointLatitude}, ident {o.WaypointIdent}), " +
             $"ndbs {o.Ndbs} (ident {o.NdbIdent}, longitude {o.NdbLongitude}, latitude {o.NdbLatitude}), " +
             $"fmsToVor {o.FmsToVorLeft}/{o.FmsToVorRight}, panel autotune {o.PanelAutotune} station {o.PanelStation} " +

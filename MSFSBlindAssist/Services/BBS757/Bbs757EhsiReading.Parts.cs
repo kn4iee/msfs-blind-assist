@@ -18,6 +18,7 @@ public sealed partial record Bbs757EhsiReading
     public Bbs757EhsiTcasReading? Tcas { get; init; }
     public string? TcasMissing { get; init; }
 
+    /// <summary>The NAV AID, ARPT and WPT items, the tuned stations and the course lines (full: MAP and PLAN only).</summary>
     public Bbs757EhsiMapOptionsReading? MapOptions { get; init; }
     public string? MapOptionsMissing { get; init; }
 
@@ -27,10 +28,6 @@ public sealed partial record Bbs757EhsiReading
     public Bbs757EhsiMapGuidesReading? MapGuides { get; init; }
     public string? MapGuidesMissing { get; init; }
 }
-
-/// <summary>The NAV AID, ARPT and WPT items, the tuned stations and the course lines (plan 28's map options; its reading
-/// is written by the map options' task and holds nothing yet).</summary>
-public sealed record Bbs757EhsiMapOptionsReading;
 
 /// <summary>TERR, the wind, the runways and the deceleration points (plan 28's map extras; its reading is written by the
 /// map extras' task and holds nothing yet).</summary>

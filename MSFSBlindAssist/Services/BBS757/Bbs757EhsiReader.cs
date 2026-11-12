@@ -208,8 +208,13 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
             points = list;
         }
 
-        // Plan 28's parts (Bbs757EhsiReader.Parts.cs), in the same regions scope: one torn part is a corrupt reading.
-        if (!TryParts(nd, source, modeValue, full, out var parts))
+        var map = new Bbs757EhsiMap(centerLatitude, centerLongitude, rotation, screenX, screenY, width, height);
+
+        // Plan 28's parts (Bbs757EhsiReader.Parts.cs), in the same regions scope: one torn part is a corrupt reading. The
+        // map options' loop measures from the nd's own map and aircraft position (never the simulator's), against the
+        // routes and airports just read.
+        var mapScene = full ? MapScene(map, range, latitude, longitude, routeLegs, modificationLegs, points) : null;
+        if (!TryParts(nd, source, modeValue, full, mapScene, out var parts))
         {
             reading = Bad(full);
             return true;
@@ -220,7 +225,7 @@ public sealed partial class Bbs757EhsiReader : IBbs757DisplaySampler<Bbs757EhsiR
             Valid: valid, Aligning: aligning, Number: number, TrackUp: trackUp != 0, TrueReference: trueReference != 0,
             HeadingBug: bug, Latitude: position?.Latitude ?? latitude, Longitude: position?.Longitude ?? longitude,
             GroundSpeed: groundSpeed, Clock: clock,
-            Map: new Bbs757EhsiMap(centerLatitude, centerLongitude, rotation, screenX, screenY, width, height),
+            Map: map,
             Constants: _constants, Words: _words, Active: activeLeg, ActiveIndex: activeIndex, RouteActive: routeActive, DataSwitch: dataSwitch, ExcessCount: excessCount,
             Route: routeLegs, Modification: modificationLegs, Points: points, Corrupt: false);
         reading = WithParts(reading, parts);

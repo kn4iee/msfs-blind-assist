@@ -89,7 +89,6 @@ public class Bbs757EhsiPartsTests
         }, NotRead(Rows(missing, mode: 2)));
         Assert.Equal(new[]
         {
-            "Map options: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
             "TERR, wind and runways: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
             "FIX, descent and altitude guides: not read: " + Bbs757EhsiReader.NotReadYetInThisBuild,
         }, NotRead(Rows(WithParts, mode: 2)));
@@ -126,11 +125,30 @@ public class Bbs757EhsiPartsTests
             },
         }, true, Bbs757EhsiApproachTests.P);
 
-        foreach (var reading in new[] { vor, ils, ilsOff, traffic })
+        var options = Bbs757EhsiMapOptionsTests.Read(new Bbs757EhsiMapOptionsTests.Options
+        {
+            NavAid = true, Airport = true, Waypoint = true, TunedLeft = 0,
+            NavaidList = new Bbs757EhsiMapOptionsTests.Nav?[] { Bbs757EhsiMapOptionsTests.Sea, Bbs757EhsiMapOptionsTests.Pae with { Nm = 12.34 } },
+            AirportList = new[] { new Bbs757EhsiMapOptionsTests.Place("KBFI", 5.26, -10.4) },
+            WaypointList = new Bbs757EhsiMapOptionsTests.Place?[] { new Bbs757EhsiMapOptionsTests.Place("HAVHO", 3.06, 30) },
+            Left = new Bbs757EhsiMapOptionsTests.Panel(false, Bbs757EhsiMapOptionsTests.Sea, 186.6),
+        });
+        var plan = Bbs757EhsiMapOptionsTests.Read(new Bbs757EhsiMapOptionsTests.Options
+        {
+            NavAid = true, NavaidList = new Bbs757EhsiMapOptionsTests.Nav?[] { Bbs757EhsiMapOptionsTests.Pae with { Nm = 12.34 } },
+        }, mode: 3);
+
+        foreach (var reading in new[] { vor, ils, ilsOff, traffic, options, plan })
             Assert.Equal(TestCulture.Run("en-US", () => Bbs757EhsiText.Rows(reading)), TestCulture.Run(culture, () => Bbs757EhsiText.Rows(reading)));
 
         var rows = TestCulture.Run(culture, () => Bbs757EhsiText.Rows(vor).Concat(Bbs757EhsiText.Rows(ils)).Concat(Bbs757EhsiText.Rows(ilsOff))
-            .Concat(Bbs757EhsiText.Rows(traffic)).ToArray());
+            .Concat(Bbs757EhsiText.Rows(traffic)).Concat(Bbs757EhsiText.Rows(options)).Concat(Bbs757EhsiText.Rows(plan)).ToArray());
+        Assert.Contains("Map: VORTAC SEA, tuned, 0.5 NM, 173° left", rows);
+        Assert.Contains("Map: VOR/DME PAE, 12.3 NM, 40° right", rows);
+        Assert.Contains("Map: airport KBFI, 5.3 NM, 10° left", rows);
+        Assert.Contains("Map: waypoint HAVHO, 3.1 NM, 30° right", rows);
+        Assert.Contains("Map: VOR L course 187 through SEA", rows);
+        Assert.Contains("Map: VOR/DME PAE, 12.3 NM south of the center", rows);
         Assert.Contains("Top left: DME 0.5", rows);
         Assert.Contains("Center: deviation 0.5 dots right", rows);
         Assert.Contains("Bearing pointer 1: VOR L, SEA, 74° right", rows);

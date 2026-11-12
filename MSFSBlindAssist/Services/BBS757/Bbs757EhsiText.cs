@@ -62,8 +62,9 @@ public static partial class Bbs757EhsiText
     /// right): each leg with a symbol ("Map: KOLM, active, 37.5 NM, 87° right"; an inactive route's "Map, inactive route: ",
     /// a pending modification's "Map, modification: "; with DATA on its constraint and ETA as drawn), and the points
     /// within range + the margin ("Map: T/C, …", "Map: KSEA airport, …"). In PLAN the place is from the leg at the map's
-    /// center ("13.4 NM north-east of KOLM"), else "the center". A discontinuity draws nothing. In MAP, the TCAS traffic
-    /// among them.</item>
+    /// center ("13.4 NM north-east of KOLM"), else "the center". A discontinuity draws nothing. Plan 28's map options among
+    /// them (the tuned stations and the items BlueBird's loop draws), and in MAP the TCAS traffic; then the VOR course
+    /// lines.</item>
     /// <item>MAP while valid: the bearing pointers.</item>
     /// <item>Valid: "Heading bug: 147, 28° right".</item>
     /// <item>"Message: EXCESS DATA" at the layout's count, else "Messages: none".</item>
@@ -216,11 +217,13 @@ public static partial class Bbs757EhsiText
             items.Add(new MapItem(at.Y, at.X, "Map: " + name + ", " + at.Place));
         }
 
-        // Plan 28's traffic (Bbs757EhsiText.Tcas.cs), among the map's items by its place.
+        // Plan 28's map options and traffic (Bbs757EhsiText.MapOptions.cs, .Tcas.cs), among the map's items by their place.
+        AddMapOptions(items, r, center);
         AddTraffic(items, r);
 
-        // Top to bottom, then left to right; OrderBy is stable, so one spot keeps the draw's order.
-        return items.OrderBy(i => i.Y).ThenBy(i => i.X).Select(i => i.Text).ToArray();
+        // Top to bottom, then left to right; OrderBy is stable, so one spot keeps the draw's order. The course lines, which
+        // cross the screen, after them.
+        return items.OrderBy(i => i.Y).ThenBy(i => i.X).Select(i => i.Text).Concat(CourseLineRows(r)).ToArray();
     }
 
     private static void AddLeg(List<MapItem> items, Bbs757EhsiReading r, Bbs757EhsiLeg leg, string prefix, bool active, string? center)

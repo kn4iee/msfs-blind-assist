@@ -82,6 +82,7 @@ public partial class Bbs757EhsiLayoutTests
         Assert.Equal((0, 1, 2, 3, 6), (sample.MapOptions.KindVor, sample.MapOptions.KindVorDme, sample.MapOptions.KindVortac,
             sample.MapOptions.KindTacan, sample.MapOptions.KindDme));
         Assert.Equal(new[] { 0, 1, 2, 5 }, sample.Approach.VorKinds);
+        Assert.Equal((4, 4), (sample.MapOptions.NavaidIdentLength, sample.MapOptions.AirportLabelLength));
         Assert.Equal((4, 16, 372, 780, 776, 24, 32), (sample.Approach.StationIdentLength, sample.Approach.StationFrequency,
             sample.Approach.PanelIlsStation, sample.Approach.PanelManualWhole, sample.Approach.PanelManualFraction,
             sample.Approach.AdfLongitude, sample.Approach.AdfLatitude));
@@ -109,7 +110,9 @@ public partial class Bbs757EhsiLayoutTests
         Assert.Contains(lines, l => l.Contains("EHSI VOR and ILS:", StringComparison.Ordinal) && l.Contains("glideslopePin 2.2", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Contains("EHSI TCAS:", StringComparison.Ordinal) && l.Contains("trafficStride 40", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Contains("EHSI map options:", StringComparison.Ordinal) && l.Contains("drawnKinds [0, 1, 2, 3, 6]", StringComparison.Ordinal)
-            && l.Contains("courseLineKinds [0, 1, 2, 5], kinds vor 0 vorDme 1 vortac 2 tacan 3 dme 6", StringComparison.Ordinal));
+            && l.Contains("courseLineKinds [0, 1, 2, 5], kinds vor 0 vorDme 1 vortac 2 tacan 3 dme 6", StringComparison.Ordinal)
+            && l.Contains("(ident 0 length 4, frequency 16", StringComparison.Ordinal)
+            && l.Contains("(name 0 label 4, longitude 16", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.Contains("EHSI VOR and ILS:", StringComparison.Ordinal) && l.Contains("vorKinds [0, 1, 2, 5]", StringComparison.Ordinal)
             && l.Contains("panelStation 368 ils 372 manual 780/776", StringComparison.Ordinal)
             && l.Contains("station ident 0 length 4 frequency 16", StringComparison.Ordinal)
@@ -293,8 +296,8 @@ public partial class Bbs757EhsiLayoutTests
         MapOptions = new Bbs757EhsiMapOptions(
             NavAidSwitch: 208, AirportSwitch: 210, WaypointSwitch: 211, TunedLeft: 212, TunedRight: 216,
             NdToSuper: 1216, SuperToNavdb: 584, NdToFms: 908,
-            Navaids: 80, NavaidIdent: 0, NavaidFrequency: 16, NavaidKind: 32, NavaidClass: 33, NavaidLongitude: 40, NavaidLatitude: 48,
-            Airports: 9072, AirportStride: 48, AirportName: 0, AirportRecordLongitude: 16, AirportRecordLatitude: 24,
+            Navaids: 80, NavaidIdent: 0, NavaidIdentLength: 4, NavaidFrequency: 16, NavaidKind: 32, NavaidClass: 33, NavaidLongitude: 40, NavaidLatitude: 48,
+            Airports: 9072, AirportStride: 48, AirportName: 0, AirportLabelLength: 4, AirportRecordLongitude: 16, AirportRecordLatitude: 24,
             Waypoints: 344, WaypointLongitude: 0, WaypointLatitude: 8, WaypointIdent: 16,
             Ndbs: 256, NdbIdent: 0, NdbLongitude: 24, NdbLatitude: 32,
             FmsToVorLeft: 7884, FmsToVorRight: 7888, PanelAutotune: 740, PanelStation: 368, PanelCourse: 784,
