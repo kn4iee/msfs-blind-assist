@@ -88,13 +88,28 @@
 
 - [ ] **Steps:** rebase (app and private), the next `GeneratorVersion.Current`, regenerate with every reader on `B757`, suites green; read-only: ILS and VOR rows against an EHSI capture at a runway; traffic against the simulator's AI traffic positions; deploy to `C:\MSFSBA-B757` with the layout; ask the owner to push and publish.
 
-## In-sim checks (owner, by ear)
+## In-sim checks (owner, by ear; rewritten 2026-11-12 after the measurements and the whole-plan review)
 
-1. ILS mode on an approach: course, deviation and DME follow the needles; a flag heard once if one shows.
-2. TCAS with traffic around: Alt+N lists it; TA ONLY heard once when set.
-3. NAV AID and APRT on in the window: the stations and airports appear in the list, in screen order; off, they go.
-4. In cruise: the wind row with its speed; TERR on: its word and two numbers; a departure or arrival runway listed near the airport.
-5. Each of the window's switches (WXR, TERR, TFC, NAV AID, APRT, WPT) changes the list when set.
+Only what needs a flight or the owner's ears; Task 7's live checks on the ground are the controller's (the rows
+against captures in each mode, the switches, the tuned station, the course line, the FIX circle, the TCAS words).
+
+1. An ILS approach (Alt+N open, EFIS on APP, expanded then CTR): "deviation … right/left" agrees with which way to
+   fly; "glideslope … above" while below the path; the DME is the ILS's; the frequency row reads dashes until the
+   localizer is received. Nothing is spoken when turning the mode selector or pressing CTR.
+2. VOR mode on a tuned station: TO then FROM passing it; about 5 degrees a dot.
+3. TCAS in flight: "TA ONLY" heard once on the knob, and its "gone" once climbing through 1,000 ft radio altitude
+   with TA/RA set; with traffic near, how often "EHSI message: TRAFFIC" is heard on the ground at a busy airport
+   (the owner decides whether TRAFFIC stays spoken); a target below reads a tag like "-05".
+4. Cruise: "Bottom left: wind 70 kt from 30° left" against the screen's arrow; dashes under 100 kt.
+5. TERR on near terrain: the two numbers and their colors, with the gear up and with it down close to the amber
+   boundary (BlueBird compares the gear with a value that may mean up).
+6. Level flight with the MCP altitude set lower: no altitude range arc row; in a climb or descent toward it: a
+   plausible distance.
+7. A VNAV descent: which sign of "VNAV path deviation" is above the path (the row gives the signed number until this
+   is heard); "Map: deceleration starts / ends" near the 250 kt slow-down; OFFPATH DES on: its circles row, and the
+   reader keeps running.
+8. A long flight: no "not read: unexpected values" row and no "EHSI unavailable"; if one shows, the
+   `bbs757-ehsi.log` at once (it rotates within minutes).
 
 ## Handoff to plan 16
 

@@ -680,7 +680,7 @@ captures agree (expanded VOR and ILS, full VOR).
   drawn twice. The range + 10 NM test. A **cyan triangle** outline (f74279, stroke 1171096): apex (x, y − 16), base
   corners (x ± 15, y + 14). The UTF-32 name at (x + 20, y + 20), font `nd+336`, cyan (1171040). `nd+1276 += 1`.
 
-### The loop, the count and `EXCESS DATA` (23406, WAT lines 2616 to 3630; MAP and PLAN, `nd+805` not required)
+### The loop, the count and `EXCESS DATA` (23406, WAT lines 2616 to 3630; the map block: MAP with `nd+805`, or PLAN)
 
 - **Order:** f23430 origin and destination, f23431 the course lines, `f23433(nd, [nd+212], 1)`,
   `f23433(nd, [nd+216], 1)` (all before the count is zeroed, so never counted), then `nd+1276` = 0 and the loop.
@@ -977,6 +977,25 @@ captures agree (expanded VOR and ILS, full VOR).
   `nd+928`: a different class, with the unit's name inside) hold no value: the wind speed, the wind direction and
   the gear position are simulator inputs (S10): `AMBIENT WIND VELOCITY`, `AMBIENT WIND DIRECTION`, `GEAR POSITION`.
 - Not read in this plan: the amber `VOR` flag (its condition is the electrical circuit lookup f36730, not a field).
+
+## Settled from the code after the reviews (2026-11-12)
+
+- **f23445** (the NDBs' 80 NM test) is f4581 on the two positions: the top line's haversine (R = 6,371,000 m, ÷ 1852).
+- **The second course line** (23431): the second receiver is compared only with a line already drawn in this frame
+  (the previous station and course are kept after f23494 draws); "the same station" is the same frequency, the same
+  ident (the string at station+60) and a position within 1e-6 (f23493).
+- **f47466**, the station getter the course lines and the tuned-station write use, returns no station while the VOR
+  panel's circuit is not available (f36730(`[vcp+344]`, `vcp+736`)) or while the panel's EFIS is in ILS mode; the
+  field `vcp+368` keeps its station meanwhile. The reader reads the field: the panel's power is not modeled.
+- **f23660**, the route-point comparison of the waypoint draw's on-route test, compares both coordinates through
+  f23841 (not decoded); the reader takes exact equality.
+- **The TCAS message draw (23460), re-read:** `TCAS` / `FAIL` is drawn, and ends the left block, only when the
+  failed-or-unpowered test (f73997) AND `u8 nd+1273` both hold; failed with the gate clear falls through to the level
+  switch: level 1 draws `TFC` (if TFC and the gate) and `TA ONLY` (ungated), level 2 `TFC` (gated), any other value
+  `TCAS` / `OFF` (gated).
+- **The map block's condition** (23406): it runs in MAP only while `nd+805`, and in PLAN regardless.
+- **The amber test colors:** the ILS dots (`u8 nd+274`) and the glideslope scale (`u8 g+39`) are amber during the
+  receiver's self-test.
 
 ## Not measured
 
