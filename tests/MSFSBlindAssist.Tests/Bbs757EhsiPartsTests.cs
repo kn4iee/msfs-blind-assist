@@ -258,7 +258,7 @@ public class Bbs757EhsiPartsTests
         Assert.Contains("Map: fix TCM, circle 15 NM", rows);
         Assert.Contains("Map: fix TCM, radial 300", rows);
         Assert.Contains("Map: altitude range arc, 13.9 NM, ahead", rows);
-        Assert.Contains("Right side: VNAV path deviation -121 ft", rows);
+        Assert.Contains("Right side: VNAV path deviation 121 ft below the path", rows);
         Assert.Contains("Map: off-path descent circles, 46 NM and 38 NM around 111.6 NM, 52° right", rows);
         Assert.Contains("Map: off-path descent circles, 46 NM and 38 NM around 111.6 NM south of the center", rows);
         Assert.Contains("Top right: TERR", rows);

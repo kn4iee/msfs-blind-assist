@@ -100,14 +100,15 @@ public static partial class Bbs757EhsiText
             ? g.Fixes.Where(f => f.Position is null).Select(f => FixPrefix(f) + "position not read")
             : Array.Empty<string>();
 
-    /// <summary>The VNAV path deviation scale, in MAP: "Right side: VNAV path deviation 120 ft" (the stored value rounded
-    /// to whole feet, signed as stored: which sign is above the path is not measured), ", at full scale" at or beyond the
-    /// layout's clamp.</summary>
+    /// <summary>The VNAV path deviation scale, in MAP: "Right side: VNAV path deviation 120 ft above the path" (the
+    /// stored value rounded to whole feet; positive is the aircraft above the path, measured in flight, [B757-48]; 0
+    /// says neither), ", at full scale" at or beyond the layout's clamp.</summary>
     private static void VnavDeviationRow(List<string> rows, Bbs757EhsiReading r)
     {
         if (r.MapGuides is not { PathDeviation: { } feet } g || !Is(r, Bbs757EhsiMode.Map)) return;
         long whole = (long)Math.Round(feet, MidpointRounding.AwayFromZero);
-        rows.Add("Right side: VNAV path deviation " + whole.ToString(Inv) + " ft"
+        rows.Add("Right side: VNAV path deviation " + Math.Abs(whole).ToString(Inv) + " ft"
+            + (whole > 0 ? " above the path" : whole < 0 ? " below the path" : "")
             + (Math.Abs(feet) >= g.DeviationClamp ? ", at full scale" : ""));
     }
 

@@ -469,15 +469,17 @@ public class Bbs757EhsiMapGuidesTests
     // ---- the VNAV path deviation ----
 
     [Fact]
-    public void The_vnav_deviation_reads_its_signed_feet_in_the_descent()
+    public void The_vnav_deviation_reads_feet_above_or_below_the_path_in_the_descent()
     {
-        Assert.Equal(new[] { "Right side: VNAV path deviation 120 ft" }, Starting(Read(new Guides { Phase = 4, Deviation = 120.4 }), "Right side: VNAV"));
-        Assert.Equal(new[] { "Right side: VNAV path deviation -121 ft" }, Starting(Read(new Guides { Phase = 4, Deviation = -120.6 }), "Right side: VNAV"));
+        // The sign as flown (KDEN to CYVR, 2026-11-12): level at 5,000 ft the stored value ran from -1,108 through 0 to
+        // +175 as the path came down through the aircraft, so positive is the aircraft above the path.
+        Assert.Equal(new[] { "Right side: VNAV path deviation 120 ft above the path" }, Starting(Read(new Guides { Phase = 4, Deviation = 120.4 }), "Right side: VNAV"));
+        Assert.Equal(new[] { "Right side: VNAV path deviation 121 ft below the path" }, Starting(Read(new Guides { Phase = 4, Deviation = -120.6 }), "Right side: VNAV"));
         Assert.Equal(new[] { "Right side: VNAV path deviation 0 ft" }, Starting(Read(new Guides { Phase = 4, Deviation = -0.3 }), "Right side: VNAV"));
         // The clamp: at or beyond 400 ft either way.
-        Assert.Equal(new[] { "Right side: VNAV path deviation 400 ft, at full scale" }, Starting(Read(new Guides { Phase = 4, Deviation = 400 }), "Right side: VNAV"));
-        Assert.Equal(new[] { "Right side: VNAV path deviation -450 ft, at full scale" }, Starting(Read(new Guides { Phase = 4, Deviation = -450 }), "Right side: VNAV"));
-        Assert.Equal(new[] { "Right side: VNAV path deviation -400 ft" }, Starting(Read(new Guides { Phase = 4, Deviation = -399.6 }), "Right side: VNAV"));
+        Assert.Equal(new[] { "Right side: VNAV path deviation 400 ft above the path, at full scale" }, Starting(Read(new Guides { Phase = 4, Deviation = 400 }), "Right side: VNAV"));
+        Assert.Equal(new[] { "Right side: VNAV path deviation 450 ft below the path, at full scale" }, Starting(Read(new Guides { Phase = 4, Deviation = -450 }), "Right side: VNAV"));
+        Assert.Equal(new[] { "Right side: VNAV path deviation 400 ft below the path" }, Starting(Read(new Guides { Phase = 4, Deviation = -399.6 }), "Right side: VNAV"));
         // Out of the descent phase, without a path for the route, in PLAN, in a light reading: no row.
         Assert.Empty(Starting(Read(new Guides { Phase = 3, Deviation = 120 }), "Right side: VNAV"));
         Assert.Empty(Starting(Read(new Guides { Phase = 4, Deviation = 120 }, scene: s => s.HasRegistry = false), "Right side: VNAV"));
@@ -485,7 +487,7 @@ public class Bbs757EhsiMapGuidesTests
         Assert.Empty(Starting(Read(new Guides { Phase = 4, Deviation = 120 }, full: false), "Right side: VNAV"));
         // After the map's rows, before the bearing pointers and the heading bug; never spoken.
         var rows = Rows(Read(new Guides { Phase = 4, Deviation = 120 }));
-        int at = Array.IndexOf(rows, "Right side: VNAV path deviation 120 ft");
+        int at = Array.IndexOf(rows, "Right side: VNAV path deviation 120 ft above the path");
         Assert.StartsWith("Heading bug: ", rows.Skip(at).First(r => r.StartsWith("Heading bug: ", StringComparison.Ordinal)), StringComparison.Ordinal);
         Assert.StartsWith("Map", rows[at - 1], StringComparison.Ordinal);
         Assert.Empty(Bbs757EhsiText.Changes(Read(new Guides()), Read(new Guides { Phase = 4, Deviation = 120 }), true));
