@@ -68,8 +68,9 @@ public static partial class Bbs757EhsiText
     /// (<see cref="Bbs757EhsiReading.Number"/>, magnetic or true as the screen's own number), so the line runs at the course
     /// minus that number from the station's pixel: sampled along the stretch of the line within half the screen's diagonal
     /// of the point nearest the screen's center, which covers every pixel of it the screen can show, both ways. In PLAN
-    /// (true north up) the reader has no magnetic variation to turn the line with: it is listed while its station's point
-    /// is inside the clip. Not on the screen for a range not above 0 or any input that is not a finite number. The samples
+    /// (true north up) the reader has no magnetic variation to turn the line with, and the line runs both ways through the
+    /// station and usually crosses the screen, so it is listed whenever its conditions hold, with no on-screen test
+    /// (measured 2026-11-12: the line was drawn through SEA with SEA outside the clip). In MAP, not on the screen for a range not above 0 or any input that is not a finite number. The samples
     /// are counted by an index up to <see cref="MaxCourseLineSamples"/>, never by adding a step to a far coordinate (at a
     /// tiny range the station's pixel is so far out that adding a few pixels no longer changes it).
     /// </summary>
@@ -82,7 +83,8 @@ public static partial class Bbs757EhsiText
         if (!double.IsFinite(x) || !double.IsFinite(y)) return false;
         bool Inside(double px, double py) =>
             Bbs757EhsiGeometry.OnScreen(map, r.Centered, px, py, c.RadiusFactor, c.AircraftYFactor, c.ClipInset);
-        if (Is(r, Bbs757EhsiMode.Plan)) return Inside(x, y);
+        // PLAN: the line is listed whenever its conditions hold (see the summary).
+        if (Is(r, Bbs757EhsiMode.Plan)) return double.IsFinite(line.Course);
         double angle = (line.Course - r.Number) * Math.PI / 180.0;
         if (!double.IsFinite(angle) || !double.IsFinite(map.Width) || !double.IsFinite(map.Height)) return false;
         double sin = Math.Sin(angle), cos = Math.Cos(angle);

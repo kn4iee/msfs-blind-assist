@@ -285,7 +285,7 @@ public class Bbs757EhsiMapOptionsTests
     }
 
     // The line runs both ways through its station: a course pointing away from the screen still reaches it behind the
-    // station. In PLAN (no magnetic variation to turn it with) a line is listed while its station is on the screen.
+    // station. In PLAN (no magnetic variation to turn it with) a line is listed whenever its conditions hold.
     [Fact]
     public void A_course_line_is_listed_only_where_it_crosses_the_screen()
     {
@@ -296,8 +296,9 @@ public class Bbs757EhsiMapOptionsTests
         // range 20 too.
         Assert.Equal(new[] { "Map: VOR R course 159 through PAE" },
             OptionRows(Read(new Options { Right = new Panel(false, Pae, 159.39, 110, 40) })));
-        // PLAN: PAE off the screen at range 20, so no line; on it at range 40.
-        Assert.Empty(OptionRows(Read(away, mode: 3)));
+        // PLAN: listed whenever drawn, with the station off the screen too (measured: the line was drawn through SEA with
+        // SEA outside the clip); PAE is off the screen at range 20 and on it at range 40.
+        Assert.Equal(new[] { "Map: VOR R course 310 through PAE" }, OptionRows(Read(away, mode: 3)));
         Assert.Equal(new[] { "Map: VOR R course 310 through PAE" }, OptionRows(Read(away, mode: 3, range: 40)));
     }
 
