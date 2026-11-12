@@ -118,7 +118,7 @@ against captures in each mode, the switches, the tuned station, the course line,
 
 ## Execution record
 
-- **Status:** landed (2026-11-12) at the owner's word ("Push and publish"), with the generator-8 757 layout published; the in-sim checks wait for the owner's flight
+- **Status:** landed (2026-11-12) at the owner's word ("Push and publish"), with the generator-8 757 layout published; the owner's flight (KDEN to CYVR, 2026-11-12) passed what it exercised, results below
 - **Claimed by:** Robin Kipp (robin24), 2026-11-12
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-12, from `B757` 22d54e0d0 (plan 26 landed)
@@ -133,8 +133,35 @@ against captures in each mode, the switches, the tuned station, the course line,
   f34b4e4ea; 5 rules B757-40 to B757-49 (f2c14fc05, 03e3c7a6e); 6 no picture button (the owner); the whole-plan
   review's fixes 041f5f4e9, 0000b345c and d9398c68f; 7 the live checks and the deploy (below). Each dispatch reviewed
   by a fresh reviewer, each fix round re-reviewed, then one whole-plan review of the app branch.
-- **Waiting on the owner:** the in-sim checks above; whether `TRAFFIC` stays spoken (check 3).
-- **In-sim results:** none yet (the owner's flight). The controller's ground checks, 2026-11-12, parked at KSEA,
+- **Waiting on the owner:** the checks the flight did not exercise (below).
+- **In-sim results:** the owner's flight KDEN to CYVR, 2026-11-12, recorded beside the app by a throwaway read-only
+  recorder (the app's own reader and rows once a second with the simulator's values, 3 h 46 min, about 13,500
+  readings; never committed):
+  - Health: one corrupt reading in the recorder and one in the app's log, at different moments, each gone on the
+    next reading; no "not read: unexpected values", no "EHSI unavailable". Nothing spoken at any mode change.
+  - Check 1 (ILS, CYVR 111.95, expanded): intercepting from 184 m left of the centerline the row read "0.3 dots
+    right"; "glideslope … above" while below the path, centered at 6.3 NM and 2,008 ft, "0.1 dots below" about 50 ft
+    high; the DME ran down to 0.1 at the touchdown zone; dashes in ILS mode until the frequency was set. CTR: not
+    exercised.
+  - Check 2 (VOR, MLD, course 000, passed abeam): FROM throughout; full scale left, 2.0 dots at about 10 degrees
+    off (5 degrees a dot), centered on the radial, full scale right; out of range: `DME ---`, no bar, no pointer.
+    A TO to FROM passage: not exercised.
+  - Check 3 (TCAS): "TA ONLY" once on the knob and gone once in the climb (the owner heard it once on the approach
+    too, where the raw reading flickered for 3 s around 1,000 ft); tags below from "-00" to "-26"; the self-test
+    spoke nothing. `TRAFFIC` came about 12 times in 19 minutes of taxi at KDEN and 7 times at CYVR; **the owner
+    keeps it spoken** ("super helpful"). Three were one-second repeats right after a real one in the raw reading;
+    whether they are heard twice is not known.
+  - Check 4 (wind): within 1 kt and 2 degrees of the simulator all through cruise; dashes by BlueBird's flag (until
+    liftoff, and with the wind near 3 kt on the approach).
+  - Check 5 (TERR): "000 green, 000 green" over water at range 10; other colors and the gear boundary: not
+    exercised.
+  - Check 6 (range arc): no row in level cruise; distances right in the climb and the descent (7.2 NM at 2,350
+    ft/min with 2,560 ft to go at 404 kt).
+  - Check 7 (VNAV): **positive is the aircraft above the path** (level at 5,000 ft the value ran from -1,108
+    through 0 to +175 as the path came down); the row now says "above the path" or "below the path" ([B757-48]).
+    The deceleration rows, T/C and T/D appeared and counted down. OFFPATH DES and the FIX page: not exercised.
+  - Check 8: as under Health.
+- **Ground checks:** the controller's, 2026-11-12, parked at KSEA,
   MSFSBA closed: the app's own reader and rows run read-only against the simulator with the generator-8 layout, each
   compared with a capture of the EHSI:
   - MAP at range 20 with NAV AID, APRT, WPT, TERR and TFC on: every row as the screen (the waypoints in screen order,
@@ -190,11 +217,11 @@ against captures in each mode, the switches, the tuned station, the course line,
     (an electrical lookup, not a field: an unpowered, manually tuned VOR still lists its pointer and course line);
     whether a tuned station is still received; the position trend vector; a FIX fix entered as a position with no
     stored name (BlueBird builds its name).
-  - Approximations: the VNAV path deviation row gives the signed number (which sign is above the path: check 7); a
+  - Approximations: a
     300 NM circle at range 10 is sampled every 54 px or so; a course line's listing in MAP under the TRU reference
     is turned by the heading number, off by the variation; a part's torn-reading count is not reset by readings in
     which the part is not read; staggered tears of several parts can still add up to more than the monitor's ten.
-  - Not measured live: the LOC, G/S and `TCAS FAIL` words, a resolution advisory, the off-path circles, the range
-    arc, the VNAV deviation, the wind's speed and arrow, deceleration points for an inactive route.
+  - Not measured live: the LOC and G/S flags, a resolution advisory, the off-path circles, centered VOR and ILS in
+    flight, a TO to FROM passage, terrain colors near the gear boundary, deceleration points for an inactive route.
   - For plan 16 (the handoff below): the changelog and guide lines; the hotkey guide is unchanged.
   - Private repository: the toolkit document's section for these parts.
