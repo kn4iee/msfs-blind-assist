@@ -119,12 +119,12 @@ et10.0-windows\`, because the OCR TFM had moved the app's output away from the f
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** claimed
-- **Superseded:** 2026-10-29, by plan 18 (`18-efb-unified.md`): it takes over this plan's remaining work and its files, with Declan Webster's agreement (confirmed by Robin Kipp, 2026-10-29)
+- **Status:** closed (2026-11-12), superseded: nothing of this plan remains to do. Closed by Robin Kipp ("Plan 11 was superseded by the EFB rewrite which now uses memory access")
+- **Superseded:** 2026-10-29, by plan 18 (`18-efb-unified.md`): it takes over this plan's remaining work and its files, with Declan Webster's agreement (confirmed by Robin Kipp, 2026-10-29). Plans 20 to 22 then rebuilt the tablet window on BlueBird's own structure read from memory (pages, presses, typing), which replaced this plan's screen reading; the in-sim checks under "Waiting on the owner" below belong to that retired reader and are dropped.
 - **Claimed by:** Declan Webster, 2026-10-26 (with Robin Kipp's agreement)
 - **Worked by:** Declan Webster, with Claude (no subagents)
 - **Started:** 2026-10-26, from `B757` 14944413
-- **Landed:** (date; the last commit of this plan on `B757`)
+- **Landed:** its work reached `B757` in 2026-10 and was replaced there by plans 17, 18 and 20 to 22
 - **Tests at landing:** full suite passed 2026-10-27 (17,752 tests; the one failure, a test written for the old page heading, was updated and the 1,865 BlueBird tests re-run green); again 2026-10-27 after the read-only rework and the rebase onto `B757` 7e0a42ed: 17,954 passed, 0 failed
 - **Tasks:** 0 done. 1 done for what screen reading needs (flight-11.md sections 5-6: services, sliders, switches,
   scrolling; presets, pushback arrows, REMOVE ALL and the Cabin & Doors door tiles were read, not tapped). 2 done
