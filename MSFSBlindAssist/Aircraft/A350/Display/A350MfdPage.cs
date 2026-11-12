@@ -812,29 +812,54 @@ public static class A350MfdPage
 
     private const string MenuOpen = ", menu open";
 
-    /// <summary>The reader's own word for a list opener, just before its colour or at its end ("RWY button", "FMS 1 menu, cyan").</summary>
-    private static readonly Regex OpenerWord = new(@" (button|menu)(?=(, [a-z]+)?$)", RegexOptions.Compiled);
+    private const string Unavailable = ", unavailable";
 
-    /// <summary>A line as the MFD window shows it: the reader's words, ended with the A380 window's role word where the line
-    /// takes input (plan 09 Task 2; spec 2.7: "required" was said, never that a field takes typed input). A field and the
-    /// scratchpad end with "edit"; a list opener reads as a combo box, collapsed or expanded, in place of its own word; a grey
-    /// key or opener, unavailable, ends with "dimmed". Other lines are as read.</summary>
+    /// <summary>The reader's own role word after a line's text, before its first state or at its end ("RWY button", "FMS 1 menu,
+    /// cyan", "F-PLN tab, selected", "FULL check box, checked"); lowercase, so never the page's own capitals.</summary>
+    private static readonly Regex ReaderRole = new(@"(?:^| )(?<w>button|menu|tab|check box)(?=,|$)", RegexOptions.Compiled);
+
+    /// <summary>A line as the MFD window shows it, as the A380's MFD window shows its own (plan 25; `FBWA380MCDUForm.RoleWord`):
+    /// "&lt;text&gt;, &lt;role&gt;[, state][, dimmed]", its colours in the owner's words (<see cref="A350MfdWording.Speak"/>). A field and the
+    /// scratchpad are an "edit"; a key, a menu's item and an F-PLN row (it opens its waypoint's revision menu) a "button"; a list
+    /// opener a "combo box", collapsed or expanded; a tab a "tab"; a check box a "check box"; a selector's option a "radio button".
+    /// A grey control, or one read unavailable, ends "dimmed"; the list row under the KCCU's box "highlighted". Texts, the title
+    /// and a message have no role.</summary>
     public static string Shown(MfdLine line)
     {
-        string s = line.Spoken;
+        string s = A350MfdWording.Speak(line);
+        bool dimmed = A350MfdWording.IsDimmed(line);
+        if (s.EndsWith(Unavailable, StringComparison.Ordinal)) s = s[..^Unavailable.Length];
         bool open = s.EndsWith(MenuOpen, StringComparison.Ordinal);
+        string Ends(string shown) => shown + (dimmed ? ", dimmed" : "") + (line.Highlighted ? ", highlighted" : "");
         if (line.Kind is "field" or "scratchpad")
-            return open ? s[..^MenuOpen.Length] + ", edit" + MenuOpen : s + ", edit";
+            return Ends(open ? s[..^MenuOpen.Length] + ", edit" + MenuOpen : s + ", edit");
         if (line.Opener)
         {
-            s = OpenerWord.Replace(open ? s[..^MenuOpen.Length] : s, "");
-            return $"{s}, combo box, {(open ? "expanded" : "collapsed")}{(s.EndsWith(", grey", StringComparison.Ordinal) ? ", dimmed" : "")}";
+            if (open) s = s[..^MenuOpen.Length];
+            var m = ReaderRole.Match(s);
+            string text = m.Success ? s[..m.Index] + s[(m.Index + m.Length)..] : s;
+            return Ends($"{text}, combo box, {(open ? "expanded" : "collapsed")}");
         }
-        if (line.Highlighted) s += ", highlighted";
-        // An F-PLN row opens its waypoint's revision menu: the A380 window's "button" for its rows.
-        if (line.Kind == "waypoint")
-            return s + ", button";
-        return line.Kind is "button" or "menuitem" && s.EndsWith(", grey", StringComparison.Ordinal) ? s + ", dimmed" : s;
+        return line.Kind switch
+        {
+            "button" or "menuitem" => Ends(WithRole(s, "button")),
+            "tab" => Ends(WithRole(s, "tab")),
+            "checkbox" => Ends(WithRole(s, "check box")),
+            "option" => Ends(s.IndexOf(", selected", StringComparison.Ordinal) is int at and >= 0
+                ? s[..at] + ", radio button" + s[at..] : s + ", radio button"),
+            "waypoint" => Ends(s + ", button"),
+            _ => Ends(s),
+        };
+    }
+
+    /// <summary>The line's text, the A380 window's role after a comma, then the line's states: the reader's own role word moves
+    /// behind the text ("INSERT * TMPY button" → "INSERT * TMPY, button"); a line with none takes the role at its end.</summary>
+    private static string WithRole(string s, string role)
+    {
+        var m = ReaderRole.Match(s);
+        if (!m.Success) return $"{s}, {role}";
+        string text = s[..m.Index];
+        return (text.Length == 0 ? role : $"{text}, {role}") + s[(m.Index + m.Length)..];
     }
 
     /// <summary>The FMS message line as the window compares it: the scratchpad's, or a checklist page's message; a read page

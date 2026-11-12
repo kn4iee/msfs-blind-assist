@@ -123,7 +123,7 @@ public class A350MfdFplnGridTests
     public void A_waypoint_row_reads_button_in_the_window()
     {
         var shown = A350MfdWindow.PageLines(A350Fixtures.Capture("mfd_fpln_basu1d.json"), 0, dark: false).Shown;
-        Assert.Contains("BI453   BASU1D 309° 6   250  5000   00:04, green, button", shown);
-        Assert.Contains("FROM          TRK  NM  SPD  ALT    TIME, white", shown);
+        Assert.Contains("BI453   BASU1D 309° 6   250  5000   00:04, button", shown);
+        Assert.Contains("FROM          TRK  NM  SPD  ALT    TIME", shown);
     }
 }

@@ -56,7 +56,7 @@ public class A350MfdListTests
     public void The_highlighted_row_says_so()
     {
         var shown = A350MfdWindow.PageLines(Cap("p09_mfd_departure_sid_up3"), 0, dark: false).Shown;
-        Assert.Contains("MIRO3G button, highlighted", shown);
+        Assert.Contains("MIRO3G, button, highlighted", shown);
         Assert.Single(shown, l => l.Contains("highlighted", StringComparison.Ordinal));
     }
 }
