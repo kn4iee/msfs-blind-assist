@@ -103,10 +103,10 @@
 
 ## Execution record
 
-- **Status:** not started
-- **Claimed by:**
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** Robin Kipp (robin24), 2026-11-12
+- **Worked by:** Robin Kipp with Claude (subagent-driven development)
+- **Started:** 2026-11-12, from `B757` 22d54e0d0 (plan 26 landed)
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
