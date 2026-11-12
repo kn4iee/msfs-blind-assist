@@ -113,20 +113,43 @@ against captures in each mode, the switches, the tuned station, the course line,
 
 ## Handoff to plan 16
 
-- **Pilot-facing:** "The 757's EHSI window also reads VOR and ILS modes, TCAS traffic, the map options, the wind, the terrain elevations and the runways." Changelog `improvement`; the guide's 757 EHSI part.
+- **Pilot-facing:** "The 757's EHSI window also reads VOR and ILS modes with the bearing pointers, TCAS traffic and its messages, the map options, the wind, the terrain elevations, the runways, the deceleration points and the FIX page's rings, with the altitude range arc and the VNAV path deviation." Changelog `improvement`; the guide's 757 EHSI part (the weather radar is not shown on this display; S/C is on the PROGRESS page).
 - **docs/b757.md:** the EHSI reader's parts.
 
 ## Execution record
 
-- **Status:** in progress
+- **Status:** built, reviewed and deployed to `C:\MSFSBA-B757` (2026-11-12); not pushed, the layout not published: both wait for the owner's word, and the in-sim checks for a flight
 - **Claimed by:** Robin Kipp (robin24), 2026-11-12
 - **Worked by:** Robin Kipp with Claude (subagent-driven development)
 - **Started:** 2026-11-12, from `B757` 22d54e0d0 (plan 26 landed)
 - **Landed:**
-- **Tests at landing:**
-- **Tasks:** 0 claim (353488970), 1 measure (56198a036), 2 the layout's parts (04013dd56).
-- **Waiting on the owner:** nothing.
-- **In-sim results:**
+- **Tests at landing:** (before landing) the app suite 25,032 passed, 0 failed, at d9398c68f; the solution builds with 0 errors; the toolkit suite 701 passed (private, at 82cf62bcb; unchanged by the version raise).
+- **Tasks:** 0 claim (353488970); 1 measure (56198a036, e64ff937c); 2 the layout's parts (04013dd56; fields added
+  or removed by 789c49788, ef1091d22, 041f5f4e9); 3 the recipe, in the private `feature/b757-displays` (not pushed):
+  TCAS 77868fe05 and 56fd0b1e9, VOR and ILS 973917282, 74e579f14, 713baedf2 and 885cf50ba, map options 8815cef7e and
+  666f933f6, map extras 36f4bf048 and 241ccca1c, map guides 6cfbc446d, c33dce9c0 and 82cf62bcb, generator version 8
+  8a651803f, with the app branch merged in between; 4 the reader: VOR, ILS and TCAS 21b3c8e55 and 789c49788, map
+  options ef1091d22, TERR, wind, runways and deceleration points 81d61ca4e, the guides 7ad16a0a8, review polish
+  f34b4e4ea; 5 rules B757-40 to B757-49 (f2c14fc05, 03e3c7a6e); 6 no picture button (the owner); the whole-plan
+  review's fixes 041f5f4e9, 0000b345c and d9398c68f; 7 the live checks and the deploy (below). Each dispatch reviewed
+  by a fresh reviewer, each fix round re-reviewed, then one whole-plan review of the app branch.
+- **Waiting on the owner:** the word to push `B757` and publish the generator-8 757 layout (and to push the private
+  branch); the in-sim checks above; whether `TRAFFIC` stays spoken (check 3).
+- **In-sim results:** none yet (the owner's flight). The controller's ground checks, 2026-11-12, parked at KSEA,
+  MSFSBA closed: the app's own reader and rows run read-only against the simulator with the generator-8 layout, each
+  compared with a capture of the EHSI:
+  - MAP at range 20 with NAV AID, APRT, WPT, TERR and TFC on: every row as the screen (the waypoints in screen order,
+    KBFI, KSEA, the tuned SEA, runway 16L, the FIX circle, traffic with its tags, `TERR` 031 red and 004 amber,
+    `EXCESS DATA`, wind dashes).
+  - VOR expanded and centered (SEA 116.80, course 187): DME 0.5, the course pointer, "deviation 0.5 dots right", TO,
+    VOR L; centered: `TA ONLY` still shown, `TRAFFIC` after the left block, no terrain picture row.
+  - ILS centered and expanded (110.30 ISNQ, course 164): DME 0.6, ILS, 110.30, the deviation and the glideslope at
+    full scale, the bearing pointer to SEA; the panel parked: `DME ---`, no deviation bar, dashes.
+  - PLAN at range 80: `TERR` 105 red, the FIX fix with its 15 NM circle and radial 300, T/C, T/D, the two
+    deceleration points, the heading bug. One miss, fixed (d9398c68f): a manually tuned VOR's course line is drawn in
+    PLAN with its station off the screen.
+  - One reading takes 4.0 ms light and 4.3 ms full, 5.8 ms with every map option on (medians of 20).
+  - Deployed build d9398c68f with the layout `…-5c145a6233d04a83.json` in `%APPDATA%` beside the generator-7 file.
 - **Changed from the plan:** from Task 1's measurements (the evidence file has each):
   - **No weather radar:** BlueBird's EHSI draws none; the WXR switch changes nothing on it (traced and captured). No
     radar rows or labels, and WXR is not among the switches that change the list.
@@ -149,4 +172,30 @@ against captures in each mode, the switches, the tuned station, the course line,
     shows when there's a step climb coming up"). The FIX page's rings, circles and radials, the off-path descent
     circles, the altitude range arc and the VNAV path deviation scale are added to this plan (a fifth optional layout
     part, `MapGuides`, through Tasks 2 to 4). No "Describe the picture" button (Task 6: no).
+  - **From the reviews and the live checks:**
+    - A part that keeps reading unexpected values is dropped alone ("<part>: not read: unexpected values") after 4
+      torn readings in a row, and comes back on its next good read; the route, Ctrl+W and the other parts keep
+      running ([B757-40], [B757-41]). While a part is out, its words are neither spoken as gone nor as new.
+    - `TCAS FAIL` hides the other words only with the gate byte set; the TCAS self-test speaks nothing; `TFC` and
+      `TEST` are never spoken (the pilot's own presses); `TCAS FAIL` is.
+    - VOR and ILS also list the ETA (expanded) and the heading bug; the bearing pointers give an angle only; in ILS
+      mode the pointer uses the panel's ILS-mode station.
+    - The layout file format lets a member marked `[LayoutFileOptional]` be absent, so files written before these
+      parts still load ([WASM-26]'s full text); a deployed older build ignores the new members of a newer file.
+    - Rules B757-40 to B757-49 in `b757-ehsi.md` (the walks, the optional parts, the loop replay, listed against
+      spoken, inputs from memory, the navaid leg position, the draw's own conditions, magnetic against true, the
+      measured signs, what a reading may read).
+    - The recipe's map option part needs its VOR and ILS part (it cross-checks the same records).
 - **Open at landing:**
+  - Not read: S/C and the FIX page's PRED ETA-ALT marker (the owner); the amber `VOR` flag and the VOR panel's power
+    (an electrical lookup, not a field: an unpowered, manually tuned VOR still lists its pointer and course line);
+    whether a tuned station is still received; the position trend vector; a FIX fix entered as a position with no
+    stored name (BlueBird builds its name).
+  - Approximations: the VNAV path deviation row gives the signed number (which sign is above the path: check 7); a
+    300 NM circle at range 10 is sampled every 54 px or so; a course line's listing in MAP under the TRU reference
+    is turned by the heading number, off by the variation; a part's torn-reading count is not reset by readings in
+    which the part is not read; staggered tears of several parts can still add up to more than the monitor's ten.
+  - Not measured live: the LOC, G/S and `TCAS FAIL` words, a resolution advisory, the off-path circles, the range
+    arc, the VNAV deviation, the wind's speed and arrow, deceleration points for an inactive route.
+  - For plan 16 (the handoff below): the changelog and guide lines; the hotkey guide is unchanged.
+  - Private repository: the toolkit document's section for these parts.
