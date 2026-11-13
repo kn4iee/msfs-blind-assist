@@ -180,6 +180,45 @@ public class A350ModuleCacheTests : IDisposable
         Assert.Equal(1, builds);
     }
 
+    // Whole-branch review (2026-11-13): the service read the 69 MB module three times (the facts, the hash, the patch), so an
+    // update landing in between cached one build's code under another's hash. The bytes are read once and hashed as read.
+    [Fact]
+    public void The_module_builds_from_the_bytes_in_hand()
+    {
+        var path = WriteModule("Community");
+        var bytes = File.ReadAllBytes(path);
+        string sha = A350ModuleCache.Sha256Of(bytes);
+        Assert.Equal(A350ModuleCache.Sha256Of(path), sha);
+        File.Delete(path);   // nothing reads the file again
+        using var engine = A350ModuleCache.CreateEngine();
+        using var m = A350ModuleCache.LoadOrBuild(engine, bytes, sha, _root, null, out bool built);
+        Assert.True(built);
+        using var again = A350ModuleCache.LoadOrBuild(engine, bytes, sha, _root, null, out bool builtAgain);
+        Assert.False(builtAgain);
+    }
+
+    // Whole-branch review: the compiled cache is loaded as machine code. It carries a checksum of its own bytes: a cache whose
+    // bytes changed on disk (a damaged file) is compiled again, never loaded.
+    [Fact]
+    public void A_cache_whose_bytes_changed_is_rebuilt()
+    {
+        var module = WriteModule("Community");
+        var sha = A350ModuleCache.Sha256Of(module);
+        var cache = A350ModuleCache.CachePath(_root, sha);
+        using var engine = A350ModuleCache.CreateEngine();
+        using (A350ModuleCache.LoadOrBuild(engine, module, sha, _root, null, out bool first))
+            Assert.True(first);
+        var bytes = File.ReadAllBytes(cache);
+        bytes[bytes.Length / 2] ^= 0xFF;
+        File.WriteAllBytes(cache, bytes);
+        int starts = 0;
+        using (A350ModuleCache.LoadOrBuild(engine, module, sha, _root, () => starts++, out bool second))
+            Assert.True(second);
+        Assert.Equal(1, starts);
+        using var third = A350ModuleCache.LoadOrBuild(engine, module, sha, _root, null, out bool rebuilt);
+        Assert.False(rebuilt);   // the rewritten cache checks out
+    }
+
     [Fact]
     public void A_corrupt_cache_is_rebuilt_and_an_old_version_cache_removed()
     {

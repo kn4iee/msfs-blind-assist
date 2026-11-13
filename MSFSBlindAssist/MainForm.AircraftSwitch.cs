@@ -705,8 +705,18 @@ public partial class MainForm
         var idents = new Aircraft.A350.Display.A350CalcStrings();
         a350DisplayService.CalcStringAnswer = idents.Answer;
         a350IdentTimer = new System.Windows.Forms.Timer { Interval = 2000 };
-        a350IdentTimer.Tick += (_, _) => simConnectManager?.RequestNavRadioInfo(d =>
-            idents.Update(d.Nav1Ident ?? "", d.Nav2Ident ?? "", d.Adf1Ident ?? "", d.Adf2Ident ?? ""));
+        // One ask out at a time (A350IdentPoll): each leaves a handler waiting for its answer, and a sim that does not answer
+        // would collect one every tick.
+        var identPoll = new Aircraft.A350.Display.A350IdentPoll();
+        a350IdentTimer.Tick += (_, _) =>
+        {
+            if (simConnectManager is not { IsConnected: true } sim || identPoll.Ask(DateTime.UtcNow) is not int ticket) return;
+            sim.RequestNavRadioInfo(d =>
+            {
+                if (identPoll.Answered(ticket))
+                    idents.Update(d.Nav1Ident ?? "", d.Nav2Ident ?? "", d.Adf1Ident ?? "", d.Adf2Ident ?? "");
+            });
+        };
         a350IdentTimer.Start();
         var service = a350DisplayService;
         a350EcamMonitor = new Aircraft.A350.Display.A350EcamMonitor(

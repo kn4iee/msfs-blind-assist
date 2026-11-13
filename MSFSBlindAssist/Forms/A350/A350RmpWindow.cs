@@ -235,10 +235,11 @@ public sealed class A350RmpWindow : Form
         return keys;
     }
 
-    /// <summary>Speaks what a page key changed, from a fresh draw (<see cref="A350Rmp.PageReadBack"/>).</summary>
-    private async Task ChangesAsync(string page)
+    /// <summary>Speaks what a page key changed on <paramref name="rmp"/>, the RMP the key went to, from a fresh draw
+    /// (<see cref="A350Rmp.PageReadBack"/>); nothing once another RMP is picked (whole-branch review 2026-11-13: it took the
+    /// RMP from the side box as it ran, and read another RMP's screen as what the key changed).</summary>
+    private async Task ChangesAsync(int rmp, string page)
     {
-        int rmp = Rmp;
         await Task.Delay(ReadBackMs);
         if (IsDisposed || rmp != Rmp || await _drawNow(rmp) is not { Ok: true } cap || IsDisposed || rmp != Rmp) return;
         _shown.Fresh(_latest(rmp));
@@ -299,7 +300,7 @@ public sealed class A350RmpWindow : Form
             Press(new[] { key }.Concat(digits), () => ReadBackAsync(rmp, at + 1));
             return true;
         }
-        Press(new[] { key }, () => ChangesAsync(key));
+        Press(new[] { key }, () => ChangesAsync(rmp, key));
         return true;
     }
 
@@ -341,13 +342,15 @@ public sealed class A350RmpWindow : Form
         {
             // The A380 window's Alt+I: the transponder IDENT, the cockpit's way (the SQWK page, then its IDENT key).
             _squawk = null;
-            Press(Abandoned().Concat(A350Rmp.IdentKeys), () => IdentAsync(Rmp));
+            int identRmp = Rmp;   // the RMP the keys go to
+            Press(Abandoned().Concat(A350Rmp.IdentKeys), () => IdentAsync(identRmp));
             return true;
         }
         if (alt && PageKeys.TryGetValue(key, out var page))
         {
             _squawk = null;
-            Press(Abandoned().Append(page), () => ChangesAsync(page));
+            int pageRmp = Rmp;   // the RMP the key goes to
+            Press(Abandoned().Append(page), () => ChangesAsync(pageRmp, page));
             return true;
         }
         if ((alt || ctrl) && key is >= Keys.D1 and <= Keys.D3)

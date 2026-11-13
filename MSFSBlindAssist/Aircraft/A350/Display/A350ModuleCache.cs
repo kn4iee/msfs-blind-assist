@@ -89,6 +89,9 @@ public static class A350ModuleCache
         return Convert.ToHexStringLower(SHA256.HashData(f));
     }
 
+    /// <summary>The hash of a module's bytes as they were read: the same as its file's.</summary>
+    public static string Sha256Of(byte[] moduleBytes) => Convert.ToHexStringLower(SHA256.HashData(moduleBytes));
+
     /// <summary>The compiled patched module: the cache when it loads, else patched, compiled and cached.
     /// <paramref name="built"/> says it was compiled now.</summary>
     public static Module LoadOrBuild(Engine engine, string modulePath, string localAppData, out bool built) =>
@@ -105,6 +108,17 @@ public static class A350ModuleCache
     /// it loads, else patched, compiled and cached; <paramref name="beforeBuild"/> runs as a compile starts, for whatever
     /// reason (no cache, a corrupt one: review 2026-10-29, a corrupt cache was compiled again in silence).</summary>
     public static Module LoadOrBuild(Engine engine, string modulePath, string sha, string localAppData, Action? beforeBuild,
+        out bool built) =>
+        LoadOrBuild(engine, () => File.ReadAllBytes(modulePath), sha, localAppData, beforeBuild, out built);
+
+    /// <summary>As above for a module whose bytes the caller has read already (whole-branch review 2026-11-13: the service read
+    /// the 69 MB file once for its facts, again for its hash and a third time here, so an update landing in between cached one
+    /// build's code under another's hash): <paramref name="sha"/> is the hash of <paramref name="moduleBytes"/>.</summary>
+    public static Module LoadOrBuild(Engine engine, byte[] moduleBytes, string sha, string localAppData, Action? beforeBuild,
+        out bool built) =>
+        LoadOrBuild(engine, () => moduleBytes, sha, localAppData, beforeBuild, out built);
+
+    private static Module LoadOrBuild(Engine engine, Func<byte[]> moduleBytes, string sha, string localAppData, Action? beforeBuild,
         out bool built)
     {
         var cache = CachePath(localAppData, sha);
@@ -122,7 +136,7 @@ public static class A350ModuleCache
             }
             beforeBuild?.Invoke();
             var sw = Stopwatch.StartNew();
-            var patched = A350ModulePatcher.Patch(File.ReadAllBytes(modulePath));
+            var patched = A350ModulePatcher.Patch(moduleBytes());
             var module = Module.FromBytes(engine, "a350", patched.Bytes);
             Log.Info("A350Display", $"module patched and compiled in {sw.ElapsedMilliseconds} ms ({Short(sha)}); allocator answered: "
                 + string.Join(", ", patched.Allocator)
@@ -133,6 +147,22 @@ public static class A350ModuleCache
         }
     }
 
+    /// <summary>The length of the checksum a cache file ends with: the SHA-256 of the compiled module before it.</summary>
+    private const int ChecksumBytes = 32;
+
+    /// <summary>The compiled module in a cache file's bytes, or null when the file is not what was written: a cache is loaded as
+    /// machine code, which Wasmtime trusts as given, so a file whose bytes changed on disk (a damaged one, or one written
+    /// before the checksum) is compiled again, never loaded (whole-branch review 2026-11-13). The checksum tells damage, not
+    /// intent: whoever can write the pilot's own files can write a matching one.</summary>
+    internal static ReadOnlySpan<byte> CheckedModule(ReadOnlySpan<byte> file)
+    {
+        if (file.Length <= ChecksumBytes) return default;
+        var module = file[..^ChecksumBytes];
+        Span<byte> hash = stackalloc byte[ChecksumBytes];
+        SHA256.HashData(module, hash);
+        return hash.SequenceEqual(file[^ChecksumBytes..]) ? module : default;
+    }
+
     private static Module? TryLoad(Engine engine, string cache, string sha)
     {
         if (!File.Exists(cache))
@@ -140,7 +170,13 @@ public static class A350ModuleCache
         var sw = Stopwatch.StartNew();
         try
         {
-            var cached = Module.Deserialize(engine, "a350", File.ReadAllBytes(cache));
+            var module = CheckedModule(File.ReadAllBytes(cache));
+            if (module.IsEmpty)
+            {
+                Log.Warn("A350Display", $"module cache does not match its checksum, rebuilding ({Short(sha)})");
+                return null;
+            }
+            var cached = Module.Deserialize(engine, "a350", module);
             Log.Info("A350Display", $"module cache loaded in {sw.ElapsedMilliseconds} ms ({Short(sha)})");
             return cached;
         }
@@ -162,7 +198,12 @@ public static class A350ModuleCache
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(cache)!);
-            File.WriteAllBytes(tmp, module.Serialize());
+            var compiled = module.Serialize();
+            using (var file = File.Create(tmp))
+            {
+                file.Write(compiled);
+                file.Write(SHA256.HashData(compiled));   // its checksum (CheckedModule)
+            }
             File.Move(tmp, cache, overwrite: true);
         }
         catch (Exception ex)

@@ -139,6 +139,7 @@ public sealed class A350ReverserCallout
             if (colour != "amber")
             {
                 _amberSince.Remove(engine);
+                _amberSaid.Remove(engine);   // an amber that comes back (hanging as it stows) is said again
                 continue;
             }
             if (!_amberSince.TryGetValue(engine, out var since))

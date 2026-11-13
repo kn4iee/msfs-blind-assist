@@ -90,13 +90,13 @@ public sealed class A350DisplayService : IDisposable
     /// <summary>The A: vars the draw code asks the sim for ("KOHLSMAN SETTING HG:1|inches of mercury").</summary>
     public Func<string, double?> AVarAnswer
     {
-        set { _aVar = value; _work.Add(() => { if (_draw != null) _draw.AVarAnswer = value; }); }
+        set { _aVar = value; TryQueue(() => { if (_draw != null) _draw.AVarAnswer = value; }); }
     }
 
     /// <summary>The strings the draw code asks through calculator code ("(A:NAV IDENT:2, String)").</summary>
     public Func<string, string?> CalcStringAnswer
     {
-        set { _calcString = value; _work.Add(() => { if (_draw != null) _draw.CalcStringAnswer = value; }); }
+        set { _calcString = value; TryQueue(() => { if (_draw != null) _draw.CalcStringAnswer = value; }); }
     }
 
     public A350DisplayService(string? localAppData = null)
@@ -130,8 +130,28 @@ public sealed class A350DisplayService : IDisposable
         if (_thread.IsAlive || _disposed) return;
         _thread.Start();
         State = A350DisplayState.Preparing;
-        _work.Add(Prepare);
+        TryQueue(Prepare);
     }
+
+    /// <summary>Queues a job for the worker; false once the service is disposed (the queue takes no more: a draw asked or an
+    /// answer set as the aircraft is switched away is dropped, never thrown at its caller).</summary>
+    private bool TryQueue(Action job)
+    {
+        try
+        {
+            _work.Add(job);
+            return true;
+        }
+        catch (InvalidOperationException) { return false; }
+    }
+
+    /// <summary>How long after a start that failed the next draw asked tries again: the module was being replaced by an update, or
+    /// the aircraft was installed since (whole-branch review 2026-11-13: a failed start was final for the session).</summary>
+    internal static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(30);
+
+    private long _failedAtTicks;        // when the last start failed (the worker writes, a draw's caller reads)
+    private int _retryQueued;           // 1 while a retry waits in the queue: one at a time, whoever asks
+    private string? _saidUnavailable;   // the reason last said, so a retry failing the same way says nothing (the worker's own)
 
     /// <summary>The module prepared and its identity when it was (<see cref="A350ModuleCache.IdentityOf"/>).</summary>
     private string? _modulePath;
@@ -139,6 +159,7 @@ public sealed class A350DisplayService : IDisposable
 
     private void Prepare()
     {
+        Interlocked.Exchange(ref _retryQueued, 0);
         try
         {
             _factsCheck = new A350FactsCheck();
@@ -147,7 +168,9 @@ public sealed class A350DisplayService : IDisposable
             _modulePath = path;
             Log.Info("A350Display", $"installed A350 package {A350ModuleCache.PackageVersionOf(path) ?? "(version not read)"}, MSFSBA's control map measured on {A350ControlMap.Load().PackageVersion}, patch version {A350ModulePatcher.Version}: {path}");
             _moduleIdentity = A350ModuleCache.IdentityOf(path);
-            var mod = A350WasmModule.Parse(File.ReadAllBytes(path));
+            // Read once: the facts, the hash and the patch are all of these bytes.
+            var bytes = File.ReadAllBytes(path);
+            var mod = A350WasmModule.Parse(bytes);
             _facts = A350ModuleFacts.From(mod);
             if (_facts.TakeoffSpeeds == null)
                 Log.Warn("A350Display", "this A350 version does not say where its FMS keeps the take-off speeds: no V1, Rotate and V2 call-outs");
@@ -156,12 +179,14 @@ public sealed class A350DisplayService : IDisposable
             var ui = A350ModulePatcher.UiDrawClassesOf(mod);
             _engine = A350ModuleCache.CreateEngine();
             // Hashed once; "getting ready" is said as a compile starts, whatever the reason (no cache, a corrupt one).
-            _module = A350ModuleCache.LoadOrBuild(_engine, path, A350ModuleCache.Sha256Of(path), _localAppData,
+            _module = A350ModuleCache.LoadOrBuild(_engine, bytes, A350ModuleCache.Sha256Of(bytes), _localAppData,
                 () => Say(A350DisplayStatus.GettingReady), out bool built);
             _draw = new A350DrawEngine(_engine, _module, ui, _facts) { AVarAnswer = _aVar, CalcStringAnswer = _calcString, RecordShapes = true };   // sprites: the SD's symbols, the PFD's tape and heading scale, the MFD's
             _reader = new A350MemoryReader(_facts.Anchors);
             State = A350DisplayState.Ready;
-            if (built) Say(A350DisplayStatus.Ready);
+            // "Ready" after a compile, and after a start that had failed and was said so.
+            if (built || _saidUnavailable != null) Say(A350DisplayStatus.Ready);
+            _saidUnavailable = null;
             Log.Info("A350Display", "ready");
         }
         catch (Exception ex)
@@ -169,10 +194,16 @@ public sealed class A350DisplayService : IDisposable
             // Any failure leaves the displays unavailable and says why (review 2026-10-29: a module that could not be
             // parsed, a truncated file mid-update, threw past the four types caught here and left "Preparing" for good).
             bool known = ex is A350ModuleException or WasmtimeException or IOException or UnauthorizedAccessException;
-            State = A350DisplayState.Unavailable;
             Reason = known ? ex.Message : "the A350's module could not be read";
-            Log.Warn("A350Display", "not available: " + (known ? ex.Message : ex.ToString()));
-            Say(A350DisplayStatus.NotAvailable(Reason));
+            Interlocked.Exchange(ref _failedAtTicks, Clock().Ticks);
+            State = A350DisplayState.Unavailable;
+            // Tried again later (RetryAfter): the same reason is said and logged once.
+            if (Reason != _saidUnavailable)
+            {
+                Log.Warn("A350Display", "not available: " + (known ? ex.Message : ex.ToString()));
+                Say(A350DisplayStatus.NotAvailable(Reason));
+                _saidUnavailable = Reason;
+            }
         }
     }
 
@@ -241,8 +272,16 @@ public sealed class A350DisplayService : IDisposable
     public Task<IReadOnlyList<A350DrawCapture>?> DrawAsync(params (string Gauge, int Index)[] gauges)
     {
         var tcs = new TaskCompletionSource<IReadOnlyList<A350DrawCapture>?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // A start that failed is tried again by the first draw asked once RetryAfter has passed: that draw answers null.
+        if (!_disposed && State == A350DisplayState.Unavailable
+            && Clock().Ticks - Interlocked.Read(ref _failedAtTicks) >= RetryAfter.Ticks
+            && Interlocked.CompareExchange(ref _retryQueued, 1, 0) == 0)
+        {
+            State = A350DisplayState.Preparing;
+            if (!TryQueue(Reprepare)) Interlocked.Exchange(ref _retryQueued, 0);
+        }
         if (_disposed || State != A350DisplayState.Ready && State != A350DisplayState.Preparing) { tcs.SetResult(null); return tcs.Task; }
-        _work.Add(() =>
+        bool queued = TryQueue(() =>
         {
             var started = DateTime.UtcNow;
             try
@@ -313,6 +352,7 @@ public sealed class A350DisplayService : IDisposable
                 tcs.SetResult(null);
             }
         });
+        if (!queued) tcs.TrySetResult(null);   // disposed meanwhile
         return tcs.Task;
     }
 
@@ -363,7 +403,7 @@ public sealed class A350DisplayService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _work.Add(() =>
+        TryQueue(() =>
         {
             _draw?.Dispose();
             _module?.Dispose();

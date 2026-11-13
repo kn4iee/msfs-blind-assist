@@ -84,3 +84,39 @@ public sealed class A350CalcStrings
     /// <summary>The string a calculator code asks for, or null when it is not one of the idents or none is read yet.</summary>
     public string? Answer(string code) => _values is { } v && v.TryGetValue(code, out var s) ? s : null;
 }
+
+/// <summary>
+/// When the idents are asked of the sim again (whole-branch review 2026-11-13): each ask leaves a handler waiting for its answer,
+/// and asked every 2 s of a sim that does not answer they collected without end. One ask is out at a time; one not answered
+/// within <see cref="GiveUpAfter"/> is given up, and its answer, should it come late, is dropped.
+/// </summary>
+public sealed class A350IdentPoll
+{
+    public static readonly TimeSpan GiveUpAfter = TimeSpan.FromSeconds(30);
+
+    private readonly object _gate = new();
+    private DateTime? _askedAt;
+    private int _ticket;
+
+    /// <summary>The ticket to ask with now, or null while an ask is still out.</summary>
+    public int? Ask(DateTime now)
+    {
+        lock (_gate)
+        {
+            if (_askedAt is { } at && now - at < GiveUpAfter) return null;
+            _askedAt = now;
+            return ++_ticket;
+        }
+    }
+
+    /// <summary>Whether <paramref name="ticket"/>'s answer is the one waited for; it then lets the next ask go.</summary>
+    public bool Answered(int ticket)
+    {
+        lock (_gate)
+        {
+            if (ticket != _ticket) return false;
+            _askedAt = null;
+            return true;
+        }
+    }
+}

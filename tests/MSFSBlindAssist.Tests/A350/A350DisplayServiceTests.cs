@@ -99,6 +99,57 @@ public class A350DisplayServicePrepareTests : IDisposable
             Assert.Contains(spoken, l => l.StartsWith("A350 displays not available: ", StringComparison.Ordinal));
     }
 
+    // Whole-branch review (2026-11-13): a start that failed (the module being replaced by an update as MSFSBA started) was final
+    // for the session: the displays stayed dead until an aircraft switch. It is tried again at a draw asked once RetryAfter has
+    // passed; the same reason is said once, and "ready" when it comes good.
+    [Fact]
+    public async Task A_start_that_failed_is_tried_again_and_comes_good()
+    {
+        var truncated = new byte[] { 0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, 0x01, 0xFF, 0xFF, 0xFF, 0x0F, 0x60 };
+        string path = Module(truncated);
+        var now = new DateTime(2026, 11, 13, 12, 0, 0, DateTimeKind.Utc);
+        var spoken = new List<string>();
+        using var service = new A350DisplayService(_root) { FindModule = () => path, Clock = () => now };
+        service.Spoken += line => { lock (spoken) spoken.Add(line); };
+        service.Start();
+        WaitPrepared(service);
+        Assert.Equal(A350DisplayState.Unavailable, service.State);
+
+        Assert.Null(await service.DrawAsync(("CTR", 0)));   // not yet: a draw is asked twice a second
+        Assert.Equal(A350DisplayState.Unavailable, service.State);
+
+        now += A350DisplayService.RetryAfter;
+        Assert.Null(await service.DrawAsync(("CTR", 0)));   // tried again, and fails the same way: said once
+        WaitPrepared(service);
+        Assert.Equal(A350DisplayState.Unavailable, service.State);
+
+        File.WriteAllBytes(path, A350DrawEngineTests.Module());   // the update has finished: a module that prepares in full
+        now += A350DisplayService.RetryAfter;
+        await service.DrawAsync(("CTR", 0));
+        WaitPrepared(service);
+        Assert.True(service.State == A350DisplayState.Ready, "not ready: " + service.Reason);
+        var until = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < until) { lock (spoken) if (spoken.Contains(A350DisplayStatus.Ready)) break; Thread.Sleep(20); }
+        lock (spoken)
+        {
+            Assert.Single(spoken, l => l.StartsWith("A350 displays not available: ", StringComparison.Ordinal));
+            Assert.Contains(A350DisplayStatus.Ready, spoken);
+        }
+    }
+
+    // Whole-branch review: an answer set, or a draw asked, as the service is disposed threw out of the caller (the queue takes
+    // no more). It is dropped.
+    [Fact]
+    public async Task What_is_asked_of_a_disposed_service_is_dropped()
+    {
+        var service = new A350DisplayService(_root) { FindModule = () => Module(A350ModulePatcherTests.Sample()) };
+        service.Start();
+        service.Dispose();
+        service.AVarAnswer = _ => 1;
+        service.CalcStringAnswer = _ => "X";
+        Assert.Null(await service.DrawAsync(("CTR", 0)));
+    }
+
     // M2: a first compile that finished after the pilot switched aircraft said "A350 displays ready" over the next one.
     // Nothing is said once the service is disposed.
     [Fact]

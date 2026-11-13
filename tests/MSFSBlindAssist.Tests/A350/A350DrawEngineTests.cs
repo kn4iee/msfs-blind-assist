@@ -18,7 +18,7 @@ public class A350DrawEngineTests
     /// <summary>The functions a test's own prelude calls (the import, nvgText, nvgScissor, then the list in Module).</summary>
     internal const int NvgSaveFunction = 4, NvgRestoreFunction = 5, NvgResetTransformFunction = 9, NvgTransformFunction = 11;
 
-    private static byte[] Module(bool firstDrawPartial = false, bool clip = false, byte[]? prelude = null)
+    internal static byte[] Module(bool firstDrawPartial = false, bool clip = false, byte[]? prelude = null)
     {
         var m = new WasmTestModule();
         int t6 = m.AddType(new[] { I32, I32, I32, I32, I32, I32 }, new[] { I32 });

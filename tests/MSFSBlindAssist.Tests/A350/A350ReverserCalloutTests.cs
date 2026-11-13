@@ -73,6 +73,21 @@ public class A350ReverserCalloutTests
         Assert.Equal(new[] { "Reverse 2 amber" }, _said.Where(s => s.StartsWith("Reverse", StringComparison.Ordinal)));
     }
 
+    // Whole-branch review (2026-11-13): an amber once said stayed remembered until no reverser showed at all, so a second amber
+    // in the same deployment (a reverser hanging as it stows) was never said.
+    [Fact]
+    public void An_amber_that_comes_back_after_green_is_said_again()
+    {
+        var m = Monitor();
+        Observe(m, Deployed(amber: 1));
+        Observe(m, Deployed(amber: 1), 3.5);
+        Observe(m, Deployed(), 1);
+        Observe(m, Deployed(), 0.5);
+        Observe(m, Deployed(amber: 1), 1);
+        Observe(m, Deployed(amber: 1), 3.5);
+        Assert.Equal(2, _said.Count(s => s == "Reverse 1 amber"));
+    }
+
     [Fact]
     public void An_amber_that_turns_green_within_3_s_says_reverse_green_only()
     {
