@@ -176,4 +176,73 @@ public class A350NdWindowEfisTests
         for (int i = 0; i < 20 && drawn < 2; i++) await Task.Yield();
         Assert.Equal(2, drawn);
     }
+
+    private static Task Run(A350NdWindow form, string method) =>
+        (Task)typeof(A350NdWindow).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(form, null)!;
+
+    // Re-review M2: a BTV sequence works on the side it started on. A side switched while it runs (Clear BTV takes seconds) never has
+    // its knobs turned: before, the steps after the switch took the first officer's ND and turned its knobs to the zoom.
+    [Fact]
+    public async Task A_btv_sequence_keeps_the_side_it_started_on()
+    {
+        var stand = A350Fixtures.Capture("efis0_fd_stand.json");   // no airport map: the LANDING tab never opens, the ND is put back
+        var knobs = new List<int>();
+        A350NdWindow? form = null;
+        form = new A350NdWindow(_ => stand,
+            _ =>
+            {
+                form!.Controls.OfType<ComboBox>().Single(c => c.AccessibleName == "Side").SelectedIndex = 1;
+                return Task.FromResult<A350DrawCapture?>(stand);
+            },
+            _ => false, new A350NdInput(_ => { }, (_, _) => Task.CompletedTask, (_, _, _, _) => Task.FromResult(true), null), new SpeechCapture(),
+            (side, _, _) => knobs.Add(side), (_, _) => 3, null, new Rows()) { Wait = _ => Task.CompletedTask };
+        try
+        {
+            await Run(form, "ClearBtvAsync");
+            Assert.NotEmpty(knobs);
+            Assert.All(knobs, side => Assert.Equal(0, side));
+        }
+        finally { form.Dispose(); }
+    }
+
+    // Review m2: a draw that fails says nothing of what the ND shows. A step looking without waiting tries again rather than take a line
+    // for gone: with the functions panel open, one failed draw made Clear BTV click the Functions button (closing the panel) first.
+    [Fact]
+    public async Task A_failed_draw_is_never_taken_for_a_line_gone()
+    {
+        var landing = A350Fixtures.Capture("efis0_anf_landing.json");
+        var torn = landing with { Error = "torn" };
+        int draws = 0;
+        var clicks = new List<(float X, float Y)>();
+        using var form = new A350NdWindow(_ => landing, _ => Task.FromResult<A350DrawCapture?>(++draws == 2 ? torn : landing), _ => false,
+            new A350NdInput(_ => { }, (_, _) => Task.CompletedTask, (_, x, y, _) => { clicks.Add((x, y)); return Task.FromResult(true); }, null),
+            new SpeechCapture(), (_, _, _) => { }, (_, mode) => mode ? A350BtvArming.PlanMode : A350BtvArming.ZoomRange, null, new Rows())
+        {
+            Wait = _ => Task.CompletedTask,
+        };
+        await Run(form, "ClearBtvAsync");
+        var field = A350NdPage.Read(landing, 0, A350BtvArming.PlanMode, A350BtvArming.ZoomRange)
+            .First(l => l.Spoken.StartsWith("BTV EXIT AT:", StringComparison.Ordinal));
+        Assert.Equal((field.ClickX, field.ClickY), clicks[0]);
+    }
+
+    // Re-review M2: a step finds what it clicks in a fresh draw only. With the fresh draw failing, the monitor's draw from before the step
+    // (its LANDING tab, its BTV EXIT AT field) is never clicked: the step fails as the map's tab not opening.
+    [Fact]
+    public async Task A_btv_step_never_clicks_a_draw_from_before_it()
+    {
+        var landing = A350Fixtures.Capture("efis0_anf_landing.json");
+        var torn = landing with { Error = "torn" };
+        var clicks = new List<int>();
+        var speech = new SpeechCapture();
+        using var form = new A350NdWindow(_ => landing, _ => Task.FromResult<A350DrawCapture?>(torn), _ => false,
+            new A350NdInput(_ => { }, (_, _) => Task.CompletedTask, (side, _, _, _) => { clicks.Add(side); return Task.FromResult(true); }, null),
+            speech, (_, _, _) => { }, (_, mode) => mode ? A350BtvArming.PlanMode : A350BtvArming.ZoomRange, null, new Rows())
+        {
+            Wait = _ => Task.CompletedTask,
+        };
+        await Run(form, "ClearBtvAsync");
+        Assert.Empty(clicks);
+        Assert.Contains(speech.Interrupts, s => s.StartsWith("The map's LANDING tab did not open.", StringComparison.Ordinal));
+    }
 }

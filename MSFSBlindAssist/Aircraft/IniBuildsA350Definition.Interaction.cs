@@ -35,8 +35,11 @@ public partial class IniBuildsA350Definition
     private int _pickSeq;
 
     public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
-        SimConnectManager simConnect, ScreenReaderAnnouncer announcer) =>
-        WriteRow(varKey, value, simConnect, announcer) != A350WriteOutcome.NoSuchRow;   // no row is a base variable: MainForm's generic path
+        SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        if (IsEcamKey(varKey)) SdKeyPressed();   // the SD's page may change: the display windows' reader holds STATUS (re-review M1)
+        return WriteRow(varKey, value, simConnect, announcer) != A350WriteOutcome.NoSuchRow;   // no row is a base variable: MainForm's generic path
+    }
 
     /// <summary>A panel row's write and what it came to; a refusal is spoken, and is a claimed row to MainForm but no write to the First
     /// Officer (<see cref="ApplyForFirstOfficer"/>).</summary>

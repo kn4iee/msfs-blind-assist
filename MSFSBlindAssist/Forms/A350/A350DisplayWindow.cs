@@ -8,7 +8,12 @@ namespace MSFSBlindAssist.Forms.A350;
 /// which keeps the display drawn every tick while a window reads it), a fresh draw after a press, whether the side's screen is dark, the
 /// display's lines from a draw, and why the display is not there at all (an option not fitted), or null.</summary>
 public sealed record A350DisplayFeed(Func<int, A350DrawCapture?> Latest, Func<int, Task<A350DrawCapture?>> DrawNow, Func<int, bool> Dark,
-    Func<A350DrawCapture, int, IReadOnlyList<string>> Read, Func<int, string?>? Unavailable = null);
+    Func<A350DrawCapture, int, IReadOnlyList<string>> Read, Func<int, string?>? Unavailable = null)
+{
+    /// <summary>Why the draw shown cannot be read (re-review M3-M5: the CTR's draw showing no power, the SD's naming no page with the page
+    /// variable unread), judged on that draw, a press's fresh draw included; null to read it.</summary>
+    public Func<A350DrawCapture, int, string?>? Unread { get; init; }
+}
 
 /// <summary>
 /// The live window every A350 display key opens ("A350 PFD", "A350 SD" and the rest; plan 26), the Fenix's display window
@@ -26,7 +31,8 @@ public sealed record A350DisplayFeed(Func<int, A350DrawCapture?> Latest, Func<in
 /// it never replaces (<see cref="A350FreshDraws"/>, per side: a draw asked for one side is never shown for the other, and a side
 /// switched back to shows its own). Presses close together read one fresh draw, after the last, and one draw at a time: each is a full
 /// memory copy on the reader's one queue, where the background's E/WD and FMA reads wait too (final review); a draw that fails costs
-/// only itself. A display that is not there (an option not fitted) is never asked of the monitor.</para>
+/// only itself. A display that is not there (an option not fitted) is never asked of the monitor, nor drawn. Why a draw cannot be read
+/// (<see cref="A350DisplayFeed.Unread"/>) is judged on the draw shown, a press's fresh draw included.</para>
 /// <para>One class for each display: windows are tracked one for each type (<c>ShowTrackedWindow</c>), so each display's window derives
 /// from this one in a class of its own. Not abstract only so that a test can build it.</para>
 /// </remarks>
@@ -85,11 +91,16 @@ public class A350DisplayWindow : Form
             AddControlAfterList(_side);
         }
 
-        FormClosing += (_, _) =>
-        {
-            _timer.Stop();
-            if (_previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
-        };
+    }
+
+    /// <summary>Closing: the timer stops and the window the pilot came from comes back, unless a handler cancelled the close (re-review
+    /// M7, review m4: judged after every handler, as the ND window does).</summary>
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        if (e.Cancel) return;
+        _timer.Stop();
+        if (_previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
     }
 
     /// <summary>The side shown: 0 the captain's, 1 the first officer's.</summary>
@@ -166,7 +177,8 @@ public class A350DisplayWindow : Form
                 if (fresh is { Ok: true })
                     _draws.Took(drawnFor ?? side, fresh, _feed.Latest(drawnFor ?? side));   // kept for its own side, shown only there
                 var capture = _draws.ToShow(side, _feed.Latest(side));
-                rows = A350DisplayRows.For(_display, capture, _feed.Dark(side), c => _feed.Read(c, side), Report);
+                rows = A350DisplayRows.For(_display, capture, _feed.Dark(side), c => _feed.Read(c, side), Report,
+                    unread: _feed.Unread is { } unread ? c => unread(c, side) : null);
             }
         }
         catch (Exception ex)
@@ -215,7 +227,8 @@ public class A350DisplayWindow : Form
                 _drawAgain = false;
                 try
                 {
-                    var fresh = await _feed.DrawNow(side);
+                    // A display not there is never drawn either: each draw is a full memory copy (re-review M3).
+                    var fresh = _feed.Unavailable?.Invoke(side) is null ? await _feed.DrawNow(side) : null;
                     if (IsDisposed) return;
                     RefreshNow(fresh, side);
                 }

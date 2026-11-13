@@ -5,12 +5,19 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// `RowToFollow`): what the display shows, one row each, or one status row "&lt;display&gt;: not available, &lt;reason&gt;" in place of
 /// the content, so the list never holds a stale row and never an empty one. The reasons: "display off" (its screen is dark, whatever
 /// the last draw held), "not read yet" (no draw young enough), "nothing shown" (a draw with nothing on it) and "read failed" (a reader
-/// that threw; it costs that window only, reported once per distinct failure by the caller's report); before them all, a display the
-/// aircraft is built without says why (the SND, an OIS option: "not fitted (an OIS option)").
+/// that threw; it costs that window only, reported once per distinct failure by the caller's report), and a draw's own reason it cannot
+/// be read, judged on the draw shown (the CTR's showing no power is "display off", the SD's naming no page "not read yet"); before them
+/// all, a display the aircraft is built without says why (the SND, an OIS option: "not fitted (an OIS option)").
 /// </summary>
 public static class A350DisplayRows
 {
     private static string StatusStart(string display) => display + ": not available, ";
+
+    /// <summary>The reason for a display whose screen is dark.</summary>
+    public const string DisplayOff = "display off";
+
+    /// <summary>The reason for a display with no draw young enough, or a draw that does not say what it shows.</summary>
+    public const string NotReadYet = "not read yet";
 
     /// <summary>The display's one status row, "&lt;display&gt;: not available, &lt;reason&gt;".</summary>
     public static IReadOnlyList<string> Status(string display, string reason) => new[] { StatusStart(display) + reason };
@@ -19,15 +26,19 @@ public static class A350DisplayRows
     /// <param name="read">The display's lines from a draw; it runs on the UI thread and does no I/O.</param>
     /// <param name="report">Where a reader that throws is reported, as "read failed: &lt;type&gt;: &lt;message&gt;".</param>
     /// <param name="unavailable">Why the display is not there at all, or null.</param>
+    /// <param name="unread">Why <paramref name="capture"/> itself cannot be read (re-review M3-M5: the CTR's draw showing no power, the
+    /// SD's naming no page with the page variable unread), judged on the draw shown, or null; a judge that throws is a read that failed.</param>
     public static IReadOnlyList<string> For(string display, A350DrawCapture? capture, bool dark,
-        Func<A350DrawCapture, IReadOnlyList<string>> read, Action<string>? report = null, string? unavailable = null)
+        Func<A350DrawCapture, IReadOnlyList<string>> read, Action<string>? report = null, string? unavailable = null,
+        Func<A350DrawCapture, string?>? unread = null)
     {
         if (unavailable is not null) return Status(display, unavailable);
-        if (dark) return Status(display, "display off");
-        if (capture is null) return Status(display, "not read yet");
+        if (dark) return Status(display, DisplayOff);
+        if (capture is null) return Status(display, NotReadYet);
         IReadOnlyList<string> rows;
         try
         {
+            if (unread?.Invoke(capture) is { } why) return Status(display, why);
             rows = read(capture);
         }
         catch (Exception ex)

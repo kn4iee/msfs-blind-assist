@@ -94,7 +94,7 @@ public sealed class A350NdWindow : Form
         // now; Clear BTV and Arm runway take the aircraft's own steps and put the ND back.
         var btv = new FlowLayoutPanel { AutoSize = true, WrapContents = true, AccessibleName = "BTV controls" };
         _readExits = new Button { Text = "Read exits", AutoSize = true, TabIndex = 0 };
-        _readExits.Click += async (s, e) => await ReadExitsAsync();
+        _readExits.Click += async (s, e) => await ReadExitsAsync(Side);
         _exits = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "BTV exit", Width = 200, TabIndex = 1 };
         _armExit = new Button { Text = "Arm exit", AutoSize = true, TabIndex = 2 };
         _armExit.Click += async (s, e) => await ArmExitAsync();
@@ -104,8 +104,10 @@ public sealed class A350NdWindow : Form
         _armRunway = new Button { Text = "Arm runway", AutoSize = true, TabIndex = 5 };
         _armRunway.Click += async (s, e) =>
         {
+            int side = Side;
             if (_runways.SelectedItem is string rwy)
-                await RunAsync(A350BtvArming.RunwaySteps(rwy, KnobNow(true), KnobNow(false)), $"Landing runway {rwy} set." + A350BtvArming.Back(KnobNow(true), KnobNow(false)));
+                await RunAsync(side, A350BtvArming.RunwaySteps(rwy, KnobNow(side, true), KnobNow(side, false)),
+                    $"Landing runway {rwy} set." + A350BtvArming.Back(KnobNow(side, true), KnobNow(side, false)));
         };
         _btvStatus = new TextBox { ReadOnly = true, AccessibleName = "BTV", Width = 300, TabIndex = 6 };
         btv.Controls.AddRange(new Control[] { _readExits, _exits, _armExit, _clearBtv, _runways, _armRunway, _btvStatus });
@@ -281,57 +283,66 @@ public sealed class A350NdWindow : Form
         return $"BTV {exit}; autobrake {brake ?? "off"}";
     }
 
-    private int KnobNow(bool mode) => _knob(Side, mode) is double v ? (int)v : -1;
+    // BTV's sequences work on the side they started on, whatever the side box says meanwhile (re-review M2: a side switched while Clear
+    // BTV ran had the rest of its steps click and turn the knobs of the other side's ND): each takes the side once and passes it down.
 
-    /// <summary>A fresh read of the side's ND as lines, with the knobs as they stand.</summary>
-    private async Task<(A350DrawCapture? Cap, IReadOnlyList<MfdLine> Lines)> ReadNowAsync()
+    private int KnobNow(int side, bool mode) => _knob(side, mode) is double v ? (int)v : -1;
+
+    /// <summary>A fresh read of <paramref name="side"/>'s ND as lines, with the knobs as they stand; a draw that fails gives the monitor's
+    /// latest, unless <paramref name="freshOnly"/> (what is clicked is never found in a draw from before the step, re-review M2).</summary>
+    private async Task<(A350DrawCapture? Cap, IReadOnlyList<MfdLine> Lines)> ReadNowAsync(int side, bool freshOnly = false)
     {
-        var cap = await _drawNow(Side);
-        if (cap is not { Ok: true }) cap = _latest(Side);
-        return (cap, cap == null ? Array.Empty<MfdLine>() : A350NdPage.Read(cap, Side, KnobNow(true), KnobNow(false)));
+        var cap = await _drawNow(side);
+        if (cap is not { Ok: true }) cap = freshOnly ? null : _latest(side);
+        return (cap, cap == null ? Array.Empty<MfdLine>() : A350NdPage.Read(cap, side, KnobNow(side, true), KnobNow(side, false)));
     }
 
-    /// <summary>Waits up to <paramref name="ms"/> for a line the test takes, reading the ND afresh each half second.</summary>
-    private async Task<MfdLine?> FindAsync(Func<MfdLine, bool> test, int ms = 4000)
+    /// <summary>How long a look that does not wait still tries when its draws fail: a failed draw says nothing of what the ND shows.</summary>
+    private const int FailedDrawRetryMs = 1500;
+
+    /// <summary>Waits up to <paramref name="ms"/> for a line the test takes, reading the ND afresh each half second; a line is taken for
+    /// gone only from a draw that read, never from one that failed (review m2: with the functions panel open, one failed draw had Clear
+    /// BTV click the Functions button, closing it), so a look that does not wait tries again while its draws fail, a moment at most.</summary>
+    private async Task<MfdLine?> FindAsync(int side, Func<MfdLine, bool> test, int ms = 4000)
     {
         for (int waited = 0; ; waited += 500)
         {
-            var (_, lines) = await ReadNowAsync();
+            var (cap, lines) = await ReadNowAsync(side, freshOnly: true);
             if (lines.FirstOrDefault(test) is { } found) return found;
-            if (waited >= ms) return null;
-            await Task.Delay(500);
+            if (waited >= (cap == null ? Math.Max(ms, FailedDrawRetryMs) : ms)) return null;
+            await Wait(500);
         }
     }
 
-    private async Task<bool> ClickAsync(MfdLine line, string? typed = null) =>
-        await _input.ActAsync(Side, line.ClickX, line.ClickY, typed) == MfdAction.Done;
+    private async Task<bool> ClickAsync(int side, MfdLine line, string? typed = null) =>
+        await _input.ActAsync(side, line.ClickX, line.ClickY, typed) == MfdAction.Done;
 
     /// <summary>The exits of the landing runway, from the airport map zoomed for the read (said before the knobs move) and the ND put
     /// back unless <paramref name="stayZoomed"/> (Arm exit's own steps put it back): fills the two lists and, unless staying zoomed, says
     /// them. Null when the ND was busy.</summary>
-    private async Task<A350BtvArming.ExitsRead?> ReadExitsAsync(bool stayZoomed = false)
+    private async Task<A350BtvArming.ExitsRead?> ReadExitsAsync(int side, bool stayZoomed = false)
     {
         if (_arming || _input.Busy) { _announcer.AnnounceImmediate("The ND is still busy; press it again"); return null; }
-        int mode = KnobNow(true), range = KnobNow(false);
+        int mode = KnobNow(side, true), range = KnobNow(side, false);
         _arming = true;
         try
         {
             bool move = (mode, range) != (A350BtvArming.PlanMode, A350BtvArming.ZoomRange);
             _announcer.AnnounceImmediate(A350BtvArming.ReadingSentence(mode, range));
-            if (move) await SetEfisAsync(A350BtvArming.PlanMode, A350BtvArming.ZoomRange);
+            if (move) await SetEfisAsync(side, A350BtvArming.PlanMode, A350BtvArming.ZoomRange);
             // The airport's name comes before the exits are placed along the runway (its scale): wait for them a while.
             A350DrawCapture? cap = null;
             IReadOnlyList<MfdLine> lines = Array.Empty<MfdLine>();
             for (int waited = 0; waited <= 6000; waited += 500)
             {
-                (cap, lines) = await ReadNowAsync();
-                if (cap != null && A350BtvArming.ExitsOf(cap, Side).Exits.Count > 0) break;
-                await Task.Delay(500);
+                (cap, lines) = await ReadNowAsync(side);
+                if (cap != null && A350BtvArming.ExitsOf(cap, side).Exits.Count > 0) break;
+                await Wait(500);
             }
-            _exitsRead = cap == null ? new A350BtvArming.ExitsRead(null, Array.Empty<A350BtvArming.Exit>()) : A350BtvArming.ExitsOf(cap, Side);
+            _exitsRead = cap == null ? new A350BtvArming.ExitsRead(null, Array.Empty<A350BtvArming.Exit>()) : A350BtvArming.ExitsOf(cap, side);
             var runways = lines.Select(l => System.Text.RegularExpressions.Regex.Match(l.Spoken, @"^Runway (\d{2}[LCR]?)\b")).Where(m => m.Success)
                 .Select(m => m.Groups[1].Value).Distinct().ToList();
-            if (move && !stayZoomed) await SetEfisAsync(mode, range);
+            if (move && !stayZoomed) await SetEfisAsync(side, mode, range);
             _exits.Items.Clear();
             foreach (var e in _exitsRead?.Exits ?? Array.Empty<A350BtvArming.Exit>()) _exits.Items.Add($"{e.Name}, {e.Metres} m");
             if (_exits.Items.Count > 0) _exits.SelectedIndex = 0;
@@ -347,29 +358,30 @@ public sealed class A350NdWindow : Form
 
     private async Task ArmExitAsync()
     {
+        int side = Side;
         if (_exitsRead?.Runway is not { } runway || _exits.SelectedIndex < 0 || _exits.SelectedIndex >= _exitsRead.Exits.Count)
         {
-            if (await ReadExitsAsync() is { Exits.Count: > 0 }) _announcer.Announce("Choose an exit, then Arm exit.");
+            if (await ReadExitsAsync(side) is { Exits.Count: > 0 }) _announcer.Announce("Choose an exit, then Arm exit.");
             return;
         }
         var chosen = _exitsRead.Exits[_exits.SelectedIndex];
-        int mode = KnobNow(true), range = KnobNow(false);
+        int mode = KnobNow(side, true), range = KnobNow(side, false);
         // Read again first, on the zoom the arming uses: the list may be from another airport or runway (review 2026-11-04).
-        if (await ReadExitsAsync(stayZoomed: true) is not { } fresh) return;
+        if (await ReadExitsAsync(side, stayZoomed: true) is not { } fresh) return;
         var (exit, refusal) = A350BtvArming.Recheck(chosen, runway, fresh);
         if (exit == null)
         {
-            await SetEfisAsync(mode, range);
+            await SetEfisAsync(side, mode, range);
             _announcer.AnnounceImmediate(refusal + A350BtvArming.Back(mode, range));
             return;
         }
-        var (cap, _) = await ReadNowAsync();
-        string? brake = cap == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(cap, Side));
-        if (!await RunAsync(A350BtvArming.ArmSteps(runway, exit, mode, range, brake), null)) return;
+        var (cap, _) = await ReadNowAsync(side);
+        string? brake = cap == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(cap, side));
+        if (!await RunAsync(side, A350BtvArming.ArmSteps(runway, exit, mode, range, brake), null)) return;
         // Read back what the aircraft shows: BTV on the FMA.
-        await Task.Delay(1500);
-        var (after, _) = await ReadNowAsync();
-        string? now = after == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(after, Side));
+        await Wait(1500);
+        var (after, _) = await ReadNowAsync(side);
+        string? now = after == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(after, side));
         _announcer.AnnounceImmediate(now == "BTV" ? A350BtvArming.ArmedSentence(exit, mode, range)
             : $"Exit {exit.Name} set, but the FMA shows {(now ?? "no autobrake")}, not BTV." + A350BtvArming.Back(mode, range) + A350BtvArming.MfdOnFlightPlan);
     }
@@ -377,29 +389,30 @@ public sealed class A350NdWindow : Form
     /// <summary>Clear BTV, then what the aircraft shows: BTV off the FMA, and whether the exit still stands on the map.</summary>
     private async Task ClearBtvAsync()
     {
-        var (cap, _) = await ReadNowAsync();
-        string? brake = cap == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(cap, Side));
-        int mode = KnobNow(true), range = KnobNow(false);
-        if (!await RunAsync(A350BtvArming.ClearSteps(mode, range, brake), null)) return;
-        await Task.Delay(1500);
-        var (after, _) = await ReadNowAsync();
-        string? now = after == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(after, Side));
+        int side = Side;
+        var (cap, _) = await ReadNowAsync(side);
+        string? brake = cap == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(cap, side));
+        int mode = KnobNow(side, true), range = KnobNow(side, false);
+        if (!await RunAsync(side, A350BtvArming.ClearSteps(mode, range, brake), null)) return;
+        await Wait(1500);
+        var (after, _) = await ReadNowAsync(side);
+        string? now = after == null ? null : A350BtvArming.AutobrakeOf(A350Pfd.Read(after, side));
         _announcer.AnnounceImmediate((now == "BTV" ? "BTV still armed." : "BTV off.") + A350BtvArming.Back(mode, range));
     }
 
-    private async Task SetEfisAsync(int mode, int range)
+    private async Task SetEfisAsync(int side, int mode, int range)
     {
         // One knob at a time, each read back: written together, the range stopped a step short (live 2026-11-03).
-        for (int attempt = 0; attempt < 3 && KnobNow(true) != mode; attempt++) { _setKnob(Side, true, mode); await Task.Delay(700); }
-        for (int attempt = 0; attempt < 3 && KnobNow(false) != range; attempt++) { _setKnob(Side, false, range); await Task.Delay(700); }
+        for (int attempt = 0; attempt < 3 && KnobNow(side, true) != mode; attempt++) { _setKnob(side, true, mode); await Wait(700); }
+        for (int attempt = 0; attempt < 3 && KnobNow(side, false) != range; attempt++) { _setKnob(side, false, range); await Wait(700); }
         // On the zoom the airport map loads ("ARPT MAP LOADING") before its names are drawn.
         if ((mode, range) == (A350BtvArming.PlanMode, A350BtvArming.ZoomRange))
-            await FindAsync(l => l.Spoken.StartsWith("Airport: ", StringComparison.Ordinal), 8000);
+            await FindAsync(side, l => l.Spoken.StartsWith("Airport: ", StringComparison.Ordinal), 8000);
     }
 
     /// <summary>Runs the steps against fresh reads, saying a step that fails and putting the ND back even then; says
     /// <paramref name="done"/> at the end when given. False when a step failed.</summary>
-    private async Task<bool> RunAsync(IReadOnlyList<A350BtvArming.Step> steps, string? done)
+    private async Task<bool> RunAsync(int side, IReadOnlyList<A350BtvArming.Step> steps, string? done)
     {
         if (_arming || _input.Busy) { _announcer.AnnounceImmediate("The ND is still busy; press it again"); return false; }
         _arming = true;
@@ -408,13 +421,13 @@ public sealed class A350NdWindow : Form
         {
             foreach (var step in steps)
             {
-                if (await DoAsync(step) is { } failed)
+                if (await DoAsync(side, step) is { } failed)
                 {
-                    if (back != null) await SetEfisAsync(back.Mode, back.Range);
+                    if (back != null) await SetEfisAsync(side, back.Mode, back.Range);
                     _announcer.AnnounceImmediate(failed + A350BtvArming.Back(back?.Mode ?? -1, back?.Range ?? -1));
                     return false;
                 }
-                await Task.Delay(600);
+                await Wait(600);
             }
             if (done != null) _announcer.AnnounceImmediate(done);
             return true;
@@ -427,55 +440,55 @@ public sealed class A350NdWindow : Form
     }
 
     /// <summary>One step, as the pilot's clicks take it; the reason it could not be taken, or null.</summary>
-    private async Task<string?> DoAsync(A350BtvArming.Step step)
+    private async Task<string?> DoAsync(int side, A350BtvArming.Step step)
     {
         switch (step)
         {
             case A350BtvArming.SetEfis s:
-                await SetEfisAsync(s.Mode, s.Range);
+                await SetEfisAsync(side, s.Mode, s.Range);
                 return null;
             case A350BtvArming.SetLandingRunway r:
-                var ident = await FindAsync(l => l.Kind == "map" && System.Text.RegularExpressions.Regex.IsMatch(l.Spoken, $@"^Runway {System.Text.RegularExpressions.Regex.Escape(r.Runway)}[ ,]"));
+                var ident = await FindAsync(side, l => l.Kind == "map" && System.Text.RegularExpressions.Regex.IsMatch(l.Spoken, $@"^Runway {System.Text.RegularExpressions.Regex.Escape(r.Runway)}[ ,]"));
                 if (ident == null) return $"Runway {r.Runway} is not on the airport map.";
-                if (!await ClickAsync(ident)) return "The ND cannot be reached.";
-                var set = await FindAsync(l => l.Kind == "menu" && l.Spoken.StartsWith("SET LDG RWY", StringComparison.Ordinal), 3000);
+                if (!await ClickAsync(side, ident)) return "The ND cannot be reached.";
+                var set = await FindAsync(side, l => l.Kind == "menu" && l.Spoken.StartsWith("SET LDG RWY", StringComparison.Ordinal), 3000);
                 if (set == null || set.Spoken.EndsWith(", grey", StringComparison.Ordinal))
                 {
                     // A click with a menu open only closes it (live 2026-10-30).
-                    if (set != null) await ClickAsync(set with { ClickX = 300, ClickY = 860 });
+                    if (set != null) await ClickAsync(side, set with { ClickX = 300, ClickY = 860 });
                     return "SET LDG RWY is not available: is the airport in the flight plan?";
                 }
-                return await ClickAsync(set) ? null : "The ND cannot be reached.";
+                return await ClickAsync(side, set) ? null : "The ND cannot be reached.";
             case A350BtvArming.OpenLandingTab:
-                if (await FindAsync(l => l.Kind == "tab" && l.Spoken.StartsWith("LANDING tab", StringComparison.Ordinal), 0) == null
-                    && await FindAsync(l => l.Spoken == "Functions button", 2000) is { } functions)
-                    await ClickAsync(functions);
-                var tab = await FindAsync(l => l.Kind == "tab" && l.Spoken.StartsWith("LANDING tab", StringComparison.Ordinal), 3000);
+                if (await FindAsync(side, l => l.Kind == "tab" && l.Spoken.StartsWith("LANDING tab", StringComparison.Ordinal), 0) == null
+                    && await FindAsync(side, l => l.Spoken == "Functions button", 2000) is { } functions)
+                    await ClickAsync(side, functions);
+                var tab = await FindAsync(side, l => l.Kind == "tab" && l.Spoken.StartsWith("LANDING tab", StringComparison.Ordinal), 3000);
                 if (tab == null) return "The map's LANDING tab did not open.";
-                return tab.Spoken.EndsWith(", selected", StringComparison.Ordinal) || await ClickAsync(tab) ? null : "The ND cannot be reached.";
+                return tab.Spoken.EndsWith(", selected", StringComparison.Ordinal) || await ClickAsync(side, tab) ? null : "The ND cannot be reached.";
             case A350BtvArming.TypeExit t:
-                var field = await FindAsync(l => l.Kind == "field" && l.Spoken.StartsWith("BTV EXIT AT:", StringComparison.Ordinal), 3000);
+                var field = await FindAsync(side, l => l.Kind == "field" && l.Spoken.StartsWith("BTV EXIT AT:", StringComparison.Ordinal), 3000);
                 if (field == null || field.Spoken.EndsWith(", grey", StringComparison.Ordinal))
                     return "BTV EXIT AT is not available: set the landing runway first.";
-                return await ClickAsync(field, t.Metres.ToString(System.Globalization.CultureInfo.InvariantCulture)) ? null : "The ND cannot be reached.";
+                return await ClickAsync(side, field, t.Metres.ToString(System.Globalization.CultureInfo.InvariantCulture)) ? null : "The ND cannot be reached.";
             case A350BtvArming.ClearExit:
-                var box = await FindAsync(l => l.Kind == "field" && l.Spoken.StartsWith("BTV EXIT AT:", StringComparison.Ordinal), 3000);
+                var box = await FindAsync(side, l => l.Kind == "field" && l.Spoken.StartsWith("BTV EXIT AT:", StringComparison.Ordinal), 3000);
                 if (box == null) return "BTV EXIT AT is not on the map's LANDING tab.";
-                if (!await ClickAsync(box)) return "The ND cannot be reached.";
-                _input.Press(Side, "CLR");
-                await Task.Delay(300);
-                _input.Press(Side, "ENTER");
+                if (!await ClickAsync(side, box)) return "The ND cannot be reached.";
+                _input.Press(side, "CLR");
+                await Wait(300);
+                _input.Press(side, "ENTER");
                 return null;
             case A350BtvArming.CloseFunctions:
-                if (await FindAsync(l => l.Kind == "tab", 0) != null && await FindAsync(l => l.Spoken == "Functions button", 1000) is { } open)
-                    await ClickAsync(open);
+                if (await FindAsync(side, l => l.Kind == "tab", 0) != null && await FindAsync(side, l => l.Spoken == "Functions button", 1000) is { } open)
+                    await ClickAsync(side, open);
                 return null;
             case A350BtvArming.PressAutobrake p:
                 if (_pressAutobrake == null) return "The A/BRK pushbutton cannot be reached from here.";
                 for (int i = 0; i < p.Times; i++)
                 {
                     _pressAutobrake();
-                    await Task.Delay(1500);
+                    await Wait(1500);
                 }
                 return null;
         }
@@ -499,7 +512,7 @@ public sealed class A350NdWindow : Form
     }
 
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-    /// <summary>The wait between a press and its fresh read (tests replace it).</summary>
+    /// <summary>Every wait the window takes: between a press and its fresh read, and between BTV's steps and reads (tests replace it).</summary>
     internal Func<int, Task> Wait { get; set; } = Task.Delay;
 
     /// <summary>After a press: a fresh read once the aircraft has taken it; a later press within the wait takes this one's place, so

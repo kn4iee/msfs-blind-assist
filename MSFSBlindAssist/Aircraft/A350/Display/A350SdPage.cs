@@ -32,39 +32,36 @@ public static class A350SdPage
 
     private const int StatusPage = 14;
 
-    /// <summary>The page the STATUS key shows when it draws no STATUS (live 2026-11-02: CRUISE in cruise, the alert's WHEEL page on the
-    /// ground with BRAKES PARK BRK ON): the page whose fields the drawn values fill most, three at least; null while STATUS is drawn,
-    /// or nothing fits.</summary>
     /// <summary>The page a draw of the SD shows, from the draw itself (plan 26's re-review): the A350's page variable reaches MSFSBA a
     /// moment after the draw shows a new page, so reading the draw by the variable read a new page by the old page's fields. STATUS by its
     /// own word; else the page whose fields the drawn values fill the largest share of, three at least (all of a page with fewer: HYD's
-    /// two), and more than any other page's;
-    /// null when no page fits so (the reader then takes the variable).</summary>
+    /// two), and more than any other page's; else the one page two fields of which at least are filled, every other page's one at most
+    /// (a live F/CTL draws only its trims as text, its surfaces as shapes: two of twenty; a stray text on another page's field does not
+    /// hide it, review m3); null when no page fits so (the reader then takes the variable).</summary>
     public static int? PageOf(IReadOnlyList<IReadOnlyList<DrawnCell>> rows)
     {
         var cells = rows.SelectMany(r => r).ToList();
         if (cells.Count == 0) return null;
         if (cells.Any(c => c.Text.Trim() == "STATUS")) return StatusPage;
-        int Fits(IEnumerable<SdField> fields) =>
-            fields.Count(f => cells.Any(c => Math.Abs(c.Y - f.Y) <= Dy && c.X >= f.X - Dx && c.X <= f.X + f.Width + Dx));
-        var scored = Pages.Where(kv => kv.Key != StatusPage)
-            .Select(kv => (Page: kv.Key, Fits: Fits(kv.Value), Share: (double)Fits(kv.Value) / kv.Value.Length))
-            .Where(p => p.Fits >= Math.Min(3, Pages[p.Page].Length)).OrderByDescending(p => p.Share).ThenByDescending(p => p.Fits).ToList();
-        if (scored.Count == 0) return null;
-        return scored.Count == 1 || scored[0].Share > scored[1].Share ? scored[0].Page : null;
+        var fitted = Pages.Select(kv => (Page: kv.Key, Fits: kv.Value.Count(f => cells.Any(c => On(c, f))), Fields: kv.Value.Length))
+            .Where(p => p.Fits > 0).ToList();
+        var sure = fitted.Where(p => p.Fits >= Math.Min(3, p.Fields))
+            .OrderByDescending(p => (double)p.Fits / p.Fields).ThenByDescending(p => p.Fits).ToList();
+        if (sure.Count > 0)
+            return sure.Count == 1 || (double)sure[0].Fits / sure[0].Fields > (double)sure[1].Fits / sure[1].Fields ? sure[0].Page : null;
+        var two = fitted.Where(p => p.Fits >= 2).ToList();
+        return two.Count == 1 ? two[0].Page : null;
     }
 
-    public static int? StatusShowing(IReadOnlyList<IReadOnlyList<DrawnCell>> rows)
-    {
-        var cells = rows.SelectMany(r => r).ToList();
-        if (cells.Any(c => c.Text.Trim() == "STATUS"))
-            return null;
-        int Fits(IEnumerable<SdField> fields) =>
-            fields.Count(f => cells.Any(c => Math.Abs(c.Y - f.Y) <= Dy && c.X >= f.X - Dx && c.X <= f.X + f.Width + Dx));
-        var best = Pages.Where(kv => kv.Key != StatusPage).Select(kv => (Page: kv.Key, Fits: Fits(kv.Value)))
-            .OrderByDescending(p => p.Fits).FirstOrDefault();
-        return best.Fits >= 3 ? best.Page : null;
-    }
+    /// <summary>The page the STATUS key shows when it draws no STATUS (live 2026-11-02: CRUISE in cruise, the alert's WHEEL page on the
+    /// ground with BRAKES PARK BRK ON), found as any draw's page is (<see cref="PageOf"/>, review M1: HYD's two fields name it here
+    /// too); null while STATUS is drawn, or no page fits.</summary>
+    public static int? StatusShowing(IReadOnlyList<IReadOnlyList<DrawnCell>> rows) =>
+        PageOf(rows) is int page && page != StatusPage ? page : null;
+
+    /// <summary>Whether <paramref name="c"/> is drawn where <paramref name="f"/>'s value is.</summary>
+    private static bool On(DrawnCell c, SdField f) =>
+        Math.Abs(c.Y - f.Y) <= Dy && c.X >= f.X - Dx && c.X <= f.X + f.Width + Dx;
 
     /// <summary>STATUS: under the ALL PHASES and APPR &amp; LDG headings two columns, read column by column, each item
     /// with its column's heading, down to the next centred heading (live 2026-10-28: INOP SYS read PART GALLEY, LS 2,
@@ -163,8 +160,7 @@ public static class A350SdPage
                     else if (loose.Count > 0 && c.X - loose[^1].X is >= 0 and <= UnitReach && !IsUnit(loose[^1])) loose.Add(c);
                     continue;
                 }
-                var f = fields.Where(f => Math.Abs(c.Y - f.Y) <= Dy && c.X >= f.X - Dx && c.X <= f.X + f.Width + Dx)
-                    .OrderBy(f => Math.Abs(c.X - f.X)).FirstOrDefault();
+                var f = fields.Where(f => On(c, f)).OrderBy(f => Math.Abs(c.X - f.X)).FirstOrDefault();
                 if (f == null) { loose.Add(c); continue; }
                 if (!byField.TryGetValue(f, out var entry)) byField[f] = entry = (r, new List<DrawnCell>());
                 entry.Cells.Add(c);

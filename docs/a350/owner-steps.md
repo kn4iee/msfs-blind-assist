@@ -72,7 +72,9 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    The PFD's QNH box and the ISIS QNH box set the QNH. (d) Ctrl+Shift+B says the airport map is in the ND window. (e) With three
    windows open, the sim and MSFSBA stay smooth. (f) Without the SND fitted, its window says "not fitted". (g) Scroll an ECAM procedure with a wheel button ten times quickly, and hold
    Enter on the SD knob's button: the E/WD and FMA call-outs stay on time. (h) With two keyboard layouts installed, Alt+Shift+N opens
-   the SND window and does not switch the layout.
+   the SND window and does not switch the layout. (i) In the SD window press F/CTL, then HYD, then STS, then ENG: each page is read under
+   its own name at once, and leaving STATUS never reads "Status page, showing the Engine page". On STATUS showing the CRUISE page, press
+   T.O CONFIG in the E/WD window: the SD title stays "Status page, showing the Cruise page".
 
 ## 3. By ear (your judgement)
 

@@ -366,6 +366,61 @@ public class A350DisplayWindowTests
         Assert.Equal(new[] { "PFD: not available, not fitted (an OIS option)" }, ItemsOf(ListOf(form)));
     }
 
+    // Re-review M3: a display not there takes no fresh draw either (each is a full memory copy), for a press as for F5.
+    [Fact]
+    public async Task A_display_not_there_takes_no_fresh_draw()
+    {
+        var feed = new Feed();
+        using var form = new Window(feed.ToFeed() with { Unavailable = _ => "not fitted (an OIS option)" }, new Rows())
+        {
+            Pause = (_, _) => Task.CompletedTask,
+        };
+        form.StartLive();
+        await form.AfterPressAsync();
+        Assert.Equal(0, feed.Drawn);
+        Assert.Equal(new[] { "PFD: not available, not fitted (an OIS option)" }, ItemsOf(ListOf(form)));
+    }
+
+    // Re-review M3-M5: why a draw cannot be read is judged on the draw the window shows, a press's fresh draw included: a fresh draw
+    // naming what the monitor's older one could not is read.
+    [Fact]
+    public async Task A_fresh_draw_is_judged_on_its_own()
+    {
+        var feed = new Feed();
+        var older = feed.Show(0, "older");
+        using var form = new Window(feed.ToFeed() with { Unread = (c, _) => ReferenceEquals(c, older) ? "not read yet" : null }, new Rows())
+        {
+            Pause = (_, _) => Task.CompletedTask,
+        };
+        form.StartLive();
+        Assert.Equal(new[] { "PFD: not available, not read yet" }, ItemsOf(ListOf(form)));
+        feed.Fresh = Draw("EFIS");
+        feed.Lines[feed.Fresh] = new[] { "fresh" };
+        await form.AfterPressAsync();
+        Assert.Equal(new[] { "fresh" }, ItemsOf(ListOf(form)));
+    }
+
+    // Re-review M7, review m4: a close cancelled, by a handler before or after the window's own, keeps the window live, as the ND
+    // window's does: its timer runs on and no other window is brought forward.
+    [Fact]
+    public void A_close_cancelled_keeps_the_window_live()
+    {
+        using var form = new Window(new Feed().ToFeed(), new Rows());
+        form.StartLive();
+        bool cancel = true;
+        form.FormClosing += (_, e) => e.Cancel |= cancel;   // subscribed after the window's own
+        var closing = typeof(Form).GetMethod("OnFormClosing", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var timer = (System.Windows.Forms.Timer)typeof(A350DisplayWindow).GetField("_timer", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(form)!;
+        closing.Invoke(form, new object[] { new FormClosingEventArgs(CloseReason.UserClosing, cancel: false) });
+        Assert.True(timer.Enabled);
+        cancel = false;
+        closing.Invoke(form, new object[] { new FormClosingEventArgs(CloseReason.UserClosing, cancel: true) });
+        Assert.True(timer.Enabled);
+        closing.Invoke(form, new object[] { new FormClosingEventArgs(CloseReason.UserClosing, cancel: false) });
+        Assert.False(timer.Enabled);
+    }
+
     // Re-review M11: F5 held down refreshes once per press, in every display window (the ND's too).
     [Fact]
     public void A_key_held_down_is_one_press()

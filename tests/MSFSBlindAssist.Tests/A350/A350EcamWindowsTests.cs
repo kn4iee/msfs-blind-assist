@@ -86,7 +86,7 @@ public class A350EcamWindowsTests
         var ctr = A350Fixtures.Capture("ctr_sd_page_3.json");
         Assert.Equal(Lines(A350EwdText.Build(ctr, 3)), def.EwdFeed().Read(ctr, 0));
         Assert.Equal(Lines(A350SdText.Build(ctr, 3)), def.SdFeed().Read(ctr, 0));
-        Assert.False(def.SdFeed().Dark(0));
+        Assert.Null(def.SdFeed().Unread!(ctr, 0));
     }
 
     // Plan 26's review minor: the E/WD and SD windows parsed the CTR's draw twice a tick each (whether it is dark, then the reader). The
@@ -101,11 +101,13 @@ public class A350EcamWindowsTests
         Assert.NotSame(def.CtrView(ctr), def.CtrView(A350Fixtures.Capture("ctr_cruise.json")));
     }
 
-    private static IniBuildsA350Definition WithPage(double? page)
+    private static IniBuildsA350Definition WithPage(double? page) => WithPage(page, out _);
+
+    private static IniBuildsA350Definition WithPage(double? page, out Dictionary<string, double> cache)
     {
-        var cache = new Dictionary<string, double>(StringComparer.Ordinal);
-        if (page is double p) cache[IniBuildsA350Definition.SdPageKey] = p;
-        var def = new IniBuildsA350Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
+        var values = cache = new Dictionary<string, double>(StringComparer.Ordinal);
+        if (page is double p) values[IniBuildsA350Definition.SdPageKey] = p;
+        var def = new IniBuildsA350Definition { Cached = (_, key) => values.TryGetValue(key, out var v) ? v : null };
         def.Attach(new SimConnect.SimConnectManager(IntPtr.Zero));
         return def;
     }
@@ -129,11 +131,84 @@ public class A350EcamWindowsTests
         Assert.Equal(Lines(A350SdText.Build(status, 14)), WithPage(14).SdFeed().Read(status, 0));
     }
 
-    // Re-review M3: with the page variable unread and no draw to name the page, the SD is not read yet, never read as a guessed page 0.
+    // Re-review M3/M4: the SD's "not read yet" is judged on the draw shown: with the page variable unread, a draw naming its page is read
+    // (a press's fresh draw lifts it), one naming none is not read yet, never read as a guessed "Page 0"; the variable read, it is read.
     [Fact]
-    public void An_sd_with_no_page_known_is_not_read_yet()
+    public void The_sd_is_not_read_yet_by_the_draw_shown()
     {
-        Assert.Equal("not read yet", WithPage(null).SdFeed().Unavailable!(0));
-        Assert.Null(WithPage(3).SdFeed().Unavailable?.Invoke(0));
+        var feed = WithPage(null).SdFeed();
+        Assert.Null(feed.Unavailable);
+        Assert.Null(feed.Unread!(A350Fixtures.Capture("ctr_sd_page_8.json"), 0));
+        var nameless = A350Fixtures.Capture("ctr_powerup_safety_test.json");   // powered, its SD names no page
+        Assert.Equal("not read yet", feed.Unread!(nameless, 0));
+        Assert.Null(WithPage(3).SdFeed().Unread!(nameless, 0));
+    }
+
+    // Re-review M5: the CTR's power is judged on the draw shown (a press's fresh draw standing over the monitor's), not the latest.
+    [Fact]
+    public void A_ctr_draw_with_no_power_is_off()
+    {
+        var off = new A350DrawCapture("CTR", Array.Empty<DrawnText>(), Array.Empty<DrawnFrame>(), Array.Empty<DrawnElement>(), null, 1);
+        var def = WithPage(3);
+        Assert.Equal("display off", def.SdFeed().Unread!(off, 0));
+        Assert.Equal("display off", def.EwdFeed().Unread!(off, 0));
+        Assert.Null(def.EwdFeed().Unread!(A350Fixtures.Capture("ctr_sd_page_3.json"), 0));
+    }
+
+    /// <summary>An ECAM key pressed as the panel, a window or a hotkey presses it: through the panel's write path.</summary>
+    private static void Press(IniBuildsA350Definition def, string row) =>
+        def.HandleUIVariableSet(row, 1, def.GetVariables()[row], new SimConnect.SimConnectManager(IntPtr.Zero), new SpeechCapture());
+
+    // Re-review M1: leaving STATUS, the draw shows the new page a moment before the variable leaves STATUS, and one draw cannot tell
+    // "STATUS showing the Engine page" from "ENG just pressed". After an ECAM key pressed (the panel's, a window's or a hotkey's) the
+    // variable's STATUS does not stand once the draw shows another page than it showed at the press, until the variable changes or 1.5 s
+    // on: the page the draw shows is read meanwhile, by both windows.
+    [Fact]
+    public void A_key_leaving_status_reads_the_page_drawn()
+    {
+        var status = A350Fixtures.Capture("p04_ctr_sd_status_air.json");   // STATUS with nothing to say: the CRUISE page
+        var engine = A350Fixtures.Capture("p04_ctr_sd_engine_air.json");
+        var def = WithPage(14);
+        long now = 0;
+        def.Clock = () => now;
+        var sd = def.SdFeed();
+        Assert.Equal(Lines(A350SdText.Build(engine, 14)), sd.Read(engine, 0));   // no key pressed: STATUS showing the Engine page
+        Assert.Equal(Lines(A350SdText.Build(status, 14)), sd.Read(status, 0));
+        Press(def, "A350_ECAM_ENG");
+        Assert.Equal(Lines(A350SdText.Build(status, 14)), sd.Read(status, 0));   // the draw has not changed yet
+        Assert.Equal(Lines(A350SdText.Build(engine, 1)), sd.Read(engine, 0));
+        Assert.Equal(Lines(A350EwdText.Build(engine, 1)), def.EwdFeed().Read(engine, 0));
+        now = 1500;
+        Assert.Equal(Lines(A350SdText.Build(engine, 14)), sd.Read(engine, 0));
+    }
+
+    // Review m1: a key that changes nothing (T.O CONFIG, a wheel step) leaves STATUS standing: the draw still shows the page it showed.
+    [Fact]
+    public void A_key_that_changes_nothing_leaves_status_standing()
+    {
+        var status = A350Fixtures.Capture("p04_ctr_sd_status_air.json");
+        var def = WithPage(14);
+        def.Clock = () => 0;
+        var sd = def.SdFeed();
+        Assert.Equal(Lines(A350SdText.Build(status, 14)), sd.Read(status, 0));
+        Press(def, "A350_ECAM_TO_CONFIG");
+        Assert.Equal(Lines(A350SdText.Build(status, 14)), sd.Read(status, 0));
+    }
+
+    // The hold ends as soon as the variable changes: STATUS taken by a key, with nothing to say (the CRUISE page drawn), is STATUS once
+    // the variable says it.
+    [Fact]
+    public void A_key_holds_status_only_until_the_variable_changes()
+    {
+        var status = A350Fixtures.Capture("p04_ctr_sd_status_air.json");
+        var engine = A350Fixtures.Capture("p04_ctr_sd_engine_air.json");
+        var def = WithPage(1, out var cache);
+        def.Clock = () => 0;
+        var sd = def.SdFeed();
+        Assert.Equal(Lines(A350SdText.Build(engine, 1)), sd.Read(engine, 0));   // on ENG
+        Press(def, "A350_ECAM_STS");
+        Assert.Equal(Lines(A350SdText.Build(status, 13)), sd.Read(status, 0));   // the variable still says ENG
+        cache[IniBuildsA350Definition.SdPageKey] = 14;
+        Assert.Equal(Lines(A350SdText.Build(status, 14)), sd.Read(status, 0));
     }
 }

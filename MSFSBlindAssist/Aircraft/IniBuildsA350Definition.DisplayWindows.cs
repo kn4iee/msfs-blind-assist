@@ -43,26 +43,72 @@ public partial class IniBuildsA350Definition
     /// <summary>The page the SD shows (INI_ECAM_ACTIVE_PAGE), or null while unread.</summary>
     private double? SdPageShown() => _sim is { } sim ? Cached(sim, SdPageKey) : null;
 
-    /// <summary>A CTR display's feed: the CTR's draws, dark while the CTR draws no power, and <paramref name="read"/>'s lines.</summary>
+    /// <summary>A CTR display's feed: the CTR's draws, "display off" while the draw shown has no power (judged on that draw, not the
+    /// monitor's latest, re-review M5), and <paramref name="read"/>'s lines.</summary>
     private Forms.A350.A350DisplayFeed CtrFeed(Func<A350.Display.A350DrawCapture, string> read) => new(
         _ => CtrDraw(),
         async _ => Displays == null ? null : (await Displays.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
-        _ => CtrDraw() is { } ctr && !CtrView(ctr).Powered,
-        (capture, _) => TextLines(read(capture)));
+        _ => false,   // the CTR's power is its draw's own: Unread
+        (capture, _) => TextLines(read(capture)))
+    {
+        Unread = (capture, _) => CtrUnread(capture),
+    };
+
+    /// <summary>"display off" for a CTR draw showing no power, else null.</summary>
+    private string? CtrUnread(A350.Display.A350DrawCapture capture) =>
+        CtrView(capture).Powered ? null : A350.Display.A350DisplayRows.DisplayOff;
+
+    /// <summary>How long an ECAM key's press holds the page variable's STATUS at most.</summary>
+    internal const long SdKeyHoldMs = 1500;
+
+    private (long At, double? Page, int? Drawn)? _sdKeyPressed;   // the UI thread's own
+    private int? _sdDrawnLast;   // the page the SD draw last read showed (the UI thread's own)
+
+    /// <summary>Whether <paramref name="varKey"/> is a row of the ECAM control panel (its page keys, CLEAR, RCL, the SD knob, the
+    /// wheels) or the SD page selector: a press of one may change the SD's page.</summary>
+    private static bool IsEcamKey(string varKey) => varKey.StartsWith("A350_ECAM_", StringComparison.Ordinal) || varKey == SdPageKey;
+
+    /// <summary>An ECAM key pressed, through the panel's write path (the panel's, a window's or a hotkey's press: <c>HandleUIVariableSet</c>,
+    /// on the UI thread), with the page the variable said and the page the SD's draw showed then.</summary>
+    private void SdKeyPressed() => _sdKeyPressed = (Clock(), SdPageShown(), _sdDrawnLast);
+
+    /// <summary>Whether the page variable's STATUS stands for a draw showing <paramref name="drawn"/> (re-review M1): leaving STATUS the
+    /// draw shows the new page a moment before the variable leaves 14, and one draw cannot tell "STATUS showing the Engine page" from
+    /// "ENG just pressed". After an ECAM key's press, a draw showing another page than the draw showed then is read as itself, until the
+    /// variable has changed or <see cref="SdKeyHoldMs"/> on; a key that changed nothing (T.O CONFIG, a wheel step) leaves STATUS
+    /// standing (review m1).</summary>
+    private bool StatusStands(double? variable, int? drawn)
+    {
+        if (_sdKeyPressed is not { } key) return true;
+        if (Clock() - key.At >= SdKeyHoldMs || variable != key.Page)
+        {
+            _sdKeyPressed = null;
+            return true;
+        }
+        return drawn == key.Drawn;
+    }
 
     /// <summary>The page to read a CTR draw's SD by: the page the draw shows, else the variable (<c>A350SdText.PageToRead</c>).</summary>
-    private double? SdPageToRead(A350.Display.A350DrawCapture capture) =>
-        A350.Display.A350SdText.PageToRead(CtrView(capture).SystemDisplay, SdPageShown());
+    private double? SdPageToRead(A350.Display.A350DrawCapture capture)
+    {
+        var drawn = A350.Display.A350SdPage.PageOf(CtrView(capture).SystemDisplay);
+        var variable = SdPageShown();
+        bool stands = StatusStands(variable, drawn);
+        _sdDrawnLast = drawn;
+        return A350.Display.A350SdText.PageToRead(drawn, variable, stands);
+    }
 
     /// <summary>The E/WD window's feed: the CTR as <c>A350EwdText</c> reads it, its SD section by the page its draw shows.</summary>
     internal Forms.A350.A350DisplayFeed EwdFeed() => CtrFeed(c => A350.Display.A350EwdText.Build(c, CtrView(c), SdPageToRead(c)));
 
-    /// <summary>The SD window's feed: the page its draw shows as <c>A350SdText</c> reads it; "not read yet" while neither the draw nor the
-    /// variable names a page (never a guessed page).</summary>
-    internal Forms.A350.A350DisplayFeed SdFeed() => CtrFeed(c => A350.Display.A350SdText.Build(c, CtrView(c), SdPageToRead(c) ?? 0)) with
-    {
-        Unavailable = _ => SdPageShown() is null && (CtrDraw() is not { } ctr || SdPageToRead(ctr) is null) ? "not read yet" : null,
-    };
+    /// <summary>The SD window's feed: the page its draw shows as <c>A350SdText</c> reads it; "not read yet" while neither the draw shown
+    /// nor the variable names a page (never a guessed page, re-review M3/M4: judged on the draw shown, so a press's fresh draw that names
+    /// its page is read).</summary>
+    internal Forms.A350.A350DisplayFeed SdFeed() =>
+        CtrFeed(c => SdPageToRead(c) is double page ? A350.Display.A350SdText.Build(c, CtrView(c), page) : "") with
+        {
+            Unread = (c, _) => CtrUnread(c) ?? (SdPageToRead(c) is null ? A350.Display.A350DisplayRows.NotReadYet : null),
+        };
 
     /// <summary>The SND window's feed: the standby navigation display, and "not fitted" while its OIS option (STANDBY NAV DISPLAY) is
     /// off, as its panel's rows refuse then.</summary>

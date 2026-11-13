@@ -165,6 +165,22 @@ Kept in this file only, so no other plan's push ever touches it.
   F5 once a press, the SD read by the page its own draw shows (`A350SdPage.PageOf`, which replaced the page wait), a feed's throw costs the
   list, a failed draw keeps the press behind it, a display not fitted is never asked of the monitor, the baro keys as the panel names
   them, every key row named
+- **The focused review of the re-review's fixes (2026-11-13):** a fresh reviewer found a live F/CTL draw named no page (two of its twenty
+  fields are text), so pressing F/CTL read it under the old page for a tick, and seven minors; all fixed test-first: `PageOf` names the
+  one page any of whose fields a draw fills (two at least) and STATUS's page is found by the same scorer (STATUS showing HYD read as a
+  bare STATUS page); a key pressed in the E/WD or SD window holds the variable's STATUS until it changes or 1.5 s on (leaving STATUS read
+  "Status page, showing the Engine page" for a tick); why a draw cannot be read (no power, no page) is judged on the draw shown, so a
+  fresh draw lifts "not read yet" and nothing reads "Page 0"; a display not fitted takes no fresh draw; a cancelled close keeps a window
+  live; the ND's BTV sequences keep the side they started on and click only what a fresh draw shows. Every live SD capture is in the
+  page theory now
+- **The review of those fixes (2026-11-13):** a fresh reviewer found no Critical or Important issue and four minors, all fixed test-first:
+  a key that changed nothing flipped STATUS's title for 1.5 s (the hold now lifts only once the draw shows another page than at the
+  press, and is armed in the definition's own write path, so the panel's and a hotkey's ECAM presses hold it too, not only a window's);
+  one failed draw made a BTV step that does not wait take a line for gone (it tries again while its draws fail, 1.5 s at most); the
+  F/CTL tier gave up on one stray text (it allows one field of another page); a close cancelled by a later handler still stopped the
+  window (judged after every handler)
 - **Rulings made while working:** the A350's own copy of the Fenix's `RowToFollow`; the side box right after the list; the E/WD
   window keeps all the Alt+E text showed; the SD page selector (the page keys as a combo) is on neither window; the ND window's rows
-  named "EFIS" and "BTV controls"
+  named "EFIS" and "BTV controls"; the reviewer's unjudged cases stand as they are: VIDEO (no capture) and a torn SD copy fall back to
+  the variable when their draw fits no page (a torn copy fitting three fields of a wrong page is unmeasured), and how long the variable
+  lags the draw is a live question (owner-steps 2.4 item 5 (i))

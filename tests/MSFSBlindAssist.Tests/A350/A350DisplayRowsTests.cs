@@ -25,6 +25,20 @@ public class A350DisplayRowsTests
     public void A_display_not_drawn_yet_is_not_read_yet() =>
         Assert.Equal(new[] { "SD: not available, not read yet" }, A350DisplayRows.For("SD", null, dark: false, _ => Lines("ENG")));
 
+    // Re-review M3-M5: why a draw cannot be read is judged on the draw shown (the CTR's own power, the SD's page), after "not read
+    // yet" and before the reader; a judge that throws costs the list as a reader does.
+    [Fact]
+    public void A_draw_that_cannot_be_read_says_why()
+    {
+        Assert.Equal(new[] { "SD: not available, display off" },
+            A350DisplayRows.For("SD", Capture, dark: false, _ => Lines("ENG"), unread: _ => A350DisplayRows.DisplayOff));
+        Assert.Equal(new[] { "ENG" }, A350DisplayRows.For("SD", Capture, dark: false, _ => Lines("ENG"), unread: _ => null));
+        var reported = new List<string>();
+        Assert.Equal(new[] { "SD: not available, read failed" },
+            A350DisplayRows.For("SD", Capture, dark: false, _ => Lines("ENG"), reported.Add, unread: _ => throw new InvalidOperationException("torn")));
+        Assert.Equal("read failed: InvalidOperationException: torn", Assert.Single(reported));
+    }
+
     [Fact]
     public void A_display_drawing_nothing_shows_nothing() =>
         Assert.Equal(new[] { "ISIS: not available, nothing shown" }, A350DisplayRows.For("ISIS", Capture, dark: false, _ => Lines()));
