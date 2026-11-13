@@ -144,11 +144,14 @@ public class A350NdInputTests
         Assert.Equal(new[] { MSFSBlindAssist.Aircraft.IniBuildsA350Definition.DarkScreen }, dark.Shown);
     }
 
+    // Plan 26 (the owner, 2026-11-13: "remove control shift b, cause the whole point is to have the nd plus all its functions in one
+    // place"): the ND window is Alt+N's; the A380's airport map key is left to MainForm, which points the pilot to Alt+N.
     [Fact]
-    public void The_key_of_the_a380s_airport_map_opens_it_on_the_a350()
+    public void The_key_of_the_a380s_airport_map_no_longer_opens_it_on_the_a350()
     {
-        // The window key's handling is the definition's, before MainForm's "only on the A380".
-        var source = File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "MSFSBlindAssist", "Aircraft", "IniBuildsA350Definition.Hotkeys.cs"));
-        Assert.Contains("case HotkeyAction.ShowOANS:", source);
+        string Source(params string[] path) => File.ReadAllText(Path.Combine(new[] { ClaudeContextBudgetTests.RepoRoot(), "MSFSBlindAssist" }.Concat(path).ToArray()));
+        Assert.DoesNotContain("HotkeyAction.ShowOANS", Source("Aircraft", "IniBuildsA350Definition.Hotkeys.cs"));
+        Assert.DoesNotContain("HotkeyAction.ShowOANS", Source("Aircraft", "IniBuildsA350Definition.DisplayWindows.cs"));
+        Assert.Contains("on the A350 it is in the ND window, output Alt+N", Source("MainForm.Hotkeys.cs"));
     }
 }

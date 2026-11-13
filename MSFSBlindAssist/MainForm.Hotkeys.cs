@@ -338,7 +338,8 @@ public partial class MainForm
                 }
                 else
                 {
-                    announcer.AnnounceImmediate("The airport map is only available on the A380 and the A350.");
+                    // The A350 has its airport map in its ND window, on Alt+N with every ND function (plan 26).
+                    announcer.AnnounceImmediate("The airport map is only available on the A380; on the A350 it is in the ND window, output Alt+N.");
                 }
                 break;
             case HotkeyAction.ShowTrackFixWindow:

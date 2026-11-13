@@ -6,12 +6,14 @@ using MSFSBlindAssist.Aircraft.A350.Display;
 namespace MSFSBlindAssist.Forms.A350;
 
 /// <summary>
-/// The ND and its airport map (ANF) as lines (Output Ctrl+Shift+B, the key of the A380's airport map window): what the side's ND
-/// shows, each name on the map and where it lies, and every control of its function panel and of the menu a click opens
-/// (<see cref="A350NdPage"/>). Enter does on a line what the sighted pilot's click does there, with the KCCU cursor brought to the
-/// ND: a tab, a button, a menu item, a name on the map (its menu: a stand's, a runway's, a taxiway's on the landing runway with
-/// SET BTV EXIT). A field takes the box's text on the KCCU. The ND's mode and range are its own EFIS knobs. Ctrl plus an arrow
-/// drags the map; on PLAN it stays where it was dragged. F5 reads now, Escape closes.
+/// The ND with every function of it in one window (output Alt+N; plan 26, the owner: "the nd plus all its functions in one place"):
+/// what the side's ND shows, its airport map (ANF), each name on the map and where it lies, and every control of its function panel
+/// and of the menu a click opens (<see cref="A350NdPage"/>). Enter does on a line what the sighted pilot's click does there, with the
+/// KCCU cursor brought to the ND: a tab, a button, a menu item, a name on the map (its menu: a stand's, a runway's, a taxiway's on the
+/// landing runway with SET BTV EXIT). A field takes the box's text on the KCCU. After the list, as the Fenix's ND window: the text
+/// box, the ND's mode and range (its own EFIS knobs), every EFIS button that changes it (<see cref="EfisKeys"/>, each the panel's own
+/// row, labelled with its light), BTV in one step, then the side box. Ctrl plus an arrow drags the map; on PLAN it stays where it was
+/// dragged. F5 reads now, Escape closes.
 /// </summary>
 public sealed class A350NdWindow : Form
 {
@@ -51,7 +53,7 @@ public sealed class A350NdWindow : Form
     /// <param name="pressAutobrake">Presses the A/BRK pushbutton, for BTV's arming (<see cref="A350BtvArming"/>).</param>
     public A350NdWindow(Func<int, A350DrawCapture?> latest, Func<int, Task<A350DrawCapture?>> drawNow, Func<int, bool> isDark,
         A350NdInput input, ScreenReaderAnnouncer announcer, Action<int, bool, double> setKnob, Func<int, bool, double?> knob,
-        Action? pressAutobrake = null)
+        Action? pressAutobrake = null, IA350WindowRows? rows = null)
     {
         _pressAutobrake = pressAutobrake;
         _previousWindow = GetForegroundWindow();
@@ -70,23 +72,27 @@ public sealed class A350NdWindow : Form
         ShowInTaskbar = false;
         KeyPreview = true;
 
-        _side = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Side", TabIndex = 0 };
+        _side = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Side" };
         _side.Items.AddRange(new object[] { "Captain", "First officer" });
         _side.SelectedIndex = 0;
-        _side.SelectedIndexChanged += (s, e) => { ReadKnobs(); _ = RefreshAsync(false); };
+        _side.SelectedIndexChanged += (s, e) => { ReadKnobs(); RefreshEfisStates(); _ = RefreshAsync(false); };
 
-        _mode = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "ND mode", TabIndex = 1 };
+        _mode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "ND mode" };
         _mode.Items.AddRange(Modes.Cast<object>().ToArray());
         _mode.SelectionChangeCommitted += (s, e) => TurnKnob(true, _mode.SelectedIndex);
 
-        _range = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "ND range", TabIndex = 2 };
+        _range = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "ND range" };
         _range.Items.AddRange(Ranges.Cast<object>().ToArray());
         _range.SelectionChangeCommitted += (s, e) => TurnKnob(false, _range.SelectedIndex);
+
+        // The EFIS panel's ND buttons, each its own row and labelled with its light, as the Fenix ND window's buttons.
+        if (rows != null)
+            _efis = new A350KeyRow(EfisKeys, rows, () => Side, () => _ = AfterActionAsync()) { AccessibleName = "EFIS" };
 
         // BTV in one step (plan 08, the A380 OANS window's Map and BTV controls): Read exits fills the exit list from the zoomed airport map
         // (never on focus alone: that turned the EFIS knobs, review 2026-11-04); Arm exit reads them again and arms the exit as it stands
         // now; Clear BTV and Arm runway take the aircraft's own steps and put the ND back.
-        var btv = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, TabIndex = 3, WrapContents = true };
+        var btv = new FlowLayoutPanel { AutoSize = true, WrapContents = true, AccessibleName = "BTV controls" };
         _readExits = new Button { Text = "Read exits", AutoSize = true, TabIndex = 0 };
         _readExits.Click += async (s, e) => await ReadExitsAsync();
         _exits = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "BTV exit", Width = 200, TabIndex = 1 };
@@ -106,12 +112,12 @@ public sealed class A350NdWindow : Form
 
         _list = new DisplayListBox
         {
-            Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 4, AccessibleName = "ND",
+            Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 0, AccessibleName = "ND",
             AccessibleDescription = "Enter acts on the line; a field takes the box's text. Control plus an arrow drags the map, Alt plus X presses the KCCU's ESC, Backspace its CLR, Page Up and Page Down scroll a list, F5 reads now, Escape closes.",
         };
         _list.SetText("Loading the ND...");
 
-        _scratchpad = new TextBox { Dock = DockStyle.Bottom, TabIndex = 5, AccessibleName = "Text: type, then Enter on a field" };
+        _scratchpad = new TextBox { AccessibleName = "Text: type, then Enter on a field" };
         _scratchpad.KeyDown += async (s, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
@@ -120,12 +126,14 @@ public sealed class A350NdWindow : Form
             await ActivateAsync();
         };
 
+        // The Fenix's order: the list first and filling the window, then each control below it in the tab order.
         Controls.Add(_list);
-        Controls.Add(_scratchpad);
-        Controls.Add(btv);
-        Controls.Add(_range);
-        Controls.Add(_mode);
-        Controls.Add(_side);
+        AddBelowList(_scratchpad);
+        AddBelowList(_mode);
+        AddBelowList(_range);
+        if (_efis != null) AddBelowList(_efis);
+        AddBelowList(btv);
+        AddBelowList(_side);
 
         Load += async (s, e) =>
         {
@@ -140,6 +148,40 @@ public sealed class A350NdWindow : Form
     }
 
     private int Side => _side.SelectedIndex < 0 ? 0 : _side.SelectedIndex;
+
+    private static string EfisSide(int side) => side == 0 ? "LEFT" : "RIGHT";
+
+    /// <summary>The EFIS panel's ND buttons, in its order: the top row's CSTR to ARPT, the bottom row's VOR 1 to VOR 2, then TAXI; the
+    /// row each presses on each side. The PFD's LS, VV and baro are the PFD window's (<see cref="A350PfdWindow.Keys"/>).</summary>
+    internal static readonly IReadOnlyList<A350WindowKey> EfisKeys = new A350WindowKey[]
+    {
+        new("CSTR", s => $"A350_EFIS_TSK_1_{EfisSide(s)}"), new("WPT", s => $"A350_EFIS_TSK_2_{EfisSide(s)}"),
+        new("VORD", s => $"A350_EFIS_TSK_3_{EfisSide(s)}"), new("NDB", s => $"A350_EFIS_TSK_4_{EfisSide(s)}"),
+        new("ARPT", s => $"A350_EFIS_TSK_5_{EfisSide(s)}"),
+        new("VOR 1", s => $"A350_EFIS_BSK_1_{EfisSide(s)}"), new("WX", s => $"A350_EFIS_BSK_2_{EfisSide(s)}"),
+        new("TERR", s => $"A350_EFIS_BSK_3_{EfisSide(s)}"), new("TRAF", s => $"A350_EFIS_BSK_4_{EfisSide(s)}"),
+        new("VOR 2", s => $"A350_EFIS_BSK_5_{EfisSide(s)}"),
+        new("TAXI", s => $"A350_EFIS_TAXI_{EfisSide(s)}", Toggle: true),
+    };
+
+    /// <summary>A side's ND mode (true) or range knob, the EFIS panel's own row.</summary>
+    internal static string KnobRow(int side, bool mode) => $"A350_EFIS_{(mode ? "MODE" : "RANGE")}_{EfisSide(side)}";
+
+    private readonly A350KeyRow? _efis;
+
+    /// <summary>The EFIS buttons, in <see cref="EfisKeys"/>' order; none without the rows to press.</summary>
+    internal IReadOnlyList<Button> EfisButtons => _efis?.Buttons ?? (IReadOnlyList<Button>)Array.Empty<Button>();
+
+    /// <summary>The EFIS buttons' labels from their lights on the side shown.</summary>
+    internal void RefreshEfisStates() => _efis?.RefreshStates();
+
+    /// <summary>Adds a control below the list, last in the tab order (the Fenix display window's order).</summary>
+    private void AddBelowList(Control control)
+    {
+        control.Dock = DockStyle.Bottom;
+        Controls.Add(control);
+        control.TabIndex = Controls.Count - 1;
+    }
 
     private void TurnKnob(bool mode, int position)
     {
@@ -180,6 +222,7 @@ public sealed class A350NdWindow : Form
             }
             if (IsDisposed) return;
             ReadKnobs();
+            RefreshEfisStates();
             var before = _lines;
             (_lines, var shown) = PageLines(cap, Side, _isDark(Side), (int?)_knob(Side, true), (int?)_knob(Side, false));
             _linesSide = Side;

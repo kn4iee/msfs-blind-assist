@@ -16,6 +16,7 @@ public static class A350Hotkeys
     public static readonly IReadOnlyDictionary<HotkeyAction, string> DisplayWindows = new Dictionary<HotkeyAction, string>
     {
         [HotkeyAction.ReadDisplayPFD] = "PFD",
+        [HotkeyAction.ReadDisplayND] = "ND",
     };
 
     /// <summary>The panel row each press hotkey drives: the AP, A/THR, LOC and APPR pushbuttons (input Shift+A, Ctrl+O,
