@@ -62,3 +62,35 @@ public sealed class A350KeyRow : FlowLayoutPanel
         }
     }
 }
+
+/// <summary>A typed row of a display window (the QNH), as the panel's field: the pilot types, Enter applies it through the side's typed
+/// row (<see cref="IA350WindowRows.Type"/>), whose plan validates it and says its refusal; the text stays, as in the panel's field.</summary>
+public sealed class A350TypedBox : TextBox
+{
+    private readonly Func<int, string> _row;
+    private readonly IA350WindowRows _rows;
+    private readonly Func<int> _side;
+    private readonly Action? _typed;
+
+    public A350TypedBox(string label, Func<int, string> row, IA350WindowRows rows, Func<int> side, Action? typed = null)
+    {
+        _row = row;
+        _rows = rows;
+        _side = side;
+        _typed = typed;
+        AccessibleName = label;
+        Width = 120;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Enter)
+        {
+            e.Handled = e.SuppressKeyPress = true;
+            _rows.Type(_row(_side()), Text.Trim());
+            _typed?.Invoke();
+            return;
+        }
+        base.OnKeyDown(e);
+    }
+}

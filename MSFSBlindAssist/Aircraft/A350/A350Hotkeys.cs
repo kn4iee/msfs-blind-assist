@@ -11,6 +11,13 @@ namespace MSFSBlindAssist.Aircraft.A350;
 /// </summary>
 public static class A350Hotkeys
 {
+    /// <summary>The display keys and the window each opens (plan 26, the Fenix's and the PMDG 737's keys): a live window of the
+    /// display with the controls that change it, in place of a one-shot read.</summary>
+    public static readonly IReadOnlyDictionary<HotkeyAction, string> DisplayWindows = new Dictionary<HotkeyAction, string>
+    {
+        [HotkeyAction.ReadDisplayPFD] = "PFD",
+    };
+
     /// <summary>The panel row each press hotkey drives: the AP, A/THR, LOC and APPR pushbuttons (input Shift+A, Ctrl+O,
     /// Ctrl+J, Ctrl+L, Shift+P) and the four FCU knobs pushed or pulled (input Shift+1 to 4, Ctrl+1 to 4).</summary>
     public static readonly IReadOnlyDictionary<HotkeyAction, string> PressRows = new Dictionary<HotkeyAction, string>

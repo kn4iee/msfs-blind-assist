@@ -18,6 +18,9 @@ public interface IA350WindowRows
 
     /// <summary>A two-position row pressed to its other position, as the FCU windows' FD.</summary>
     void Toggle(string row);
+
+    /// <summary>A typed row (a QNH) applied with <paramref name="text"/>, as the panel's field applies it on Enter.</summary>
+    void Type(string row, string text);
 }
 
 /// <summary>
@@ -54,4 +57,13 @@ internal sealed class A350WindowRows : IA350WindowRows
     }
 
     public void Toggle(string row) => _aircraft.PressToggleFromWindow(row, _simConnect, _announcer);
+
+    /// <summary>As MainForm's typed field (PanelBuilder's ApplyTyped): the number, or NaN for a field that refuses unparsable text
+    /// (the A350's typed rows), else 0; the row's own plan validates it and says its refusal.</summary>
+    public void Type(string row, string text)
+    {
+        if (!_aircraft.GetVariables().TryGetValue(row, out var def)) return;
+        bool parsed = Utils.NumberParsing.TryParseTyped(text, out double value);
+        _aircraft.PressRow(row, _simConnect, _announcer, parsed ? value : def.UnparseableTextAsNaN ? double.NaN : 0);
+    }
 }

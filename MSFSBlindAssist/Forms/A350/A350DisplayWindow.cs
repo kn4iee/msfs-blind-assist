@@ -196,6 +196,14 @@ public class A350DisplayWindow : Form
         return row;
     }
 
+    /// <summary>Adds a typed row's box after the list (<see cref="A350TypedBox"/>): Enter applies it, then the display is read again.</summary>
+    protected A350TypedBox AddTypedBox(string label, Func<int, string> row)
+    {
+        var box = new A350TypedBox(label, row, _rows, () => Side, () => _ = AfterPressAsync());
+        AddControlAfterList(box);
+        return box;
+    }
+
     /// <summary>A problem of this window, in the log once per distinct text.</summary>
     protected void Report(string problem)
     {

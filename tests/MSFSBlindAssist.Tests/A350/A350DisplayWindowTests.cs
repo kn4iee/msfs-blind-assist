@@ -47,6 +47,7 @@ public class A350DisplayWindowTests
         public string? State(string row) => States.TryGetValue(row, out var s) ? s : null;
         public void Press(string row, double value = 1) => Log.Add($"press {row} {value}");
         public void Toggle(string row) => Log.Add($"toggle {row}");
+        public void Type(string row, string text) => Log.Add($"type {row} {text}");
     }
 
     /// <summary>A window with a key row, so its controls can be held to the panel's rows.</summary>

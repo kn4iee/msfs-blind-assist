@@ -15,6 +15,11 @@ public partial class IniBuildsA350Definition
         Log.Debug("A350", $"hotkey: {action}");
         switch (action)
         {
+            // Alt+P and the other display keys: the display's live window with its controls (plan 26).
+            case var display when A350.A350Hotkeys.DisplayWindows.TryGetValue(display, out var window):
+                hotkeyManager.ExitOutputHotkeyMode();
+                ShowDisplayWindow(window, simConnect, announcer);
+                return true;
             case HotkeyAction.MonitorManager:
                 hotkeyManager.ExitOutputHotkeyMode();
                 (parentForm as MainForm)?.ShowA350MonitorManagerDialog();
@@ -177,7 +182,6 @@ public partial class IniBuildsA350Definition
                 return true;
 
             // Alt+P, N, S, I: a display read aloud, as its status display reads it (the MD-11's and PMDG's keys).
-            case HotkeyAction.ReadDisplayPFD: AnnounceDisplay(PfdCaptainKey, announcer); return true;
             case HotkeyAction.ReadDisplayND: AnnounceDisplay("A350_DISP_ND_CPT", announcer); return true;
             case HotkeyAction.ReadDisplayISIS: AnnounceDisplay("A350_DISP_SFD", announcer); return true;
             case HotkeyAction.ReadDisplayLowerECAM:
