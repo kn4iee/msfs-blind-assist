@@ -65,7 +65,17 @@ internal sealed partial class ProbeForm
         var idents = new A350CalcStrings();
         service.CalcStringAnswer = idents.Answer;
         var identTimer = new System.Windows.Forms.Timer { Interval = 2000 };
-        identTimer.Tick += (_, _) => _m.RequestNavRadioInfo(d => idents.Update(d.Nav1Ident ?? "", d.Nav2Ident ?? "", d.Adf1Ident ?? "", d.Adf2Ident ?? ""));
+        // One ask out at a time, as MainForm asks them (A350IdentPoll): each leaves a handler waiting for its answer.
+        var identPoll = new A350IdentPoll();
+        identTimer.Tick += (_, _) =>
+        {
+            if (!_m.IsConnected || identPoll.Ask(DateTime.UtcNow) is not int ticket) return;
+            _m.RequestNavRadioInfo(d =>
+            {
+                if (identPoll.Answered(ticket))
+                    idents.Update(d.Nav1Ident ?? "", d.Nav2Ident ?? "", d.Adf1Ident ?? "", d.Adf2Ident ?? "");
+            });
+        };
         identTimer.Start();
         service.Spoken += line => BeginInvoke(() => cap.Announce("[reader] " + line));
         service.TakeoffSpeedsRead += speeds => BeginInvoke(() => def.ObserveTakeoffSpeeds(speeds, cap));
@@ -396,9 +406,8 @@ internal sealed partial class ProbeForm
                             break;
                         case "stats":
                         {
-                            var sim = System.Diagnostics.Process.GetProcessesByName("FlightSimulator2024").FirstOrDefault();
-                            var machine = A350MachineMemory.Read();
-                            Line(FormattableString.Invariant($"sim {(sim?.PrivateMemorySize64 ?? 0) / 1e9:0.0} GB, {machine}, reader {service.State}"));
+                            // The sim's commit is the reader's own figure, found under either of the sim's process names.
+                            Line(FormattableString.Invariant($"{A350MachineMemory.Read().Line}, reader {service.State}"));
                             break;
                         }
                         default:

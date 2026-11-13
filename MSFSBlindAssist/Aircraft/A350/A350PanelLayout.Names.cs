@@ -100,8 +100,8 @@ public static partial class A350PanelLayout
         "PRINTER_PAPER_SIDE_6_CS", "PRINTER_PAPER_SIDE_7_CS", "PRINTER_PAPER_SIDE_8_CS",
     };
 
-    /// <summary>Panels with a plan of their own still to come, not placed until then: the RMPs (192 keys and a display)
-    /// and the KCCU wheels (the MFD's).</summary>
+    /// <summary>Groups not placed on a panel: the two KCCU wheels (all iniBuilds files under FMGS_1 and FMGS_2). The MFD
+    /// window pages a list and scrolls a page with the KCCU's own keys instead.</summary>
     private static readonly HashSet<string> DeferredPanels = new(StringComparer.Ordinal) { "FMGS_1", "FMGS_2" };
 
     /// <summary>A control iniBuilds files under another group, sent to the panel the A380 puts it on.</summary>
