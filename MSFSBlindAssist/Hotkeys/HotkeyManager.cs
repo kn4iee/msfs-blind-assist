@@ -119,7 +119,7 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_READ_DISPLAY_ISIS = 9073;
         private const int HOTKEY_DESCRIBE_SCENE = 9074;
         private const int HOTKEY_SHOW_OANS = 9099; // A380 ND OANS / BTV control panel
-        private const int HOTKEY_SHOW_STANDBY_NAV_DISPLAY = 9255; // Alt+Shift+N: the A350's standby navigation display window
+        private const int HOTKEY_SHOW_STANDBY_NAV_DISPLAY = 9276; // (9255 is another open PR's Read MFD) Alt+Shift+N: the A350's standby navigation display window
 
         // Hand fly mode global hotkey IDs (separate from output mode)
         private const int HOTKEY_HANDFLY_HEADING = 9077;
