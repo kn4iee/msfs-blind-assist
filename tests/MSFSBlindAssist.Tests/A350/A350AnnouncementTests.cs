@@ -252,6 +252,24 @@ public class A350LampAnnouncementTests
         Assert.Empty(_speech.All);
     }
 
+    // Plan 26: a display window's button presses its row as the panel does (A350WindowRows): the light it turns is the pilot's
+    // own, which the button's new text says, so never said again; the row itself is armed as the window's echo.
+    [Fact]
+    public void A_window_press_lights_its_lamp_unheard()
+    {
+        var cstr = AnyLamp("A350_LT_EFIS_TSK_1_LEFT_SEQ1_LIGHT");
+        Baseline(cstr, 0);
+        BatchAfter(5000);
+        string row = A350PanelLayout.Place(A350ControlMap.Load()).RowsByPanel.Values.SelectMany(r => r)
+            .First(r => r.Control?.Id == cstr.ControlId && r.Action == A350RowAction.Press).Key;
+        new MSFSBlindAssist.Forms.A350.A350WindowRows(_def, new SimConnectManager(IntPtr.Zero), _speech).Press(row);
+        Assert.True(_def.WindowEchoActive(row));
+        _speech.All.Clear();
+        _def.ProcessSimVarUpdate(cstr.Key, 1, _speech);
+        BatchAfter(5000);
+        Assert.Empty(_speech.All);
+    }
+
     // A pick on the first officer's tiller row moves the captain's too: the pilot's own pick, which the screen reader said,
     // is never said back by the captain's row; a later change to another position is.
     [Fact]
