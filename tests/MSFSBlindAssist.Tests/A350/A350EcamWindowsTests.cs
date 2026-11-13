@@ -100,4 +100,40 @@ public class A350EcamWindowsTests
         Assert.Same(def.CtrView(ctr), def.CtrView(ctr));
         Assert.NotSame(def.CtrView(ctr), def.CtrView(A350Fixtures.Capture("ctr_cruise.json")));
     }
+
+    private static IniBuildsA350Definition WithPage(double? page)
+    {
+        var cache = new Dictionary<string, double>(StringComparer.Ordinal);
+        if (page is double p) cache[IniBuildsA350Definition.SdPageKey] = p;
+        var def = new IniBuildsA350Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
+        def.Attach(new SimConnect.SimConnectManager(IntPtr.Zero));
+        return def;
+    }
+
+    // Re-review M1-M5: the SD was read by the page variable, which reaches MSFSBA a moment after the draw shows a new page. It is read
+    // by the page its draw shows (A350SdPage.PageOf), the variable only where the draw names none.
+    [Fact]
+    public void The_sd_is_read_by_the_page_its_draw_shows()
+    {
+        var fuel = A350Fixtures.Capture("ctr_sd_page_8.json");
+        var def = WithPage(3);   // the variable still says ELEC DC
+        Assert.Equal(Lines(A350SdText.Build(fuel, 8)), def.SdFeed().Read(fuel, 0));
+        Assert.Equal(Lines(A350EwdText.Build(fuel, 8)), def.EwdFeed().Read(fuel, 0));
+    }
+
+    // STATUS chosen with nothing to say draws the CRUISE page: the variable's STATUS stands, said "showing the Cruise page".
+    [Fact]
+    public void Status_drawing_another_page_is_still_status()
+    {
+        var status = A350Fixtures.Capture("p04_ctr_sd_status_air.json");
+        Assert.Equal(Lines(A350SdText.Build(status, 14)), WithPage(14).SdFeed().Read(status, 0));
+    }
+
+    // Re-review M3: with the page variable unread and no draw to name the page, the SD is not read yet, never read as a guessed page 0.
+    [Fact]
+    public void An_sd_with_no_page_known_is_not_read_yet()
+    {
+        Assert.Equal("not read yet", WithPage(null).SdFeed().Unavailable!(0));
+        Assert.Null(WithPage(3).SdFeed().Unavailable?.Invoke(0));
+    }
 }

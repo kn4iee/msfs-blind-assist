@@ -198,7 +198,7 @@ Trim:
 Displays (each a live window, as on the Fenix: the display as lines, then with Tab the
 cockpit controls that change it, each saying its state; F5 reads now, Escape closes):
   Alt+P      PFD window: the FMA first, then speeds, altitude, heading, messages; FD, LS,
-             VV, Baro STD, Baro QNH, Baro unit and a QNH box; a Side box for either PFD
+             VV, Baro STD (push), Baro QNH (pull), Baro unit and a QNH box; a Side box for either PFD
   Alt+N      ND window, every ND function in one place: the ND and its airport map (the
              ANF), each name on the map and where it lies, traffic; Enter does what a click
              on the ND does; ND mode and range, every EFIS button (CSTR to ARPT, VOR 1 to

@@ -20,7 +20,7 @@ public sealed class A350IsisWindow : A350DisplayWindow
 
     public A350IsisWindow(A350DisplayFeed feed, IA350WindowRows rows) : base("ISIS", feed, rows)
     {
-        AddKeyRow(Keys);
+        AddKeyRow(Keys, "ISIS keys");
         AddTypedBox("ISIS QNH", _ => QnhRow);
     }
 }

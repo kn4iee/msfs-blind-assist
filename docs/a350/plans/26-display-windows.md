@@ -57,17 +57,17 @@ As every plan's Task 0: check the remote, set the record below, commit `docs(a35
 
 ### Task 2: The base window (`A350DisplayWindow`) and its row controls
 
-**Files:** Create `MSFSBlindAssist/Forms/A350/A350DisplayWindow.cs`, `MSFSBlindAssist/Forms/A350/IA350WindowRows.cs`; modify `MSFSBlindAssist/Aircraft/IniBuildsA350Definition.Hotkeys.cs` (an adapter `A350WindowRows` implementing the seam, and `ArmWindowPressEcho`); test `tests/MSFSBlindAssist.Tests/A350/A350DisplayWindowTests.cs`.
+**Files:** Create `MSFSBlindAssist/Forms/A350/A350DisplayWindow.cs`, `MSFSBlindAssist/Forms/A350/IA350WindowRows.cs`; modify `MSFSBlindAssist/Aircraft/IniBuildsA350Definition.Hotkeys.cs` (an adapter `A350WindowRows` implementing the seam); test `tests/MSFSBlindAssist.Tests/A350/A350DisplayWindowTests.cs`.
 
 **Interfaces:**
-- Produces: `public interface IA350WindowRows { string? State(string row); void Press(string row, double value = 1); void Toggle(string row); }` (the adapter: `TryDescribeControlState`, `ArmWindowPressEcho` then `PressRow`, `PressToggleFromWindow`).
+- Produces: `public interface IA350WindowRows { string? State(string row); void Press(string row, double value = 1); void Toggle(string row); }` (the adapter: `TryDescribeControlState`, `ArmWindowEcho` then `PressRow`, `PressToggleFromWindow`).
 - Produces: `public sealed record A350DisplayFeed(Func<int, A350DrawCapture?> Latest, Func<int, Task<A350DrawCapture?>> DrawNow, Func<int, bool> Dark, Func<A350DrawCapture, int, IReadOnlyList<string>> Read)`.
 - Produces: `public sealed record A350WindowKey(string Label, Func<int, string> Row, bool Toggle = false)` (a row per side).
 - Produces: `internal sealed class A350KeyRow : FlowLayoutPanel` with `(IReadOnlyList<A350WindowKey> keys, IA350WindowRows rows, Func<int> side)`, `void RefreshStates()` and `IReadOnlyList<Button> Buttons`: one button per key, "<label>: <state>", a click pressing (or toggling) the side's row; the base window and `A350NdWindow` both use it.
 - Produces: `public class A350DisplayWindow : Form` with `(string display, A350DisplayFeed feed, IA350WindowRows rows, int sides = 1)`; `public void ShowForm()`; `internal void StartLive()`; `internal void RefreshNow(A350DrawCapture? fresh = null)`; `protected void AddControlAfterList(Control c)`; `protected A350KeyRow AddKeyRow(IReadOnlyList<A350WindowKey> keys)` (refreshed each tick); `protected virtual bool HandleWindowKey(Keys keyData)`; `protected virtual void OnRefresh()`; `internal int Side`; `internal IReadOnlyList<Button> KeyButtons`; a press refreshes from a fresh draw 600 ms later, and a tick never shows a draw older than the one shown (`A350ShownCapture`).
-- Produces: `internal void IniBuildsA350Definition.ArmWindowPressEcho(string rowKey)`: arms the row and every lamp variable its state is read from.
+- As built: no `ArmWindowPressEcho`. `A350WindowRows.Press` arms the row (`ArmWindowEcho`) and presses through `PressRow`, whose write path marks the row's lamps as the pilot's own (`NoteOwnLamps`); see the execution record.
 
-- [ ] **Step 1:** Failing tests (the window built and driven with `StartLive`/`RefreshNow`, as `FenixChannelWindowTests`): the list is named "<display> display" and comes first in the tab order; the first start selects row 0, a second does not move the pilot; a refresh keeps the row by its words; dark, unread and not-fitted give one status row and the row followed comes back after it; with two sides the side box reads side 1 and its key rows press the RIGHT row; a key button reads "LS: On", its bare label while unread, presses its row once per click and a toggle through `Toggle`; a fresh draw is not replaced by an older latest one; `ArmWindowPressEcho` arms the EFIS CSTR row's lamp (`WindowEchoActive` on it).
+- [ ] **Step 1:** Failing tests (the window built and driven with `StartLive`/`RefreshNow`, as `FenixChannelWindowTests`): the list is named "<display> display" and comes first in the tab order; the first start selects row 0, a second does not move the pilot; a refresh keeps the row by its words; dark, unread and not-fitted give one status row and the row followed comes back after it; with two sides the side box reads side 1 and its key rows press the RIGHT row; a key button reads "LS: On", its bare label while unread, presses its row once per click and a toggle through `Toggle`; a fresh draw is not replaced by an older latest one; a window press of the EFIS CSTR row lights its lamp unheard (`A350LampAnnouncementTests`).
 - [ ] **Step 2:** Run; they fail.
 - [ ] **Step 3:** Implement (the Fenix base's members, the A350's feed and seam).
 - [ ] **Step 4:** Run `--filter FullyQualifiedName~A350`; all pass.
@@ -127,7 +127,7 @@ As every plan's Task 0: check the remote, set the record below, commit `docs(a35
 
 **Files:** `IniBuildsA350Definition.Hotkeys.cs` (Ctrl+Shift+F lists PFD, ND, E/WD, SD, ISIS, SND, MFD, RMP, Mailbox, FAP, Printer, each naming its key; the one-shot `AnnounceDisplay` and the SD sentence read removed); `.claude/rules/inibuilds-a350.md` and `docs/invariants/inibuilds-a350.md` ([A350-17]); `docs/inibuilds-a350.md`; `guide/airbus-aircraft.md`; `guide/hotkey-reference.md`; `MSFSBlindAssist/HotkeyGuides/iniBuilds_A350_Hotkeys.txt`; `docs/a350/owner-steps.md`; this plan's record; test `A350WindowsListTests` (the entries, in that order).
 
-- [ ] **Step 1:** [A350-17], at most 400 characters: an A350 display window's control is the panel's own row, pressed through `PressRow` or `PressToggleFromWindow`, its label from `TryDescribeControlState`, armed as the window's echo (`ArmWindowPressEcho`); a window never writes a variable itself and says nothing on open, refresh or close.
+- [ ] **Step 1:** [A350-17], at most 400 characters: an A350 display window's control is the panel's own row, pressed through `PressRow` or `PressToggleFromWindow`, its label from `TryDescribeControlState`, armed as the window's echo (`ArmWindowEcho`, the lamps by the write path); a window never writes a variable itself and says nothing on open, refresh or close.
 - [ ] **Step 2:** The guides and docs: the keys, each window's list and controls; Ctrl+Shift+B gone from the A350.
 - [ ] **Step 3:** Owner steps: one live check (each window opens on its key, follows its display, each control presses; the SND on Alt+Shift+N; the draw load with three windows open).
 - [ ] **Step 4:** Run the suite with `ClaudeRulesHookTests` and `ClaudeContextBudgetTests`; all pass.
@@ -160,6 +160,11 @@ Kept in this file only, so no other plan's push ever touches it.
 - **The review's minors (2026-11-13):** first deferred, then fixed test-first at the owner's word ("why did you defer the minors?"):
   the SD window waits for the page before reading a new page's draw, the ND window is named and shown as the other five, the side box
   comes last on the PFD window too, the CTR's draw is parsed once; then a second fresh review
+- **The re-review (2026-11-13):** a fresh reviewer on the whole plan found the ND window could show, and click through, the other side's
+  draw, and seventeen minors; all fixed test-first: `A350FreshDraws` per side for every window, the ND window's presses coalesced and its
+  F5 once a press, the SD read by the page its own draw shows (`A350SdPage.PageOf`, which replaced the page wait), a feed's throw costs the
+  list, a failed draw keeps the press behind it, a display not fitted is never asked of the monitor, the baro keys as the panel names
+  them, every key row named
 - **Rulings made while working:** the A350's own copy of the Fenix's `RowToFollow`; the side box right after the list; the E/WD
   window keeps all the Alt+E text showed; the SD page selector (the page keys as a combo) is on neither window; the ND window's rows
   named "EFIS" and "BTV controls"

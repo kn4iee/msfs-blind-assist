@@ -34,6 +34,6 @@ public sealed class A350EwdWindow : A350DisplayWindow
 
     public A350EwdWindow(A350DisplayFeed feed, IA350WindowRows rows) : base("E/WD", feed, rows)
     {
-        AddKeyRow(Keys);
+        AddKeyRow(Keys, "ECAM keys");
     }
 }

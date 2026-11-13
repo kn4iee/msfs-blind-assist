@@ -44,17 +44,25 @@ public partial class IniBuildsA350Definition
     private double? SdPageShown() => _sim is { } sim ? Cached(sim, SdPageKey) : null;
 
     /// <summary>A CTR display's feed: the CTR's draws, dark while the CTR draws no power, and <paramref name="read"/>'s lines.</summary>
-    private Forms.A350.A350DisplayFeed CtrFeed(Func<A350.Display.A350DrawCapture, string> read, bool needsPage) => new(
-        _ => needsPage && SdPageShown() is null ? null : CtrDraw(),
+    private Forms.A350.A350DisplayFeed CtrFeed(Func<A350.Display.A350DrawCapture, string> read) => new(
+        _ => CtrDraw(),
         async _ => Displays == null ? null : (await Displays.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
         _ => CtrDraw() is { } ctr && !CtrView(ctr).Powered,
         (capture, _) => TextLines(read(capture)));
 
-    /// <summary>The E/WD window's feed: the CTR as <c>A350EwdText</c> reads it, with the SD's page when known (the Alt+E text before).</summary>
-    internal Forms.A350.A350DisplayFeed EwdFeed() => CtrFeed(c => A350.Display.A350EwdText.Build(c, CtrView(c), SdPageShown()), needsPage: false);
+    /// <summary>The page to read a CTR draw's SD by: the page the draw shows, else the variable (<c>A350SdText.PageToRead</c>).</summary>
+    private double? SdPageToRead(A350.Display.A350DrawCapture capture) =>
+        A350.Display.A350SdText.PageToRead(CtrView(capture).SystemDisplay, SdPageShown());
 
-    /// <summary>The SD window's feed: the page the SD shows as <c>A350SdText</c> reads it; not read while the page is unread.</summary>
-    internal Forms.A350.A350DisplayFeed SdFeed() => CtrFeed(c => A350.Display.A350SdText.Build(c, CtrView(c), SdPageShown() ?? 0), needsPage: true);
+    /// <summary>The E/WD window's feed: the CTR as <c>A350EwdText</c> reads it, its SD section by the page its draw shows.</summary>
+    internal Forms.A350.A350DisplayFeed EwdFeed() => CtrFeed(c => A350.Display.A350EwdText.Build(c, CtrView(c), SdPageToRead(c)));
+
+    /// <summary>The SD window's feed: the page its draw shows as <c>A350SdText</c> reads it; "not read yet" while neither the draw nor the
+    /// variable names a page (never a guessed page).</summary>
+    internal Forms.A350.A350DisplayFeed SdFeed() => CtrFeed(c => A350.Display.A350SdText.Build(c, CtrView(c), SdPageToRead(c) ?? 0)) with
+    {
+        Unavailable = _ => SdPageShown() is null && (CtrDraw() is not { } ctr || SdPageToRead(ctr) is null) ? "not read yet" : null,
+    };
 
     /// <summary>The SND window's feed: the standby navigation display, and "not fitted" while its OIS option (STANDBY NAV DISPLAY) is
     /// off, as its panel's rows refuse then.</summary>
@@ -114,7 +122,7 @@ public partial class IniBuildsA350Definition
                 ShowTrackedWindow(() => new Forms.A350.A350EwdWindow(EwdFeed(), rows), w => w.ShowForm());
                 break;
             case "SD":
-                ShowTrackedWindow(() => new Forms.A350.A350SdWindow(SdFeed(), rows, SdPageShown), w => w.ShowForm());
+                ShowTrackedWindow(() => new Forms.A350.A350SdWindow(SdFeed(), rows), w => w.ShowForm());
                 break;
             case "ISIS":
                 ShowTrackedWindow(() => new Forms.A350.A350IsisWindow(DisplayFeed("Standby flight display"), rows), w => w.ShowForm());

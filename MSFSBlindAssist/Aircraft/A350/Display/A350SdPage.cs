@@ -35,6 +35,25 @@ public static class A350SdPage
     /// <summary>The page the STATUS key shows when it draws no STATUS (live 2026-11-02: CRUISE in cruise, the alert's WHEEL page on the
     /// ground with BRAKES PARK BRK ON): the page whose fields the drawn values fill most, three at least; null while STATUS is drawn,
     /// or nothing fits.</summary>
+    /// <summary>The page a draw of the SD shows, from the draw itself (plan 26's re-review): the A350's page variable reaches MSFSBA a
+    /// moment after the draw shows a new page, so reading the draw by the variable read a new page by the old page's fields. STATUS by its
+    /// own word; else the page whose fields the drawn values fill the largest share of, three at least (all of a page with fewer: HYD's
+    /// two), and more than any other page's;
+    /// null when no page fits so (the reader then takes the variable).</summary>
+    public static int? PageOf(IReadOnlyList<IReadOnlyList<DrawnCell>> rows)
+    {
+        var cells = rows.SelectMany(r => r).ToList();
+        if (cells.Count == 0) return null;
+        if (cells.Any(c => c.Text.Trim() == "STATUS")) return StatusPage;
+        int Fits(IEnumerable<SdField> fields) =>
+            fields.Count(f => cells.Any(c => Math.Abs(c.Y - f.Y) <= Dy && c.X >= f.X - Dx && c.X <= f.X + f.Width + Dx));
+        var scored = Pages.Where(kv => kv.Key != StatusPage)
+            .Select(kv => (Page: kv.Key, Fits: Fits(kv.Value), Share: (double)Fits(kv.Value) / kv.Value.Length))
+            .Where(p => p.Fits >= Math.Min(3, Pages[p.Page].Length)).OrderByDescending(p => p.Share).ThenByDescending(p => p.Fits).ToList();
+        if (scored.Count == 0) return null;
+        return scored.Count == 1 || scored[0].Share > scored[1].Share ? scored[0].Page : null;
+    }
+
     public static int? StatusShowing(IReadOnlyList<IReadOnlyList<DrawnCell>> rows)
     {
         var cells = rows.SelectMany(r => r).ToList();

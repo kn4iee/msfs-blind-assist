@@ -61,7 +61,7 @@ public class A350DisplayWindowTests
 
         public Window(A350DisplayFeed feed, IA350WindowRows rows, int sides = 1) : base("PFD", feed, rows, sides)
         {
-            AddKeyRow(Keys);
+            AddKeyRow(Keys, "Test keys");
         }
     }
 
@@ -317,5 +317,68 @@ public class A350DisplayWindowTests
         var byTab = form.Controls.Cast<Control>().OrderBy(c => c.TabIndex).ToList();
         Assert.IsType<DisplayListBox>(byTab[0]);
         Assert.Equal("Side", byTab[^1].AccessibleName);
+    }
+
+    // Re-review M6: a feed whose dark test throws (a torn CTR) threw from the timer every second; it costs the list, as a read does.
+    [Fact]
+    public void A_dark_test_that_throws_costs_only_the_list()
+    {
+        var feed = new Feed();
+        feed.Show(0, "LS on");
+        var broken = feed.ToFeed() with { Dark = _ => throw new InvalidOperationException("torn") };
+        using var form = new Window(broken, new Rows());
+        form.StartLive();
+        Assert.Equal(new[] { "PFD: not available, read failed" }, ItemsOf(ListOf(form)));
+    }
+
+    // Re-review M9: a fresh draw that threw lost the press queued behind it.
+    [Fact]
+    public async Task A_fresh_draw_that_throws_still_reads_the_press_queued_behind_it()
+    {
+        var feed = new Feed();
+        feed.Show(0, "LS off");
+        var first = new TaskCompletionSource<A350DrawCapture?>();
+        int calls = 0;
+        var fresh = Draw("EFIS");
+        feed.Lines[fresh] = new[] { "LS on" };
+        var flaky = feed.ToFeed() with { DrawNow = _ => ++calls == 1 ? first.Task : Task.FromResult<A350DrawCapture?>(fresh) };
+        using var form = new Window(flaky, new Rows()) { Pause = (_, _) => Task.CompletedTask };
+        form.StartLive();
+        var press1 = form.AfterPressAsync();
+        var press2 = form.AfterPressAsync();   // queued behind the first's draw
+        first.SetException(new InvalidOperationException("trap"));
+        await Task.WhenAll(press1, press2);
+        Assert.Equal(2, calls);
+        Assert.Equal(new[] { "LS on" }, ItemsOf(ListOf(form)));
+    }
+
+    // Re-review M13: a display that is not there (the SND not fitted) was still asked of the monitor every second, which then drew it.
+    [Fact]
+    public void A_display_not_there_is_never_asked_of_the_monitor()
+    {
+        int asked = 0;
+        var feed = new A350DisplayFeed(_ => { asked++; return null; }, _ => Task.FromResult<A350DrawCapture?>(null), _ => false,
+            (_, _) => Array.Empty<string>(), _ => "not fitted (an OIS option)");
+        using var form = new Window(feed, new Rows());
+        form.StartLive();
+        form.RefreshNow();
+        Assert.Equal(0, asked);
+        Assert.Equal(new[] { "PFD: not available, not fitted (an OIS option)" }, ItemsOf(ListOf(form)));
+    }
+
+    // Re-review M11: F5 held down refreshes once per press, in every display window (the ND's too).
+    [Fact]
+    public void A_key_held_down_is_one_press()
+    {
+        Assert.True(A350DisplayWindow.FirstPress(IntPtr.Zero));
+        Assert.False(A350DisplayWindow.FirstPress(new IntPtr(0x40000001)));
+    }
+
+    // Re-review M15: each window's row of keys is named, as the ND window's "EFIS" row is.
+    [Fact]
+    public void A_key_row_carries_its_name()
+    {
+        using var form = new Window(new Feed().ToFeed(), new Rows());
+        Assert.Equal("Test keys", form.Controls.OfType<A350KeyRow>().Single().AccessibleName);
     }
 }

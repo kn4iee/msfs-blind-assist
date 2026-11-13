@@ -22,11 +22,11 @@ public sealed record A350DisplayFeed(Func<int, A350DrawCapture?> Latest, Func<in
 /// <remarks>
 /// <para>Silence ([CORE-7]). The window has no announcer: the screen reader reads the list as it takes focus and a row that changes under
 /// the pilot, and a button's new text after its press. A refresh, F5, opening and closing say nothing.</para>
-/// <para>Draws. A tick shows the monitor's latest draw; a press shows a fresh draw 600 ms later, and the monitor's latest from before it
-/// is then never shown over it (<see cref="A350ShownCapture"/>, one for each side, with that side's fresh draw kept: a side switched
-/// back to shows its own). Presses close together read one fresh draw, after the last, and one draw at a time: each is a full memory
-/// copy on the reader's one queue, where the background's E/WD and FMA reads wait too (final review). A draw asked for one side is
-/// never shown for the other.</para>
+/// <para>Draws. A tick shows the monitor's latest draw; a press shows a fresh draw 600 ms later, which the monitor's latest from before
+/// it never replaces (<see cref="A350FreshDraws"/>, per side: a draw asked for one side is never shown for the other, and a side
+/// switched back to shows its own). Presses close together read one fresh draw, after the last, and one draw at a time: each is a full
+/// memory copy on the reader's one queue, where the background's E/WD and FMA reads wait too (final review); a draw that fails costs
+/// only itself. A display that is not there (an option not fitted) is never asked of the monitor.</para>
 /// <para>One class for each display: windows are tracked one for each type (<c>ShowTrackedWindow</c>), so each display's window derives
 /// from this one in a class of its own. Not abstract only so that a test can build it.</para>
 /// </remarks>
@@ -46,8 +46,7 @@ public class A350DisplayWindow : Form
     private readonly ComboBox? _side;
     private readonly List<A350KeyRow> _keyRows = new();
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly A350ShownCapture[] _shown = { new(), new() };
-    private readonly A350DrawCapture?[] _freshDraw = new A350DrawCapture?[2];   // each side's last fresh draw, shown over its older latest
+    private readonly A350FreshDraws _draws;
     private int _pressGeneration, _drawAgainSide;
     private bool _drawing, _drawAgain;
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
@@ -65,6 +64,7 @@ public class A350DisplayWindow : Form
         _rows = rows;
         _timer = new System.Windows.Forms.Timer { Interval = RefreshIntervalMs };
         _timer.Tick += (_, _) => RefreshNow();
+        _draws = new A350FreshDraws(() => Clock(), (long)A350PfdMonitor.MaxAge.TotalMilliseconds);
 
         Text = "A350 " + display;
         Size = new Size(560, 480);
@@ -98,6 +98,10 @@ public class A350DisplayWindow : Form
     /// <summary>The wait between a press and its fresh draw (tests replace it).</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     internal Func<int, CancellationToken, Task> Pause { get; set; } = Task.Delay;
+
+    /// <summary>Milliseconds, steadily rising, for how long a fresh draw stands (tests replace it).</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<long> Clock { get; set; } = () => Environment.TickCount64;
 
     /// <summary>Every key row's buttons, in the order added.</summary>
     internal IReadOnlyList<Button> KeyButtons => _keyRows.SelectMany(r => r.Buttons).ToList();
@@ -149,28 +153,27 @@ public class A350DisplayWindow : Form
             Report($"controls failed: {ex.GetType().Name}: {ex.Message}");
         }
 
-        // A derived window that knows the display has not caught up with a press (the SD's page) keeps the rows it shows meanwhile.
-        if (fresh is null && HoldsRows) return;
-
         int side = Side;
-        A350DrawCapture? capture;
-        int freshSide = drawnFor ?? side;
-        if (fresh is { Ok: true })
+        IReadOnlyList<string> rows;
+        // The feed's own questions cost only the list when they throw (a torn draw's dark test), as a read does: this is the timer's.
+        try
         {
-            // Kept for its own side, shown only there: a side switched while it was drawn shows its own display.
-            _shown[freshSide].Fresh(_feed.Latest(freshSide));
-            _freshDraw[freshSide] = fresh;
+            // A display not there (an option not fitted) is never asked of the monitor, which would keep drawing it.
+            if (_feed.Unavailable?.Invoke(side) is { } why)
+                rows = A350DisplayRows.Status(_display, why);
+            else
+            {
+                if (fresh is { Ok: true })
+                    _draws.Took(drawnFor ?? side, fresh, _feed.Latest(drawnFor ?? side));   // kept for its own side, shown only there
+                var capture = _draws.ToShow(side, _feed.Latest(side));
+                rows = A350DisplayRows.For(_display, capture, _feed.Dark(side), c => _feed.Read(c, side), Report);
+            }
         }
-        if (fresh is { Ok: true } && freshSide == side)
-            capture = fresh;
-        else
+        catch (Exception ex)
         {
-            capture = _feed.Latest(side);
-            // The monitor's draw from before the press: the side's fresh one stays.
-            if (_shown[side].Superseded(capture)) capture = _freshDraw[side];
+            Report($"read failed: {ex.GetType().Name}: {ex.Message}");
+            rows = A350DisplayRows.Status(_display, "read failed");
         }
-
-        var rows = A350DisplayRows.For(_display, capture, _feed.Dark(side), c => _feed.Read(c, side), Report, _feed.Unavailable?.Invoke(side));
         _list.SetLines(rows);
         if (A350DisplayRows.IsStatusRow(_display, rows)) return;
         int best = A350DisplayRows.RowToFollow(rows, _followedRow, _list.SelectedIndex);
@@ -186,8 +189,6 @@ public class A350DisplayWindow : Form
         try
         {
             await Pause(AfterPressMs, CancellationToken.None);
-            if (IsDisposed || generation != _pressGeneration) return;
-            await SettleAsync();
             if (IsDisposed || generation != _pressGeneration) return;
             await DrawFreshAsync(side);
         }
@@ -212,10 +213,18 @@ public class A350DisplayWindow : Form
             while (true)
             {
                 _drawAgain = false;
-                var fresh = await _feed.DrawNow(side);
-                if (IsDisposed) return;
-                RefreshNow(fresh, side);
-                if (!_drawAgain) return;
+                try
+                {
+                    var fresh = await _feed.DrawNow(side);
+                    if (IsDisposed) return;
+                    RefreshNow(fresh, side);
+                }
+                catch (Exception ex)
+                {
+                    // A draw that fails costs only itself: the press queued behind it still has its own (re-review M9).
+                    Report($"fresh draw failed: {ex.GetType().Name}: {ex.Message}");
+                }
+                if (!_drawAgain || IsDisposed) return;
                 side = _drawAgainSide;
             }
         }
@@ -226,16 +235,8 @@ public class A350DisplayWindow : Form
     /// window (the Fenix display window's rule).</summary>
     internal static bool EscapeCloses(bool comboListOpen) => !comboListOpen;
 
-    /// <summary>Called as each of the window's controls is pressed, before its fresh draw is asked for. The base does nothing.</summary>
-    protected virtual void Pressed() { }
-
-    /// <summary>Awaited after a press's wait and before its fresh draw: a derived window waits here for what the display's reader needs
-    /// to have caught up (the SD's page). The base waits for nothing.</summary>
-    protected virtual Task SettleAsync() => Task.CompletedTask;
-
-    /// <summary>Whether a tick keeps the rows shown rather than read the monitor's latest draw: a derived window's display that has not
-    /// caught up with a press yet. The base never holds.</summary>
-    protected virtual bool HoldsRows => false;
+    /// <summary>Whether a key message is the key's own press, not an auto-repeat of a key held down (bit 30 of its lParam set).</summary>
+    internal static bool FirstPress(IntPtr lParam) => (lParam.ToInt64() & KeyWasDown) == 0;
 
     /// <summary>Called at every refresh, before the rows are set, for a derived window's own controls. The base does nothing.</summary>
     protected virtual void OnRefresh() { }
@@ -263,9 +264,10 @@ public class A350DisplayWindow : Form
 
     /// <summary>Adds a row of the panel's keys after the list (<see cref="A350KeyRow"/>): each reads its row's state, and a press reads
     /// the display again from a fresh draw.</summary>
-    protected A350KeyRow AddKeyRow(IReadOnlyList<A350WindowKey> keys)
+    /// <param name="name">The row's name, as a group the reader can say ("EFIS", "ECAM keys").</param>
+    protected A350KeyRow AddKeyRow(IReadOnlyList<A350WindowKey> keys, string name)
     {
-        var row = new A350KeyRow(keys, _rows, () => Side, () => { Pressed(); _ = AfterPressAsync(); });
+        var row = new A350KeyRow(keys, _rows, () => Side, () => _ = AfterPressAsync()) { AccessibleName = name };
         _keyRows.Add(row);
         AddControlAfterList(row);
         return row;
@@ -274,7 +276,7 @@ public class A350DisplayWindow : Form
     /// <summary>Adds a typed row's box after the list (<see cref="A350TypedBox"/>): Enter applies it, then the display is read again.</summary>
     protected A350TypedBox AddTypedBox(string label, Func<int, string> row)
     {
-        var box = new A350TypedBox(label, row, _rows, () => Side, () => { Pressed(); _ = AfterPressAsync(); });
+        var box = new A350TypedBox(label, row, _rows, () => Side, () => _ = AfterPressAsync());
         AddControlAfterList(box);
         return box;
     }
@@ -298,7 +300,7 @@ public class A350DisplayWindow : Form
             if (keyData == Keys.F5)
             {
                 // Once per press: a held key repeats, and each repeat has the already-down bit set.
-                if ((msg.LParam.ToInt64() & KeyWasDown) == 0) _ = RefreshFreshAsync();
+                if (FirstPress(msg.LParam)) _ = RefreshFreshAsync();
                 return true;
             }
         }

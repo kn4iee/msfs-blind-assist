@@ -20,6 +20,13 @@ public static class A350SdText
         return (title, shown);
     }
 
+    /// <summary>The page to read a draw of the SD by (plan 26's re-review): the page the draw itself shows (<see cref="A350SdPage.PageOf"/>),
+    /// since the A350's page variable reaches MSFSBA a moment after the draw shows a new page; the variable where the draw names none.
+    /// While the variable says STATUS it stands: STATUS with nothing to say draws another page (<see cref="Shown"/> names it so). Null
+    /// with neither.</summary>
+    public static double? PageToRead(IReadOnlyList<IReadOnlyList<DrawnCell>> rows, double? variable) =>
+        variable is 14 ? 14 : A350SdPage.PageOf(rows) ?? variable;
+
     public static string Build(A350DrawCapture? capture, double page) =>
         capture == null ? PageName(page) + " page\r\n" + A350DisplayStatus.NotAvailableYet : Build(capture, A350Ewd.Parse(capture), page);
 

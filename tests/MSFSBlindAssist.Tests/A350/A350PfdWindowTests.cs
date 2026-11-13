@@ -15,7 +15,8 @@ public class A350PfdWindowTests
     [Fact]
     public void Its_keys_are_the_sides_efis_rows_and_the_fcus_fd()
     {
-        Assert.Equal(new[] { "FD", "LS", "VV", "Baro STD", "Baro QNH", "Baro unit" }, A350PfdWindow.Keys.Select(k => k.Label));
+        // The knob's push and pull as the panel names them (re-review M14: "Baro STD: QNH" read as a contradiction).
+        Assert.Equal(new[] { "FD", "LS", "VV", "Baro STD (push)", "Baro QNH (pull)", "Baro unit" }, A350PfdWindow.Keys.Select(k => k.Label));
         Assert.Equal(new[] { "A350_FCU_FD", "A350_EFIS_LS_LEFT", "A350_EFIS_VV_LEFT", "A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PUSH",
             "A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL", "A350_EFIS_QNH_UNIT_SELECTOR_LEFT" }, A350PfdWindow.Keys.Select(k => k.Row(0)));
         Assert.Equal(new[] { "A350_FCU_FD", "A350_EFIS_LS_RIGHT", "A350_EFIS_VV_RIGHT", "A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH",
@@ -78,5 +79,20 @@ public class A350PfdWindowTests
         box.Text = "1013";
         typeof(Control).GetMethod("OnKeyDown", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(box, new object[] { new KeyEventArgs(Keys.Enter) });
         Assert.Equal(new[] { "type A350_CAPT_QNH_SET 1013" }, rows.Log);
+    }
+
+    // Re-review M15: each window's row of keys is named.
+    [Fact]
+    public void Every_display_windows_key_row_is_named()
+    {
+        var rows = new Rows();
+        var feed = new A350DisplayFeed(_ => null, _ => Task.FromResult<A350DrawCapture?>(null), _ => false, (_, _) => Array.Empty<string>());
+        string Name(Form form) => form.Controls.OfType<A350KeyRow>().Single().AccessibleName;
+        using var pfd = new A350PfdWindow(feed, rows);
+        using var ewd = new A350EwdWindow(feed, rows);
+        using var sd = new A350SdWindow(feed, rows);
+        using var isis = new A350IsisWindow(feed, rows);
+        using var snd = new A350SndWindow(feed, rows);
+        Assert.Equal(new[] { "EFIS", "ECAM keys", "SD page keys", "ISIS keys", "SND keys" }, new Form[] { pfd, ewd, sd, isis, snd }.Select(Name));
     }
 }

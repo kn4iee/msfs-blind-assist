@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.Forms.A350;
 public sealed record A350WindowEntry(string Name, string Description, Action Open);
 
 /// <summary>
-/// The A350's window list (Input Ctrl+Shift+F, the Fenix's key): the windows with no hotkey of their own. Enter or a double-click
+/// The A350's window list (Input Ctrl+Shift+F, the Fenix's key): every A350 window, the display windows first, each naming its own key. Enter or a double-click
 /// closes the list and opens the row's window; Escape closes it and hands the foreground back. As the Fenix's list, it says nothing
 /// but a failure to open: the screen reader reads the title, the row and the window that opens next.
 /// </summary>

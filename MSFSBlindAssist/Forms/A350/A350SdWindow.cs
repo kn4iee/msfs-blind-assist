@@ -6,9 +6,6 @@ namespace MSFSBlindAssist.Forms.A350;
 /// so a pilot can show a page and read it in the one window. They are buttons, never a combo box, which would press a key at every page
 /// the reader arrows past (the Fenix SD window's reason). A class of its own: windows are tracked one per type.
 /// </summary>
-/// <remarks>The SD's draw names no page: its rows are read by the page the A350's variable says (INI_ECAM_ACTIVE_PAGE). After a key
-/// the new page can be drawn before that variable arrives, and would be read by the old page's fields, so the window keeps the rows it
-/// shows until the page has changed, at most <see cref="SettleMs"/>, and takes its fresh draw then (plan 26's review).</remarks>
 public sealed class A350SdWindow : A350DisplayWindow
 {
     /// <summary>The page keys in the panel's order, then the SD knob: the label each shows and its row.</summary>
@@ -24,36 +21,8 @@ public sealed class A350SdWindow : A350DisplayWindow
         new("SD knob down", _ => "A350_ECAM_SD_KNOB#DEC"),
     };
 
-    /// <summary>How often the page is looked at after a key, and how long at most the rows wait for it (a key of the page shown, or
-    /// a variable that never comes, holds them no longer).</summary>
-    internal const int PollMs = 100, SettleMs = 1500;
-
-    private readonly Func<double?> _page;
-    private double? _pageAtPress;
-    private bool _settling;
-
-    /// <param name="page">The page the SD shows, as the A350's variable says it, or null while unread.</param>
-    public A350SdWindow(A350DisplayFeed feed, IA350WindowRows rows, Func<double?> page) : base("SD", feed, rows)
+    public A350SdWindow(A350DisplayFeed feed, IA350WindowRows rows) : base("SD", feed, rows)
     {
-        _page = page;
-        AddKeyRow(Keys);
+        AddKeyRow(Keys, "SD page keys");
     }
-
-    protected override void Pressed()
-    {
-        _pageAtPress = _page();
-        _settling = true;
-    }
-
-    protected override async Task SettleAsync()
-    {
-        try
-        {
-            for (int waited = 0; waited < SettleMs && _page() == _pageAtPress; waited += PollMs)
-                await Pause(PollMs, CancellationToken.None);
-        }
-        finally { _settling = false; }
-    }
-
-    protected override bool HoldsRows => _settling && _page() == _pageAtPress;
 }

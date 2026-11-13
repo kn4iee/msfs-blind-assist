@@ -38,12 +38,13 @@ public sealed class A350NdWindow : Form
     private A350BtvArming.ExitsRead? _exitsRead;
     private bool _arming;
     private IntPtr _previousWindow;
-    private readonly A350ShownCapture _shown = new();
+    private readonly A350FreshDraws _draws = new(() => Environment.TickCount64, (long)A350PfdMonitor.MaxAge.TotalMilliseconds);
+    private int _actionGeneration;
     private readonly HashSet<string> _failures = new();
     private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>();
     private int _linesSide;
     private System.Windows.Forms.Timer? _timer;
-    private bool _busy, _refreshAgain, _settingKnobs;
+    private bool _busy, _refreshAgain, _refreshAgainNow, _settingKnobs;
 
     private static readonly IReadOnlyList<string> Modes = A350BtvArming.ModeNames;
     private static readonly IReadOnlyList<string> Ranges = A350BtvArming.RangeNames;
@@ -221,33 +222,29 @@ public sealed class A350NdWindow : Form
         if (IsDisposed) return;
         if (_busy)
         {
+            // A fresh read asked for while one runs follows it fresh, never as a plain read the older draw would then hold back.
             _refreshAgain = true;
+            _refreshAgainNow |= now;
             return;
         }
         _busy = true;
         try
         {
-            var cap = now ? await _drawNow(Side) : null;
-            if (cap is { Ok: true }) _shown.Fresh(_latest(Side));
-            else
-            {
-                cap = _latest(Side);
-                if (_shown.Superseded(cap))
-                {
-                    // The list keeps the fresh draw; the knobs and the EFIS buttons' labels still follow (final review).
-                    ReadKnobs();
-                    RefreshEfisStates();
-                    return;
-                }
-            }
+            // The side the draw is asked for: a side switched while it is drawn reads its own, never this one's (re-review I1: Enter then
+            // clicked the other side's ND at this side's places).
+            int drawnFor = Side;
+            var fresh = now ? await _drawNow(drawnFor) : null;
             if (IsDisposed) return;
+            if (fresh is { Ok: true }) _draws.Took(drawnFor, fresh, _latest(drawnFor));
+            int side = Side;
+            var cap = _draws.ToShow(side, _latest(side));
             ReadKnobs();
             RefreshEfisStates();
             var before = _lines;
-            (_lines, var shown) = PageLines(cap, Side, _isDark(Side), (int?)_knob(Side, true), (int?)_knob(Side, false));
-            _linesSide = Side;
+            (_lines, var shown) = PageLines(cap, side, _isDark(side), (int?)_knob(side, true), (int?)_knob(side, false));
+            _linesSide = side;
             _list.SetLines(shown);
-            if (cap != null && BtvStatus(cap, Side) is var status && _btvStatus.Text != status) _btvStatus.Text = status;
+            if (cap != null && BtvStatus(cap, side) is var status && _btvStatus.Text != status) _btvStatus.Text = status;
             // A menu or dialog just opened takes the selection to where a sighted pilot looks, and a tab just opened
             // says itself once, as the MFD's pages do.
             if (A350NdPage.SelectionFor(before, _lines) is int opened && opened < _list.Items.Count)
@@ -269,8 +266,9 @@ public sealed class A350NdWindow : Form
             _busy = false;
             if (_refreshAgain && !IsDisposed)
             {
-                _refreshAgain = false;
-                _ = RefreshAsync(false);
+                bool again = _refreshAgainNow;
+                _refreshAgain = _refreshAgainNow = false;
+                _ = RefreshAsync(again);
             }
         }
     }
@@ -500,9 +498,17 @@ public sealed class A350NdWindow : Form
         return (lines, lines.Count == 0 ? new[] { "The ND shows nothing." } : lines.Select(l => l.Spoken).ToList());
     }
 
-    private async Task AfterActionAsync()
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    /// <summary>The wait between a press and its fresh read (tests replace it).</summary>
+    internal Func<int, Task> Wait { get; set; } = Task.Delay;
+
+    /// <summary>After a press: a fresh read once the aircraft has taken it; a later press within the wait takes this one's place, so
+    /// presses close together read one draw, after the last, as the display windows do (re-review M10).</summary>
+    internal async Task AfterActionAsync()
     {
-        await Task.Delay(600);
+        int generation = ++_actionGeneration;
+        await Wait(600);
+        if (IsDisposed || generation != _actionGeneration) return;
         await RefreshAsync(true);
     }
 
@@ -581,7 +587,10 @@ public sealed class A350NdWindow : Form
         switch (keyData)
         {
             case Keys.Alt | Keys.X: PressKey("ESC"); return true;
-            case Keys.F5: _ = RefreshAsync(true); return true;
+            // F5 once a press: a held key repeats, and each repeat would queue a full-memory draw (re-review M11).
+            case Keys.F5:
+                if (A350DisplayWindow.FirstPress(msg.LParam)) _ = RefreshAsync(true);
+                return true;
             // Escape closes, unless it is closing a combo's open list (ND mode, range, the BTV lists): the base display window's rule.
             case Keys.Escape when A350DisplayWindow.EscapeCloses(ActiveControl is ComboBox { DroppedDown: true }): Close(); return true;
         }
@@ -599,13 +608,19 @@ public sealed class A350NdWindow : Form
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        // The window the pilot came from comes back as this one closes, as in the other display windows (re-review M12).
+        if (!e.Cancel && _previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _timer?.Stop();
         _timer?.Dispose();
         _timer = null;
         base.OnFormClosed(e);
-        if (_previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
     }
 
     protected override void Dispose(bool disposing)

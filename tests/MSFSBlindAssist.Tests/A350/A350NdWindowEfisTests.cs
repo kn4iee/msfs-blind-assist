@@ -124,4 +124,56 @@ public class A350NdWindowEfisTests
         Assert.True(form.ShowInTaskbar);
         Assert.Equal("ND display", form.Controls.OfType<MSFSBlindAssist.Forms.DisplayListBox>().Single().AccessibleName);
     }
+
+    private static string[] Items(Form form) => form.Controls.OfType<MSFSBlindAssist.Forms.DisplayListBox>().Single().Items.Cast<string>().ToArray();
+
+    // Re-review I1: a side switched while the fresh draw was on its way read the captain's draw as the first officer's ND, and Enter
+    // then clicked the first officer's ND at the captain's places. A draw is its own side's.
+    [Fact]
+    public async Task A_draw_for_one_side_is_never_shown_for_the_other()
+    {
+        var captainsDraw = A350Fixtures.Capture("efis0_anf_rose_01.json");
+        var firstOfficersLatest = A350Fixtures.Capture("efis1_aligned_stand.json");
+        var draw = new TaskCompletionSource<A350DrawCapture?>();
+        using var form = new A350NdWindow(side => side == 0 ? captainsDraw : firstOfficersLatest, _ => draw.Task, _ => false,
+            new A350NdInput(_ => { }), new SpeechCapture(), (_, _, _) => { }, (_, _) => null, null, new Rows());
+        var refresh = form.RefreshAsync(true);
+        form.Controls.OfType<ComboBox>().Single(c => c.AccessibleName == "Side").SelectedIndex = 1;
+        draw.SetResult(captainsDraw);
+        await refresh;
+        Assert.Equal(A350NdWindow.PageLines(firstOfficersLatest, 1, false).Shown, Items(form));
+    }
+
+    // Re-review M10: presses close together read one fresh draw, after the last, as the display windows do.
+    [Fact]
+    public async Task Presses_close_together_read_one_fresh_draw()
+    {
+        var latest = A350Fixtures.Capture("efis0_anf_rose_01.json");
+        int drawn = 0;
+        var wait = new TaskCompletionSource();
+        using var form = new A350NdWindow(_ => latest, _ => { drawn++; return Task.FromResult<A350DrawCapture?>(A350Fixtures.Capture("efis0_anf_rose_01.json")); },
+            _ => false, new A350NdInput(_ => { }), new SpeechCapture(), (_, _, _) => { }, (_, _) => null, null, new Rows())
+        { Wait = _ => wait.Task };
+        var presses = Enumerable.Range(0, 5).Select(_ => form.AfterActionAsync()).ToList();
+        wait.SetResult();
+        await Task.WhenAll(presses);
+        Assert.Equal(1, drawn);
+    }
+
+    // Re-review M10: a fresh read asked for while one runs is a fresh read after it, never a plain one the older draw then blocks.
+    [Fact]
+    public async Task A_fresh_read_asked_while_one_runs_follows_it_fresh()
+    {
+        var latest = A350Fixtures.Capture("efis0_anf_rose_01.json");
+        int drawn = 0;
+        var first = new TaskCompletionSource<A350DrawCapture?>();
+        using var form = new A350NdWindow(_ => latest, _ => ++drawn == 1 ? first.Task : Task.FromResult<A350DrawCapture?>(A350Fixtures.Capture("efis0_anf_rose_01.json")),
+            _ => false, new A350NdInput(_ => { }), new SpeechCapture(), (_, _, _) => { }, (_, _) => null, null, new Rows());
+        var running = form.RefreshAsync(true);
+        _ = form.RefreshAsync(true);   // asked while the first runs
+        first.SetResult(A350Fixtures.Capture("efis0_anf_rose_01.json"));
+        await running;
+        for (int i = 0; i < 20 && drawn < 2; i++) await Task.Yield();
+        Assert.Equal(2, drawn);
+    }
 }

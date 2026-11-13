@@ -12,7 +12,8 @@ public static class A350DisplayRows
 {
     private static string StatusStart(string display) => display + ": not available, ";
 
-    private static IReadOnlyList<string> Status(string display, string reason) => new[] { StatusStart(display) + reason };
+    /// <summary>The display's one status row, "&lt;display&gt;: not available, &lt;reason&gt;".</summary>
+    public static IReadOnlyList<string> Status(string display, string reason) => new[] { StatusStart(display) + reason };
 
     /// <summary>The rows the window lists for one read of <paramref name="display"/>.</summary>
     /// <param name="read">The display's lines from a draw; it runs on the UI thread and does no I/O.</param>

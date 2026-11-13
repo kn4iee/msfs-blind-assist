@@ -17,6 +17,6 @@ public sealed class A350SndWindow : A350DisplayWindow
 
     public A350SndWindow(A350DisplayFeed feed, IA350WindowRows rows) : base("SND", feed, rows)
     {
-        AddKeyRow(Keys);
+        AddKeyRow(Keys, "SND keys");
     }
 }

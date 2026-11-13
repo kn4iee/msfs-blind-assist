@@ -17,8 +17,8 @@ public sealed class A350PfdWindow : A350DisplayWindow
         new("FD", _ => "A350_FCU_FD", Toggle: true),
         new("LS", s => $"A350_EFIS_LS_{EfisSide(s)}", Toggle: true),
         new("VV", s => $"A350_EFIS_VV_{EfisSide(s)}", Toggle: true),
-        new("Baro STD", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{EfisSide(s)}_PUSH"),
-        new("Baro QNH", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{EfisSide(s)}_PULL"),
+        new("Baro STD (push)", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{EfisSide(s)}_PUSH"),
+        new("Baro QNH (pull)", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{EfisSide(s)}_PULL"),
         new("Baro unit", s => $"A350_EFIS_QNH_UNIT_SELECTOR_{EfisSide(s)}"),
     };
 
@@ -27,7 +27,7 @@ public sealed class A350PfdWindow : A350DisplayWindow
 
     public A350PfdWindow(A350DisplayFeed feed, IA350WindowRows rows) : base("PFD", feed, rows, sides: 2)
     {
-        AddKeyRow(Keys);
+        AddKeyRow(Keys, "EFIS");
         AddTypedBox("QNH", QnhRow);
     }
 }

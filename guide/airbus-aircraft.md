@@ -855,10 +855,10 @@ Note that Ctrl+Shift+R in Output mode reads your last landing rate instead.
 
 **Display windows: Output Alt+P, Alt+N, Alt+E, Alt+S, Alt+I and Alt+Shift+N**, as on the Fenix. Each opens a live window of one display: the display as a list you read with the arrow keys, kept up to date every second while you stay on your line, then, with Tab, the cockpit controls that change it, each saying its state (*"LS: On"*) and pressing the cockpit's own button. F5 reads it now; Escape closes. While a display is dark its window shows one line saying so.
 
-- **PFD (Alt+P):** the flight mode annunciator first, then speeds, altitude, heading and messages. Under it: FD, LS, VV, Baro STD, Baro QNH, Baro unit and a QNH box (type, then Enter), then the **Side** box, last as in the ND window, which picks the captain's or the first officer's PFD and EFIS.
+- **PFD (Alt+P):** the flight mode annunciator first, then speeds, altitude, heading and messages. Under it: FD, LS, VV, Baro STD (push), Baro QNH (pull), Baro unit and a QNH box (type, then Enter), then the **Side** box, last as in the ND window, which picks the captain's or the first officer's PFD and EFIS.
 - **ND (Alt+N):** the ND with every function of it, described below.
 - **E/WD (Alt+E):** the engine block, every warning display line with its colour, the ECAM cursor (*"selected"*) and each action box (*"to do"*, *"done"*), the SD page and its permanent data line. Under it: T.O CONFIG, both pilots' CLEAR and C/L, RCL LAST, RCL ALL, the EMER CANC guard and EMER CANC, ABN PROC, DEFRD PROC, MORE, DISPATCH and both pilots' wheel up and down.
-- **SD (Alt+S):** the page shown with its values named. Under it: the page keys ENG to VIDEO and the SD knob (push, up, down). After a page key the list keeps the page it shows until the SD has changed page (a moment at most), then reads the new one.
+- **SD (Alt+S):** the page shown with its values named. Under it: the page keys ENG to VIDEO and the SD knob (push, up, down). Each page is read as the SD draws it, so the list follows a page key straight away.
 - **ISIS (Alt+I):** the standby flight display. Under it: STD/CHANGE, LS/DIR TO, MENU, Minus, MODE, Plus and the ISIS QNH box.
 - **SND (Alt+Shift+N):** the standby navigation display, with its keys and knob. Without the SND fitted (an option on the OIS) the window says so.
 
