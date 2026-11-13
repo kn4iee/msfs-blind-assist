@@ -139,7 +139,9 @@ No code unless the sweep finds a line. **Files:** this plan's execution record (
 ## Execution record
 
 - **Claimed by:** Claude, for the owner (kn4iee), 2026-11-08. Written as plan 23; renumbered 29 before its push, when Robin's plans 23-28 (the displays) reached `B757` first (the index: a claim counts once it is on the remote).
-- **Status:** landed on `B757`, waiting on the owner's in-sim checks (above).
+- **Status:** done (2026-11-13): landed on `B757`; closed at the owner's word ("Close out all of the FO plans as they're working as expected", then "All in sim and flight checks pass"), covering the in-sim checks above.
+- **Waiting on the owner:** nothing.
+- **In-sim results:** the owner, 2026-11-13: "All in sim and flight checks pass". Not recorded: how long the APU took to stop after its 2-minute cool-down (check 1's note).
 - Worked inline by Claude (superpowers:executing-plans, TDD per task, one fresh whole-branch reviewer at the end), on `B757` in the main folder. Base c9989d1c9 (`kn4iee/B757` after the rebase; this plan f70f4f43d). Every commit carries `Plan: 29`.
 - Task 2, d86c0b645: eleven preflight tests, shortest first, no squib or landing config test.
 - Task 3, be4ebe5cd: "APU: OFF" reads the APU switch; Final Securing's 2-minute cool-down (`SC_APU_COOLDOWN`).
