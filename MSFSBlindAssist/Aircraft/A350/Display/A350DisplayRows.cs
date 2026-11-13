@@ -5,7 +5,8 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// `RowToFollow`): what the display shows, one row each, or one status row "&lt;display&gt;: not available, &lt;reason&gt;" in place of
 /// the content, so the list never holds a stale row and never an empty one. The reasons: "display off" (its screen is dark, whatever
 /// the last draw held), "not read yet" (no draw young enough), "nothing shown" (a draw with nothing on it) and "read failed" (a reader
-/// that threw; it costs that window only, reported once per distinct failure by the caller's report).
+/// that threw; it costs that window only, reported once per distinct failure by the caller's report); before them all, a display the
+/// aircraft is built without says why (the SND, an OIS option: "not fitted (an OIS option)").
 /// </summary>
 public static class A350DisplayRows
 {
@@ -16,9 +17,11 @@ public static class A350DisplayRows
     /// <summary>The rows the window lists for one read of <paramref name="display"/>.</summary>
     /// <param name="read">The display's lines from a draw; it runs on the UI thread and does no I/O.</param>
     /// <param name="report">Where a reader that throws is reported, as "read failed: &lt;type&gt;: &lt;message&gt;".</param>
+    /// <param name="unavailable">Why the display is not there at all, or null.</param>
     public static IReadOnlyList<string> For(string display, A350DrawCapture? capture, bool dark,
-        Func<A350DrawCapture, IReadOnlyList<string>> read, Action<string>? report = null)
+        Func<A350DrawCapture, IReadOnlyList<string>> read, Action<string>? report = null, string? unavailable = null)
     {
+        if (unavailable is not null) return Status(display, unavailable);
         if (dark) return Status(display, "display off");
         if (capture is null) return Status(display, "not read yet");
         IReadOnlyList<string> rows;

@@ -56,6 +56,12 @@ public class A350DisplayRowsTests
         finally { CultureInfo.CurrentCulture = saved; }
     }
 
+    // A display the aircraft is built without (the SND, an OIS option) says why before anything else.
+    [Fact]
+    public void An_unavailable_display_says_why_before_it_is_dark() =>
+        Assert.Equal(new[] { "SND: not available, not fitted (an OIS option)" },
+            A350DisplayRows.For("SND", Capture, dark: true, _ => Lines("x"), unavailable: "not fitted (an OIS option)"));
+
     [Fact]
     public void A_status_row_is_known_as_one()
     {

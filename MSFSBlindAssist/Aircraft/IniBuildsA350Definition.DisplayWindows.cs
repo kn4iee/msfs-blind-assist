@@ -44,6 +44,18 @@ public partial class IniBuildsA350Definition
     /// <summary>The SD window's feed: the page the SD shows as <c>A350SdText</c> reads it; not read while the page is unread.</summary>
     internal Forms.A350.A350DisplayFeed SdFeed() => CtrFeed(c => A350.Display.A350SdText.Build(c, SdPageShown() ?? 0), needsPage: true);
 
+    /// <summary>The SND window's feed: the standby navigation display, and "not fitted" while its OIS option (STANDBY NAV DISPLAY) is
+    /// off, as its panel's rows refuse then.</summary>
+    internal Forms.A350.A350DisplayFeed SndFeed()
+    {
+        var option = A350.A350Options.For("AIRLINER_ISIS_MENU_2");
+        return DisplayFeed("Standby navigation display") with
+        {
+            Unavailable = _ => option != null && _sim is { } sim && Cached(sim, option.Key) is double fitted && fitted < 0.5
+                ? "not fitted (an OIS option)" : null,
+        };
+    }
+
     /// <summary>A reader's text as the window's rows: one a line, blank lines left out.</summary>
     private static IReadOnlyList<string> TextLines(string text) =>
         text.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Length > 0).ToList();
@@ -63,6 +75,12 @@ public partial class IniBuildsA350Definition
                 break;
             case "SD":
                 ShowTrackedWindow(() => new Forms.A350.A350SdWindow(SdFeed(), rows), w => w.ShowForm());
+                break;
+            case "ISIS":
+                ShowTrackedWindow(() => new Forms.A350.A350IsisWindow(DisplayFeed("Standby flight display"), rows), w => w.ShowForm());
+                break;
+            case "SND":
+                ShowTrackedWindow(() => new Forms.A350.A350SndWindow(SndFeed(), rows), w => w.ShowForm());
                 break;
             // The ND with every function of it (the owner: "the nd plus all its functions in one place"): its airport map, BTV, mode
             // and range, every EFIS button. Ctrl+Shift+B, the A380's airport map key, no longer opens it.

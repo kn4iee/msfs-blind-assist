@@ -19,6 +19,9 @@ public static class A350Hotkeys
         [HotkeyAction.ReadDisplayND] = "ND",
         [HotkeyAction.ReadDisplayUpperECAM] = "E/WD",
         [HotkeyAction.ReadDisplayLowerECAM] = "SD",
+        [HotkeyAction.ReadDisplayISIS] = "ISIS",
+        // The owner's key for the SND (2026-11-13): the ND is Alt+N, the standby navigation display beside it.
+        [HotkeyAction.ShowStandbyNavDisplay] = "SND",
     };
 
     /// <summary>The panel row each press hotkey drives: the AP, A/THR, LOC and APPR pushbuttons (input Shift+A, Ctrl+O,

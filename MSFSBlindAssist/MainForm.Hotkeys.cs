@@ -342,6 +342,10 @@ public partial class MainForm
                     announcer.AnnounceImmediate("The airport map is only available on the A380; on the A350 it is in the ND window, output Alt+N.");
                 }
                 break;
+            case HotkeyAction.ShowStandbyNavDisplay:
+                // Alt+Shift+N reaches here only when the aircraft did not take it: today only the A350 has a standby navigation display window.
+                announcer.AnnounceImmediate("The standby navigation display window is only on the A350.");
+                break;
             case HotkeyAction.ShowTrackFixWindow:
                 ShowTrackFixDialog();
                 break;

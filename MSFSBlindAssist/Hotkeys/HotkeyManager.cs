@@ -119,6 +119,7 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_READ_DISPLAY_ISIS = 9073;
         private const int HOTKEY_DESCRIBE_SCENE = 9074;
         private const int HOTKEY_SHOW_OANS = 9099; // A380 ND OANS / BTV control panel
+        private const int HOTKEY_SHOW_STANDBY_NAV_DISPLAY = 9255; // Alt+Shift+N: the A350's standby navigation display window
 
         // Hand fly mode global hotkey IDs (separate from output mode)
         private const int HOTKEY_HANDFLY_HEADING = 9077;
@@ -498,6 +499,9 @@ public class HotkeyManager : IDisposable
                         case HOTKEY_READ_DISPLAY_ND:
                             TriggerHotkey(HotkeyAction.ReadDisplayND);
                             break;
+                        case HOTKEY_SHOW_STANDBY_NAV_DISPLAY:
+                            TriggerHotkey(HotkeyAction.ShowStandbyNavDisplay);
+                            break;
                         case HOTKEY_READ_DISPLAY_PFD:
                             TriggerHotkey(HotkeyAction.ReadDisplayPFD);
                             break;
@@ -799,6 +803,7 @@ public class HotkeyManager : IDisposable
             RegisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_UPPER_ECAM, MOD_ALT, 0x45);  // Alt+E (Read E/WD)
             RegisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_LOWER_ECAM, MOD_ALT, 0x53);  // Alt+S (Read SD)
             RegisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_ND, MOD_ALT, 0x4E);          // Alt+N (Read ND)
+            RegisterHotKey(windowHandle, HOTKEY_SHOW_STANDBY_NAV_DISPLAY, MOD_ALT | MOD_SHIFT, 0x4E); // Alt+Shift+N (A350 SND window)
             RegisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_PFD, MOD_ALT, 0x50);         // Alt+P (Read PFD)
             RegisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_ISIS, MOD_ALT, 0x49);        // Alt+I (Read ISIS)
             RegisterHotKey(windowHandle, HOTKEY_DESCRIBE_SCENE, MOD_ALT, 0x44);           // Alt+D (Describe Scene)
@@ -914,6 +919,7 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_UPPER_ECAM);
             UnregisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_LOWER_ECAM);
             UnregisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_ND);
+            UnregisterHotKey(windowHandle, HOTKEY_SHOW_STANDBY_NAV_DISPLAY);
             UnregisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_PFD);
             UnregisterHotKey(windowHandle, HOTKEY_READ_DISPLAY_ISIS);
             UnregisterHotKey(windowHandle, HOTKEY_DESCRIBE_SCENE);
@@ -1392,6 +1398,7 @@ public class HotkeyManager : IDisposable
         ShowRMP,
         ShowDCDU,
         ShowOANS,
+        ShowStandbyNavDisplay,
         ReadNearestCity,
         ReadDistanceToTOD,
         ReadDistanceToDest,

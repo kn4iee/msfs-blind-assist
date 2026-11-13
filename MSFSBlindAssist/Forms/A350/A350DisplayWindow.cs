@@ -5,10 +5,10 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Forms.A350;
 
 /// <summary>Where a display window's rows come from: a side's latest draw (the background monitor's, <see cref="A350PfdMonitor.Latest"/>,
-/// which keeps the display drawn every tick while a window reads it), a fresh draw after a press, whether the side's screen is dark, and
-/// the display's lines from a draw.</summary>
+/// which keeps the display drawn every tick while a window reads it), a fresh draw after a press, whether the side's screen is dark, the
+/// display's lines from a draw, and why the display is not there at all (an option not fitted), or null.</summary>
 public sealed record A350DisplayFeed(Func<int, A350DrawCapture?> Latest, Func<int, Task<A350DrawCapture?>> DrawNow, Func<int, bool> Dark,
-    Func<A350DrawCapture, int, IReadOnlyList<string>> Read);
+    Func<A350DrawCapture, int, IReadOnlyList<string>> Read, Func<int, string?>? Unavailable = null);
 
 /// <summary>
 /// The live window every A350 display key opens ("A350 PFD", "A350 SD" and the rest; plan 26), the Fenix's display window
@@ -154,7 +154,7 @@ public class A350DisplayWindow : Form
             Report($"controls failed: {ex.GetType().Name}: {ex.Message}");
         }
 
-        var rows = A350DisplayRows.For(_display, capture, _feed.Dark(side), c => _feed.Read(c, side), Report);
+        var rows = A350DisplayRows.For(_display, capture, _feed.Dark(side), c => _feed.Read(c, side), Report, _feed.Unavailable?.Invoke(side));
         _list.SetLines(rows);
         if (A350DisplayRows.IsStatusRow(_display, rows)) return;
         int best = A350DisplayRows.RowToFollow(rows, _followedRow, _list.SelectedIndex);
