@@ -818,7 +818,7 @@ public sealed class A350DrawEngine : IDisposable
         }
         catch (TrapException ex) when (ex.Type == TrapCode.Interrupt)
         {
-            error = $"trap: the draw ran past its {DrawDeadline.TotalSeconds:0.#} s deadline";
+            error = FormattableString.Invariant($"trap: the draw ran past its {DrawDeadline.TotalSeconds:0.#} s deadline");
             LastTrap = ex.Message;
             _fresh = true;
         }
