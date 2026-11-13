@@ -215,6 +215,9 @@ The After waits are first values, to be measured in the sim (Task 10's checks): 
 
 ## Execution record
 
+- **Status:** done (2026-11-13): landed on `B757` (2026-11-05, 3c6793a15); closed at the owner's word ("Close out all of the FO plans as they're working as expected", then "All in sim and flight checks pass"). That covers Task 10's in-sim checks and the list under "Only the sim can confirm" below: the preflight tests and their waits (since reshaped by plan 29: eleven tests), the oxygen tests' hold, the light steps and the flows' pace, A/P Disconnect and its warning's silence, the EFB at night, and the ILS and VOR readouts.
+- **Waiting on the owner:** nothing.
+
 Date: 2026-11-05. Worked by Claude with subagents (one implementer and one reviewer per task), on branch B757 in the main folder (the owner's go-ahead; no worktree). Base 6ad94a4ad. Every commit carries `Plan: 19`. Not yet pushed (Task 10).
 
 - Task 0, c6c3f37ec: the plan and its evidence (`docs/b757/evidence/flight-19.md`).
