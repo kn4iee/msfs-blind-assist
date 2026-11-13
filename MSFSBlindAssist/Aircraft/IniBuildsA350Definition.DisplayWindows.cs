@@ -61,6 +61,34 @@ public partial class IniBuildsA350Definition
         text.Split('\n').Select(l => l.TrimEnd('\r')).Where(l => l.Length > 0).ToList();
 
 
+    /// <summary>The windows list's entries (input Ctrl+Shift+F), as the Fenix's list holds its display windows with its other windows:
+    /// every A350 window, the displays first, each naming the key that opens it too.</summary>
+    internal IReadOnlyList<Forms.A350.A350WindowEntry> WindowEntries(SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
+        System.Windows.Forms.Form parentForm, HotkeyManager hotkeyManager)
+    {
+        Forms.A350.A350WindowEntry Display(string name, string description) =>
+            new(name, description, () => ShowDisplayWindow(name, simConnect, announcer));
+        return new[]
+        {
+            Display("PFD", "The captain's or the first officer's PFD, live, with the FD, LS, VV, baro and QNH. Also output Alt+P."),
+            Display("ND", "The ND with every function of it: the airport map, BTV, mode and range, every EFIS button. Also output Alt+N."),
+            Display("E/WD", "The engine and warning display, live, with the ECAM keys that act on it. Also output Alt+E."),
+            Display("SD", "The system display, live, with the ECAM page keys and the SD knob. Also output Alt+S."),
+            Display("ISIS", "The standby flight display, live, with its keys and QNH. Also output Alt+I."),
+            Display("SND", "The standby navigation display, live, with its keys and knob. Also output Alt+Shift+N."),
+            new Forms.A350.A350WindowEntry("MFD", "The MFD: the flight management pages, the checklists and the datalink. Also input Shift+M.",
+                () => ShowMfdWindow(simConnect, announcer, hotkeyManager, page: null)),
+            new Forms.A350.A350WindowEntry("RMP", "The radio management panels: the radios, the transponder. Also input Ctrl+Shift+R.",
+                () => ShowRmpWindow(simConnect, announcer)),
+            new Forms.A350.A350WindowEntry("Mailbox", "The ATC mailbox: the message it shows and its buttons. Also input Ctrl+Shift+D.",
+                () => ShowMailboxWindow(simConnect, announcer)),
+            new Forms.A350.A350WindowEntry("FAP", "The flight attendant panel: cabin lights, temperature, doors and slides, water and waste, Cabin Ready.",
+                () => (parentForm as MainForm)?.ShowA350FapDialog()),
+            new Forms.A350.A350WindowEntry("Printer", "What the printer last printed.",
+                () => ShowTrackedWindow(() => new Forms.A350.A350PrinterWindow(A350.A350Printout.ReadAsync), w => w.ShowForm())),
+        };
+    }
+
     /// <summary>Opens, or brings forward, the window of <paramref name="display"/> ("PFD" and the rest).</summary>
     private void ShowDisplayWindow(string display, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {

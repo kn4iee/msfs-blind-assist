@@ -145,10 +145,17 @@ Kept in this file only, so no other plan's push ever touches it.
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-13
 - **Worked by:** Claude (Opus 5.5), inline (superpowers:executing-plans)
 - **Started:** 2026-11-13, from `ef6bcac8d`
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** 2026-11-13, offline (final review below)
+- **Tests at landing:** recorded with the final review
+- **Tasks:** 1 `36338d9` (`A350DisplayRows`), 2 `17af37d` (`A350DisplayWindow`, `A350KeyRow`, `A350WindowRows`), 3 `c2be48f` (PFD,
+  Alt+P), 4 `85b3032` (ND on Alt+N with the EFIS buttons, Ctrl+Shift+B retired), 5 `ab51450` (E/WD and SD, Alt+E and Alt+S), 6
+  `4bf4dad` (ISIS on Alt+I, SND on Alt+Shift+N), 7 the windows list, [A350-17] and the docs
+- **Waiting on the owner:** the live check, `owner-steps.md` 2.4 item 5
+- **In-sim results:** none: built offline
+- **Changed from the plan:** no `ArmWindowPressEcho`: the row write path already marks a pressed control's lamps as the pilot's own, so
+  the window arms only the row; a typed box (`A350TypedBox`) for the PFD's and the ISIS's QNH; the ISIS window carries its panel's
+  rows (six keys and the typed QNH, no knob up and down); a display not fitted is a fifth status reason; each one-shot read went with its
+  key's window
+- **Rulings made while working:** the A350's own copy of the Fenix's `RowToFollow`; the side box right after the list; the E/WD
+  window keeps all the Alt+E text showed; the SD page selector (the page keys as a combo) is on neither window; the ND window's rows
+  named "EFIS" and "BTV controls"

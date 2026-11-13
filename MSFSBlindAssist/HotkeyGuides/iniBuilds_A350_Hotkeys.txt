@@ -195,24 +195,31 @@ Transponder:
 Trim:
   Shift+T    Toggle Trim Announcements On/Off (the THS in degrees, as the F/CTL page shows it)
 
-Displays:
-  Alt+P      Read the captain's PFD (the FMA first, then speeds, altitude, heading, messages)
-  Alt+N      Read the captain's ND
-  Alt+S      Read the SD page shown, with its values named
-  Alt+I      Read the standby flight display
-  Alt+E      Open the E/WD (Engine/Warning Display) window: engine block, every warning
-             display line with its colour, the ECAM cursor and action boxes, the SD and its
-             permanent data. Read with the arrow keys; auto-refreshes, F5 refreshes now,
-             Escape closes.
+Displays (each a live window, as on the Fenix: the display as lines, then with Tab the
+cockpit controls that change it, each saying its state; F5 reads now, Escape closes):
+  Alt+P      PFD window: the FMA first, then speeds, altitude, heading, messages; FD, LS,
+             VV, Baro STD, Baro QNH, Baro unit and a QNH box; a Side box for either PFD
+  Alt+N      ND window, every ND function in one place: the ND and its airport map (the
+             ANF), each name on the map and where it lies, traffic; Enter does what a click
+             on the ND does; ND mode and range, every EFIS button (CSTR to ARPT, VOR 1 to
+             VOR 2, WX, TERR, TRAF, TAXI), Brake To Vacate armed in one step, a Side box
+  Alt+E      E/WD window: engine block, every warning display line with its colour, the
+             ECAM cursor and action boxes, the SD and its permanent data; T.O CONFIG, CLEAR,
+             RCL LAST and ALL, EMER CANC and its guard, ABN and DEFRD PROC, C/L, MORE,
+             DISPATCH and the wheels
+  Alt+S      SD window: the page shown with its values named; the page keys ENG to VIDEO
+             and the SD knob
+  Alt+I      ISIS window: the standby flight display; its keys and the ISIS QNH box
+  Alt+Shift+N  SND window: the standby navigation display; its keys and knob
   Ctrl+E     Toggle the E/WD auto call-outs (also in the Monitor Manager, Ctrl+M)
   Ctrl+Shift+C  The A350's checklists: the MFD window (input mode Shift+M) opened on C/L MENU,
              as the A380's live ECL key opens its checklist
 
-  The other displays have no hotkey window, as on the A380: open Displays in the Panels
-  list (Ctrl+2): Captain and First Officer PFD (FMA, selected speed, altitude, selected
-  altitude, QNH, radio altitude, heading, flags and messages), Captain and First Officer
-  ND, Captain and First Officer MFD (read as drawn), FCU display, RMP 1 to 3 display,
-  Standby flight display, Standby navigation display and BAT display. Each status
+  Every display is also in Displays in the Panels list (Ctrl+2): Captain and First Officer
+  PFD (FMA, selected speed, altitude, selected altitude, QNH, radio altitude, heading, flags
+  and messages), Captain and First Officer ND, Captain and First Officer MFD (read as drawn),
+  FCU display, RMP 1 to 3 display, Standby flight display, Standby navigation display and
+  BAT display. Each status
   display reads that display and refreshes every second. The FMA is spoken on every change
   with its colours, one Monitor Manager (Ctrl+M) row per FMA column.
 
@@ -307,13 +314,11 @@ SayIntentions:
 VATSIM:
   Alt+V      Mute or unmute VATSIM announcements (vPilot)
 
-First Officer and the ND:
+First Officer:
   Shift+C       The First Officer window: flows from cold and dark to securing, with the
                 aircraft's own checklists as its read-backs (also on the MFD: Ctrl+Shift+C).
-  Ctrl+Shift+B  The ND window: the ND line by line and its airport map (the ANF), Brake To
-                Vacate armed in one step (the landing runway's exits listed), the flight
-                path's symbols and traffic with where each lies; Enter does what a click on
-                the ND does.
+  (Ctrl+Shift+B, the A380's airport map key, opens nothing here: the A350's airport map is
+  in the ND window, Alt+N.)
 
 INPUT MODE - Press [ to activate
 
@@ -397,8 +402,9 @@ MFD (the A350's flight management, its checklists and datalink):
              PMDG 737's NAV radios key)
   Ctrl+Shift+D  The ATC mailbox window, where the A350 shows its CPDLC messages (the A32NX's
                 DCDU key)
-  Ctrl+Shift+F  The A350's other windows: FAP, Mailbox and Printer (Enter opens one, Escape
-                closes the list)
+  Ctrl+Shift+F  Every A350 window: the PFD, ND, E/WD, SD, ISIS and SND display windows,
+                the MFD, RMP, Mailbox, FAP and Printer (Enter opens one, Escape closes
+                the list)
 
 OIS (the A350's EFB, one on each side):
   Shift+T       Captain's OIS

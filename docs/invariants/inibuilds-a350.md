@@ -105,3 +105,20 @@ colour word.
 `A350MfdPages.Offered`; a message read ", black" is caught without its box, `A350MfdPage.NoMessageRead`; the FMS message
 observers compare raw reads). Strip them there and those checks go blind. The other displays (PFD, ND, E/WD, SD, RMP, mailbox)
 keep their colours: the owner scoped this to the MFD.
+
+## A350-17
+
+The owner (2026-11-13) asked for the Fenix's and the PMDG 737's display windows on the A350: each display key opens a live window of
+its display, and under the list the cockpit controls that change it ("the ND in the Fenix is an actual window with all the buttons").
+Those controls are the panels' rows already flown live, so a window press must be exactly the panel's press: `A350WindowRows` (the
+display windows' `IA350WindowRows`) presses a row through `IniBuildsA350Definition.PressRow` (its write plan, its refusals, its
+read-back), a two-position row through `PressToggleFromWindow` (from the commanded state, so two presses flip twice), a typed row
+through the row's plan as MainForm's typed field does (NaN for an entry that does not parse), and labels each button from
+`TryDescribeControlState`, the bare label while a state is unread, never a guess. A window that wrote a variable of its own would act
+unlike its panel and escape the write plans ([A350-1], [A350-5]).
+
+Silence ([CORE-7]): the screen reader says a button's new text, so the press must not be said again. The row is armed as the window's
+own echo (`ArmWindowEcho`), and the row's lights follow as the pilot's own press through the write path (`NoteOwnLamps`), which
+`A350LampAnnouncementTests.A_window_press_lights_its_lamp_unheard` pins. The window speaks nothing on open, on its one-second
+refresh, on F5 or on close; a refresh never moves the pilot off the row they are on (`A350DisplayRows.RowToFollow`).
+

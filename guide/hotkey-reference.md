@@ -287,7 +287,7 @@ Each display key opens a live window read from the Fenix. When the Fenix cannot 
 - **Input Shift+1** to **Shift+4** — Push the heading, altitude, speed and vertical speed knobs.
 - **Input Ctrl+1** to **Ctrl+4** — Pull the heading, altitude, speed and vertical speed knobs.
 - **Input Ctrl+Shift+D** — Open the DCDU window.
-- **Input Ctrl+Shift+F** — Open the Fenix windows list: Engines, Cabin, Failures, Fenix documents, Fenix options, PFD, ND, E/WD, SD, ISIS and DCDU. On the iniBuilds A350, its list: [the FAP, the ATC mailbox and the printer](airbus-aircraft.md#a350-windows). On any other aircraft you hear *"This aircraft has no extra windows."*
+- **Input Ctrl+Shift+F** — Open the Fenix windows list: Engines, Cabin, Failures, Fenix documents, Fenix options, PFD, ND, E/WD, SD, ISIS and DCDU. On the iniBuilds A350, its list: [every A350 window, the display windows first](airbus-aircraft.md#a350-windows). On any other aircraft you hear *"This aircraft has no extra windows."*
 
 Ctrl+P opens the autopilot window: AP1, AP2, ATHR, APPR, LOC, EXPED and the disconnect buttons for each side. Input Shift+T opens the Fenix's own EFB web page, where **Alt+Home** goes back to the EFB's home screen.
 
@@ -397,8 +397,9 @@ Full explanations: [iniBuilds A350](airbus-aircraft.md#airbus-a350).
 - **Output Ctrl+0** — Approach capability, as the flight mode annunciator shows it.
 - **Output X** — Squawk and transponder mode, as the captain's RMP shows them.
 - **Output Ctrl+E** — Turn the automatic E/WD callouts on or off.
-- **Output Alt+E** — Open the E/WD window.
-- **Output Alt+P**, **Alt+N**, **Alt+S**, **Alt+I** — Read the captain's PFD, the captain's ND, the SD page and the standby flight display.
+- **Output Alt+P** — The PFD window, with FD, LS, VV, the baro and QNH. **Output Alt+N** — The ND window: the ND with every function of it, the airport map, BTV and every EFIS button.
+- **Output Alt+E** — The E/WD window, with the ECAM keys that act on it. **Output Alt+S** — The SD window, with the page keys and the SD knob.
+- **Output Alt+I** — The ISIS window, with its keys and QNH. **Output Alt+Shift+N** — The SND window (the standby navigation display), with its keys and knob.
 - **Output Ctrl+Shift+C** — Open the MFD window on C/L MENU, the A350's checklists.
 
 Q and A read in metres when the FCU's METRIC ALT button is on.
@@ -411,6 +412,13 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 - **Input Shift+M** — Open the MFD window. **Input Ctrl+N** — The MFD window on RAD NAV. **Input Ctrl+Shift+D** — The ATC mailbox window. **Input Ctrl+Shift+F** — The A350's other windows: FAP, Mailbox, Printer.
 - **Input Shift+T** — The captain's OIS. **Input Ctrl+Shift+T** — The first officer's OIS.
 - **Input Ctrl+Shift+R** — Open the RMP window.
+
+### Display windows (Output Alt+P, Alt+N, Alt+E, Alt+S, Alt+I, Alt+Shift+N) {#hk-a350-displays}
+
+- **Up**, **Down** — Read the display's lines (they update every second; you stay on your line).
+- **Tab** — The controls after the list: each says its state and presses the cockpit's own button. In a QNH box, type and press **Enter**.
+- **F5** — Read the display now. **Escape** — Close.
+- In the ND window, Enter, Control plus an arrow and the BTV row work as [the A350's chapter](airbus-aircraft.md#a350-nd-window) describes.
 
 ### MFD window (Input Shift+M) {#hk-a350-mfd}
 
@@ -435,7 +443,7 @@ Q and A read in metres when the FCU's METRIC ALT button is on.
 ### General keys that differ or don't work here {#hk-a350-general}
 
 - **Output N** says VOR 1 and VOR 2 from the radios the FMS tunes, then the landing system as the PFD shows it: frequency, distance, course, localizer and glideslope.
-- **Output Ctrl+Shift+B** opens the ND window: the ND and its airport map (ANF) and Brake To Vacate, line by line, as [the A350's chapter](airbus-aircraft.md#a350-nd-window) describes.
+- **Output Ctrl+Shift+B** opens nothing on the A350: its airport map is in [the ND window](airbus-aircraft.md#a350-nd-window), Output Alt+N.
 - In the Surroundings window, Enter and Shift+Enter tune VHF 1 by pressing the RMP's own keys.
 
 ## PMDG 737 {#hk-pmdg737}

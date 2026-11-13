@@ -66,6 +66,11 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    (Alt+S is now the scratchpad box). (c) Arrow through INIT, F-PLN (with a TMPY plan up) and PERF: no colour word anywhere, "required"
    on the empty amber boxes, "temporary" on the TMPY plan's lines, the page title said once and in the window's title. (d) With an FMS
    message up, Backspace says "Info cleared" and the message goes.
+5. **The display windows at Fenix parity (plan 26, built offline 2026-11-13):** (a) Alt+P, Alt+N, Alt+E, Alt+S, Alt+I and
+   Alt+Shift+N each open their window on the display, and the list follows it every second without moving you off your line. (b) Press
+   each control under each list once (Tab to it): its own cockpit button acts and its label says the new state once, never twice. (c)
+   The PFD's QNH box and the ISIS QNH box set the QNH. (d) Ctrl+Shift+B says the airport map is in the ND window. (e) With three
+   windows open, the sim and MSFSBA stay smooth. (f) Without the SND fitted, its window says "not fitted".
 
 ## 3. By ear (your judgement)
 

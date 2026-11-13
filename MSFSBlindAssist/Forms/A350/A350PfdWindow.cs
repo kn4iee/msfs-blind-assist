@@ -8,18 +8,18 @@ namespace MSFSBlindAssist.Forms.A350;
 /// </summary>
 public sealed class A350PfdWindow : A350DisplayWindow
 {
-    private static string Side(int side) => side == 0 ? "LEFT" : "RIGHT";
+    private static string EfisSide(int side) => side == 0 ? "LEFT" : "RIGHT";
 
     /// <summary>The window's keys, in the EFIS panel's order after the FD: the label each shows and its row on each side. The FD is the
     /// FCU's one pushbutton for both sides, as the A350's FCU windows press it.</summary>
     internal static readonly IReadOnlyList<A350WindowKey> Keys = new A350WindowKey[]
     {
         new("FD", _ => "A350_FCU_FD", Toggle: true),
-        new("LS", s => $"A350_EFIS_LS_{Side(s)}", Toggle: true),
-        new("VV", s => $"A350_EFIS_VV_{Side(s)}", Toggle: true),
-        new("Baro STD", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{Side(s)}_PUSH"),
-        new("Baro QNH", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{Side(s)}_PULL"),
-        new("Baro unit", s => $"A350_EFIS_QNH_UNIT_SELECTOR_{Side(s)}"),
+        new("LS", s => $"A350_EFIS_LS_{EfisSide(s)}", Toggle: true),
+        new("VV", s => $"A350_EFIS_VV_{EfisSide(s)}", Toggle: true),
+        new("Baro STD", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{EfisSide(s)}_PUSH"),
+        new("Baro QNH", s => $"A350_EFIS_QNH_PRESSURE_SELECTOR_{EfisSide(s)}_PULL"),
+        new("Baro unit", s => $"A350_EFIS_QNH_UNIT_SELECTOR_{EfisSide(s)}"),
     };
 
     /// <summary>The side's typed QNH row, the EFIS panel's "QNH (in Capt unit)" and "QNH (in F/O unit)".</summary>

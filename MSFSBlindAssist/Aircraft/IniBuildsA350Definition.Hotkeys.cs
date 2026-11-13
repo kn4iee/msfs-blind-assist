@@ -39,35 +39,18 @@ public partial class IniBuildsA350Definition
                 hotkeyManager.ExitInputHotkeyMode();
                 ShowMailboxWindow(simConnect, announcer);
                 return true;
-            // Ctrl+Shift+F: the A350's other windows, as the Fenix's list: what has no key of its own.
+            // Ctrl+Shift+F: every A350 window, as the Fenix's list holds its display windows with its other windows (plan 26).
             case HotkeyAction.ShowAircraftWindows:
                 hotkeyManager.ExitInputHotkeyMode();
                 ShowTrackedWindow(
-                    () => new Forms.A350.A350WindowsForm(new[]
-                    {
-                        new Forms.A350.A350WindowEntry("FAP", "The flight attendant panel: cabin lights, temperature, doors and slides, water and waste, Cabin Ready.",
-                            () => (parentForm as MainForm)?.ShowA350FapDialog()),
-                        new Forms.A350.A350WindowEntry("Mailbox", "The ATC mailbox: the message it shows and its buttons. Also Input Ctrl+Shift+D.",
-                            () => ShowMailboxWindow(simConnect, announcer)),
-                        new Forms.A350.A350WindowEntry("Printer", "What the printer last printed.",
-                            () => ShowTrackedWindow(() => new Forms.A350.A350PrinterWindow(A350.A350Printout.ReadAsync), w => w.ShowForm())),
-                    }, announcer),
+                    () => new Forms.A350.A350WindowsForm(WindowEntries(simConnect, announcer, parentForm, hotkeyManager), announcer),
                     w => w.ShowForm());
                 return true;
             // Ctrl+Shift+R: the RMP window (A380 parity): the chosen RMP's screen, a frequency typed on its keypad, Enter
             // loads it as standby, Alt+1/2/3 swaps it in; Alt+T a squawk.
             case HotkeyAction.ShowRMP:
                 hotkeyManager.ExitOutputHotkeyMode();
-                ShowTrackedWindow(
-                    () =>
-                    {
-                        var window = new Forms.A350.A350RmpWindow(rmp => Pfd?.Latest(A350.A350Rmp.Gauge(rmp).Gauge, A350.A350Rmp.Gauge(rmp).Index),
-                            async rmp => Displays == null ? null : (await Displays.DrawAsync(A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
-                            rmp => IsScreenDark($"RMP {rmp} display"), rpn => simConnect.ExecuteCalculatorCodeUnique(rpn), announcer);
-                        window.SquawkSet += NoteWindowSquawk;   // the window says its own squawk
-                        return window;
-                    },
-                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                ShowRmpWindow(simConnect, announcer);
                 return true;
             // Ctrl+E: the E/WD call-outs on or off, the same row Ctrl+M shows (the A380's toggle).
             case HotkeyAction.ToggleECAMMonitoring:
@@ -319,9 +302,17 @@ public partial class IniBuildsA350Definition
             ? display.Panel + " " + char.ToLowerInvariant(DarkScreen[0]) + DarkScreen[1..]
             : null;
 
-    private void AnnounceDisplay(string displayKey, ScreenReaderAnnouncer announcer) =>
-        announcer.AnnounceImmediate(Readout(displayKey,
-            lines => lines.Count == 0 ? A350.Display.A350DisplayStatus.Blank : string.Join(". ", lines)));
+    /// <summary>The RMP window (Ctrl+Shift+R, the windows list), opened or brought forward.</summary>
+    private void ShowRmpWindow(SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => ShowTrackedWindow(
+        () =>
+        {
+            var window = new Forms.A350.A350RmpWindow(rmp => Pfd?.Latest(A350.A350Rmp.Gauge(rmp).Gauge, A350.A350Rmp.Gauge(rmp).Index),
+                async rmp => Displays == null ? null : (await Displays.DrawAsync(A350.A350Rmp.Gauge(rmp)))?.FirstOrDefault(),
+                rmp => IsScreenDark($"RMP {rmp} display"), rpn => simConnect.ExecuteCalculatorCodeUnique(rpn), announcer);
+            window.SquawkSet += NoteWindowSquawk;   // the window says its own squawk
+            return window;
+        },
+        w => { w.Show(); w.BringToFront(); w.Activate(); });
 
     /// <summary>A display read aloud: dark while its screen is dark, not available before its first good draw, else what
     /// <paramref name="read"/> makes of its lines (a dark PFD's "none shown" read as no capability, review 2026-10-28).</summary>
