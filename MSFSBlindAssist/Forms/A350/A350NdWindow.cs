@@ -202,7 +202,7 @@ public sealed class A350NdWindow : Form
         finally { _settingKnobs = false; }
     }
 
-    private async Task RefreshAsync(bool now)
+    internal async Task RefreshAsync(bool now)
     {
         if (IsDisposed) return;
         if (_busy)
@@ -218,7 +218,13 @@ public sealed class A350NdWindow : Form
             else
             {
                 cap = _latest(Side);
-                if (_shown.Superseded(cap)) return;
+                if (_shown.Superseded(cap))
+                {
+                    // The list keeps the fresh draw; the knobs and the EFIS buttons' labels still follow (final review).
+                    ReadKnobs();
+                    RefreshEfisStates();
+                    return;
+                }
             }
             if (IsDisposed) return;
             ReadKnobs();
@@ -562,7 +568,8 @@ public sealed class A350NdWindow : Form
         {
             case Keys.Alt | Keys.X: PressKey("ESC"); return true;
             case Keys.F5: _ = RefreshAsync(true); return true;
-            case Keys.Escape: Close(); return true;
+            // Escape closes, unless it is closing a combo's open list (ND mode, range, the BTV lists): the base display window's rule.
+            case Keys.Escape when A350DisplayWindow.EscapeCloses(ActiveControl is ComboBox { DroppedDown: true }): Close(); return true;
         }
         if (ActiveControl == _list)
         {

@@ -217,4 +217,95 @@ public class A350DisplayWindowTests
         form.StartLive();
         Assert.Equal(new[] { "PFD: not available, read failed" }, ItemsOf(ListOf(form)));
     }
+
+    private static ComboBox SideBox(Form form) => form.Controls.OfType<ComboBox>().Single(c => c.AccessibleName == "Side");
+
+    // Final review 1: each press queued a full-memory draw of its own (a wheel scrolled ten times, a knob button held on Enter),
+    // and the E/WD and FMA call-outs waited behind them. Presses close together read one fresh draw, after the last.
+    [Fact]
+    public async Task Many_presses_read_one_fresh_draw_after_the_last()
+    {
+        var feed = new Feed();
+        feed.Show(0, "LS off");
+        var wait = new TaskCompletionSource();
+        using var form = new Window(feed.ToFeed(), new Rows()) { Pause = (_, _) => wait.Task };
+        form.StartLive();
+        feed.Fresh = Draw("EFIS");
+        feed.Lines[feed.Fresh] = new[] { "LS on" };
+        var presses = Enumerable.Range(0, 10).Select(_ => form.AfterPressAsync()).ToList();
+        wait.SetResult();
+        await Task.WhenAll(presses);
+        Assert.Equal(1, feed.Drawn);
+        Assert.Equal(new[] { "LS on" }, ItemsOf(ListOf(form)));
+    }
+
+    // Final review 2a: a tick whose latest draw is older than the press's returned before the buttons, so the button's new label, the
+    // one thing heard for the press, came late.
+    [Fact]
+    public async Task A_tick_on_the_older_draw_still_refreshes_the_buttons()
+    {
+        var feed = new Feed();
+        feed.Show(0, "LS off");
+        var rows = new Rows();
+        using var form = new Window(feed.ToFeed(), rows) { Pause = (_, _) => Task.CompletedTask };
+        form.StartLive();
+        feed.Fresh = Draw("EFIS");
+        feed.Lines[feed.Fresh] = new[] { "LS on" };
+        await form.AfterPressAsync();
+        rows.States["A350_EFIS_LS_LEFT"] = "On";
+        form.RefreshNow();   // the monitor's latest is still the draw from before the press
+        Assert.Equal("LS: On", form.KeyButtons[0].Text);
+        Assert.Equal(new[] { "LS on" }, ItemsOf(ListOf(form)));
+    }
+
+    // Final review 2b: after a press on the first officer's side, a switch to the captain's and back left the captain's rows under the
+    // first officer's box, while its buttons pressed the RIGHT rows.
+    [Fact]
+    public async Task A_side_switched_back_to_shows_its_own_fresh_draw()
+    {
+        var feed = new Feed();
+        feed.Show(0, "Captain PFD line");
+        feed.Show(1, "First officer, before the press");
+        using var form = new Window(feed.ToFeed(), new Rows(), sides: 2) { Pause = (_, _) => Task.CompletedTask };
+        form.StartLive();
+        var side = SideBox(form);
+        side.SelectedIndex = 1;
+        feed.Fresh = Draw("EFIS");
+        feed.Lines[feed.Fresh] = new[] { "First officer, after the press" };
+        await form.AfterPressAsync();
+        side.SelectedIndex = 0;
+        Assert.Equal(new[] { "Captain PFD line" }, ItemsOf(ListOf(form)));
+        side.SelectedIndex = 1;
+        Assert.Equal(new[] { "First officer, after the press" }, ItemsOf(ListOf(form)));
+    }
+
+    // Final review 3: a side switched while the fresh draw was on its way read the first officer's draw as the captain's PFD.
+    [Fact]
+    public async Task A_fresh_draw_for_one_side_is_never_shown_for_the_other()
+    {
+        var feed = new Feed();
+        feed.Show(0, "Captain PFD line");
+        feed.Show(1, "First officer PFD line");
+        var draw = new TaskCompletionSource<A350DrawCapture?>();
+        var slow = feed.ToFeed() with { DrawNow = _ => draw.Task };
+        using var form = new Window(slow, new Rows(), sides: 2) { Pause = (_, _) => Task.CompletedTask };
+        form.StartLive();
+        var side = SideBox(form);
+        side.SelectedIndex = 1;
+        var press = form.AfterPressAsync();
+        side.SelectedIndex = 0;
+        var firstOfficers = Draw("EFIS");
+        feed.Lines[firstOfficers] = new[] { "First officer, fresh" };
+        draw.SetResult(firstOfficers);
+        await press;
+        Assert.Equal(new[] { "Captain PFD line" }, ItemsOf(ListOf(form)));
+    }
+
+    // Final review 5: Escape cancelling a combo's open list closed the whole window; it closes the window only with no list open.
+    [Fact]
+    public void Escape_closes_the_window_only_with_no_combo_list_open()
+    {
+        Assert.True(A350DisplayWindow.EscapeCloses(comboListOpen: false));
+        Assert.False(A350DisplayWindow.EscapeCloses(comboListOpen: true));
+    }
 }

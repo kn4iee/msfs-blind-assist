@@ -23,7 +23,7 @@ On the build from `feat/inibuilds-a350` (the all-PRs build), A350-900, cold and 
    SimBrief request is plan 13's unproven line), load the loadsheet and the fuel.
 2. Fly it end to end with MSFSBA as a pilot would: the First Officer's flows (Shift+C), MFD INIT and F-PLN import (Shift+M, Alt+I),
    T.O PERF on the OIS (Shift+T), take-off with FLEX, the climb, cruise, a STAR and the ILS, autoland or hand flown, the rollout with
-   BTV armed from the ND window (Ctrl+Shift+B), taxi to a stand, Securing.
+   BTV armed from the ND window (Alt+N), taxi to a stand, Securing.
 3. Plan 17's ledger lists 23 "to fly" steps (`docs/a350/ledger/17-walkthrough.md`): each should work as written there. Tell me any that
    did not, or send me `%APPDATA%\MSFSBlindAssist\logs` (debug.log, a350_speech.log, a350_display.log) and I go through them.
 4. Plan 24's in-flight checks were flown on the third flight of 2026-11-03 (scripted): the ND's symbols, the SND with a navaid tuned and
@@ -70,7 +70,9 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    Alt+Shift+N each open their window on the display, and the list follows it every second without moving you off your line. (b) Press
    each control under each list once (Tab to it): its own cockpit button acts and its label says the new state once, never twice. (c)
    The PFD's QNH box and the ISIS QNH box set the QNH. (d) Ctrl+Shift+B says the airport map is in the ND window. (e) With three
-   windows open, the sim and MSFSBA stay smooth. (f) Without the SND fitted, its window says "not fitted".
+   windows open, the sim and MSFSBA stay smooth. (f) Without the SND fitted, its window says "not fitted". (g) Scroll an ECAM procedure with a wheel button ten times quickly, and hold
+   Enter on the SD knob's button: the E/WD and FMA call-outs stay on time. (h) With two keyboard layouts installed, Alt+Shift+N opens
+   the SND window and does not switch the layout.
 
 ## 3. By ear (your judgement)
 

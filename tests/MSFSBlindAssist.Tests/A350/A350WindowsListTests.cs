@@ -34,4 +34,15 @@ public class A350WindowsListTests
     [InlineData("Mailbox", "Ctrl+Shift+D")]
     public void Each_names_the_key_that_opens_it_too(string name, string key) =>
         Assert.Contains(key, Entries().Single(e => e.Name == name).Description);
+
+    // Final review 8: the hotkey reference's A350 input keys still said Ctrl+Shift+F listed only the FAP, the mailbox and the printer.
+    [Fact]
+    public void The_hotkey_reference_says_the_list_holds_every_window()
+    {
+        string all = File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "guide", "hotkey-reference.md"));
+        int at = all.IndexOf("{#hk-a350-input}", StringComparison.Ordinal);
+        string block = all[at..all.IndexOf("\n### ", at, StringComparison.Ordinal)];
+        Assert.DoesNotContain("FAP, Mailbox, Printer.", block);
+        Assert.Contains("SND", block);
+    }
 }

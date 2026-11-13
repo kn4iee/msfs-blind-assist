@@ -23,7 +23,10 @@ public sealed record A350DisplayFeed(Func<int, A350DrawCapture?> Latest, Func<in
 /// <para>Silence ([CORE-7]). The window has no announcer: the screen reader reads the list as it takes focus and a row that changes under
 /// the pilot, and a button's new text after its press. A refresh, F5, opening and closing say nothing.</para>
 /// <para>Draws. A tick shows the monitor's latest draw; a press shows a fresh draw 600 ms later, and the monitor's latest from before it
-/// is then never shown over it (<see cref="A350ShownCapture"/>).</para>
+/// is then never shown over it (<see cref="A350ShownCapture"/>, one for each side, with that side's fresh draw kept: a side switched
+/// back to shows its own). Presses close together read one fresh draw, after the last, and one draw at a time: each is a full memory
+/// copy on the reader's one queue, where the background's E/WD and FMA reads wait too (final review). A draw asked for one side is
+/// never shown for the other.</para>
 /// <para>One class for each display: windows are tracked one for each type (<c>ShowTrackedWindow</c>), so each display's window derives
 /// from this one in a class of its own. Not abstract only so that a test can build it.</para>
 /// </remarks>
@@ -43,7 +46,10 @@ public class A350DisplayWindow : Form
     private readonly ComboBox? _side;
     private readonly List<A350KeyRow> _keyRows = new();
     private readonly System.Windows.Forms.Timer _timer;
-    private readonly A350ShownCapture _shown = new();
+    private readonly A350ShownCapture[] _shown = { new(), new() };
+    private readonly A350DrawCapture?[] _freshDraw = new A350DrawCapture?[2];   // each side's last fresh draw, shown over its older latest
+    private int _pressGeneration, _drawAgainSide;
+    private bool _drawing, _drawAgain;
     private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
     private IntPtr _previousWindow;
     private bool _started;
@@ -124,25 +130,14 @@ public class A350DisplayWindow : Form
 
     /// <summary>Reads the display again, from <paramref name="fresh"/> or the monitor's latest draw, and reconciles the list in place,
     /// the pilot kept on their row; the controls' states with it. Never speaks, never takes focus; nothing once the window is gone.</summary>
-    internal void RefreshNow(A350DrawCapture? fresh = null)
+    /// <param name="fresh">A fresh draw, of <paramref name="drawnFor"/>'s side (the side shown when null).</param>
+    internal void RefreshNow(A350DrawCapture? fresh = null, int? drawnFor = null)
     {
         if (IsDisposed || Disposing) return;
         var current = _list.Items.Cast<string>().ToList();
         if (!A350DisplayRows.IsStatusRow(_display, current)) _followedRow = _list.SelectedItem as string;
 
-        int side = Side;
-        A350DrawCapture? capture;
-        if (fresh is { Ok: true })
-        {
-            _shown.Fresh(_feed.Latest(side));
-            capture = fresh;
-        }
-        else
-        {
-            capture = _feed.Latest(side);
-            if (_shown.Superseded(capture)) return;   // the draw from before the press: the fresh one stays
-        }
-
+        // The controls first, whatever draw the list keeps: a button's new label is what the pilot hears for a press (final review).
         // A fault in a derived window's controls costs only them: this runs on the timer, every second.
         try
         {
@@ -154,6 +149,24 @@ public class A350DisplayWindow : Form
             Report($"controls failed: {ex.GetType().Name}: {ex.Message}");
         }
 
+        int side = Side;
+        A350DrawCapture? capture;
+        int freshSide = drawnFor ?? side;
+        if (fresh is { Ok: true })
+        {
+            // Kept for its own side, shown only there: a side switched while it was drawn shows its own display.
+            _shown[freshSide].Fresh(_feed.Latest(freshSide));
+            _freshDraw[freshSide] = fresh;
+        }
+        if (fresh is { Ok: true } && freshSide == side)
+            capture = fresh;
+        else
+        {
+            capture = _feed.Latest(side);
+            // The monitor's draw from before the press: the side's fresh one stays.
+            if (_shown[side].Superseded(capture)) capture = _freshDraw[side];
+        }
+
         var rows = A350DisplayRows.For(_display, capture, _feed.Dark(side), c => _feed.Read(c, side), Report, _feed.Unavailable?.Invoke(side));
         _list.SetLines(rows);
         if (A350DisplayRows.IsStatusRow(_display, rows)) return;
@@ -161,14 +174,52 @@ public class A350DisplayWindow : Form
         if (best != -1 && best != _list.SelectedIndex) _list.SelectedIndex = best;
     }
 
-    /// <summary>After a press: a fresh draw once the aircraft has taken it, shown over the monitor's older one.</summary>
+    /// <summary>After a press: a fresh draw once the aircraft has taken it, shown over the monitor's older one. A later press within
+    /// the wait takes this one's place, so presses close together read one draw, after the last (final review).</summary>
     internal async Task AfterPressAsync()
     {
-        await Pause(AfterPressMs, CancellationToken.None);
-        if (IsDisposed) return;
-        var fresh = await _feed.DrawNow(Side);
-        if (!IsDisposed) RefreshNow(fresh);
+        int generation = ++_pressGeneration;
+        int side = Side;
+        try
+        {
+            await Pause(AfterPressMs, CancellationToken.None);
+            if (IsDisposed || generation != _pressGeneration) return;
+            await DrawFreshAsync(side);
+        }
+        catch (Exception ex)
+        {
+            Report($"fresh draw failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
+
+    /// <summary>One fresh draw at a time: one asked for while another is on its way follows it, once, for the side last asked.</summary>
+    private async Task DrawFreshAsync(int side)
+    {
+        if (_drawing)
+        {
+            _drawAgain = true;
+            _drawAgainSide = side;
+            return;
+        }
+        _drawing = true;
+        try
+        {
+            while (true)
+            {
+                _drawAgain = false;
+                var fresh = await _feed.DrawNow(side);
+                if (IsDisposed) return;
+                RefreshNow(fresh, side);
+                if (!_drawAgain) return;
+                side = _drawAgainSide;
+            }
+        }
+        finally { _drawing = false; }
+    }
+
+    /// <summary>Whether Escape closes the window: not while it is closing a combo's open list, so a pilot cancelling the list keeps the
+    /// window (the Fenix display window's rule).</summary>
+    internal static bool EscapeCloses(bool comboListOpen) => !comboListOpen;
 
     /// <summary>Called at every refresh, before the rows are set, for a derived window's own controls. The base does nothing.</summary>
     protected virtual void OnRefresh() { }
@@ -215,7 +266,7 @@ public class A350DisplayWindow : Form
         if (msg.Msg is WM_KEYDOWN or WM_SYSKEYDOWN)
         {
             if (HandleWindowKey(keyData)) return true;
-            if (keyData == Keys.Escape && ActiveControl is not ComboBox { DroppedDown: true })
+            if (keyData == Keys.Escape && EscapeCloses(ActiveControl is ComboBox { DroppedDown: true }))
             {
                 Close();
                 return true;
@@ -232,8 +283,14 @@ public class A350DisplayWindow : Form
 
     private async Task RefreshFreshAsync()
     {
-        var fresh = await _feed.DrawNow(Side);
-        if (!IsDisposed) RefreshNow(fresh);
+        try
+        {
+            await DrawFreshAsync(Side);
+        }
+        catch (Exception ex)
+        {
+            Report($"fresh draw failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     protected override void Dispose(bool disposing)

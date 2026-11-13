@@ -136,7 +136,6 @@ public partial class IniBuildsA350Definition
                     : "Gross weight not available");
                 return true;
 
-            // Alt+P, N, S, I: a display read aloud, as its status display reads it (the MD-11's and PMDG's keys).
             // N: the VORs from the stock radios the FMS tunes, and the LS as the PFD shows it, on the stock NAV 3 the generic read-out leaves out.
             case HotkeyAction.ReadNavRadioInfo:
                 _ = ReadNavRadiosAsync(simConnect, announcer);

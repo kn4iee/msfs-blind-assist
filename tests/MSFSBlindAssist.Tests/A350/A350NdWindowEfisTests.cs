@@ -90,4 +90,28 @@ public class A350NdWindowEfisTests
         typeof(Control).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(cstr, new object[] { EventArgs.Empty });
         Assert.Equal(new[] { "press A350_EFIS_TSK_1_LEFT" }, rows.Log);
     }
+
+    private sealed class StateRows : IA350WindowRows
+    {
+        public string? Cstr;
+        public string? State(string row) => row == "A350_EFIS_TSK_1_LEFT" ? Cstr : null;
+        public void Press(string row, double value = 1) { }
+        public void Toggle(string row) { }
+        public void Type(string row, string text) { }
+    }
+
+    // Final review 2a, the ND window too: a tick on the draw from before a press returned before the EFIS buttons' labels.
+    [Fact]
+    public async Task A_tick_on_the_older_draw_still_refreshes_the_efis_buttons()
+    {
+        var older = A350Fixtures.Capture("efis0_anf_rose_01.json");
+        var fresh = A350Fixtures.Capture("efis0_anf_rose_01.json");
+        var rows = new StateRows();
+        using var form = new A350NdWindow(_ => older, _ => Task.FromResult<A350DrawCapture?>(fresh), _ => false,
+            new A350NdInput(_ => { }), new SpeechCapture(), (_, _, _) => { }, (_, _) => null, null, rows);
+        await form.RefreshAsync(true);
+        rows.Cstr = "On";
+        await form.RefreshAsync(false);   // the monitor's latest is still the draw from before
+        Assert.Equal("CSTR: On", form.EfisButtons[0].Text);
+    }
 }
