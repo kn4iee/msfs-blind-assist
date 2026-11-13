@@ -17,6 +17,8 @@ public static class A350Hotkeys
     {
         [HotkeyAction.ReadDisplayPFD] = "PFD",
         [HotkeyAction.ReadDisplayND] = "ND",
+        [HotkeyAction.ReadDisplayUpperECAM] = "E/WD",
+        [HotkeyAction.ReadDisplayLowerECAM] = "SD",
     };
 
     /// <summary>The panel row each press hotkey drives: the AP, A/THR, LOC and APPR pushbuttons (input Shift+A, Ctrl+O,

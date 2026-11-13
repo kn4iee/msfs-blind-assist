@@ -24,16 +24,6 @@ public partial class IniBuildsA350Definition
                 hotkeyManager.ExitOutputHotkeyMode();
                 (parentForm as MainForm)?.ShowA350MonitorManagerDialog();
                 return true;
-            // Alt+E: the whole E/WD (engine block, warning display with its cursor and boxes, SD, permanent
-            // data) in the shared E/WD window, refreshed from the background monitor's latest capture.
-            case HotkeyAction.ReadDisplayUpperECAM:
-                hotkeyManager.ExitOutputHotkeyMode();
-                ShowTrackedWindow(
-                    () => new Forms.FbwEwdWindow("A350 E/WD — Engine / Warning Display",
-                        () => Task.FromResult(A350.Display.A350EwdText.Build(Ecam?.LatestCapture,
-                            simConnect.GetCachedVariableValue(SdPageKey))), announcer),
-                    w => { w.Show(); w.BringToFront(); w.Activate(); });
-                return true;
             // Shift+M: the MFD window (A380 parity): the page's lines, Enter acts, a field takes the scratchpad,
             // Alt+letter page keys; clicks through the Coherent mouse route, typing on the KCCU. While it is open it says
             // the FMS messages itself, and the background follows them silently (MfdWindowOpen).
@@ -165,11 +155,6 @@ public partial class IniBuildsA350Definition
 
             // Alt+P, N, S, I: a display read aloud, as its status display reads it (the MD-11's and PMDG's keys).
             case HotkeyAction.ReadDisplayISIS: AnnounceDisplay("A350_DISP_SFD", announcer); return true;
-            case HotkeyAction.ReadDisplayLowerECAM:
-                announcer.AnnounceImmediate(Ecam?.LatestCapture is { } sd && simConnect.GetCachedVariableValue(SdPageKey) is double sdPage
-                    ? A350.A350Hotkeys.Sentences(A350.Display.A350SdText.Build(sd, sdPage))
-                    : NotAvailableYet);
-                return true;
             // N: the VORs from the stock radios the FMS tunes, and the LS as the PFD shows it, on the stock NAV 3 the generic read-out leaves out.
             case HotkeyAction.ReadNavRadioInfo:
                 _ = ReadNavRadiosAsync(simConnect, announcer);
