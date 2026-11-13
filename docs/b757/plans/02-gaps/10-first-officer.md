@@ -99,14 +99,14 @@
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** waiting on owner: the three air flows (After Takeoff, Descent, Before Landing) need a flight; every ground flow passed in the sim on both engine variants
+- **Status:** done (2026-11-13), closed at the owner's word ("Close out all of the FO plans as they're working as expected", then "All in sim and flight checks pass"): every ground flow passed in the sim on both engine variants (2026-10-27/28); the air flows (After Takeoff, Descent, Before Landing, as reshaped by plan 29) are covered by that word
 - **Claimed by:** kn4iee (the owner), 2026-10-28, handed over by Declan Webster (claimed 2026-10-26) so the owner can work on it
 - **Worked by:** Declan Webster, with subagents
 - **Started:** 2026-10-26 (from `B757` fe63572f; rebased onto `B757` b82e0a46 on 2026-10-27)
 - **Landed:** 2026-10-28
 - **Tests at landing:** full suite passed (18,352 tests) after the last rebase, on `B757` 12e80040
 - **Tasks:** 1-6 done. The profile, evaluator, executor, phase monitor, the Normal Checklist read-backs, the action groups and 12 flows (Power Up, Preflight, Before Start, Engine Start, After Start, Before Takeoff, After Takeoff, Descent, Before Landing, After Landing, Shutdown, Final Securing), the registration and the cross-profile tests; the 757's own tests in `tests/.../FirstOfficer/BBS757/`.
-- **Waiting on the owner:** a flight for After Takeoff, Descent and Before Landing (the 10,000 ft and transition reminders/automation with them); a cold RR start (EGT at or below 0 °C, the RICH position) and a failed start (the light-off watch and abort) have not been provoked.
+- **Waiting on the owner:** nothing. (Never provoked in a session this record logs: a cold RR start, EGT at or below 0 °C with the RICH position, and a failed start's light-off watch and abort.)
 - **In-sim results:** 2026-10-27 and 2026-10-28, MSFS 2020 (`docs/b757/evidence/flight-10.md`). PW, cold and dark: Power Up, Preflight, Before Start, Engine Start (both engines, 135 s), After Start, Before Takeoff, After Landing, Shutdown, Final Securing all complete; two false failures found and fixed (APU start, IRS check). RR, cold and dark, on the fixed build: the same nine flows complete (Engine Start 113 s, idle 50.6 % N2); the parking brake did not set (REALISTIC mode) and was fixed (plan 03's commit `fix(b757): the parking brake sets and releases in BlueBird's REALISTIC mode`), then set from the flow in both modes.
 - **Changed from the plan:**
   - The fuel control line reads the variant from the aircraft TITLE first and `B757_ENG_VARIANT` only when the title names none (a PW reads 1, an RR 0, and an unwritten L:var reads 0 too, so 0 alone is unknown).
