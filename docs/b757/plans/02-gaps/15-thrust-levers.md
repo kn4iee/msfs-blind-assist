@@ -95,14 +95,14 @@ After a landing (owner, in flight), try the simulator's reverser key with the le
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started (optional)
+- **Status:** closed (2026-11-13), not needed: never built. Closed at the owner's word ("We can also get rid of 15 since it's optional and you can now control throttles via keyboard/xbox controller"): the plan's premise, that the 757 ignores the simulator's throttle keys (measured in session 7), no longer holds, so a pilot without a hardware throttle moves BlueBird's levers with the keyboard or a controller.
 - **Claimed by:** none
-- **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** (date; the `B757` commit you branched from)
-- **Landed:** (date; the last commit of this plan on `B757`)
-- **Tests at landing:** (full suite passed / failed, after the last rebase)
-- **Tasks:** (done; left, and why)
-- **Waiting on the owner:** ([owner] and [in flight] tasks and in-sim checks not run yet)
-- **In-sim results:** (each check: passed or failed, date; or "none run")
-- **Changed from the plan:** (a name, a value or a task changed, dropped or added, and why)
-- **Rulings made while working:** (question, answer, who decided)
+- **Worked by:** nobody
+- **Started:** never
+- **Landed:** nothing to land; no code of this plan exists
+- **Tests at landing:** none
+- **Tasks:** none done; all dropped with the plan
+- **Waiting on the owner:** nothing
+- **In-sim results:** none run (the owner's report above is the reason for closing)
+- **Changed from the plan:** the whole plan dropped. For plan 16: the hotkey guide's Notes and the guide's 757 flying notes need no Thrust levers panel; their throttle text can say the keyboard and controllers move the levers.
+- **Rulings made while working:** close plan 15 rather than build it (the owner, 2026-11-13)
