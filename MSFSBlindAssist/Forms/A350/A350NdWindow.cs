@@ -37,7 +37,7 @@ public sealed class A350NdWindow : Form
     private readonly Button _readExits, _armExit, _clearBtv, _armRunway;
     private A350BtvArming.ExitsRead? _exitsRead;
     private bool _arming;
-    private readonly IntPtr _previousWindow;
+    private IntPtr _previousWindow;
     private readonly A350ShownCapture _shown = new();
     private readonly HashSet<string> _failures = new();
     private IReadOnlyList<MfdLine> _lines = Array.Empty<MfdLine>();
@@ -56,7 +56,6 @@ public sealed class A350NdWindow : Form
         Action? pressAutobrake = null, IA350WindowRows? rows = null)
     {
         _pressAutobrake = pressAutobrake;
-        _previousWindow = GetForegroundWindow();
         _latest = latest;
         _drawNow = drawNow;
         _isDark = isDark;
@@ -65,11 +64,11 @@ public sealed class A350NdWindow : Form
         _setKnob = setKnob;
         _knob = knob;
 
-        Text = "A350 ND and airport map";
+        Text = "A350 ND";
         Size = new Size(820, 620);
         StartPosition = FormStartPosition.CenterScreen;
         MinimizeBox = false;
-        ShowInTaskbar = false;
+        ShowInTaskbar = true;
         KeyPreview = true;
 
         _side = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Side" };
@@ -112,7 +111,7 @@ public sealed class A350NdWindow : Form
 
         _list = new DisplayListBox
         {
-            Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 0, AccessibleName = "ND",
+            Dock = DockStyle.Fill, Font = new Font("Consolas", 11), TabIndex = 0, AccessibleName = "ND display",
             AccessibleDescription = "Enter acts on the line; a field takes the box's text. Control plus an arrow drags the map, Alt plus X presses the KCCU's ESC, Backspace its CLR, Page Up and Page Down scroll a list, F5 reads now, Escape closes.",
         };
         _list.SetText("Loading the ND...");
@@ -148,6 +147,21 @@ public sealed class A350NdWindow : Form
     }
 
     private int Side => _side.SelectedIndex < 0 ? 0 : _side.SelectedIndex;
+
+    /// <summary>Shows the window, or brings the open one forward, with focus on the list, as the other display windows do: a second
+    /// Alt+N puts the pilot back on the ND's list.</summary>
+    public void ShowForm()
+    {
+        if (!Visible) _previousWindow = GetForegroundWindow();
+        if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+        Show();
+        BringToFront();
+        Activate();
+        // The key opens this while the sim has the foreground, where Activate alone can leave the window behind it.
+        TopMost = true;
+        TopMost = false;
+        _list.Focus();
+    }
 
     private static string EfisSide(int side) => side == 0 ? "LEFT" : "RIGHT";
 

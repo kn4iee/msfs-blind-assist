@@ -75,7 +75,7 @@ public class A350NdWindowEfisTests
     {
         using var form = Window(new Rows());
         var order = form.Controls.Cast<Control>().OrderBy(c => c.TabIndex).Select(c => c.AccessibleName).ToList();
-        Assert.Equal(new[] { "ND", "Text: type, then Enter on a field", "ND mode", "ND range", "EFIS", "BTV controls", "Side" }, order);
+        Assert.Equal(new[] { "ND display", "Text: type, then Enter on a field", "ND mode", "ND range", "EFIS", "BTV controls", "Side" }, order);
     }
 
     [Fact]
@@ -113,5 +113,15 @@ public class A350NdWindowEfisTests
         rows.Cstr = "On";
         await form.RefreshAsync(false);   // the monitor's latest is still the draw from before
         Assert.Equal("CSTR: On", form.EfisButtons[0].Text);
+    }
+
+    // Plan 26's review minor: the ND window differed from the other five (its list named "ND", its title, no taskbar entry).
+    [Fact]
+    public void It_is_named_and_shown_as_the_other_display_windows()
+    {
+        using var form = Window(new Rows());
+        Assert.Equal("A350 ND", form.Text);
+        Assert.True(form.ShowInTaskbar);
+        Assert.Equal("ND display", form.Controls.OfType<MSFSBlindAssist.Forms.DisplayListBox>().Single().AccessibleName);
     }
 }

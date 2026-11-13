@@ -149,6 +149,9 @@ public class A350DisplayWindow : Form
             Report($"controls failed: {ex.GetType().Name}: {ex.Message}");
         }
 
+        // A derived window that knows the display has not caught up with a press (the SD's page) keeps the rows it shows meanwhile.
+        if (fresh is null && HoldsRows) return;
+
         int side = Side;
         A350DrawCapture? capture;
         int freshSide = drawnFor ?? side;
@@ -183,6 +186,8 @@ public class A350DisplayWindow : Form
         try
         {
             await Pause(AfterPressMs, CancellationToken.None);
+            if (IsDisposed || generation != _pressGeneration) return;
+            await SettleAsync();
             if (IsDisposed || generation != _pressGeneration) return;
             await DrawFreshAsync(side);
         }
@@ -221,27 +226,46 @@ public class A350DisplayWindow : Form
     /// window (the Fenix display window's rule).</summary>
     internal static bool EscapeCloses(bool comboListOpen) => !comboListOpen;
 
+    /// <summary>Called as each of the window's controls is pressed, before its fresh draw is asked for. The base does nothing.</summary>
+    protected virtual void Pressed() { }
+
+    /// <summary>Awaited after a press's wait and before its fresh draw: a derived window waits here for what the display's reader needs
+    /// to have caught up (the SD's page). The base waits for nothing.</summary>
+    protected virtual Task SettleAsync() => Task.CompletedTask;
+
+    /// <summary>Whether a tick keeps the rows shown rather than read the monitor's latest draw: a derived window's display that has not
+    /// caught up with a press yet. The base never holds.</summary>
+    protected virtual bool HoldsRows => false;
+
     /// <summary>Called at every refresh, before the rows are set, for a derived window's own controls. The base does nothing.</summary>
     protected virtual void OnRefresh() { }
 
     /// <summary>A derived window's chance at a key before the base's own (Escape, F5); true when it took the key.</summary>
     protected virtual bool HandleWindowKey(Keys keyData) => false;
 
-    /// <summary>Adds a control below the list, last in the tab order: the list first, then the controls in the order added.</summary>
+    /// <summary>Adds a control below the list, in the tab order after the controls added before it and before the side box, which
+    /// stays last as on the ND window: the list first, then the controls in the order added, then the side box.</summary>
     protected void AddControlAfterList(Control control)
     {
         // The list fills what the docked controls leave, and Windows Forms docks the last control added first, so the controls end
-        // up below the list in the order they were added.
+        // up below the list in the order they were added: the side box is taken out and added again after each.
         control.Dock = DockStyle.Bottom;
+        bool sideLast = _side != null && control != _side && Controls.Contains(_side);
+        if (sideLast) Controls.Remove(_side!);
         Controls.Add(control);
         control.TabIndex = Controls.Count - 1;
+        if (sideLast)
+        {
+            Controls.Add(_side!);
+            _side!.TabIndex = Controls.Count - 1;
+        }
     }
 
     /// <summary>Adds a row of the panel's keys after the list (<see cref="A350KeyRow"/>): each reads its row's state, and a press reads
     /// the display again from a fresh draw.</summary>
     protected A350KeyRow AddKeyRow(IReadOnlyList<A350WindowKey> keys)
     {
-        var row = new A350KeyRow(keys, _rows, () => Side, () => _ = AfterPressAsync());
+        var row = new A350KeyRow(keys, _rows, () => Side, () => { Pressed(); _ = AfterPressAsync(); });
         _keyRows.Add(row);
         AddControlAfterList(row);
         return row;
@@ -250,7 +274,7 @@ public class A350DisplayWindow : Form
     /// <summary>Adds a typed row's box after the list (<see cref="A350TypedBox"/>): Enter applies it, then the display is read again.</summary>
     protected A350TypedBox AddTypedBox(string label, Func<int, string> row)
     {
-        var box = new A350TypedBox(label, row, _rows, () => Side, () => _ = AfterPressAsync());
+        var box = new A350TypedBox(label, row, _rows, () => Side, () => { Pressed(); _ = AfterPressAsync(); });
         AddControlAfterList(box);
         return box;
     }

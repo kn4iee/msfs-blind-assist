@@ -88,4 +88,16 @@ public class A350EcamWindowsTests
         Assert.Equal(Lines(A350SdText.Build(ctr, 3)), def.SdFeed().Read(ctr, 0));
         Assert.False(def.SdFeed().Dark(0));
     }
+
+    // Plan 26's review minor: the E/WD and SD windows parsed the CTR's draw twice a tick each (whether it is dark, then the reader). The
+    // definition parses a draw once, whoever asks.
+    [Fact]
+    public void A_ctr_draw_is_parsed_once_whoever_reads_it()
+    {
+        var def = new IniBuildsA350Definition();
+        def.Attach(new SimConnect.SimConnectManager(IntPtr.Zero));
+        var ctr = A350Fixtures.Capture("ctr_cruise.json");
+        Assert.Same(def.CtrView(ctr), def.CtrView(ctr));
+        Assert.NotSame(def.CtrView(ctr), def.CtrView(A350Fixtures.Capture("ctr_cruise.json")));
+    }
 }

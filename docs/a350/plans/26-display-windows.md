@@ -157,6 +157,9 @@ Kept in this file only, so no other plan's push ever touches it.
   rows (six keys and the typed QNH, no knob up and down); a display not fitted is a fifth status reason; each one-shot read went with its
   key's window; after the final review, presses close together read one fresh draw, each side keeps its own fresh draw, the buttons
   refresh on every tick, and Escape spares an open combo list in the ND window too
+- **The review's minors (2026-11-13):** first deferred, then fixed test-first at the owner's word ("why did you defer the minors?"):
+  the SD window waits for the page before reading a new page's draw, the ND window is named and shown as the other five, the side box
+  comes last on the PFD window too, the CTR's draw is parsed once; then a second fresh review
 - **Rulings made while working:** the A350's own copy of the Fenix's `RowToFollow`; the side box right after the list; the E/WD
   window keeps all the Alt+E text showed; the SD page selector (the page keys as a combo) is on neither window; the ND window's rows
   named "EFIS" and "BTV controls"

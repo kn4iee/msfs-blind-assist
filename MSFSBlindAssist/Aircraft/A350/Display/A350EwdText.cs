@@ -5,10 +5,13 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 public static class A350EwdText
 {
     /// <param name="sdPage">INI_ECAM_ACTIVE_PAGE when known: the SD section then names the page and its values.</param>
-    public static string Build(A350DrawCapture? capture, double? sdPage = null)
+    public static string Build(A350DrawCapture? capture, double? sdPage = null) =>
+        capture == null ? A350DisplayStatus.NotAvailableYet : Build(capture, A350Ewd.Parse(capture), sdPage);
+
+    /// <summary>The text from a draw already parsed (<paramref name="view"/> is <paramref name="capture"/>'s), so a window that also
+    /// asked whether the CTR is dark parses it once.</summary>
+    public static string Build(A350DrawCapture capture, A350EwdView view, double? sdPage)
     {
-        if (capture == null) return A350DisplayStatus.NotAvailableYet;
-        var view = A350Ewd.Parse(capture);
         if (!view.Powered) return "The E/WD and SD are off: no power.";
 
         var o = new List<string> { "Engine display:" };

@@ -28,6 +28,18 @@ public partial class IniBuildsA350Definition
     /// <summary>The CTR's latest draw (the E/WD, the SD and the mailbox), drawn every tick.</summary>
     private A350.Display.A350DrawCapture? CtrDraw() => Pfd?.Latest("CTR", 0);
 
+    private (A350.Display.A350DrawCapture? Capture, A350.Display.A350EwdView? View) _ctrView;   // the UI thread's own
+
+    /// <summary>The CTR's draw parsed once, whoever reads it (whether it is dark, the E/WD's text, the SD's): the last draw's view is kept
+    /// by the draw's identity (plan 26's review: each window parsed it twice a tick). UI thread only.</summary>
+    internal A350.Display.A350EwdView CtrView(A350.Display.A350DrawCapture capture)
+    {
+        if (ReferenceEquals(_ctrView.Capture, capture) && _ctrView.View is { } kept) return kept;
+        var view = A350.Display.A350Ewd.Parse(capture);
+        _ctrView = (capture, view);
+        return view;
+    }
+
     /// <summary>The page the SD shows (INI_ECAM_ACTIVE_PAGE), or null while unread.</summary>
     private double? SdPageShown() => _sim is { } sim ? Cached(sim, SdPageKey) : null;
 
@@ -35,14 +47,14 @@ public partial class IniBuildsA350Definition
     private Forms.A350.A350DisplayFeed CtrFeed(Func<A350.Display.A350DrawCapture, string> read, bool needsPage) => new(
         _ => needsPage && SdPageShown() is null ? null : CtrDraw(),
         async _ => Displays == null ? null : (await Displays.DrawAsync(("CTR", 0)))?.FirstOrDefault(),
-        _ => CtrDraw() is { } ctr && !A350.Display.A350Ewd.Parse(ctr).Powered,
+        _ => CtrDraw() is { } ctr && !CtrView(ctr).Powered,
         (capture, _) => TextLines(read(capture)));
 
     /// <summary>The E/WD window's feed: the CTR as <c>A350EwdText</c> reads it, with the SD's page when known (the Alt+E text before).</summary>
-    internal Forms.A350.A350DisplayFeed EwdFeed() => CtrFeed(c => A350.Display.A350EwdText.Build(c, SdPageShown()), needsPage: false);
+    internal Forms.A350.A350DisplayFeed EwdFeed() => CtrFeed(c => A350.Display.A350EwdText.Build(c, CtrView(c), SdPageShown()), needsPage: false);
 
     /// <summary>The SD window's feed: the page the SD shows as <c>A350SdText</c> reads it; not read while the page is unread.</summary>
-    internal Forms.A350.A350DisplayFeed SdFeed() => CtrFeed(c => A350.Display.A350SdText.Build(c, SdPageShown() ?? 0), needsPage: true);
+    internal Forms.A350.A350DisplayFeed SdFeed() => CtrFeed(c => A350.Display.A350SdText.Build(c, CtrView(c), SdPageShown() ?? 0), needsPage: true);
 
     /// <summary>The SND window's feed: the standby navigation display, and "not fitted" while its OIS option (STANDBY NAV DISPLAY) is
     /// off, as its panel's rows refuse then.</summary>
@@ -102,7 +114,7 @@ public partial class IniBuildsA350Definition
                 ShowTrackedWindow(() => new Forms.A350.A350EwdWindow(EwdFeed(), rows), w => w.ShowForm());
                 break;
             case "SD":
-                ShowTrackedWindow(() => new Forms.A350.A350SdWindow(SdFeed(), rows), w => w.ShowForm());
+                ShowTrackedWindow(() => new Forms.A350.A350SdWindow(SdFeed(), rows, SdPageShown), w => w.ShowForm());
                 break;
             case "ISIS":
                 ShowTrackedWindow(() => new Forms.A350.A350IsisWindow(DisplayFeed("Standby flight display"), rows), w => w.ShowForm());
@@ -127,7 +139,7 @@ public partial class IniBuildsA350Definition
                         // BTV's arming (plan 08): the A/BRK pushbutton, the Autobrake panel's own row.
                         () => PressRow("A350_LDG_AUTO_BRK", simConnect, announcer, 1),
                         rows),
-                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                    w => w.ShowForm());
                 break;
         }
     }

@@ -308,4 +308,14 @@ public class A350DisplayWindowTests
         Assert.True(A350DisplayWindow.EscapeCloses(comboListOpen: false));
         Assert.False(A350DisplayWindow.EscapeCloses(comboListOpen: true));
     }
+
+    // Plan 26's review minor: the side box came right after the list on the PFD window and last on the ND window. It is last on both.
+    [Fact]
+    public void With_two_sides_the_side_box_comes_last_after_every_control()
+    {
+        using var form = new Window(new Feed().ToFeed(), new Rows(), sides: 2);
+        var byTab = form.Controls.Cast<Control>().OrderBy(c => c.TabIndex).ToList();
+        Assert.IsType<DisplayListBox>(byTab[0]);
+        Assert.Equal("Side", byTab[^1].AccessibleName);
+    }
 }

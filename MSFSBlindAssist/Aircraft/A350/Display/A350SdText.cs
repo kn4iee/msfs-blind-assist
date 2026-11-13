@@ -20,11 +20,13 @@ public static class A350SdText
         return (title, shown);
     }
 
-    public static string Build(A350DrawCapture? capture, double page)
+    public static string Build(A350DrawCapture? capture, double page) =>
+        capture == null ? PageName(page) + " page\r\n" + A350DisplayStatus.NotAvailableYet : Build(capture, A350Ewd.Parse(capture), page);
+
+    /// <summary>The text from a draw already parsed (<paramref name="view"/> is <paramref name="capture"/>'s).</summary>
+    public static string Build(A350DrawCapture capture, A350EwdView view, double page)
     {
         var head = PageName(page) + " page";
-        if (capture == null) return head + "\r\n" + A350DisplayStatus.NotAvailableYet;
-        var view = A350Ewd.Parse(capture);
         if (!view.Powered) return head + "\r\nThe SD is off: no power.";
         var (title, shown) = Shown(view.SystemDisplay, page);
         var o = new List<string> { title };
