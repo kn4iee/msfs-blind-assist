@@ -339,19 +339,20 @@ public sealed class A350NdWindow : Form
                 if (cap != null && A350BtvArming.ExitsOf(cap, side).Exits.Count > 0) break;
                 await Wait(500);
             }
-            _exitsRead = cap == null ? new A350BtvArming.ExitsRead(null, Array.Empty<A350BtvArming.Exit>()) : A350BtvArming.ExitsOf(cap, side);
+            var read = cap == null ? new A350BtvArming.ExitsRead(null, Array.Empty<A350BtvArming.Exit>()) : A350BtvArming.ExitsOf(cap, side);
+            _exitsRead = read;
             var runways = lines.Select(l => System.Text.RegularExpressions.Regex.Match(l.Spoken, @"^Runway (\d{2}[LCR]?)\b")).Where(m => m.Success)
                 .Select(m => m.Groups[1].Value).Distinct().ToList();
             if (move && !stayZoomed) await SetEfisAsync(side, mode, range);
             _exits.Items.Clear();
-            foreach (var e in _exitsRead?.Exits ?? Array.Empty<A350BtvArming.Exit>()) _exits.Items.Add($"{e.Name}, {e.Metres} m");
+            foreach (var e in read.Exits) _exits.Items.Add($"{e.Name}, {e.Metres} m");
             if (_exits.Items.Count > 0) _exits.SelectedIndex = 0;
             _runways.Items.Clear();
             foreach (var r in runways) _runways.Items.Add(r);
-            if (_exitsRead?.Runway is { } landing && _runways.Items.IndexOf(landing) is int at && at >= 0) _runways.SelectedIndex = at;
+            if (read.Runway is { } landing && _runways.Items.IndexOf(landing) is int at && at >= 0) _runways.SelectedIndex = at;
             if (!stayZoomed)
-                _announcer.Announce(cap == null ? "The airport map could not be read." : A350BtvArming.ExitsSentence(_exitsRead));
-            return _exitsRead;
+                _announcer.Announce(cap == null ? "The airport map could not be read." : A350BtvArming.ExitsSentence(read));
+            return read;
         }
         finally { _arming = false; }
     }

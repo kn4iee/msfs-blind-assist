@@ -58,11 +58,12 @@ public static class A350Rmp
         if (frequency)
         {
             string text = typed.Contains('.') || typed.Length != 5 ? typed : typed[..3] + "." + typed[3..];
-            if (!text.All(c => char.IsDigit(c) || c == '.') || !double.TryParse(text, System.Globalization.NumberStyles.Float, culture, out double mhz) || mhz is < 108 or > 117.95)
+            if (!text.All(c => char.IsAsciiDigit(c) || c == '.') || !double.TryParse(text, System.Globalization.NumberStyles.Float, culture, out double mhz) || mhz is < 108 or > 117.95)
                 return null;
             return mhz.ToString("000.00", culture).Select(c => KeyFor(c)!).ToList();
         }
-        if (typed.Length is 0 or > 3 || !typed.All(char.IsDigit) || int.Parse(typed, culture) > 360)
+        // The keypad's own digits alone: a digit of another script is one to char.IsDigit and none to the parse, which threw.
+        if (typed.Length is 0 or > 3 || !typed.All(char.IsAsciiDigit) || int.Parse(typed, culture) > 360)
             return null;
         return typed.PadLeft(3, '0').Select(c => KeyFor(c)!).ToList();
     }

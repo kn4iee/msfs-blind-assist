@@ -87,7 +87,7 @@ public class A350PfdWindowTests
     {
         var rows = new Rows();
         var feed = new A350DisplayFeed(_ => null, _ => Task.FromResult<A350DrawCapture?>(null), _ => false, (_, _) => Array.Empty<string>());
-        string Name(Form form) => form.Controls.OfType<A350KeyRow>().Single().AccessibleName;
+        string Name(Form form) => form.Controls.OfType<A350KeyRow>().Single().AccessibleName ?? "";
         using var pfd = new A350PfdWindow(feed, rows);
         using var ewd = new A350EwdWindow(feed, rows);
         using var sd = new A350SdWindow(feed, rows);

@@ -530,7 +530,10 @@ public static class A350MfdPage
         // A label two fields share takes each field's column header: the nearest text above it in its column.
         int unnamed = Enumerable.Range(0, fields.Count).Count(k => fields[k].Label == null && !columnNames.ContainsKey(k));
         // VERT REV's CMS draws three boxes under no labels: where the constant Mach segment begins, its Mach, where it ends (live 2026-10-30).
-        var inCmsOrder = pageTab == "CMS" && unnamed == 3 ? fields.OrderBy(f => f.X0).Select(f => f.X0).ToList() : null;
+        // (Ordered among themselves: a labelled box left of them is no part of the three, second review pass 2026-11-13.)
+        var inCmsOrder = pageTab == "CMS" && unnamed == 3
+            ? Enumerable.Range(0, fields.Count).Where(k => fields[k].Label == null && !columnNames.ContainsKey(k)).Select(k => fields[k].X0).OrderBy(x => x).ToList()
+            : null;
         for (int k = 0; k < fields.Count; k++)
         {
             var f = fields[k];
@@ -1138,11 +1141,12 @@ public static class A350MfdPage
             var key = cells.FirstOrDefault(c => !used.Contains(c) && c.X >= dx && c.X <= dx + dest.RectW && c.Y >= dest.Y && c.Y <= dest.Y + dest.RectH + 4);
             var data = cells.Where(c => !used.Contains(c) && c != key && c.Y >= barTop && c.Y < barTop + 60 && c.X >= 200 && c.X < 560)
                 .OrderBy(c => c.X).ToList();
-            if (key != null && data.Count > 0)
+            // (A bar holding nothing but grey has no figure to name: it reads as drawn, second review pass 2026-11-13.)
+            var values = data.Where(c => c.Colour != "grey").ToList();
+            if (key != null && values.Count > 0)
             {
                 used.Add(key);
                 used.UnionWith(data);
-                var values = data.Where(c => c.Colour != "grey").ToList();
                 string Unit(Cell v) => data.FirstOrDefault(u => u.Colour == "grey" && u.X > v.X && u.X - v.X < 40) is { } u ? " " + u.Text : "";
                 var named = values.Select((v, i) => $"{(i switch { 0 => "time", 1 => "EFOB", 2 => "distance", _ => "value" })} {Word(v.Text)}{Unit(v)}");
                 lines.Add((dest.Y, 0, new MfdLine("button", $"Destination {key.Text}: {string.Join(", ", named)}, {values.First().Colour}",

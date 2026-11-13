@@ -156,3 +156,17 @@ public class A350BaroWindowUnitTests
         Assert.Equal(new[] { "STD, both sides", "QNH, both sides", "Captain baro unit", "First officer baro unit", "Close" }, buttons);
     }
 }
+
+/// <summary>Second review pass (2026-11-13): an FCU window's key pressed again while the window was open recorded the window itself
+/// as the one to go back to, so closing it no longer handed the foreground back to the sim. Every other A350 window keeps the
+/// window it was opened from; so do these.</summary>
+public class A350FcuWindowReturnTests
+{
+    [Fact]
+    public void A_window_opened_goes_back_to_the_window_in_front_as_it_opened() =>
+        Assert.Equal((IntPtr)11, MSFSBlindAssist.Forms.A350.A350FcuWindowBase.ReturnTo(visible: false, previous: IntPtr.Zero, foreground: (IntPtr)11));
+
+    [Fact]
+    public void A_window_brought_forward_again_keeps_the_window_it_goes_back_to() =>
+        Assert.Equal((IntPtr)11, MSFSBlindAssist.Forms.A350.A350FcuWindowBase.ReturnTo(visible: true, previous: (IntPtr)11, foreground: (IntPtr)22));
+}

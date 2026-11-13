@@ -211,6 +211,10 @@ public class A350RmpPageTests
     [InlineData("361", false)]
     [InlineData("1000", false)]
     [InlineData("12.5", false)]
+    // Second review pass (2026-11-13): digits of another script passed as digits and then threw as the course was parsed; the
+    // keypad has keys for 0 to 9 alone.
+    [InlineData("٣٦٠", false)]
+    [InlineData("١٠٩.٥٠", true)]
     public void A_typed_entry_out_of_range_is_refused(string typed, bool frequency) => Assert.Null(A350Rmp.TuningKeys(typed, frequency));
 
     // The Surroundings window's Enter tunes VHF 1 through RMP 1's keys, as a pilot does (manual p. 74-75): the VHF page, a new entry's

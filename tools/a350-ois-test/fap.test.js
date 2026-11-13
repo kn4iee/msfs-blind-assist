@@ -211,6 +211,21 @@ test('the page is not read again until it changes', async () => {
   assert.ok(JSON.parse(A.scrape()).elements);
 });
 
+// Second review pass (2026-11-13): as the OIS agent's (gate.test.js): a read that fails answers {ok:false} and must leave the
+// next scrape full, never unchanged.
+test('a read that fails leaves the next scrape full', async () => {
+  const { A } = load('fap_cabin', { agent: 'fap', gate: true });
+  A.scrape();
+  await new Promise(r => setTimeout(r, 0));
+  const visible = A.visible;
+  A._dirty = true;
+  A.visible = () => { throw new Error('torn read'); };
+  assert.equal(JSON.parse(A.scrape()).ok, false);
+  A.visible = visible;
+  await new Promise(r => setTimeout(r, 0));
+  assert.ok(JSON.parse(A.scrape()).elements);
+});
+
 test('the FAP has no field to type into', () => {
   const { A } = load('fap_cabin', { agent: 'fap' });
   assert.equal(A.setValue(1, 'x'), 'not a field');

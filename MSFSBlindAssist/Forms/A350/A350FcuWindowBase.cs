@@ -39,9 +39,13 @@ public class A350FcuWindowBase : Form
     }
 
     /// <summary>Shows the window non-modal (other windows stay reachable, as the A380's) and starts its live states.</summary>
+    /// <summary>The window to hand the foreground back to on close: the one in front as this window opens. Its key pressed again
+    /// while it is open brings it forward and keeps that window (the one in front is then this window itself).</summary>
+    internal static IntPtr ReturnTo(bool visible, IntPtr previous, IntPtr foreground) => visible ? previous : foreground;
+
     public void ShowForm()
     {
-        _previousWindow = GetForegroundWindow();
+        _previousWindow = ReturnTo(Visible, _previousWindow, GetForegroundWindow());
         Show();
         BringToFront();
         Activate();

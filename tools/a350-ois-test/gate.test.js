@@ -63,3 +63,19 @@ test('a scrape that fails leaves the next one full', async () => {
   await tick();
   assert.ok(JSON.parse(A.scrape()).elements);
 });
+
+// Second review pass (2026-11-13): the read catches its own failure and answers {ok:false}, so the scrape's catch above never
+// saw one: the page stayed clean and the next polls answered unchanged for up to ten polls. A read that fails inside the page
+// walk leaves the next scrape full.
+test('a read that fails inside the page walk leaves the next scrape full', async () => {
+  const { A } = load('ground', { gate: true });
+  A.scrape();
+  await tick();
+  const visible = A.visible;
+  A._dirty = true;
+  A.visible = () => { throw new Error('torn read'); };
+  assert.equal(JSON.parse(A.scrape()).ok, false, 'the failed read says so');
+  A.visible = visible;
+  await tick();
+  assert.ok(JSON.parse(A.scrape()).elements, 'and the page is read again at once');
+});

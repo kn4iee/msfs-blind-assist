@@ -35,7 +35,7 @@ public class A350PfdDisplayTests
     {
         var def = new IniBuildsA350Definition();
         var cockpit = def.GetPanelStructure().Where(s => s.Key != "Displays").SelectMany(s => s.Value).ToHashSet(StringComparer.Ordinal);
-        Assert.Empty(IniBuildsA350Definition.DisplayPanels.Select(d => d.Panel).Where(cockpit.Contains));
+        Assert.DoesNotContain(IniBuildsA350Definition.DisplayPanels.Select(d => d.Panel), cockpit.Contains);
         Assert.Equal(new[] { "A350_FCU_HUD_BRIGHTNESS_LEFT", "A350_FCU_HUD_XWIND_LEFT", "A350_INSTRUMENT_FCU_HUD_DECLUTTER_LEFT_IE_ID" },
             def.GetPanelControls()["Captain HUD"]);
         var all = def.GetPanelStructure().SelectMany(s => s.Value).ToList();

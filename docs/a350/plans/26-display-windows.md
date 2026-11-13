@@ -141,7 +141,7 @@ A fresh reviewer on the most capable model; the fix pass test-first; the full su
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** claimed
+- **Status:** landed, waiting on the owner (the live check below)
 - **Claimed by:** Francesco Tissera, with Claude, 2026-11-13
 - **Worked by:** Claude (Opus 5.5), inline (superpowers:executing-plans)
 - **Started:** 2026-11-13, from `ef6bcac8d`

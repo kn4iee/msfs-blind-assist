@@ -58,6 +58,28 @@ public class A350MfdPageTests
         Assert.Contains("CMS to: none, cyan", spoken);
     }
 
+    // Second review pass (2026-11-13): the three names were indexed by every box's place on the page, so a labelled box left of
+    // them gave the last one a fourth place and the whole page's read threw (the window kept its last page). The three are named
+    // among themselves, whatever else the page holds.
+    [Fact]
+    public void The_constant_mach_segments_boxes_keep_their_names_beside_a_labelled_box()
+    {
+        var cms = A350Fixtures.Capture("mfd_vert_rev_cms.json");
+        int first = cms.Texts.Count;
+        var white = A350Rgba.Of("white");
+        var withBox = cms with
+        {
+            Elements = cms.Elements.Append(new DrawnElement(0, "BaseUITextBox", 20, 480, 60, 30, 20, 480, first)).ToList(),
+            Texts = cms.Texts.Append(new DrawnText("ZZ", 5, 502, 5, 502, 0, white))
+                .Append(new DrawnText("250", 25, 500, 25, 500, 0, A350Rgba.Of("cyan"))).ToList(),
+        };
+        var spoken = A350MfdPage.Read(withBox, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains("ZZ: 250, cyan", spoken);
+        Assert.Contains("CMS from: none, cyan", spoken);
+        Assert.Contains("CMS Mach: none, cyan", spoken);
+        Assert.Contains("CMS to: none, cyan", spoken);
+    }
+
     // Live 2026-10-30: a stored waypoint draws one value under LAT and LONG, and the nearest heading took it all: "LONG 08°22.7N/077°08.9E".
     [Fact]
     public void One_value_under_two_headings_names_both_parts() =>
@@ -538,6 +560,23 @@ public class A350MfdPageTests
         Assert.DoesNotContain(lines, l => l.StartsWith("FROM TIME") || l.Contains("306d"));
         Assert.Contains("CLEAR INFO button", lines);   // a hidden row's box reaches under the bottom keys
         Assert.Contains("Scratchpad: NAV ACCURACY UPGRADED, white", lines);
+    }
+
+    // Second review pass (2026-11-13): the destination bar's line took its colour from its first value that is not grey; with
+    // nothing but grey there the whole page's read threw. The bar then reads as drawn, the destination's key still a key.
+    [Fact]
+    public void A_destination_bar_with_only_grey_figures_still_reads()
+    {
+        var plan = A350Fixtures.Capture("mfd_fpln_route.json");
+        var grey = A350Rgba.Of("grey");
+        var allGrey = plan with
+        {
+            Texts = plan.Texts.Select(t => t.X is >= 200 and < 560 && t.Y is >= 850 and < 860 ? t with { Colour = grey } : t).ToList(),
+        };
+        var lines = A350MfdPage.Read(allGrey, 0).Select(l => l.Spoken).ToList();
+        Assert.Contains(lines, l => l.Contains("OMDB", StringComparison.Ordinal));
+        Assert.Contains("DEST button", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("Destination OMDB:", StringComparison.Ordinal));
     }
 
     // POSITION/IRS (live, aligned): IRS 3's texts sit at y 430 and 432, either side of a fixed 12 px bucket's edge;

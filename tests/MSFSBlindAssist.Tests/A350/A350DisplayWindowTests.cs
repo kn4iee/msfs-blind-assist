@@ -188,7 +188,7 @@ public class A350DisplayWindowTests
     }
 
     [Fact]
-    public void A_press_is_read_from_a_fresh_draw_and_the_older_latest_never_replaces_it()
+    public async Task A_press_is_read_from_a_fresh_draw_and_the_older_latest_never_replaces_it()
     {
         var feed = new Feed();
         var older = feed.Show(0, "LS off");
@@ -196,7 +196,7 @@ public class A350DisplayWindowTests
         form.StartLive();
         feed.Fresh = Draw("EFIS");
         feed.Lines[feed.Fresh] = new[] { "LS on" };
-        form.AfterPressAsync().GetAwaiter().GetResult();
+        await form.AfterPressAsync();
         Assert.Equal(1, feed.Drawn);
         Assert.Equal(new[] { "LS on" }, ItemsOf(ListOf(form)));
         form.RefreshNow();   // the monitor's latest is still the draw from before the press

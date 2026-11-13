@@ -330,6 +330,7 @@
       if (picture) push(null, { kind: 'static', text: picture });
       return JSON.stringify({ ok: true, page: page, elements: out });
     } catch (err) {
+      A._dirty = true;   // a failed read is no read: the next scrape reads the page again, never "unchanged"
       return JSON.stringify({ ok: false, error: String(err && err.message || err) });
     }
   };
