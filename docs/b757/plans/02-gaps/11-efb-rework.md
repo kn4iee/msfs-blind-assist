@@ -131,11 +131,9 @@ Kept in this file only, so no other plan's push ever touches it. Task 0 claims t
   (`Bbs757GroundServices`). 3 replaced: settings are read from the tablet's own page, see "Changed". 4 done as the
   screen-reading bridge (`Bbs757EfbBridge`, Shift+T opens the shared `FbwEfbForm`; the old window stays as "Classic
   757 EFB window" inside it). 5 done for the four proven services (CHOCKS stays the map's Status row).
-- **Waiting on the owner:** the in-sim checks below at a gate with the APU on (this work ran on a runway, cold and
-  dark then tablet-only); FWD STAIR (its tile did not move on a runway); JETWAY (no jetway on a runway); GND SRVC
-  mode, tug and arrows; a door open/close from the Cabin & Doors page. After 2026-10-27: Shift+T opening the classic
-  window, its Read the tablet screen button, and a few pages read and navigated in the read-only window in the app
-  itself (the reliability numbers below are the probe's, which runs the same reader files).
+- **Waiting on the owner:** nothing (updated 2026-11-13). The checks once listed here (a gate with the APU on, FWD STAIR,
+  JETWAY, GND SRVC mode, tug and arrows, a Cabin & Doors door, the classic window's Shift+T and Read button) belonged to
+  the screen reader plans 18 and 20 to 22 replaced, and were dropped with it ("Superseded", above).
 - **In-sim results:** 2026-10-26/27, MSFS 2024, BlueBird 757-200 PW 0.1.0, through the app's own Shift+T window (test
   build, UI Automation): pages read and navigated (Home, Aircraft, Settings General/Aircraft/Callouts, Checklist);
   a settings switch (Radio altimeter 2500) on and off; EFB brightness mode Manual then Auto; a slider (Notifications
