@@ -203,15 +203,60 @@ public class Bbs757AnnunciatorsTests
     }
 
     [Fact]
+    public void A_row_the_flight_load_left_alone_speaks_its_first_change_after_the_load()
+    {
+        // After a flight load a row the new flight did not change is not delivered again (the batch delivers
+        // changes only), so its next delivery is a real change, not a baseline: the parking brake released
+        // after loading parked must be heard.
+        var rig = new Rig();
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);
+
+        rig.Def.OnSimContextReset();
+        rig.Now += BBS757Definition.LoadQuietMs + 1;
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);
+
+        Assert.Equal(new[] { Bbs757Readouts.ParkingBrakePhrase(0) }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_change_the_flight_load_brings_is_not_spoken()
+    {
+        var rig = new Rig();
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);
+
+        rig.Def.OnSimContextReset();
+        rig.Now += BBS757Definition.LoadQuietMs - 1;
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);   // the new flight's brake: no change
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_dropped_connection_makes_every_next_reading_a_baseline()
+    {
+        // The reconnect delivers every row again, whatever happened meanwhile: none of it is a change.
+        var rig = new Rig();
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);
+
+        rig.Def.OnSimContextReset();
+        rig.Def.OnVariableCacheCleared();
+        rig.Now += BBS757Definition.LoadQuietMs + 1;
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
     public void An_irs_switch_value_survives_a_flight_load()
     {
         // A switch value is a fact, not a baseline: the batch delivers only changes, so after a flight load
-        // (the tracker reset) the switch at NAV is not delivered again, and the IRS must still say aligned.
+        // the switch at NAV is not delivered again, and the IRS must still say aligned.
         var rig = new Rig();
         rig.Deliver("BBS757_IRS_L_SWITCH_WATCH", 2);
         rig.Deliver("BBS757_IRS_L_ALIGN", 1);
         rig.Def.OnSimContextReset();
-        rig.Deliver("BBS757_IRS_L_ALIGN", 1);   // the baseline after the load
+        rig.Deliver("BBS757_IRS_L_ALIGN", 1);   // the new flight as found
+        rig.Now += BBS757Definition.LoadQuietMs + 1;   // the load's quiet is over: a change is news again
         rig.Deliver("BBS757_IRS_L_ALIGN", 0);
         Assert.Equal(new[] { "IRS L aligned" }, rig.Speech.All);
     }

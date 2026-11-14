@@ -101,6 +101,23 @@ public partial class MainForm
         var layouts = new Services.WasmMemory.LayoutStore(module, Services.WasmMemory.LayoutStore.DefaultRoot,
             Services.WasmMemory.LayoutStore.BundledRoot, Services.WasmMemory.ProcessLayoutGenerator.NextToApp(), host.ReadFile, host.Log);
         bbs757.StartDisplays(host, layouts, simConnectManager, announcer);
+        StartBbs757CduMessageWatch();
+    }
+
+    /// <summary>
+    /// Makes the 757's CDU window without showing it, so its closed-window watch speaks a CDU message on the
+    /// captain's scratchpad from the moment the 757 is the aircraft, not only once Shift+M has opened the window
+    /// (<see cref="Forms.BBS757.BBS757CduForm.StartHidden"/>). Runs with the display readers' start, on the UI
+    /// thread; a second call finds the window made and changes nothing.
+    /// </summary>
+    private void StartBbs757CduMessageWatch()
+    {
+        if (currentAircraft is not BBS757Definition) return;
+        var client = EnsureBbs757TabletClient();
+        if (client == null) return;
+        if (bbs757CduForm == null || bbs757CduForm.IsDisposed)
+            bbs757CduForm = new Forms.BBS757.BBS757CduForm(client, announcer);
+        bbs757CduForm.StartHidden();
     }
 
     /// <summary>A flight loaded in another simulator than the one the 757's session analysed BlueBird's files for (MSFS 2020

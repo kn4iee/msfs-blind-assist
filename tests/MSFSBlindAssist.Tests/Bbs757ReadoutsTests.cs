@@ -596,4 +596,45 @@ public class Bbs757ReadoutsTests
         Assert.Null(t.Observe("flaps", "Flaps 5", 100));
         Assert.Equal("Flaps 15", t.Observe("flaps", "Flaps 15", 200));
     }
+
+    [Fact]
+    public void A_row_the_flight_load_did_not_change_speaks_its_first_change_after_the_quiet()
+    {
+        // The batch delivers a value only when it changes, so a row the new flight leaves as it was is never
+        // delivered again: its baseline has to survive the load, or its first real change would be taken for one.
+        var t = new Bbs757ChangeTracker();
+        t.Observe("valve", "Left start valve closed", 0);
+
+        t.BeginLoadQuiet(untilMs: 60_000);
+
+        Assert.Equal("Left start valve open", t.Observe("valve", "Left start valve open", 61_000));
+    }
+
+    [Fact]
+    public void A_change_the_flight_load_brings_is_a_silent_baseline()
+    {
+        var t = new Bbs757ChangeTracker();
+        t.Observe("flaps", "Flaps UP", 0);
+        t.ArmEcho("brake", 500_000);
+
+        t.BeginLoadQuiet(untilMs: 60_000);
+
+        Assert.Null(t.Observe("flaps", "Flaps 5", 30_000));             // the new flight's flaps: no change
+        Assert.Null(t.Observe("flaps", "Flaps 5", 61_000));
+        Assert.Equal("Flaps 15", t.Observe("flaps", "Flaps 15", 62_000));
+        t.Observe("brake", "Parking brake set", 61_000);
+        Assert.Equal("Parking brake released", t.Observe("brake", "Parking brake released", 62_000));   // the old flight's echo is gone
+    }
+
+    [Fact]
+    public void A_reset_ends_a_load_quiet()
+    {
+        var t = new Bbs757ChangeTracker();
+        t.BeginLoadQuiet(untilMs: 60_000);
+
+        t.Reset();
+
+        Assert.Null(t.Observe("flaps", "Flaps UP", 100));
+        Assert.Equal("Flaps 5", t.Observe("flaps", "Flaps 5", 200));
+    }
 }

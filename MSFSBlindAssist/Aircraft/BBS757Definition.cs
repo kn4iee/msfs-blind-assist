@@ -373,6 +373,14 @@ public partial class BBS757Definition : BaseAircraftDefinition
     }
 
     /// <summary>
+    /// Hands the definition the SimConnectManager at startup and on a switch to the 757 (MainForm, as the MD-11's
+    /// Attach), so <see cref="FollowEngineType"/> can read the loaded aircraft's title for the first section list
+    /// built after connecting. Without it <see cref="Sim"/> stays null until a panel is built, and a PW's first
+    /// section list still names the RR-only panel.
+    /// </summary>
+    public void Attach(SimConnectManager sim) => Sim = sim;
+
+    /// <summary>
     /// The section lists only: when the loaded engine type has changed, leaves out of them, in place, a panel the type
     /// empties (<see cref="Bbs757Variant.RewriteSections"/>: on a PW the RR's Electronic engine control panel), and an
     /// unknown type brings every panel back. A panel with an app field or a status display stays. MainForm calls

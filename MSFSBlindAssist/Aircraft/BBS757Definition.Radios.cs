@@ -789,28 +789,35 @@ public partial class BBS757Definition
         }
     }
 
-    /// <summary>The walk itself: INIT, then 6L and 5L as the pages ask; no key once <paramref name="ct"/> fires.</summary>
-    private static async Task<Bbs757RunwayIls?> FindRunwayIlsAsync(Bbs757CduPages pages, CancellationToken ct)
+    /// <summary>
+    /// The walk itself: INIT, then 6L and 5L as the pages ask; no key once <paramref name="ct"/> fires. One call of
+    /// the page service (<see cref="Bbs757CduPages.WalkAsync"/>), so no other reader's key (D's PROG read, another
+    /// plan's background work on the first officer's CDU) lands between two of its pages. Null when it is stopped.
+    /// </summary>
+    private static Task<Bbs757RunwayIls?> FindRunwayIlsAsync(Bbs757CduPages pages, CancellationToken ct)
     {
         const int cdu = Bbs757CduPages.FirstOfficer;
-        var screen = await pages.ShowPageAsync(cdu, Bbs757CduKeys.Init,
-            s => Bbs757NavRad.IsApproachRef(s) || Bbs757NavRad.IsInitRefIndex(s) || Bbs757NavRad.HasIndexKey(s), ct);
-        ct.ThrowIfCancellationRequested();
-        if (screen == null) return null;
-
-        if (!Bbs757NavRad.IsApproachRef(screen))
+        return pages.WalkAsync<Bbs757RunwayIls?>("APPROACH REF walk", null, ct, async walk =>
         {
-            if (!Bbs757NavRad.IsInitRefIndex(screen))
-            {
-                screen = await pages.PressKeysAsync(cdu, new[] { Bbs757CduKeys.Lsk(right: false, 6) }, ct);   // <INDEX
-                ct.ThrowIfCancellationRequested();
-                if (screen == null || !Bbs757NavRad.IsInitRefIndex(screen)) return null;
-            }
-            screen = await pages.PressKeysAsync(cdu, new[] { Bbs757CduKeys.Lsk(right: false, 5) }, ct);      // <APPROACH
+            var screen = await walk.ShowPageAsync(cdu, Bbs757CduKeys.Init,
+                s => Bbs757NavRad.IsApproachRef(s) || Bbs757NavRad.IsInitRefIndex(s) || Bbs757NavRad.HasIndexKey(s), ct);
             ct.ThrowIfCancellationRequested();
-            if (screen == null || !Bbs757NavRad.IsApproachRef(screen)) return null;
-        }
-        return Bbs757NavRad.ParseApproachRefIls(screen);
+            if (screen == null) return null;
+
+            if (!Bbs757NavRad.IsApproachRef(screen))
+            {
+                if (!Bbs757NavRad.IsInitRefIndex(screen))
+                {
+                    screen = await walk.PressKeysAsync(cdu, new[] { Bbs757CduKeys.Lsk(right: false, 6) }, ct);   // <INDEX
+                    ct.ThrowIfCancellationRequested();
+                    if (screen == null || !Bbs757NavRad.IsInitRefIndex(screen)) return null;
+                }
+                screen = await walk.PressKeysAsync(cdu, new[] { Bbs757CduKeys.Lsk(right: false, 5) }, ct);      // <APPROACH
+                ct.ThrowIfCancellationRequested();
+                if (screen == null || !Bbs757NavRad.IsApproachRef(screen)) return null;
+            }
+            return Bbs757NavRad.ParseApproachRefIls(screen);
+        });
     }
 
     /// <summary>
@@ -1189,6 +1196,7 @@ public partial class BBS757Definition
     {
         base.OnVariableCacheCleared();
         RestartIlsCount(loadPending: false);
+        ResetReadoutBaselines();   // the reconnect delivers every state row anew: each a baseline (BBS757Definition.Readouts.cs)
     }
 
     /// <summary>

@@ -854,6 +854,9 @@ public partial class MainForm
         // every button shows a bare label (Attach used to run only from a press or a hotkey).
         if (newAircraft is TFDiMD11Definition newMd11)
             newMd11.Attach(simConnectManager);
+        // The 757 reads the loaded aircraft's title through it, for the engine type its section lists follow.
+        if (newAircraft is BBS757Definition newBbs757)
+            newBbs757.Attach(simConnectManager);
 
         taxiGuidanceManager.TurnLeadSeconds = newAircraft.TaxiTurnLeadSeconds;
         taxiGuidanceManager.SharpTurnLeadSeconds = newAircraft.TaxiSharpTurnLeadSeconds;

@@ -25,8 +25,9 @@ namespace MSFSBlindAssist.Services;
 /// It was the one left out until 2026-09-25 and relied on each branch checking
 /// <c>A380DisabledMonitorVariablesSet</c> itself; the baro branches never did, so their rows muted
 /// nothing. The branches that check locally are unaffected.</item>
-/// <item>the BlueBird 757 — its flaps, speedbrake, parking brake, MCP light and EXEC light call-outs
-/// and the base class's trim and glideslope call-outs (its map's status rows speak on the generic
+/// <item>the BlueBird 757 — its flaps, speedbrake, parking brake, MCP light and EXEC light call-outs,
+/// its radio, autoflight and ground power rows and the base class's trim call-out (the 757 has no
+/// glideslope call-out: it does not use the simulator's nav radio; its map's status rows speak on the generic
 /// path, where the same list gates them; its three gear legs speak the one "Gear" row's call-out,
 /// so they are <see cref="IAircraftDefinition.IsMuteWrapExempt"/> and check that row themselves).</item>
 /// </list>

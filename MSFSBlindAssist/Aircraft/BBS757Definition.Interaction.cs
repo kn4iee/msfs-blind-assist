@@ -507,7 +507,7 @@ public partial class BBS757Definition
         CancelPendingPicks();
         CancelMcpSets();
         CancelLoadWatch();
-        ResetReadoutBaselines();   // the new flight's flaps, gear and lights are no change
+        QuietReadoutBaselines();   // the new flight's flaps, gear and lights are no change; a drop clears them (OnVariableCacheCleared)
         ResetRadios();          // plan 04
         ResetAutoflight();      // plan 05
         ResetThrust();          // plan 15

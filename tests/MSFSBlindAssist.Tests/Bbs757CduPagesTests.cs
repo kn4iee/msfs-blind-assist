@@ -298,6 +298,43 @@ public class Bbs757CduPagesTests
         Assert.NotNull(await read);
     }
 
+    [Fact]
+    public async Task A_walk_keeps_other_calls_out_until_its_last_step()
+    {
+        // Ctrl+N's read of APPROACH REF is several pages: a key another reader presses between two of its steps
+        // would land on the wrong page. The walk holds the gate from its first step to its last.
+        var cdu = new FakeCdu { Title = "NAV RADIO" };
+        var release = new TaskCompletionSource();
+        var pages = new Bbs757CduPages(cdu, (ms, ct) => release.Task);
+
+        var walk = pages.WalkAsync<Bbs757CduScreen?>("test walk", null, CancellationToken.None, async w =>
+        {
+            await w.PressKeysAsync(Fo, new[] { "L6" }, CancellationToken.None);
+            return await w.PressKeysAsync(Fo, new[] { "L5" }, CancellationToken.None);
+        });
+        var other = pages.PressKeysAsync(Fo, new[] { "KEYDEL" }, CancellationToken.None);
+
+        Assert.False(other.IsCompleted);
+        Assert.Equal(new[] { "L6" }, cdu.Presses.Select(p => p.Key));
+        release.SetResult();
+        Assert.NotNull(await walk);
+        Assert.NotNull(await other);
+        Assert.Equal(new[] { "L6", "L5", "KEYDEL" }, cdu.Presses.Select(p => p.Key));
+    }
+
+    [Fact]
+    public async Task A_walk_that_is_canceled_or_throws_answers_its_failed_value()
+    {
+        var cdu = new FakeCdu { Title = "NAV RADIO" };
+        var pages = Pages(cdu);
+
+        Assert.Equal("failed", await pages.WalkAsync("test walk", "failed", CancellationToken.None,
+            _ => throw new OperationCanceledException()));
+        Assert.Equal("failed", await pages.WalkAsync("test walk", "failed", CancellationToken.None,
+            _ => throw new InvalidOperationException("boom")));
+        Assert.NotNull(await pages.ReadAsync(Fo, CancellationToken.None));   // the gate was let go
+    }
+
     // ---- Failures ------------------------------------------------------------------------------
 
     [Fact]

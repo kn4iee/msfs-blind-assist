@@ -63,7 +63,7 @@ public sealed class Bbs757CduPages
     // left, CLR held again. One long CLR cleared the scratchpad 45 times in 60 and removed only its last
     // character the other 15, where a second one always cleared the rest (docs/b757/evidence/flight-08.md);
     // a short CLR would remove one more character and leave the rest.
-    private const int WipeHoldMs = 1300;
+    private const int WipeHoldMs = Bbs757CduKeys.ClearAllHoldMs;   // the one measured hold (1300 ms)
     private const int WipeSettleMs = 1800;
     // Typed keys: the queue is checked every DrainPollMs, for at most a key cycle per key plus DrainSlackMs.
     private const int DrainPollMs = 100;
@@ -103,26 +103,53 @@ public sealed class Bbs757CduPages
     /// uses <see cref="PageCount"/> and <see cref="PressKeysAsync"/> with PREV.
     /// </summary>
     public Task<Bbs757CduScreen?> ShowPageAsync(int cdu, string pageKey, Func<Bbs757CduScreen, bool> isWanted, CancellationToken ct) =>
-        Gated<Bbs757CduScreen?>($"CDU {cdu} page {pageKey}", null, ct, async () =>
-        {
-            var screen = await ReadCore(cdu, ct);
-            if (screen != null && isWanted(screen)) return screen;
-            if (Refused(cdu, new[] { pageKey })) return null;
+        Gated<Bbs757CduScreen?>($"CDU {cdu} page {pageKey}", null, ct, () => ShowPageCore(cdu, pageKey, isWanted, ct));
 
-            _link.PressKey(cdu, pageKey, CoherentBbs757TabletClient.KeyHoldMs);
-            // Both limits: the sleeps alone keep a test's instant delay finite; the clock keeps the
-            // wait at 3 s when each read takes seconds.
-            long pressedAt = _clockMs();
-            for (int waited = 0; waited < PageWaitMs && _clockMs() - pressedAt < PageWaitMs; waited += PagePollMs)
-            {
-                await _delay(PagePollMs, ct);
-                if (LinkLost(cdu)) return null;
-                screen = await ReadCore(cdu, ct);
-                if (screen != null && isWanted(screen)) return screen;
-            }
-            Log.Debug("BBS757", $"CDU {cdu}: {pageKey} did not bring up the page wanted.");
-            return null;
-        });
+    private async Task<Bbs757CduScreen?> ShowPageCore(int cdu, string pageKey, Func<Bbs757CduScreen, bool> isWanted, CancellationToken ct)
+    {
+        var screen = await ReadCore(cdu, ct);
+        if (screen != null && isWanted(screen)) return screen;
+        if (Refused(cdu, new[] { pageKey })) return null;
+
+        _link.PressKey(cdu, pageKey, CoherentBbs757TabletClient.KeyHoldMs);
+        // Both limits: the sleeps alone keep a test's instant delay finite; the clock keeps the
+        // wait at 3 s when each read takes seconds.
+        long pressedAt = _clockMs();
+        for (int waited = 0; waited < PageWaitMs && _clockMs() - pressedAt < PageWaitMs; waited += PagePollMs)
+        {
+            await _delay(PagePollMs, ct);
+            if (LinkLost(cdu)) return null;
+            screen = await ReadCore(cdu, ct);
+            if (screen != null && isWanted(screen)) return screen;
+        }
+        Log.Debug("BBS757", $"CDU {cdu}: {pageKey} did not bring up the page wanted.");
+        return null;
+    }
+
+    /// <summary>
+    /// Runs a walk of several pages as ONE call: <paramref name="body"/> holds the gate from its first step to
+    /// its last, so no other caller's key or read lands between two of them (a key pressed on the page the
+    /// walk has just left would select something else). The steps are <see cref="Walk"/>'s, which do not take
+    /// the gate again. As every call here it never throws: <paramref name="failed"/> when the gate stays
+    /// taken, <paramref name="ct"/> fires or a step throws.
+    /// </summary>
+    public Task<T> WalkAsync<T>(string what, T failed, CancellationToken ct, Func<Walk, Task<T>> body) =>
+        Gated(what, failed, ct, () => body(new Walk(this)));
+
+    /// <summary>The steps of a <see cref="WalkAsync"/>: the page service's calls, inside the gate the walk holds.</summary>
+    public sealed class Walk
+    {
+        private readonly Bbs757CduPages _pages;
+        internal Walk(Bbs757CduPages pages) => _pages = pages;
+
+        /// <summary><see cref="Bbs757CduPages.ShowPageAsync"/>, without taking the gate.</summary>
+        public Task<Bbs757CduScreen?> ShowPageAsync(int cdu, string pageKey, Func<Bbs757CduScreen, bool> isWanted, CancellationToken ct) =>
+            _pages.ShowPageCore(cdu, pageKey, isWanted, ct);
+
+        /// <summary><see cref="Bbs757CduPages.PressKeysAsync"/>, without taking the gate.</summary>
+        public Task<Bbs757CduScreen?> PressKeysAsync(int cdu, IReadOnlyList<string> keys, CancellationToken ct) =>
+            _pages.PressKeysCore(cdu, keys, ct);
+    }
 
     /// <summary>
     /// Clears the first officer's scratchpad: CLR held 1300 ms (the whole of it), then, if anything is
@@ -183,15 +210,17 @@ public sealed class Bbs757CduPages
     /// them), or when the tablet view is lost or the screen unreadable.
     /// </summary>
     public Task<Bbs757CduScreen?> PressKeysAsync(int cdu, IReadOnlyList<string> keys, CancellationToken ct) =>
-        Gated<Bbs757CduScreen?>($"CDU {cdu} keys", null, ct, async () =>
-        {
-            if (Refused(cdu, keys)) return null;
-            foreach (var key in keys) _link.PressKey(cdu, key, CoherentBbs757TabletClient.KeyHoldMs);
-            if (!await DrainAsync(cdu, keys.Count, ct)) return null;
-            await _delay(KeySettleMs, ct);
-            if (LinkLost(cdu)) return null;
-            return await ReadCore(cdu, ct);
-        });
+        Gated<Bbs757CduScreen?>($"CDU {cdu} keys", null, ct, () => PressKeysCore(cdu, keys, ct));
+
+    private async Task<Bbs757CduScreen?> PressKeysCore(int cdu, IReadOnlyList<string> keys, CancellationToken ct)
+    {
+        if (Refused(cdu, keys)) return null;
+        foreach (var key in keys) _link.PressKey(cdu, key, CoherentBbs757TabletClient.KeyHoldMs);
+        if (!await DrainAsync(cdu, keys.Count, ct)) return null;
+        await _delay(KeySettleMs, ct);
+        if (LinkLost(cdu)) return null;
+        return await ReadCore(cdu, ct);
+    }
 
     /// <summary>The scratchpad line (13), trimmed: an entry, a message, or "".</summary>
     public static string Scratchpad(Bbs757CduScreen screen) => screen.Lines[Bbs757CduFrame.ScratchpadRow].Trim();

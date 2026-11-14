@@ -628,6 +628,22 @@ public partial class BBS757CduForm : Form
         Render();
     }
 
+    /// <summary>
+    /// Starts the closed-window watch on a window the pilot has not opened yet, so a CDU message is spoken
+    /// from the moment the 757 loads and not only after the first Shift+M. The client's pushes are marshalled
+    /// with BeginInvoke, which needs the window's handle: a window never shown has none, so it is made here.
+    /// The watch starts knowing nothing, so the first captain screen only seeds it (what the scratchpad holds
+    /// at load is no news). A no-op on a window that is shown or was shown before (hiding it set all this).
+    /// </summary>
+    public void StartHidden()
+    {
+        if (_disposed || Visible || IsHandleCreated) return;
+        _ = Handle;
+        _watch.Seed(null);
+        _client.SetActive(false);
+        _client.ActiveCdu = 1;
+    }
+
     private void HideAndRestore()
     {
         Hide();

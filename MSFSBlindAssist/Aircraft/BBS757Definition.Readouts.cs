@@ -448,10 +448,31 @@ public partial class BBS757Definition
         if (!_altimeterResting.Pending) _altimeterTimer?.Stop();
     }
 
+    /// <summary>How long after a flight load a state row's change is the new flight as found, not news (not measured:
+    /// AircraftLoaded fires during the loading screen, and BlueBird sets its panel up some time after).</summary>
+    internal const long LoadQuietMs = 60_000;
+
     /// <summary>
-    /// A reconnect or a flight load: every state row's next delivery is a baseline again. The announced rows'
-    /// raw values stay: they are facts, not baselines, and the batch delivers only changes, so an IRS switch
-    /// left at NAV is not delivered again.
+    /// A flight load on a live connection (<see cref="OnSimContextReset"/>): for <see cref="LoadQuietMs"/> a state
+    /// row's change is tracked, never spoken (the new flight's flaps, gear and lights are no change). The baselines
+    /// and the gear legs STAY: the connection kept its value cache and the batch delivers a value only when it
+    /// changes, so a row the new flight leaves as it was is not delivered again. With its baseline cleared, its
+    /// first real change was taken for the baseline and never said (the parking brake released after loading
+    /// parked). A dropped connection clears them (<see cref="ResetReadoutBaselines"/>): the reconnect delivers
+    /// every row anew.
+    /// </summary>
+    private void QuietReadoutBaselines()
+    {
+        _changes.BeginLoadQuiet(NowMs() + LoadQuietMs);
+        _altimeterResting.Reset();
+        _altimeterEchoUntil = 0;
+        _altimeterTimer?.Stop();
+    }
+
+    /// <summary>
+    /// A dropped connection or a reconnect: every state row's next delivery is a baseline again (SimConnect's value
+    /// cache went with the connection, so every row is delivered anew). The announced rows' raw values stay: they
+    /// are facts, not baselines.
     /// </summary>
     private void ResetReadoutBaselines()
     {

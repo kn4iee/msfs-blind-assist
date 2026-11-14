@@ -80,19 +80,22 @@ public static class Bbs757Prog
 
     /// <summary>
     /// PROG page 1 on the first officer's CDU: PROG (unless a PROG page is already up), then PREV until the
-    /// counter reads 1, at most twice. Null when the CDU does not answer or page 1 is not reached.
+    /// counter reads 1, at most twice. Null when the CDU does not answer or page 1 is not reached. One call of
+    /// the page service (<see cref="Bbs757CduPages.WalkAsync"/>): D and Shift+D pressed quickly, or another
+    /// reader's walk, never press between its PROG and its PREVs.
     /// </summary>
-    public static async Task<Bbs757CduScreen?> ReadPageOneAsync(Bbs757CduPages pages, CancellationToken ct)
-    {
-        var screen = await pages.ShowPageAsync(Bbs757CduPages.FirstOfficer, Bbs757CduKeys.Prog, IsProgress, ct);
-        for (int presses = 0; screen != null && !IsPageOne(screen); presses++)
+    public static Task<Bbs757CduScreen?> ReadPageOneAsync(Bbs757CduPages pages, CancellationToken ct) =>
+        pages.WalkAsync<Bbs757CduScreen?>("PROG page 1 walk", null, ct, async walk =>
         {
-            if (presses == MaxPrevPresses) return null;
-            screen = await pages.PressKeysAsync(Bbs757CduPages.FirstOfficer, new[] { Bbs757CduKeys.Prev }, ct);
-            if (screen != null && !IsProgress(screen)) return null;
-        }
-        return screen;
-    }
+            var screen = await walk.ShowPageAsync(Bbs757CduPages.FirstOfficer, Bbs757CduKeys.Prog, IsProgress, ct);
+            for (int presses = 0; screen != null && !IsPageOne(screen); presses++)
+            {
+                if (presses == MaxPrevPresses) return null;
+                screen = await walk.PressKeysAsync(Bbs757CduPages.FirstOfficer, new[] { Bbs757CduKeys.Prev }, ct);
+                if (screen != null && !IsProgress(screen)) return null;
+            }
+            return screen;
+        });
 
     /// <summary>The row after the first label row (rows 1 to 11) that <paramref name="isLabel"/> accepts; null when none.</summary>
     private static string? DataAfter(Bbs757CduScreen s, Func<string, bool> isLabel)
