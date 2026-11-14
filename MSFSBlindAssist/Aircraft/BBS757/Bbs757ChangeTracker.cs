@@ -17,7 +17,7 @@ public sealed class Bbs757ChangeTracker
 {
     private readonly Dictionary<string, string> _last = new(StringComparer.Ordinal);
     private readonly Dictionary<string, long> _echoUntil = new(StringComparer.Ordinal);
-    private long _quietUntil = long.MinValue;
+    private bool _loadQuiet;
 
     /// <summary>The phrase to speak for this delivery, or null (a baseline, no change, a flight load's change, or an echo).</summary>
     public string? Observe(string row, string phrase, long nowMs)
@@ -25,22 +25,28 @@ public sealed class Bbs757ChangeTracker
         bool first = !_last.TryGetValue(row, out string? last);
         _last[row] = phrase;
         if (first || last == phrase) return null;
-        if (nowMs < _quietUntil) return null;
+        if (_loadQuiet) return null;
         if (_echoUntil.TryGetValue(row, out long until) && nowMs < until) return null;
         return phrase;
     }
 
     /// <summary>
-    /// A flight was loaded on a live connection: until <paramref name="untilMs"/> every change is the new
+    /// A flight was loaded on a live connection: until <see cref="EndLoadQuiet"/> every change is the new
     /// flight's cockpit as found, tracked and never spoken. The baselines are KEPT: the batch delivers a value
     /// only when it changes, so a row the new flight leaves as it was is never delivered again, and with its
     /// baseline gone its first real change would be taken for one and lost. The old flight's echo windows go.
     /// </summary>
-    public void BeginLoadQuiet(long untilMs)
+    public void BeginLoadQuiet()
     {
-        _quietUntil = untilMs;
+        _loadQuiet = true;
         _echoUntil.Clear();
     }
+
+    /// <summary>The new flight's values have arrived and gone quiet (the caller's evidence): a change is news again.</summary>
+    public void EndLoadQuiet() => _loadQuiet = false;
+
+    /// <summary>A flight load's quiet is still on.</summary>
+    public bool LoadQuiet => _loadQuiet;
 
     /// <summary>A change of <paramref name="row"/> before <paramref name="untilMs"/> is the app's own write's echo.</summary>
     public void ArmEcho(string row, long untilMs) => _echoUntil[row] = untilMs;
@@ -53,6 +59,6 @@ public sealed class Bbs757ChangeTracker
     {
         _last.Clear();
         _echoUntil.Clear();
-        _quietUntil = long.MinValue;
+        _loadQuiet = false;
     }
 }

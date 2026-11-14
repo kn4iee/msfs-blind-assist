@@ -437,6 +437,7 @@ public partial class BBS757Definition
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
         WarnOnceIfNestMissing(announcer);
+        NoteDelivery(varName, value);   // the flight load's gate counts every delivery (BBS757Definition.Readouts.cs)
         if (IsPickPending(varName)) return true;
         FollowEhsiControl(varName, value);   // plan 26: the EHSI window's EFIS control shows it; consumes nothing
         // A display reader's input: read from the cache, never spoken (BBS757Definition.Displays.cs).

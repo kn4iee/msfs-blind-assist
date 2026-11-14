@@ -448,14 +448,23 @@ public partial class BBS757Definition
         if (!_altimeterResting.Pending) _altimeterTimer?.Stop();
     }
 
-    /// <summary>How long after a flight load a state row's change is the new flight as found, not news (not measured:
-    /// AircraftLoaded fires during the loading screen, and BlueBird sets its panel up some time after).</summary>
-    internal const long LoadQuietMs = 60_000;
+    // Says when a flight load's values have arrived and gone quiet, from the batch deliveries (the MD-11's gate,
+    // IAircraftDefinition.OnSimContextReset: never a wall clock), and every value delivered so far, which the gate
+    // is armed with so a forced redelivery of an old value is no evidence.
+    private readonly MD11.Md11SeedGate _loadGate = new();
+    private readonly Dictionary<string, double> _deliveredValues = new(StringComparer.Ordinal);
+
+    /// <summary>The batches now registered; replaced by tests. Null: the real ones, <see cref="Sim"/>'s.</summary>
+    internal Func<IReadOnlyCollection<int>>? ActiveBatches { get; init; }
+
+    /// <summary>A flight load's quiet is still on: a state row's change is tracked, not spoken.</summary>
+    internal bool LoadQuietPending => _changes.LoadQuiet;
 
     /// <summary>
-    /// A flight load on a live connection (<see cref="OnSimContextReset"/>): for <see cref="LoadQuietMs"/> a state
-    /// row's change is tracked, never spoken (the new flight's flaps, gear and lights are no change). The baselines
-    /// and the gear legs STAY: the connection kept its value cache and the batch delivers a value only when it
+    /// A flight load on a live connection (<see cref="OnSimContextReset"/>): until the batch deliveries show the
+    /// new flight's values have arrived and gone quiet (<see cref="OnContinuousBatchDelivered"/>), a state row's
+    /// change is tracked, never spoken (the new flight's flaps, gear and lights are no change). The baselines and
+    /// the gear legs STAY: the connection kept its value cache and the batch delivers a value only when it
     /// changes, so a row the new flight leaves as it was is not delivered again. With its baseline cleared, its
     /// first real change was taken for the baseline and never said (the parking brake released after loading
     /// parked). A dropped connection clears them (<see cref="ResetReadoutBaselines"/>): the reconnect delivers
@@ -463,30 +472,68 @@ public partial class BBS757Definition
     /// </summary>
     private void QuietReadoutBaselines()
     {
-        _changes.BeginLoadQuiet(NowMs() + LoadQuietMs);
+        _changes.BeginLoadQuiet();
+        _loadGate.Arm(_deliveredValues);
+        ResetAltimeterResting();
+    }
+
+    /// <summary>Every delivery, for the flight load's gate: a change of one of BlueBird's own variables is the aircraft publishing.</summary>
+    private void NoteDelivery(string varName, double value)
+    {
+        if (_loadGate.Armed)
+            _loadGate.NoteValue(varName, value, CountsAsFcuLoadEvidence(GetVariables().GetValueOrDefault(varName)));
+        _deliveredValues[varName] = value;
+    }
+
+    /// <summary>
+    /// A batch has been dispatched: counted toward the end of a flight load's quiet, which ends once every batch has
+    /// been delivered, one of BlueBird's own values has changed and nothing has moved for
+    /// <see cref="MD11.Md11SeedGate.QuietCycles"/> deliveries of each batch, or <see cref="MD11.Md11SeedGate.CeilingMs"/>
+    /// after the first full cycle when nothing of BlueBird's own ever moves.
+    /// </summary>
+    public override void OnContinuousBatchDelivered(int batchNum)
+    {
+        base.OnContinuousBatchDelivered(batchNum);
+        if (!_loadGate.Armed) return;
+        var batches = ActiveBatches != null ? ActiveBatches() : Sim?.ActiveContinuousBatches;
+        if (batches == null) return;
+        var trigger = _loadGate.OnBatchDelivered(batchNum, batches, NowMs());
+        if (trigger == MD11.Md11SeedTrigger.None) return;
+        _changes.EndLoadQuiet();
+        Log.Debug("BBS757", $"Flight load: state call-outs speak again after {_loadGate.Deliveries} batch deliveries ({trigger}).");
+    }
+
+    /// <summary>
+    /// A dropped connection: every state row's next delivery is a baseline again (SimConnect's value cache went
+    /// with the connection, so the reconnect delivers every row anew). The announced rows' raw values stay: they
+    /// are facts, not baselines.
+    /// </summary>
+    private void ResetReadoutBaselines()
+    {
+        _changes.Reset();
+        _loadGate.Disarm();
+        _deliveredValues.Clear();
+        _gearLegs.Clear();
+        ResetAltimeterResting();
+    }
+
+    private void ResetAltimeterResting()
+    {
         _altimeterResting.Reset();
         _altimeterEchoUntil = 0;
         _altimeterTimer?.Stop();
     }
 
     /// <summary>
-    /// A dropped connection or a reconnect: every state row's next delivery is a baseline again (SimConnect's value
-    /// cache went with the connection, so every row is delivered anew). The announced rows' raw values stay: they
-    /// are facts, not baselines.
+    /// The Connected branch, which runs AFTER the reconnect's first batch has delivered every row again
+    /// (IAircraftDefinition.ResetAnnouncementBaselines): the state rows' baselines, just taken, stay, or the next
+    /// real change would be taken for one. The drop cleared them already (<see cref="OnVariableCacheCleared"/>).
+    /// Only the altimeter's pending call-out goes.
     /// </summary>
-    private void ResetReadoutBaselines()
-    {
-        _changes.Reset();
-        _gearLegs.Clear();
-        _altimeterResting.Reset();
-        _altimeterEchoUntil = 0;
-        _altimeterTimer?.Stop();
-    }
-
     public override void ResetAnnouncementBaselines()
     {
         base.ResetAnnouncementBaselines();
-        ResetReadoutBaselines();
+        ResetAltimeterResting();
     }
 
     // =================================================================================

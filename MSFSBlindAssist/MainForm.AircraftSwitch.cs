@@ -1213,6 +1213,9 @@ public partial class MainForm
         // The 757's windows, on every switch: the monitor manager lists the definition it was
         // built for, so the next Ctrl+M rebuilds it from the live one.
         DisposeBBS757Forms();
+        // After the dispose, which also takes the hidden CDU window StartBbs757Displays has just made: the 757's
+        // closed-window CDU message watch needs one from the moment the 757 is picked (a no-op for another aircraft).
+        StartBbs757CduMessageWatch();
 
         // Rebuild sections from new aircraft structure
         foreach (var section in currentAircraft.GetPanelStructure().Keys)

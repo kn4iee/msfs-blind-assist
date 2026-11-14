@@ -24,10 +24,25 @@ public class Bbs757AnnunciatorsTests
 
         public Rig(Bbs757ControlMap? map = null)
             => Def = map == null
-                ? new BBS757Definition { NestRunning = () => true, NowMs = () => Now }
-                : new BBS757Definition(map) { NestRunning = () => true, NowMs = () => Now };
+                ? new BBS757Definition { NestRunning = () => true, NowMs = () => Now, ActiveBatches = () => OneBatch }
+                : new BBS757Definition(map) { NestRunning = () => true, NowMs = () => Now, ActiveBatches = () => OneBatch };
+
+        private static readonly int[] OneBatch = { 1 };
 
         public bool Deliver(string key, double value) => Def.ProcessSimVarUpdate(key, value, Speech);
+
+        /// <summary>One delivery of the only batch, a second later.</summary>
+        public void Batch()
+        {
+            Now += 1000;
+            Def.OnContinuousBatchDelivered(1);
+        }
+
+        /// <summary>The batch deliveries that end a flight load's quiet once one of BlueBird's own values has changed.</summary>
+        public void QuietBatches()
+        {
+            for (int i = 0; i <= Aircraft.MD11.Md11SeedGate.QuietCycles; i++) Batch();
+        }
     }
 
     /// <summary>A map of one control on <paramref name="panel"/>, so no test depends on the generated map's names.</summary>
@@ -210,25 +225,66 @@ public class Bbs757AnnunciatorsTests
         // after loading parked must be heard.
         var rig = new Rig();
         rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);
+        rig.Deliver(Bbs757Readouts.SpeedbrakeKey, 0);
 
         rig.Def.OnSimContextReset();
-        rig.Now += BBS757Definition.LoadQuietMs + 1;
+        rig.Deliver(Bbs757Readouts.SpeedbrakeKey, 1);   // BlueBird publishes the new flight
+        rig.QuietBatches();                             // and nothing moves for five deliveries
+        Assert.False(rig.Def.LoadQuietPending);
         rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);
 
         Assert.Equal(new[] { Bbs757Readouts.ParkingBrakePhrase(0) }, rig.Speech.All);
     }
 
     [Fact]
-    public void A_change_the_flight_load_brings_is_not_spoken()
+    public void A_change_the_flight_load_brings_is_not_spoken_however_late_it_comes()
+    {
+        // No wall clock: AircraftLoaded fires during the loading screen, and until BlueBird has published and
+        // gone quiet a change is the new flight as found. With nothing of BlueBird's own moving yet, a minute of
+        // batches ends nothing before the gate's ceiling.
+        var rig = new Rig();
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);
+
+        rig.Def.OnSimContextReset();
+        for (int i = 0; i < 20; i++) rig.Batch();
+        Assert.True(rig.Def.LoadQuietPending);
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);   // the new flight's brake: no change
+        rig.Batch();
+        Assert.True(rig.Def.LoadQuietPending);            // it moved: the quiet count starts over
+
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_flight_load_that_changes_nothing_ends_its_quiet_at_the_ceiling()
     {
         var rig = new Rig();
         rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);
 
         rig.Def.OnSimContextReset();
-        rig.Now += BBS757Definition.LoadQuietMs - 1;
-        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);   // the new flight's brake: no change
+        rig.Batch();                                                   // the first full cycle
+        rig.Now += Aircraft.MD11.Md11SeedGate.CeilingMs;
+        rig.Batch();
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);
 
-        Assert.Empty(rig.Speech.All);
+        Assert.Equal(new[] { Bbs757Readouts.ParkingBrakePhrase(0) }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_first_change_after_a_reconnect_is_spoken()
+    {
+        // The reconnect's first batch delivers every row again BEFORE MainForm's Connected branch calls
+        // ResetAnnouncementBaselines: a wipe there took the next real change for a baseline.
+        var rig = new Rig();
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);
+
+        rig.Def.OnSimContextReset();                      // the drop
+        rig.Def.OnVariableCacheCleared();
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 1);   // the reconnect's re-fire: a baseline
+        rig.Def.ResetAnnouncementBaselines();             // Connected
+        rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);
+
+        Assert.Equal(new[] { Bbs757Readouts.ParkingBrakePhrase(0) }, rig.Speech.All);
     }
 
     [Fact]
@@ -240,7 +296,6 @@ public class Bbs757AnnunciatorsTests
 
         rig.Def.OnSimContextReset();
         rig.Def.OnVariableCacheCleared();
-        rig.Now += BBS757Definition.LoadQuietMs + 1;
         rig.Deliver(Bbs757Readouts.ParkingBrakeKey, 0);
 
         Assert.Empty(rig.Speech.All);
@@ -256,7 +311,9 @@ public class Bbs757AnnunciatorsTests
         rig.Deliver("BBS757_IRS_L_ALIGN", 1);
         rig.Def.OnSimContextReset();
         rig.Deliver("BBS757_IRS_L_ALIGN", 1);   // the new flight as found
-        rig.Now += BBS757Definition.LoadQuietMs + 1;   // the load's quiet is over: a change is news again
+        rig.Batch();
+        rig.Now += Aircraft.MD11.Md11SeedGate.CeilingMs;
+        rig.Batch();                            // the load's quiet is over: a change is news again
         rig.Deliver("BBS757_IRS_L_ALIGN", 0);
         Assert.Equal(new[] { "IRS L aligned" }, rig.Speech.All);
     }

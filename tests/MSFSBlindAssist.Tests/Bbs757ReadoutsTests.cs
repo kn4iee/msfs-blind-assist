@@ -223,7 +223,7 @@ public class Bbs757ReadoutsTests
         Assert.Equal(phrase, Bbs757Readouts.GearPhrase(state));
     }
 
-    // The lever is BlueBird's L:B757_GEAR_HANDLE_POS: 0 UP, 0.5 OFF, 1 DOWN (flight-13.md flight 2).
+    // The lever is BlueBird's L:B757_GEAR_HANDLE_POS: 0 UP, 0.5 OFF, 1 DOWN (a flight of 2026-10-28).
     [Theory]
     [InlineData(1.0, 1.0, "Gear down, lever down")]
     [InlineData(0.0, 0.0, "Gear up, lever up")]
@@ -605,7 +605,8 @@ public class Bbs757ReadoutsTests
         var t = new Bbs757ChangeTracker();
         t.Observe("valve", "Left start valve closed", 0);
 
-        t.BeginLoadQuiet(untilMs: 60_000);
+        t.BeginLoadQuiet();
+        t.EndLoadQuiet();
 
         Assert.Equal("Left start valve open", t.Observe("valve", "Left start valve open", 61_000));
     }
@@ -617,9 +618,10 @@ public class Bbs757ReadoutsTests
         t.Observe("flaps", "Flaps UP", 0);
         t.ArmEcho("brake", 500_000);
 
-        t.BeginLoadQuiet(untilMs: 60_000);
+        t.BeginLoadQuiet();
 
         Assert.Null(t.Observe("flaps", "Flaps 5", 30_000));             // the new flight's flaps: no change
+        t.EndLoadQuiet();
         Assert.Null(t.Observe("flaps", "Flaps 5", 61_000));
         Assert.Equal("Flaps 15", t.Observe("flaps", "Flaps 15", 62_000));
         t.Observe("brake", "Parking brake set", 61_000);
@@ -630,7 +632,7 @@ public class Bbs757ReadoutsTests
     public void A_reset_ends_a_load_quiet()
     {
         var t = new Bbs757ChangeTracker();
-        t.BeginLoadQuiet(untilMs: 60_000);
+        t.BeginLoadQuiet();
 
         t.Reset();
 
