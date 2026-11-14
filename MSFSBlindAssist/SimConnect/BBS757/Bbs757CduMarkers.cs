@@ -5,7 +5,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// <summary>
 /// Marks the selected option of a CDU row the way the other Boeing CDU windows do: "X " in front of it,
 /// so a pilot who cannot see the highlight hears and reads which option is chosen. What marks a selection
-/// was measured live (docs/b757/evidence/flight-09.md): on eleven pages, a modified LEGS page among them,
+/// was measured live in cruise on 2026-10-28 ([B757-56]): on eleven pages, then about 55 on a full tour, a modified LEGS page among them,
 /// BlueBird's CDU sent only the colour <c>g</c> and never an inverse cell; a selection there is drawn as
 /// text (<c>&lt;ACT&gt;</c>), which the window already reads, and size marks labels and units, never a
 /// selection. So only an inverse run is marked (colour and size mark nothing), in case a page not read

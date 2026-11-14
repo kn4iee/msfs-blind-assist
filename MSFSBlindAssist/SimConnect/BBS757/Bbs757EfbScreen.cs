@@ -139,7 +139,7 @@ public sealed record Bbs757EfbItem(
     bool ValueBox = false);
 
 /// <summary>
-/// One of BlueBird's text boxes as the keyboard types into it (plan 22, measured live 2026-11-07, docs/b757/evidence/efb-typing.md):
+/// One of BlueBird's text boxes as the keyboard types into it (plan 22, measured live 2026-11-07):
 /// <see cref="Caret"/>, the character boundary a typed character goes in at (0 to the text's length; a tap puts it at the nearest
 /// boundary, a typed character then at the end; backspace deletes before it, <c>btn_delete</c> after); <see cref="MaxLength"/>, the most
 /// characters it takes (a key tapped on a full box is dropped: Airport 4, the fuel dialog 8, SayIntentions 64); and <see cref="Keypad"/>,
@@ -148,7 +148,7 @@ public sealed record Bbs757EfbItem(
 public sealed record Bbs757EfbTextState(int Caret, int MaxLength, bool Keypad);
 
 /// <summary>
-/// BlueBird's keyboard as its app keeps it (plan 22, measured live 2026-11-07, docs/b757/evidence/efb-typing.md), beside
+/// BlueBird's keyboard as its app keeps it (plan 22, measured live 2026-11-07), beside
 /// <see cref="Bbs757EfbScreenModel.Keyboard"/>, which says only where its keys are: <see cref="Shown"/> from a text box's tap until it goes
 /// down; <see cref="Ready"/> once it has settled, 1.12 to 1.16 s after the tap (a key tapped before lands on the page beneath);
 /// <see cref="Keypad"/> when the numeric keypad shows instead of the QWERTY keyboard (meaningful only while <see cref="Shown"/>: BlueBird
@@ -164,7 +164,7 @@ public sealed record Bbs757EfbKeyboardState(bool Shown, bool Ready, bool Keypad,
     Rectangle KeypadBox);
 
 /// <summary>
-/// A drop-down's list while it is open (plan 21, Task 7; measured 2026-11-07, <c>docs/b757/evidence/efb-memory-classes.md</c>): the part
+/// A drop-down's list while it is open (plan 21, Task 7; measured 2026-11-07, [B757-27]): the part
 /// of the tablet its rows show in (<see cref="Viewport"/>, the drawn rectangle of its <c>item_scrollbox</c>: the runway list's 519,189
 /// 150x228) and its rows in the list's order, one per entry, each with its words and where it is drawn now (the list's own scroll and the
 /// page's taken off: the runway list's rows 38 px apart from y 189). A list taller than its cap does not scroll: its box clips the rows

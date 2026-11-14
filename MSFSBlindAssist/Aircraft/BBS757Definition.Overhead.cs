@@ -466,7 +466,7 @@ public partial class BBS757Definition
     /// pilot has switched profiles) and released at <see cref="Bbs757SpringControl.HoldMs"/>
     /// (<see cref="HoldSpringAsync"/>). These waits are on <see cref="CancellationToken.None"/>, as
     /// <see cref="PressAsync"/>'s release is: nothing in the aircraft returns a trim switch to rest, so a lost
-    /// release runs the trim to its stop (flight-12.md, measured twice).</item>
+    /// release runs the trim to its stop (measured twice on 2026-10-28, [B757-15]).</item>
     /// <item>The release is verified (<see cref="ReleaseSpringAsync"/>), even after a profile switch: it is the safety.
     /// A switch still off rest is released again in the background (<see cref="KeepReleasingAsync"/>, even after a
     /// profile switch, started before anything is said so the safety never depends on speech), then says "{name}

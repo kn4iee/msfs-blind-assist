@@ -16,7 +16,7 @@ public interface IBbs757IlsDisplay : IDisposable
 /// <summary>
 /// Reads the BlueBird 757's ILS control panel display from BlueBird's own variables: <c>L:BBS_757_ILS_FREQ</c>
 /// is -1 while the panel is parked and its frequency otherwise, following each click at once, and
-/// <c>L:BBS_ILS_COURSE</c> is the course (docs/b757/evidence/flight-19.md, section 1). Both are read fresh
+/// <c>L:BBS_ILS_COURSE</c> is the course (measured 2026-11-05, [B757-10]). Both are read fresh
 /// (<paramref name="readFresh"/>, by variable key), and <see cref="Bbs757IlsPanel.ReadingFrom"/> says what they show.
 /// </summary>
 public sealed class Bbs757IlsVariableDisplay(Func<string, CancellationToken, Task<double?>> readFresh) : IBbs757IlsDisplay

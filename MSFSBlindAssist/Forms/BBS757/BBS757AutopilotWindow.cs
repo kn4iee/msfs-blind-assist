@@ -8,8 +8,8 @@ public sealed record Bbs757AutopilotButton(string Label, Func<string> State, Act
 /// <summary>
 /// The "757 Autopilot" window (Ctrl+P in input mode), the iFly, HS787 and MD-11 windows' shape:
 /// one button per MCP engage control (CMD L, C and R, A/T Arm, the two F/D switches, THR, SPD,
-/// LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP, Speed Intervene, A/T Disconnect, the
-/// disengage bar), each captioned with its live state ("CMD L: On"; a button with no state shows its
+/// LNAV, VNAV, FLCH, HDG HOLD, ALT HOLD, V/S, LOC, APP, Speed Intervene, A/T Disconnect, and A/P
+/// Disconnect, the captain's yoke button), each captioned with its live state ("CMD L: On"; a button with no state shows its
 /// label alone), refreshed twice a second and rewritten only on change. Alt and a button's fixed
 /// letter presses it: the window handles the keys itself rather than through an underlined caption
 /// letter, since several labels hold no free letter of their own (ALT HOLD is Alt+E), and each

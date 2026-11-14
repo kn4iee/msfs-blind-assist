@@ -70,7 +70,7 @@ public sealed class Bbs757FoStateEvaluator : LVarStateEvaluator
     // definition's own door rows speak (Bbs757Annunciators: 5 and 10).
     public const double DoorClosedAt = 5, CargoDoorClosedAt = 10;
 
-    /// <summary>The isolation switch's state var for the valve OPEN and CLOSED (measured 2026-10-27: 1 brought the right duct up to the left's pressure; flight-10.md).</summary>
+    /// <summary>The isolation switch's state var for the valve OPEN and CLOSED (measured 2026-10-27: 1 brought the right duct up to the left's pressure).</summary>
     public const double IsolationOpen = 1, IsolationClosed = 0;
 
     private static readonly string[] PollFields = BuildPollFields();

@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.Forms.BBS757;
 // of BlueBird's tablet, read from BlueBird's own files (efb_settings.json and each registration's
 // liveries\<registration>-opt.json) and changed in them while no simulator process runs. BlueBird reads the files once,
 // when the 757 loads, and writes its own copy back over them while it is loaded, so a change takes effect at the next
-// load and none can be made while a simulator runs (docs/b757/evidence/efb-settings.md, section 1). The window holds
+// load and none can be made while a simulator runs (measured 2026-10-27, [B757-17]). The window holds
 // nothing else: the Navigraph sign-in, the nav data update and the SimBrief load are on the tablet window's own pages
 // (Bbs757EfbExtras), where the simulator runs.
 //

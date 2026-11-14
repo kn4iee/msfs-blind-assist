@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// that set them, the read-backs and the words. Pure; <see cref="BBS757Definition"/> wires it to the
 /// sim through <see cref="McpIo"/> (a fresh read, a calculator write, an awaitable wait).
 ///
-/// Measured (docs/b757/evidence/live-findings.md, session 6):
+/// Measured 2026-10-25 (docs/b757.md, "Altimeters, minimums and squawk"):
 ///   • <c>K:KOHLSMAN_SET</c> with 16 × hPa set ALL THREE altimeters (<c>KOHLSMAN SETTING MB:1..3</c>),
 ///     and the reads lag a few seconds, so a set is read back for up to
 ///     <see cref="AltimeterReadBackMaxMs"/>. (<c>K:KOHLSMAN_INC</c> moves only altimeter 1: not used.)

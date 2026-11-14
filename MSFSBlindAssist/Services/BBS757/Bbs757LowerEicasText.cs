@@ -4,7 +4,7 @@ namespace MSFSBlindAssist.Services.BBS757;
 
 /// <summary>
 /// The lower EICAS's rows as BlueBird draws them (R17, R18): its label words and number formats live here, never in the
-/// layout. Source: docs/b757/evidence/displays-lower-eicas.md, Step 2. Numbers are always culture-invariant; "whole" is
+/// layout. Source: BlueBird's draw code, read from the module on 2026-11-09 (docs/b757.md, "Lower EICAS (Alt+S)"). Numbers are always culture-invariant; "whole" is
 /// BlueBird's <c>to_wstring(int)</c> of a value truncated toward zero, never rounded; an invalid engine's cell reads
 /// "blank"; runs of spaces in BlueBird's words collapse to one; the left engine is first.
 /// </summary>

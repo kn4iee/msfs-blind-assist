@@ -29,7 +29,7 @@ public class Bbs757EfbMemoryLiveTests
         // The scroll is the scrollbox's content offset at +0x134 (B757-26), never the scrollbar thumb at +0x158.
         // A slider keeps its knob's rectangle at +0x184 (x, y, w, h; measured 2026-11-07).
         CtrlLabelText: 0x128, CtrlButtonText: 0x144, ScrollboxOffset: 0x134, SliderKnob: 0x184,
-        // The phase 2 fields, measured live 2026-11-07 (docs/b757/evidence/efb-memory-classes.md): a text box's label
+        // The phase 2 fields, measured live 2026-11-07 (docs/b757.md, "The tablet window"): a text box's label
         // pointer, a multi-line box's text, a drop-down's face, list, entries (text +0x0c) and open byte, the selected
         // entry's two button bytes, BBOS's dialog byte and its notification vector (BBOS + 0x9334, 0x3c-byte records).
         TextboxLabel: 0x128, MultilineText: 0x128, PulldownFace: 0x128, PulldownList: 0x130, PulldownEntries: 0x138,
@@ -40,8 +40,8 @@ public class Bbs757EfbMemoryLiveTests
         OverlayPanelShown: 0x1fc, OverlayListOpen: 0x1fd, OverlayPanelRect: 0x234, OverlayPanelHeight: 0x240, OverlayFlightTimeText: 0x1b4,
         // The top bar's boarding box and BBOS's loading state (decoded from BBS752.wasm, read live 2026-11-07).
         OverlayBoardingRect: 0x214, BbosLoadState: 0x9160, BbosLoadDeboarding: 0x9164, BbosLoadFlown: 0x9167, BbosLoadRemaining: 0x9278,
-        // The keyboard app's state and a text box's caret, maximum length and keypad flag (measured live 2026-11-07,
-        // docs/b757/evidence/efb-typing.md).
+        // The keyboard app's state and a text box's caret, maximum length and keypad flag (measured live 2026-11-07;
+        // docs/b757.md, "Pressing", Typing).
         KeyboardShown: 0x1ac, KeyboardReady: 0x1ad, KeyboardKeypad: 0x1ae, KeyboardTarget: 0x1ec, KeypadRect: 0x1d8,
         KeyboardNumeric: 0x1e8, KeyboardShift: 0x1e9, KeyboardCaps: 0x1ea, TextboxCaret: 0x1ac, TextboxMaxLength: 0x1bc, TextboxKeypad: 0x1cc,
         // A toggle control's own byte (measured live 2026-11-07).

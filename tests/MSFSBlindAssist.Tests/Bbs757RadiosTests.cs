@@ -898,7 +898,7 @@ public class Bbs757RadiosTests
 
     // ==== The transfer (task 4) ==========================================================================
     //
-    // Measured 2026-10-26 (docs/b757/evidence/flight-04.md): all three stock swaps work on BlueBird, and the
+    // Measured 2026-10-26 ([B757-8]): all three stock swaps work on BlueBird, and the
     // tuning panels' transfer buttons swap the radio their lights select. So the stock swap goes first; a
     // swap BlueBird ignores falls back to that button. The fakes complete at once, so a fire-and-forget
     // press has run to its end when the call returns.

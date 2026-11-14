@@ -6,7 +6,7 @@ using MSFSBlindAssist.SimConnect;
 namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
-/// The seams the 757 gap plans (docs/b757/plans/02-gaps/) fill in, one group per plan, so each plan
+/// The seams the 757 gap plans fill in (docs/b757.md, "Seams"), one group per plan, so each plan
 /// works in a partial file of its own and none edits the definition's main files. Every hook is a
 /// <c>partial void</c> with no access modifier: a plan that has not landed leaves its hooks
 /// unimplemented, and the compiler removes their calls, so the old path runs as it did.

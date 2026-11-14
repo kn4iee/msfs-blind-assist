@@ -15,7 +15,7 @@ namespace MSFSBlindAssist.Tests;
 /// </summary>
 public class Bbs757LoadWatchTests
 {
-    // The evening's plan (live-findings.md, task 11e step 0): a 16,400 lb block, 114 passengers at
+    // The plan BlueBird loaded on the evening of 2026-10-25: a 16,400 lb block, 114 passengers at
     // 185 lb, 3,990 lb of cargo, all forward.
     private static readonly Bbs757Loads Plan = new(8200, 8200, 0, 21090, 3990, 0, 114, 114);
 

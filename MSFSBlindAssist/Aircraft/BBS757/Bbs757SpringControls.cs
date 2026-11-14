@@ -61,7 +61,7 @@ public sealed record Bbs757SpringRead(string Key, string Label, Bbs757SpringCont
 /// Rudder and aileron trim, the app's own panel: the cockpit's aileron / rudder trim panel at the aft end of the aisle
 /// stand), the alternate stab trim (Pedestal, Stabilizer trim) and the manual cabin altitude switch (Overhead,
 /// Pressurization); for three seconds the P61 test switches (Other, P61 panel). Measured 2026-10-28
-/// (docs/b757/evidence/flight-12.md) and read from BlueBird's code (research package sections 6 and 7):
+/// on the ground ([B757-15]) and read from BlueBird's code:
 /// <list type="bullet">
 /// <item>Each trim switch rests on 1, 0 is left or nose down, 2 right or nose up. BlueBird trims every frame
 /// while one is off 1, and nothing in the aircraft returns it to 1 but the cockpit mouse's own release, so a
@@ -158,7 +158,7 @@ public static class Bbs757SpringControls
     /// <summary>
     /// The app's own panel for the rudder and aileron trim buttons and their two readout rows (plan 12 task 7): the
     /// cockpit has those switches on their own trim panel at the aft end of the aisle stand
-    /// (docs/b757/evidence/panel-audit-12.md), not with the stab trim on the control stand. No map control is on it.
+    /// (docs/b757.md, "Sections, panels and their order"), not with the stab trim on the control stand. No map control is on it.
     /// </summary>
     public const string RudderAileronTrimPanel = "Rudder and aileron trim";
 
@@ -417,7 +417,7 @@ public static class Bbs757SpringControls
     /// verified release; no readout: the press says "{test} done" (<see cref="DonePhrase"/>). Not here: the duct leak /
     /// fuel quantity test switch (<c>B757_VC_P61_SWITCH_5</c>, <c>L:BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW</c>; plan 12
     /// task 12, the final review's I1): nothing in BlueBird reads its var (not the WASM, no XML but the switch's own, no
-    /// gauge), and holding it on the ground with BBS Nest running changed no variable (flight-12.md), so a button would
+    /// gauge), and holding it on the ground with BBS Nest running changed no variable (2026-10-28), so a button would
     /// say "… test done" for a test that never runs.
     /// </summary>
     public static readonly IReadOnlyList<Bbs757SpringControl> TestSwitches = new[]
@@ -474,7 +474,7 @@ public static class Bbs757SpringControls
 /// <summary>
 /// The lamp test: the map's Warning Test (<see cref="Node"/>, a plain button). Its press toggles
 /// <c>L:OVHD_TEST_LTS</c> when circuit 27 is on (and clears it otherwise), and the lights stay as they are after the
-/// release: it latches, a second press turns it off (measured in flight, flight-12.md). So the press, made as any
+/// release: it latches, a second press turns it off (measured in flight 2026-10-28). So the press, made as any
 /// button's, reads <see cref="LitVar"/> back and says which. Pure.
 /// </summary>
 public static class Bbs757LampTest

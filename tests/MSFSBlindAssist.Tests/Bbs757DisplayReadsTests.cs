@@ -7,11 +7,11 @@ using MSFSBlindAssist.Services;
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// The BlueBird 757-200's four AI display reads: which hotkey reads which display, which
+/// The BlueBird 757-200's five AI display reads: which hotkey reads which display, which
 /// instrument camera view frames it, and the prompts that tell the AI which display of a busy frame
-/// to describe. Index 0 was measured as framing the captain's EHSI (a 2026-10-25 window capture,
-/// docs/b757/evidence/efb-and-manual.md); that the ADI is legible in it is to be confirmed in the
-/// sim. Index 1 was measured as the EICAS view (docs/b757/evidence/live-findings.md), which also
+/// to describe. Index 0 was measured as framing the captain's EHSI (a 2026-10-25 window capture;
+/// docs/b757.md, "AI display reads"); that the ADI is legible in it is to be confirmed in the
+/// sim. Index 1 was measured as the EICAS view (the same day), which also
 /// holds the whole MCP, the standby instruments, the autobrake, the flap gauge, the gear lever and
 /// the first officer's airspeed. Whether the camera lands on the right view and the AI reads the
 /// right display is checked in the sim.
@@ -179,8 +179,8 @@ public class Bbs757DisplayReadsTests
     [Fact]
     public void TheAdiPrompt_AlsoReadsTheAutolandStatusAnnunciator_BesideIt()
     {
-        // No variable carries the autoland status (wasm-findings.md §5); the AUTOLAND STATUS
-        // annunciator sits beside the ADI in the same instrument view, so the ADI read reports it.
+        // The AUTOLAND STATUS annunciator sits beside the ADI in the same instrument view, so the ADI
+        // read reports it (its two lines are also announced rows, Bbs757Annunciators).
         string prompt = GeminiService.GetPromptForDisplay(GeminiService.DisplayType.Adi757);
 
         Assert.Contains("AUTOLAND STATUS", prompt);

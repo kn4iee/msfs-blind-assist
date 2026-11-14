@@ -153,8 +153,8 @@ Writes go to the MobiFlight calculator as one-shot `MF.SimVars.Set.<rpn>` comman
 `MobiFlight.Command` channel the app uses, each made unique with a `{seq} 0 *` prefix so MobiFlight
 cannot drop it as a repeat of the command before ([SIM-17]). The tool never registers an expression with
 `MF.SimVars.Add`: MobiFlight re-runs a registered expression on every poll, so a write inside one runs
-again and again (measured on 2026-10-28, `docs/b757/evidence/flight-12.md`: it drove a trim to its
-stop).
+again and again (measured on 2026-10-28: it drove the rudder trim to its stops; docs/b757.md,
+"PanelSweep").
 
 ## What it leaves alone
 
@@ -234,6 +234,6 @@ The planning half (which controls, which positions, the denylist) runs under `--
 against the map. The live half ran once, on 2026-10-28: 168 controls, 267 of 276 positions landed, every
 control was put back and there was no SimConnect exception. The nine that did not land were BlueBird's
 momentary door lock and Chrono ET RESET (they spring back by themselves) and the autobrake's DISARM logic
-with the IRS off and the brakes set (`docs/b757/evidence/flight-12.md`). Its first start had stopped at
+with the IRS off and the brakes set (docs/b757.md, "PanelSweep"). Its first start had stopped at
 connect, before any write (fixed in `1a9b39c8f`). Plan 12 task 11's 30 windows and furniture controls have
 not been swept live yet.

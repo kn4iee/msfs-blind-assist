@@ -27,7 +27,7 @@ namespace MSFSBlindAssist.Aircraft;
 /// set, park or course result only adds the FMC's runway ILS to the status, silently. The ILS course is written
 /// as a calculator write and read back (<see cref="SetIlsCourseAsync"/>). The ILS frequency and park turn the
 /// ILS control panel's knobs, whose display BlueBird's <c>L:BBS_757_ILS_FREQ</c> shows (-1 parked; added by its
-/// 2026-10-31 update, not in its public table; flight-19.md): the app reads the display from that variable
+/// 2026-10-31 update, not in its public table; [B757-10]): the app reads the display from that variable
 /// (<see cref="Bbs757IlsVariableDisplay"/>), turns the knobs from that read and reads it again
 /// (<see cref="SetIlsAsync"/>), and N says the read. When the display cannot be read, the app's count of the
 /// panel, from the state a flight loads it in and the clicks it sent, stands in, and is said as a count ("ILS
@@ -871,8 +871,7 @@ public partial class BBS757Definition
     /// <summary>
     /// The wait between two ILS knob clicks. BlueBird takes a click within one sim frame (median 33 ms) and
     /// counts two writes landing in one frame as one: 20 ms apart lost steps, 50 and 150 ms apart lost none,
-    /// and one 192 ms frame was seen (measured, flight-04.md, "Round 4: ILS step timing and localizer
-    /// detection"). Nothing confirms a click through SimConnect (the request never reads non-zero there), so
+    /// and one 192 ms frame was seen (measured 2026-10-26, [B757-59]). Nothing confirms a click through SimConnect (the request never reads non-zero there), so
     /// each click also waits for a fresh read, which the sim answers in a frame after the last click went out:
     /// the gap then follows the sim's frames, not the wall clock alone (a stall longer than the gap would
     /// otherwise bring two clicks into one frame). A display read that checks clicks waits the same way, a fresh

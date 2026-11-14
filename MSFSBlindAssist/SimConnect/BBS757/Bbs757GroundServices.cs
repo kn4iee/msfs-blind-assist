@@ -17,7 +17,8 @@ public static class Bbs757GroundServices
 {
     /// <summary>
     /// The tiles. The state variables are the ones the package survey ties to each tile
-    /// (docs/b757/evidence/wasm-findings.md section 3, "Doors and ground services"); <see cref="Announced"/>
+    /// (an offline survey of the module's strings and the cockpit XML; docs/b757.md, "What the app adds around a
+    /// press"); <see cref="Announced"/>
     /// names the ones a reversible tap in sim has shown to follow the tile.
     /// </summary>
     public static readonly IReadOnlyList<Bbs757GroundService> All = new[]

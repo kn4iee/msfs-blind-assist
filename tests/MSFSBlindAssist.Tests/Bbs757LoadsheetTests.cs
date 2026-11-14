@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The 757's fuel and payload load from SimBrief, which BlueBird's own EFB loads (task 11e): the
 /// plan's fields and units, the whole-pound targets per tank, cabin and hold as BlueBird spreads them
-/// (measured 2026-10-25, docs/b757/evidence/live-findings.md, sessions 5 and 7), the units check made
+/// (measured 2026-10-25; docs/b757.md, "What the app adds around a press"), the units check made
 /// before any tap, the read-back, and the sentences the load watch says.
 /// </summary>
 public class Bbs757LoadsheetTests

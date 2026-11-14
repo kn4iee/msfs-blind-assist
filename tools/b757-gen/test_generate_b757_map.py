@@ -1473,8 +1473,8 @@ class DirectWrite(unittest.TestCase):
 class HoldMs(unittest.TestCase):
     """Plan 12, task 5 (the owner: "Test in sim and revise accordingly"): curation's 'hold_ms'. The fire, CVR and squib tests
     show only while their button is held, and BlueBird's template for them is the plain momentary button, so the rules keep
-    each as a button and the app presses it for 200 ms (measured: docs/b757/evidence/flight-12.md, "The fire test, the P61
-    test switches and the master lights"). An entry makes the control a held button with that hold: the app presses it, holds
+    each as a button and the app presses it for 200 ms (measured in flight 2026-10-28; docs/b757.md, "Held tests and
+    spring switches"). An entry makes the control a held button with that hold: the app presses it, holds
     it that long and lets go (Bbs757Write.PressFor), and the press and the release are exactly what they were."""
     FIRE, OTHER = "B757_PED_FIRE_ENG_BUTTON", "B757_PED_FIRE_CARGO_BUTTON"
     # Every test the shipped curation holds 3000 ms. The fire, CVR and squib tests were measured; the others hold the same
@@ -1727,7 +1727,7 @@ class HoldMs(unittest.TestCase):
         task = [n for n in notes if n.startswith("PLAN 12 TASK 5 (2026-10-28)")]
         self.assertEqual(len(task), 3, "the key, the held tests and the P61 exclusion each have a note")
         joined = "\n".join(task)
-        for needle in ("hold_ms", "flight-12.md", "B757_PED_FIRE_ENG_BUTTON", "B757_P6_SQUIBS_BUTTON2", "B757_VC_P61_SWITCH_3",
+        for needle in ("hold_ms", "in flight on 2026-10-28", "B757_PED_FIRE_ENG_BUTTON", "B757_P6_SQUIBS_BUTTON2", "B757_VC_P61_SWITCH_3",
                        "B757_VC_P61_SWITCH_10", "every 30 ms", "B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_OVHD_WARNING_TEST_BUTTON"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, joined)
@@ -1744,7 +1744,7 @@ class HoldMs(unittest.TestCase):
         for node in self.TEST_LABELS:
             with self.subTest(node=node):
                 self.assertIn(node, task[0])
-        for needle in ("flight-12.md", "User Procedures", "FIRE/OVHT - ENG/APU/CARGO", "SQUIB TEST", "ASA TEST 1",
+        for needle in ("measured in flight, 2026-10-28", "User Procedures", "FIRE/OVHT - ENG/APU/CARGO", "SQUIB TEST", "ASA TEST 1",
                        "CONFIG (T/O CHK)", "press and release", "hold_ms"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, task[0])
@@ -1807,7 +1807,7 @@ class Levers(unittest.TestCase):
     def altn_gear_rows(self):
         """The alternate gear extension switch and its guard, under the vendor's main panel banner
         (BBS_752_BASE_INTERIOR.xml:29515, 29520): plan 12 task 7 puts them on the Landing gear panel, where they sit in the
-        cockpit (6 cm from the gear lock override; docs/b757/evidence/panel-audit-12.md)."""
+        cockpit (6 cm from the gear lock override in the interior models, 2026-10-28)."""
         guard, switch = self.ALTN_GEAR_GUARD, self.ALTN_GEAR
         return {
             guard: row(node=guard, kind="guard", panel="MAIN PANEL SWITCH GEAR + BUTTONS", line=29515, state=["L:" + guard],
@@ -2139,7 +2139,7 @@ class DirectPositions(unittest.TestCase):
     state var the systems read and the positions to pick, with their values (the form of 'levers'), and the control is built as
     a switch with no click code: the app writes the state var to the picked position, as for any switch with none
     (Bbs757Write.ToPosition). Nothing of the vendor's click code is kept, so the cockpit mouse's clamp (30, or 20 on the F/O ADI
-    knob) does not limit the positions: the systems accept 0-40 (docs/b757/evidence/flight-12.md). The rows have the shape the
+    knob) does not limit the positions: the systems accept 0-40 (measured 2026-10-28, [B757-16]). The rows have the shape the
     extractor gives the vendor's controls (BBS_752_BASE_INTERIOR.xml: Auto Rate at 10157, the flight deck zone knob at 10423,
     the captain ADI knob at 18857) and are converted with a curation of the test's own; the SHIPPED entries are pinned in
     the second half of the class."""
@@ -2257,7 +2257,7 @@ class DirectPositions(unittest.TestCase):
 
     def test_the_positions_are_not_checked_against_the_click_codes_clamp(self):
         # The cockpit mouse stops the captain ADI knob at 30 and the first officer's at 20; BlueBird's brightness code takes
-        # 0-40 and writes 40 on load (docs/b757/evidence/flight-12.md, measured). The entry may name what the systems accept.
+        # 0-40 and writes 40 on load (measured 2026-10-28, [B757-16]). The entry may name what the systems accept.
         row_ = self.adi_row()
         self.assertEqual(row_["positions"], "range 0..30 step 1")
         self.assertIn("30 min", row_["_clicks"]["cw"][0][1])
@@ -2386,7 +2386,7 @@ class DirectPositions(unittest.TestCase):
         m, _ = self.build(cockpit=only_rr)
         self.assertEqual({c["node"]: c["label"] for c in m["controls"]}[self.ADI], "Captain PFD (RR)")
 
-    # ---- the SHIPPED entries (plan 12 task 1): measured 2026-10-28 in docs/b757/evidence/flight-12.md and read from the
+    # ---- the SHIPPED entries (plan 12 task 1): measured 2026-10-28 (docs/b757.md, "Knobs written by value") and read from the
     # package's code, written out here so that a change to them is a visible one ----
     SCREEN_BANNER, ADI_BANNER = "MAIN BUTTONS AND CONTROL", "(after INDIVIDUAL AUDIO/RADIO PANELS)"
     # The eight display brightness knobs: node -> (the var BlueBird's brightness code reads, the label). The PFD knobs are the
@@ -2403,7 +2403,7 @@ class DirectPositions(unittest.TestCase):
         "B757_FMC_1_SCREEN_KNOB": ("B757_FMC_1_SCREEN_KNOB", "Captain CDU"),
         "B757_FMC_2_SCREEN_KNOB": ("B757_FMC_2_SCREEN_KNOB", "First Officer CDU"),
     }
-    # node -> its panel, all on the Pedestal (docs/b757/evidence/panel-audit-12.md: positions, manual p.102-103)
+    # node -> its panel, all on the Pedestal (the cockpit audit of 2026-10-28: 3D positions, Flight Guide p.102-103)
     SCREEN_PANELS = {
         "B757_ADI_1_LCD_KNOB": "Captain EFIS", "B757_HSI_1_SCREEN_KNOB": "Captain EFIS",
         "B757_ADI_2_LCD_KNOB": "First officer EFIS", "B757_HSI_2_SCREEN_KNOB": "First officer EFIS",
@@ -2469,7 +2469,7 @@ class DirectPositions(unittest.TestCase):
         self.assertNotIn("B757_OVHD_MID_CAB_TEMP_SEL_KNOB_FRAME", [v["state_var"] for v in c["direct_positions"].values()])
 
     def test_the_zone_frames_are_the_nearest_to_each_whole_degree(self):
-        # 18 + (frame - 5) * 6 / 13 is the readback between frames 5 and 31 (measured: flight-12.md; BlueBird's WASM remaps
+        # 18 + (frame - 5) * 6 / 13 is the readback between frames 5 and 31 (measured 2026-10-28; BlueBird's WASM remaps
         # 5..31 onto 18..30 degrees C). A half-way tie (21 and 27 degrees fall between two frames) takes the higher frame.
         frames = dict(self.ZONE_FRAMES)
         self.assertEqual(frames[0], "OFF")
@@ -2537,7 +2537,7 @@ class DirectPositions(unittest.TestCase):
         self.assertRegex(notes, r"direct_positions: node -> \{state_var, positions\}")
         self.assertRegex(notes, r"direct_positions: .*not checked against the (range|clamp)")
         # the task's note: the evidence for each row, from the measurements and from the package's code
-        self.assertRegex(notes, r"PLAN 12 TASK 1 .*docs/b757/evidence/flight-12\.md")
+        self.assertRegex(notes, r"PLAN 12 TASK 1 .*measured 2026-10-28 on the ground")
         for word in ("B757_OVHD_AUTORATE_SWITCH", "INDEX", "B757_ADI_1_LCD_KNOB", "BBS757_RASTER_BRIGHTNESS_CA",
                      "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_FRAME", "B757_OVHD_FLT_DK_TEMP_SEL_KNOB_ANIM_FRAME",
                      "B757_PED_WX_L_LARGE_SEL_KNOB", "XML:10153", "XML:11577", "XML:18856", "XML:10423"):
@@ -4040,7 +4040,7 @@ class Curation(unittest.TestCase):
     # a control to where it rests cold and dark (BlueBird's cold and dark panel state). A panel no step changes follows,
     # in Task 7's order. Pinned: the Pedestal keeps Control stand, Engines, TCAS
     # and transponder first (plan 01's frozen Bbs757DefinitionTests), and the Forward panel opens with Brakes, the
-    # autobrake's panel (the owner). Each panel's first change: docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9".
+    # autobrake's panel (the owner). The rule: docs/b757.md, "Sections, panels and their order" (panel_order).
     PANEL_ORDER = {
         # 35:10 battery ON; 46:29 the electric hydraulic pumps ON (the engine pumps rest ON); 48:13 packs AUTO; then the
         # panels whose steps only confirm a resting position (EEC, yaw dampers, limiters ON; anti-ice, wipers OFF ...)
@@ -4072,8 +4072,8 @@ class Curation(unittest.TestCase):
     }
     # The controls of each panel that has an order, in tab order, by the label the pilot hears (the embedded map's label).
     # Plan 12 task 4 (the owner: "the panel items should be ordered where most frequently every day items are listed first
-    # in tab order") lists EVERY control of the panels it moved, in the order docs/b757/evidence/panel-order-12.md gives each
-    # with its tier and source: what the normal procedures move on every flight first, in the flow's order; then what is set
+    # in tab order") lists EVERY control of the panels it moved, in three tiers (docs/b757.md, "Sections, panels and their order",
+    # control_order): what the normal procedures move on every flight first, in the flow's order; then what is set
     # once, the tests and the display options; then the non-normal, emergency and maintenance controls, a guard just before the
     # switch it covers. The panels it left alone (Fuel, Passenger signs, TCAS and transponder) lead with the
     # controls ruling R37 approved and the rest keep cockpit order (Engines too until plan 12 task 10 ordered it engine by engine). Plan 12 task 7 regrouped the panels by the cockpit and
@@ -4285,7 +4285,7 @@ class Curation(unittest.TestCase):
                 self.assertEqual(at[guard], want)
 
     def test_the_embedded_map_puts_controls_on_the_panels_they_are_on(self):
-        # A few placements from the audit (docs/b757/evidence/panel-audit-12.md), one per kind of move: an EFIS panel to the
+        # A few placements from the cockpit audit of 2026-10-28 (docs/b757.md, "Sections, panels and their order"), one per kind of move: an EFIS panel to the
         # pedestal, a brightness knob to its EFIS panel, the first officer's clock switch to the first officer's clock, the
         # oxygen masks and the door to Other, the cabin lights to the forward attendant panel, the IRS keypad into IRS.
         with open(g.DEFAULT_OUT, encoding="utf-8") as fh:
@@ -4357,7 +4357,7 @@ class Curation(unittest.TestCase):
 class Furniture(unittest.TestCase):
     """Plan 12, task 11 (the owner: "Yes add"): the side windows, sun visors, shades, seats, armrests, headrests, jumpseats,
     chart holders, floor box and stowage doors, which BlueBird draws as clickable cockpit parts. Measured on the ground
-    2026-10-28 (docs/b757/evidence/flight-12.md, "Windows and furniture"): every var below holds a written value and goes back.
+    2026-10-28 (docs/b757.md, "The Other section's furniture"): every var below holds a written value and goes back.
     The toggles under excluded vendor banners are taken in by node (include_nodes and a node_panels rule; their banners stay
     excluded), the armrests, sun visor bases and floor box left exclude_nodes, the drag handles are levers, and the two seat
     levers, whose click writes only O:vars, are levers on the seat's var."""

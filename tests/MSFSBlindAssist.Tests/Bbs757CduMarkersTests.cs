@@ -7,7 +7,7 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// Plan 09 Task 4: an inverse run is a selected option, and the CDU window reads it with "X " in front
 /// as the other Boeing windows do, without moving the row's later columns. BlueBird itself sent no
-/// inverse cell on any page read (docs/b757/evidence/flight-09.md), so these rows are built here.
+/// inverse cell on any page read (measured 2026-10-28, [B757-56]), so these rows are built here.
 /// </summary>
 public class Bbs757CduMarkersTests
 {
@@ -176,7 +176,7 @@ public class Bbs757CduMarkersTests
     /// <summary>
     /// A row without an inverse cell is returned as it is: the same 24 characters as its line, so every
     /// page captured so far reads as it did before markers existed (colour and size mark nothing, the
-    /// live measurement of flight-09.md).
+    /// live measurement of 2026-10-28).
     /// </summary>
     [Theory]
     [InlineData("bbs757-cdu-menu.json")]

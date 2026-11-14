@@ -21,7 +21,7 @@ using Step = Models.FlowStep<Bbs757FoStateEvaluator>;
 /// The engine start follows BlueBird's own criteria: start selector GND, fuel on at the variant's
 /// fuel point (Pratt &amp; Whitney about 25 % N2; Rolls-Royce about 25 % N3, its stock N2, with the EGT
 /// below 100 °C), the starter released (the selector back in AUTO at cut-out) before anything else,
-/// then the engine running. Right engine first. Measured on the PW (2026-10-27, flight-10.md): N2
+/// then the engine running. Right engine first. Measured on the PW (2026-10-27; docs/b757.md, "Flows"): N2
 /// reaches 25 % about 25 s after GND, the selector releases about 29 s after fuel, idle 59.5 %.
 /// </summary>
 public static class Bbs757FoFlowDefinitions

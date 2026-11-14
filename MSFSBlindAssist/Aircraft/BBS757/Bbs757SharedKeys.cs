@@ -1,7 +1,7 @@
 namespace MSFSBlindAssist.Aircraft.BBS757;
 
 /// <summary>
-/// The 757 variable keys more than one gap plan names (docs/b757/spec-gaps.md section 5). Each is
+/// The 757 variable keys more than one gap plan names. Each is
 /// registered by exactly one plan: the EXT PWR lights by plan 06, the ground power connection by plan 07.
 /// </summary>
 public static class Bbs757SharedKeys

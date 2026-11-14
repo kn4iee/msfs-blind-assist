@@ -54,8 +54,7 @@ public sealed record Bbs757IlsReading(bool Parked, double? Mhz, int? Course);
 /// the knob model, the clicks that reach a frequency or PARK, and the words. Pure; BBS757Definition.Radios.cs
 /// keeps the count and turns the knobs.
 ///
-/// Measured on the ground (docs/b757/evidence/flight-04.md, "C. ILS panel on the ground" and "Round 4: ILS
-/// step timing and localizer detection"):
+/// Measured on the ground on 2026-10-26 (docs/b757.md, "The ILS control panel"):
 ///   • No variable holds the frequency. The knobs are step requests, <c>L:B757_ILS_FREQ_WHOLE_INC</c> and
 ///     <c>L:B757_ILS_FREQ_FRAC_INC</c>, written +1 or -1 and set back to 0 by BlueBird within a frame.
 ///   • The whole knob is a ring of five, 108, 109, 110, 111, PARK, then 108 again (+1), the reverse for -1,
@@ -66,7 +65,7 @@ public sealed record Bbs757IlsReading(bool Parked, double? Mhz, int? Course);
 ///   • A write of 2 moves one channel: one write is one click. Two writes landing in one frame count once.
 /// The panel's display is read from BlueBird's own variable, <c>L:BBS_757_ILS_FREQ</c> (-1 while parked, the
 /// panel's frequency otherwise; added by BlueBird's 2026-10-31 update, not in its public table; measured
-/// 2026-11-05, docs/b757/evidence/flight-19.md): a set reads it, clicks and reads it again, and what it says is
+/// 2026-11-05 in cruise, [B757-10]): a set reads it, clicks and reads it again, and what it says is
 /// what the display shows (<see cref="ReadingFrom"/>). When the display cannot be read the app
 /// counts the clicks it sends from a state it knows (<see cref="Bbs757IlsDial.LoadState"/>, or the last
 /// reading) and its words say it went by the count (<see cref="ByCount"/>, <see cref="CountPhrase"/>).

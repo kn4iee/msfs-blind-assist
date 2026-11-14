@@ -120,7 +120,7 @@ public partial class BBS757Definition
             else
             {
                 // Landed only when TWO reads in a row show the target: BlueBird's REALISTIC parking brake
-                // writes itself back, so one read of the target can lie (evidence: flight-10.md).
+                // writes itself back, so one read of the target can lie (docs/b757.md, "The write path").
                 // The budget counts the waits asked or the real time since the poll began, whichever is larger
                 // (a real wait runs long and a read takes time; HoldSpringAsync counts the same way).
                 long start = NowMs();

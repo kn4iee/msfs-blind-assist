@@ -290,7 +290,7 @@ public class Bbs757ControlMapTests
     // every flight), and a step that sets a control to where it rests cold and dark (BlueBird's cold and dark panel
     // state). A panel no step changes follows, in plan 12 task 7's order. Pinned: the Pedestal keeps Control stand,
     // Engines, TCAS and transponder first (plan 01's frozen Bbs757DefinitionTests), and the Forward panel opens with
-    // Brakes (the owner). Each panel's first change: docs/b757/evidence/panel-order-12.md, "Plan 12 Task 9". Every panel is
+    // Brakes (the owner). The rule: docs/b757.md, "Sections, panels and their order" (panel_order). Every panel is
     // listed, so none falls back to the alphabet.
     [InlineData("Overhead", "Electrical|APU|IRS|CVR|Emergency lights and passenger oxygen|Window heat|Pressurization|Hydraulics|Fuel|Passenger signs|Exterior lights|Air conditioning and bleed|SELCAL and cabin call|Electronic engine control (RR)|Yaw dampers|Panel lighting|Ram air turbine and engine limiters|Anti-ice|Wipers|Equipment cooling|Indicator lights and door lock")]
     [InlineData("Glareshield", "MCP|VOR/DME|Master warning and caution")]
@@ -316,7 +316,7 @@ public class Bbs757ControlMapTests
     [Theory]
     // Plan 12 task 4 (the owner: "the panel items should be ordered where most frequently every day items are listed first in
     // tab order"), kept by plan 12 task 7 inside each regrouped panel: by tier (every flight, set once, non-normal), within a
-    // tier the order docs/b757/evidence/panel-order-12.md gives where the controls shared a panel, each guard right before
+    // tier the order the flow first uses them (docs/b757.md, "Sections, panels and their order", control_order) where the controls shared a panel, each guard right before
     // its switch. The Emergency Lights guard stays right after its switch (the app opens it itself).
     [InlineData("IRS", "IRS L|IRS C|IRS R|IRS Center Knob|IRS Large Knob|IRS Number 1|IRS Number 2|IRS Number 3|IRS Number 4|IRS Number 5|IRS Number 6|IRS Number 7|IRS Number 8|IRS Number 9|IRS Number 0|IRS Number Ent|IRS Number Del")]
     // The two ELEC ENG Cont switches and their guards are on the RR cockpit only (no node in the PW one), so their labels say so.
@@ -466,7 +466,7 @@ public class Bbs757ControlMapTests
     }
 
     [Theory]
-    // A few placements from the audit's tables (docs/b757/evidence/panel-audit-12.md), one of each kind of move.
+    // A few placements from the cockpit audit of 2026-10-28 (docs/b757.md, "Sections, panels and their order"), one of each kind of move.
     [InlineData("B757_ADI_1_LCD_KNOB", "Pedestal", "Captain EFIS")]
     [InlineData("B757_HSI_2_SCREEN_KNOB", "Pedestal", "First officer EFIS")]
     [InlineData("B757_EICAS_2_SCREEN_KNOB", "Pedestal", "EICAS control")]
@@ -518,7 +518,7 @@ public class Bbs757ControlMapTests
     public void The_cabin_altitude_status_row_reads_the_feet_BlueBirds_code_writes()
     {
         // Plan 12 task 1: L:B757_TEST_CABIN_ALT is the cabin altitude in feet BlueBird's WASM writes every tick (1,161 ft on
-        // the ground, measured: docs/b757/evidence/flight-12.md). B757_DEBUG_PRESSURE_CABIN_ALT_FT is declared and never written,
+        // the ground, measured 2026-10-28). B757_DEBUG_PRESSURE_CABIN_ALT_FT is declared and never written,
         // so a row on it read 0 at every altitude.
         var row = Assert.Single(Map.Status, s => s.Label == "Cabin Altitude");
 
@@ -788,7 +788,7 @@ public class Bbs757ControlMapTests
         var pumps = Map.Controls.Where(c => c.Panel == "Hydraulics").ToList();
 
         // A label never moves a control: the order is the owner's (ruling R37), by node. Plan 12 task 4 puts the electric pumps
-        // first, in the order they are switched on before start (docs/b757/evidence/panel-order-12.md: UP 46, 80, 139); the
+        // first, in the order they are switched on before start (BlueBird's User Procedures v1.01, PDF pages 46, 80 and 139); the
         // shutdown turns only the electric pumps off, so the two engine pumps, which stay on, come last.
         Assert.Equal(
             new[]
@@ -1124,7 +1124,7 @@ public class Bbs757ControlMapTests
     {
         // 3.5 is the knob's load value; BlueBird's code uses its whole number (3: a climb limit of 500 ft/min and a descent
         // limit of 300; 0 is 50 and 30, 13 is 2,000 and 1,200), so INDEX at 3.5 shows the load value as what it acts as. The
-        // rules dropped the knob (131 positions of 0.1); curation's direct_positions takes it in (docs/b757/evidence/flight-12.md).
+        // rules dropped the knob (131 positions of 0.1); curation's direct_positions takes it in (docs/b757.md, "Knobs written by value").
         const string stateVar = "B757_OVHD_AUTORATE_SWITCH";
         Bbs757Control rate = Find("B757_OVHD_AUTORATE_SWITCH");
 
@@ -1151,7 +1151,7 @@ public class Bbs757ControlMapTests
 
     [Theory]
     // Plan 12 task 7: each knob on the panel it is on (the EFIS control panels' PFD and ND knobs, the EICAS control panel's
-    // concentric BRT knob, a knob on each CDU's face; docs/b757/evidence/panel-audit-12.md), its label saying what it dims.
+    // concentric BRT knob, a knob on each CDU's face; docs/b757.md, "Sections, panels and their order"), its label saying what it dims.
     [InlineData("B757_ADI_1_LCD_KNOB", "B757_PFD_1_SCREEN_KNOB", "PFD Brightness", "Captain EFIS")]
     [InlineData("B757_ADI_2_LCD_KNOB", "B757_PFD_2_SCREEN_KNOB", "PFD Brightness", "First officer EFIS")]
     [InlineData("B757_HSI_1_SCREEN_KNOB", "B757_HSI_1_SCREEN_KNOB", "ND Brightness", "Captain EFIS")]
@@ -1163,7 +1163,7 @@ public class Bbs757ControlMapTests
     public void Each_display_brightness_knob_writes_the_var_BlueBirds_brightness_code_reads(string node, string stateVar, string label,
         string panel)
     {
-        // BlueBird's code sets a display's output to knob / 40 * 1.5, never below 0.1 (measured, flight-12.md): 0 dims the
+        // BlueBird's code sets a display's output to knob / 40 * 1.5, never below 0.1 (measured 2026-10-28, [B757-16]): 0 dims the
         // display to its minimum and does not turn it off, so there is no Off. 40 is every knob's load value. The cockpit's
         // mouse stops at 30 (20 on the F/O ADI knob), but the code takes 0-40. The PFD knobs are the ADI knobs: the nodes
         // NAMED B757_PFD_x_SCREEN_KNOB write raster vars nothing reads and have no row.
@@ -1252,7 +1252,7 @@ public class Bbs757ControlMapTests
     public void The_four_DDRMI_switches_are_the_toggles_they_were()
     {
         // Plan 12 task 1 changes nothing here: the map already held all four (0 VOR, 1 ADF) and their click code works
-        // through the calculator, the first officer's right one's stray closing brace included (measured, flight-12.md).
+        // through the calculator, the first officer's right one's stray closing brace included (measured 2026-10-28).
         foreach (string stateVar in new[] { "BBS_DDRMI_LEFT", "BBS_DDRMI_RIGHT", "BBS_DDRMI_LEFT_FO", "BBS_DDRMI_RIGHT_FO" })
         {
             Bbs757Control s = Assert.Single(Map.Controls, c => c.StateVar == stateVar);
@@ -1265,7 +1265,7 @@ public class Bbs757ControlMapTests
 
     /// <summary>
     /// The nineteen test buttons curation's hold_ms makes held buttons of 3000 ms: the fire, CVR and squib tests (measured in
-    /// flight, docs/b757/evidence/flight-12.md: they show only while the button is held, so the app's 200 ms press gave a blip
+    /// flight on 2026-10-28: they show only while the button is held, so the app's 200 ms press gave a blip
     /// at most) and, by the same rule (a test is held until it shows), the TCAS test, the four oxygen tests, the four autoland
     /// status tests, the weather radar test, the ILS test and the three radio panel tests. Plan 12 task 6 (the owner: "The
     /// tests are not clearly labeled"): each says what it tests, by BlueBird's own procedures where they name the test and by
@@ -1388,7 +1388,7 @@ public class Bbs757ControlMapTests
     public void The_autoland_resets_the_lamp_test_and_the_takeoff_check_stay_buttons_pressed_for_200_ms()
     {
         // The autoland resets (AUTOLAND_3) are not status tests. The lamp test toggles L:OVHD_TEST_LTS on its press and stays on
-        // after the release, so it is not held (flight-12.md); the master warning and caution buttons work as they are. The
+        // after the release, so it is not held (measured in flight 2026-10-28); the master warning and caution buttons work as they are. The
         // takeoff configuration check is BlueBird's "press and release" (plan 12 task 6: task 5 held it 3 s by the rule, not by
         // a measure, and a pilot presses it once), so it is a plain button again.
         foreach (string node in new[] { "B757_MAIN_L_AUTOLAND_3_BUTTON", "B757_MAIN_R_AUTOLAND_3_BUTTON",
@@ -1404,7 +1404,7 @@ public class Bbs757ControlMapTests
 
     /// <summary>
     /// Plan 12 task 6: the test buttons the map does not hold say what they test as well. The lamp test lights the annunciator
-    /// lamps and stays on until it is pressed again (flight-12.md), the takeoff check is BlueBird's "CONFIG (T/O CHK)" button
+    /// lamps and stays on until it is pressed again (measured in flight 2026-10-28), the takeoff check is BlueBird's "CONFIG (T/O CHK)" button
     /// and the two resets are the autoland status test's P/RST. All four are plain buttons (the app presses them for 200 ms).
     /// </summary>
     [Theory]

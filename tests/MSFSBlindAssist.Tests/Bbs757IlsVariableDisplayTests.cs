@@ -6,7 +6,7 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The BlueBird 757's ILS control panel display, read from BlueBird's own variable (plan 19, task 5):
 /// <c>L:BBS_757_ILS_FREQ</c> holds the panel's frequency and -1 while parked, <c>L:BBS_ILS_COURSE</c> the
-/// course (docs/b757/evidence/flight-19.md, section 1).
+/// course (measured 2026-11-05, [B757-10]).
 /// </summary>
 public class Bbs757IlsVariableDisplayTests
 {

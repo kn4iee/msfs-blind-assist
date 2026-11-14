@@ -77,7 +77,7 @@ public class TakeoffAssistSpeedCalloutTests
         var aircraft = (IAircraftDefinition)Activator.CreateInstance(type)!;
         try
         {
-            // The BlueBird 757 plays its own 80 knots, V1 and rotate (docs/b757/spec.md §4).
+            // The BlueBird 757 plays its own 80 knots, V1 and rotate (docs/b757.md, "Take-off callouts").
             Assert.Equal(aircraft.AircraftCode == "BBS_757", aircraft.PlaysOwnTakeoffSpeedCallouts);
         }
         finally

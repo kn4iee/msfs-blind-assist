@@ -58,7 +58,7 @@ public class Bbs757FlightReadinessTests
     [Fact]
     public void Shift_G_reads_blueBirds_gear_lever_never_the_stock_handle()
     {
-        // Measured (flight-13.md flight 2): the stock GEAR HANDLE POSITION read up with BlueBird's lever at OFF
+        // Measured on a flight of 2026-10-28: the stock GEAR HANDLE POSITION read up with BlueBird's lever at OFF
         // and the gear still down.
         var row = Def.GetVariables()[R.GearHandleKey];
         Assert.Equal("B757_GEAR_HANDLE_POS", row.Name);

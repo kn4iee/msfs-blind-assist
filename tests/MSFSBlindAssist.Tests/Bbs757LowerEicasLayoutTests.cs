@@ -6,7 +6,7 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>The lower EICAS layout record (plan 25, Task 2): it round-trips through the generic layout file format
 /// byte-identical (WASM-21), a page part that is missing keeps its reason, and a file without the reader reads as
-/// missing (WASM-26). Offsets are those of docs/b757/evidence/displays-lower-eicas.md, copied here (nothing reads docs/).</summary>
+/// missing (WASM-26). Offsets are those measured from the module's memory on 2026-11-09, copied here.</summary>
 public class Bbs757LowerEicasLayoutTests
 {
     private static readonly ModuleDescription Module = Bbs757Module.Description;

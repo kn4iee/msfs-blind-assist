@@ -14,7 +14,8 @@ namespace MSFSBlindAssist.Forms.BBS757;
 /// two are independent, as on the aircraft, and the window title names the side shown
 /// (<see cref="TitleFor"/>). Alt+C clears the scratchpad (<see cref="Bbs757CduKeys.ClearScratchpad"/>).
 ///
-/// The window never disposes the client: MainForm owns it (the EFB window shares it). The window
+/// The window never disposes the client: the definition owns it (<c>BBS757Definition.EnsureTabletClient</c>;
+/// the page service and the EFB window share it). The window
 /// only subscribes, and unsubscribes in Dispose.
 ///
 /// Speech (CORE-7): a page title is spoken whenever it changes (ACT turning into MOD included, as on
@@ -688,7 +689,7 @@ public partial class BBS757CduForm : Form
             _client.ScreenLost -= Client_ScreenLost;
             _client.KeysDropped -= Client_KeysDropped;
             _client.SetActive(false);
-            // The client is MainForm's, shared with the EFB window: never disposed here.
+            // The client is the definition's, shared with the EFB window: never disposed here.
         }
         base.Dispose(disposing);
     }

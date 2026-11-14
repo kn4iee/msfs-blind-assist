@@ -15,16 +15,16 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// rectangle at <see cref="SliderKnob"/> (x, y, width, height: four floats, in the slider rectangle's own coordinates, which
 /// a scroll does not move). The reader tells a control's kind from its vtable (<see cref="ClassVptrs"/>). Equality compares
 /// the byte and class lists by content, ignoring <see cref="SourceFile"/>.
-/// <para>The phase 2 fields (measured live 2026-11-07, docs/b757/evidence/efb-memory-classes.md) follow <see cref="SliderKnob"/>:
+/// <para>The phase 2 fields (measured live 2026-11-07; docs/b757.md, "The tablet window") follow <see cref="SliderKnob"/>:
 /// a <c>textbox</c>'s text label and a <c>multiline</c> box's text; a <c>pulldown</c>'s face, list, entries and open byte (it has
 /// no index: its current entry is the one whose text is its face's); a button's two bytes that mark the current side-menu entry
 /// or tab; BBOS's dialog byte; and BBOS's vector of notification records with each record's fields. Every std::string is
 /// libc++'s, every vector (begin, end, capacity).</para>
-/// <para>Then the top bar app's notification panel (measured live 2026-11-07, the evidence's "The top bar"): BlueBird draws its
+/// <para>Then the top bar app's notification panel (measured live 2026-11-07; the same section's Notifications): BlueBird draws its
 /// notification pop-up and its notification list from the overlay app's own fields, not as controls, over the top right of the page:
 /// the byte that says one shows, the byte that says the full list is open, and the panel's rectangle.</para>
-/// <para>Then the keyboard's state and a text box's typing fields (plan 22, measured live 2026-11-07,
-/// docs/b757/evidence/efb-typing.md): the keyboard app (its class <c>keyboard</c>) keeps whether the keyboard is up and settled, whether
+/// <para>Then the keyboard's state and a text box's typing fields (plan 22, measured live 2026-11-07;
+/// docs/b757.md, "Pressing", Typing): the keyboard app (its class <c>keyboard</c>) keeps whether the keyboard is up and settled, whether
 /// the numeric keypad shows instead and where, which text box it types into, and its layer bytes; a text box keeps its caret, its
 /// maximum length and whether it opens the keypad.</para>
 /// </summary>
@@ -76,7 +76,7 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// <param name="BbosLoadRemaining">BBOS's three remaining loading times, 64-bit seconds 8 bytes apart (0x9278): the box reads
 /// "BOARDING... N MIN" with N the largest rounded up to whole minutes, and "BOARDING..." when none is above 0.</param>
 /// <param name="KeyboardShown">The keyboard app's byte (BlueBird's <c>app_keyboard</c>, BBOS app map key 2), 1 from a text box's tap
-/// until the keyboard goes down (<c>btn_keyboard_down</c>), 0 down (0x1ac; measured live 2026-11-07, docs/b757/evidence/efb-typing.md).
+/// until the keyboard goes down (<c>btn_keyboard_down</c>), 0 down (0x1ac; measured live 2026-11-07).
 /// The keyboard's controls read visible either way, so this byte is what says it is up.</param>
 /// <param name="KeyboardReady">The keyboard app's byte, 1 once the keyboard has settled, 1.12 to 1.16 s after the tap, and 0 at once on
 /// down (0x1ad): a key tapped before it is 1 lands on the page beneath, the box losing focus.</param>
@@ -95,7 +95,7 @@ public sealed record Bbs757EfbClassVptr(string Kind, uint Vptr);
 /// SayIntentions 64; a key tapped on a full box is dropped.</param>
 /// <param name="TextboxKeypad">A text box's int, 1 when it opens the numeric keypad, 0 the QWERTY keyboard (0x1cc).</param>
 /// <param name="ToggleOn">A toggle control's (<c>bbos_control_toggle</c>, a settings switch) own byte, 1 on and 0 off (0x188; measured
-/// live 2026-11-07, docs/b757/evidence/efb-typing.md): the only word that changed when TOD pause was turned on and off, and it matched
+/// live 2026-11-07): the only word that changed when TOD pause was turned on and off, and it matched
 /// all 16 of Settings &gt; Aircraft's toggles. Only its low bit is the state.</param>
 public sealed record Bbs757EfbMemLayout(
     string SourceFile,

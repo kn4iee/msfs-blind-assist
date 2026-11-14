@@ -22,7 +22,7 @@ public enum Bbs757SimState
 /// <summary>
 /// When the app may write BlueBird's settings files: only while no simulator process runs. BlueBird reads those files
 /// once, when the 757 loads, and while it is loaded it writes its own copy back over them, so a value written then is
-/// ignored and overwritten (docs/b757/evidence/efb-settings.md, section 1). An aircraft can also stay loaded behind the
+/// ignored and overwritten (measured 2026-10-27, [B757-17]). An aircraft can also stay loaded behind the
 /// simulator's main menu, so the screen cannot say whether the 757 is loaded; the one safe moment is with no simulator
 /// process at all, MSFS 2024's (<c>FlightSimulator2024</c>) or MSFS 2020's (<c>FlightSimulator</c>). A check that fails
 /// is <see cref="Bbs757SimState.Unknown"/>, never "not running": the settings stay read-only, and debug.log says why,

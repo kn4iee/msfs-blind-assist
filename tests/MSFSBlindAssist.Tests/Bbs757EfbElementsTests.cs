@@ -714,7 +714,7 @@ public class Bbs757EfbElementsTests
     // ---- plan 22, Task 5: the tablet's fields are edit boxes -------------------------------------------------------------
     // No committed tree carries a text box's caret, maximum length and keypad flag (all were captured before plan 22 read them), so these
     // pages are given them as the walk reads them now (Bbs757EfbTreeJson.WithTextState). A maximum length plays no part in what the window
-    // shows; the measured ones are used where there is one (docs/b757/evidence/efb-typing.md: Airport 4, runway length 5, Charts 4, the
+    // shows; the measured ones are used where there is one (measured 2026-11-07: Airport 4, runway length 5, Charts 4, the
     // fuel dialog 8, TOD 3, SimBrief 8, Hoppie 24, SayIntentions 64).
 
     private static Bbs757EfbElements.Built BuildRead(IReadOnlyList<Bbs757EfbMemory.App> apps) =>

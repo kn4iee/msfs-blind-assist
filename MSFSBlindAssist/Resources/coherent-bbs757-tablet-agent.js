@@ -7,7 +7,8 @@
 // {"Target":"Display","Data":[336 cells]}. Nothing arrives while a page is static, so the agent
 // keeps the last frame per CDU; the captain's is also cached by BlueBird's own <bbs-tablet>
 // element (lastMobiFlightCduPayload), which seeds CDU 1 at install. The first officer's has no
-// cache: it arrives on its next change only (docs/b757/evidence/cdu.md).
+// cache: it arrives on its next change only (measured 2026-10-25; docs/b757.md, "How the screens
+// are read and the keys pressed").
 //
 // Keys: L:B757_CDU_<1|2>_<KEY> held at 1 for the app's hold, then 0: HOLD_MS when the app gives
 // none, clamped to MIN_HOLD_MS-MAX_HOLD_MS. The default is short on purpose: a CLR held about a

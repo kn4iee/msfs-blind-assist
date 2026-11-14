@@ -46,8 +46,8 @@ public sealed record Bbs757ReadBackVariable(string Key, string SimVar, string Un
 /// <summary>
 /// The 757's fuel and payload from a SimBrief plan, which BlueBird's own EFB loads when the pilot presses
 /// IMPORT FROM SIMBRIEF or START BOARDING on the tablet: BlueBird fuels and boards at its own pace.
-/// The targets here are how BlueBird spreads a plan (measured 2026-10-25,
-/// docs/b757/evidence/live-findings.md, sessions 5 and 7): the block evenly over both wings and the
+/// The targets here are how BlueBird spreads a plan (measured 2026-10-25;
+/// docs/b757.md, "What the app adds around a press"): the block evenly over both wings and the
 /// rest in the center, every passenger the cabin seats at the plan's standard weight, and the rest of
 /// the payload as cargo, the forward hold first. The load watch (<see cref="Bbs757LoadWatch"/>) judges
 /// the read tanks and stations against them; every target is whole pounds.

@@ -10,8 +10,8 @@ namespace MSFSBlindAssist.Tests;
 /// frequency, and the panel's two knobs are step requests BlueBird consumes within a frame, so the app
 /// keeps its own count of the panel, from the state a flight loads in (PARK, fraction .10), and turns the
 /// knobs one click per write, each after a fresh read and 250 ms apart. The knob model is round 1's
-/// measurement (docs/b757/evidence/flight-04.md, "C. ILS panel on the ground"), copied here as data; the
-/// step timing is round 4's ("Round 4: ILS step timing and localizer detection"). Task 6b reads the panel's
+/// measurement (2026-10-26 on the ground; docs/b757.md, "The ILS control panel"), copied here as data; the
+/// step timing is round 4's of the same day ([B757-59]). Task 6b reads the panel's
 /// display (round 5): a set reads it, clicks and reads again, and says what it shows; the count stands in, and
 /// says so, when the display cannot be read, which is how the rig's fake display answers unless a test shows it
 /// the panel. CI runs under en-US, so the de-DE and sv-SE cases are the ones that catch a culture leak.
@@ -235,7 +235,7 @@ public class Bbs757IlsPanelTests
     // ---- The knob model -----------------------------------------------------------------------------------
 
     /// <summary>
-    /// Round 1 (flight-04.md, "C. ILS panel on the ground", "Knob behaviour", 11:40-11:49), in the order the knobs were turned
+    /// Round 1 (2026-10-26 on the ground, 11:40-11:49), in the order the knobs were turned
     /// from the panel as the flight loaded (PARK, .10): each row's knob and direction, and what the panel's
     /// frequency window showed after each of its clicks.
     /// </summary>
@@ -385,7 +385,7 @@ public class Bbs757IlsPanelTests
     [Fact]
     public void Out_of_park_the_whole_knob_turns_first_and_the_load_state_to_110_50_is_what_round_3_turned()
     {
-        // Round 3 (flight-04.md, "E3. The FMC as an ILS comparator, on the ground") tuned 110.50 by hand from
+        // Round 3 (2026-10-26, the FMC as an ILS comparator, on the ground) tuned 110.50 by hand from
         // the load state: WHOLE -1 x2, FRAC +1 x4.
         Assert.Equal(new[] { (W, -1), (W, -1), (F, +1), (F, +1), (F, +1), (F, +1) },
             Bbs757IlsPanel.PlanSteps(Bbs757IlsDial.LoadState, Dial(110.50)));

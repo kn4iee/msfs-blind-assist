@@ -6,7 +6,7 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The BlueBird 757 CDU screen arrives as MobiFlight WinCtrl JSON on the Comm Bus
-/// (docs/b757/evidence/cdu.md): <c>{"Target":"Display","Data":[336 cells]}</c>, 14 rows of 24
+/// (docs/b757.md, "How the screens are read and the keys pressed"): <c>{"Target":"Display","Data":[336 cells]}</c>, 14 rows of 24
 /// cells, a cell <c>[]</c> or <c>[char, color, size, inverse]</c>. Whatever arrives, the window
 /// gets exactly 14 lines of 24 characters and never an exception.
 /// </summary>

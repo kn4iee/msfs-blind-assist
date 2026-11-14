@@ -293,7 +293,7 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
         };
 
         // NAV 1's glideslope is wrong on an aircraft whose own receivers leave the sim's NAV radios
-        // untouched (the BlueBird 757, docs/b757/spec-gaps.md 3.2): no row, so no Ctrl+M row either.
+        // untouched (the BlueBird 757, [B757-5]): no row, so no Ctrl+M row either.
         if (!UsesStockNavReceivers) vars.Remove("MON_GlideSlopeAlive");
         return vars;
     }

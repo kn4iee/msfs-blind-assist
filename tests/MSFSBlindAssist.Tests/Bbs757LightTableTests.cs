@@ -5,7 +5,7 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// Plan 13's light table: every light is one of the 757's own (the lights fixture, made once from
-/// docs/b757/evidence/controls/lights.tsv), none twice, no backlight or test light, and the watch set
+/// the 518 light nodes of BlueBird's model XML), none twice, no backlight or test light, and the watch set
 /// leaves out what another row already announces and every momentary button.
 /// </summary>
 public class Bbs757LightTableTests

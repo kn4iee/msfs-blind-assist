@@ -16,7 +16,7 @@ public sealed record Bbs757EngineRow(string Key, string SimVar, string Units, st
 /// with the invariant culture: a comma decimal or a locale's minus sign is not what the cockpit
 /// shows. <see cref="BBS757Definition"/> registers the variables and reads them.
 ///
-/// Which variable is the truth on this aircraft (docs/b757/evidence/live-findings.md, session 6):
+/// Which variable is the truth on this aircraft (measured 2026-10-25; docs/b757.md, "Flight-control readouts and call-outs"):
 ///   • Flaps: the stock <c>FLAPS HANDLE INDEX</c> follows BlueBird's lever (FLAPS_INCR moved it 0
 ///     to 1 with <c>L:B757_FC_FLAP_LEVER</c>); the surfaces are <c>TRAILING EDGE FLAPS LEFT ANGLE</c>.
 ///   • The speedbrake is <c>L:B757_FC_SPOILER_LEVER</c> (0 down, 10 armed, 100 up) and the parking
@@ -24,7 +24,7 @@ public sealed record Bbs757EngineRow(string Key, string SimVar, string Units, st
 ///     BlueBird's brake set, so it is never read.
 ///   • Gear: the stock legs, <c>GEAR CENTER/LEFT/RIGHT POSITION</c> (0 up, 1 down), and BlueBird's
 ///     lever <c>L:B757_GEAR_HANDLE_POS</c> (0 UP, 0.5 OFF, 1 DOWN): the stock <c>GEAR HANDLE
-///     POSITION</c> has no OFF and read up with the lever at OFF and the gear down (flight-13.md flight 2).
+///     POSITION</c> has no OFF and read up with the lever at OFF and the gear down (a flight of 2026-10-28).
 /// </summary>
 public static class Bbs757Readouts
 {
@@ -169,7 +169,7 @@ public static class Bbs757Readouts
 
     /// <summary>
     /// Shift+G: the legs, then the lever, always, as the PMDG 737 does: "Gear up, lever off", "Gear
-    /// down, lever off" (flight-13.md flight 2: the sim's gear key stepped BlueBird's lever to OFF before
+    /// down, lever off" (a flight of 2026-10-28: the sim's gear key stepped BlueBird's lever to OFF before
     /// the gear moved, and the stock handle, with no OFF, read up). An unread lever says the legs alone.
     /// </summary>
     public static string GearReadout(double? handle, double? nose, double? left, double? right)
@@ -287,8 +287,8 @@ public static class Bbs757Readouts
 
     /// <summary>
     /// The Engines panel's status rows, left engine then right: N1, N2, EGT, fuel flow and EPR from the
-    /// stock engine variables. Unmeasured on BlueBird: the first engine start compares them with an
-    /// Alt+E read of the upper EICAS (the in-sim plan). Nothing here is announced.
+    /// stock engine variables. Compared with BlueBird's upper EICAS on 2026-11-09 (the RR aircraft): they are
+    /// the simulator's values, not the EICAS's (docs/b757.md, "Engine values"). Nothing here is announced.
     /// </summary>
     public static IReadOnlyList<Bbs757EngineRow> EngineRows { get; } = BuildEngineRows();
 

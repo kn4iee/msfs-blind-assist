@@ -41,11 +41,14 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 ///
 /// Keys: one queue for both CDUs, so presses never overlap. Each key carries its hold, the caller's:
 /// <see cref="KeyHoldMs"/> by default, since a CLR held about a second clears the whole scratchpad;
-/// only <see cref="Bbs757CduPages.WipeScratchpadAsync"/> holds CLR 1300 ms, to do just that. Holds
+/// only the long CLR is held 1300 ms (<see cref="Bbs757CduKeys.ClearAllHoldMs"/>), to do just that: the page
+/// service's wipe (<see cref="Bbs757CduPages.WipeScratchpadAsync"/>) and the CDU window's Alt+C
+/// (<see cref="Bbs757CduKeys.ClearScratchpad"/>). Holds
 /// are clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/> here and in the agent. Each key
-/// carries its gap too: the next key goes out <see cref="KeyGapMs"/> ms after the release unless the
-/// caller gives another (only the CDU window's typed entries do, <see cref="Bbs757CduTyping"/>; clamped
-/// to <see cref="MinGapMs"/>-<see cref="MaxGapMs"/>).
+/// carries its own gap too, the pause after its release before the next key: <see cref="KeyGapMs"/> unless
+/// the caller gives another (only the CDU window's typed entries do, <see cref="Bbs757CduTyping.GapMs"/>).
+/// A gap is clamped to <see cref="MinGapMs"/>-<see cref="MaxGapMs"/>; <see cref="MinGapMs"/> (50 ms) is a
+/// floor, not a safe gap.
 /// Restart is not supported: dispose and create a new instance.
 /// </summary>
 public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
@@ -99,13 +102,13 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
     /// <summary>The longest hold a key may have (the agent's MAX_HOLD_MS).</summary>
     internal const int MaxHoldMs = 1500;
 
-    /// <summary>The pause after a key's release before the next key (docs/b757/evidence/cdu.md).</summary>
+    /// <summary>The standard pause after a key's release before the next key; a key may carry its own (typed entries: <see cref="Bbs757CduTyping.GapMs"/>).</summary>
     public const int KeyGapMs = 400;
 
     /// <summary>
     /// The shortest pause a key may have after its release: a floor, not a safe gap. A quiet sim typed 5/5
     /// down to 50, a busier one lost a repeated digit at 100 (4 in 10): typed entries use
-    /// <see cref="Bbs757CduTyping.GapMs"/> (plan 08, docs/b757/evidence/flight-08.md).
+    /// <see cref="Bbs757CduTyping.GapMs"/> (plan 08, [B757-58]).
     /// </summary>
     internal const int MinGapMs = 50;
 
@@ -297,8 +300,8 @@ public sealed class CoherentBbs757TabletClient : IDisposable, IBbs757CduLink
 
     /// <summary>
     /// Queues one key held <paramref name="holdMs"/> (clamped to <see cref="MinHoldMs"/>-<see cref="MaxHoldMs"/>);
-    /// the next key goes out <see cref="KeyGapMs"/> after its release. Only the scratchpad wipe holds
-    /// a key longer than <see cref="KeyHoldMs"/>: a CLR held about a second clears the whole scratchpad.
+    /// the next key goes out <see cref="KeyGapMs"/> after its release. Only the long CLR (the page service's wipe and
+    /// the CDU window's Alt+C) holds a key longer than <see cref="KeyHoldMs"/>: a CLR held about a second clears the whole scratchpad.
     /// </summary>
     public void PressKey(int cdu, string key, int holdMs) => PressKey(cdu, key, holdMs, KeyGapMs);
 

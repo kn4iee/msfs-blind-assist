@@ -28,7 +28,7 @@ public class Bbs757CduTypingTests
     [Fact]
     public void The_typing_timing_is_the_measured_one()
     {
-        // flight-08.md: powered, 100/100 lost repeated digits (6/10); 100/200 15/15; 100/300 keeps a step of margin.
+        // Measured 2026-10-27 ([B757-58]): powered, 100/100 lost repeated digits (6/10); 100/200 15/15; 100/300 keeps a step of margin.
         Assert.Equal(100, Bbs757CduTyping.HoldMs);
         Assert.Equal(300, Bbs757CduTyping.GapMs);
         Assert.True(CoherentBbs757TabletClient.CycleMs(Bbs757CduTyping.HoldMs, Bbs757CduTyping.GapMs) < CoherentBbs757TabletClient.KeyCycleMs);

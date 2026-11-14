@@ -7,7 +7,7 @@ public sealed record Bbs757EfbTypingPlan(IReadOnlyList<Point> Taps);
 
 /// <summary>
 /// Plans typing on BlueBird's on-screen keyboard and numeric keypad (plan 22, Task 2; measured 2026-11-07,
-/// docs/b757/evidence/efb-typing.md). Pure: no I/O, no clock. The runner (TypeAsync) taps the plan through the tablet agent.
+/// [B757-29]). Pure: no I/O, no clock. The runner (TypeAsync) taps the plan through the tablet agent.
 /// </summary>
 public static class Bbs757EfbTyping
 {

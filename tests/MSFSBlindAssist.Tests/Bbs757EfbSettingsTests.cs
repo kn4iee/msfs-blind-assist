@@ -6,8 +6,8 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The catalog of BlueBird's tablet settings (<see cref="Bbs757EfbSettings"/>): every setting's key, file, tablet
-/// label and words, the value BlueBird stores for each word (measured, docs/b757/evidence/efb-settings.md), the
-/// writes one change makes (the tablet's three rules, evidence section 9), how a number or text box shows and reads
+/// label and words, the value BlueBird stores for each word (measured 2026-10-27), the
+/// writes one change makes (the tablet's three rules: docs/b757.md, "The settings window"), how a number or text box shows and reads
 /// what is typed and what its empty box means, and the random failure frequency's slider: its steps, what it reads and
 /// where a stored value sits on it. Pure: no files, no simulator.
 /// </summary>

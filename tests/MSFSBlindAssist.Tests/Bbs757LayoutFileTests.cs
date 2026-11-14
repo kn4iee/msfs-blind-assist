@@ -80,7 +80,7 @@ public class Bbs757LayoutFileTests
         CtrlButtonText: 0x144,
         ScrollboxOffset: 0x134,
         SliderKnob: 0x184,
-        // The phase 2 fields, measured live 2026-11-07 (docs/b757/evidence/efb-memory-classes.md).
+        // The phase 2 fields, measured live 2026-11-07.
         TextboxLabel: 0x128,
         MultilineText: 0x128,
         PulldownFace: 0x128,
@@ -111,8 +111,7 @@ public class Bbs757LayoutFileTests
         BbosLoadDeboarding: 0x9164,
         BbosLoadFlown: 0x9167,
         BbosLoadRemaining: 0x9278,
-        // The keyboard app's state and a text box's caret, maximum length and keypad flag, measured live 2026-11-07
-        // (docs/b757/evidence/efb-typing.md).
+        // The keyboard app's state and a text box's caret, maximum length and keypad flag, measured live 2026-11-07.
         KeyboardShown: 0x1ac,
         KeyboardReady: 0x1ad,
         KeyboardKeypad: 0x1ae,
@@ -391,7 +390,7 @@ public class Bbs757LayoutFileTests
     public void The_efb_layout_with_the_keyboard_fields_round_trips()
     {
         // The keyboard app's state (shown, ready, keypad, target, the keypad's rectangle, its three layer bytes) and a text box's
-        // caret, maximum length and keypad flag, measured live 2026-11-07 (docs/b757/evidence/efb-typing.md); the keyboard app is
+        // caret, maximum length and keypad flag, measured live 2026-11-07; the keyboard app is
         // a class of its own (N3bbs12app_keyboardE).
         string text = LayoutFileFormat.Write(Module, FileWith(SampleLayout()));
         foreach (var (name, value) in KeyboardFields)

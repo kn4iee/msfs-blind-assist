@@ -234,7 +234,7 @@ public class Bbs757CduPagesTests
     [Fact]
     public async Task Wipe_holds_clr_again_when_a_long_clr_removes_one_character()
     {
-        // Measured (docs/b757/evidence/flight-08.md): a CLR held 1.3 s cleared the scratchpad 45 times in
+        // Measured 2026-10-26 (docs/b757.md, "The page service"): a CLR held 1.3 s cleared the scratchpad 45 times in
         // 60 and removed only its last character the other 15; a second long CLR always cleared the rest.
         var cdu = new FakeCdu { Title = "NAV RADIO", Scratchpad = "KATL1100.5", LongClrMisses = 1 };
         var delays = new List<int>();
@@ -492,7 +492,7 @@ public class Bbs757CduPagesTests
         public string? MessageAfterTyping { get; init; }
         /// <summary>
         /// How many long CLRs, from the first, remove only the last character, as a short CLR does (none,
-        /// normally; measured: about one long CLR in four, flight-08.md).
+        /// normally; measured 2026-10-26: about one long CLR in four).
         /// </summary>
         public int LongClrMisses { get; set; }
         /// <summary>Reads null until a key is pressed, as the first officer's CDU does after a load.</summary>

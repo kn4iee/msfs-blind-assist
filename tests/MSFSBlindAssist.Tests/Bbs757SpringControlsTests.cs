@@ -11,7 +11,7 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The 757's spring-loaded cockpit switches, held from the panels for one second (plan 12, task 3): the
 /// rudder trim, the aileron trim, the alternate stab trim and the manual cabin altitude switch. The values
-/// are measured (docs/b757/evidence/flight-12.md) and read from BlueBird's code: nothing in the aircraft
+/// are measured (2026-10-28, [B757-15]) and read from BlueBird's code: nothing in the aircraft
 /// returns a trim switch written 0 or 2 to rest (a lost release ran the rudder trim to its stop twice), so
 /// the release always runs and is read back, and re-sent while the switch is off rest. The first half is
 /// the pure part (the codes, the phrases, the decisions), CI runs under en-US, so the de-DE and sv-SE cases
@@ -35,11 +35,11 @@ public class Bbs757SpringControlsTests
 
     private static Bbs757SpringControl Control(string key) => S.All.Single(c => c.Key == key);
 
-    // ---- The table (measured, flight-12.md) --------------------------------------------------------------
+    // ---- The table (measured 2026-10-28) -----------------------------------------------------------------
 
     [Theory]
     // Plan 12 task 7: the rudder and aileron trim switches sit on their own trim panel at the aft end of the aisle stand
-    // (docs/b757/evidence/panel-audit-12.md), so their buttons are on the app's own Rudder and aileron trim panel, listed
+    // (docs/b757.md, "How it writes", Spring switches), so their buttons are on the app's own Rudder and aileron trim panel, listed
     // right after Stabilizer trim; the alternate stab trim switch is on the control stand, with the cutouts.
     [InlineData("BBS757_RUDDER_TRIM", "B757_PEDESTAL_RUDDER_TRIM_KNOB", 1, 0, 2, "Pedestal", "Rudder and aileron trim", "Rudder trim", "Stabilizer trim")]
     [InlineData("BBS757_AILERON_TRIM", "BBS_AILERON_TRIM_SWITCH", 1, 0, 2, "Pedestal", "Rudder and aileron trim", "Aileron trim", "Stabilizer trim")]
@@ -1215,7 +1215,7 @@ public class Bbs757SpringControlsTests
     // Plan 12 task 5b: the P61 test switches, held for 3 s from a button per test, and the lamp test
     // =====================================================================================================
     //
-    // Measured in flight (flight-12.md, "The fire test, the P61 test switches and the master lights"): a P61 test switch
+    // Measured in flight on 2026-10-28 (docs/b757.md, "Held tests and spring switches"): a P61 test switch
     // written once is back on neutral (1) at once (the Asobo 3-state template's STATE0_TIMER 0.01), so a test runs only
     // while its position is written again: every 30 ms it held and the test ran steadily, every ~130 ms it dropped out.
 
@@ -1263,7 +1263,7 @@ public class Bbs757SpringControlsTests
     {
         // Plan 12 task 12 (the final review's I1): nothing in BlueBird reads BBS757_DUCT_LEAK_FUEL_QTY_P61_TEST_SW (not the
         // WASM, no XML but its own switch), and holding it on the ground with BBS Nest running changed no variable
-        // (flight-12.md), so a button saying "… test done" would promise a test that never runs.
+        // (2026-10-28), so a button saying "… test done" would promise a test that never runs.
         var def = new BBS757Definition();
         var vars = def.GetVariables();
 
@@ -1794,7 +1794,7 @@ public class Bbs757SpringControlsTests
 
     // ---- The hold ends by real time (fix round 1) ----------------------------------------------------------
     //
-    // A real 30 ms wait runs about 40 ms (flight-12.md): counted by its waits alone a "3 s" test held about 4 s. The
+    // A real 30 ms wait runs about 40 ms (measured 2026-10-28): counted by its waits alone a "3 s" test held about 4 s. The
     // hold ends by whichever comes first of the waits asked and the definition's clock (NowMs); the fakes' waits take
     // no time, so every sequence above is unchanged.
 

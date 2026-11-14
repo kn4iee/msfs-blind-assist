@@ -8,8 +8,8 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 public sealed record Bbs757Light(string LVar, string Label, string OnPhrase, string? OffPhrase);
 
 /// <summary>
-/// The 757's annunciator lights worth a pilot's attention, curated from
-/// <c>docs/b757/evidence/controls/lights.tsv</c> (518 light nodes from BlueBird's model XML), and
+/// The 757's annunciator lights worth a pilot's attention, curated from the 518 light nodes of BlueBird's
+/// model XML (the test fixture <c>bbs757-lights.json</c> holds their names), and
 /// the set of L:vars the tablet agent watches for the cockpit-wide announcements.
 ///
 /// Left out on purpose: backlights, display brightness and test lights; the 511 breakers; the

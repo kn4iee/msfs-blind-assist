@@ -1209,7 +1209,7 @@ public class Bbs757EfbPressTests
     private static char? AirportTakes(char c) => char.IsLetter(c) ? char.ToUpperInvariant(c) : null;
 
     /// <summary>
-    /// One of BlueBird's text boxes behind the press runner, typed as the tablet types it (docs/b757/evidence/efb-typing.md). The box's tap
+    /// One of BlueBird's text boxes behind the press runner, typed as the tablet types it (measured 2026-11-07, [B757-29]). The box's tap
     /// brings the keyboard up for it, shown at once and settled <see cref="ReadyAfterMs"/> later, and puts the caret at
     /// <see cref="TapCaret"/>; a key tapped before it settled lands on the page beneath and the keyboard goes down
     /// (<see cref="KeysOnThePage"/>). A character key types its shown layer at the caret, then the caret goes to the end; backspace

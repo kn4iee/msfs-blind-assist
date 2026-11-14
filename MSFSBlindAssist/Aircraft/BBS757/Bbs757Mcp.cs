@@ -33,7 +33,7 @@ public readonly record struct Bbs757SpeedBurstPlan(int Bulk, int Rest);
 /// The BlueBird 757's MCP (autopilot panel) values: how each is set and read, the typed-input
 /// rules and the words spoken. Pure; <see cref="BBS757Definition"/> wires it to the sim.
 ///
-/// What was measured (docs/b757/evidence/live-findings.md, "MCP" and "After the first flight"):
+/// What was measured on 2026-10-25 (docs/b757.md, "The MCP value windows"):
 ///   • Heading <c>L:BBS_AP_TARGET_HEADING</c> and altitude <c>L:BBS_AP_TARGET_ALTITUDE</c> adopt a
 ///     direct write, so an exact value is one write.
 ///   • The speed target <c>L:BBS757_ORANGE_AIRSPEED_BUGS</c> is READ-ONLY (a direct write is
@@ -66,7 +66,7 @@ public static class Bbs757Mcp
 
     /// <summary>
     /// The speed window's hundreds wheel; in Mach mode it shows the tenths digit (10·d). The Mach is read
-    /// from the wheels: <c>L:BBS_TARGET_MACH</c> stays 0 in Mach mode (measured, flight-05.md M1).
+    /// from the wheels: <c>L:BBS_TARGET_MACH</c> stays 0 in Mach mode (measured at FL290 on 2026-10-26, [B757-50]).
     /// </summary>
     public const string MachTenthsDrumVar = "B757_MCP_Gau_SPD_AUTO_100";
 
@@ -437,8 +437,8 @@ public static class Bbs757Mcp
 
     /// <summary>
     /// "Heading 090, LNAV": the phrase, then each lit button of <paramref name="lit"/> in order; the phrase
-    /// alone when none is lit. These are the MCP's button lights, not the flight mode annunciator (no
-    /// readable source for it, plan 13), so an armed mode whose button is lit is named too.
+    /// alone when none is lit. These are the MCP's button lights, not the flight mode annunciator (which
+    /// the FMA reader reads from the aircraft's memory), so an armed mode whose button is lit is named too.
     /// </summary>
     public static string WithModes(string phrase, IReadOnlyList<string> lit)
         => lit.Count == 0 ? phrase : $"{phrase}, {string.Join(", ", lit)}";
@@ -523,7 +523,7 @@ public static class Bbs757Mcp
 
     /// <summary>
     /// The Mach the speed window's wheels show: tenths from the hundreds wheel (10·d), hundredths from
-    /// the tens wheel (10·(d+1)); measured at FL290, .40 to .95 (flight-05.md M1). Null when either is
+    /// the tens wheel (10·(d+1)); measured at FL290 on 2026-10-26, .40 to .95 ([B757-50]). Null when either is
     /// unread, not a digit (a wheel caught between digits reads between multiples of 10), or below the
     /// .40 floor: the wheels showing knots (100-399 kt) decode as .10-.39, as they do for a second or two
     /// after an IAS/MACH changeover, and must never be taken for a Mach.

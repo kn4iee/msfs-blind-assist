@@ -52,7 +52,7 @@ public sealed record Bbs757CduScreen(IReadOnlyList<string> Lines)
 
 /// <summary>
 /// Reads a CDU frame from the 757's Comm Bus (<c>BBS_CDU_DISPLAY_1</c>/<c>_2</c>, see
-/// docs/b757/evidence/cdu.md): MobiFlight WinCtrl JSON <c>{"Target":"Display","Data":[...]}</c>,
+/// docs/b757.md, "How the screens are read and the keys pressed"): MobiFlight WinCtrl JSON <c>{"Target":"Display","Data":[...]}</c>,
 /// 14 rows of 24 cells row-major, a cell <c>[]</c> (blank) or <c>[char, color, size, inverse]</c>.
 /// Each cell's character makes the screen's lines and the whole cell, with its colour, size and inverse
 /// flag, makes <see cref="Bbs757CduScreen.Cells"/>. Pure, and it never throws: a short frame is padded,

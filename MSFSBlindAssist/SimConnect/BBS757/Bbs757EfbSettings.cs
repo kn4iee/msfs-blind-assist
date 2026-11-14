@@ -153,7 +153,7 @@ public sealed record Bbs757LinkedKey(string Path, Bbs757SettingFile File);
 public sealed record Bbs757SettingChoice(string Word, Bbs757Value Stored, Bbs757Value? AlsoStored = null);
 
 /// <summary>
-/// A setting the tablet shows, and what BlueBird stores for it (docs/b757/evidence/efb-settings.md).
+/// A setting the tablet shows, and what BlueBird stores for it (docs/b757.md, "The settings window").
 /// </summary>
 /// <param name="Path">The key, dotted through the file's objects: <c>loading_speed</c>, <c>failures.random_enabled</c>,
 /// <c>options.egpws_callouts.2500</c>.</param>
@@ -185,7 +185,7 @@ public sealed record Bbs757SettingWrite(Bbs757Setting Setting, string Path, Bbs7
 /// <summary>
 /// The catalog of BlueBird's tablet settings: for each one its key, file, tablet label, the tablet's words and the
 /// value BlueBird stores for each. The words and stored values were measured on the tablet
-/// (docs/b757/evidence/efb-settings.md, sections 2 to 7), with three exceptions. Hoppie ACARS's On is taken by type: it
+/// (2026-10-27, each changed on the tablet and both files read after it), with three exceptions. Hoppie ACARS's On is taken by type: it
 /// was not tapped when measuring, as switching it on could log on to Hoppie. The "not set" values of the SimBrief ID
 /// and the two ACARS codes (<c>simbrief_id</c> -1, the codes "") come from the spec and earlier notes, not from this
 /// measurement: section 8 was not tapped. The TOD pause distance range of 1 to 999 is a ruling: the tablet's keypad

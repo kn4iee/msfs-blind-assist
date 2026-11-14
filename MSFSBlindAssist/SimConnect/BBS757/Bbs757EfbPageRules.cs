@@ -5,8 +5,8 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// which names make a tab row, the pictures that show a state, the role words of a name, the headings and settings rows BlueBird
 /// names otherwise, the value boxes' names and the reading orders. Where on the tablet the pilot is (the section, R1, and a tab
 /// row's current tab, R2) comes from BlueBird's selected state since plan 21 (<see cref="Bbs757EfbModelReader"/>), so the table of
-/// distinctive names that told a section went. Evidence: <c>docs/b757/evidence/efb-memory-pages.md</c>,
-/// <c>docs/b757/evidence/efb-memory-classes.md</c>.
+/// distinctive names that told a section went. Evidence: docs/b757.md, "The tablet window"
+/// ([B757-22]).
 /// </summary>
 internal static class Bbs757EfbPageRules
 {
@@ -29,7 +29,7 @@ internal static class Bbs757EfbPageRules
 
     /// <summary>The state a picture shows, from its file's name (the part after the last <c>/</c>), as the tablet's tiles use pictures
     /// for what their words do not say: the chocks tile's picture is <c>bbs_ldg_gr_chocks.png</c> with the chocks in place and
-    /// <c>bbs_ldg_gr.png</c> with them removed (measured, <c>docs/b757/evidence/efb-memory-pages.md</c>). Null for any other picture.</summary>
+    /// <c>bbs_ldg_gr.png</c> with them removed (measured 2026-11-06). Null for any other picture.</summary>
     internal static string? PictureState(string text)
     {
         string file = text[(Math.Max(text.LastIndexOf('/'), text.LastIndexOf('\\')) + 1)..];

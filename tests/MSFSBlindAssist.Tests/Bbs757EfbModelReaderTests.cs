@@ -1522,7 +1522,7 @@ public class Bbs757EfbModelReaderTests
     // ---- plan 22, Task 1b: the keyboard's state and a text box's caret ----
 
     /// <summary>The Airport box tapped and the keyboard settled, as the walk reads the keyboard app (measured 2026-11-07,
-    /// docs/b757/evidence/efb-typing.md): up, ready, the QWERTY keyboard, typing into the Airport box, the one-shot shift on.</summary>
+    /// [B757-23]): up, ready, the QWERTY keyboard, typing into the Airport box, the one-shot shift on.</summary>
     private static readonly Bbs757EfbMemory.KeyboardState AirportTyping =
         new(true, true, false, "planning_perf_calc_airport_input", false, true, false, 595.5f, 348, 360, 430);
 
@@ -1619,7 +1619,7 @@ public class Bbs757EfbModelReaderTests
         Assert.NotEqual(Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(page)!), Bbs757EfbPress.Fingerprint(Bbs757EfbModelReader.Read(apps)!));
     }
 
-    // ---- a toggle's own state (plan 22, Task 1c; measured 2026-11-07, docs/b757/evidence/efb-typing.md "Follow-up") ----
+    // ---- a toggle's own state (plan 22, Task 1c; measured 2026-11-07) ----
 
     private static string LineOf(string listing, string word) =>
         Assert.Single(listing.Split('\n'), l => l.Contains(word, StringComparison.OrdinalIgnoreCase));

@@ -6,15 +6,15 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// <summary>
 /// The BlueBird 757-200's five AI display reads and the instrument camera view each one needs. The
 /// ADI, the EHSI, both EICAS CRTs and the standby instruments are WASM-rendered gauges with no DOM and no text behind them
-/// (docs/b757/spec.md §3.4), so AI vision on a camera capture is the only way to read them.
+/// (docs/b757.md, "Displays read from memory"), so AI vision on a camera capture is the only way to read them
+/// without the aircraft's memory.
 ///
 /// The view indices are 0-based into the aircraft's cameras.cfg instrument cameras, so the sim's
 /// own "instrument view 1" is index 0 and its "instrument view 2" is index 1. Measured on the live
-/// aircraft:
-///   • Index 0, titled "ADI/EHSI", frames the captain's EHSI (a window capture on 2026-10-25,
-///     docs/b757/evidence/efb-and-manual.md). That the ADI is legible in it is still to be
+/// aircraft from window captures on 2026-10-25 (docs/b757.md, "AI display reads"):
+///   • Index 0, titled "ADI/EHSI", frames the captain's EHSI. That the ADI is legible in it is still to be
 ///     confirmed in the sim.
-///   • Index 1, titled "EICAS", is the EICAS view (docs/b757/evidence/live-findings.md): both EICAS
+///   • Index 1, titled "EICAS", is the EICAS view: both EICAS
 ///     CRTs and, with them, the whole MCP, the standby instruments, the autobrake, the flap gauge,
 ///     the gear lever and the first officer's airspeed, so every EICAS prompt names the CRT to
 ///     describe and says to ignore the rest.

@@ -81,7 +81,7 @@ public sealed class Bbs757EfbMemory
     public sealed record App(int Key, string Class, IReadOnlyList<Node> Controls, NoticePanel? Panel = null, string FlightTime = "",
         BoardingBox? Boarding = null, KeyboardState? Keyboard = null);
 
-    /// <summary>BlueBird's keyboard as the keyboard app keeps it (measured live 2026-11-07, docs/b757/evidence/efb-typing.md): <c>Shown</c>
+    /// <summary>BlueBird's keyboard as the keyboard app keeps it (measured live 2026-11-07): <c>Shown</c>
     /// from a text box's tap until the keyboard goes down; <c>Ready</c> once it has settled, 1.12 to 1.16 s after the tap (a key tapped
     /// before lands on the page beneath); <c>Keypad</c> when the numeric keypad shows instead of the QWERTY keyboard (BlueBird leaves it 1
     /// after the keypad closes, until the QWERTY keyboard next opens: it says which shows only while <c>Shown</c>); <c>Target</c>, the
@@ -311,7 +311,7 @@ public sealed class Bbs757EfbMemory
     internal const int MaxTextboxLength = 1000;
 
     /// <summary>A text box with its caret, maximum length and keypad flag (<see cref="Node"/>): the ints at the layout's
-    /// <c>TextboxCaret</c>, <c>TextboxMaxLength</c> and <c>TextboxKeypad</c> (measured live 2026-11-07, docs/b757/evidence/efb-typing.md).
+    /// <c>TextboxCaret</c>, <c>TextboxMaxLength</c> and <c>TextboxKeypad</c> (measured live 2026-11-07).
     /// Each is null when it cannot be read; a maximum length outside 1 to <see cref="MaxTextboxLength"/> and a keypad int other than 0 (the
     /// QWERTY keyboard) or 1 (the numeric keypad) read as none too, a torn read. A caret outside 0 to the text's length is kept inside it
     /// (the final review's M4): a text BlueBird sets itself may leave the caret where a longer one had it, the planner clamps it anyway, and

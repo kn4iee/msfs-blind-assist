@@ -18,7 +18,8 @@ public sealed record Bbs757ProgTop(string Kind, int Miles, string? EtaZulu);
 /// (".801       1740Z/ 1219NM", 2026-10-27, a SimBrief step on a long flight), and the T/D shows there only
 /// once no step is left: the DES page shows no T/D. The parse finds the label rows rather than counting them,
 /// and never throws.
-/// <c>L:BBS_VNAV_TOD</c> is not used: it does not count down (flight-06.md).
+/// <c>L:BBS_VNAV_TOD</c> is not used: it does not count down (in cruise on 2026-10-26 it read
+/// 118.39569 unchanged over several minutes while PROG's T/D distance fell).
 /// </summary>
 public static class Bbs757Prog
 {

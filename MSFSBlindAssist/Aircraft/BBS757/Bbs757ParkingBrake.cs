@@ -4,7 +4,7 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Aircraft.BBS757;
 
 /// <summary>
-/// The parking brake when BlueBird's PARKING BRAKE MODE is REALISTIC ("needs full braking", wasm-findings.md).
+/// The parking brake when BlueBird's PARKING BRAKE MODE is REALISTIC ("needs full braking"; its setting <c>parking_brake_realistic</c>).
 /// Measured 2026-10-28 (FS2020, the 757-200 RR, powered and unpowered): the lever's own toggle, which the map
 /// writes and which works in EASY mode, neither sets nor releases the brake there; full braking, <c>K:BRAKES</c>
 /// and the lever's new value in ONE calculator string do both, and the brake keeps its new state once the pedals

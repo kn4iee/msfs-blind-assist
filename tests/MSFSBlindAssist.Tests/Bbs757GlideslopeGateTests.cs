@@ -5,7 +5,7 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// The shared "glideslope alive / lost" call-out reads the sim's NAV 1, which BlueBird's 757 never
-/// tunes (docs/b757/spec-gaps.md 3.2, ruling R56): the 757 registers no glideslope row and never
+/// tunes ([B757-5], ruling R56): the 757 registers no glideslope row and never
 /// speaks it, while an aircraft on the stock receivers keeps both.
 /// </summary>
 public class Bbs757GlideslopeGateTests

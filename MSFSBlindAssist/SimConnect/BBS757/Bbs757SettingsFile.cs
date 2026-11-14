@@ -31,7 +31,7 @@ public sealed record Bbs757EditResult(byte[]? Bytes, string? Refusal);
 /// every other value is unchanged); only then is it written to <c>&lt;file&gt;.msfsba-tmp</c> beside the file and moved
 /// over it. A save writes only while the caller's guard allows, asked before reading and again just before writing: no
 /// simulator may run, since BlueBird reads these files once, when the 757 loads, and writes its own copy back while it is
-/// loaded (docs/b757/evidence/efb-settings.md, section 1). It never creates a file, and refuses rather than guesses: a
+/// loaded (measured 2026-10-27, [B757-17]). It never creates a file, and refuses rather than guesses: a
 /// missing file or key, a value of another type, a file that is not JSON, that names a key on the way twice or whose text
 /// there cannot be read. The files hold the pilot's SimBrief ID, Hoppie logon code and SayIntentions ACARS key: their
 /// content is never logged; each save or refusal is logged with the file's name alone and its key, and with its value

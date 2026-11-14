@@ -8,7 +8,7 @@ using R =MSFSBlindAssist.Aircraft.BBS757.Bbs757Readouts;
 namespace MSFSBlindAssist.Tests;
 
 /// <summary>
-/// The seams the 757 gap plans build on (docs/b757/plans/02-gaps/01-foundation.md): the optional
+/// The seams the 757 gap plans build on (docs/b757.md, "Seams"): the optional
 /// partial-method hooks on <see cref="BBS757Definition"/>, the Ctrl+M rows they extend and the shared
 /// variable keys. An unimplemented hook compiles away, so with none implemented the definition must
 /// behave as it did before the seams.

@@ -342,7 +342,7 @@ public class Bbs757EfbMemoryTests
         Assert.Null(button.Knob);
     }
 
-    // ---- text boxes, drop-downs and the selected entry (plan 21, measured 2026-11-07: docs/b757/evidence/efb-memory-classes.md) ----
+    // ---- text boxes, drop-downs and the selected entry (plan 21, measured 2026-11-07) ----
 
     [Fact]
     public void A_text_box_reads_its_text()
@@ -364,7 +364,7 @@ public class Bbs757EfbMemoryTests
         Assert.Equal("", bare.Text);
     }
 
-    // ---- a text box's caret, maximum length and keypad flag (plan 22, measured 2026-11-07: docs/b757/evidence/efb-typing.md) ----
+    // ---- a text box's caret, maximum length and keypad flag (plan 22, measured 2026-11-07) ----
 
     /// <summary>The grid's first child made a text box holding <paramref name="text"/> (its text label's), with its caret, maximum length
     /// and keypad ints where the layout keeps them.</summary>
@@ -478,7 +478,7 @@ public class Bbs757EfbMemoryTests
             Assert.DoesNotContain($"\"{field}\"", bare, StringComparison.Ordinal);
     }
 
-    // ---- a toggle's own byte (plan 22, measured 2026-11-07: docs/b757/evidence/efb-typing.md, "Follow-up") ----
+    // ---- a toggle's own byte (plan 22, measured 2026-11-07) ----
 
     [Theory]
     [InlineData(1, true)]
@@ -886,7 +886,7 @@ public class Bbs757EfbMemoryTests
         Assert.DoesNotContain("\"boarding\"", Bbs757EfbTreeJson.Write(none), StringComparison.Ordinal);
     }
 
-    // ---- the keyboard app (plan 22, measured 2026-11-07: docs/b757/evidence/efb-typing.md) ----
+    // ---- the keyboard app (plan 22, measured 2026-11-07) ----
 
     /// <summary>The map gains the keyboard app at <paramref name="app"/> (key 2, BlueBird's app_keyboard: its front flag 1, as measured),
     /// its roots holding <c>kb_grid</c> with one key.</summary>

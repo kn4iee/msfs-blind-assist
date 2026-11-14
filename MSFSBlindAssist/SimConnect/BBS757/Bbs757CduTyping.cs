@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 /// Every other key keeps the tablet client's standard 250 ms hold and 400 ms gap (0.65 s a key):
 /// page keys, line select keys, CLR and DEL, and every key of the CDU page service. Typed entries go
 /// out at 100 ms / 300 ms (0.4 s a key; "KATL" in 1.6 s instead of 2.6 s). Measured on the first
-/// officer's CDU typing <c>KATL1100.5</c> (docs/b757/evidence/flight-08.md), both days on APU power:
+/// officer's CDU typing <c>KATL1100.5</c> ([B757-58]), both days on APU power:
 /// on 2026-10-26 every pair down to 100 / 50 landed 5 of 5; on 2026-10-27, through the tablet agent's
 /// own press as the app types and with the sim busier (the EFB reader's ND pop-out open), 100 / 100
 /// landed only 6 of 10, losing a repeated digit ("KATL100.5"), while 100 / 200 landed 15 of 15 and

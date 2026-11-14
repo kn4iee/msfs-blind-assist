@@ -61,7 +61,7 @@ public sealed class Bbs757CduPages
     private const int PageWaitMs = 3000;
     // The wipe: CLR held WipeHoldMs (the whole scratchpad), read WipeSettleMs later; if anything is
     // left, CLR held again. One long CLR cleared the scratchpad 45 times in 60 and removed only its last
-    // character the other 15, where a second one always cleared the rest (docs/b757/evidence/flight-08.md);
+    // character the other 15, where a second one always cleared the rest (measured 2026-10-26; docs/b757.md, "The page service");
     // a short CLR would remove one more character and leave the rest.
     private const int WipeHoldMs = Bbs757CduKeys.ClearAllHoldMs;   // the one measured hold (1300 ms)
     private const int WipeSettleMs = 1800;

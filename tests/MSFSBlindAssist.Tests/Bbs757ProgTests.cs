@@ -6,8 +6,8 @@ namespace MSFSBlindAssist.Tests;
 
 /// <summary>
 /// D and Shift+D (plan 06, <see cref="Bbs757Prog"/>): the destination and the top of climb or descent read off
-/// the first officer's CDU PROG page 1. The lines are session 8's (live-findings.md, KSEA → KMIA at the gate)
-/// and flight 356's T/D (flight-06.md, "1633Z/ 10NM").
+/// the first officer's CDU PROG page 1. The lines are those read at the gate on 2026-10-25 (a route to KMIA)
+/// and the T/D row of a flight of 2026-10-26 ("1633Z/ 10NM").
 /// </summary>
 public class Bbs757ProgTests
 {

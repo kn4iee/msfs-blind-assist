@@ -11,8 +11,8 @@ public readonly record struct Bbs757SpeedEntry(int? Knots, double? Mach)
 }
 
 /// <summary>
-/// Mach entry through the 757's speed window (gap plan 05, Task 3), as flight-05.md M1 measured it at
-/// FL290: one <c>K:AP_SPD_VAR_INC/DEC</c> moves the Mach target 0.01; bursts speed up in BlueBird's knot
+/// Mach entry through the 757's speed window (gap plan 05, Task 3), as measured at FL290 on
+/// 2026-10-26 ([B757-51]): one <c>K:AP_SPD_VAR_INC/DEC</c> moves the Mach target 0.01; bursts speed up in BlueBird's knot
 /// tiers (1 an event for events 1-10, 2 for 11-25; a burst of 30 gave 3 an event or hit a ceiling, so no
 /// burst is planned past 25); the target stops at .40 but runs past the aircraft's .86 to .95, so the app
 /// keeps to <see cref="Min"/>-<see cref="Max"/> itself; and the Mach is read only from the window's wheels
@@ -38,7 +38,7 @@ public static class Bbs757Mach
 
     /// <summary>
     /// The Mach is judged from the window's wheels, which show a burst or a changeover 1-2 s after it
-    /// (flight-05.md M1, measured through the MCP tool, whose own round trip is part of that). After a
+    /// (2026-10-26, measured through the MCP tool, whose own round trip is part of that). After a
     /// burst they are read every <see cref="WheelPollMs"/> until they move, for up to <see cref="WheelWaitMs"/> ...
     /// </summary>
     public const int WheelPollMs = 250;

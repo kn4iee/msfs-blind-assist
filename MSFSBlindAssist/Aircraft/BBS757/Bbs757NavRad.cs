@@ -31,7 +31,7 @@ public sealed record Bbs757RunwayIls(string Runway, double Mhz, string Ident, in
 
 /// <summary>
 /// The 757's own nav radios, for output N and the Ctrl+N window. BlueBird's VOR and ILS receivers are its
-/// own and leave the stock NAV variables alone (measured, docs/b757/spec-gaps.md 3.2), so the stock NAV
+/// own and leave the stock NAV variables alone (measured, [B757-5]), so the stock NAV
 /// radios are never read here. The courses are BlueBird's L:vars; the VOR frequencies are on the CDU's NAV
 /// RADIO page, and the FMC's runway ILS on APPROACH REF, both read on the first officer's CDU
 /// (<see cref="Bbs757CduPages"/>, ruling R52). The tuned ILS frequency is on no page: the
@@ -73,7 +73,7 @@ public static class Bbs757NavRad
 
     /// <summary>
     /// The keys of BlueBird's tuning variables (added by its 2026-10-31 update, not in its public table;
-    /// docs/b757/evidence/flight-19.md): the ILS panel's frequency (-1 while parked), the two VOR receivers'
+    /// read in cruise 2026-11-05, docs/b757.md, "Radios"): the ILS panel's frequency (-1 while parked), the two VOR receivers'
     /// frequencies and whether each is tuned automatically.
     /// </summary>
     public const string IlsFrequencyKey = "BBS757_ILS_FREQ";

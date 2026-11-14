@@ -6,7 +6,7 @@
 // That element forwards the mouse to the WASM through its own four handlers (onMouseMove,
 // OnMouseDown, OnMouseUp, onClick: each a Coherent.call WASM_MOUSE_* / WASM_CLICK with page
 // coordinates). A click here calls those four with the canvas origin plus the tablet-local point,
-// exactly as the mouse would (measured, docs/b757/evidence/efb-and-manual.md). No camera move, no
+// exactly as the mouse would (measured 2026-10-25; docs/b757.md, "Pressing"). No camera move, no
 // real mouse. Nothing on the tablet can be read: the app checks results through files BlueBird
 // writes.
 //

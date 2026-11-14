@@ -7,7 +7,7 @@ namespace MSFSBlindAssist.Aircraft.BBS757;
 /// BBS Nest (<c>C:\BBS Nest\bbs_nest.exe</c>) is BlueBird's companion app, its own SimConnect
 /// client. Without it the 757 takes every switch write into its cockpit model and no system
 /// reacts: measured for a whole session with the battery bus dead and the APU never turning
-/// (docs/b757/evidence/live-findings.md, session 1). The aircraft's own warning is on a display,
+/// (2026-10-25; docs/b757.md, "BBS Nest"). The aircraft's own warning is on a display,
 /// so the app checks for the process itself.
 /// </summary>
 public static class Bbs757Nest

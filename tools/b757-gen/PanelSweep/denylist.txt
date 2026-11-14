@@ -1,7 +1,7 @@
 # PanelSweep denylist: the 757 controls the sweep NEVER writes.
 #
 # One map node name per line: the "node" of a control in MSFSBlindAssist/Resources/bbs757_control_map.json
-# (plan 12, Task 2: docs/b757/plans/02-gaps/12-panels-remaining.md). Matching ignores case. '#' starts a
+# (plan 12, Task 2; docs/b757.md, "PanelSweep"). Matching ignores case. '#' starts a
 # comment. A line naming a node the map does not have is stale (a renamed node has lost its protection):
 # --dry-run warns about it, and a live run refuses to start.
 #

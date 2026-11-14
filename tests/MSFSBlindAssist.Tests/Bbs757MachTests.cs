@@ -9,7 +9,7 @@ namespace MSFSBlindAssist.Tests;
 /// <summary>
 /// The 757's Mach entry through the speed window (gap plan 05, Task 3): the typed entry, the IAS/MACH
 /// changeover before a set in the other units, and the Mach set against a simulated MCP that behaves as
-/// flight-05.md M1 measured at FL290: one knob event moves 0.01 Mach, bursts speed up in BlueBird's knot
+/// measured at FL290 on 2026-10-26 ([B757-51]): one knob event moves 0.01 Mach, bursts speed up in BlueBird's knot
 /// tiers, the target stops at .40 but runs past .86 (to at least .95), and the Mach shows only on the
 /// window's wheels (<c>L:BBS_TARGET_MACH</c> stays 0). Whether the aircraft flies it is checked in the sim.
 /// </summary>
@@ -109,7 +109,7 @@ public class Bbs757MachTests
     // ---- The set against a simulated MCP ----------------------------------------------------
 
     /// <summary>
-    /// The MCP as flight-05.md M1 measured it: the IAS/MACH flag, the window's wheels in Mach, the knob
+    /// The MCP as measured at FL290 on 2026-10-26: the IAS/MACH flag, the window's wheels in Mach, the knob
     /// events in tiers (1 hundredth each for events 1-10, 2 for 11-25, 3 after), the .40 floor and no
     /// ceiling before .95. A changeover press flips the flag unless <see cref="ChangeoverWorks"/> is false
     /// (on the ground, measured in session 8).
@@ -121,10 +121,10 @@ public class Bbs757MachTests
 
         public double? MachFlag = 1;
         public int Hundredths = 73;     // the Mach target, in hundredths
-        public int Knots = 283;         // the IAS target the wheels show in IAS (flight-05.md: 20/90/40 at 283)
+        public int Knots = 283;         // the IAS target the wheels show in IAS (measured: 20/90/40 at 283)
         public bool WheelsReadable = true;
         public bool ChangeoverWorks = true;
-        public int RollDelayMs;         // the wheels show a change this long after it (flight-05.md: 1-2 s)
+        public int RollDelayMs;         // the wheels show a change this long after it (measured: 1-2 s)
         public int Peak;
         public readonly List<string> Writes = new();
         public long Now;
@@ -270,7 +270,7 @@ public class Bbs757MachTests
     public async Task A_mach_typed_in_knots_waits_for_the_wheels_to_show_mach()
     {
         // Review finding 1: in IAS at 283 kt the wheels read 20/90 (".28"); they roll to the Mach 1-2 s after
-        // the changeover (flight-05.md). Planned from ".28", .78 would send +50 and run the target to .95.
+        // the changeover (measured 2026-10-26). Planned from ".28", .78 would send +50 and run the target to .95.
         var mcp = new FakeMcp { MachFlag = 0, Hundredths = 73, Knots = 283, RollDelayMs = 1500 };
         Assert.Null(await Bbs757Mach.EnsureUnitsAsync(mcp.Io, wantMach: true, Changeover, () => { }, default));
 

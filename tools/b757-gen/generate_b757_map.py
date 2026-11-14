@@ -131,8 +131,8 @@ What is derived and what is curated (curation.json):
             built as a switch with no click code: press, release, cw and ccw are empty, and the app writes the state var
             to the picked position, as it does for any switch with none. Nothing of the vendor's click code is kept, so
             the positions are NOT held to the clamp in that code: the cockpit mouse stops the brightness knobs at 30 (20
-            on the F/O ADI knob) and Auto Rate at 13, but BlueBird's systems take 0-40 for the brightness (measured:
-            docs/b757/evidence/flight-12.md; 40 is every knob's load value). An entry takes in only a row the rules leave
+            on the F/O ADI knob) and Auto Rate at 13, but BlueBird's systems take 0-40 for the brightness (measured
+            2026-10-28, [B757-16]; 40 is every knob's load value). An entry takes in only a row the rules leave
             out as a knob whose positions they cannot list ("rotary knob infinite", "rotary knob finite with more than 12
             positions" or "rotary knob finite without positions"), and the run names each; it never overrides curation's
             own exclusions (a knob under an excluded banner needs an include_nodes entry as well), and a node the rules
@@ -144,8 +144,8 @@ What is derived and what is curated (curation.json):
             writes B757_PFD_1_SCREEN_KNOB, the var BlueBird's brightness code reads for the PFD). A node also under
             levers, guarded, direct_write, kinds or positions is an error: the entry holds all the knob has.
   hold_ms   a button the cockpit shows a result for only while it is held: the fire tests, the CVR and squib tests and the
-            other test buttons (docs/b757/evidence/flight-12.md, "The fire test, the P61 test switches and the master
-            lights": the engine fire test raised the bell, the fire lights and both sides' master warning for as long as
+            other test buttons (measured in flight 2026-10-28; docs/b757.md, "Held tests and spring
+            switches": the engine fire test raised the bell, the fire lights and both sides' master warning for as long as
             the button was down and cleared when it was let go, so the app's 200 ms press gives a blip at most). BlueBird's
             template for them is the plain momentary button, which the extractor reads as a button, so curation names the
             node and its hold in milliseconds, and the control is built as a held button (kind "held") with that hold_ms.
@@ -938,7 +938,7 @@ def check_direct_positions(first_row, cur):
     or writes (check_component_var). A zone selector's row shows the derived ..._ANIM_FRAME var, but its click writes the
     ..._KNOB_FRAME var the systems read, which the extractor keeps with the component. The positions are NOT checked against
     the range the click code clamps to, as a lever's are: none of that code is replayed, and the systems accept more than the
-    cockpit mouse reaches (the brightness knobs: 0-40, the mouse stops at 30 or 20; docs/b757/evidence/flight-12.md)."""
+    cockpit mouse reaches (the brightness knobs: 0-40, the mouse stops at 30 or 20; measured 2026-10-28, [B757-16])."""
     for node, entry in cur["direct_positions"].items():
         check_component_var("direct_positions", "knob", node, first_row[node], entry["state_var"])
 

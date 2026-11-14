@@ -4,7 +4,7 @@ namespace MSFSBlindAssist.SimConnect.BBS757;
 
 /// <summary>
 /// The BlueBird 757 CDU's key names, as the cockpit XML names them: a key is the L:var
-/// <c>L:B757_CDU_&lt;1|2&gt;_&lt;KEY&gt;</c> (docs/b757/evidence/cdu.md). <see cref="All"/> is the
+/// <c>L:B757_CDU_&lt;1|2&gt;_&lt;KEY&gt;</c> (docs/b757.md, "How the screens are read and the keys pressed"). <see cref="All"/> is the
 /// same 69 names the tablet agent whitelists (<c>KEY_NAMES</c> in
 /// <c>coherent-bbs757-tablet-agent.js</c>; Bbs757CduKeysTests keeps the two equal), and every
 /// mapping below gives only names from it.

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- A SimBrief OFP cut down to the fields the 757's fuel and payload load reads, with the numbers
-     of the plan BlueBird's own EFB loaded on 2026-10-25 (docs/b757/evidence/live-findings.md,
-     session 5). The airline, flight number and IDs are made up. -->
+     of the plan BlueBird's own EFB loaded on 2026-10-25. The airline, flight number and IDs are made up. -->
 <OFP>
   <fetch>
     <userid>1</userid>

@@ -20,7 +20,7 @@ internal sealed class SimLinkException : Exception
 /// app reads its L:vars. Writes are MobiFlight "MF.SimVars.Set.&lt;rpn&gt;" commands on the default
 /// "MobiFlight.Command" client-data area, the channel the app's ExecuteCalculatorCode writes on: Set runs
 /// the code ONCE. They are never sent as "MF.SimVars.Add", which REGISTERS an expression the module then
-/// re-evaluates on every poll (measured 2026-10-28, docs/b757/evidence/flight-12.md: a write registered that
+/// re-evaluates on every poll (measured 2026-10-28: a write registered that
 /// way re-ran every cycle and drove a trim to its stop). Every command carries a fresh "{seq} 0 * " prefix
 /// so two identical writes are never byte-identical (CalcCommand).
 ///

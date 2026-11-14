@@ -94,7 +94,7 @@ public partial class BBS757Definition : BaseAircraftDefinition
                 Log.Warn("BBS757", $"Control map lists node {c.Node} twice; the second row is ignored.");
     }
 
-    // The MCP takes exact values (docs/b757/spec.md §3.2): Ctrl+H/S/A/V open the entry windows
+    // The MCP takes exact values (docs/b757.md, "The MCP value windows"): Ctrl+H/S/A/V open the entry windows
     // (BBS757Definition.Mcp.cs), Shift+H/S/A/V read the MCP's own variables.
     public override FCUControlType GetAltitudeControlType() => FCUControlType.SetValue;
     public override FCUControlType GetHeadingControlType() => FCUControlType.SetValue;
@@ -104,14 +104,14 @@ public partial class BBS757Definition : BaseAircraftDefinition
     public override Dictionary<string, string> GetButtonStateMapping() => new();
 
     /// <summary>
-    /// The 757 plays its own pilot-monitoring 80 knots, V1 and rotate (docs/b757/spec.md §4), so
+    /// The 757 plays its own pilot-monitoring 80 knots, V1 and rotate (docs/b757.md, "Take-off callouts"), so
     /// Takeoff Assist's "80 knots" and "100 knots" are not spoken on it.
     /// </summary>
     public override bool PlaysOwnTakeoffSpeedCallouts => true;
 
     /// <summary>
     /// BlueBird's VOR and ILS receivers are its own: tuning them changed no stock NAV variable
-    /// (measured, docs/b757/spec-gaps.md 3.2), so the shared glideslope call-out, which reads NAV 1,
+    /// (measured, [B757-5]), so the shared glideslope call-out, which reads NAV 1,
     /// is off on the 757 (ruling R56).
     /// </summary>
     public override bool UsesStockNavReceivers => false;
@@ -277,9 +277,9 @@ public partial class BBS757Definition : BaseAircraftDefinition
 
     /// <summary>
     /// Sections and panels from the map, in map order, then the status rows. The map's order is the
-    /// order the pilot tabs through them: each panel is one panel of the cockpit (plan 12,
-    /// docs/b757/evidence/panel-audit-12.md), a section's panels follow the first action on each of them
-    /// in BlueBird's Simplified Procedures (plan 12 task 9, docs/b757/evidence/panel-order-12.md), with
+    /// order the pilot tabs through them: each panel is one panel of the cockpit (plan 12;
+    /// docs/b757.md, "Sections, panels and their order"), a section's panels follow the first action on each of them
+    /// in BlueBird's Simplified Procedures (plan 12 task 9, the same section), with
     /// the Forward panel pinned to open with Brakes and the Pedestal's start (Control stand, Engines,
     /// TCAS and transponder) pinned by plan 01's test, and a panel's controls come every-day first (the
     /// generator's panel_order and control_order; whatever they leave out follows alphabetically, or in

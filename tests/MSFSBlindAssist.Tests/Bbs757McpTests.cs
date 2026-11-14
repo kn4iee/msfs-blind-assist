@@ -970,7 +970,7 @@ public class Bbs757McpTests
         Assert.Equal(Bbs757Mcp.MachModeReadNote, await Bbs757Mcp.ReadSpeedAsync(mcp.Io, default));
     }
 
-    // ---- The speed window while blank, and Mach (plan 05, Task 2; flight-05.md) --------------
+    // ---- The speed window while blank, and Mach (plan 05, Task 2) ----------------------------
 
     [Theory]
     [InlineData(1.0, 0.0, 250.0, null, "MCP speed window blank. Speed Intervene opens it.")]
@@ -987,7 +987,7 @@ public class Bbs757McpTests
     }
 
     [Theory]
-    // Measured at FL290 (flight-05.md M1): the tenths wheel reads 10·d, the hundredths wheel 10·(d+1).
+    // Measured at FL290 on 2026-10-26 ([B757-50]): the tenths wheel reads 10·d, the hundredths wheel 10·(d+1).
     [InlineData(70.0, 40.0, 0.73)]
     [InlineData(70.0, 50.0, 0.74)]
     [InlineData(70.0, 100.0, 0.79)]

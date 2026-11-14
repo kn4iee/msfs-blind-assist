@@ -693,7 +693,7 @@ public sealed class Bbs757EfbPressRunner
     // ------------------------------------------------------------------ typing into a field (plan 22, Task 3)
 
     /// <summary>After a field's tap, the longest wait for BlueBird's keyboard to read up and settled typing into it. Measured 2026-11-07
-    /// (docs/b757/evidence/efb-typing.md): it settled 1.1 to more than 1.9 s after the tap, and a key tapped before lands on the page
+    /// ([B757-23]): it settled 1.1 to more than 1.9 s after the tap, and a key tapped before lands on the page
     /// beneath (the box loses focus and the keyboard slides away).</summary>
     public const int KeyboardReadyMaxMs = 5000;
 
@@ -702,7 +702,7 @@ public sealed class Bbs757EfbPressRunner
 
     /// <summary>
     /// A field (one of BlueBird's text boxes, on the page or a dialog's row) set to <paramref name="text"/>, typed on BlueBird's own
-    /// keyboard or numeric keypad as a sighted pilot types it (plan 22; measured 2026-11-07, docs/b757/evidence/efb-typing.md), through the
+    /// keyboard or numeric keypad as a sighted pilot types it (plan 22; measured 2026-11-07, [B757-29]), through the
     /// runner's discipline (B757-18: a fresh read, the field relocated and brought into view, a tap or nothing):
     /// <list type="number">
     /// <item>The first fresh read, before any drag or tap (<see cref="TypingWanted"/>): a field with no caret read
