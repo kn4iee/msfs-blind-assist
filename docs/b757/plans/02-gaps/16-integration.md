@@ -73,10 +73,10 @@ Before any other task. A claim counts only once it is on the remote `B757`: one 
 Kept in this file only, so no other plan's push ever touches it. Task 0 claims the plan (**Status**, **Claimed by**,
 **Started**); fill in the rest as you go and when the plan lands (index, "Records").
 
-- **Status:** not started
-- **Claimed by:** none
+- **Status:** claimed
+- **Claimed by:** Robin Kipp (robin24), 2026-11-14
 - **Worked by:** (people; add "with subagents" if run through superpowers:subagent-driven-development)
-- **Started:** (date; the `B757` commit you branched from)
+- **Started:** 2026-11-14, from `B757` at 4725281b8
 - **Landed:** (date; the last commit of this plan on `B757`)
 - **Pull request:** (number, link; the commit that last holds `docs/b757/` before Task 6 deletes it)
 - **Waiting on the owner:** (the in-sim pass scenarios not run yet)
