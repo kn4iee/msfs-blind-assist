@@ -1091,6 +1091,22 @@ public class A350MfdPageTests
         Assert.Equal("ACTIVE/F-PLN; TMPY, yellow", A350MfdPage.PageJustChanged(init, PageLines("mfd_fpln_tmpy_basu1d")));
     }
 
+    // Live 2026-11-16 (OMDB, the MFD window, DELETE on a waypoint): the window said "ACTIVE/F-PLN TMPY", then "ACTIVE/F-PLN;
+    // TMPY". A draw without shapes (the background's) finds no yellow box under TMPY, so its black text joined the title; a fresh
+    // draw with shapes read it apart. The title bar's other texts stand apart from the title either way, and a title that differs
+    // only in a colour the pilot never hears is no new page.
+    [Fact]
+    public void A_title_reads_the_same_with_or_without_the_shapes()
+    {
+        var withShapes = PageLines("mfd_fpln_tmpy_basu1d");
+        var withoutShapes = A350MfdPage.Read(A350Fixtures.Capture("mfd_fpln_tmpy_basu1d.json") with { Shapes = null }, 0);
+        Assert.Equal("ACTIVE/F-PLN; TMPY", A350MfdWording.Speak("title", A350MfdPage.PageTitle(withoutShapes)!));
+        Assert.Equal("ACTIVE/F-PLN; TMPY", A350MfdWording.Speak("title", A350MfdPage.PageTitle(withShapes)!));
+        Assert.Null(A350MfdPage.PageJustChanged(withShapes, withoutShapes));
+        Assert.Null(A350MfdPage.PageJustChanged(withoutShapes, withShapes));
+        Assert.Equal("ACTIVE/F-PLN", A350MfdPage.PageTitle(A350MfdPage.Read(A350Fixtures.Capture("mfd_fpln_basu1d.json") with { Shapes = null }, 0)));
+    }
+
     // Black text is drawn on a filled box (every page, 2026-10-27/28): the scratchpad's message on white or amber, TMPY on
     // yellow, the page title on the light title bar. It read "black"; a sighted pilot sees the box's colour, and the title.
     [Fact]

@@ -170,7 +170,12 @@ public static class A350MfdPage
         if (titleRow.Count > 0)
         {
             used.UnionWith(titleRow);
-            var title = titleRow.Where(c => c.Colour is TitleBar or "black").OrderBy(c => c.X).ToList();
+            // The title is the text on the title bar; a draw without shapes keeps every text of the row black, and then the
+            // leftmost black text is the title, the others (TMPY) apart from it, as a draw with shapes reads them (live 2026-11-16:
+            // "ACTIVE/F-PLN TMPY" then "ACTIVE/F-PLN; TMPY", the title said twice).
+            var title = titleRow.Where(c => c.Colour == TitleBar).OrderBy(c => c.X).ToList();
+            if (title.Count == 0 && titleRow.Where(c => c.Colour == "black").MinBy(c => c.X) is { } bare)
+                title.Add(bare);
             var parts = (title.Count > 0 ? new[] { string.Join(" ", title.Select(c => c.Text)) } : Array.Empty<string>())
                 .Concat(titleRow.Except(title).OrderBy(c => c.X).Select(c => $"{c.Text}, {c.Colour}"));
             var at = title.FirstOrDefault() ?? titleRow.MinBy(c => c.X)!;
@@ -888,7 +893,11 @@ public static class A350MfdPage
     /// going back to the page before), else null: a sighted pilot sees the new title bar at once. Nothing on the window's
     /// first read.</summary>
     public static string? PageJustChanged(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now) =>
-        before.Count == 0 || PageTitle(now) is not { } title || !Readable(title) || title == PageTitle(before) ? null : title;
+        before.Count == 0 || PageTitle(now) is not { } title || !Readable(title) || SameTitle(title, PageTitle(before)) ? null : title;
+
+    /// <summary>Two titles a pilot hears alike: the colour of TMPY's box is no word of it, and a draw without shapes has none.</summary>
+    private static bool SameTitle(string title, string? other) =>
+        other != null && A350MfdWording.Speak("title", title) == A350MfdWording.Speak("title", other);
 
     /// <summary>How many reads in a row a torn line may read as its last whole reading before it reads unreadable again.</summary>
     public const int MaxCarried = 3;
@@ -902,7 +911,7 @@ public static class A350MfdPage
     public static IReadOnlyList<MfdLine> KeepReadable(IReadOnlyList<MfdLine> before, IReadOnlyList<MfdLine> now)
     {
         static bool HasUnreadable(MfdLine l) => l.Spoken.Contains(Unreadable, StringComparison.Ordinal);
-        if (PageTitle(now) is not { } title || !Readable(title) || PageTitle(before) != title)
+        if (PageTitle(now) is not { } title || !Readable(title) || !SameTitle(title, PageTitle(before)))
             return now;
         return now.Select(l => l.Kind != "title" && HasUnreadable(l) && before.FirstOrDefault(b => b.Kind == l.Kind && !HasUnreadable(b)
                 && b.Carried < MaxCarried && Math.Abs(b.ClickX - l.ClickX) <= 2 && Math.Abs(b.ClickY - l.ClickY) <= 2) is { } whole
