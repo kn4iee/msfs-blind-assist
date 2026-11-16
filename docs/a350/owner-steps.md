@@ -1,4 +1,4 @@
-# A350: what is left for you (2026-11-03)
+# A350: what is left for you (2026-11-17)
 
 Everything the plans could do or script is done and pushed to Gus's `feat/inibuilds-a350`. This is what only you can do: a sign-in,
 a flight that cannot be scripted safely, a judgement by ear, or a decision. Each item names its plan, so its record says more.
@@ -11,7 +11,10 @@ No pull request is open. Plan 21's last two tasks (the regression flight and the
    17 and 04 need them.
 2. **A company message (plan 04, COMPANY MSG):** with the datalink signed in, have a telex sent to the aircraft's callsign from another
    Hoppie client (or fly with SayIntentions running). Tell me when it is on the way: I run `A350Probe ecamwatch` beside it to settle
-   what raises the COMPANY MSG memo.
+   what raises the COMPANY MSG memo. Seen 2026-11-16 at OMDB: it came up on the stand after the SimBrief and company uplinks
+   (six OIS company messages: two loadsheets, the OMDB and OTHH METARs and TAFs; the MFD's company flight plan and winds), stayed
+   after every message was opened and the winds inserted, and was still up after the landing at OTHH. So a telex is still the
+   test of what raises it; what clears it is open too.
 
 ## 2. Flights
 
@@ -26,7 +29,15 @@ On the build from `feat/inibuilds-a350` (the all-PRs build), A350-900, cold and 
    BTV armed from the ND window (Alt+N), taxi to a stand, Securing.
 3. Plan 17's ledger lists 23 "to fly" steps (`docs/a350/ledger/17-walkthrough.md`): each should work as written there. Tell me any that
    did not, or send me `%APPDATA%\MSFSBlindAssist\logs` (debug.log, a350_speech.log, a350_display.log) and I go through them.
-4. Plan 24's in-flight checks were flown on the third flight of 2026-11-03 (scripted): the ND's symbols, the SND with a navaid tuned and
+4. Scripted on 2026-11-16, OMDB to OTHH (SimBrief UAE111, 30L NABI3F to TOSN2L ILS 34R, FL220), through the probe's MSFSBA
+   code: MFD INIT company flight plan and winds, DEPARTURE and ARRIVAL pages (the STAR list paged with the KCCU), FUEL&LOAD typed,
+   OIS LOADSHEET SIMBRIEF IMPORT, SET ZFW and Instant Refuel (the first press loaded nothing, the second did), T.O PERF and LDG
+   PERF (SYNC FMS, SYNC; see the OIS doc for SYNC without a METAR), SEND TO FMS and CONFIRM TO SPDs, SURV default settings, the
+   First Officer's flows from COCKPIT_PREP to PARKING, a FLEX take-off with SRS, the climb, the T/D pause and RESUME FLIGHT, the
+   managed descent, ACTIVATE APPR, an ILS autoland (LAND3 SINGLE, LAND, FLARE, ROLL OUT, BRK MED) and the airport map at both
+   airports (stand, runway, stand). What is still yours: the same flight with MSFSBA's own keys and windows, by ear, and a taxi
+   with guidance (the probe placed the aircraft on the runway and at the stand).
+5. Plan 24's in-flight checks were flown on the third flight of 2026-11-03 (scripted): the ND's symbols, the SND with a navaid tuned and
    WHAT IF in flight. Nothing is left for you there (`docs/a350/evidence/flight-2026-11-03.md`, the third flight).
 
 ### 2.2 One A350 approach with the new visual guidance (plan 18's flights are gone)
@@ -60,13 +71,25 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    A short runway at a big airport, with BTV armed for its end.
 3. **A deferred procedure (plan 16):** none of the 1.2.8 OIS failures makes one; if one appears in a flight, the DEFRD page reads it.
    (The automatic emergency descent was flown on 2026-11-03 and is off this list.)
-4. **The MFD window at A380 parity (plan 25, built offline 2026-11-12):** on the stand, Shift+M. (a) INIT: type a cost index in the
+4. **Done, scripted live 2026-11-16 (OMDB):** (a) Delete on CI says "Cleared", and the FMS draws CI 0, its own value for a
+   cleared cost index, not an empty box; Backspace on a field clears it. (b) Alt+W presses the KCCU's OIS key (the aircraft took it).
+   (c) No colour word, "required", "temporary", "constraint" as written; the title was said twice on a TMPY page (fixed, b3faa2199).
+   (d) Backspace with a message up said "Info cleared" but the message stayed after the first: the KCCU's CLR is a key the aircraft
+   never resets (fixed, 1db639cde). Left for you: (a) to (d) by ear. The item as written before:
+   **The MFD window at A380 parity (plan 25, built offline 2026-11-12):** on the stand, Shift+M. (a) INIT: type a cost index in the
    scratchpad box (Alt+S), Enter on CI, then **Delete** on CI: it should read empty (BA types CLR into the field and ENTER, as a pilot
    does); then fill it again and clear it with **Backspace** from the list (box empty, no FMS message). (b) **Alt+W** opens the OIS
    (Alt+S is now the scratchpad box). (c) Arrow through INIT, F-PLN (with a TMPY plan up) and PERF: no colour word anywhere, "required"
    on the empty amber boxes, "temporary" on the TMPY plan's lines, the page title said once and in the window's title. (d) With an FMS
    message up, Backspace says "Info cleared" and the message goes.
-5. **The display windows at Fenix parity (plan 26, built offline 2026-11-13):** (a) Alt+P, Alt+N, Alt+E, Alt+S, Alt+I and
+5. **Mostly done, scripted live 2026-11-16:** (a) all six open on their display and say nothing on opening; (b) the E/WD and SD
+   keys each act and their labels change once (T.O CONFIG is a latched hold: press again to let go); (c) the PFD box (each side)
+   and the ISIS box set the QNH; (e) with the PFD, ND and E/WD windows open the sim ran 16.8 fps median against 15.6 without;
+   (g) ten wheel presses during the FL220 level-off: ALT CRZ*, ALT CRZ, SPEED and MACH came on time; (i) each SD page under its own
+   name at once, and leaving STATUS never mixed two names (in cruise the aircraft itself left STATUS for its cruise page after
+   T.O CONFIG). Left for you: (d) Ctrl+Shift+B in the app (its answer is MainForm's, which the probe does not host), (f) with the
+   SND not fitted (it is fitted on this aircraft), (h) the keyboard layouts. The item as written before:
+   **The display windows at Fenix parity (plan 26, built offline 2026-11-13):** (a) Alt+P, Alt+N, Alt+E, Alt+S, Alt+I and
    Alt+Shift+N each open their window on the display, and the list follows it every second without moving you off your line. (b) Press
    each control under each list once (Tab to it): its own cockpit button acts and its label says the new state once, never twice. (c)
    The PFD's QNH box and the ISIS QNH box set the QNH. (d) Ctrl+Shift+B says the airport map is in the ND window. (e) With three
@@ -104,6 +127,12 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
 8. **The display design question:** keep MSFSBA's own A350 windows, or an Alt+key that opens the display itself to click anything?
 9. **A symbol I could not name for sure (plan 24):** four small circles under the ailerons' columns on F/CTL. If you know them, I read
    them. (The ND's circled 1 and 2 are named now: the flap 1 and flap 2 points of the CDA function, settled on the third flight.)
+10. **ABN PROC read aloud (2026-11-16):** pressing ABN PROC has the E/WD call-outs say every line of the not-sensed list (19 lines
+   at once), as they say any new line. Keep that, or say only the list's title for a list you opened yourself (the window holds the
+   lines)?
+11. **QNH with a fraction (2026-11-16):** a preset pulled from STD can land at 1015.81. The PFD draws it 1016; MSFSBA says 1015,
+   as the baro knob's tooltip floors it (decided 2026-10-26). Say what the PFD shows (1016, so you know to set 1015 again), or keep
+   the tooltip's?
 
 ## 5. Things outside the A350
 
