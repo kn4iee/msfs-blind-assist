@@ -181,6 +181,14 @@ public static class A350Pfd
     /// set, 178 x 29 at the bottom left.</summary>
     private static readonly (float X, float Y) SpeedBrakeAtlas = (653, 80), ParkingBrakeAtlas = (252, 11);
 
+    /// <summary>The spoiler symbol is drawn both for armed ground spoilers and for an extended speed brake (live 2026-11-16): the
+    /// green bar under it tells them apart. Armed, a fixed bar below the symbol (its top at y 920, the symbol's foot 914); out, a
+    /// bar rising into the symbol with the deflection (its top 897 to 908).</summary>
+    private static bool SpoilersArmed(A350DrawCapture capture, DrawnShape symbol) =>
+        capture.Shapes?.Where(s => s.Kind == "fill" && s.Image == 0 && A350Rgba.NameOf(s.Colour) == "green"
+                && s.X0 >= symbol.X0 - 10 && s.X1 <= symbol.X1 + 10 && s.Y1 >= symbol.Y0 && s.Y0 <= symbol.Y1 + 20)
+            .MinBy(s => s.Y0) is { } bar && bar.Y0 >= symbol.Y1 + 3;
+
     private static DrawnShape? Sprite(A350DrawCapture capture, int side, (float X, float Y) atlas, Func<DrawnShape, bool>? where = null) =>
         capture.Shapes?.FirstOrDefault(s => s.Image > 1 && Math.Abs(s.X0 - s.PatternX - atlas.X) < 1.5f
             && Math.Abs(s.Y0 - s.PatternY - atlas.Y) < 1.5f && ((s.X0 + s.X1) / 2 >= PfdWidth) == (side != 0) && (where?.Invoke(s) ?? true));
@@ -593,8 +601,8 @@ public static class A350Pfd
         }
         // The rest of the lower part are sprites, no text (live 2026-11-03, 1.2.8): the speed brake's symbol beside the flaps
         // while it is out, the parking brake's legend while it is set.
-        if (Sprite(capture, side, SpeedBrakeAtlas) != null)
-            o.Add("Speed brake: extended");
+        if (Sprite(capture, side, SpeedBrakeAtlas) is { } spoilers)
+            o.Add(SpoilersArmed(capture, spoilers) ? "Ground spoilers: armed" : "Speed brake: extended");
         if (Sprite(capture, side, ParkingBrakeAtlas) != null)
             o.Add("Parking brake: on");
         if (Sprite(capture, side, GearDownAtlas) != null)

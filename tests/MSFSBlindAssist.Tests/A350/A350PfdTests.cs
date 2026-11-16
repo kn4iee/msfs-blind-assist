@@ -712,6 +712,25 @@ public class A350PfdTests
         Assert.DoesNotContain(A350Pfd.Read(Fixture("p12_efis0_park_brake_on"), 0), l => l.StartsWith("Speed brake", StringComparison.Ordinal));
     }
 
+    // Live 2026-11-16 (OMDB to OTHH): the PFD read "Speed brake: extended" on the runway with the ground spoilers only armed. The
+    // spoiler symbol (atlas 653,80) is drawn for both; a green bar under it tells them apart: armed, a fixed bar below the symbol
+    // (y 920 to 928.5); extended, a bar whose top rises into it with the deflection (quarter 908, half 905, full 902, on the stand;
+    // half 897 with the engines running). Neither armed nor out, neither is drawn.
+    [Theory]
+    [InlineData("efis0_spoilers_armed", "Ground spoilers: armed")]
+    [InlineData("efis0_speedbrake_quarter", "Speed brake: extended")]
+    [InlineData("efis0_speedbrake_full", "Speed brake: extended")]
+    [InlineData("efis0_speedbrake_half_cruise", "Speed brake: extended")]
+    [InlineData("p12_efis0_speed_brake_half", "Speed brake: extended")]
+    public void Armed_ground_spoilers_read_apart_from_an_extended_speed_brake(string fixture, string expected)
+    {
+        var lines = A350Pfd.Read(Fixture(fixture), 0);
+        Assert.Contains(expected, lines);
+        Assert.Single(lines, l => l.StartsWith("Speed brake", StringComparison.Ordinal) || l.StartsWith("Ground spoilers", StringComparison.Ordinal));
+        Assert.DoesNotContain(A350Pfd.Read(Fixture("efis0_spoilers_none"), 0),
+            l => l.StartsWith("Speed brake", StringComparison.Ordinal) || l.StartsWith("Ground spoilers", StringComparison.Ordinal));
+    }
+
     // Plan 24, the flight of 2026-11-03: the speed tape's caution strips (CautionTapes.png), each read at its end: VMAX's red barber
     // pole at its lower end (340 kt clean at 335 kt), VLS's amber strip, V alpha prot's amber barber pole and V alpha max's red strip at
     // their upper ends (flaps 3 on the approach; clean at 150 kt just after the in-air start). A strip parked outside the tape's window
