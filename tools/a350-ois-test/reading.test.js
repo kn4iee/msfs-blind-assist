@@ -100,3 +100,16 @@ test("the OFP's Text - is no expander when the section list is hidden", () => {
   assert.ok(els.some(e => e.kind === 'button' && e.text === 'Text -'), 'plain Text -');
   assert.ok(!els.some(e => /^Text - \(/.test(e.text || '')), 'never collapsed or expanded');
 });
+
+// Live 2026-11-16 (OMDB): the header's message count ("6 MESSAGES", top centre) has a click handler that opens the AOC page,
+// where the messages are, and the window read it as plain text, so a pilot could not reach the messages from it.
+test('the header message count is a button', () => {
+  for (const fixture of ['menu', 'aoc']) {
+    const els = scrape(fixture);
+    const count = els.find(e => /^\d+ MESSAGES?$/.test(e.text || ''));
+    assert.ok(count, fixture + ': the count is read');
+    assert.equal(count.kind, 'button', fixture);
+    assert.equal(count.clickable, true, fixture);
+    assert.ok(count.idx > 0, fixture + ': it can be pressed');
+  }
+});

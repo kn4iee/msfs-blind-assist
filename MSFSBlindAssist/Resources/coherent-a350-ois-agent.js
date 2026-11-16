@@ -847,6 +847,13 @@
           continue;
         }
 
+        // The header's message count ("6 MESSAGES"): a click opens the AOC page, where the messages are (live 2026-11-16).
+        if (A.hasCls(e, 'message-box-count')) {
+          A.own(e);
+          push(e, { kind: 'button', text: A.norm(e.innerText), clickable: true, key: 'button:messages' });
+          continue;
+        }
+
         // The header's EFB dropdown: its chevron opens the page menu.
         if (e.id === 'efb-dropdown-menu-button') {
           A.own(e);
