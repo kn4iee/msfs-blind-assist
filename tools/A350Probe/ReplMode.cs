@@ -19,6 +19,7 @@ internal sealed partial class ProbeForm
     {
         "enter" => Keys.Enter, "back" => Keys.Back, "esc" => Keys.Escape, "f5" => Keys.F5, "." => Keys.OemPeriod, "up" => Keys.Up, "down" => Keys.Down,
         "left" => Keys.Left, "right" => Keys.Right, "pgup" => Keys.PageUp, "pgdn" => Keys.PageDown,
+        "del" => Keys.Delete, "tab" => Keys.Tab, "space" => Keys.Space, "home" => Keys.Home, "end" => Keys.End,
         _ when t.StartsWith("ctrl+", StringComparison.Ordinal) => Keys.Control | WindowKey(t[5..]),
         _ when t.StartsWith("alt+", StringComparison.Ordinal) => Keys.Alt | WindowKey(t[4..]),
         _ when t.Length == 1 && char.IsDigit(t[0]) => Keys.D0 + (t[0] - '0'),
@@ -270,7 +271,14 @@ internal sealed partial class ProbeForm
                             break;
                         case "panel":   // a panel's status display as MSFSBA shows it: its rows' states and lights
                             foreach (var key in (def.GetPanelDisplayVariables().GetValueOrDefault(rest) ?? new List<string>()))
-                                Line($"{vars[key].DisplayName}\t{(def.TryDescribeControlState(key, out var state) ? state : Fmt(_m.GetCachedVariableValue(key)))}");
+                            {
+                                // As the status display shows it: a lamp's "On" or "Off" is its display override (its rule and its bus),
+                                // not the first variable its key streams.
+                                double? value = _m.GetCachedVariableValue(key);
+                                string shown = def.TryDescribeControlState(key, out var state) ? state
+                                    : value is double v && def.TryGetDisplayOverride(key, v, out var over) ? over : Fmt(value);
+                                Line($"{vars[key].DisplayName}\t{shown}");
+                            }
                             break;
                         case "ois":
                         case "fap":
@@ -335,7 +343,7 @@ internal sealed partial class ProbeForm
                             Line($"{verb}\t{rest}");
                             break;
                         }
-                        case "key":   // key TOKEN[ TOKEN]: keys to the top window, as the pilot types them: a digit or ".", enter, back, esc, f5, ctrl+N, alt+N, alt+LETTER, up, down
+                        case "key":   // key TOKEN[ TOKEN]: keys to the top window, as the pilot types them: a digit or ".", a letter, enter, back, del, esc, tab, space, home, end, f5, up, down, left, right, pgup, pgdn, ctrl+ or alt+ any of them
                         {
                             if (Window() is not { } target) { Line("no window"); break; }
                             var process = typeof(Control).GetMethod("ProcessCmdKey", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;

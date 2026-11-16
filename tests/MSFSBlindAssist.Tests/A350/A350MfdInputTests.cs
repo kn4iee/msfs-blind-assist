@@ -85,6 +85,29 @@ public class A350MfdInputTests
         await Assert.ThrowsAsync<ArgumentException>(() => input.MoveCursorAsync(side, "INIT"));
     }
 
+    // Live 2026-11-16 (OMDB, GPS jamming on, a queue of FMS messages): after the CLR key cleared a message INI_MCDU1_CLR stayed 1
+    // while every other KCCU key was back at 0, and each further 1 cleared nothing (the window said "Info cleared" as the message
+    // stayed); a 0 before the 1 cleared one message every time. CLR is a key the aircraft does not reset, so a press holds it
+    // and lets it go [A350-3], as the cursor keys are; every other key stays one write of 1.
+    [Theory]
+    [InlineData("CLR", 0, "INI_MCDU1_CLR")]
+    [InlineData("MAILBOX", 1, "INI_MCDU2_MAILBOX")]
+    [InlineData("ND", 0, "INI_MCDU1_ND")]
+    public void A_key_the_aircraft_does_not_reset_is_held_and_let_go(string key, int side, string lvar)
+    {
+        var (input, log) = Recorded();
+        input.Press(side, key);
+        Assert.Equal(new[] { $"send 1 (>L:{lvar})", "wait 180", $"send 0 (>L:{lvar})" }, log);
+    }
+
+    [Fact]
+    public void A_key_the_aircraft_resets_is_one_write_of_1()
+    {
+        var (input, log) = Recorded();
+        input.Press(0, "ENTER");
+        Assert.Equal(new[] { "send 1 (>L:INI_MCDU1_ENTER)" }, log);
+    }
+
     [Fact]
     public async Task An_action_with_nothing_typed_only_clicks()
     {

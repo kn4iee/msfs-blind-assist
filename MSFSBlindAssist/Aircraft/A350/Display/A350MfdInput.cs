@@ -5,8 +5,8 @@ using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft.A350.Display;
 
-/// <summary>The KCCU's keys: the L:var each side's key presses (one write of 1; the aircraft resets it), and
-/// which keys type a text.</summary>
+/// <summary>The KCCU's keys: the L:var each side's key presses (one write of 1, which the aircraft resets, but for the
+/// <see cref="HeldKeys"/>), and which keys type a text.</summary>
 public static class A350Kccu
 {
     /// <summary>The page and function keys besides letters and digits (from the module's own names).</summary>
@@ -18,6 +18,11 @@ public static class A350Kccu
     };
 
     public static string LVar(int side, string key) => $"INI_MCDU{side + 1}_{key}";
+
+    /// <summary>The keys the aircraft does not reset after a press, so each press is held and let go [A350-3]: the cursor keys
+    /// (ND, MFD, MAILBOX) and CLR (live 2026-11-16: after CLR cleared an FMS message INI_MCDU1_CLR stayed 1 while every other key
+    /// was back at 0, and each further 1 cleared nothing until a 0 went before it).</summary>
+    public static readonly IReadOnlySet<string> HeldKeys = new HashSet<string>(StringComparer.Ordinal) { "CLR", "ND", "MFD", "MAILBOX" };
 
     /// <summary>The keys that type <paramref name="text"/>, or null when a character has no key.</summary>
     public static IReadOnlyList<string>? KeysFor(string text)
@@ -137,12 +142,21 @@ public sealed class A350MfdInput
         Log.Warn("A350Display", "MFD input: " + why);
     }
 
-    /// <summary>Presses a side's KCCU key once: a page or function key the aircraft resets itself. The cursor keys (ND,
-    /// MFD) are not reset by it: <see cref="MoveCursorAsync"/> moves the cursor.</summary>
+    /// <summary>Presses a side's KCCU key once: one write of 1 for a key the aircraft resets itself, and a 1 held about 180 ms
+    /// then let go for one it does not (<see cref="A350Kccu.HeldKeys"/>), in the background, the 1 at once. To move the cursor
+    /// before a click, await <see cref="MoveCursorAsync"/>.</summary>
     public void Press(int side, string key)
     {
         Log.Debug("A350Display", $"KCCU {side + 1}: {key}");
         SendKey(side, key);
+        if (A350Kccu.HeldKeys.Contains(key))
+            _ = ReleaseAsync(side, key);
+    }
+
+    private async Task ReleaseAsync(int side, string key)
+    {
+        try { await _delay(MfdKeyHoldMs, CancellationToken.None).ConfigureAwait(false); }
+        finally { _send($"0 (>L:{A350Kccu.LVar(side, key)})"); }
     }
 
     private void SendKey(int side, string key) => _send($"1 (>L:{A350Kccu.LVar(side, key)})");
