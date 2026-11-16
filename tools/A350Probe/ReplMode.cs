@@ -56,9 +56,10 @@ internal sealed partial class ProbeForm
             bool first = !baseline.TryGetValue(e.VarName, out var was);
             baseline[e.VarName] = e.Value;
             if (first || Math.Abs(was - e.Value) < 0.001) return;
-            string word = d.ValueDescriptions.TryGetValue(e.Value, out var w) ? w : Fmt(e.Value);
+            // The words MainForm's generic path says, composed as the app composes them (a spoken-only word, the SD's Cruise, too:
+            // the probe said "System display page: 13" where the app says "Cruise", 2026-11-16).
             if (!settings.A350DisabledMonitorVariablesSet.Contains(e.VarName))
-                cap.Announce($"[generic] {d.DisplayName}: {word}");
+                cap.Announce($"[generic] {_m.FormatVariableValue(e.VarName, d, e.Value)}");
         };
 
         using var service = new A350DisplayService();
