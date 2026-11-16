@@ -113,3 +113,16 @@ test('the header message count is a button', () => {
     assert.ok(count.idx > 0, fixture + ': it can be pressed');
   }
 });
+
+// Live 2026-11-16 (OMDB): AUTOSAVE's custom saves read "P17 RWY04", "EDIT", "DELETE", eight times over, so a pilot tabbing
+// heard EDIT and DELETE without the save they act on. Each row's EDIT and DELETE carry its save's name, as a row's buttons do.
+test('a custom save\'s EDIT and DELETE name their save', () => {
+  const els = texts(scrape('autosave_create_128'));
+  for (const save of ['P05 RWY04', 'P04 GATE', 'P02 FL200']) {
+    const at = els.indexOf(save);
+    assert.ok(at >= 0, save);
+    assert.equal(els[at + 1], save + ': EDIT');
+    assert.equal(els[at + 2], save + ': DELETE');
+  }
+  assert.ok(!els.includes('EDIT') && !els.includes('DELETE'), 'no bare EDIT or DELETE');
+});

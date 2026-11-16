@@ -782,6 +782,13 @@
             push(e, { kind: 'button', text: sync, clickable: true, disabled: A.isDisabled(e), key: 'button:' + bt });
             continue;
           }
+          // AUTOSAVE's custom saves: each row's EDIT and DELETE act on the save named first in the row (live 2026-11-16).
+          var saveRow = e.closest && e.closest('.save-entry'), saveBtn = saveRow && saveRow.querySelector('button');
+          if (saveBtn && saveBtn !== e) {
+            var saveName = A.buttonText(saveBtn);
+            push(e, { kind: 'button', text: saveName + ': ' + bt, clickable: true, disabled: A.isDisabled(e), key: 'button:' + saveName + ': ' + bt });
+            continue;
+          }
           var above = A.headingAbove(e);
           if (above) {
             // A unit toggle: each press steps it, so its label carries the value and speaks again.
