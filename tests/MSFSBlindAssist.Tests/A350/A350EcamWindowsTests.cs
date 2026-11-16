@@ -84,7 +84,7 @@ public class A350EcamWindowsTests
         var def = new IniBuildsA350Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
         def.Attach(new SimConnect.SimConnectManager(IntPtr.Zero));
         var ctr = A350Fixtures.Capture("ctr_sd_page_3.json");
-        Assert.Equal(Lines(A350EwdText.Build(ctr, 3)), def.EwdFeed().Read(ctr, 0));
+        Assert.Equal(Lines(A350EwdText.Build(ctr)), def.EwdFeed().Read(ctr, 0));
         Assert.Equal(Lines(A350SdText.Build(ctr, 3)), def.SdFeed().Read(ctr, 0));
         Assert.Null(def.SdFeed().Unread!(ctr, 0));
     }
@@ -120,7 +120,7 @@ public class A350EcamWindowsTests
         var fuel = A350Fixtures.Capture("ctr_sd_page_8.json");
         var def = WithPage(3);   // the variable still says ELEC DC
         Assert.Equal(Lines(A350SdText.Build(fuel, 8)), def.SdFeed().Read(fuel, 0));
-        Assert.Equal(Lines(A350EwdText.Build(fuel, 8)), def.EwdFeed().Read(fuel, 0));
+        Assert.Equal(Lines(A350EwdText.Build(fuel)), def.EwdFeed().Read(fuel, 0));
     }
 
     // STATUS chosen with nothing to say draws the CRUISE page: the variable's STATUS stands, said "showing the Cruise page".
@@ -177,7 +177,7 @@ public class A350EcamWindowsTests
         Press(def, "A350_ECAM_ENG");
         Assert.Equal(Lines(A350SdText.Build(status, 14)), sd.Read(status, 0));   // the draw has not changed yet
         Assert.Equal(Lines(A350SdText.Build(engine, 1)), sd.Read(engine, 0));
-        Assert.Equal(Lines(A350EwdText.Build(engine, 1)), def.EwdFeed().Read(engine, 0));
+        Assert.Equal(Lines(A350EwdText.Build(engine)), def.EwdFeed().Read(engine, 0));
         now = 1500;
         Assert.Equal(Lines(A350SdText.Build(engine, 14)), sd.Read(engine, 0));
     }

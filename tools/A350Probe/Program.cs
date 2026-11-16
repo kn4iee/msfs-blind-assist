@@ -385,7 +385,8 @@ internal sealed partial class ProbeForm : Form
             if (ctr is { Ok: true } && Environment.GetEnvironmentVariable("A350_DRAW_JSON") is { } jsonDir)   // a fixture, sim asks answered
                 DisplayModes.SaveNew(Path.Combine(jsonDir, "CTR_0.json"), System.Text.Json.JsonSerializer.Serialize(ctr));
             if (ctr is { Ok: true })
-                foreach (var line in MSFSBlindAssist.Aircraft.A350.Display.A350EwdText.Build(ctr, _m!.GetCachedVariableValue("A350_SD_PAGE"))
+                foreach (var line in (MSFSBlindAssist.Aircraft.A350.Display.A350EwdText.Build(ctr)
+                             + (_m!.GetCachedVariableValue("A350_SD_PAGE") is double sdPage ? "\n" + MSFSBlindAssist.Aircraft.A350.Display.A350SdText.Build(ctr, sdPage) : ""))
                              .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
                     Line("  " + line);
         }

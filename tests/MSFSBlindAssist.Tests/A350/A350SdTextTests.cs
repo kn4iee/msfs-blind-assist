@@ -38,8 +38,7 @@ public class A350SdTextTests
         int pump = lines.IndexOf("Engine 1 green pump: LO, amber");
         Assert.True(pressure > 0 && pump > pressure);
         Assert.True(pump < lines.IndexOf("Permanent data:"));
-        var ewd = A350EwdText.Build(Fixture("ctr_sdsym_8"), 8).Split('\n');
-        Assert.Contains("Crossfeed A valve: closed, green", ewd);
+        Assert.Contains("Crossfeed A valve: closed, green", A350SdText.Build(Fixture("ctr_sdsym_8"), 8).Split("\r\n"));
     }
 
     [Fact]

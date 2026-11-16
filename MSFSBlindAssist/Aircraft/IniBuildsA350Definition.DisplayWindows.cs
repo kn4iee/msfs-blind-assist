@@ -98,8 +98,9 @@ public partial class IniBuildsA350Definition
         return A350.Display.A350SdText.PageToRead(drawn, variable, stands);
     }
 
-    /// <summary>The E/WD window's feed: the CTR as <c>A350EwdText</c> reads it, its SD section by the page its draw shows.</summary>
-    internal Forms.A350.A350DisplayFeed EwdFeed() => CtrFeed(c => A350.Display.A350EwdText.Build(c, CtrView(c), SdPageToRead(c)));
+    /// <summary>The E/WD window's feed: the upper display as <c>A350EwdText</c> reads it (the engine block, the mailbox and the warning display;
+    /// the SD page and permanent data are the SD window's).</summary>
+    internal Forms.A350.A350DisplayFeed EwdFeed() => CtrFeed(c => A350.Display.A350EwdText.FromView(c, CtrView(c)));
 
     /// <summary>The SD window's feed: the page its draw shows as <c>A350SdText</c> reads it; "not read yet" while neither the draw shown
     /// nor the variable names a page (never a guessed page, re-review M3/M4: judged on the draw shown, so a press's fresh draw that names

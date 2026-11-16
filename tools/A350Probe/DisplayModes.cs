@@ -81,7 +81,8 @@ internal static class DisplayModes
             if (ctr is { Ok: true })
             {
                 double? page = File.ReadLines(read).Select(l => l.Trim()).Where(pages.ContainsKey).Select(l => (double?)pages[l]).FirstOrDefault();
-                o.AddRange(A350EwdText.Build(ctr, page).Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).Select(l => "  " + l));
+                string both = A350EwdText.Build(ctr) + (page is double p ? "\n" + A350SdText.Build(ctr, p) : "");   // the SD as the SD window reads it
+                o.AddRange(both.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries).Select(l => "  " + l));
             }
             File.WriteAllLines(Path.Combine(dir, "reread.txt"), o);
             rounds++;
@@ -312,7 +313,7 @@ internal static class DisplayModes
             // `A350_SD=<page>`: also the engine display and that SD page as MSFSBA reads them.
             if (double.TryParse(Environment.GetEnvironmentVariable("A350_SD"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sd))
             {
-                Console.WriteLine(A350EwdText.Build(caps[0], sd));
+                Console.WriteLine(A350EwdText.Build(caps[0]));
                 Console.WriteLine(A350SdText.Build(caps[0], sd));
             }
         }

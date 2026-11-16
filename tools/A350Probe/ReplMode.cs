@@ -264,7 +264,8 @@ internal sealed partial class ProbeForm
                         }
                         case "ewd":
                             if (await Draw("CTR", 0) is { } ctr)
-                                foreach (var line in A350EwdText.Build(ctr, _m.GetCachedVariableValue("A350_SD_PAGE")).Split('\n', StringSplitOptions.RemoveEmptyEntries)) Line(line);
+                                foreach (var line in (A350EwdText.Build(ctr) + (_m.GetCachedVariableValue("A350_SD_PAGE") is double sdPage ? "\n" + A350SdText.Build(ctr, sdPage) : ""))
+                                             .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)) Line(line);
                             else Line("no draw");
                             break;
                         case "panel":   // a panel's status display as MSFSBA shows it: its rows' states and lights

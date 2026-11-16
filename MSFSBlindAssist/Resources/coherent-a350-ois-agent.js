@@ -263,6 +263,9 @@
 
   A.cls = function (e) { return typeof e.className === 'string' ? e.className : ''; };
   A.hasCls = function (e, c) { return (' ' + A.cls(e) + ' ').indexOf(' ' + c + ' ') >= 0; };
+  // A button the OIS will not act on: disabled, or drawn greyed with no attribute (FLT OPS MENU's OPS LIBRARY,
+  // menu-button-disabled).
+  A.isDisabled = function (e) { return e.disabled === true || A.hasCls(e, 'menu-button-disabled'); };
 
   A.owned = function (e) {
     for (var p = e; p && p !== document.body; p = p.parentElement)
@@ -514,6 +517,60 @@
     return h && /^H[1-6]$/.test(h.tagName) ? A.norm(h.innerText) : '';
   };
 
+  // The page's elements in the order a pilot reads the screen, from the document's order (a NodeList). Two parts are drawn
+  // elsewhere than the document puts them (live 2026-11-16, 1.2.8):
+  // - the shortcut bar (#bottom-bar) runs along the bottom of the screen, under the page, but comes before the page in the
+  //   document: read last, every page opened with eight navigation buttons before its title;
+  // - GROUND's door map (#door-map): the aircraft picture with its colour key above it and a clickspot on each door, and the
+  //   PUSHBACK and GROUND EQUIP blocks on its right, PUSHBACK above; in the document GROUND EQUIP comes first and the doors
+  //   last. Its children read column by column (the picture's, then the one right of it), each top to bottom; with nothing
+  //   placed (every rect alike) the document's order stands. The document index breaks every tie: Coherent's sort is not
+  //   stable.
+  A.readingOrder = function (all) {
+    var list = Array.prototype.slice.call(all), n;
+    var map = document.getElementById('door-map'), pic = document.getElementById('door-map-image');
+    var start = map && pic && A.visible(pic) ? list.indexOf(map) + 1 : 0;
+    if (start > 0) {
+      // The map's elements follow it in the document, each under one of its children: group them by that child, then lay
+      // the groups out as drawn.
+      var end = start;
+      while (end < list.length && map.contains(list[end])) end++;
+      var edge = pic.getBoundingClientRect().right, kids = [], group = [];
+      for (n = 0; n < map.children.length; n++) {
+        var r = map.children[n].getBoundingClientRect();
+        kids.push({ n: n, band: r.left >= edge ? 1 : 0, top: r.top, left: r.left });
+        group.push([]);
+      }
+      for (var j = start; j < end; j++) {
+        var top = list[j];
+        while (top.parentElement !== map) top = top.parentElement;
+        group[Array.prototype.indexOf.call(map.children, top)].push(list[j]);
+      }
+      kids.sort(function (a, b) { return a.band - b.band || a.top - b.top || a.left - b.left || a.n - b.n; });
+      var laid = [];
+      for (n = 0; n < kids.length; n++) laid = laid.concat(group[kids[n].n]);
+      list = list.slice(0, start).concat(laid, list.slice(end));
+    }
+    var bar = document.getElementById('bottom-bar');
+    if (bar) {
+      var inBar = function (el) { return el === bar || bar.contains(el); };
+      list = list.filter(function (el) { return !inBar(el); }).concat(list.filter(inBar));
+    }
+    return list;
+  };
+
+  // T.O PERF's and LDG PERF's SYNC keys, said with what they fill (Gus, 2026-11-16: "it's not really clear what that sync
+  // button does"). The A350 manual 1.5: SYNC "inserts the current conditions (live METAR) and take off weight", SYNC FMS
+  // the airport and runway the FMS holds, SYNC SIMBRIEF SimBrief's; LDG PERF's "work in the same manner" for the arrival.
+  A.SYNC_NAMES = {
+    'T.O PERF': { 'SYNC': 'SYNC: the conditions from the latest METAR, and the take-off weight',
+      'SYNC FMS': 'SYNC FMS: the departure airport and runway from the FMS',
+      'SYNC SIMBRIEF': 'SYNC SIMBRIEF: the departure airport and runway from SimBrief' },
+    'LDG PERF': { 'SYNC': 'SYNC: the conditions from the latest METAR, and the landing weight',
+      'SYNC FMS': 'SYNC FMS: the arrival airport and runway from the FMS',
+      'SYNC SIMBRIEF': 'SYNC SIMBRIEF: the arrival airport and runway from SimBrief' }
+  };
+
   A.collectPage = function () {
     try {
       var all = document.body.querySelectorAll('*');
@@ -544,8 +601,9 @@
         out.push(item);
       };
 
-      for (i = 0; i < all.length; i++) {
-        e = all[i];
+      var walk = A.readingOrder(all);
+      for (i = 0; i < walk.length; i++) {
+        e = walk[i];
         if (A.owned(e) || !A.visible(e)) continue;
         var tag = e.tagName;
         var own = A.ownText(e);
@@ -716,20 +774,25 @@
           if (!bt) continue;
           // The open EFB dropdown's pages: five share a name with the bottom bar's (LOADSHEET, T.O PERF, ...).
           if (e.closest && e.closest('#efb-dropdown-menu-content')) {
-            push(e, { kind: 'button', text: 'EFB menu: ' + bt, clickable: true, disabled: e.disabled === true, key: 'menu:' + bt });
+            push(e, { kind: 'button', text: 'EFB menu: ' + bt, clickable: true, disabled: A.isDisabled(e), key: 'menu:' + bt });
+            continue;
+          }
+          var sync = A.SYNC_NAMES[page] && A.SYNC_NAMES[page][bt];
+          if (sync) {
+            push(e, { kind: 'button', text: sync, clickable: true, disabled: A.isDisabled(e), key: 'button:' + bt });
             continue;
           }
           var above = A.headingAbove(e);
           if (above) {
             // A unit toggle: each press steps it, so its label carries the value and speaks again.
-            push(e, { kind: 'button', text: above + ': ' + bt, clickable: true, disabled: e.disabled === true,
+            push(e, { kind: 'button', text: above + ': ' + bt, clickable: true, disabled: A.isDisabled(e),
               key: 'cycler:' + above, announceChange: true });
             continue;
           }
           var rowName = A.buttonRowName(e);
           if (rowName) {
             // It opens the OIS's options pop-up, so it is a plain button named by its row.
-            push(e, { kind: 'button', text: rowName + ': ' + bt, clickable: true, disabled: e.disabled === true, key: 'button:' + rowName });
+            push(e, { kind: 'button', text: rowName + ': ' + bt, clickable: true, disabled: A.isDisabled(e), key: 'button:' + rowName });
             continue;
           }
           if (A.hasCls(e, 'failure-button')) {
@@ -740,34 +803,36 @@
           }
           var ct = A.cardTitle(e);
           if (ct) {
-            push(e, { kind: 'button', text: ct + ': ' + bt, clickable: true, disabled: e.disabled === true, key: 'button:' + ct, announceChange: true });
+            push(e, { kind: 'button', text: ct + ': ' + bt, clickable: true, disabled: A.isDisabled(e), key: 'button:' + ct, announceChange: true });
             continue;
           }
           var tg = A.sidebarToggle(e, bt);
           if (tg) {
-            push(e, { kind: 'button', text: tg.name + ': ' + tg.state, clickable: true, disabled: e.disabled === true, key: 'button:' + tg.name, announceChange: true });
+            push(e, { kind: 'button', text: tg.name + ': ' + tg.state, clickable: true, disabled: A.isDisabled(e), key: 'button:' + tg.name, announceChange: true });
             continue;
           }
-          // A button showing a list beside it (PANEL STATES' presets, SET FUEL's refuel kinds).
+          // A button showing a list beside it (PANEL STATES' presets, SET FUEL's refuel kinds): the two alone together. The OFP's
+          // Text + and Text - stand beside its section list but do not open it (live 2026-11-16).
           var lst = e.nextElementSibling, expKey = 'exp:' + page + '|' + bt;
-          if (A.isButtonList(lst) && (A.hasCls(lst, 'd-none') || A.memo[expKey])) {
+          if (!e.previousElementSibling && A.isButtonList(lst) && !lst.nextElementSibling
+              && (A.hasCls(lst, 'd-none') || A.memo[expKey])) {
             A.memo[expKey] = 1;   // its list is hidden by d-none: an expander, also once open
             push(e, { kind: 'button', text: bt + (A.visible(lst) ? ' (expanded)' : ' (collapsed)'), clickable: true,
-              disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
+              disabled: A.isDisabled(e), key: 'button:' + bt, announceChange: true });
             continue;
           }
           var active = A.hasCls(e, 'active'), bs = A.buttonState(e, bt);
           if (bs) {
-            push(e, { kind: 'button', text: bt + ': ' + bs, clickable: true, disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
+            push(e, { kind: 'button', text: bt + ': ' + bs, clickable: true, disabled: A.isDisabled(e), key: 'button:' + bt, announceChange: true });
             continue;
           }
           // Painted by the OIS with no known meaning: its colour, as a sighted pilot sees it.
           var paint = A.colourWord(e.style.backgroundColor) || A.colourWord((/^\s*([a-z]+|#[0-9a-f]{6}|rgba?\([^)]*\))/i.exec(e.style.background || '') || [])[1]);
           if (paint && paint !== 'black' && paint !== 'white') {
-            push(e, { kind: 'button', text: bt + ' (' + paint + ')', clickable: true, disabled: e.disabled === true, key: 'button:' + bt, announceChange: true });
+            push(e, { kind: 'button', text: bt + ' (' + paint + ')', clickable: true, disabled: A.isDisabled(e), key: 'button:' + bt, announceChange: true });
             continue;
           }
-          push(e, { kind: 'button', text: bt + (active ? ' (selected)' : ''), clickable: true, disabled: e.disabled === true, key: 'button:' + bt });
+          push(e, { kind: 'button', text: bt + (active ? ' (selected)' : ''), clickable: true, disabled: A.isDisabled(e), key: 'button:' + bt });
           continue;
         }
 

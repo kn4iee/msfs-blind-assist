@@ -1,8 +1,9 @@
 namespace MSFSBlindAssist.Forms.A350;
 
 /// <summary>
-/// The E/WD's window ("A350 E/WD", output Alt+E; plan 26), as the Fenix's: the CTR as the pilot sees it, the engine block, the warning
-/// display with its cursor and action boxes, the SD and the permanent data, each line with its colours (<c>A350EwdText</c>), then the
+/// The E/WD's window ("A350 E/WD", output Alt+E; plan 26), as the Fenix's: the upper display as the pilot sees it, the engine block, the
+/// mailbox and the warning display with its cursor and action boxes, each line with its colours (<c>A350EwdText</c>; the SD page and the
+/// permanent data are the SD window's, Gus 2026-11-16), then the
 /// ECAM control panel's keys that act on the warning display, each the panel's own row: T.O CONFIG, each pilot's CLEAR, RCL LAST and
 /// ALL, EMER CANC with its guard, ABN and DEFRD PROC, each pilot's C/L, MORE, DISPATCH and each pilot's wheel. The SD's page keys are
 /// the SD window's (<see cref="A350SdWindow"/>). A class of its own: windows are tracked one per type.
