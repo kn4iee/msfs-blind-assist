@@ -22,6 +22,7 @@ public class FirstOfficerWindowsTests
         ["TFDI_MD11"] = "TFDi MD-11 First Officer",
         ["HS_787"] = null,
         ["INI_A350"] = "iniBuilds A350 First Officer",
+        ["BBS_757"] = "BlueBird 757 First Officer",
     };
 
     [Theory]

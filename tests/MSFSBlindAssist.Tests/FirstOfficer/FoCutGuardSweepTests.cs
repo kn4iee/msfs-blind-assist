@@ -12,6 +12,7 @@ using A380State = MSFSBlindAssist.FirstOfficer.FBWA380.FbwA380StateEvaluator;
 using FenixState = MSFSBlindAssist.FirstOfficer.Fenix.FenixStateEvaluator;
 using IFlyState = MSFSBlindAssist.FirstOfficer.IFly737.IFly737StateEvaluator;
 using Md11State = MSFSBlindAssist.FirstOfficer.MD11.Md11FoStateEvaluator;
+using B757State = MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoStateEvaluator;
 using Pmdg737State = MSFSBlindAssist.FirstOfficer.PMDG737.AircraftStateEvaluator;
 using Pmdg777State = MSFSBlindAssist.FirstOfficer.AircraftStateEvaluator;
 
@@ -238,6 +239,23 @@ public class FoCutGuardSweepTests
         },
         () => new Md11State());
 
+    private static Profile<MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoActionExecutor, B757State> Bbs757() => new("BlueBird 757",
+        MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoChecklistDefinitions.Build(),
+        MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoFlowDefinitions.Build(),
+        (g, r) =>
+        {
+            // The 757's battery also needs the APU stopped and external power off (E199): its parked state
+            // reads both, so "parked" is the whole aircraft shut down, as for every other cut.
+            var s = new B757State();
+            s.SetSimConnect(SeededSimConnectCache.With(Seeds(g, r)
+                .Append((MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoKeys.ApuState, 0.0))
+                .Append((MSFSBlindAssist.FirstOfficer.BBS757.Bbs757FoKeys.ExtPwrOn, 0.0)).ToArray()));
+            double n2 = r ? 60 : 0;
+            s.SetEngineN2(n2, n2);
+            return s;
+        },
+        () => new B757State());
+
     [Fact]
     public void A320_family() // the A32NX, its Headwind A330 duplicate and the Fenix: one rule for all three
     {
@@ -264,6 +282,9 @@ public class FoCutGuardSweepTests
 
     [Fact]
     public void Tfdi_MD11() => Sweep(Md11());
+
+    [Fact]
+    public void BlueBird_757() => Sweep(Bbs757());
 
     // ---- The flows that power the aircraft down or set it up cold open with BOTH guards ---------
 
@@ -300,6 +321,7 @@ public class FoCutGuardSweepTests
         AssertOpensWithGroundAndEnginesGuards(IFly737().Flows, "SECURE", "iFly 737");
         AssertOpensWithGroundAndEnginesGuards(Pmdg777().Flows, "SECURE", "PMDG 777");
         AssertOpensWithGroundAndEnginesGuards(Md11().Flows, "SHUTDOWN", "MD-11");
+        AssertOpensWithGroundAndEnginesGuards(Bbs757().Flows, "SECURE", "BlueBird 757");
     }
 
     [Fact]
@@ -313,6 +335,10 @@ public class FoCutGuardSweepTests
         AssertOpensWithGroundAndEnginesGuards(A380().Flows, "COCKPIT_PREP", "A380");
         AssertOpensWithGroundAndEnginesGuards(A350().Flows, "COCKPIT_PREP", "A350");
         AssertOpensWithGroundAndEnginesGuards(Md11().Flows, "POWER_UP", "MD-11");
+        // The 757's Power Up checks the fuel controls CUTOFF and the electric hydraulic pumps OFF, and its
+        // Preflight switches the fuel pumps off: cold and dark only.
+        AssertOpensWithGroundAndEnginesGuards(Bbs757().Flows, "POWER_UP", "BlueBird 757");
+        AssertOpensWithGroundAndEnginesGuards(Bbs757().Flows, "PREFLIGHT", "BlueBird 757");
         // The 737 Preflights switch the fuel pumps off: cold and dark only, like the 777's
         // Cockpit Preparation and Electrical Power Up (hydraulic pumps, fuel controls).
         AssertOpensWithGroundAndEnginesGuards(MSFSBlindAssist.FirstOfficer.PMDG737.PMDG737FlowDefinitions.Build(), "PREFLIGHT", "PMDG 737");

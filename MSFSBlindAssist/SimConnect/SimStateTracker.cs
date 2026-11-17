@@ -60,7 +60,8 @@ public sealed class SimStateTracker
     // announcements for a whole session. Volatile: SimConnectManager.FlightRunning is read off the UI thread.
     private volatile bool _simRunning = true;
 
-    /// <summary>Whether a flight runs, by the last "Sim" event (true until one says otherwise).</summary>
+    /// <summary>Whether a flight runs, by the last "Sim" event: false while no flight runs (the menus, a flight's
+    /// load); true until one says otherwise.</summary>
     public bool SimRunning => _simRunning;
 
     /// <summary>Forgets every state: the next delivery of each signal seeds silently. Call per connection.</summary>

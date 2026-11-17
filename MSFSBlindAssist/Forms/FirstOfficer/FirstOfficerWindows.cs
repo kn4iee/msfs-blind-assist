@@ -49,6 +49,8 @@ public static class FirstOfficerWindows
             (md11, sc, a, s) => Window(new Fo.MD11.Md11FoProfile(md11), sc, a, s)),
         [IniBuildsA350Definition.Code] = Of<IniBuildsA350Definition>("iniBuilds A350 First Officer",
             (a350, sc, a, s) => Window(new Fo.A350.A350FoProfile(a350, a), sc, a, s)),
+        ["BBS_757"] = Of<BBS757Definition>("BlueBird 757 First Officer",
+            (b757, sc, a, s) => Window(new Fo.BBS757.Bbs757FoProfile(b757, a), sc, a, s)),
     };
 
     private static Row? RowFor(IAircraftDefinition? aircraft) =>

@@ -25,6 +25,7 @@
         private System.Windows.Forms.ToolStripMenuItem ifly737MaxMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem tfdiMd11MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem iniBuildsA350MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem bbs757MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem extrasMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem volantaMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem helpMenuItem = null!;
@@ -68,6 +69,7 @@
             this.ifly737MaxMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.tfdiMd11MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.iniBuildsA350MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.bbs757MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.extrasMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.volantaMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.helpMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -215,6 +217,7 @@
             this.horizonSim787MenuItem,
             this.ifly737MaxMenuItem,
             this.tfdiMd11MenuItem,
+            this.bbs757MenuItem,
             this.iniBuildsA350MenuItem});
             this.aircraftMenuItem.Name = "aircraftMenuItem";
             this.aircraftMenuItem.Size = new System.Drawing.Size(75, 24);
@@ -319,6 +322,16 @@
             this.iniBuildsA350MenuItem.Text = "iniBuilds Airbus A3&50";
             this.iniBuildsA350MenuItem.Checked = false;
             this.iniBuildsA350MenuItem.Click += new System.EventHandler(this.IniBuildsA350MenuItem_Click);
+            //
+            // bbs757MenuItem
+            //
+            this.bbs757MenuItem.AccessibleName = "BlueBird 757-200";
+            this.bbs757MenuItem.AccessibleDescription = "Switch to the BlueBird 757-200";
+            this.bbs757MenuItem.Name = "bbs757MenuItem";
+            this.bbs757MenuItem.Size = new System.Drawing.Size(240, 26);
+            this.bbs757MenuItem.Text = "&BlueBird 757-200";
+            this.bbs757MenuItem.Checked = false;
+            this.bbs757MenuItem.Click += new System.EventHandler(this.BBS757MenuItem_Click);
             //
             // extrasMenuItem
             //

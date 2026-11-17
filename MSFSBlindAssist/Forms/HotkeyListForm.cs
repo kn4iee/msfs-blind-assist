@@ -141,7 +141,8 @@ public partial class HotkeyListForm : Form
             { "HS_787", "HS787_Hotkeys.txt" },
             { "IFLY_737MAX8", "iFly_737MAX8_Hotkeys.txt" },
             { "TFDI_MD11", "TFDi_MD11_Hotkeys.txt" },
-            { "INI_A350", "iniBuilds_A350_Hotkeys.txt" }
+            { "INI_A350", "iniBuilds_A350_Hotkeys.txt" },
+            { "BBS_757", "BBS757_Hotkeys.txt" }
         };
 
         // Determine which file to load

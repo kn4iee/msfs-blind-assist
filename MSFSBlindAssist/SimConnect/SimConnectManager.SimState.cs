@@ -14,8 +14,8 @@ public partial class SimConnectManager
 {
     private readonly SimStateTracker _simState = new();
 
-    /// <summary>Whether a flight runs, from the "Sim" system event (true until it says otherwise); safe to read from
-    /// any thread.</summary>
+    /// <summary>Whether a flight runs, from the "Sim" system event: false while no flight runs (the menus, a
+    /// flight's load), true until it says otherwise; safe to read from any thread.</summary>
     public bool FlightRunning => _simState.SimRunning;
 
     /// <summary>A pause or slew change worth speaking, raised on the UI thread. Never raised for the
