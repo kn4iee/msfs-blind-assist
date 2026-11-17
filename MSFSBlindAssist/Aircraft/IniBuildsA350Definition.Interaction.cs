@@ -215,29 +215,49 @@ public partial class IniBuildsA350Definition
             return A350WriteOutcome.Unavailable;
         }
         if (field == A350TypedEntry.IsisQnh && isisStd == null && IsisDrawPending())
-            _ = IsisTypedAfterDrawAsync(row, field, value, Read, sim, announcer);
+        {
+            int run = ++_nextRunId;   // the row's run from now: a newer entry, waiting or not, supersedes this one while it waits
+            _latestRunByRow[row.Key] = run;
+            _ = IsisTypedAfterDrawAsync(row, field, value, run, Read, sim, announcer);
+        }
         else
             _ = TypedAsync(row, value, plan, Read, sim, announcer);
         return A350WriteOutcome.Sent;
     }
 
     /// <summary>The ISIS QNH typed just after MSFSBA pressed a key that moves the ISIS's STD: planned again, and refused or sent, once the
-    /// ISIS is drawn since (<see cref="IsisOnStdSettledAsync"/>; review 2026-11-17: writing blind could read back unchanged).</summary>
-    private async Task IsisTypedAfterDrawAsync(A350PlacedRow row, A350TypedField field, double value, Func<string, double?> read,
+    /// ISIS is drawn since (<see cref="IsisOnStdSettledAsync"/>; review 2026-11-17: writing blind could read back unchanged). Stands down
+    /// quietly when a newer entry took the row or the aircraft went while it waited (review 3).</summary>
+    private async Task IsisTypedAfterDrawAsync(A350PlacedRow row, A350TypedField field, double value, int run, Func<string, double?> read,
         SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
-        if (await IsisOnStdSettledAsync() == true)
+        try
         {
-            announcer.Announce(A350BaroEntry.IsisOnStdNotice);
-            return;
+            bool? onStd = await IsisOnStdSettledAsync();
+            if (_disposed || _latestRunByRow.GetValueOrDefault(row.Key) != run)
+                return;
+            if (onStd == true)
+            {
+                announcer.Announce(A350BaroEntry.IsisOnStdNotice);
+                return;
+            }
+            var plan = A350TypedEntry.Plan(field, value, read);   // leaving STD brings back the setting underneath
+            if (plan.Refusal != null)
+            {
+                announcer.Announce(plan.Refusal);
+                return;
+            }
+            if (!CanLand(sim))
+            {
+                announcer.Announce($"{row.Name} unavailable");
+                return;
+            }
+            await TypedAsync(row, value, plan, read, sim, announcer);
         }
-        var plan = A350TypedEntry.Plan(field, value, read);   // leaving STD brings back the setting underneath
-        if (plan.Refusal != null)
+        catch (Exception ex)
         {
-            announcer.Announce(plan.Refusal);
-            return;
+            Log.Warn("A350", $"The ISIS QNH entry after the ISIS's draw failed: {ex.Message}");
         }
-        await TypedAsync(row, value, plan, read, sim, announcer);
     }
 
     /// <param name="echoRows">The rows whose windows this run can move, when more than its own (a linked entry's copies).</param>
@@ -385,9 +405,10 @@ public partial class IniBuildsA350Definition
 
     private bool? IsisOnStd() => IsisStdRead != null ? IsisStdRead() : A350BaroEntry.IsisOnStd(DisplayLines(SfdDisplay, sincePress: true));
 
-    /// <summary>How long an ISIS entry waits, after MSFSBA pressed a key that moves the ISIS's STD, for the ISIS drawn since (it is drawn
-    /// every other tick, a second apart).</summary>
-    internal const int IsisStdWaitMs = 2500;
+    /// <summary>How long an ISIS entry waits at most, after MSFSBA pressed a key that moves the ISIS's STD, for the ISIS drawn since: the
+    /// monitor draws it every tick while a press waits (500 ms plus the copy and the draws, a tick about 1.2 s with a large memory), the
+    /// first draw counting 600 ms after the press; the bound is for a reader that stalled (review 2026-11-17, 3).</summary>
+    internal const int IsisStdWaitMs = 6000;
 
     /// <summary>Whether the ISIS has a draw, but none since MSFSBA's last press of a key that moves its STD.</summary>
     private bool IsisDrawPending() => IsisStdRead == null && DisplayPanels.FirstOrDefault(d => d.Key == SfdDisplay) is { } sfd
@@ -414,7 +435,16 @@ public partial class IniBuildsA350Definition
         _sim = sim;
         int entry = ++_baroEntry, pulls = _baroPulls;
         double? Read(string name) => Cached(sim, KeyForInput(name));
-        var plan = A350BaroEntry.Plan(typed, Read, await IsisOnStdSettledAsync());
+        bool? isisStd;
+        try { isisStd = await IsisOnStdSettledAsync(); }
+        catch (Exception ex)
+        {
+            Log.Warn("A350", $"The altimeter entry's ISIS read failed: {ex.Message}");
+            isisStd = null;
+        }
+        if (_disposed || entry != _baroEntry)
+            return;   // a newer entry, or the aircraft gone, while it waited for the ISIS (review 2026-11-17, 3)
+        var plan = A350BaroEntry.Plan(typed, Read, isisStd);
         if (plan.Refusal != null)
         {
             announcer.Announce(plan.Refusal);

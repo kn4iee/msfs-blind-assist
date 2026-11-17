@@ -208,6 +208,30 @@ public class A350PfdMonitorTests
         Assert.Null(m.LatestSincePress("SFD", 0));
     }
 
+    // Review 2026-11-17 (3): the SFD comes round every other tick, so a draw since a press waited up to two of them (about 3 s with a
+    // large memory) and an entry waiting for it timed out. While a press waits for its draw, the display is drawn every tick.
+    [Fact]
+    public async Task A_pressed_display_is_drawn_every_tick_until_a_draw_since()
+    {
+        var now = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        var sfd = Fixture("sfd_isis_std_stand");
+        var asked = new List<bool>();
+        var m = new A350PfdMonitor(gauges =>
+        {
+            asked.Add(gauges.Contains(("SFD", 0)));
+            return Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => g.Gauge == "SFD" ? sfd : null).ToList());
+        }, _ => false, _ => { }, () => now);
+        for (int i = 0; i < 4; i++) { await m.TickAsync(); now += TimeSpan.FromMilliseconds(500); }
+        Assert.Equal(new[] { false, true, false, true }, asked);   // RMP and SFD in turn
+        asked.Clear();
+        m.Pressed("SFD", 0);
+        for (int i = 0; i < 5; i++) { await m.TickAsync(); now += TimeSpan.FromMilliseconds(500); }
+        // At the press (RMP's turn, copied before the settle), half a second on (SFD's turn, still before it), 1 s on (RMP's turn, since):
+        // then in turn again (SFD's, RMP's).
+        Assert.Equal(new[] { true, true, true, true, false }, asked);
+        Assert.NotNull(m.LatestSincePress("SFD", 0));
+    }
+
     // The reader not ready (or no A350 in the sim) answers the whole tick with nothing: nothing is kept or said.
     [Fact]
     public async Task A_tick_the_reader_cannot_draw_keeps_nothing()

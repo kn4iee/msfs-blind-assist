@@ -291,22 +291,32 @@ public class A350BaroEntryRunTests
         Assert.DoesNotContain(A350BaroEntry.IsisOnStdNotice, _speech.All);
     }
 
-    // Review 2026-11-17: the ISIS's STD is read from its draw, kept up to half a minute; just after its STD/CHANGE key a draw from before
-    // the press said "ISIS not set: it is on STD." though the pilot had just taken it off STD. A draw from before the press is unread.
-    // The ISIS's draws for the run tests below: on STD until `_isisShows` changes; each Delay the definition awaits moves the monitor's
-    // clock on and ticks it (the SFD is drawn every other tick), so a wait for a draw since a press sees one.
+    // The ISIS's draws for the run tests below: on STD until `_isisShows` changes. With `ticksOnDelay` the waits the definition awaits move
+    // the monitor's clock on and tick it every 500 ms of them, as the real monitor ticks (review 3: ticking on every wait hid the cadence).
     private DateTime _monitorNow = new(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
     private A350DrawCapture _isisShows = A350Fixtures.Capture("sfd_isis_std_stand.json");
+    private int _sinceTick;
+
+    private static A350DrawCapture OnStd => A350Fixtures.Capture("sfd_isis_std_stand.json");
+    private static A350DrawCapture OffStd => A350Fixtures.Capture("ground_SFD.json");
 
     private async Task<A350PfdMonitor> IsisDrawn(bool ticksOnDelay)
     {
         var monitor = new A350PfdMonitor(A350PfdMonitorTests.Each((g, _) => g == "SFD" ? _isisShows : null), _ => false, _ => { }, () => _monitorNow);
         _def.Pfd = monitor;
         _def.IsisStdRead = null;   // the definition's own: the ISIS's draw
-        await monitor.TickAsync();
-        await monitor.TickAsync();
+        for (int i = 0; i < 2; i++)
+        {
+            await monitor.TickAsync();
+            _monitorNow += TimeSpan.FromMilliseconds(A350PfdMonitor.PeriodMs);
+        }
         if (ticksOnDelay)
-            _def.Delay = async ms => { _monitorNow += TimeSpan.FromMilliseconds(ms); await monitor.TickAsync(); };
+            _def.Delay = async ms =>
+            {
+                _monitorNow += TimeSpan.FromMilliseconds(ms);
+                for (_sinceTick += ms; _sinceTick >= A350PfdMonitor.PeriodMs; _sinceTick -= A350PfdMonitor.PeriodMs)
+                    await monitor.TickAsync();
+            };
         return monitor;
     }
 
@@ -314,6 +324,9 @@ public class A350BaroEntryRunTests
         _def.HandleUIVariableSet(A350IsisWindow.QnhRow, qnh, _def.GetVariables()[A350IsisWindow.QnhRow], _sim, _speech);
 
     private void Press(string row) => _def.HandleUIVariableSet(row, 1, _def.GetVariables()[row], _sim, _speech);
+
+    private bool IsisWritten(double qnh) => _sent.Any(rpn => rpn.StartsWith(
+        ((int)Math.Round((qnh - 1) * 16)).ToString(System.Globalization.CultureInfo.InvariantCulture) + " 3 r (>K:2:KOHLSMAN_SET)", StringComparison.Ordinal));
 
     // Review 2026-11-17: the ISIS's STD is read from its draw, kept up to half a minute; just after its STD/CHANGE key a draw from before
     // the press said "ISIS not set: it is on STD." though the pilot had just taken it off STD. The entry waits for a draw since the key
@@ -328,10 +341,10 @@ public class A350BaroEntryRunTests
         Assert.Empty(_sent);
 
         Press(IniBuildsA350Definition.IsisStdKeyRow);
-        _isisShows = A350Fixtures.Capture("ground_SFD.json");   // off STD, from the next draw on
+        _isisShows = OffStd;   // from the next draw on
         _sent.Clear();
         TypeIsis();
-        Assert.NotEmpty(_sent);
+        Assert.True(IsisWritten(1019));
         Assert.Single(_speech.All, A350BaroEntry.IsisOnStdNotice);
     }
 
@@ -339,13 +352,10 @@ public class A350BaroEntryRunTests
     public async Task After_the_isis_std_key_a_draw_since_still_on_std_refuses()
     {
         Baros(link: 0);
+        _isisShows = OffStd;
         await IsisDrawn(ticksOnDelay: true);
-        _isisShows = A350Fixtures.Capture("ground_SFD.json");
-        _monitorNow += TimeSpan.FromSeconds(1);
-        await _def.Pfd!.TickAsync();
-        await _def.Pfd.TickAsync();
         Press(IniBuildsA350Definition.IsisStdKeyRow);
-        _isisShows = A350Fixtures.Capture("sfd_isis_std_stand.json");   // the key put it on STD
+        _isisShows = OnStd;   // the key put it on STD
         _sent.Clear();
         TypeIsis();
         Assert.Empty(_sent);
@@ -355,18 +365,21 @@ public class A350BaroEntryRunTests
     // Review 2026-11-17 (2), important 1: at LINKED INSTR 2 a side's push puts the ISIS on STD and its pull takes it off ([A350-13]):
     // they move the ISIS's STD as its own key does. At 0 they leave it alone.
     [Theory]
-    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL")]
-    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL")]
-    public async Task At_linked_instr_2_a_sides_pull_moves_the_isis_std(string pullRow)
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL", false)]
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL", false)]
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PUSH", true)]
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH", true)]
+    public async Task At_linked_instr_2_a_sides_push_or_pull_moves_the_isis_std(string row, bool toStd)
     {
-        Baros(link: 2, mode1: 3, mode2: 3);
+        Baros(link: 2, mode1: toStd ? 0 : 3, mode2: toStd ? 0 : 3);
+        _isisShows = toStd ? OffStd : OnStd;
         await IsisDrawn(ticksOnDelay: true);
-        Press(pullRow);
-        _isisShows = A350Fixtures.Capture("ground_SFD.json");
+        Press(row);
+        _isisShows = toStd ? OnStd : OffStd;
         _sent.Clear();
         TypeIsis();
-        Assert.NotEmpty(_sent);
-        Assert.DoesNotContain(A350BaroEntry.IsisOnStdNotice, _speech.All);
+        Assert.Equal(!toStd, IsisWritten(1019));
+        Assert.Equal(toStd, _speech.All.Contains(A350BaroEntry.IsisOnStdNotice));
     }
 
     [Fact]
@@ -381,20 +394,112 @@ public class A350BaroEntryRunTests
         Assert.Equal(A350BaroEntry.IsisOnStdNotice, _speech.All[^1]);
     }
 
-    // The Altimeter entry waits for a draw since the key too.
+    // The Altimeter entry waits for a draw since the key too, and leaves the ISIS out when that draw shows STD.
     [Fact]
-    public async Task The_altimeter_entry_waits_for_an_isis_draw_since_its_std_key()
+    public async Task The_altimeter_entry_finds_the_isis_on_std_after_its_wait()
     {
         Baros(link: 0);
+        _isisShows = OffStd;
         await IsisDrawn(ticksOnDelay: true);
         Press(IniBuildsA350Definition.IsisStdKeyRow);
-        _isisShows = A350Fixtures.Capture("ground_SFD.json");
-        foreach (var side in new[] { 1, 2, 3 })
+        _isisShows = OnStd;
+        foreach (var side in new[] { 1, 2 })
             Fresh($"KOHLSMAN SETTING MB:{side}", 1033);
         _sent.Clear();
         await Enter(1033);
-        Assert.Contains(_sent, rpn => rpn.Contains(" 3 r (>K:2:KOHLSMAN_SET)", StringComparison.Ordinal));
-        Assert.DoesNotContain(A350BaroEntry.IsisOnStdNotice, _speech.All);
+        Assert.DoesNotContain(_sent, rpn => rpn.Contains(" 3 r (>K:2:KOHLSMAN_SET)", StringComparison.Ordinal));
+        Assert.Equal(A350BaroEntry.IsisOnStdNotice, _speech.All[^1]);
+    }
+
+    // Review 2026-11-17 (3): two ISIS entries waiting for the same draw, each polling on its own phase: the newer one may wake first and
+    // run; the older one, waking after, stands down quietly instead of running last and leaving its value.
+    [Fact]
+    public async Task Of_two_isis_entries_waiting_the_newer_runs_whichever_wakes_first()
+    {
+        Baros(link: 0);
+        var monitor = await IsisDrawn(ticksOnDelay: false);
+        Press(IniBuildsA350Definition.IsisStdKeyRow);
+        _isisShows = OffStd;
+        var older = new TaskCompletionSource();
+        var newer = new TaskCompletionSource();
+        _sent.Clear();
+        _def.Delay = _ => older.Task;
+        TypeIsis(1019);
+        _def.Delay = _ => newer.Task;
+        TypeIsis(1022);
+        Assert.Empty(_sent);
+        _monitorNow += TimeSpan.FromSeconds(1);
+        await monitor.TickAsync();
+        _def.Delay = _ => Task.CompletedTask;
+        newer.SetResult();
+        for (int i = 0; i < 100 && !IsisWritten(1022); i++)
+            await Task.Delay(10);   // the continuations run on the test's context, after it yields
+        Assert.True(IsisWritten(1022));
+        older.SetResult();
+        await Task.Delay(300);
+        Assert.False(IsisWritten(1019));
+    }
+
+    // Review 2026-11-17 (3): an Altimeter entry superseded while it waited for the ISIS says nothing when it wakes, not even its refusal.
+    [Fact]
+    public async Task A_superseded_altimeter_entry_says_nothing_after_its_wait()
+    {
+        Baros(link: 0);
+        var monitor = await IsisDrawn(ticksOnDelay: false);
+        Press(IniBuildsA350Definition.IsisStdKeyRow);
+        _isisShows = OffStd;
+        var older = new TaskCompletionSource();
+        var newer = new TaskCompletionSource();
+        _def.Delay = _ => older.Task;
+        var first = Enter(500);   // refused once planned: outside every unit
+        _def.Delay = _ => newer.Task;
+        var second = Enter(1033);
+        _monitorNow += TimeSpan.FromSeconds(1);
+        await monitor.TickAsync();
+        _def.Delay = _ => Task.CompletedTask;
+        newer.SetResult();
+        await second;
+        older.SetResult();
+        await first;
+        Assert.DoesNotContain(_speech.All, s => s.Contains("must be", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Review 2026-11-17 (3): an aircraft switched while an entry waits: nothing is sent for it.
+    [Fact]
+    public async Task An_isis_entry_waiting_when_the_aircraft_goes_sends_nothing()
+    {
+        Baros(link: 0);
+        var monitor = await IsisDrawn(ticksOnDelay: false);
+        Press(IniBuildsA350Definition.IsisStdKeyRow);
+        _isisShows = OffStd;
+        var gate = new TaskCompletionSource();
+        _def.Delay = _ => gate.Task;
+        _sent.Clear();
+        TypeIsis(1019);
+        _def.Dispose();
+        _monitorNow += TimeSpan.FromSeconds(1);
+        await monitor.TickAsync();
+        _def.Delay = _ => Task.CompletedTask;
+        gate.SetResult();
+        await Task.Delay(300);   // the continuation runs on the test's context, after it yields
+        Assert.Empty(_sent);
+    }
+
+    // With no draw of the ISIS since the press (the reader stalled), the wait ends at its bound and the entry writes, its read-back
+    // saying what the ISIS then shows: as with the ISIS unread.
+    [Fact]
+    public async Task An_isis_entry_with_no_draw_since_writes_after_its_bound()
+    {
+        Baros(link: 0);
+        _isisShows = OffStd;
+        await IsisDrawn(ticksOnDelay: false);
+        int waited = 0;
+        _def.Delay = ms => { waited += ms; return Task.CompletedTask; };
+        Press(IniBuildsA350Definition.IsisStdKeyRow);
+        _sent.Clear();
+        TypeIsis(1019);
+        Assert.True(IsisWritten(1019));
+        Assert.InRange(waited, IniBuildsA350Definition.IsisStdWaitMs, IniBuildsA350Definition.IsisStdWaitMs + 5000);
     }
 
     [Fact]

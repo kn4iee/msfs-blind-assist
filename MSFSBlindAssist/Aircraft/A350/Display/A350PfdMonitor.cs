@@ -137,6 +137,10 @@ public sealed class A350PfdMonitor : IDisposable
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), DateTime> _pressedAt = new();
 
+    /// <summary>How long after a press its display is drawn every tick while no draw since is in (a display that cannot be drawn, dark
+    /// or failing, is not asked for every tick for ever).</summary>
+    public static readonly TimeSpan PressForceFor = TimeSpan.FromSeconds(10);
+
     /// <summary>A key that changes a display was pressed: until a draw kept <see cref="PressSettle"/> after it, <see cref="LatestSincePress"/>
     /// has none (review 2026-11-17: the ISIS's STD, read only from its draw).</summary>
     public void Pressed(string gauge, int index) => _pressedAt[(gauge, index)] = _now();
@@ -164,6 +168,12 @@ public sealed class A350PfdMonitor : IDisposable
         if (_tick++ % 2 == 0) gauges.Add(("MFD", 0));   // the FMS messages: two agreeing reads within four ticks
         gauges.Add(Others[_other++ % Others.Count]);
         var due = _now();
+        // A display a press waits on is drawn every tick until a draw copied since (review 2026-11-17, 3: the SFD comes round every
+        // other tick, so an entry waiting for it waited up to two of them), for PressForceFor at most.
+        foreach (var (pressedKey, pressed) in _pressedAt)
+            if (due - pressed < PressForceFor && !gauges.Contains(pressedKey)
+                && !(_latest.TryGetValue(pressedKey, out var since) && since.Copied >= pressed + PressSettle))
+                gauges.Add(pressedKey);
         (string Gauge, int Index)? quiet = null;
         for (int n = 0; n < Quiet.Count; n++)
         {

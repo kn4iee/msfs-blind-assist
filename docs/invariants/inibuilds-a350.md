@@ -82,9 +82,11 @@ wrote and said "ISIS QNH did not take 1019" (`A350BaroEntryRunTests`). The STD i
 `A350PfdMonitor.PressSettle` (600 ms) after MSFSBA's last press of a row that moves it (`MovesIsisStd`: the STD/CHANGE key, and at
 LINKED INSTR 2 or unread a side's push or pull; `LatestSincePress`, counted to the draw's copy, its tick's start, as a tick draws four
 or five displays after it): the SFD is drawn every other tick and its latest draw is kept up to half a minute, so just after the key a
-draw from before it said the ISIS was still on STD (reviews, 2026-11-17). An entry typed then waits up to `IsisStdWaitMs` (2.5 s) for
-a draw since (`IsisOnStdSettledAsync`) and goes by it, planned again, as leaving STD brings back the setting underneath; with none,
-the STD is unknown and the entry writes, its read-back saying what the ISIS then shows.
+draw from before it said the ISIS was still on STD (reviews, 2026-11-17). While a press waits, the monitor draws the SFD every tick
+(`PressForceFor`, 10 s at most), and an entry typed then waits up to `IsisStdWaitMs` (6 s) for a draw since (`IsisOnStdSettledAsync`)
+and goes by it, planned again, as leaving STD brings back the setting underneath; with none (the reader stalled), the STD is unknown
+and the entry writes, its read-back saying what the ISIS then shows. A newer entry supersedes a waiting one, which then says nothing,
+as does one waiting when the aircraft goes.
 
 ## A350-15
 
