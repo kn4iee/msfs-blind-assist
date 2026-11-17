@@ -200,6 +200,12 @@ public partial class IniBuildsA350Definition
             announcer.Announce(plan.Refusal);
             return A350WriteOutcome.Refused;
         }
+        // On its own STD the ISIS moves for nothing written ([A350-14]): say so, as the Altimeter entry does, never a write that reads back unchanged.
+        if (field == A350TypedEntry.IsisQnh && IsisOnStd() == true)
+        {
+            announcer.Announce(A350BaroEntry.IsisOnStdNotice);
+            return A350WriteOutcome.Refused;
+        }
         if (!CanLand(sim))
         {
             announcer.Announce($"{row.Name} unavailable");

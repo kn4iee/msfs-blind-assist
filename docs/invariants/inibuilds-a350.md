@@ -76,7 +76,9 @@ The ISIS has an STD of its own, toggled only by its STD/CHANGE key and shown onl
 write, not a click, not MSFSBA's row, at every timing tried from 100 ms to 3 s; the setting underneath survives (the key brought back
 1020). At LINKED INSTR 2 a side's push puts the ISIS on STD with them and it stays there when the option goes back to 0 or 1, where only
 its own key gets it back (plan 02, evidence 02). So `A350BaroEntry` plans no ISIS target while the SFD shows it on STD and says so ("ISIS
-not set: it is on STD."), never a write that would read back unchanged and be reported as a failure.
+not set: it is on STD."), never a write that would read back unchanged and be reported as a failure. The ISIS QNH row (the ISIS
+window's typed field, `HandleTyped`) refuses the same way, sending nothing: on the A350-1000's controls pass (2026-11-17) it still
+wrote and said "ISIS QNH did not take 1019" (`A350BaroEntryRunTests`).
 
 ## A350-15
 

@@ -266,6 +266,18 @@ public class A350BaroEntryRunTests
         Assert.Equal(A350BaroEntry.IsisOnStdNotice, _speech.All[^1]);
     }
 
+    // The A350-1000's controls pass, 2026-11-17: the ISIS window's typed QNH with the ISIS on its own STD said "ISIS QNH did not
+    // take 1019" after writes the ISIS ignores ([A350-14]); the Altimeter entry already said why and sent nothing.
+    [Fact]
+    public void A_typed_isis_qnh_on_the_isis_std_says_so_and_sends_nothing()
+    {
+        Baros(link: 0);
+        _def.IsisStdRead = () => true;
+        _def.HandleUIVariableSet(A350IsisWindow.QnhRow, 1019, _def.GetVariables()[A350IsisWindow.QnhRow], _sim, _speech);
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { A350BaroEntry.IsisOnStdNotice }, _speech.All);
+    }
+
     [Fact]
     public async Task A_newer_entry_stops_the_older_ones_targets()
     {
