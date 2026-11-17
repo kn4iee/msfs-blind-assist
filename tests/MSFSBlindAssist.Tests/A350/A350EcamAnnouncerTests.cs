@@ -23,6 +23,51 @@ public class A350EcamAnnouncerTests
         return a.Observe(v);
     }
 
+    // The owner, 2026-11-16: ABN PROC had the call-outs say all 19 lines of the not-sensed list at once ("just the title"). A list
+    // the pilot opens with a key (ABN PROC, DEFRD PROC) says its title, and its "NO ..." line when it is empty, which is all it
+    // holds; its items stay in the window. A warning or caution that comes up meanwhile is said as ever.
+    private static readonly string[] AbnList =
+    {
+        "ABNORMAL NOT-SENSED PROCEDURES|white", "SMOKE / FUMES|red", "EMER EVAC|red", "ENG|white", "RELIGHT IN FLT|amber",
+    };
+
+    [Fact]
+    public void An_opened_list_says_its_title_alone()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View("SEAT BELTS|green"));
+        Assert.Equal(new[] { "ABNORMAL NOT-SENSED PROCEDURES, white" }, Twice(a, View(AbnList)));
+        Assert.Empty(Twice(a, View(AbnList.Append("F/CTL|white").ToArray())));   // a line scrolled into view: still the list's
+    }
+
+    [Fact]
+    public void An_opened_lists_items_that_agree_a_read_late_are_not_said()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View("SEAT BELTS|green"));
+        a.Observe(View(AbnList[0]));
+        Assert.Equal(new[] { "ABNORMAL NOT-SENSED PROCEDURES, white" }, a.Observe(View(AbnList[0])));
+        a.Observe(View(AbnList));
+        Assert.Empty(a.Observe(View(AbnList)));
+    }
+
+    [Fact]
+    public void An_empty_deferred_list_says_its_title_and_that_it_is_empty()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View("SEAT BELTS|green"));
+        Assert.Equal(new[] { "DEFERRED PROCEDURES LIST, white", "NO DEFERRED PROCEDURES, grey" },
+            Twice(a, View("DEFERRED PROCEDURES LIST|white", "NO DEFERRED PROCEDURES|grey")));
+    }
+
+    [Fact]
+    public void A_warning_while_a_list_is_open_is_said()
+    {
+        var a = new A350EcamAnnouncer();
+        Twice(a, View(AbnList));
+        Assert.Equal(new[] { "ENG 1 FIRE, red" }, Twice(a, View(AbnList.Prepend("ENG 1 FIRE|red").ToArray())));
+    }
+
     [Fact]
     public void The_first_agreed_read_is_a_silent_baseline()
     {

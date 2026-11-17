@@ -13,7 +13,9 @@ namespace MSFSBlindAssist.Aircraft.A350.Display;
 /// 2026-10-31: the landing memo was said in full again 5 s after an AP OFF warning had displaced it); a warning or a caution
 /// (red or amber in the main column) is always said. A memo-column line whose only change is its colour is said once the new colour has held
 /// <see cref="ColourHold"/>, and not at all when it reverts within it (question 4: COMPANY MSG and WXR/PWS OFF swapped colours for
-/// about a second, every few minutes, on 2026-10-31).
+/// about a second, every few minutes, on 2026-10-31). A list the pilot opens with a key (<see cref="OpenedListTitles"/>) says
+/// its title alone, and its "NO ..." line when empty; the lines under its title are held back while it is up (the owner,
+/// 2026-11-16).
 /// </summary>
 public sealed class A350EcamAnnouncer
 {
@@ -115,12 +117,23 @@ public sealed class A350EcamAnnouncer
         }
 
         _memoIds.UnionWith(memos);
+        // A list the pilot opened with a key says its title and, empty, its "NO ..." line; its items, the lines under the title,
+        // stay in the window (the owner, 2026-11-16: ABN PROC said 19 lines at once; "just the title").
+        float? listTop = view.Warning.FirstOrDefault(l => OpenedListTitles.Contains(l.Text))?.Y;
         var spoken = new List<string>();
-        foreach (var (id, text) in lines)
-            if (toSay.TryGetValue(id, out var say) && say.Remove(text))
+        foreach (var (line, (id, text)) in view.Warning.Zip(lines))
+            if (toSay.TryGetValue(id, out var say) && say.Remove(text)
+                && (listTop is not float top || line.Y < top || OpenedListTitles.Contains(line.Text)
+                    || line.Text.StartsWith("NO ", StringComparison.Ordinal)))
                 spoken.Add(text);
         return spoken;
     }
+
+    /// <summary>The titles of the lists the pilot opens on the warning display with a key: ABN PROC's and DEFRD PROC's.</summary>
+    public static readonly IReadOnlySet<string> OpenedListTitles = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "ABNORMAL NOT-SENSED PROCEDURES", "DEFERRED PROCEDURES LIST",
+    };
 
     /// <summary>Forgets the baseline (aircraft reloaded, reader restarted): the next agreed read is silent.</summary>
     public void Reset()

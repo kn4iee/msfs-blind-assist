@@ -127,9 +127,8 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
 8. **The display design question:** keep MSFSBA's own A350 windows, or an Alt+key that opens the display itself to click anything?
 9. **A symbol I could not name for sure (plan 24):** four small circles under the ailerons' columns on F/CTL. If you know them, I read
    them. (The ND's circled 1 and 2 are named now: the flap 1 and flap 2 points of the CDA function, settled on the third flight.)
-10. **ABN PROC read aloud (2026-11-16):** pressing ABN PROC has the E/WD call-outs say every line of the not-sensed list (19 lines
-   at once), as they say any new line. Keep that, or say only the list's title for a list you opened yourself (the window holds the
-   lines)?
+10. **ABN PROC read aloud (2026-11-16): decided, title only (done 2026-11-17).** A list opened with ABN PROC or DEFRD PROC says its
+   title, and "NO DEFERRED PROCEDURES" when empty; the items are in the E/WD window.
 11. **QNH with a fraction (2026-11-16):** a preset pulled from STD can land at 1015.81. The PFD draws it 1016; MSFSBA says 1015,
    as the baro knob's tooltip floors it (decided 2026-10-26). Say what the PFD shows (1016, so you know to set 1015 again), or keep
    the tooltip's?
