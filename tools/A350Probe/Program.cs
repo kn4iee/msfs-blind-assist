@@ -943,7 +943,31 @@ internal sealed partial class ProbeForm : Form
                     if (!wholePanel && !_arg!.Split(',').Contains(key)) continue;
                     var d = vars[key];
                     if (skip.Contains(key)) { Line($"{panel}	{key}	SKIPPED (lasting effect: drive by hand)"); continue; }
-                    if (d.RenderAsSlider) { Line($"{panel}\t{key}\tslider\tSKIPPED (knob: drive by hand)"); continue; }
+                    if (d.RenderAsSlider)
+                    {
+                        // A knob: a quarter and three quarters of its range, each read back, then where it was (2026-11-17: the
+                        // sweep had left 64 knobs to be driven by hand).
+                        double? was = await Read(key);
+                        var knob = new List<string>();
+                        bool knobOk = true;
+                        foreach (double f in new[] { 0.25, 0.75 })
+                        {
+                            double target = d.SliderMin + f * (d.SliderMax - d.SliderMin);
+                            def.HandleUIVariableSet(key, target, d, _m, cap);
+                            await Task.Delay(2000);
+                            double? got = await Read(key);
+                            bool hit = got is double g && Math.Abs(g - target) <= Math.Max(0.02 * (d.SliderMax - d.SliderMin), 0.01);
+                            knobOk &= hit;
+                            knob.Add($"{Fmt(target)}={Fmt(got)}{(hit ? "" : "!")}");
+                        }
+                        if (was is double w)
+                        {
+                            def.HandleUIVariableSet(key, w, d, _m, cap);
+                            await Task.Delay(2000);
+                        }
+                        Line($"{panel}\t{key}\tslider {(knobOk ? "PASS" : "FAIL")}\t{d.DisplayName}\tbefore={Fmt(was)}\t{string.Join(", ", knob)}\trestored={Fmt(await Read(key))}\tsaid: {cap.Drain()}");
+                        continue;
+                    }
                     // A typed value (the FCU windows, the QNHs, the cabin targets) has no positions to sweep: never a PASS.
                     if (!d.RenderAsButton && d.ValueDescriptions is not { Count: > 0 })
                     { Line($"{panel}\t{key}\ttyped\tUNTESTED (a typed value: drive it with set)"); continue; }
@@ -958,6 +982,9 @@ internal sealed partial class ProbeForm : Form
                     double? before = await Read(key);
                     var results = new List<string>();
                     bool allOk = true;
+                    // A spring-loaded switch (the OIS EFB/AVNCS switches) moves for the press and is back at its rest position
+                    // by the read: that is a pass, said "springs back" (2026-11-17: the sweep failed both OIS switches).
+                    double? rest = MSFSBlindAssist.Aircraft.A350.A350ControlMap.Load().FindByKey(key)?.Rest;
                     foreach (var v in d.ValueDescriptions!.Keys.OrderBy(x => x))
                     {
                         if (before is double b && Math.Abs(b - v) < 0.01) continue;
@@ -965,6 +992,11 @@ internal sealed partial class ProbeForm : Form
                         def.HandleUIVariableSet(key, v, d, _m, cap);
                         await Task.Delay(2000);
                         double? after = await Read(key);
+                        if (rest is double r && after is double ar && Math.Abs(ar - r) < 0.01 && Math.Abs(v - r) >= 0.01)
+                        {
+                            results.Add($"{d.ValueDescriptions[v]}: springs back to {Fmt(after)} [{Diff(pre, await Snapshot(def, lights))}]");
+                            continue;
+                        }
                         bool ok = after is double a && Math.Abs(a - v) < 0.01;
                         allOk &= ok;
                         results.Add($"{d.ValueDescriptions[v]}={Fmt(after)}{(ok ? "" : "!")} [{Diff(pre, await Snapshot(def, lights))}]");
