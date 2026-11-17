@@ -731,5 +731,8 @@ every panel and drove every knob to a quarter and three quarters of its range; e
 shut, a spring switch back at rest), none MSFSBA's, and it found the ISIS QNH field writing while the ISIS sat on its own STD
 ([A350-14]). Its one display difference is the SD's WHEEL page (`EcamWheel1000Static.png`): six-wheel bogies, twelve brakes in three
 rows (1 to 4, 5 to 8, 9 to 12, left to right; temperatures at y 637, 747 and 858) where the -900 draws eight in two (666 and 809).
-`A350SdPage` holds both layouts, no row within a field's reach of the other's (fixture `ctr_sd_wheel_1000_ground.json`); the arc over
-the hottest brake is taken at the -900's offset from the temperature, not yet seen hot on a -1000.
+`A350SdPage` holds both layouts, no row within a field's reach of the other's (fixture `ctr_sd_wheel_1000_ground.json`). The arc over
+the hottest brake, seen after a rejected take-off on 30L (TOGA, rejected at 113 kt, 122 kt peak, full manual braking and reverse,
+stopped in 1,029 m; the brakes reached 190 to 200 °C, the arc green from about 100 °C), sits in the -900's columns 24 px over the
+-1000's row (brake 2's at 199, 613.5), the -1000's temperatures 5 px right of the -900's (fixture `ctr_wheel_1000_hot_brake.json`).
+The RTO autobrake did not stop the aircraft on a first reject at about 64 kt, below its 72 kt arming speed; it is not MSFSBA's.

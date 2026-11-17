@@ -43,8 +43,12 @@ public static class A350SdPage
         var cells = rows.SelectMany(r => r).ToList();
         if (cells.Count == 0) return null;
         if (cells.Any(c => c.Text.Trim() == "STATUS")) return StatusPage;
-        var fitted = Pages.Select(kv => (Page: kv.Key, Fits: kv.Value.Count(f => cells.Any(c => On(c, f))), Fields: kv.Value.Length))
-            .Where(p => p.Fits > 0).ToList();
+        // A page drawn differently by variant: its layout the draw fills best (Layouts).
+        var fitted = Pages.SelectMany(kv => (Layouts.TryGetValue(kv.Key, out var layouts) ? layouts : new[] { kv.Value })
+                .Select(fields => (Page: kv.Key, Fits: fields.Count(f => cells.Any(c => On(c, f))), Fields: fields.Length)))
+            .Where(p => p.Fits > 0)
+            .GroupBy(p => p.Page).Select(g => g.OrderByDescending(p => (double)p.Fits / p.Fields).ThenByDescending(p => p.Fits).First())
+            .ToList();
         var sure = fitted.Where(p => p.Fits >= Math.Min(3, p.Fields))
             .OrderByDescending(p => (double)p.Fits / p.Fields).ThenByDescending(p => p.Fits).ToList();
         if (sure.Count > 0)
@@ -253,6 +257,20 @@ public static class A350SdPage
         new("Fuel on board", 723, 1013, "{weight}"),
     };
 
+    // WHEEL: the -900's two rows of brakes (EcamWheelStatic.png), and the -1000's three (EcamWheel1000Static.png, six-wheel bogies; live
+    // 2026-11-17), 1 to 4, 5 to 8, 9 to 12, left to right; no row of one is within a field's reach (Dy) of a row of the other. Declared
+    // before Pages and Layouts, which their initializers read.
+    private static readonly SdField[] Wheel900 =
+        Row(666, "°C", ("Brake 1 temperature", 82), ("Brake 2 temperature", 181), ("Brake 3 temperature", 357), ("Brake 4 temperature", 456))
+            .Concat(Row(809, "°C", ("Brake 5 temperature", 82), ("Brake 6 temperature", 181), ("Brake 7 temperature", 357), ("Brake 8 temperature", 456)))
+            .ToArray();
+
+    private static readonly SdField[] Wheel1000 = Wheel1000Row(637, 1).Concat(Wheel1000Row(747, 5)).Concat(Wheel1000Row(858, 9)).ToArray();
+
+    /// <summary>With no door data an amber XX in each gear door's place (both variants, the stand powered), named as its symbol is.</summary>
+    private static readonly SdField[] WheelDoors = Row(435, null, ("Nose gear door, left", 223), ("Nose gear door, right", 283))
+        .Concat(Row(532, null, ("Left main gear door", 146), ("Right main gear door", 362))).ToArray();
+
     /// <summary>Pages split by a rule into two columns, read one after the other: DOOR's oxygen and rain
     /// repellent column right of the aircraft.</summary>
     private static readonly IReadOnlyDictionary<int, float> ColumnSplit = new Dictionary<int, float> { [11] = 590 };
@@ -379,14 +397,14 @@ public static class A350SdPage
                 new SdField("Forward cargo temperature", 365, 891, "°C"), new SdField("Aft cargo temperature", 585, 891, "°C"),
             },
         }.SelectMany(p => p).ToArray(),
-        // WHEEL: the -900's two rows of brakes (EcamWheelStatic.png), and the -1000's three (EcamWheel1000Static.png, six-wheel bogies; live
-        // 2026-11-17), 1 to 4, 5 to 8, 9 to 12, left to right; no row of one is within a field's reach (Dy) of a row of the other.
-        [12] = Row(666, "°C", ("Brake 1 temperature", 82), ("Brake 2 temperature", 181), ("Brake 3 temperature", 357), ("Brake 4 temperature", 456))
-            .Concat(Row(809, "°C", ("Brake 5 temperature", 82), ("Brake 6 temperature", 181), ("Brake 7 temperature", 357), ("Brake 8 temperature", 456)))
-            .Concat(Wheel1000Row(637, 1)).Concat(Wheel1000Row(747, 5)).Concat(Wheel1000Row(858, 9))
-            // With no door data an amber XX in each gear door's place (both variants, the stand powered), named as its symbol is.
-            .Concat(Row(435, null, ("Nose gear door, left", 223), ("Nose gear door, right", 283)))
-            .Concat(Row(532, null, ("Left main gear door", 146), ("Right main gear door", 362)))
-            .ToArray(),
+        [12] = Wheel900.Concat(Wheel1000).Concat(WheelDoors).ToArray(),
+    };
+
+    /// <summary>A page drawn differently by variant, each layout scored on its own by <see cref="PageOf"/> (review 2026-11-17: WHEEL's 24
+    /// fields scored as one let a -900 draw fill a third of them, and three stray values named a page of six); <see cref="Pages"/> reads by
+    /// all of them.</summary>
+    private static readonly IReadOnlyDictionary<int, SdField[][]> Layouts = new Dictionary<int, SdField[][]>
+    {
+        [12] = new[] { Wheel900.Concat(WheelDoors).ToArray(), Wheel1000.Concat(WheelDoors).ToArray() },
     };
 }

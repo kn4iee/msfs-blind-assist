@@ -117,6 +117,18 @@ public class A350SdPageOfTests
         Assert.Null(A350SdPage.PageOf(With(eng[0], eng[2])));
     }
 
+    // Review 2026-11-17 (2): page 12 holds the -900's WHEEL layout and the -1000's, 24 fields together; scored as one, a -900 WHEEL draw
+    // filled a third of it and three stray values on a page of a few fields named that page. Each layout is scored on its own.
+    [Fact]
+    public void A_wheel_draw_is_scored_by_its_own_layout()
+    {
+        var small = A350SdPage.Pages.Where(kv => kv.Key != 12 && kv.Value.Length is >= 5 and <= 8).MinBy(kv => kv.Value.Length);
+        var rows = new[] { 666f, 809f }.SelectMany(y => new[] { 82f, 181f, 357f, 456f }.Select(x => new DrawnCell("40", "green", x, y)))
+            .Concat(small.Value.Take(3).Select(f => new DrawnCell("12", "green", f.X, f.Y)))
+            .Select(c => (IReadOnlyList<DrawnCell>)new[] { c }).ToList();
+        Assert.Equal(12, A350SdPage.PageOf(rows));
+    }
+
     // Review M1: the page STATUS shows is found as any draw's page is, one scorer for both: HYD's two fields and F/CTL's two named it
     // (STATUS's own scorer wanted three, so STATUS showing HYD read as a bare STATUS page); STATUS drawn shows no other page.
     [Theory]

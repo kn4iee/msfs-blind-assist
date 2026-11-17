@@ -354,22 +354,29 @@ public class A350SdSymbolsTests
     [InlineData("ctr_cruise_cabin_up", 13, "Cabin: climbing, green")]
     [InlineData("ctr_cruise_cabin_down", 13, "Cabin: descending, green")]
     [InlineData("ctr_wheel_hot_brake", 12, "Hottest brake: brake 2, amber")]
+    [InlineData("ctr_wheel_1000_hot_brake", 12, "Hottest brake: brake 2, green")]
     [InlineData("ctr_fctl_rudder_limit", 10, "Rudder travel limit: 35 degrees each way, green")]
     public void The_sd_says_its_arrows_arcs_and_limits(string fixture, int page, string said) =>
         Assert.Contains(said, A350SdSymbols.Read(A350Fixtures.Capture(fixture + ".json").Shapes, page));
 
-    // The A350-1000's WHEEL page draws its twelve brakes in three rows (live 2026-11-17); its arc over the hottest brake is taken at the
-    // -900's offset from the brake's temperature (18 px right, 24 px up), not yet seen hot on a -1000: the -900's arc over brake 2, moved
-    // to where brake 9's would be (temperature at 82, 858), names brake 9.
-    [Theory]
-    [InlineData(82, 858, "Hottest brake: brake 9, amber")]
-    [InlineData(461, 747, "Hottest brake: brake 8, amber")]
-    [InlineData(186, 637, "Hottest brake: brake 2, amber")]
-    public void An_a350_1000s_hottest_brake_arc_names_its_brake(float tempX, float tempY, string said)
+    // The A350-1000's WHEEL page draws its twelve brakes in three rows. Its arc over the hottest brake, seen live after a rejected take-off
+    // (2026-11-17, OMDB 30L, 122 kt; brakes 190 to 200 °C): over brake 2 at (199, 613.5), the -900's column (its arc at 199, 642), 24 px
+    // over the -1000's row, not 18 px right of the -1000's own temperature (186). The live arc, moved to each other brake's place, names it.
+    [Fact]
+    public void An_a350_1000s_hottest_brake_arc_sits_in_the_900s_columns()
     {
-        var shapes = A350Fixtures.Capture("ctr_wheel_hot_brake.json").Shapes!;
-        var arc = shapes.Single(s => s.Image == 22 && Math.Abs((s.X0 + s.X1) / 2 - 199) <= 2 && Math.Abs((s.Y0 + s.Y1) / 2 - 642) <= 2);
-        float dx = tempX - 181, dy = tempY - 666;   // the -900's brake 2 temperature
+        Assert.Contains(A350SdSymbols.Pages[12], s => s.Label == "Hottest brake" && Math.Abs(s.X - 199) <= 1 && Math.Abs(s.Y - 613.5) <= 1);
+    }
+
+    [Theory]
+    [InlineData(0, 2, "Hottest brake: brake 9, green")]
+    [InlineData(3, 1, "Hottest brake: brake 8, green")]
+    [InlineData(2, 0, "Hottest brake: brake 3, green")]
+    public void An_a350_1000s_hottest_brake_arc_names_its_brake(int column, int row, string said)
+    {
+        var shapes = A350Fixtures.Capture("ctr_wheel_1000_hot_brake.json").Shapes!;
+        var arc = shapes.Single(s => s.Image == 22 && Math.Abs((s.X0 + s.X1) / 2 - 199) <= 2 && Math.Abs((s.Y0 + s.Y1) / 2 - 613.5) <= 2);
+        float dx = new[] { 82f, 181f, 357f, 456f }[column] - 181, dy = new[] { 637f, 747f, 858f }[row] - 637;
         var moved = arc with { X0 = arc.X0 + dx, X1 = arc.X1 + dx, Y0 = arc.Y0 + dy, Y1 = arc.Y1 + dy,
             PatternX = arc.PatternX + dx, PatternY = arc.PatternY + dy };
         var read = A350SdSymbols.Read(shapes.Where(s => s != arc).Append(moved).ToList(), 12);
