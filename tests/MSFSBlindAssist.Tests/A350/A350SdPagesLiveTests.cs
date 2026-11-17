@@ -45,6 +45,32 @@ public class A350SdPagesLiveTests
         Assert.Contains(lines, l => l.StartsWith(start, StringComparison.Ordinal));
     }
 
+    // The A350-1000's WHEEL page (EcamWheel1000Static.png, live 2026-11-17 at OMDB, cold engines): six-wheel bogies, twelve brakes in three
+    // rows (1 to 4, 5 to 8, 9 to 12, left to right) where the -900 draws eight in two; each temperature read as a bare number.
+    [Fact]
+    public void The_a350_1000s_wheel_page_names_all_twelve_brakes()
+    {
+        var lines = A350SdText.Build(A350Fixtures.Capture("ctr_sd_wheel_1000_ground.json"), 12).Split("\r\n");
+        Assert.Equal("Wheel page", lines[0]);
+        var expected = new[] { 35, 45, 45, 40, 35, 35, 40, 45, 35, 35, 35, 40 }
+            .Select((t, i) => $"Brake {i + 1} temperature: {t} °C, green").ToArray();
+        Assert.Equal(expected, lines.Where(l => l.StartsWith("Brake ", StringComparison.Ordinal)).ToArray());
+        Assert.DoesNotContain(lines, l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\d+, green$"));
+    }
+
+    // With no gear door data (the stand, powered, on both variants) WHEEL draws an amber XX in each door's place: it read "XX XX, amber",
+    // "XX, amber", "XX, amber", no door named, where every other page names its XX by its field.
+    [Theory]
+    [InlineData("ctr_sd_wheel_1000_ground.json")]
+    [InlineData("ctr_sd_page_12.json")]
+    public void The_wheel_pages_gear_doors_without_data_are_named(string fixture)
+    {
+        var lines = A350SdText.Build(A350Fixtures.Capture(fixture), 12).Split("\r\n");
+        foreach (var door in new[] { "Nose gear door, left", "Nose gear door, right", "Left main gear door", "Right main gear door" })
+            Assert.Contains($"{door}: XX, amber", lines);
+        Assert.DoesNotContain(lines, l => l.StartsWith("XX", StringComparison.Ordinal));
+    }
+
     // In flight the door page also draws CAB V/S (its label and unit in white and cyan, the value in green): it read as a bare "400".
     [Fact]
     public void The_door_page_in_flight_names_the_cabin_vertical_speed()

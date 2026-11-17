@@ -230,6 +230,11 @@ public static class A350SdPage
     private static IEnumerable<SdField> Row(float y, string? unit, params (string Label, float X)[] cells) =>
         cells.Select(c => new SdField(c.Label, c.X, y, unit));
 
+    /// <summary>One row of the A350-1000's WHEEL page: four brakes from <paramref name="first"/>, the left gear's two then the right's.</summary>
+    private static IEnumerable<SdField> Wheel1000Row(float y, int first) => Row(y, "°C",
+        ($"Brake {first} temperature", 82), ($"Brake {first + 1} temperature", 186), ($"Brake {first + 2} temperature", 357),
+        ($"Brake {first + 3} temperature", 461));
+
     /// <summary>A pair of passenger doors on DOOR: each door's symbol, its number drawn inside it (a caption: the
     /// symbol's colour is its state, read by A350SdSymbols; "X" there means no data), each slide beside it.</summary>
     private static IEnumerable<SdField> DoorRow(int n, float y, float leftSlideX, float rightSlideX) => new[]
@@ -374,8 +379,14 @@ public static class A350SdPage
                 new SdField("Forward cargo temperature", 365, 891, "°C"), new SdField("Aft cargo temperature", 585, 891, "°C"),
             },
         }.SelectMany(p => p).ToArray(),
+        // WHEEL: the -900's two rows of brakes (EcamWheelStatic.png), and the -1000's three (EcamWheel1000Static.png, six-wheel bogies; live
+        // 2026-11-17), 1 to 4, 5 to 8, 9 to 12, left to right; no row of one is within a field's reach (Dy) of a row of the other.
         [12] = Row(666, "°C", ("Brake 1 temperature", 82), ("Brake 2 temperature", 181), ("Brake 3 temperature", 357), ("Brake 4 temperature", 456))
             .Concat(Row(809, "°C", ("Brake 5 temperature", 82), ("Brake 6 temperature", 181), ("Brake 7 temperature", 357), ("Brake 8 temperature", 456)))
+            .Concat(Wheel1000Row(637, 1)).Concat(Wheel1000Row(747, 5)).Concat(Wheel1000Row(858, 9))
+            // With no door data an amber XX in each gear door's place (both variants, the stand powered), named as its symbol is.
+            .Concat(Row(435, null, ("Nose gear door, left", 223), ("Nose gear door, right", 283)))
+            .Concat(Row(532, null, ("Left main gear door", 146), ("Right main gear door", 362)))
             .ToArray(),
     };
 }

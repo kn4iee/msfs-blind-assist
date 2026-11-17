@@ -95,6 +95,7 @@ public class A350SdPageOfTests
     [InlineData("ctr_wheel_gear_down_transit.json", 12)]
     [InlineData("ctr_wheel_gear_up_transit.json", 12)]
     [InlineData("ctr_wheel_hot_brake.json", 12)]
+    [InlineData("ctr_sd_wheel_1000_ground.json", 12)]
     public void A_draw_names_its_own_sd_page(string fixture, int page) =>
         Assert.Equal(page, A350SdPage.PageOf(A350Ewd.Parse(A350Fixtures.Capture(fixture)).SystemDisplay));
 

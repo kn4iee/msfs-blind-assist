@@ -442,7 +442,9 @@ public static class A350SdSymbols
             new SdSymbol("Y accumulator pressure", 710, 615, "accumulator"), new SdSymbol("G accumulator pressure", 710, 843, "accumulator"),
             HottestBrake(1, 82, 666), HottestBrake(2, 181, 666), HottestBrake(3, 357, 666), HottestBrake(4, 456, 666),
             HottestBrake(5, 82, 809), HottestBrake(6, 181, 809), HottestBrake(7, 357, 809), HottestBrake(8, 456, 809),
-        },
+        // The A350-1000's twelve brakes (three rows, A350SdPage's): the arc at the -900's offset from each temperature, not yet seen hot.
+        }.Concat(new[] { 637f, 747f, 858f }.SelectMany((y, row) => new[] { 82f, 186f, 357f, 461f }.Select((x, i) => HottestBrake(row * 4 + i + 1, x, y))))
+            .ToArray(),
         // CRUISE: the cabin vertical speed's arrow beside its figure, which has no sign climbing.
         [13] = new[] { Said("Cabin", 548, 650, (w, _) => w == "up" ? "climbing" : w == "down" ? "descending" : w) },
     };
