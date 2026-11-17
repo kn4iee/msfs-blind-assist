@@ -53,7 +53,7 @@ public partial class IniBuildsA350Definition
             return HandleTyped(row, field, value, simConnect, announcer);
         if (varKey is CaptainPullRow or FirstOfficerPullRow)
             _baroPulls++;   // a side the pilot pulls has not left STD unasked
-        if (varKey == IsisStdKeyRow && DisplayPanels.FirstOrDefault(d => d.Key == SfdDisplay) is { } sfd)
+        if (MovesIsisStd(varKey, simConnect) && DisplayPanels.FirstOrDefault(d => d.Key == SfdDisplay) is { } sfd)
             Pfd?.Pressed(sfd.Gauge, sfd.Index);   // the ISIS's draw from before it says nothing of its STD now
 
         // An option the aircraft is built without: the cockpit hides its controls and clears their variables.
@@ -203,7 +203,8 @@ public partial class IniBuildsA350Definition
             return A350WriteOutcome.Refused;
         }
         // On its own STD the ISIS moves for nothing written ([A350-14]): say so, as the Altimeter entry does, never a write that reads back unchanged.
-        if (field == A350TypedEntry.IsisQnh && IsisOnStd() == true)
+        bool? isisStd = field == A350TypedEntry.IsisQnh ? IsisOnStd() : null;
+        if (isisStd == true)
         {
             announcer.Announce(A350BaroEntry.IsisOnStdNotice);
             return A350WriteOutcome.Refused;
@@ -213,8 +214,30 @@ public partial class IniBuildsA350Definition
             announcer.Announce($"{row.Name} unavailable");
             return A350WriteOutcome.Unavailable;
         }
-        _ = TypedAsync(row, value, plan, Read, sim, announcer);
+        if (field == A350TypedEntry.IsisQnh && isisStd == null && IsisDrawPending())
+            _ = IsisTypedAfterDrawAsync(row, field, value, Read, sim, announcer);
+        else
+            _ = TypedAsync(row, value, plan, Read, sim, announcer);
         return A350WriteOutcome.Sent;
+    }
+
+    /// <summary>The ISIS QNH typed just after MSFSBA pressed a key that moves the ISIS's STD: planned again, and refused or sent, once the
+    /// ISIS is drawn since (<see cref="IsisOnStdSettledAsync"/>; review 2026-11-17: writing blind could read back unchanged).</summary>
+    private async Task IsisTypedAfterDrawAsync(A350PlacedRow row, A350TypedField field, double value, Func<string, double?> read,
+        SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        if (await IsisOnStdSettledAsync() == true)
+        {
+            announcer.Announce(A350BaroEntry.IsisOnStdNotice);
+            return;
+        }
+        var plan = A350TypedEntry.Plan(field, value, read);   // leaving STD brings back the setting underneath
+        if (plan.Refusal != null)
+        {
+            announcer.Announce(plan.Refusal);
+            return;
+        }
+        await TypedAsync(row, value, plan, read, sim, announcer);
     }
 
     /// <param name="echoRows">The rows whose windows this run can move, when more than its own (a linked entry's copies).</param>
@@ -349,7 +372,34 @@ public partial class IniBuildsA350Definition
     /// <summary>The ISIS's STD/CHANGE key: after its press the ISIS's STD is unknown until its display is drawn again (review 2026-11-17).</summary>
     internal const string IsisStdKeyRow = "A350_ISIS_KNOB_BUTTON_1";
 
+    private const string CaptainPushRow = "A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PUSH", FirstOfficerPushRow = "A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PUSH";
+
+    /// <summary>Whether a row moves the ISIS's own STD: its STD/CHANGE key, and at LINKED INSTR 2 (or unread) a side's push, which puts it on
+    /// STD, or pull, which takes it off ([A350-13]; review 2026-11-17, 2).</summary>
+    private bool MovesIsisStd(string varKey, SimConnectManager sim)
+    {
+        if (varKey == IsisStdKeyRow) return true;
+        if (varKey is not (CaptainPushRow or FirstOfficerPushRow or CaptainPullRow or FirstOfficerPullRow)) return false;
+        return Cached(sim, KeyForInput(A350BaroEntry.LinkedVar)) is not double link || Math.Abs(link - 2) < 0.5;
+    }
+
     private bool? IsisOnStd() => IsisStdRead != null ? IsisStdRead() : A350BaroEntry.IsisOnStd(DisplayLines(SfdDisplay, sincePress: true));
+
+    /// <summary>How long an ISIS entry waits, after MSFSBA pressed a key that moves the ISIS's STD, for the ISIS drawn since (it is drawn
+    /// every other tick, a second apart).</summary>
+    internal const int IsisStdWaitMs = 2500;
+
+    /// <summary>Whether the ISIS has a draw, but none since MSFSBA's last press of a key that moves its STD.</summary>
+    private bool IsisDrawPending() => IsisStdRead == null && DisplayPanels.FirstOrDefault(d => d.Key == SfdDisplay) is { } sfd
+        && !IsDark(sfd) && Pfd?.Latest(sfd.Gauge, sfd.Index) != null && Pfd.LatestSincePress(sfd.Gauge, sfd.Index) == null;
+
+    /// <summary>The ISIS's STD (<see cref="IsisOnStd"/>), waiting up to <see cref="IsisStdWaitMs"/> for a draw since such a press.</summary>
+    private async Task<bool?> IsisOnStdSettledAsync()
+    {
+        for (int waited = 0; IsisDrawPending() && waited < IsisStdWaitMs; waited += 100)
+            await Delay(100);
+        return IsisOnStd();
+    }
 
     /// <summary>The ISIS's line in the Altimeter window: STD where its display shows it (the setting then holds 1013.25, which says nothing),
     /// else the setting the sim holds.</summary>
@@ -364,7 +414,7 @@ public partial class IniBuildsA350Definition
         _sim = sim;
         int entry = ++_baroEntry, pulls = _baroPulls;
         double? Read(string name) => Cached(sim, KeyForInput(name));
-        var plan = A350BaroEntry.Plan(typed, Read, IsisOnStd());
+        var plan = A350BaroEntry.Plan(typed, Read, await IsisOnStdSettledAsync());
         if (plan.Refusal != null)
         {
             announcer.Announce(plan.Refusal);

@@ -293,28 +293,108 @@ public class A350BaroEntryRunTests
 
     // Review 2026-11-17: the ISIS's STD is read from its draw, kept up to half a minute; just after its STD/CHANGE key a draw from before
     // the press said "ISIS not set: it is on STD." though the pilot had just taken it off STD. A draw from before the press is unread.
-    [Fact]
-    public async Task An_isis_draw_from_before_its_std_key_is_no_refusal()
+    // The ISIS's draws for the run tests below: on STD until `_isisShows` changes; each Delay the definition awaits moves the monitor's
+    // clock on and ticks it (the SFD is drawn every other tick), so a wait for a draw since a press sees one.
+    private DateTime _monitorNow = new(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+    private A350DrawCapture _isisShows = A350Fixtures.Capture("sfd_isis_std_stand.json");
+
+    private async Task<A350PfdMonitor> IsisDrawn(bool ticksOnDelay)
     {
-        Baros(link: 0);
-        var now = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
-        var onStd = A350Fixtures.Capture("sfd_isis_std_stand.json");
-        var monitor = new A350PfdMonitor(A350PfdMonitorTests.Each((g, _) => g == "SFD" ? onStd : null), _ => false, _ => { }, () => now);
+        var monitor = new A350PfdMonitor(A350PfdMonitorTests.Each((g, _) => g == "SFD" ? _isisShows : null), _ => false, _ => { }, () => _monitorNow);
         _def.Pfd = monitor;
         _def.IsisStdRead = null;   // the definition's own: the ISIS's draw
         await monitor.TickAsync();
         await monitor.TickAsync();
-        void TypeIsis() => _def.HandleUIVariableSet(A350IsisWindow.QnhRow, 1019, _def.GetVariables()[A350IsisWindow.QnhRow], _sim, _speech);
+        if (ticksOnDelay)
+            _def.Delay = async ms => { _monitorNow += TimeSpan.FromMilliseconds(ms); await monitor.TickAsync(); };
+        return monitor;
+    }
 
+    private void TypeIsis(double qnh = 1019) =>
+        _def.HandleUIVariableSet(A350IsisWindow.QnhRow, qnh, _def.GetVariables()[A350IsisWindow.QnhRow], _sim, _speech);
+
+    private void Press(string row) => _def.HandleUIVariableSet(row, 1, _def.GetVariables()[row], _sim, _speech);
+
+    // Review 2026-11-17: the ISIS's STD is read from its draw, kept up to half a minute; just after its STD/CHANGE key a draw from before
+    // the press said "ISIS not set: it is on STD." though the pilot had just taken it off STD. The entry waits for a draw since the key
+    // (review 2, minor 3: writing blind could read back unchanged) and goes by it.
+    [Fact]
+    public async Task After_the_isis_std_key_its_qnh_waits_for_a_draw_since()
+    {
+        Baros(link: 0);
+        await IsisDrawn(ticksOnDelay: true);
         TypeIsis();
         Assert.Equal(new[] { A350BaroEntry.IsisOnStdNotice }, _speech.All);   // the draw shows STD
         Assert.Empty(_sent);
 
-        _def.HandleUIVariableSet(IniBuildsA350Definition.IsisStdKeyRow, 1, _def.GetVariables()[IniBuildsA350Definition.IsisStdKeyRow], _sim, _speech);
+        Press(IniBuildsA350Definition.IsisStdKeyRow);
+        _isisShows = A350Fixtures.Capture("ground_SFD.json");   // off STD, from the next draw on
         _sent.Clear();
         TypeIsis();
         Assert.NotEmpty(_sent);
         Assert.Single(_speech.All, A350BaroEntry.IsisOnStdNotice);
+    }
+
+    [Fact]
+    public async Task After_the_isis_std_key_a_draw_since_still_on_std_refuses()
+    {
+        Baros(link: 0);
+        await IsisDrawn(ticksOnDelay: true);
+        _isisShows = A350Fixtures.Capture("ground_SFD.json");
+        _monitorNow += TimeSpan.FromSeconds(1);
+        await _def.Pfd!.TickAsync();
+        await _def.Pfd.TickAsync();
+        Press(IniBuildsA350Definition.IsisStdKeyRow);
+        _isisShows = A350Fixtures.Capture("sfd_isis_std_stand.json");   // the key put it on STD
+        _sent.Clear();
+        TypeIsis();
+        Assert.Empty(_sent);
+        Assert.Equal(A350BaroEntry.IsisOnStdNotice, _speech.All[^1]);
+    }
+
+    // Review 2026-11-17 (2), important 1: at LINKED INSTR 2 a side's push puts the ISIS on STD and its pull takes it off ([A350-13]):
+    // they move the ISIS's STD as its own key does. At 0 they leave it alone.
+    [Theory]
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL")]
+    [InlineData("A350_EFIS_QNH_PRESSURE_SELECTOR_RIGHT_PULL")]
+    public async Task At_linked_instr_2_a_sides_pull_moves_the_isis_std(string pullRow)
+    {
+        Baros(link: 2, mode1: 3, mode2: 3);
+        await IsisDrawn(ticksOnDelay: true);
+        Press(pullRow);
+        _isisShows = A350Fixtures.Capture("ground_SFD.json");
+        _sent.Clear();
+        TypeIsis();
+        Assert.NotEmpty(_sent);
+        Assert.DoesNotContain(A350BaroEntry.IsisOnStdNotice, _speech.All);
+    }
+
+    [Fact]
+    public async Task At_linked_instr_0_a_sides_pull_leaves_the_isis_std_known()
+    {
+        Baros(link: 0, mode1: 3);
+        await IsisDrawn(ticksOnDelay: false);
+        Press("A350_EFIS_QNH_PRESSURE_SELECTOR_LEFT_PULL");
+        _sent.Clear();
+        TypeIsis();
+        Assert.Empty(_sent);
+        Assert.Equal(A350BaroEntry.IsisOnStdNotice, _speech.All[^1]);
+    }
+
+    // The Altimeter entry waits for a draw since the key too.
+    [Fact]
+    public async Task The_altimeter_entry_waits_for_an_isis_draw_since_its_std_key()
+    {
+        Baros(link: 0);
+        await IsisDrawn(ticksOnDelay: true);
+        Press(IniBuildsA350Definition.IsisStdKeyRow);
+        _isisShows = A350Fixtures.Capture("ground_SFD.json");
+        foreach (var side in new[] { 1, 2, 3 })
+            Fresh($"KOHLSMAN SETTING MB:{side}", 1033);
+        _sent.Clear();
+        await Enter(1033);
+        Assert.Contains(_sent, rpn => rpn.Contains(" 3 r (>K:2:KOHLSMAN_SET)", StringComparison.Ordinal));
+        Assert.DoesNotContain(A350BaroEntry.IsisOnStdNotice, _speech.All);
     }
 
     [Fact]

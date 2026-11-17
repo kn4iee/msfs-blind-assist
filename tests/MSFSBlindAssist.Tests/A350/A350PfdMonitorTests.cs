@@ -182,6 +182,32 @@ public class A350PfdMonitorTests
         Assert.Same(sfd, m.LatestSincePress("SFD", 0));
     }
 
+    // Review 2026-11-17 (2): a draw is kept when its tick has drawn everything, its memory copied at the tick's start; a tick that
+    // copied the memory before the press landed and finished drawing well after it still shows the display before the press.
+    [Fact]
+    public async Task A_draw_copied_before_a_press_is_no_draw_since_it_however_late_it_is_kept()
+    {
+        var now = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        var sfd = Fixture("sfd_isis_std_stand");
+        A350PfdMonitor? m = null;
+        bool pressDuringDraw = false;
+        m = new A350PfdMonitor(gauges =>
+        {
+            if (pressDuringDraw && gauges.Any(g => g.Gauge == "SFD"))
+            {
+                pressDuringDraw = false;
+                m!.Pressed("SFD", 0);                                   // the key, while this tick draws its copy
+                now += A350PfdMonitor.PressSettle + TimeSpan.FromMilliseconds(200);   // a slow tick
+            }
+            return Task.FromResult<IReadOnlyList<A350DrawCapture?>?>(gauges.Select(g => g.Gauge == "SFD" ? sfd : null).ToList());
+        }, _ => false, _ => { }, () => now);
+        pressDuringDraw = true;
+        await m.TickAsync();
+        await m.TickAsync();
+        Assert.Same(sfd, m.Latest("SFD", 0));
+        Assert.Null(m.LatestSincePress("SFD", 0));
+    }
+
     // The reader not ready (or no A350 in the sim) answers the whole tick with nothing: nothing is kept or said.
     [Fact]
     public async Task A_tick_the_reader_cannot_draw_keeps_nothing()

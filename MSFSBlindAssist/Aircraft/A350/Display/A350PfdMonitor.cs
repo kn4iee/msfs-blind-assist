@@ -45,7 +45,7 @@ public sealed class A350PfdMonitor : IDisposable
     private readonly A350FmaAnnouncer _fma = new();
     private readonly A350PfdFlagAnnouncer _flags = new();
     private readonly A350FmsMessageAnnouncer _messages = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), (A350DrawCapture Capture, DateTime At)> _latest = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), (A350DrawCapture Capture, DateTime At, DateTime Copied)> _latest = new();   // Copied: its tick's start
     private readonly Func<DateTime> _now;
     private int _tick, _other, _quiet;
     private CancellationTokenSource? _cts;
@@ -131,9 +131,9 @@ public sealed class A350PfdMonitor : IDisposable
         return _latest.TryGetValue((gauge, index), out var kept) && now - kept.At <= MaxAge ? kept.Capture : null;
     }
 
-    /// <summary>How long after a key's press a display's draw is taken to show it: the press lands in a frame or two, and a draw's copy
-    /// is taken up to a draw before it is kept.</summary>
-    public static readonly TimeSpan PressSettle = TimeSpan.FromMilliseconds(500);
+    /// <summary>How long after a key's press a display's draw is taken to show it, counted to the draw's memory copy (its tick's start,
+    /// review 2026-11-17: a tick draws four or five displays after it): the press lands in a frame or two; A350ShownCapture's 600 ms.</summary>
+    public static readonly TimeSpan PressSettle = TimeSpan.FromMilliseconds(600);
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), DateTime> _pressedAt = new();
 
@@ -141,14 +141,14 @@ public sealed class A350PfdMonitor : IDisposable
     /// has none (review 2026-11-17: the ISIS's STD, read only from its draw).</summary>
     public void Pressed(string gauge, int index) => _pressedAt[(gauge, index)] = _now();
 
-    /// <summary>The display's latest draw (<see cref="Latest"/>) when it was kept at least <see cref="PressSettle"/> after the last
-    /// <see cref="Pressed"/>, else null.</summary>
+    /// <summary>The display's latest draw (<see cref="Latest"/>) when its memory was copied at least <see cref="PressSettle"/> after the
+    /// last <see cref="Pressed"/>, else null.</summary>
     public A350DrawCapture? LatestSincePress(string gauge, int index)
     {
         var now = _now();
         _askedAt[(gauge, index)] = now;
         if (!_latest.TryGetValue((gauge, index), out var kept) || now - kept.At > MaxAge) return null;
-        return _pressedAt.TryGetValue((gauge, index), out var pressed) && kept.At < pressed + PressSettle ? null : kept.Capture;
+        return _pressedAt.TryGetValue((gauge, index), out var pressed) && kept.Copied < pressed + PressSettle ? null : kept.Capture;
     }
 
     /// <summary>One tick: the CTR (when the E/WD is fed) and the captain's EFIS, the MFD every other tick, one of
@@ -182,7 +182,7 @@ public sealed class A350PfdMonitor : IDisposable
         if (quiet is { } drawn) _triedAt[drawn] = due;
         var at = _now();
         for (int n = 0; n < gauges.Count && n < caps.Count; n++)
-            if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = (cap, at);
+            if (caps[n] is { Ok: true } cap) _latest[gauges[n]] = (cap, at, due);
         // Each reader reads its own draw, the E/WD's first (its warnings matter most), and one that throws costs that read
         // only (final review 2026-10-29: a message-line read that threw ended the tick before the E/WD had its CTR).
         if (ctr != null && caps.Count > 0) Read("E/WD", () => ctr(caps[0]));

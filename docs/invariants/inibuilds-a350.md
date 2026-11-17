@@ -71,17 +71,20 @@ each baro from its own read, or clicking the ISIS on STD at 2, moves the sides b
 
 ## A350-14
 
-The ISIS has an STD of its own, toggled only by its STD/CHANGE key and shown only on its display (the SFD's `STD` line against its
-`Baro:` line): no variable says it. While it is on, `KOHLSMAN SETTING MB:3` holds 1013.25 and nothing written moves it, not a direct
+The ISIS has an STD of its own, toggled by its STD/CHANGE key (and at LINKED INSTR 2 by a side's push, which puts it on STD, or pull,
+which takes it off) and shown only on its display (the SFD's `STD` line against its `Baro:` line): no variable says it. While it is on, `KOHLSMAN SETTING MB:3` holds 1013.25 and nothing written moves it, not a direct
 write, not a click, not MSFSBA's row, at every timing tried from 100 ms to 3 s; the setting underneath survives (the key brought back
 1020). At LINKED INSTR 2 a side's push puts the ISIS on STD with them and it stays there when the option goes back to 0 or 1, where only
 its own key gets it back (plan 02, evidence 02). So `A350BaroEntry` plans no ISIS target while the SFD shows it on STD and says so ("ISIS
 not set: it is on STD."), never a write that would read back unchanged and be reported as a failure. The ISIS QNH row (the ISIS
 window's typed field, `HandleTyped`) refuses the same way, sending nothing: on the A350-1000's controls pass (2026-11-17) it still
-wrote and said "ISIS QNH did not take 1019" (`A350BaroEntryRunTests`). The STD is judged on a draw kept at least
-`A350PfdMonitor.PressSettle` after MSFSBA's last press of the STD/CHANGE key (`LatestSincePress`): the SFD is drawn every other tick
-and its latest draw is kept up to half a minute, so just after the key a draw from before it said the ISIS was still on STD (review,
-2026-11-17). An older draw is no draw: the STD is unknown and the entry writes, its read-back saying what the ISIS then shows.
+wrote and said "ISIS QNH did not take 1019" (`A350BaroEntryRunTests`). The STD is judged on a draw whose memory was copied at least
+`A350PfdMonitor.PressSettle` (600 ms) after MSFSBA's last press of a row that moves it (`MovesIsisStd`: the STD/CHANGE key, and at
+LINKED INSTR 2 or unread a side's push or pull; `LatestSincePress`, counted to the draw's copy, its tick's start, as a tick draws four
+or five displays after it): the SFD is drawn every other tick and its latest draw is kept up to half a minute, so just after the key a
+draw from before it said the ISIS was still on STD (reviews, 2026-11-17). An entry typed then waits up to `IsisStdWaitMs` (2.5 s) for
+a draw since (`IsisOnStdSettledAsync`) and goes by it, planned again, as leaving STD brings back the setting underneath; with none,
+the STD is unknown and the entry writes, its read-back saying what the ISIS then shows.
 
 ## A350-15
 
