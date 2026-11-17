@@ -982,7 +982,7 @@ internal sealed partial class ProbeForm : Form
                     }
                     double? before = await Read(key);
                     var results = new List<string>();
-                    bool allOk = true;
+                    bool allOk = true, untested = false;
                     // A spring-loaded switch (the OIS EFB/AVNCS switches) is held at the position for A350WritePlan.SpringHoldMs, then
                     // let go to its rest: it passes only seen at the position inside the hold and at rest after it (2026-11-17: the
                     // sweep failed both OIS switches read after the hold; review: a dead switch, never moved, read as sprung back).
@@ -999,19 +999,24 @@ internal sealed partial class ProbeForm : Form
                             // Watched in the cockpit's own JS through the hold: a read through the batch answers at its next second,
                             // as long as the hold, so it missed one hold in eight (2026-11-17).
                             var seen = new List<double>();
+                            int answered = 0;   // the evals that read a number: none (the debugger's port held, the view missing) is no verdict
                             var watch = System.Diagnostics.Stopwatch.StartNew();
                             while (watch.ElapsedMilliseconds < MSFSBlindAssist.Aircraft.A350.A350WritePlan.SpringHoldMs + 500)
                             {
                                 var js = await MSFSBlindAssist.SimConnect.CoherentEvalClient.EvalAsync(MSFSBlindAssist.Aircraft.A350.A350Printout.ViewNeedle,
                                     $"String(SimVar.GetSimVarValue('{control!.StateVar}','number'))", CancellationToken.None);
                                 if (double.TryParse(js, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sv)
-                                    && (seen.Count == 0 || Math.Abs(seen[^1] - sv) >= 0.01))
-                                    seen.Add(sv);
+                                    && double.IsFinite(sv))
+                                {
+                                    answered++;
+                                    if (seen.Count == 0 || Math.Abs(seen[^1] - sv) >= 0.01) seen.Add(sv);
+                                }
                                 await Task.Delay(80);
                             }
                             await Task.Delay(1000);
                             double? sprung = await Read(key);
                             bool heldOk = seen.Any(s => Math.Abs(s - v) < 0.01), backOk = sprung is double sb && Math.Abs(sb - rs) < 0.01;
+                            if (answered == 0) { untested = true; results.Add($"{d.ValueDescriptions[v]}: UNTESTED (the cockpit's JS read nothing)"); continue; }
                             allOk &= heldOk && backOk;
                             results.Add($"{d.ValueDescriptions[v]}: seen {(seen.Count == 0 ? "nothing" : string.Join(" ", seen.Select(s => Fmt(s))))}{(heldOk ? "" : "!")}, springs back to {Fmt(sprung)}{(backOk ? "" : "!")} [{Diff(pre, await Snapshot(def, lights))}]");
                             continue;
@@ -1027,7 +1032,7 @@ internal sealed partial class ProbeForm : Form
                         def.HandleUIVariableSet(key, Math.Round(back), d, _m, cap);
                         await Task.Delay(2000);
                     }
-                    Line($"{panel}\t{key}\t{(allOk ? "PASS" : "FAIL")}\t{d.DisplayName}\tbefore={Fmt(before)}\t{string.Join(", ", results)}\trestored={Fmt(await Read(key))}\tsaid: {cap.Drain()}");
+                    Line($"{panel}\t{key}\t{(!allOk ? "FAIL" : untested ? "UNTESTED" : "PASS")}\t{d.DisplayName}\tbefore={Fmt(before)}\t{string.Join(", ", results)}\trestored={Fmt(await Read(key))}\tsaid: {cap.Drain()}");
                 }
             }
             Line("done");
