@@ -106,11 +106,18 @@ public sealed class A350FcuWindowsTests : IDisposable
         Assert.Equal("STD", Read(baro, ("KOHLSMAN SETTING MB:1", 1013.25), ("XMLVAR_Baro1_Mode", 3), ("XMLVAR_Baro_Selector_HPA_1", 1), ("INI_BARO_PRESET_CPT", 0), ("INI_BARO_PRESET_CPT_SHOW", 0)));
     }
 
-    /// <summary>The cockpit floors hectopascals (the baro knob's tooltip: flr '%dhPa'): a pull from a preset stepped from a
-    /// fractional setting left 1015.81, which the cockpit reads 1015 (live in flight 2026-10-26).</summary>
-    [Fact]
-    public void Hectopascals_read_floored_as_the_cockpit_reads_them() =>
-        Assert.Equal("QNH 1015 hectopascals", Read(W("Captain baro"), ("KOHLSMAN SETTING MB:1", 1015.8125), ("XMLVAR_Baro1_Mode", 0),
+    /// <summary>Hectopascals read as the PFD and the FCU's baro display draw them, rounded half up (live 2026-11-17 on the ULR,
+    /// the setting written through KOHLSMAN_SET: 1015.25 and 1015.4375 drew 1015, 1015.5, 1015.75 and 1015.8125 drew 1016).
+    /// A pull from a preset can land at 1015.81 (live 2026-11-16): MSFSBA said 1015, as the knob's mouse tooltip floors it
+    /// (flr '%dhPa'), while both displays showed 1016 (the owner, 2026-11-17: what a sighted pilot sees).</summary>
+    [Theory]
+    [InlineData(1015.8125, "QNH 1016 hectopascals")]
+    [InlineData(1015.5, "QNH 1016 hectopascals")]
+    [InlineData(1015.4375, "QNH 1015 hectopascals")]
+    [InlineData(1015.25, "QNH 1015 hectopascals")]
+    [InlineData(1013.25, "QNH 1013 hectopascals")]
+    public void Hectopascals_read_as_the_displays_draw_them(double mb, string expected) =>
+        Assert.Equal(expected, Read(W("Captain baro"), ("KOHLSMAN SETTING MB:1", mb), ("XMLVAR_Baro1_Mode", 0),
             ("XMLVAR_Baro_Selector_HPA_1", 1), ("INI_BARO_PRESET_CPT", 0), ("INI_BARO_PRESET_CPT_SHOW", 0)));
 
     /// <summary>Live in flight 2026-10-26: on STD a knob turn shows a preset QNH (INI_BARO_PRESET_*, whole hectopascals or

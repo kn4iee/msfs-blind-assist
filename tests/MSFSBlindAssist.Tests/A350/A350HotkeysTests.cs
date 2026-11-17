@@ -143,8 +143,8 @@ public class A350HotkeysTests
     public void The_altimeter_reads_standard_or_both_units()
     {
         Assert.Equal("Altimeter standard", A350Hotkeys.Altimeter(3, 1013.25));
-        // The cockpit floors its hectopascals (the baro knob's tooltip): 1011.8 shows 1011.
-        Assert.Equal("Altimeter: 1011, 29.88", A350Hotkeys.Altimeter(0, 1011.8));
+        // Hectopascals as the PFD draws them, rounded half up (live 2026-11-17): 1011.8 shows 1012.
+        Assert.Equal("Altimeter: 1012, 29.88", A350Hotkeys.Altimeter(0, 1011.8));
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class A350HotkeysTests
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("de-DE");
-            Assert.Equal("Altimeter: 1011, 29.88", A350Hotkeys.Altimeter(0, 1011.8));
+            Assert.Equal("Altimeter: 1012, 29.88", A350Hotkeys.Altimeter(0, 1011.8));
         }
         finally { CultureInfo.CurrentCulture = old; }
     }

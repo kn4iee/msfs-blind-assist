@@ -77,7 +77,7 @@ public static class A350Hotkeys
     };
 
     /// <summary>The captain's altimeter as the A380's B read-out says it: standard while the baro knob is pushed
-    /// (<c>XMLVAR_Baro1_Mode</c> 3), else the setting in both units, its hectopascals floored as the cockpit shows them.</summary>
+    /// (<c>XMLVAR_Baro1_Mode</c> 3), else the setting in both units, its hectopascals as the PFD draws them.</summary>
     public static string Altimeter(double mode, double millibars) =>
         Math.Abs(mode - 3) < 0.5
             ? "Altimeter standard"

@@ -129,9 +129,8 @@ On each of the FBW A380, the FBW A32NX and the Headwind A330, with the First Off
    them. (The ND's circled 1 and 2 are named now: the flap 1 and flap 2 points of the CDA function, settled on the third flight.)
 10. **ABN PROC read aloud (2026-11-16): decided, title only (done 2026-11-17).** A list opened with ABN PROC or DEFRD PROC says its
    title, and "NO DEFERRED PROCEDURES" when empty; the items are in the E/WD window.
-11. **QNH with a fraction (2026-11-16):** a preset pulled from STD can land at 1015.81. The PFD draws it 1016; MSFSBA says 1015,
-   as the baro knob's tooltip floors it (decided 2026-10-26). Say what the PFD shows (1016, so you know to set 1015 again), or keep
-   the tooltip's?
+11. **QNH with a fraction (2026-11-16): decided, as the displays show it (done 2026-11-17).** The PFD and the FCU baro display
+   round half up (1015.5 shows 1016); MSFSBA now says the same, so a preset pulled to 1015.81 is heard as 1016.
 
 ## 5. Things outside the A350
 

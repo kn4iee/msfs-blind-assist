@@ -124,9 +124,10 @@ public static class A350FcuWindows
     private static string Window(double dashed, double dot, string value) =>
         (dashed >= 0.5 ? "Dashes" : value) + (dot >= 0.5 ? ", managed" : "");
 
-    /// <summary>A side's QNH in hectopascals as the cockpit reads it: floored (the baro knob's tooltip, flr '%dhPa'), so
-    /// 1015.81 reads 1015.</summary>
-    public static string Hectopascals(double mb) => Math.Floor(mb + 1e-6).ToString("0", CultureInfo.InvariantCulture);
+    /// <summary>A side's QNH in hectopascals as the PFD and the FCU's baro display draw it: rounded half up (live 2026-11-17:
+    /// 1015.4375 drew 1015, 1015.5 drew 1016), so 1015.81 reads 1016. Only the knob's mouse tooltip floors it (flr '%dhPa'); the
+    /// owner, 2026-11-17: say what a sighted pilot sees.</summary>
+    public static string Hectopascals(double mb) => Math.Round(mb, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture);
 
     private static string Speed(double v, bool mach) =>
         mach ? "Mach " + v.ToString("0.00", CultureInfo.InvariantCulture) : Whole(v) + " knots";

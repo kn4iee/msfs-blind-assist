@@ -75,7 +75,7 @@ public class A350FcuCalloutsTests
     // The A380's words (BaroPhrase): the side, "altimeter", the setting in the side's unit; STD as "standard".
     [Theory]
     [InlineData(1, 1, 1013.25, "Captain altimeter 1013 hectopascals")]
-    [InlineData(2, 1, 1015.81, "First officer altimeter 1015 hectopascals")]   // floored, as the knob's own tooltip
+    [InlineData(2, 1, 1015.81, "First officer altimeter 1016 hectopascals")]   // as the PFD draws it (the knob's tooltip floors)
     [InlineData(1, 0, 29.92 * 33.8639, "Captain altimeter 29.92 inches")]
     public void A_baro_on_qnh_says_its_setting_in_its_unit(int side, double unit, double mb, string expected) =>
         Assert.Equal(expected, A350FcuCallouts.Phrase(side == 1 ? "Captain baro" : "First officer baro", Baro(side, 0, unit, mb)));
