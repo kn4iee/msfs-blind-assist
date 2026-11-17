@@ -633,7 +633,7 @@ public partial class IniBuildsA350Definition
                 return;
             _commanded.Record(CommandKey(row.Key), now, Clock());
             ReRead(row.Key, sim);
-            announcer.Announce($"{row.Name} did not move" + (GuardClosed(row, sim) ? ": its guard is closed" : ""));
+            announcer.Announce($"{row.Name} did not move" + (GuardBlocks(row, target, sim) ? ": its guard is closed" : ""));
         }
         catch (Exception ex)
         {
@@ -646,12 +646,21 @@ public partial class IniBuildsA350Definition
         }
     }
 
-    /// <summary>Whether a switch sits under a guard that reads closed: its "&lt;key&gt;_GUARD" row (the ELT's; its set code puts TEST/RESET
-    /// back while the guard is shut, 2026-11-17), read by the guard's own spoken state, as a sighted pilot sees the guard over it.</summary>
-    private bool GuardClosed(A350PlacedRow row, SimConnectManager sim) =>
-        _rows.TryGetValue(row.Key + "_GUARD", out var guard) && guard.Control is { } control
-        && Cached(sim, guard.Key) is double state
-        && A350PanelLayout.PositionWords(control).TryGetValue(state, out var word) && word == "Closed";
+    /// <summary>The switches a closed guard holds, and the states it holds them from: the ELT's set code puts TEST/RESET (0) back while its
+    /// guard is shut and takes ARM and ON whatever the guard (2026-11-17). EMER CANCEL's guard covers a held button, never read back here.</summary>
+    private static readonly IReadOnlyDictionary<string, (string Guard, double[] Blocked)> Guards = new Dictionary<string, (string, double[])>
+    {
+        ["A350_ELT"] = ("A350_ELT_GUARD", new[] { 0.0 }),
+    };
+
+    /// <summary>Whether the guard over a switch reads closed and holds it from <paramref name="target"/> (<see cref="Guards"/>), the
+    /// guard's state read by its own spoken position, as a sighted pilot sees the guard over the switch.</summary>
+    private bool GuardBlocks(A350PlacedRow row, double target, SimConnectManager sim) =>
+        Guards.TryGetValue(row.Key, out var g)
+        && g.Blocked.Any(b => Math.Abs(b - target) < A350WritePlan.SameValueTolerance)
+        && _rows.TryGetValue(g.Guard, out var guard) && guard.Control is { } control
+        && Cached(sim, guard.Key) is double state && control.PositionForState(state) is double position
+        && A350PanelLayout.PositionWords(control).TryGetValue(control.StateForPosition(position), out var word) && word == "Closed";
 
     /// <summary>"All thrust levers" read back as both levers: the one that stayed is named ("Thrust lever 2 did not move"),
     /// both "All thrust levers did not move", and each stayed lever's position is remembered. Never cut short by a delivery
