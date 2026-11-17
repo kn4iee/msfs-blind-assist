@@ -765,4 +765,30 @@ public class IniBuildsA350ReadBackTests
         await Task.Yield();
         Assert.Equal(new[] { "BAT 1 did not move" }, speech.All);
     }
+
+    // 2026-11-17 (the ULR): the ELT's set code puts TEST/RESET back while its guard is closed (INI_ELT_SWITCH_GUARD 0), ARM and ON
+    // whatever the guard; a sighted pilot sees the guard over the switch. "ELT did not move" now says why.
+    [Theory]
+    [InlineData(0, "ELT did not move: its guard is closed")]
+    [InlineData(1, "ELT did not move")]
+    public async Task A_guarded_switch_that_did_not_move_says_its_guard_is_closed(double guard, string said)
+    {
+        var speech = new SpeechCapture();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var readBack = new TaskCompletionSource<double?>();
+        var def = new IniBuildsA350Definition
+        {
+            CanLand = _ => true,
+            Send = (_, _) => { },
+            ReRead = (_, _) => { },
+            Delay = _ => Task.CompletedTask,
+            ReadFresh = (_, _, _) => readBack.Task,
+        };
+        string guardKey = def.KeyForInput("INI_ELT_SWITCH_GUARD"), eltKey = def.KeyForInput("INI_ELT_SWITCH");
+        def.Cached = (_, key) => key == guardKey ? guard : key == eltKey ? 1 : 0;   // ARMED
+        def.HandleUIVariableSet("A350_ELT", 0, def.GetVariables()["A350_ELT"], sim, speech);
+        readBack.SetResult(1);   // still ARMED
+        await Task.Yield();
+        Assert.Equal(new[] { said }, speech.All);
+    }
 }

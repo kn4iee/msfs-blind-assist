@@ -633,7 +633,7 @@ public partial class IniBuildsA350Definition
                 return;
             _commanded.Record(CommandKey(row.Key), now, Clock());
             ReRead(row.Key, sim);
-            announcer.Announce($"{row.Name} did not move");
+            announcer.Announce($"{row.Name} did not move" + (GuardClosed(row, sim) ? ": its guard is closed" : ""));
         }
         catch (Exception ex)
         {
@@ -645,6 +645,13 @@ public partial class IniBuildsA350Definition
                 _pendingPicks.Remove(row.Key);
         }
     }
+
+    /// <summary>Whether a switch sits under a guard that reads closed: its "&lt;key&gt;_GUARD" row (the ELT's; its set code puts TEST/RESET
+    /// back while the guard is shut, 2026-11-17), read by the guard's own spoken state, as a sighted pilot sees the guard over it.</summary>
+    private bool GuardClosed(A350PlacedRow row, SimConnectManager sim) =>
+        _rows.TryGetValue(row.Key + "_GUARD", out var guard) && guard.Control is { } control
+        && Cached(sim, guard.Key) is double state
+        && A350PanelLayout.PositionWords(control).TryGetValue(state, out var word) && word == "Closed";
 
     /// <summary>"All thrust levers" read back as both levers: the one that stayed is named ("Thrust lever 2 did not move"),
     /// both "All thrust levers did not move", and each stayed lever's position is remembered. Never cut short by a delivery
