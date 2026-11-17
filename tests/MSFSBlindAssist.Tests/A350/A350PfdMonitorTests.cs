@@ -158,6 +158,30 @@ public class A350PfdMonitorTests
         Assert.Null(m.Latest("EFIS", 0));
     }
 
+    // Review 2026-11-17: the ISIS's own STD is read only from its draw, drawn every other tick and kept up to MaxAge, so just after its
+    // STD/CHANGE key a draw from before the press said it was still where it had been. A display's draw since a press is one kept at
+    // least PressSettle after it; the latest draw stays the latest for everything else.
+    [Fact]
+    public async Task A_draw_from_before_a_press_is_no_draw_since_it()
+    {
+        var now = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        var sfd = Fixture("sfd_isis_std_stand");
+        var m = new A350PfdMonitor(Each((g, _) => g == "SFD" ? sfd : null), _ => false, _ => { }, () => now);
+        await m.TickAsync();
+        await m.TickAsync();
+        Assert.Same(sfd, m.LatestSincePress("SFD", 0));   // never pressed: the latest
+        m.Pressed("SFD", 0);
+        Assert.Null(m.LatestSincePress("SFD", 0));
+        Assert.Same(sfd, m.Latest("SFD", 0));
+        await m.TickAsync();
+        await m.TickAsync();
+        Assert.Null(m.LatestSincePress("SFD", 0));   // drawn at the press: maybe before it landed
+        now += A350PfdMonitor.PressSettle;
+        await m.TickAsync();
+        await m.TickAsync();
+        Assert.Same(sfd, m.LatestSincePress("SFD", 0));
+    }
+
     // The reader not ready (or no A350 in the sim) answers the whole tick with nothing: nothing is kept or said.
     [Fact]
     public async Task A_tick_the_reader_cannot_draw_keeps_nothing()

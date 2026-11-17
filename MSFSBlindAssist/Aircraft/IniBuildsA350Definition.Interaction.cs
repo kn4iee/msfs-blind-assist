@@ -53,6 +53,8 @@ public partial class IniBuildsA350Definition
             return HandleTyped(row, field, value, simConnect, announcer);
         if (varKey is CaptainPullRow or FirstOfficerPullRow)
             _baroPulls++;   // a side the pilot pulls has not left STD unasked
+        if (varKey == IsisStdKeyRow && DisplayPanels.FirstOrDefault(d => d.Key == SfdDisplay) is { } sfd)
+            Pfd?.Pressed(sfd.Gauge, sfd.Index);   // the ISIS's draw from before it says nothing of its STD now
 
         // An option the aircraft is built without: the cockpit hides its controls and clears their variables.
         if (A350Options.For(control.Id) is { } option && Cached(simConnect, option.Key) is double fitted && fitted < 0.5)
@@ -344,7 +346,10 @@ public partial class IniBuildsA350Definition
     /// <summary>The ISIS's own STD, from its display; tests replace it.</summary>
     internal Func<bool?>? IsisStdRead { get; set; }
 
-    private bool? IsisOnStd() => IsisStdRead != null ? IsisStdRead() : A350BaroEntry.IsisOnStd(DisplayLines(SfdDisplay));
+    /// <summary>The ISIS's STD/CHANGE key: after its press the ISIS's STD is unknown until its display is drawn again (review 2026-11-17).</summary>
+    internal const string IsisStdKeyRow = "A350_ISIS_KNOB_BUTTON_1";
+
+    private bool? IsisOnStd() => IsisStdRead != null ? IsisStdRead() : A350BaroEntry.IsisOnStd(DisplayLines(SfdDisplay, sincePress: true));
 
     /// <summary>The ISIS's line in the Altimeter window: STD where its display shows it (the setting then holds 1013.25, which says nothing),
     /// else the setting the sim holds.</summary>

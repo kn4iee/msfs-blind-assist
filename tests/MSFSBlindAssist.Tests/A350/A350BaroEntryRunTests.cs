@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A350.Display;
 using MSFSBlindAssist.Aircraft.A350;
 using MSFSBlindAssist.Forms.A350;
 using MSFSBlindAssist.SimConnect;
@@ -276,6 +277,44 @@ public class A350BaroEntryRunTests
         _def.HandleUIVariableSet(A350IsisWindow.QnhRow, 1019, _def.GetVariables()[A350IsisWindow.QnhRow], _sim, _speech);
         Assert.Empty(_sent);
         Assert.Equal(new[] { A350BaroEntry.IsisOnStdNotice }, _speech.All);
+    }
+
+    // Review 2026-11-17: an ISIS whose STD is unknown (its display unread) is no refusal: the field writes, and its read-back says what
+    // the ISIS then shows.
+    [Fact]
+    public void A_typed_isis_qnh_with_the_isis_std_unknown_is_sent()
+    {
+        Baros(link: 0);
+        _def.IsisStdRead = () => null;
+        _def.HandleUIVariableSet(A350IsisWindow.QnhRow, 1019, _def.GetVariables()[A350IsisWindow.QnhRow], _sim, _speech);
+        Assert.NotEmpty(_sent);
+        Assert.DoesNotContain(A350BaroEntry.IsisOnStdNotice, _speech.All);
+    }
+
+    // Review 2026-11-17: the ISIS's STD is read from its draw, kept up to half a minute; just after its STD/CHANGE key a draw from before
+    // the press said "ISIS not set: it is on STD." though the pilot had just taken it off STD. A draw from before the press is unread.
+    [Fact]
+    public async Task An_isis_draw_from_before_its_std_key_is_no_refusal()
+    {
+        Baros(link: 0);
+        var now = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        var onStd = A350Fixtures.Capture("sfd_isis_std_stand.json");
+        var monitor = new A350PfdMonitor(A350PfdMonitorTests.Each((g, _) => g == "SFD" ? onStd : null), _ => false, _ => { }, () => now);
+        _def.Pfd = monitor;
+        _def.IsisStdRead = null;   // the definition's own: the ISIS's draw
+        await monitor.TickAsync();
+        await monitor.TickAsync();
+        void TypeIsis() => _def.HandleUIVariableSet(A350IsisWindow.QnhRow, 1019, _def.GetVariables()[A350IsisWindow.QnhRow], _sim, _speech);
+
+        TypeIsis();
+        Assert.Equal(new[] { A350BaroEntry.IsisOnStdNotice }, _speech.All);   // the draw shows STD
+        Assert.Empty(_sent);
+
+        _def.HandleUIVariableSet(IniBuildsA350Definition.IsisStdKeyRow, 1, _def.GetVariables()[IniBuildsA350Definition.IsisStdKeyRow], _sim, _speech);
+        _sent.Clear();
+        TypeIsis();
+        Assert.NotEmpty(_sent);
+        Assert.Single(_speech.All, A350BaroEntry.IsisOnStdNotice);
     }
 
     [Fact]

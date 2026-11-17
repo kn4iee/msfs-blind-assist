@@ -131,6 +131,26 @@ public sealed class A350PfdMonitor : IDisposable
         return _latest.TryGetValue((gauge, index), out var kept) && now - kept.At <= MaxAge ? kept.Capture : null;
     }
 
+    /// <summary>How long after a key's press a display's draw is taken to show it: the press lands in a frame or two, and a draw's copy
+    /// is taken up to a draw before it is kept.</summary>
+    public static readonly TimeSpan PressSettle = TimeSpan.FromMilliseconds(500);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string, int), DateTime> _pressedAt = new();
+
+    /// <summary>A key that changes a display was pressed: until a draw kept <see cref="PressSettle"/> after it, <see cref="LatestSincePress"/>
+    /// has none (review 2026-11-17: the ISIS's STD, read only from its draw).</summary>
+    public void Pressed(string gauge, int index) => _pressedAt[(gauge, index)] = _now();
+
+    /// <summary>The display's latest draw (<see cref="Latest"/>) when it was kept at least <see cref="PressSettle"/> after the last
+    /// <see cref="Pressed"/>, else null.</summary>
+    public A350DrawCapture? LatestSincePress(string gauge, int index)
+    {
+        var now = _now();
+        _askedAt[(gauge, index)] = now;
+        if (!_latest.TryGetValue((gauge, index), out var kept) || now - kept.At > MaxAge) return null;
+        return _pressedAt.TryGetValue((gauge, index), out var pressed) && kept.At < pressed + PressSettle ? null : kept.Capture;
+    }
+
     /// <summary>One tick: the CTR (when the E/WD is fed) and the captain's EFIS, the MFD every other tick, one of
     /// <see cref="Others"/> and at most one of <see cref="Quiet"/>, asked for at once so they are drawn on one memory copy (live 2026-10-28, with the A350's memory at 495 MB, one copy took
     /// 650 ms, and a tick asking display by display made three or four).</summary>

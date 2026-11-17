@@ -43,7 +43,8 @@ FCU Speed, Heading, Altitude and VS/FPA fields, each side's QNH (in that side's 
 ISIS QNH (hectopascals or inches) and the cabin altitude and V/S targets. Type the value and press Enter: the aircraft's own knob lands it
 and the value the cockpit then shows is said ("FCU speed 250, selected"). A value the knob
 cannot take is said instead (a Mach number while the speed window shows knots, a QNH while
-that side is on STD).
+that side is on STD, the ISIS QNH while the ISIS is on its own STD: "ISIS not set: it is on
+STD.").
 
 The thrust levers, flaps and speed brake are combos with the A380's positions ("Thrust
 lever 1: Climb", "Flaps: 2"), and they say where they went ("All thrust levers Climb",

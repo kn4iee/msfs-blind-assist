@@ -289,11 +289,12 @@ public partial class IniBuildsA350Definition
     }
 
     /// <summary>A display's latest lines, as its status display reads them (none while its screen is dark), or null while
-    /// the displays are not running.</summary>
-    private IReadOnlyList<string>? DisplayLines(string displayKey) =>
+    /// the displays are not running; <paramref name="sincePress"/>: or while its latest draw may predate a key's press
+    /// (<see cref="A350PfdMonitor.LatestSincePress"/>).</summary>
+    private IReadOnlyList<string>? DisplayLines(string displayKey, bool sincePress = false) =>
         DisplayPanels.FirstOrDefault(d => d.Key == displayKey) is not { } d ? null
             : IsDark(d) ? Array.Empty<string>()
-            : Pfd?.Latest(d.Gauge, d.Index) is { } capture ? ReadDisplay(d, capture) : null;
+            : (sincePress ? Pfd?.LatestSincePress(d.Gauge, d.Index) : Pfd?.Latest(d.Gauge, d.Index)) is { } capture ? ReadDisplay(d, capture) : null;
 
     /// <summary>"Captain PFD dark: ..." while that display's screen is dark, else null.</summary>
     private string? DarkReadout(string displayKey) =>

@@ -78,7 +78,10 @@ write, not a click, not MSFSBA's row, at every timing tried from 100 ms to 3 s; 
 its own key gets it back (plan 02, evidence 02). So `A350BaroEntry` plans no ISIS target while the SFD shows it on STD and says so ("ISIS
 not set: it is on STD."), never a write that would read back unchanged and be reported as a failure. The ISIS QNH row (the ISIS
 window's typed field, `HandleTyped`) refuses the same way, sending nothing: on the A350-1000's controls pass (2026-11-17) it still
-wrote and said "ISIS QNH did not take 1019" (`A350BaroEntryRunTests`).
+wrote and said "ISIS QNH did not take 1019" (`A350BaroEntryRunTests`). The STD is judged on a draw kept at least
+`A350PfdMonitor.PressSettle` after MSFSBA's last press of the STD/CHANGE key (`LatestSincePress`): the SFD is drawn every other tick
+and its latest draw is kept up to half a minute, so just after the key a draw from before it said the ISIS was still on STD (review,
+2026-11-17). An older draw is no draw: the STD is unknown and the entry writes, its read-back saying what the ISIS then shows.
 
 ## A350-15
 
