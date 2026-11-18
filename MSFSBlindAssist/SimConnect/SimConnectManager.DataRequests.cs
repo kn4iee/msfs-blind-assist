@@ -1,0 +1,1019 @@
+using System.Collections.Concurrent;
+using Microsoft.FlightSimulator.SimConnect;
+using static Microsoft.FlightSimulator.SimConnect.SimConnect;
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Navigation;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Utils.Logging;
+
+namespace MSFSBlindAssist.SimConnect;
+
+public partial class SimConnectManager
+{
+
+    /// <summary>
+    /// Requests one data snapshot for every AI/multiplayer aircraft within 150nm.
+    /// Responses arrive via AiTrafficReceived, one event per aircraft.
+    /// </summary>
+    public void RequestAiTrafficData()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            const uint radiusMeters = 278000; // ~150nm
+            simConnect.RequestDataOnSimObjectType(
+                DATA_REQUESTS.REQUEST_AI_TRAFFIC,
+                DATA_DEFINITIONS.DEF_AI_TRAFFIC,
+                radiusMeters,
+                SIMCONNECT_SIMOBJECT_TYPE.AIRCRAFT);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"RequestAiTrafficData error: {ex.Message}");
+        }
+    }
+
+    // The next of the GroundTrafficRequestIdCount sweep ids to use, 0..7 (UI thread: the monitor's
+    // timer and the Alt+G summary).
+    private uint _groundTrafficSlot;
+
+    /// <summary>
+    /// The ground-traffic monitor's sweep: every aircraft within <paramref name="radiusMeters"/>
+    /// (the monitor passes just past what it can use — about 1-17 km — instead of TCAS's 150 nm).
+    /// Entries arrive via AiTrafficReceived like any other sweep's; the last one raises
+    /// GroundTrafficSweepCompleted with the sweep's request id. The user's own aircraft is always
+    /// inside any radius, so the sweep always completes. Each sweep goes out under the NEXT id of the
+    /// rotating range (<see cref="IsGroundTrafficRequestId"/>), so a late completion of a sweep the
+    /// monitor gave up on can be told from the one it is waiting for. Returns the request id used, or
+    /// 0 when nothing was sent (not connected, or the request threw).
+    /// </summary>
+    public uint RequestGroundTrafficData(uint radiusMeters)
+    {
+        if (!IsConnected || simConnect == null) return 0;
+        try
+        {
+            uint slot = _groundTrafficSlot;
+            _groundTrafficSlot = (slot + 1) % GroundTrafficRequestIdCount;
+            var requestId = (DATA_REQUESTS)((uint)DATA_REQUESTS.REQUEST_GROUND_TRAFFIC + slot);
+            simConnect.RequestDataOnSimObjectType(
+                requestId,
+                DATA_DEFINITIONS.DEF_AI_TRAFFIC,
+                Math.Max(1u, radiusMeters),
+                SIMCONNECT_SIMOBJECT_TYPE.AIRCRAFT);
+            return (uint)requestId;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"RequestGroundTrafficData error: {ex.Message}");
+            return 0;
+        }
+    }
+
+    public void RequestAircraftInfo()
+    {
+        if (IsConnected && simConnect != null)
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_AIRCRAFT_INFO,
+                DATA_DEFINITIONS.AIRCRAFT_INFO, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+
+            // Also request ATC ID
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_ATC_ID,
+                DATA_DEFINITIONS.ATC_ID_INFO, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+    }
+
+    /// <summary>
+    /// Request variables for a specific panel (replacement for RequestOnDemandVars)
+    /// </summary>
+    public void RequestPanelVariables(string panelName, string relatedAction = "")
+    {
+        if (!IsConnected || simConnect == null) return;
+
+        try
+        {
+            var panelControls = CurrentAircraft?.GetPanelControls() ?? new Dictionary<string, List<string>>();
+            if (!panelControls.ContainsKey(panelName)) return;
+
+            var panelVariables = panelControls[panelName];
+            Log.Debug("SimConnect", $"Requesting {panelVariables.Count} variables for panel '{panelName}' after: {relatedAction}");
+
+            foreach (string varKey in panelVariables)
+            {
+                try
+                {
+                    RequestVariable(varKey);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug("SimConnect", $"Error requesting variable {varKey}: {ex.Message}");
+                    // Continue with other variables even if one fails
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting panel '{panelName}': {ex.Message}");
+        }
+    }
+
+    // Awaitable fresh reads (see FreshReadWaiters). Completed from the two delivery paths in
+    // SimConnectManager.VarCache.cs — the individual-def response (by request id) and the
+    // continuous batch (a period sample) — and failed on disconnect / aircraft switch beside
+    // forceUpdateVariables.Clear().
+    //
+    // Every fresh read's PERIOD.ONCE goes out under its OWN request id from this range (the
+    // definition id is unchanged), so its answer can be told from an abandoned earlier read's.
+    // Dispatch routes any id >= INDIVIDUAL_VARIABLE_BASE to ProcessIndividualVariableResponse;
+    // data-definition ids start at 1000 and reset per connection and per aircraft switch, so a range
+    // starting at one million can never collide with them (pinned by FreshReadWaitersTests).
+    // _freshRequestIdToVarKey maps an issued id to its var key until the ONCE answers (consumed on
+    // delivery) or the connection/aircraft resets (cleared beside requestIdToVarKey) — it is
+    // deliberately NOT folded into requestIdToVarKey, whose contract is exact sync with
+    // variableDataDefinitions. A SEED read (FreshReadPolicy.SeedRequestId, def id + 900000) sits
+    // between the two ranges and needs no map: the dispatch maps it back to its definition id.
+    internal const int FreshRequestIdBase = 1_000_000;
+    private readonly FreshReadWaiters _freshReads = new(FreshRequestIdBase);
+    private readonly ConcurrentDictionary<int, string> _freshRequestIdToVarKey = new();
+
+    // SimConnect is not thread-safe. This gate covers the one off-thread path that issues a data
+    // REQUEST and touches the maps below; the client-data WRITES a pool thread already makes (the
+    // MD-11's CEVENT pump, the A380's seat-motion Task.Run, both through ExecuteCalculatorCode)
+    // are a separate, older exception it does not cover. The manager is built on the UI thread
+    // (MainForm's constructor, through
+    // InitializeManagers), so this initializer captures the UI thread's WinForms context and id at
+    // construction — as MobiFlightWasmModule captures its own for its heartbeat — and the core
+    // RequestVariable below moves an off-thread call onto it. Only a WinForms context: it runs
+    // every post on the thread that created it, which is what makes "posted" mean "on the UI
+    // thread"; anything else (a test runner's context) leaves the gate inert — today's behaviour.
+    private readonly UiThreadGate _uiGate = new(
+        SynchronizationContext.Current as System.Windows.Forms.WindowsFormsSynchronizationContext,
+        Environment.CurrentManagedThreadId);
+
+    /// <summary>
+    /// True when a <see cref="ReadFreshAsync"/> of <paramref name="varKey"/> reflects the aircraft
+    /// within about a frame — see <see cref="FreshReadPolicy.SupportsFreshReads"/>. The MD-11
+    /// walker picks its read protocol on this.
+    /// </summary>
+    public bool SupportsFreshReads(string varKey)
+        => FreshReadPolicy.SupportsFreshReads(variableDataDefinitions.ContainsKey(varKey), DefinitionOf(varKey));
+
+    /// <summary>
+    /// Force-reads <paramref name="varKey"/> and completes on the NEXT delivery of it: the
+    /// PERIOD.ONCE response of an individual-def var (a frame or two), or the next continuous batch
+    /// of a batch-covered one (up to one period; the force flag makes an unchanged value re-fire).
+    /// A var on its own SIM_FRAME + CHANGED subscription gets its CACHE back at once instead — that
+    /// cache is at most a frame old and an unchanged value would never deliver
+    /// (<see cref="FreshReadPolicy.CacheIsFresh"/>) — unless the cache is EMPTY, when the read goes
+    /// out under its own fresh id beside the subscription (<see cref="FreshReadPolicy.AnswerFromCache"/>). Returns null when nothing
+    /// is delivered within <paramref name="timeoutMs"/>, when not connected, or when the key cannot
+    /// be delivered at all; throws <see cref="OperationCanceledException"/> on <paramref name="ct"/>.
+    /// The MD-11 walker reads through this instead of sleeping and polling the cache — the delivery
+    /// is the only fresh signal there is.
+    /// </summary>
+    public Task<double?> ReadFreshAsync(string varKey, int timeoutMs, CancellationToken ct = default)
+    {
+        if (!IsConnected || simConnect == null) return Task.FromResult<double?>(null);
+        bool deliverable = variableDataDefinitions.ContainsKey(varKey) || continuousVariableIndexMap.ContainsKey(varKey);
+        if (!deliverable) return Task.FromResult<double?>(null);
+        var freshDef = DefinitionOf(varKey);
+        if (FreshReadPolicy.CacheIsFresh(freshDef))
+        {
+            var cached = GetCachedVariableValue(varKey);
+            if (FreshReadPolicy.AnswerFromCache(freshDef, cached)) return Task.FromResult(cached);
+            // Never delivered — the SIM_FRAME + CHANGED subscription's initial delivery did not
+            // land (whole MD-11 sessions, 2026-09-09 and 2026-09-10: the speedbrake lever set up
+            // and never once delivered, every walk "state var unreadable"). The subscription itself
+            // must not be touched, so fall through and ask under this read's OWN request id: a ONCE
+            // on a separate id answers within a frame and leaves the subscription alive (measured
+            // live). RequestVariable issues it because freshRequestId is set — see the SIM_FRAME
+            // branch there.
+        }
+        return _freshReads.WaitAsync(varKey,
+            id => RequestVariable(varKey, forceUpdate: true, freshRequestId: id), timeoutMs, ct);
+    }
+
+    private SimVarDefinition? DefinitionOf(string varKey)
+    {
+        var defs = CurrentAircraft?.GetVariables();
+        return defs != null && defs.TryGetValue(varKey, out var def) ? def : null;
+    }
+
+    // SIM_FRAME own subscriptions paused by SetSimFrameSubscriptionActive. Cleared wherever the data
+    // definitions are, because registration issues every subscription active again.
+    private readonly ConcurrentDictionary<string, byte> _pausedSimFrameSubscriptions = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Pause (<paramref name="active"/> false) or resume a SIM_FRAME + CHANGED own subscription — the
+    /// take-off callouts' airspeed feed, which is needed only on the ground and on a roll still armed
+    /// (<see cref="IAircraftDefinition.TakeoffCalloutFeedKey"/>), and otherwise delivered tens of times
+    /// a second through a whole flight for nothing. A no-op when the subscription is already in that
+    /// state, so it is safe to call on every delivery. Pausing re-issues the subscription's own
+    /// request id with PERIOD.NEVER (the codebase's cancel idiom, as SafelyClearDataDefinition);
+    /// resuming re-issues it exactly as registration did. The cache keeps the last value while paused.
+    /// </summary>
+    public void SetSimFrameSubscriptionActive(string varKey, bool active)
+    {
+        if (!IsConnected || simConnect == null) return;
+        if (_uiGate.PostIfOffThread(() => SetSimFrameSubscriptionActive(varKey, active))) return;
+        if (active != _pausedSimFrameSubscriptions.ContainsKey(varKey)) return;   // already there
+        if (!FreshReadPolicy.CacheIsFresh(DefinitionOf(varKey))) return;           // not a SIM_FRAME own subscription
+        if (!variableDataDefinitions.TryGetValue(varKey, out int dataDefId)) return;
+
+        try
+        {
+            simConnect.RequestDataOnSimObject((DATA_REQUESTS)dataDefId, (DATA_DEFINITIONS)dataDefId,
+                SIMCONNECT_OBJECT_ID_USER,
+                active ? SIMCONNECT_PERIOD.SIM_FRAME : SIMCONNECT_PERIOD.NEVER,
+                active ? SIMCONNECT_DATA_REQUEST_FLAG.CHANGED : SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+            if (active) _pausedSimFrameSubscriptions.TryRemove(varKey, out _);
+            else _pausedSimFrameSubscriptions[varKey] = 0;
+            Log.Debug("SimConnect", $"SIM_FRAME subscription for {varKey} {(active ? "resumed" : "paused")}");
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error {(active ? "resuming" : "pausing")} subscription {varKey}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Request a single variable by key
+    /// </summary>
+    /// <param name="varKey">The variable key to request</param>
+    /// <param name="forceUpdate">If true, will always fire SimVarUpdated event even if value hasn't changed</param>
+    public void RequestVariable(string varKey, bool forceUpdate = false)
+    {
+        // Anyone else's read of a key with a cache-only poll in flight: the two answers come back
+        // under the one data-definition id and cannot be told apart, so the flag is dropped and
+        // the next answer is delivered as a normal one. Otherwise this caller's answer could be
+        // the one consumed as "cache-only" and swallowed when unchanged.
+        _cacheOnlyPolls.TryRemove(varKey, out _);
+        RequestVariable(varKey, forceUpdate, freshRequestId: null);
+    }
+
+    /// <summary>
+    /// A read that only keeps the cache current: the First Officer window's 1 Hz poll of its
+    /// OnRequest fields, which its evaluator reads through <see cref="GetCachedVariableValue"/>.
+    /// The answer updates the cache like any other, but fires SimVarUpdated only when the value
+    /// CHANGED (or a force-read is pending): every unchanged answer once re-ran MainForm's whole
+    /// SimVarUpdated pipeline, 45 to 100 times a second for the rest of the session once the window
+    /// had been opened. UI thread only (the FO window's timer), like the maps it reads.
+    /// </summary>
+    public void RequestVariableForCache(string varKey)
+    {
+        // The private overload, never the public one, which drops this very flag (another caller's
+        // read in flight). Cleared on reconnect and re-registration, so an unanswered poll never
+        // outlives its connection or aircraft.
+        if (variableDataDefinitions.ContainsKey(varKey)) _cacheOnlyPolls[varKey] = 0;
+        RequestVariable(varKey, forceUpdate: false, freshRequestId: null);
+    }
+
+    /// <summary>
+    /// <paramref name="freshRequestId"/>: a <see cref="ReadFreshAsync"/> issues its PERIOD.ONCE
+    /// under this id instead of the data-definition id, so its answer can be told from any other
+    /// delivery of the var (see <see cref="FreshReadWaiters"/>). The id is recorded in
+    /// <see cref="_freshRequestIdToVarKey"/> only once the request is actually issued — a var this
+    /// method issues no ONCE for (batch-covered, or on its own PERIOD.SECOND subscription) is
+    /// answered by its next sample instead. A SIM_FRAME own subscription is issued on the fresh id
+    /// like any individual def — never on its subscription's own id (<see cref="FreshReadPolicy.RouteRequest"/>).
+    /// </summary>
+    private void RequestVariable(string varKey, bool forceUpdate, int? freshRequestId)
+    {
+        if (!IsConnected || simConnect == null)
+        {
+            return;
+        }
+
+        // Off the UI thread — the MD-11's walks and read-backs call in from ConfigureAwait(false)
+        // pool-thread continuations — hand the whole request to the UI thread, where SimConnect and
+        // the maps below are otherwise only ever touched. The posted run re-enters here and
+        // re-checks the connection above. A ReadFreshAsync caller loses nothing: FreshReadWaiters
+        // registers its waiter before it calls in, and the id mapping below is written by the
+        // posted run itself, before the request it names can be answered.
+        if (_uiGate.PostIfOffThread(() => RequestVariable(varKey, forceUpdate, freshRequestId))) return;
+
+        // Record the force flag BEFORE the individual-def check below. Batch-covered vars
+        // (Continuous+IsAnnounced, no ExcludeFromBatch) have NO individual data def, so they take
+        // the early-return — but the continuous batch stream still delivers them and
+        // ProcessContinuousBatch honors forceUpdateVariables. Recording the flag here is what makes
+        // a force-read of an UNCHANGED batch-covered value actually re-fire (it previously sat after
+        // the early-return, so the flag was never set for batch-covered vars). Individual-def vars
+        // still have it consumed by ProcessIndividualVariableResponse exactly as before.
+        // Only record keys a delivery path can consume — individual data defs or the
+        // continuous batch. Unregistered/typo'd keys otherwise sit in the set until
+        // the next clear (silent growth, misleading when debugging).
+        if (forceUpdate)
+        {
+            bool deliverable = variableDataDefinitions.ContainsKey(varKey)
+                               || continuousVariableIndexMap.ContainsKey(varKey);
+            if (deliverable)
+            {
+                lock (forceUpdateVariables)
+                {
+                    forceUpdateVariables.Add(varKey);
+                }
+            }
+        }
+
+        if (!variableDataDefinitions.ContainsKey(varKey))
+        {
+            return;
+        }
+
+        // A var on its own periodic subscription (Continuous + IsAnnounced + ExcludeFromBatch -
+        // the predicate SetupDataDefinitions uses) is already streaming on THIS SAME request id.
+        // Re-issuing the id as PERIOD.ONCE would REPLACE that subscription (SimConnect re-uses the
+        // RequestID; the cancel idiom relies on exactly that) and freeze the var for the rest of
+        // the session - measured live on the A380 FCU panel (docs/a380x.md), and reachable from
+        // every panel open, display refresh and force-read. Leave the subscription alone: the
+        // force flag recorded above is honoured by the next periodic delivery, so a force-read
+        // still fires SimVarUpdated within one period (1 s at PERIOD.SECOND).
+        //
+        // A SIM_FRAME + CHANGED subscription has no "next periodic delivery" while the value
+        // stands still, so a force-read of an unchanged var would otherwise never answer — and
+        // if its initial delivery never landed, the cache stays empty for the session (the
+        // MD-11 speedbrake, 2026-09-09/10). Answer through a SEPARATE request id instead: a
+        // ONCE there delivers within a frame, honours the force flag recorded above, and leaves
+        // the subscription untouched (measured live). A ReadFreshAsync caller supplied its own
+        // fresh id; any other read goes out on the seed id — but only to fill an EMPTY cache or to
+        // answer a force-read (the walk-end refresh, whose re-fired SimVarUpdated corrects MainForm's
+        // stored value after a walk that did not land). With a value cached the subscription keeps
+        // it current, and an unforced re-read (a panel open) would only come back unchanged and be
+        // dropped. PERIOD.SECOND subscriptions keep waiting for their next delivery as before.
+        var route = FreshReadPolicy.RouteRequest(DefinitionOf(varKey), freshRequestId != null);
+        if (route == VarRequestRoute.AwaitNextDelivery) return;
+        if (route == VarRequestRoute.SeedId && !forceUpdate && lastVariableValues.ContainsKey(varKey)) return;
+
+        try
+        {
+            int dataDefId = variableDataDefinitions[varKey];
+            int requestId = freshRequestId
+                ?? (route == VarRequestRoute.SeedId ? FreshReadPolicy.SeedRequestId(dataDefId) : dataDefId);
+            if (freshRequestId is int freshId) _freshRequestIdToVarKey[freshId] = varKey;
+            simConnect.RequestDataOnSimObject((DATA_REQUESTS)requestId,
+                (DATA_DEFINITIONS)dataDefId, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            if (freshRequestId is int failedId) _freshRequestIdToVarKey.TryRemove(failedId, out _);
+            Log.Debug("SimConnect", $"Error requesting variable {varKey}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Request multiple variables by keys
+    /// </summary>
+    public void RequestVariables(List<string> varKeys)
+    {
+        foreach (string varKey in varKeys)
+        {
+            RequestVariable(varKey);
+        }
+    }
+
+    /// <summary>
+    /// Re-bind a variable's SimConnect data definition in place (same def id, so
+    /// requests and response dispatch are unchanged). Needed for L:vars that did
+    /// not EXIST at registration time: a data definition bound to a nonexistent
+    /// L:var never delivers values, even after the var is later created (observed
+    /// live 2026-06-12 — the bridge probe's nonce writes held in the sim while
+    /// MSFSBA's reads of the same var returned nothing). Call after the var has
+    /// been created (e.g. by a calc-path write).
+    /// </summary>
+    public void RebindVariableDataDefinition(string varKey)
+    {
+        if (simConnect == null || CurrentAircraft == null) return;
+        if (!variableDataDefinitions.TryGetValue(varKey, out int dataDefId)) return;
+        var vars = CurrentAircraft.GetVariables();
+        if (!vars.TryGetValue(varKey, out var varDef)) return;
+        try
+        {
+            simConnect.ClearDataDefinition((DATA_DEFINITIONS)dataDefId);
+            if (varDef.Type == SimVarType.LVar)
+                simConnect.AddToDataDefinition((DATA_DEFINITIONS)dataDefId,
+                    $"L:{varDef.Name}", "number", SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+            else
+                simConnect.AddToDataDefinition((DATA_DEFINITIONS)dataDefId,
+                    varDef.Name, varDef.Units ?? "number", SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+            simConnect.RegisterDataDefineStruct<SingleValue>((DATA_DEFINITIONS)dataDefId);
+            Log.Debug("SimConnect", $"data definition re-bound for {varKey} (def {dataDefId})");
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"rebind FAILED for {varKey}: {ex.Message}");
+        }
+    }
+
+    // NOTE: FCU request methods (RequestFCUHeading, RequestFCUSpeed, RequestFCUAltitude, RequestFCUVerticalSpeed)
+    // have been moved to aircraft-specific implementations.
+    // See FlyByWireA320Definition.cs for A320 FCU implementation.
+    // Other aircraft will have their own FCU/MCP implementations.
+
+    // SC-12 (2026-07): these methods used to each individually clear + re-add + re-register their
+    // data definition on EVERY call via SafelyClearDataDefinition(delayMs: 50) — a per-press
+    // UI-thread stall (DoEvents+Sleep pump) — even though the simvar/unit content never changes.
+    // The defs are now registered ONCE, permanently, in SimConnectManager.Setup.cs
+    // (HotkeyReadoutDefinitions / RegisterHotkeyReadoutDefinitions). Each request here is now a
+    // thin RequestDataOnSimObject(..., ONCE) against the already-registered def — no clear, no
+    // re-add, no DoEvents. See RegisterHotkeyReadoutDefinitions' doc comment for why this is safer
+    // (not riskier) than the old per-press cycle.
+
+    public void RequestAltitudeAGL()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_ALTITUDE_AGL,
+                DATA_DEFINITIONS.DEF_ALTITUDE_AGL, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting altitude AGL: {ex.Message}");
+        }
+    }
+
+    public void RequestAltitudeMSL()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_ALTITUDE_MSL,
+                DATA_DEFINITIONS.DEF_ALTITUDE_MSL, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting altitude MSL: {ex.Message}");
+        }
+    }
+
+    public void RequestAirspeedIndicated()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_AIRSPEED_IAS,
+                DATA_DEFINITIONS.DEF_AIRSPEED_IAS, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting indicated airspeed: {ex.Message}");
+        }
+    }
+
+    // The First Officer's and the universal automation's background reads. Each definition is
+    // registered once per connection (RegisterFoBackgroundDefinitions, SC-12), so a request is a
+    // bare ONCE against it — never the per-call clear / re-add / re-register these once did.
+    private void RequestFoBackground(DATA_REQUESTS request, DATA_DEFINITIONS definition, string what)
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(request, definition, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting {what}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Request AGL altitude for the First Officer background timer.
+    /// Fires SimVarUpdated with VarName "FO_ALTITUDE_AGL" — NOT announced by HandleSpecialAnnouncements.
+    /// </summary>
+    public void RequestFOAltitudeAGL()
+    {
+        if (CoalesceSampleRequest(ref _lastFoAglRequestMs)) return;
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_ALTITUDE_AGL, DATA_DEFINITIONS.DEF_FO_ALTITUDE_AGL, "FO altitude AGL");
+    }
+
+    // Aircraft position, AGL and IAS are asked for every second by BOTH the First Officer window
+    // and the universal automation, and each answer reaches every subscriber: a second request
+    // within SampleCoalesceMs of the last is dropped, its answer being the one about to arrive (or
+    // just arrived). Every requester polls at 1 s or slower, so none is starved. Racy by design
+    // and harmless: at worst two requests go out, as before.
+    internal const long SampleCoalesceMs = 900;
+    private long _lastPositionRequestMs = long.MinValue / 2;
+    private long _lastFoAglRequestMs = long.MinValue / 2;
+    private long _lastFoIasRequestMs = long.MinValue / 2;
+
+    private static bool CoalesceSampleRequest(ref long lastMs)
+    {
+        long now = Environment.TickCount64;
+        if (IsCoalesced(System.Threading.Volatile.Read(ref lastMs), now)) return true;
+        System.Threading.Volatile.Write(ref lastMs, now);
+        return false;
+    }
+
+    /// <summary>A request at <paramref name="nowMs"/> repeats the one at <paramref name="lastMs"/>
+    /// (pure, for the tests).</summary>
+    internal static bool IsCoalesced(long lastMs, long nowMs) => nowMs - lastMs < SampleCoalesceMs;
+
+    /// <summary>
+    /// Request indicated airspeed for the First Officer background timer.
+    /// Fires SimVarUpdated with VarName "FO_AIRSPEED_IAS" — NOT announced by HandleSpecialAnnouncements.
+    /// </summary>
+    public void RequestFOAirspeedIndicated()
+    {
+        if (CoalesceSampleRequest(ref _lastFoIasRequestMs)) return;
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_AIRSPEED_IAS, DATA_DEFINITIONS.DEF_FO_AIRSPEED_IAS, "FO airspeed IAS");
+    }
+
+    /// <summary>
+    /// Request every engine's N2 (1–3) for the First Officer background timer. The PMDG NG3 data
+    /// struct exposes no N1/N2, so the FO reads the stock TURB ENG N2 SimVars to reliably
+    /// tell "engine running" from "cold/unpowered" (the fuel-valve byte alone can't).
+    /// Fires SimVarUpdated with VarName "FO_ENG1_N2" / "FO_ENG2_N2" / "FO_ENG3_N2" (percent) — NOT announced.
+    /// Engine 3 (the TFDi MD-11's right-wing engine, the FIRST one TFDi starts) is requested for
+    /// every aircraft: a two-engine airframe answers 0, and the only consumer is an evaluator that
+    /// opts in through IFoEngine3N2Sink.
+    /// </summary>
+    public void RequestFOEngineN2()
+    {
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_ENG1_N2, DATA_DEFINITIONS.DEF_FO_ENG1_N2, "FO engine 1 N2");
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_ENG2_N2, DATA_DEFINITIONS.DEF_FO_ENG2_N2, "FO engine 2 N2");
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_ENG3_N2, DATA_DEFINITIONS.DEF_FO_ENG3_N2, "FO engine 3 N2");
+    }
+
+    /// <summary>
+    /// Request the stock-sim center tank fuel quantity for the First Officer background timer
+    /// (iFly 737 MAX8: the SDK's fuel-gauge digit cells read blank all flight, so the FO's
+    /// center-pump logic reads the stock fuel system instead). One definition carrying
+    /// FUEL TANK CENTER QUANTITY (gallons) + FUEL WEIGHT PER GALLON (pounds), multiplied at
+    /// dispatch. Fires SimVarUpdated with VarName "FO_CENTER_FUEL_LBS" (pounds) — NOT announced.
+    /// </summary>
+    public void RequestFOCenterFuelLbs() =>
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_CENTER_FUEL_LBS, DATA_DEFINITIONS.DEF_FO_CENTER_FUEL_LBS, "FO center fuel");
+
+    /// <summary>
+    /// Request the three stock gear-leg positions for the PMDG 777 First Officer's gear
+    /// confirmation (its SDK exposes no gear-indication lights). One definition carrying
+    /// GEAR LEFT / CENTER / RIGHT POSITION (percent — the unit the 777 System Display's Gear page
+    /// reads them in). Fires SimVarUpdated three times, VarName "FO_GEAR_LEFT_POS" /
+    /// "FO_GEAR_CENTER_POS" / "FO_GEAR_RIGHT_POS" (percent extended) — NOT announced.
+    /// </summary>
+    public void RequestFOGearPositions() =>
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_GEAR_POSITIONS, DATA_DEFINITIONS.DEF_FO_GEAR_POSITIONS, "FO gear positions");
+
+    /// <summary>
+    /// Request the stock GEAR HANDLE POSITION (1 = down) for the universal auto-gear, so it never
+    /// lowers or raises a gear the pilot already moved and never announces a gear call it did
+    /// not make. Fires SimVarUpdated with VarName "FO_GEAR_HANDLE" — NOT announced.
+    /// </summary>
+    public void RequestFOGearHandle() =>
+        RequestFoBackground(DATA_REQUESTS.REQUEST_FO_GEAR_HANDLE, DATA_DEFINITIONS.DEF_FO_GEAR_HANDLE, "FO gear handle");
+
+    public void RequestAirspeedTrue()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_AIRSPEED_TAS,
+                DATA_DEFINITIONS.DEF_AIRSPEED_TAS, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting true airspeed: {ex.Message}");
+        }
+    }
+
+    public void RequestGroundSpeed()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_GROUND_SPEED,
+                DATA_DEFINITIONS.DEF_GROUND_SPEED, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting ground speed: {ex.Message}");
+        }
+    }
+
+    public void RequestVerticalSpeed()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_VERTICAL_SPEED,
+                DATA_DEFINITIONS.DEF_VERTICAL_SPEED, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting vertical speed: {ex.Message}");
+        }
+    }
+
+    public void RequestMachSpeed()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_MACH,
+                DATA_DEFINITIONS.DEF_MACH, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting mach speed: {ex.Message}");
+        }
+    }
+
+    public void RequestBankAngle()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_BANK,
+                DATA_DEFINITIONS.DEF_BANK, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting bank angle: {ex.Message}");
+        }
+    }
+
+    public void RequestPitch()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_PITCH,
+                DATA_DEFINITIONS.DEF_PITCH, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting pitch: {ex.Message}");
+        }
+    }
+
+    public void RequestOutsideTemperature()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_OUTSIDE_TEMP,
+                DATA_DEFINITIONS.DEF_OUTSIDE_TEMP, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting outside temperature: {ex.Message}");
+        }
+    }
+
+    public void RequestSquawkCode()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_SQUAWK_CODE,
+                DATA_DEFINITIONS.DEF_SQUAWK_CODE, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting squawk code: {ex.Message}");
+        }
+    }
+
+    public void RequestHeadingMagnetic()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_HEADING_MAG,
+                DATA_DEFINITIONS.DEF_HEADING_MAG, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting magnetic heading: {ex.Message}");
+        }
+    }
+
+    public void RequestPositionForTakeoffAssist()
+    {
+        if (IsConnected && simConnect != null)
+        {
+            try
+            {
+                // Request one-shot takeoff assist data (lat, lon, pitch, heading) for toggle
+                simConnect.RequestDataOnSimObject((DATA_REQUESTS)326,
+                    DATA_DEFINITIONS.TAKEOFF_ASSIST_DATA, SIMCONNECT_OBJECT_ID_USER,
+                    SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("SimConnect", $"Error requesting position for takeoff assist: {ex.Message}");
+            }
+        }
+    }
+
+    public void RequestHeadingTrue()
+    {
+        if (!IsConnected || simConnect == null) return;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_HEADING_TRUE,
+                DATA_DEFINITIONS.DEF_HEADING_TRUE, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting true heading: {ex.Message}");
+        }
+    }
+
+    // SC-12 (2026-07) survey of callers (grep): BaseAircraftDefinition (LOCAL/ZULU time,
+    // always-fixed content), FlyByWireA320Definition (A320-specific FCU heading/speed/altitude
+    // L:vars, id 300-302), PMDG777/PMDG737/HS787 (gross weight, ids 319-320), FlyByWireA380
+    // (fuel quantity, ids 314/318). The simvar/units genuinely vary PER AIRCRAFT for the same
+    // numeric id (e.g. id 300 is an A32NX-specific L:var here, but is DEF_HEADING/unused
+    // elsewhere) — this is NOT a small fixed universal set like HotkeyReadoutDefinitions, so it
+    // is intentionally left dynamic (clear + re-add + re-register per call).
+    // ⚠️ id 308 is DEF_VERTICAL_SPEED/REQUEST_VERTICAL_SPEED — one of the permanently-registered
+    // HotkeyReadoutDefinitions ("VERTICAL SPEED","feet per minute"). FlyByWireA320Definition used
+    // to have a dead IAircraftDefinition.RequestFCUVerticalSpeed override that also called
+    // RequestSingleValue(308, "VERTICAL SPEED","feet per second",...) — different units, same id
+    // — which would have clobbered def 308's content and corrupted the next RequestVerticalSpeed()
+    // ONCE-only read (which trusts the def still holds "feet per minute"). That dead override was
+    // removed (2026-07); give any future caller here a non-colliding id instead of reusing 308.
+    public void RequestSingleValue(int id, string simVarName, string units, string varName)
+    {
+        if (IsConnected && simConnect != null)
+        {
+            try
+            {
+                var tempDefId = (DATA_DEFINITIONS)id;
+                SafelyClearDataDefinition(tempDefId, requestId: null, delayMs: 50);
+                simConnect.AddToDataDefinition(tempDefId,
+                    simVarName, units,
+                    SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+                simConnect.RegisterDataDefineStruct<SingleValue>(tempDefId);
+                simConnect.RequestDataOnSimObject((DATA_REQUESTS)id,
+                    tempDefId, SIMCONNECT_OBJECT_ID_USER,
+                    SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("SimConnect", $"Error requesting {varName}: {ex.Message}");
+            }
+        }
+    }
+
+    public void RequestAircraftPosition()
+    {
+        if (!IsConnected) return;
+        // A repeat within SampleCoalesceMs is dropped (see CoalesceSampleRequest): the First
+        // Officer window and the universal automation both ask every second.
+        if (CoalesceSampleRequest(ref _lastPositionRequestMs)) return;
+
+        try
+        {
+            simConnect!.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_AIRCRAFT_POSITION,
+                DATA_DEFINITIONS.AIRCRAFT_POSITION, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting aircraft position: {ex.Message}");
+        }
+    }
+
+    public void RequestAircraftPositionAsync(Action<AircraftPosition> callback)
+    {
+        if (!IsConnected || callback == null) return;
+
+        try
+        {
+            // Set up a one-time event handler for this specific request
+            EventHandler<AircraftPosition>? handler = null;
+            handler = (sender, position) =>
+            {
+                // Unsubscribe the handler after first use
+                AircraftPositionReceived -= handler!;
+                // Invoke the callback with the position
+                callback(position);
+            };
+
+            // Subscribe to the event
+            AircraftPositionReceived += handler;
+
+            // Request the position data
+            simConnect!.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_AIRCRAFT_POSITION,
+                DATA_DEFINITIONS.AIRCRAFT_POSITION, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting aircraft position async: {ex.Message}");
+        }
+    }
+
+    public void RequestNavRadioInfo(Action<NavRadioData> callback)
+    {
+        if (!IsConnected || callback == null) return;
+
+        try
+        {
+            EventHandler<NavRadioData>? handler = null;
+            handler = (sender, navData) =>
+            {
+                NavRadioReceived -= handler!;
+                callback(navData);
+            };
+            NavRadioReceived += handler;
+
+            simConnect!.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_NAV_RADIO,
+                DATA_DEFINITIONS.DEF_NAV_RADIO, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting NAV radio info: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// COM 1 active and standby as the sim holds them now, or null when no answer arrives within
+    /// <paramref name="timeout"/> (not connected, or no reply). Call on the UI thread; the handler is
+    /// removed on every exit, so an unanswered read leaves nothing subscribed.
+    /// </summary>
+    public async Task<Com1RadioData?> ReadCom1RadioAsync(TimeSpan timeout)
+    {
+        if (!IsConnected || simConnect == null) return null;
+        var answer = new TaskCompletionSource<Com1RadioData>(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler<Com1RadioData> handler = (_, data) => answer.TrySetResult(data);
+        Com1RadioReceived += handler;
+        try
+        {
+            simConnect.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_COM1_RADIO,
+                DATA_DEFINITIONS.DEF_COM1_RADIO, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+            return await answer.Task.WaitAsync(timeout);
+        }
+        catch (TimeoutException) { return null; }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error reading COM 1: {ex.Message}");
+            return null;
+        }
+        finally { Com1RadioReceived -= handler; }
+    }
+
+    public void RequestWindInfo(Action<WindData> callback)
+    {
+        if (!IsConnected || callback == null) return;
+
+        try
+        {
+            // Set up a one-time event handler for this specific request
+            EventHandler<WindData>? handler = null;
+            handler = (sender, windData) =>
+            {
+                // Unsubscribe the handler after first use
+                WindReceived -= handler!;
+                // Invoke the callback with the wind data
+                callback(windData);
+            };
+
+            // Subscribe to the event
+            WindReceived += handler;
+
+            // Request the wind data
+            simConnect!.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_WIND_DATA,
+                DATA_DEFINITIONS.WIND_DATA, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting wind info: {ex.Message}");
+        }
+    }
+
+    public void RequestWeatherInfo(Action<AmbientWeatherData> callback)
+    {
+        if (!IsConnected || callback == null) return;
+
+        try
+        {
+            EventHandler<AmbientWeatherData>? handler = null;
+            handler = (sender, data) =>
+            {
+                WeatherDataReceived -= handler!;
+                callback(data);
+            };
+
+            WeatherDataReceived += handler;
+
+            simConnect!.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_WEATHER_DATA,
+                DATA_DEFINITIONS.WEATHER_DATA, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting weather data: {ex.Message}");
+        }
+    }
+
+    public void RequestDestinationRunwayDistance()
+    {
+        if (!IsConnected || !HasDestinationRunway()) return;
+        if (destinationRunway == null || destinationAirport == null) return;
+
+        try
+        {
+            // Use callback pattern to calculate and announce distance only for this specific request
+            RequestAircraftPositionAsync(position =>
+            {
+                try
+                {
+                    // Calculate distance to runway threshold
+                    double distance = NavigationCalculator.CalculateDistance(
+                        position.Latitude, position.Longitude,
+                        destinationRunway.StartLat, destinationRunway.StartLon);
+
+                    // Calculate magnetic bearing to runway
+                    double bearing = NavigationCalculator.CalculateMagneticBearing(
+                        position.Latitude, position.Longitude,
+                        destinationRunway.StartLat, destinationRunway.StartLon,
+                        position.MagneticVariation);
+
+                    // Format announcement with runway identifier
+                    string announcement = $"{distance:F1} miles to runway {destinationRunway.RunwayID} at {destinationAirport.ICAO}, bearing {bearing:000} degrees";
+
+                    SimVarUpdated?.Invoke(this, new SimVarUpdateEventArgs
+                    {
+                        VarName = "DISTANCE_TO_RUNWAY",
+                        Value = 0,
+                        Description = announcement
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug("SimConnect", $"Error calculating destination runway distance: {ex.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting destination runway distance: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Requests ILS (Instrument Landing System) guidance information for the currently selected destination runway.
+    /// Calculates localizer and glideslope deviation, intercept heading, and distance from threshold.
+    /// </summary>
+    /// <param name="ilsData">ILS data for the runway (from database)</param>
+    /// <param name="runway">The destination runway</param>
+    /// <param name="airport">The destination airport</param>
+    public void RequestILSGuidance(ILSData ilsData, Runway runway, Airport airport)
+    {
+        if (!IsConnected) return;
+
+        try
+        {
+            // Store ILS request data for processing when position is received
+            currentILSRequest = ilsData;
+            ilsRunway = runway;
+            ilsAirport = airport;
+
+            // Request aircraft position for ILS guidance calculations
+            simConnect!.RequestDataOnSimObject(DATA_REQUESTS.REQUEST_ILS_GUIDANCE,
+                DATA_DEFINITIONS.AIRCRAFT_POSITION, SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_PERIOD.ONCE, SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT,
+                0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error requesting ILS guidance: {ex.Message}");
+            SimVarUpdated?.Invoke(this, new SimVarUpdateEventArgs
+            {
+                VarName = "ILS_GUIDANCE",
+                Value = 0,
+                Description = $"Error requesting ILS guidance: {ex.Message}"
+            });
+        }
+    }
+
+}

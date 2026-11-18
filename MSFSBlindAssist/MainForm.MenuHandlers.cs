@@ -1,0 +1,662 @@
+using System.Collections.Concurrent;
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Database;
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Forms;
+using MSFSBlindAssist.Forms.FenixA320;
+using MSFSBlindAssist.Forms.PMDG737;
+using MSFSBlindAssist.Forms.PMDG777;
+using MSFSBlindAssist.Forms.HS787;
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.Services;
+using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Patching;
+using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
+
+namespace MSFSBlindAssist;
+
+public partial class MainForm
+{
+    private void DatabaseSettingsMenuItem_Click(object? sender, EventArgs e)
+    {
+        using (var settingsForm = new DatabaseSettingsForm(announcer, this))
+        {
+            if (settingsForm.ShowDialog(this) == DialogResult.OK)
+            {
+                // The window changes no settings: it verifies, or builds a database and reopens the
+                // connections itself (ReopenDatabaseConnections). It returns OK from every exit, Escape
+                // included, so reload here only when the active database changed since it was loaded
+                // (DatabaseSelector.CurrentStamp): closing it with nothing changed must not run the
+                // database-switch reset, which clears the landing exit plan and disarms the landing
+                // assist, rollout centerline cue included ([EXIT-11]).
+                bool reloaded = DatabaseSelector.CurrentStamp() != _loadedDatabaseStamp;
+                if (reloaded)
+                    RefreshDatabaseProvider();
+
+                // Announce the change. After a reload, queued behind the reset's own "… off" and "Landing
+                // exit plan cleared." lines instead of cutting them off.
+                var status = DatabaseSelector.GetDatabaseStatus();
+                string text = status.hasDatabase
+                    ? $"Database settings saved. Using {status.message}"
+                    : $"Database settings saved. {status.message}";
+                if (reloaded)
+                    announcer.Announce(text);
+                else
+                    announcer.AnnounceImmediate(text);
+            }
+        }
+    }
+
+    private void SettingsMenuItem_Click(object? sender, EventArgs e)
+    {
+        // Same inline refresh-taxiway-names callback TaxiGuidanceOptionsMenuItem_Click builds
+        // today; only wired when the augmenting provider is available (Task 6 moves this into
+        // the TaxiGuidancePanel wiring).
+        Func<Task>? refreshCallback = null;
+        if (_augmentingProvider != null && airportDataProvider != null)
+        {
+            var provider = _augmentingProvider;
+            var dataProvider = airportDataProvider;
+            refreshCallback = async () =>
+            {
+                // A position asked of the simulator at the press: LastKnownPosition can be stale in
+                // quiet cruise (usually the departure stand). Falls back to it after 1.5 s; throws
+                // only when there is neither.
+                SimConnectManager.AircraftPosition pos;
+                try
+                {
+                    pos = await GetFreshAircraftPositionAsync();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    _taxiAugmentLog.Warn($"taxi-augment: name refresh pressed with no aircraft position ({ex.Message})");
+                    // An error, so spoken: silence would sound like a press that never registered.
+                    if (IsHandleCreated && !IsDisposed)
+                        announcer.AnnounceImmediate("Aircraft position unavailable.");
+                    return;
+                }
+
+                // The airport the aircraft is AT (CurrentAirport.Resolve); a database query, so off
+                // the UI thread.
+                string? icao = await Task.Run(() => MSFSBlindAssist.Services.CurrentAirport.Resolve(
+                    dataProvider, pos.Latitude, pos.Longitude));
+
+                if (icao == null)
+                {
+                    // With no airport within 5 NM there is nothing to refresh; say so rather than
+                    // stay silent. Same words as Where Am I's.
+                    if (IsHandleCreated && !IsDisposed)
+                        announcer.AnnounceImmediate("No airport nearby.");
+                    return;
+                }
+
+                // PrefetchAsync fetches nothing with online taxi data off; "No new names found" would
+                // then be untrue.
+                if (!provider.Enabled)
+                {
+                    if (IsHandleCreated && !IsDisposed)
+                        announcer.AnnounceImmediate("Online taxi data is switched off. Nothing refreshed.");
+                    return;
+                }
+
+                await provider.PrefetchAsync(icao, force: true);
+
+                var cov = provider.GetLastCoverage(icao);
+                int added = cov == null ? 0
+                    : cov.NamesAdoptedFromOsm + cov.NamesAdoptedFromAptDat + cov.AliasesAdded;
+                string msg = added > 0
+                    ? $"Taxiway names refreshed for {icao}: {added} added."
+                    : $"Taxiway names refreshed for {icao}. No new names found.";
+                // No marshal needed: this callback is invoked from
+                // Still on the UI thread: no await above uses ConfigureAwait(false).
+                if (IsHandleCreated && !IsDisposed)
+                    announcer.AnnounceImmediate(msg);
+            };
+        }
+
+        using var dlg = new Forms.Settings.SettingsForm(
+            refreshTaxiwayNames: refreshCallback,
+            vatsimStatus: () => vatsimService?.GetStatus(),
+            sceneryIndexStatus: () => sceneryIndexer.LastStatus,
+            locationDataDownloader: locationDataDownloader);
+        if (dlg.ShowDialog(this) == DialogResult.OK)
+        {
+            ApplyRuntimeSettings();
+            statusLabel.Text = "Settings saved";
+            announcer.Announce("Settings saved");
+        }
+    }
+
+    /// <summary>What the last <see cref="ApplyRuntimeSettings"/> saw for the two settings feeding the
+    /// surroundings catalog, seeded at construction so the first OK clears only on a real change.</summary>
+    private bool _appliedSceneryIndexEnabled, _appliedTaxiAugmentEnabled;
+
+    /// <summary>Re-applies saved UserSettings to the live runtime managers after the Settings
+    /// dialog is accepted, so changes take effect without restarting. Each settings section that
+    /// has a live effect adds its re-apply here (populated as panels are migrated).</summary>
+    private void ApplyRuntimeSettings()
+    {
+        // (SimBrief and Gemini have no live effect.)
+
+        // Announcements: mode, nearest-city timer, weather monitor interval, GSX background toggle.
+        var settings = MSFSBlindAssist.Settings.SettingsManager.Current;
+        var mode = Enum.TryParse(settings.AnnouncementMode, out AnnouncementMode parsedMode)
+            ? parsedMode
+            : AnnouncementMode.ScreenReader;
+        announcer.SetAnnouncementMode(mode);
+        RestartNearestCityAnnouncementTimer();
+
+        if (activeSkyWeatherMonitor != null)
+        {
+            activeSkyWeatherMonitor.IntervalMinutes = settings.WeatherAutoAnnounceIntervalMinutes;
+            // Both Weather-tab switches take effect without restart. The Enabled setter
+            // maps to Start()/Stop(), and System.Windows.Forms.Timer.Start/Stop are
+            // idempotent, so an unchanged setting is a no-op.
+            activeSkyWeatherMonitor.Enabled =
+                MSFSBlindAssist.Services.ActiveSkyWeatherMonitor.ShouldRun(settings);
+        }
+
+        // GSX background-monitoring toggle. Push the new value into the live
+        // service. The form's VisibleChanged handler will overwrite this
+        // when the form is open/hidden — that's intentional (form open =
+        // form drives speech). When the form is hidden the saved setting wins.
+        if (_gsxService != null && (_accessGsxForm == null || !_accessGsxForm.Visible))
+            _gsxService.AnnounceWhenFormHidden = settings.GsxBackgroundMonitoring;
+
+        // Hand Fly / Visual Guidance / Takeoff Assist — moved verbatim from the retired
+        // HandFlyOptionsMenuItem_Click. Recreate TakeoffAssistManager to pick up new
+        // settings (steer-toward tone, legacy mode, tone, volume); its mode is set at
+        // construction time so there is no in-place setter.
+        if (takeoffAssistManager != null)
+        {
+            // Preserve a teleport/taxi-lineup runway reference across the
+            // recreate — Reset() clears it, and losing it here silently
+            // downgraded the next Ctrl+T to "no runway selected". Restore
+            // is silent (SetRunwayReference only Debug-logs).
+            bool hadRunwayRef = takeoffAssistManager.TryGetRunwayReference(
+                out double refLat, out double refLon, out double refHdgTrue,
+                out double refHdgMag, out string refRunwayId, out string refIcao);
+
+            // KNOWN BEHAVIOR, NOT FIXED HERE: Reset() unconditionally clears isActive (stops
+            // the centerline tone, fires TakeoffAssistActiveChanged(false), stops
+            // SimConnect monitoring) with no spoken announcement — so saving Settings while
+            // Takeoff Assist is active silently switches it off, for ANY settings change,
+            // including one as unrelated as the guidance-tone output device added by this
+            // branch (whose own RequestSweep("settings saved") call is now placed at the very
+            // end of this method, deliberately AFTER this block — see the comment there for
+            // why). The root cause predates this branch: this recreate block already went
+            // out of its way to preserve the runway reference across the recreate (see
+            // hadRunwayRef above) but never considered preserving ACTIVE state the same way.
+            // Not fixed here because re-arming activation after the recreate would have to replay
+            // whatever Toggle()'s real activation path does (StartTakeoffAssistMonitoring,
+            // clearing the docking destination gate, stopping taxi guidance, pulling Fenix
+            // V-speeds — see OnTakeoffAssistActiveChanged) and interacts with the
+            // auto-activate-on-lineup one-shot latch invariant (taxi-guidance.md) — that
+            // combination can only be verified against a live sim, which this fix wave
+            // cannot do. If a pilot reports Takeoff Assist going quiet after opening
+            // Settings mid-roll, this is why.
+            takeoffAssistManager.Reset();
+            takeoffAssistManager.Dispose();
+            takeoffAssistManager = new TakeoffAssistManager(announcer,
+                settings.TakeoffAssistToneWaveform, settings.TakeoffAssistToneVolume,
+                settings.TakeoffAssistMuteCenterlineAnnouncements,
+                settings.TakeoffAssistSteerTowardTone,
+                settings.TakeoffAssistHeadingToneThreshold, settings.TakeoffAssistLegacyMode,
+                settings.TakeoffAssistEnableCallouts);
+            takeoffAssistManager.TakeoffAssistActiveChanged += OnTakeoffAssistActiveChanged;
+
+            if (hadRunwayRef)
+            {
+                takeoffAssistManager.SetRunwayReference(refLat, refLon,
+                    refHdgTrue, refHdgMag, refRunwayId, refIcao);
+            }
+        }
+
+        // Capture whether the heading/VS monitoring choices actually changed
+        // BEFORE UpdateSettings overwrites the manager's flags — the restart
+        // below is gated on a real change so a no-op Settings-OK doesn't cancel
+        // and re-register live SIM_FRAME streams for nothing.
+        bool handFlyMonitorFlagsChanged = handFlyManager != null &&
+            (handFlyManager.MonitorHeading != settings.HandFlyMonitorHeading ||
+             handFlyManager.MonitorVerticalSpeed != settings.HandFlyMonitorVerticalSpeed);
+
+        // Update HandFlyManager if it's active
+        handFlyManager?.UpdateSettings(
+            settings.HandFlyFeedbackMode,
+            settings.HandFlyWaveType,
+            settings.HandFlyToneVolume,
+            settings.HandFlyMonitorHeading,
+            settings.HandFlyMonitorVerticalSpeed);
+
+        // Re-register the SimConnect streams to match the new heading/VS choices.
+        // StartHandFlyMonitoring only registers the heading/VS requests whose flag
+        // is on AT CALL TIME, so enabling one while Hand Fly is active was a
+        // silent no-op (the manager-side gate passed but no data ever flowed)
+        // until Hand Fly was toggled off and on again. Matters out of the box now
+        // that HandFlyMonitorVerticalSpeed defaults to off. Both calls no-op
+        // safely when disconnected.
+        if (handFlyMonitorFlagsChanged && handFlyManager!.IsActive)
+        {
+            simConnectManager.StopHandFlyMonitoring();
+            // drainCancelledStreams: the streams cancelled a line above may
+            // still have data in flight; the drain (cancel + message pump)
+            // guards the ClearDataDefinition-while-request-active crash. Safe
+            // here — this runs from the settings OK handler, NOT inside
+            // SimConnect dispatch, so the pump can actually process WM_USER.
+            simConnectManager.StartHandFlyMonitoring(
+                settings.HandFlyMonitorHeading, settings.HandFlyMonitorVerticalSpeed,
+                drainCancelledStreams: true);
+        }
+
+        // Taxi Guidance / Docking — moved verbatim from the retired TaxiGuidanceOptionsMenuItem_Click.
+        // Every other taxi/docking setting (tone type/volume, invert/hard-pan, announce-crossings,
+        // ground-speed intervals, distance units, GSX auto-select, docking enabled/beep) is read
+        // live from SettingsManager.Current at point of use (TaxiGuidanceManager, DockingGuidanceManager,
+        // GroundSpeedAnnouncer, GroundTrafficMonitor, TaxiAssistForm) — no push needed for those.
+        // The online taxiway/gate-name augmentation toggle is the one setting with a live service
+        // to push into; apply it here so it takes effect immediately (next route build).
+        if (_augmentingProvider != null)
+            _augmentingProvider.Enabled = settings.TaxiAugmentEnabled;
+        if (onlineFeatures != null)
+            onlineFeatures.Enabled = settings.TaxiAugmentEnabled;
+
+        // Opt-in passing-building callouts — applies immediately, no restart needed.
+        if (surroundingsMonitor != null)
+        {
+            surroundingsMonitor.Enabled = settings.SurroundingsCalloutsEnabled;
+            surroundingsMonitor.SurfaceCalloutsEnabled = settings.SurfaceChangeCalloutsEnabled;
+        }
+
+        // These two flags feed every cached catalog but not the gate-list token it keys on, so a
+        // real change (and only a change) clears the cache and the OSM store.
+        if (_appliedSceneryIndexEnabled != settings.SceneryIndexEnabled || _appliedTaxiAugmentEnabled != settings.TaxiAugmentEnabled)
+        {
+            surroundingsCache.Clear();
+            if (_appliedTaxiAugmentEnabled != settings.TaxiAugmentEnabled) onlineFeatures?.Clear();
+        }
+        _appliedSceneryIndexEnabled = settings.SceneryIndexEnabled;
+        _appliedTaxiAugmentEnabled = settings.TaxiAugmentEnabled;
+
+        // First Officer automation toggles — push the saved settings into the First Officer
+        // window, if one is open, so a change takes effect without reopening it (moved from the
+        // retired FOSettingsMenuItem_Click).
+        if (firstOfficerForm is { IsDisposed: false } foForm)
+            foForm.ApplySettings();
+
+        // VATSIM: install or refresh the vPilot plugin and start/stop the pipe server.
+        var vatsimInstall = vatsimService?.ApplySettings(settings);
+        if (vatsimInstall != null)
+            AnnounceVatsimInstallOutcome(vatsimInstall, atStartup: false);
+
+        // The rollout centerline cue setting arms or disarms the landing assist's rollout-only cue for the
+        // destination or exit plan already set; unchanged armings are left alone (RefreshRolloutCueArming).
+        RefreshRolloutCueArming();
+
+        // Guidance tone output device, LAST: the takeoff-assist recreate above disposes and
+        // replaces its centerline tone, so requesting the sweep before that block paid a full
+        // WASAPI teardown and reopen for a generator that was destroyed moments later. The
+        // sweep is a request, not a blocking call -- the router's worker does the work off the
+        // UI thread, so an unrelated settings save can never gap a tone that is steering the
+        // aircraft.
+        Services.AudioOutputRouter.Shared.RequestSweep("settings saved");
+    }
+
+    /// <summary>
+    /// Speaks what an install attempt actually did. The outcome is spoken because the
+    /// pilot cannot see whether a file landed in another application's folder — and
+    /// because "Installed" always means "now restart vPilot", which nothing else would
+    /// tell them.
+    ///
+    /// <paramref name="atStartup"/> narrows what gets spoken, but NOT down to "Locked and
+    /// Failed only" — that would silently mute the worse of the two silent-VATSIM
+    /// outcomes. The same install check runs on every launch, so an ordinary
+    /// update-refresh (an already-installed plugin gets overwritten with the same or a
+    /// newer copy while vPilot was not holding it) stays quiet there: it needed nothing
+    /// from the pilot and vPilot will load the new copy the next time it starts on its
+    /// own. A FIRST install (<see cref="MSFSBlindAssist.Services.VPilot.VPilotInstallResult.PluginWasAbsent"/>)
+    /// is a different case entirely and must speak even at startup: nothing was there
+    /// before this write, so vPilot is GUARANTEED not to have the plugin loaded right
+    /// now, and — because vPilot only loads plugins at its OWN startup, never on a
+    /// timer — nothing will load it this session unless vPilot itself is restarted.
+    /// Staying silent there is exactly what used to leave a pilot flying an entire leg in
+    /// total, unexplained VATSIM silence. Locked and Failed speak unconditionally for the
+    /// same underlying reason: the plugin the pilot is about to rely on is NOT the one
+    /// that is actually there, and nothing else on screen or in speech would say so.
+    /// LegacyRemoved (below) is unconditional too, but for an unrelated reason — see its
+    /// own comment.
+    ///
+    /// Startup uses the QUEUED announcer, not the immediate one: its System.Windows.Forms
+    /// timer cannot tick until the message pump is running, which naturally defers the
+    /// speech until the form is up instead of firing it mid-construction.
+    /// </summary>
+    private void AnnounceVatsimInstallOutcome(
+        MSFSBlindAssist.Services.VPilot.VPilotInstallResult result, bool atStartup)
+    {
+        // Inherently one-shot — once the old DLL is gone it can never be removed again —
+        // so it is worth hearing whenever it happens, startup included. It is the only
+        // thing that explains why the duplicate announcements stopped.
+        if (result.LegacyRemoved)
+        {
+            Announce("Removed the old vPilot to TTS plugin. MSFS Blind Assist now handles VATSIM announcements.");
+        }
+
+        switch (result.Status)
+        {
+            case MSFSBlindAssist.Services.VPilot.VPilotInstallStatus.Installed:
+                // A first install speaks even at startup — see PluginWasAbsent's doc
+                // comment. An update-refresh Installed stays quiet there; it is the
+                // ordinary outcome of every app update and asks nothing of the pilot.
+                if (!atStartup || result.PluginWasAbsent)
+                    Announce("vPilot plugin installed. Restart vPilot to load it.");
+                break;
+            case MSFSBlindAssist.Services.VPilot.VPilotInstallStatus.Locked:
+                // Startup gets its own wording. The Settings-path phrasing tells the
+                // pilot to re-open a dialog they just used; at startup they have not
+                // opened Settings this session, and the check that produced this result
+                // ran on its own — so the accurate instruction is to relaunch the app
+                // itself, which re-runs the very check that is speaking right now.
+                Announce(atStartup
+                    ? "vPilot is running with an older plugin. Close vPilot and restart MSFS Blind Assist to update it."
+                    : "vPilot is running with an older plugin. Close vPilot and re-open Settings to update it.");
+                break;
+            case MSFSBlindAssist.Services.VPilot.VPilotInstallStatus.VPilotNotFound:
+                if (!atStartup)
+                    Announce("vPilot was not found. Install vPilot, then re-open Settings.");
+                break;
+            case MSFSBlindAssist.Services.VPilot.VPilotInstallStatus.Failed:
+                Announce("The vPilot plugin could not be installed. See the log for details.");
+                break;
+            // AlreadyCurrent, and an update-refresh Installed, say nothing further —
+            // "Settings saved" already covers the Settings path, and at startup both are
+            // the normal outcome on every launch.
+        }
+
+        void Announce(string text)
+        {
+            if (atStartup)
+                announcer.AnnounceWithQueue(text);
+            else
+                announcer.Announce(text);
+        }
+    }
+
+    private void HotkeyListMenuItem_Click(object? sender, EventArgs e)
+    {
+        using (var hotkeyListForm = new HotkeyListForm(currentAircraft.AircraftCode))
+        {
+            hotkeyListForm.ShowDialog(this);
+        }
+    }
+
+    // Help, User Guide: the one-page guide bundled next to the exe, or the online guide when it is missing
+    // (HelpLinks). The screen reader has just read the menu item, so only the fallback, which it cannot say, is
+    // spoken (CORE-7).
+    private void UserGuideMenuItem_Click(object? sender, EventArgs e)
+    {
+        (string target, bool isBundled) = HelpLinks.ResolveGuide(AppContext.BaseDirectory, File.Exists);
+        if (!isBundled)
+            announcer.Announce("This copy of BA has no user guide in its folder. Opening the online guide.");
+        OpenInBrowser(target, "the user guide");
+    }
+
+    private void ProjectWebsiteMenuItem_Click(object? sender, EventArgs e)
+        => OpenInBrowser(HelpLinks.WebsiteUrl, "the project website");
+
+    private void OpenInBrowser(string target, string what)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(target) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            announcer.AnnounceImmediate($"Could not open {what}: {ex.Message}");
+            Log.Warn("MainForm", $"Opening {what} ({target}) failed: {ex.Message}");
+        }
+    }
+
+    // One modeless Sim Performance window at a time: a second click brings the open one forward.
+    // It opens whether or not the sim is connected — the rows say what is measurable (a sim
+    // still loading shows its memory climbing before SimConnect answers) — and it releases its
+    // frame subscription and sampler when closed.
+    private SimPerformanceForm? simPerformanceForm;
+
+    private void SimPerformanceMenuItem_Click(object? sender, EventArgs e)
+    {
+        if (simPerformanceForm is { IsDisposed: false })
+        {
+            simPerformanceForm.Activate();
+            return;
+        }
+        simPerformanceForm = new SimPerformanceForm(simConnectManager);
+        simPerformanceForm.FormClosed += (_, _) => simPerformanceForm = null;
+        simPerformanceForm.Show(this);
+    }
+
+    // Extras > Volanta, or Shift+O in output mode: one modeless window at a time. It is its own
+    // top-level window, never owned by this one (the TCAS window's pattern), so the pilot can Alt+Tab
+    // between the two; a second click or press brings the open one forward. It opens whether or not the
+    // sim is connected (it can place traffic from Volanta's own position report) and owns the browser that
+    // reads Volanta's public web map, which it closes with the window. It names where each aircraft is from
+    // the same offline location data Output C reads.
+    private Forms.Volanta.VolantaLiveMapForm? volantaLiveMapForm;
+
+    private void VolantaMenuItem_Click(object? sender, EventArgs e) => OpenVolantaWindow();
+
+    private void OpenVolantaWindow()
+    {
+        if (volantaLiveMapForm is not { IsDisposed: false })
+        {
+            // vPilot's callsign, so the pilot's own VATSIM entry is never listed as traffic.
+            volantaLiveMapForm = new Forms.Volanta.VolantaLiveMapForm(simConnectManager, announcer, offlineLocationService,
+                () => vatsimService?.ConnectedCallsign);
+            volantaLiveMapForm.FormClosed += (_, _) => volantaLiveMapForm = null;
+        }
+        volantaLiveMapForm.ShowForm();
+    }
+
+    private void FMCSettingsMenuItem_Click(object? sender, EventArgs e)
+    {
+        var s = SettingsManager.Current;
+        using (var settingsForm = new Forms.FMCSettingsForm(
+            s.MCDUUseAlternateLSKKeys,
+            s.PMDGEnhancedDistanceMode))
+        {
+            if (settingsForm.ShowDialog(this) == DialogResult.OK)
+            {
+                s.MCDUUseAlternateLSKKeys = settingsForm.UseAlternateLSKKeys;
+                s.PMDGEnhancedDistanceMode = settingsForm.EnhancedDistanceMode;
+                SettingsManager.Save();
+
+                // Toggle the PROG-page monitor in/out of running state to
+                // match the new Enhanced-distance setting. Effect is
+                // immediate — no app restart needed.
+                EnsurePMDGProgPageMonitor();
+
+                statusLabel.Text = "FMC settings saved";
+                announcer.Announce("FMC settings saved");
+            }
+        }
+    }
+
+    private void SuspendHotkeysMenuItem_Click(object? sender, EventArgs e)
+    {
+        if (suspendHotkeysMenuItem.Checked)
+        {
+            hotkeyManager.Suspend();
+            announcer.AnnounceImmediate("Hotkeys suspended");
+        }
+        else
+        {
+            if (hotkeyManager.Resume())
+            {
+                announcer.AnnounceImmediate("Hotkeys resumed");
+            }
+            else
+            {
+                announcer.AnnounceImmediate("Warning: failed to re-register hotkeys. Another application may be using the bracket keys.");
+            }
+        }
+    }
+
+    private void FlyByWireA320MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new FlyByWireA320Definition());
+    }
+
+    private void FenixA320MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new FenixA320Definition());
+    }
+
+    private void PMDG777MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new PMDG777Definition());
+    }
+
+    private void FlyByWireA380MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new FlyByWireA380Definition());
+    }
+
+    private void PMDG737MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new PMDG737Definition());
+    }
+
+    private void HorizonSim787MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new HorizonSim787Definition());
+    }
+
+    private void HeadwindA330MenuItem_Click(object? sender, EventArgs e)
+    {
+        SwitchAircraft(new HeadwindA330Definition());
+    }
+
+    /// <summary>
+    /// Guards against the startup check and the menu item running at once — either would
+    /// otherwise open its own update dialog.
+    /// </summary>
+    private int _updateCheckInFlight;
+
+    private async void UpdateApplicationMenuItem_Click(object? sender, EventArgs e)
+    {
+        await RunUpdateCheckAsync(userInitiated: true);
+    }
+
+    /// <summary>
+    /// The one update-check path, shared by the Application menu item and the startup
+    /// check. The difference between them is only how loud they are:
+    ///
+    ///   userInitiated true  — reports failures and reports being up to date.
+    ///   userInitiated false — silent on both. A pilot who did not ask for a check must
+    ///                         never be interrupted to be told nothing happened.
+    ///
+    /// An available update (or an offered downgrade) is announced and shown either way.
+    /// </summary>
+    private async Task RunUpdateCheckAsync(bool userInitiated)
+    {
+        if (Interlocked.CompareExchange(ref _updateCheckInFlight, 1, 0) != 0)
+        {
+            if (userInitiated) announcer.AnnounceImmediate("An update check is already running.");
+            return;
+        }
+
+        try
+        {
+            if (userInitiated) announcer.AnnounceImmediate("Checking for updates...");
+
+            var channel = SettingsManager.Current.UpdateChannel;
+            // Logged regardless of userInitiated: the automatic startup check is silent
+            // toward the PILOT by design, but silence toward the LOG is exactly what made
+            // "auto-update never offers me anything" undiagnosable — this log folder is
+            // this project's entire support mechanism.
+            Log.Debug("Updates", $"Update check starting. Channel={channel}, userInitiated={userInitiated}");
+
+            var updateService = new UpdateService();
+            var result = await updateService.CheckForUpdatesAsync(channel);
+
+            // The window can be gone by the time the HTTP call returns.
+            if (IsDisposed || !IsHandleCreated) return;
+
+            if (!string.IsNullOrEmpty(result.ErrorMessage))
+            {
+                Log.Warn("Updates", $"Update check failed. Channel={channel}: {result.ErrorMessage}");
+                if (!userInitiated) return;
+                announcer.AnnounceImmediate($"Update check failed: {result.ErrorMessage}");
+                MessageBox.Show(this, result.ErrorMessage, "Update Check Failed",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (!result.IsUpdateAvailable)
+            {
+                Log.Debug("Updates",
+                    $"No update offered. Channel={channel}, Verdict={result.Verdict}, CurrentVersion={result.CurrentVersion}");
+                if (!userInitiated) return;
+
+                // NoCandidate is not the same as UpToDate: claiming "you are on the latest
+                // version" when the check found no releases at all would be a small lie.
+                var message = result.Verdict == UpdateVerdict.NoCandidate
+                    ? "No releases were found on GitHub."
+                    : $"You are running the latest version ({result.CurrentVersion}).";
+
+                announcer.AnnounceImmediate(message);
+                MessageBox.Show(this, message, "No Updates Available",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Log.Debug("Updates",
+                $"Update offered. Tag={result.TagName}, Version={result.LatestVersion}, IsDowngrade={result.IsDowngrade}");
+
+            var announcement = result.IsDowngrade
+                ? $"Release build {result.LatestVersion} is available. It is older than the preview build you are running."
+                : $"Update available: version {result.LatestVersion}";
+
+            // The startup announcement is QUEUED so it cannot cut off other startup speech;
+            // a check the pilot asked for speaks immediately.
+            if (userInitiated) announcer.AnnounceImmediate(announcement);
+            else announcer.AnnounceWithQueue(announcement);
+
+            using var updateDialog = new UpdateAvailableForm(result, updateService);
+            if (updateDialog.ShowDialog(this) == DialogResult.OK && updateDialog.ShouldUpdate)
+            {
+                try
+                {
+                    announcer.AnnounceImmediate("Launching updater. Application will close and restart.");
+                    updateService.LaunchUpdater(updateDialog.DownloadedZipPath);
+                    Application.Exit();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, $"Failed to launch updater: {ex.Message}", "Update Error",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Updates", "Update check threw an exception.", ex);
+            if (!userInitiated) return;
+            announcer.AnnounceImmediate($"Update failed: {ex.Message}");
+            MessageBox.Show(this, $"An error occurred while checking for updates: {ex.Message}",
+                "Update Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _updateCheckInFlight, 0);
+        }
+    }
+
+    private void AboutMenuItem_Click(object? sender, EventArgs e)
+    {
+        using (var aboutForm = new AboutForm())
+        {
+            aboutForm.ShowDialog(this);
+        }
+    }
+}

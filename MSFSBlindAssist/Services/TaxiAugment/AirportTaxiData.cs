@@ -13,7 +13,38 @@ public sealed class AirportTaxiData
 {
     public string Source { get; init; } = "";
     public List<NamedTaxiSegment> Taxiways { get; } = new();
+
+    /// <summary>
+    /// Online stand/gate designators with one representative coordinate each. From OSM that is
+    /// <c>aeroway=parking_position</c> (node OR way — at hubs the stand is usually mapped as the
+    /// painted guidance LINE, and a way contributes its arc-length midpoint) plus
+    /// <c>aeroway=gate</c>, both <c>ref</c>-tagged only; from X-Plane it is the ramp-start name.
+    /// Consumed for ONE purpose — <c>GateAliasResolver</c> searchable aliases on an authoritative
+    /// navdata/GSX gate. The coordinate only feeds that resolver's distance sanity backstop: online
+    /// data never sets a gate's name or position and never adds a selectable gate (anti-grass rule).
+    /// </summary>
     public List<(string Name, double Lat, double Lon)> Parking { get; } = new();
+
+    /// <summary>
+    /// Painted NAMED holding points (OSM <c>aeroway=holding_position</c> nodes that carry a
+    /// ref/name — LSZH "A2", EGLL VIKAS/N2E…). Kind is the OSM <c>holding_position:type</c>
+    /// tag ("runway", "ILS", "intermediate") or "" when untagged. Unnamed painted hold lines
+    /// are never collected. NAME + position only, consumed two ways: as runway-ENTRY
+    /// selectors (TaxiGraph.ResolveHoldingPointEntries) and as Progressive Taxi hold
+    /// targets (Navigation.NamedHoldingPointResolver — the name attaches to the nearest
+    /// navdata graph node). Never feeds hold-short placement, and the online coordinate is
+    /// never itself a route target (the augmentation anti-geometry rule).
+    /// </summary>
+    public List<(string Name, double Lat, double Lon, string Kind)> HoldingPoints { get; } = new();
+
+    /// <summary>
+    /// Named holding points read off X-Plane's red mandatory SIGNS (<see cref="SignHoldingPointExtractor"/>),
+    /// apt.dat only. Kept in their OWN list, never merged into <see cref="HoldingPoints"/>: a sign's
+    /// position is approximate, so these feed exactly one consumer — the Progressive Taxi
+    /// "hold at named holding point" list, as a FALLBACK for names no painted line carries
+    /// (OMDB "KK"). They never become runway-entry selectors or cross-at points.
+    /// </summary>
+    public List<SignHoldingPoint> SignHoldingPoints { get; } = new();
 }
 
 public sealed class CoverageReport

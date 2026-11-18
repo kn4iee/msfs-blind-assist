@@ -1,0 +1,537 @@
+using System.Collections.Concurrent;
+using Microsoft.FlightSimulator.SimConnect;
+using static Microsoft.FlightSimulator.SimConnect.SimConnect;
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Navigation;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Utils.Logging;
+
+namespace MSFSBlindAssist.SimConnect;
+
+public partial class SimConnectManager
+{
+
+    public void SetLVar(string varName, double value)
+    {
+        if (!IsConnected || simConnect == null) return;
+
+        // GLOBAL WRITE ROUTING: prefer the MobiFlight calculator path for real L:vars.
+        // The data-definition write below (AddToDataDefinition + SetDataOnSimObject) is UNRELIABLE for
+        // many add-on L:vars (FlyByWire L:vars in particular silently revert a frame later) -- which is
+        // why dozens of A380/A32NX controls had to be hand-routed through the calc path one prefix at a
+        // time in each aircraft def's HandleUIVariableSet catch-all. Routing every L:var write that
+        // reaches this fallback through the calc path fixes them all globally. Guardrails:
+        //   * Only when the calc path is PROVEN alive end-to-end (CalcPathVerified — the nonce
+        //     round-trip probe). IsMobiFlightConnected is NOT sufficient: it is true even when no
+        //     WASM module is installed (purely local setup), and routing on it sent every L:var
+        //     write into a dead client-data area for no-module users. Until/unless verification
+        //     succeeds, fall through to the data-def write — the exact legacy (main) behavior,
+        //     which works for Fenix and degrades to main's known imperfection for FBW for the
+        //     few seconds before the probe verifies.
+        //
+        // ⚠️ DO NOT "clean up" the per-prefix ExecuteCalculatorCode routing in the FBW defs'
+        // HandleUIVariableSet catch-alls just because this global routing exists. Those write
+        // through the calculator UNCONDITIONALLY; this one is conditional on a probe that was
+        // measured failing silently for ten weeks (11 Jun - 22 Aug 2026). They are the reason
+        // the overhead panel kept working throughout that outage while the FCU combos did not,
+        // so they are deliberate defence in depth, not leftovers. Only ~7 of the ~71 calc call
+        // sites in those defs are even this shape; the rest are RPN logic and parameterised
+        // K-/H-events that could never be replaced by a plain L:var write.
+        //   * Only for names with no space and no colon [SIM-12]. Stock SimVar names carry one
+        //     (e.g. "TRANSPONDER STATE:1", "INTERACTIVE POINT OPEN:0") and must never be routed through
+        //     the L:var calc path — but an add-on L:var can carry one too: the HS787 passes the
+        //     colon-indexed "B787_IRS_Knob_State:1" here, and it gets the data-def write below. For such
+        //     an L:var that route is unmeasured, not a rule: move it to the calc path only if an in-sim
+        //     read-back shows the data-def write reverting. SetLVar always writes L:<name>, so it can
+        //     never write a stock SimVar: use SetSimVar for one.
+        if (CalcPathVerified
+            && !string.IsNullOrEmpty(varName)
+            && varName.IndexOf(' ') < 0
+            && varName.IndexOf(':') < 0)
+        {
+            // Fixed-point format: the default double formatting emits scientific notation
+            // for small/large magnitudes ("1E-05"), which the MSFS RPN parser rejects.
+            ExecuteCalculatorCode(value.ToString("0.################", System.Globalization.CultureInfo.InvariantCulture)
+                + " (>L:" + varName + ")");
+            return;
+        }
+
+        // For setting LVars, we'll need to use a workaround
+        // Create a temporary data definition for this specific LVar
+        // Use thread-safe counter to generate unique IDs (fixes crash from ID collision)
+        var tempDefId = (DATA_DEFINITIONS)System.Threading.Interlocked.Increment(ref nextTempDefId);
+
+        try
+        {
+            simConnect.AddToDataDefinition(tempDefId, $"L:{varName}", "number",
+                SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+
+            simConnect.SetDataOnSimObject(tempDefId,
+                SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_DATA_SET_FLAG.DEFAULT, value);
+
+            SafelyClearDataDefinition(tempDefId, requestId: null, delayMs: 50);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error setting LVar {varName}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Executes RPN calculator code via the MobiFlight WASM module.
+    /// Useful for atomic read-modify-write operations on LVars.
+    /// Example: "(L:E_FCU_EFIS1_BARO) 5 + (>L:E_FCU_EFIS1_BARO)"
+    /// </summary>
+    /// <param name="quiet">
+    /// Pass true only from an identified high-rate (per-frame timer) caller -- e.g. the A380
+    /// seat-motor/slider-ramp ticks -- to skip the per-command debug log line. Default false
+    /// preserves existing logging for every other caller.
+    /// </param>
+    /// <summary>
+    /// True when <see cref="ExecuteCalculatorCode"/> would actually send — connected, with the
+    /// MobiFlight module object present. This IS the condition that method guards itself with
+    /// (not a copy of it), so a caller that must know in advance whether a write will land cannot
+    /// drift from it. During a SimConnect outage the call returns having done nothing and says so
+    /// to nobody, which for a queued transport like the MD-11's CEVENT bus means the id is
+    /// consumed and the keystroke is lost; the MCDU window asks here first and refuses the press
+    /// aloud instead.
+    /// </summary>
+    public bool CanExecuteCalculatorCode => IsConnected && mobiFlightWasm != null;
+
+    /// <summary>
+    /// True when a calc write can be expected to LAND in the aircraft — what a caller that must
+    /// refuse aloud should ask, rather than <see cref="CanExecuteCalculatorCode"/>.
+    ///
+    /// The difference is the no-module configuration. `mobiFlightWasm` is constructed
+    /// unconditionally in <c>Connect()</c> and its initialize is purely local client-data setup, so
+    /// <see cref="CanExecuteCalculatorCode"/> is TRUE with no WASM module installed (the same trap
+    /// <see cref="IsMobiFlightConnected"/> carries, and why <see cref="SetLVar"/>'s routing gates on
+    /// <see cref="CalcPathVerified"/>). The only end-to-end evidence is the bridge probe, so this
+    /// refuses exactly when the probe has CONCLUDED and did not verify.
+    ///
+    /// While the probe is still PENDING this stays permissive, deliberately: refusing a write that
+    /// would have succeeded is worse than the gap it closes. That window is NOT short — the probe
+    /// runs 40 attempts at 1.5 s, so the no-module case (the only one this predicate adds) concludes
+    /// about a MINUTE after detection, and writes made in that minute are still discarded silently.
+    /// That is the accepted trade, not an oversight: the alternative refuses writes that would have
+    /// landed. The verdict is per CONNECTION, so MainForm re-arms it on every aircraft switch
+    /// (<c>ArmBridgeProbe</c>) — without that, a profile registering no probe target concludes
+    /// unverified and its verdict refuses every write on the aircraft switched to next.
+    /// Note this is NOT what <see cref="ExecuteCalculatorCode"/> guards itself
+    /// with, and must not become it — the FBW defs' per-prefix catch-alls write through the
+    /// calculator UNCONDITIONALLY by design ([VAR-3]), and gating them on the probe is what kept
+    /// the A380/A32NX overhead panels alive through the ten-week probe outage.
+    /// </summary>
+    public bool CalcWriteCanLand => CanExecuteCalculatorCode && !(CalcPathProbeConcluded && !CalcPathVerified);
+
+    public void ExecuteCalculatorCode(string rpnCode, bool quiet = false)
+    {
+        if (!CanExecuteCalculatorCode) return;
+
+        // Read the module ONCE for the call itself. The gate above stays the shared condition (it
+        // is what CalcWriteCanLand and every "will this land?" caller ask), but it re-reads the
+        // field, so checking and then dereferencing read it twice — and the MD-11's CEVENT pump
+        // calls in from a POOL THREAD roughly sixteen times a second for the whole session while
+        // Disconnect() nulls this field on the UI thread partway through its teardown, so a null
+        // could land between the two reads. SendMFCommand swallows its own exceptions and the
+        // catch below takes the rest, so the race cost a silently dropped write rather than a
+        // crash; the local makes it impossible instead of merely survivable.
+        var wasm = mobiFlightWasm;
+        if (wasm == null) return;
+
+        try
+        {
+            wasm.SendMFCommand($"MF.SimVars.Set.{rpnCode}", quiet);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error executing calculator code: {ex.Message}");
+        }
+    }
+
+    public void SetSimVar(string varName, double value, string units = "number")
+    {
+        if (!IsConnected || simConnect == null) return;
+
+        Log.Debug("SimConnect", $"Setting SimVar: {varName} = {value} ({units})");
+
+        // Create a temporary data definition for this specific SimVar
+        // Use thread-safe counter to generate unique IDs (fixes crash from ID collision)
+        var tempDefId = (DATA_DEFINITIONS)System.Threading.Interlocked.Increment(ref nextTempDefId);
+
+        try
+        {
+            simConnect.AddToDataDefinition(tempDefId, varName, units,
+                SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+
+            simConnect.SetDataOnSimObject(tempDefId,
+                SIMCONNECT_OBJECT_ID_USER,
+                SIMCONNECT_DATA_SET_FLAG.DEFAULT, value);
+
+            SafelyClearDataDefinition(tempDefId, requestId: null, delayMs: 50);
+
+            Log.Debug("SimConnect", $"Successfully set SimVar {varName} to {value}");
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("SimConnect", $"Error setting SimVar {varName}: {ex.Message}");
+        }
+    }   
+
+    /// <summary>
+    /// True when <see cref="SendEvent"/> would actually send. The STOCK-event twin of
+    /// <see cref="CanExecuteCalculatorCode"/>, and a DIFFERENT condition: a stock event needs no
+    /// MobiFlight module, so a caller must ask the one that matches its own transport. Same
+    /// reason for existing — <see cref="SendEvent"/> returns having done nothing during an outage
+    /// and tells nobody, so a caller that must refuse aloud (the MD-11's COM tuning and squawk)
+    /// asks here rather than spelling the condition a second time.
+    /// </summary>
+    public bool CanSendEvent => IsConnected && simConnect != null;
+
+    public void SendEvent(string eventName, uint data = 0)
+    {
+        if (!CanSendEvent) return;
+
+        Log.Debug("SimConnect", $"Sending event: {eventName} with data: {data}");
+
+        // Two FlyByWire event classes prefer the MobiFlight calculator path:
+        //   1. "H:" gauge/HTML events (e.g. H:A32NX_CHRONO_RST) — these have NO
+        //      TransmitClientEvent transport AT ALL (main never sent H: via SendEvent; its
+        //      SendHVar was MobiFlight-only too), so they always go to the MobiFlight
+        //      channel, queued during the brief connect window.
+        //   2. Dotted custom input events (e.g. A32NX.FCU_HDG_SET, A32NX.FCU_AP_1_PUSH) —
+        //      the calc path is preferred once VERIFIED end-to-end, but these DO have a
+        //      legacy transport: MapClientEventToSimEvent + TransmitClientEvent is the
+        //      shipping path for the A32NX FCU on main (the FBW WASM registers the custom
+        //      client events with the sim). So: verified → calc; probe still running →
+        //      queue (flushed on the probe's conclusion); concluded-unverified (module
+        //      absent, or a non-FBW aircraft that can't probe) → legacy transmit below.
+        if (eventName.StartsWith("H:", StringComparison.Ordinal))
+        {
+            if (mobiFlightWasm == null) return; // no transport exists for H: without the module object
+            if (IsMobiFlightConnected)
+                FireCalcEvent(eventName, data);
+            else
+                lock (pendingCalcEvents)
+                {
+                    if (pendingCalcEvents.Count < MaxPendingCalcEvents)
+                        pendingCalcEvents.Enqueue((eventName, data));
+                }
+            return;
+        }
+        if (eventName.Contains('.') && mobiFlightWasm != null)
+        {
+            // FBW FCU buttons never wait on the probe — see IsFbwFcuEvent for why a false
+            // negative there silently kills them rather than degrading them.
+            if (CalcPathVerified || IsFbwFcuEvent(eventName, CurrentAircraft?.AircraftCode))
+            {
+                FireCalcEvent(eventName, data);
+                return;
+            }
+            if (!CalcPathProbeConcluded)
+            {
+                // Probe still in flight (post-aircraft-load window): don't pick a loser yet.
+                // Queue; MarkCalcPathVerified flushes via calc, MarkCalcPathProbeConcluded
+                // flushes via the legacy transmit fallback in FlushPendingCalcEvents.
+                lock (pendingCalcEvents)
+                {
+                    if (pendingCalcEvents.Count < MaxPendingCalcEvents)
+                        pendingCalcEvents.Enqueue((eventName, data));
+                }
+                return;
+            }
+            // Probe concluded without verification — fall through to the legacy
+            // MapClientEventToSimEvent + TransmitClientEvent path below.
+        }
+
+        // Map the event name to an ID if not already mapped
+        if (!eventIds.ContainsKey(eventName))
+        {
+            uint eventId = nextEventId++;
+            eventIds[eventName] = eventId;
+            // Non-null by CanSendEvent at the top of this method (here and at the transmit below);
+            // the compiler cannot see through a property, and spelling that condition a second time
+            // is exactly what the property exists to prevent.
+            simConnect!.MapClientEventToSimEvent((EVENTS)eventId, eventName);
+            Log.Debug("SimConnect", $"Registered new event: {eventName} with ID: {eventId}");
+        }
+        
+        // Send the event with the data parameter
+        simConnect!.TransmitClientEvent(SIMCONNECT_OBJECT_ID_USER,
+            (EVENTS)eventIds[eventName], data, GROUP_PRIORITY.HIGHEST,
+            SIMCONNECT_EVENT_FLAG.GROUPID_IS_PRIORITY);
+    }
+
+    // Ever-increasing discriminator for the calc-path event strings. Interlocked because
+    // SendEvent is not reached from the UI thread alone: the FBW A320's DeferReadback calls it
+    // from a pool thread, whose A32NX.FCU_ALT_SET comes through here on a verified calc path
+    // (its COM swap is a known race on eventIds above, [SIM-20]). Every other caller, hotkeys
+    // included (WM_HOTKEY), runs on the UI thread.
+    private long calcEventSeq;
+
+    /// <summary>
+    /// The RPN the MobiFlight command channel is given for one H: or dotted event.
+    ///
+    /// ⚠️ The leading "<paramref name="seq"/> 0 *" is LOAD-BEARING, not decoration. That channel
+    /// DEDUPS byte-identical consecutive commands, so without a per-call discriminator every
+    /// TOGGLE event reached through SendEvent could be fired once and then never again: an EFIS
+    /// filter or LOC/APPR switched on could not be switched off, because "on" and "off" are the
+    /// same event and therefore the same string. The prefix pushes seq, pushes 0 and multiplies
+    /// to an inert 0 which is left on the stack and discarded — so a (>K:) still pops the data
+    /// value that follows it, and a (>H:) still sees no argument. Same idiom, same reason, as
+    /// the A320/A380 SD-page writes, the A380 RMP keypresses and the A380 seat-motor ramp.
+    /// </summary>
+    /// <summary>
+    /// Makes an arbitrary RPN command textually unique so the MobiFlight channel cannot coalesce
+    /// it with an identical predecessor. Same inert "{seq} 0 *" prefix as BuildCalcEventCode.
+    ///
+    /// ⚠️ Needed by any VALUELESS write, which is where repeats are byte-identical: a bare
+    /// K-event TOGGLE is the common case. The A320/A380 wiper circuit toggle is the live example
+    /// — Off→Slow→Off→Slow silently loses the last step, because its two
+    /// ELECTRICAL_CIRCUIT_TOGGLE writes land back to back with nothing between them.
+    /// </summary>
+    public static string BuildUniqueCalcCode(string rpn, long seq) => $"{seq} 0 * {rpn}";
+
+    /// <summary>Run RPN that must not be coalesced with an identical predecessor.</summary>
+    public void ExecuteCalculatorCodeUnique(string rpnCode) =>
+        ExecuteCalculatorCode(BuildUniqueCalcCode(
+            rpnCode, System.Threading.Interlocked.Increment(ref calcEventSeq)));
+
+    public static string BuildCalcEventCode(string eventName, uint data, long seq) =>
+        eventName.StartsWith("H:", StringComparison.Ordinal)
+            ? $"{seq} 0 * (>{eventName})"
+            : $"{seq} 0 * {data} (>K:{eventName})";
+
+    /// <summary>
+    /// FlyByWire FCU button events, which MUST go down the calculator path and must NOT wait on
+    /// the <see cref="CalcPathVerified"/> probe.
+    ///
+    /// ⚠️ The FBW FCU consumes these strictly as calculator K-events; the TransmitClientEvent
+    /// fallback reaches it not at all. So a probe FALSE NEGATIVE — path alive, read-back broken —
+    /// does not degrade these, it kills them outright. That is not hypothetical: measured
+    /// 2026-08-22 on a live machine, MSFSBA_BRIDGE_PROBE held the exact nonce written (so the
+    /// calc WRITE was fine) while the data-def read-back never arrived, leaving the path forever
+    /// unverified and every A32NX.FCU_* sent through SendEvent silently discarded. Reported as
+    /// "the FCU won't accept". FireFCUButton had always bypassed this by calling
+    /// ExecuteCalculatorCode directly, which is exactly why the knob buttons kept working while
+    /// the combos did not — the inconsistency hid the fault for months.
+    ///
+    /// Deliberately narrow: only the FCU family, and only on the A380. Stock events still want
+    /// the legacy transport, and other dotted events keep the probe gate.
+    ///
+    /// ⚠️ The AIRCRAFT half of that narrowing is load-bearing, not tidiness. The A32NX shares the
+    /// `A32NX.FCU_*` event names but NOT the reasoning above: its FCU is reached perfectly well by
+    /// MapClientEventToSimEvent + TransmitClientEvent (the shipping path documented in SendEvent),
+    /// so for the A320 this bypass does not rescue a probe false negative — it DELETES the working
+    /// fallback. A pilot without the MobiFlight WASM module (a supported, degraded configuration —
+    /// it is exactly what CalcPathVerdict.PilotWarning exists to announce) would have every A320
+    /// FCU control go dead rather than degrade: FCU_HDG_SET / FCU_SPD_SET / FCU_ALT_SET, the
+    /// FCU_EFIS_{L,R}_BARO_{SET,PUSH,PULL} writes and every FCU panel push button, all handed to a
+    /// WASM module that is not there and silently dropped.
+    /// </summary>
+    public static bool IsFbwFcuEvent(string eventName, string? aircraftCode) =>
+        aircraftCode == "FBW_A380"
+        && eventName.StartsWith("A32NX.FCU_", StringComparison.Ordinal);
+
+    // Fire a calculator-path event via the MobiFlight bridge. H: events are momentary (no param);
+    // dotted custom events take the data param. Callers route here once the verdict/connection
+    // gates have been applied (the H: flush may fire during the brief connect window —
+    // ExecuteCalculatorCode drops safely if the module object is gone).
+    private void FireCalcEvent(string eventName, uint data) =>
+        ExecuteCalculatorCode(
+            BuildCalcEventCode(eventName, data, System.Threading.Interlocked.Increment(ref calcEventSeq)));
+
+    // Flush events queued while the calc-path verdict was pending. Called from
+    // MarkCalcPathVerified (flush via calc) and MarkCalcPathProbeConcluded (flush
+    // dotted events via the legacy TransmitClientEvent transport; H: events go to
+    // the MobiFlight channel regardless — they have no other transport).
+    private void FlushPendingCalcEvents()
+    {
+        (string eventName, uint data)[] toFire;
+        lock (pendingCalcEvents)
+        {
+            if (pendingCalcEvents.Count == 0) return;
+            toFire = pendingCalcEvents.ToArray();
+            pendingCalcEvents.Clear();
+        }
+        foreach (var e in toFire)
+        {
+            if (CalcPathVerified || e.eventName.StartsWith("H:", StringComparison.Ordinal))
+                FireCalcEvent(e.eventName, e.data);
+            else
+                SendEvent(e.eventName, e.data); // re-enters; CalcPathProbeConcluded routes it to TransmitClientEvent
+
+            try
+            {
+                QueuedEventDispatched?.Invoke(this, e.eventName);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("SimConnect", $"QueuedEventDispatched subscriber threw for {e.eventName}: {ex.Message}");
+            }
+        }
+    }
+
+    // Release any H: events queued during the MobiFlight connect window without
+    // disturbing queued dotted events (which wait for the probe's verdict).
+    private void FlushPendingHEvents()
+    {
+        List<(string eventName, uint data)> hEvents = new();
+        lock (pendingCalcEvents)
+        {
+            if (pendingCalcEvents.Count == 0) return;
+            var keep = new Queue<(string eventName, uint data)>();
+            while (pendingCalcEvents.Count > 0)
+            {
+                var e = pendingCalcEvents.Dequeue();
+                if (e.eventName.StartsWith("H:", StringComparison.Ordinal)) hEvents.Add(e);
+                else keep.Enqueue(e);
+            }
+            while (keep.Count > 0) pendingCalcEvents.Enqueue(keep.Dequeue());
+        }
+        foreach (var e in hEvents) FireCalcEvent(e.eventName, e.data);
+    }
+
+    public void SendHVar(string hvar)
+    {
+        Log.Debug("SimConnect", $"Attempting to send H-variable: {hvar}");
+        Log.Debug("SimConnect", $"MobiFlight Status: {MobiFlightStatus}");
+        Log.Debug("SimConnect", $"Can Send H-Vars: {CanSendHVars}");
+
+        if (mobiFlightWasm?.CanSendHVars == true)
+        {
+            mobiFlightWasm.SendHVar(hvar);
+            Log.Debug("SimConnect", $"Successfully sent H-variable: {hvar}");
+        }
+        else
+        {
+            Log.Debug("SimConnect", $"❌ Cannot send H-variable - MobiFlight not ready: {hvar}");
+            Log.Debug("SimConnect", $"MobiFlight module null: {mobiFlightWasm == null}");
+            if (mobiFlightWasm != null)
+            {
+                Log.Debug("SimConnect", $"IsConnected: {mobiFlightWasm.IsConnected}");
+                Log.Debug("SimConnect", $"IsRegistered: {mobiFlightWasm.IsRegistered}");
+                Log.Debug("SimConnect", $"CanSendHVars: {mobiFlightWasm.CanSendHVars}");
+            }
+        }
+    }
+
+    public void SendButtonPressRelease(string pressEvent, string releaseEvent, int delayMs = 200)
+    {
+        if (string.IsNullOrEmpty(pressEvent) || string.IsNullOrEmpty(releaseEvent))
+        {
+            Log.Debug("SimConnect", "Invalid press/release events");
+            return;
+        }
+
+        // Send press event
+        SendHVar(pressEvent);
+
+        // Set up timer for release event
+        var releaseTimer = new System.Windows.Forms.Timer();
+        releaseTimer.Interval = delayMs;
+        releaseTimer.Tick += (sender, e) =>
+        {
+            releaseTimer.Stop();
+            releaseTimer.Dispose();
+            SendHVar(releaseEvent);
+            Log.Debug("SimConnect", $"Button press/release completed: {pressEvent} -> {releaseEvent}");
+        };
+        releaseTimer.Start();
+    }
+
+    public void AddLedVariable(string ledVariable)
+    {
+        if (mobiFlightWasm != null && !string.IsNullOrEmpty(ledVariable))
+        {
+            // Use default MobiFlight channel to add L-variable for reading
+            mobiFlightWasm.AddDefaultChannelLVar(ledVariable);
+            Log.Debug("SimConnect", $"Added LED variable for monitoring via default channel: {ledVariable}");
+        }
+    }
+
+    public void RequestLedVariableUpdate()
+    {
+        // This triggers an update of all registered L-variables in the default channel
+        // MobiFlight will automatically send updates when any L-variable changes
+        if (mobiFlightWasm != null)
+        {
+            Log.Debug("SimConnect", "LED variable updates will be received automatically from MobiFlight");
+        }
+    }
+
+    public void ReadLedVariable(string ledVariable)
+    {
+        if (mobiFlightWasm != null && !string.IsNullOrEmpty(ledVariable))
+        {
+            mobiFlightWasm.ReadLedVariable(ledVariable);
+            Log.Debug("SimConnect", $"Reading LED variable: {ledVariable}");
+        }
+    }
+
+    public void SendPMDGEvent(string eventName, uint eventId, int? parameter = null)
+    {
+        pmdgDataManager?.SendEvent(eventName, eventId, parameter);
+    }
+
+    public async Task SendPMDGGuardedSet(string guardEventName, uint guardEventId,
+                                          string switchEventName, uint switchEventId,
+                                          int targetPosition)
+    {
+        if (pmdgDataManager != null)
+            await pmdgDataManager.SendGuardedSet(guardEventName, guardEventId, switchEventName, switchEventId, targetPosition);
+    }
+
+    /// <summary>
+    /// TransmitClientEvent dispatch for absolute-position selectors (3+ detents) whose
+    /// CDA selector handler does not accept the target position directly. PMDG accepts
+    /// the absolute target position via the standard SimConnect event path.
+    /// </summary>
+    public void SendPMDGEventViaTransmitWithTarget(uint eventId, uint targetPosition)
+    {
+        pmdgDataManager?.SendEventViaTransmitWithTarget(eventId, targetPosition);
+    }
+
+    /// <summary>
+    /// Walks an NG3 switch to a target position via mouse-click TransmitClientEvents
+    /// (TFM convention). PMDG NG3 handles guard physics transparently — no explicit
+    /// guard manipulation needed.
+    /// </summary>
+    public async Task WalkPMDGSelector(uint eventId, int currentPosition, int targetPosition)
+    {
+        if (pmdgDataManager != null)
+            await pmdgDataManager.WalkSelectorViaClicks(eventId, currentPosition, targetPosition);
+    }
+
+    /// <summary>
+    /// Closed-loop click-walk for NG3 detented rotaries that ignore both the CDA
+    /// position write and transmit-with-target (currently the transponder mode
+    /// selector, EVT_TCAS_MODE). Awaits a FRESH Data-CDA snapshot before every
+    /// re-read (the ambient poll is 1 Hz — too stale to steer clicks) so PMDG's
+    /// probabilistically-dropped detent clicks self-correct without overshoot;
+    /// click direction is inverted vs <see cref="WalkPMDGSelector"/>'s TFM
+    /// convention. Returns the VERIFIED landed position (== target on success,
+    /// elsewhere on budget exhaustion), or null when unverified — non-NG3
+    /// manager, not ready, or snapshot timeout. See
+    /// <see cref="PMDGNG3DataManager.WalkSelectorClosedLoop"/> for the probe history.
+    /// </summary>
+    public async Task<int?> WalkPMDGSelectorClosedLoop(uint eventId, string fieldName, int targetPosition)
+    {
+        if (pmdgDataManager is PMDGNG3DataManager ng3)
+            return await ng3.WalkSelectorClosedLoop(eventId, fieldName, targetPosition);
+        return null;
+    }
+
+    /// <summary>
+    /// Sends a press-and-release dispatch pair for a momentary spring-loaded
+    /// toggle. Used by the PMDG 737 NG3 for GRD POWER, GEN, and APU GEN
+    /// switches — bare clicks without RELEASE play the switch sound but the
+    /// state springs back. See <see cref="IPMDGDataManager.SendMomentaryToggle"/>.
+    /// </summary>
+    public async Task SendPMDGMomentaryToggle(uint eventId, int targetPosition)
+    {
+        if (pmdgDataManager != null)
+            await pmdgDataManager.SendMomentaryToggle(eventId, targetPosition);
+    }
+}

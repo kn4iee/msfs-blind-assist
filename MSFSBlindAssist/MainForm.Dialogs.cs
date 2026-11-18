@@ -1,0 +1,912 @@
+﻿using System.Collections.Concurrent;
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Database;
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Forms;
+using MSFSBlindAssist.Forms.FenixA320;
+using MSFSBlindAssist.Forms.PMDG737;
+using MSFSBlindAssist.Forms.PMDG777;
+using MSFSBlindAssist.Forms.HS787;
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.Services;
+using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Patching;
+using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
+
+namespace MSFSBlindAssist;
+
+public partial class MainForm
+{
+    /// <summary>
+    /// Open (or refocus) the Access GSX form. The underlying GsxService runs
+    /// from connect-time, independently of this form, so the form is just a
+    /// UI surface for the existing connection.
+    /// </summary>
+    private void ShowAccessGSXForm()
+    {
+        if (_gsxService == null)
+        {
+            announcer.AnnounceImmediate("Access GSX: service not initialized.");
+            return;
+        }
+
+        // Deliberately NOT gated on IsConnected. That gate refused to open the
+        // window whenever the GSX Remote API was unreachable — which is exactly
+        // the case the window exists to explain: its status box carries
+        // GsxService.UnavailableReason, and F5 speaks it. Refusing to open, with
+        // an announcement blaming the simulator, left a pilot on an older GSX
+        // with no way to find out what was actually wrong. There is no fallback
+        // transport to degrade to, so this explanation IS the mitigation.
+        if (_accessGsxForm == null || _accessGsxForm.IsDisposed)
+        {
+            _accessGsxForm = new Forms.AccessGSXForm(_gsxService, announcer);
+        }
+
+        // Show ownerless so the window is an independent top-level — MainForm
+        // stays usable, and the GSX window gets its own taskbar entry. The
+        // brief TopMost flash brings it to the foreground without keeping it
+        // pinned (same pattern as HS787FMCForm.ShowForm).
+        if (!_accessGsxForm.Visible)
+            _accessGsxForm.Show();
+        _accessGsxForm.TopMost = true;
+        _accessGsxForm.TopMost = false;
+        _accessGsxForm.BringToFront();
+        _accessGsxForm.Activate();
+    }
+
+    private void ShowRunwayTeleportDialog()
+    {
+        // Deactivate input hotkey mode before showing dialog
+        hotkeyManager.ExitInputHotkeyMode();
+
+        if (airportDataProvider == null || !airportDataProvider.DatabaseExists)
+        {
+            announcer.AnnounceImmediate("Airport database not found. Configure database from File menu first.");
+            return;
+        }
+
+        // Validate database matches simulator
+        if (!ValidateDatabaseSimulatorMatch())
+            return;
+
+        var dialog = new RunwayTeleportForm(airportDataProvider, announcer);
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            if (dialog.SelectedRunway != null && dialog.SelectedAirport != null)
+            {
+                simConnectManager.TeleportToRunway(dialog.SelectedRunway, dialog.SelectedAirport);
+            }
+        }
+    }
+
+    private void ShowGateTeleportDialog()
+    {
+        // Deactivate input hotkey mode before showing dialog
+        hotkeyManager.ExitInputHotkeyMode();
+
+        if (airportDataProvider == null || !airportDataProvider.DatabaseExists)
+        {
+            announcer.AnnounceImmediate("Airport database not found. Configure database from File menu first.");
+            return;
+        }
+
+        // Validate database matches simulator
+        if (!ValidateDatabaseSimulatorMatch())
+            return;
+
+        var dialog = new GateTeleportForm(airportDataProvider, announcer, simConnectManager.AircraftWingSpan, BuildGateDataSource());
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            if (dialog.SelectedParkingSpot != null && dialog.SelectedAirport != null)
+            {
+                simConnectManager.TeleportToParkingSpot(dialog.SelectedParkingSpot, dialog.SelectedAirport);
+            }
+        }
+    }
+
+    private void ShowLocationInfoDialog()
+    {
+        // Deactivate output hotkey mode before showing dialog
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        if (!simConnectManager.IsConnected)
+        {
+            announcer.AnnounceImmediate("Not connected to simulator. Cannot get location information.");
+            return;
+        }
+
+        if (!offlineLocationService.IsAvailable)
+        {
+            announcer.AnnounceImmediate(LocationDataUnavailableText());
+            return;
+        }
+
+        try
+        {
+            // The lookup is local and takes milliseconds, so the window opens already filled: no
+            // "Requesting…" or "Loading…" stage, and its focused first box is what NVDA reads.
+            var query = Services.Geography.LocationQuerySettings.From(MSFSBlindAssist.Settings.SettingsManager.Current);
+            simConnectManager.RequestAircraftPositionAsync(async position =>
+            {
+                // This callback runs on the UI thread, so the await resumes there.
+                try
+                {
+                    var report = await Task.Run(() => offlineLocationService.GetLocationInfo(position.Latitude, position.Longitude, query));
+                    if (report?.Details is null)
+                    {
+                        announcer.AnnounceImmediate(LocationDataUnavailableText());
+                        return;
+                    }
+                    var locationForm = new Forms.LocationInfoForm(report, query.Kilometres);
+                    locationForm.Show();
+                }
+                catch (Exception ex)
+                {
+                    announcer.AnnounceImmediate($"Error displaying location information: {ex.Message}");
+                    Log.Debug("MainForm", $"Error in position callback: {ex.Message}");
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            announcer.AnnounceImmediate($"Error requesting location information: {ex.Message}");
+            Log.Debug("MainForm", $"Error in ShowLocationInfoDialog: {ex.Message}");
+        }
+    }
+
+    private void OpenWeatherRadarWindow()
+    {
+        try
+        {
+            if (weatherRadarForm == null || weatherRadarForm.IsDisposed)
+                weatherRadarForm = new Forms.WeatherRadarForm(announcer, simConnectManager);
+            weatherRadarForm.ShowForm();
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("MainForm", $"Error opening weather radar: {ex.Message}");
+        }
+    }
+
+    private void OpenTcasWindow()
+    {
+        try
+        {
+            if (tcasForm == null || tcasForm.IsDisposed)
+            {
+                // The gate source is what makes the TCAS "at Gate B 25" label agree with every
+                // other stand readout (taxi dialog, Where-Am-I, SayIntentions) -- see
+                // Services/ParkingSpotSource. Passed as a FACTORY so the resolver creates it
+                // lazily, on first use rather than on window open.
+                //
+                // This resolver is built ONCE per TcasForm and captures the provider it is given
+                // in a readonly field, so a DATABASE switch is invalidated by rebuilding the
+                // window -- RefreshDatabaseProvider closes it, exactly as it closes the EFB. Do
+                // not re-add the claim that ClearCache covers that: it has no production caller,
+                // and it clears the spot cache without touching the readonly provider, so it
+                // could not fix a database switch even if something did call it.
+                var gateResolver = new Services.GateResolver(Database.DatabaseSelector.SelectProvider(), BuildGateDataSource);
+                tcasForm = new Forms.TcasForm(tcasService!, announcer, gateResolver);
+            }
+            tcasForm.ShowForm();
+        }
+        catch (Exception ex)
+        {
+            announcer.AnnounceImmediate($"Error opening TCAS: {ex.Message}");
+        }
+    }
+
+    private void OpenSimBriefBriefing()
+    {
+        try
+        {
+            announcer.AnnounceImmediate("Opening your SimBrief briefing");
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://dispatch.simbrief.com/briefing/latest",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            announcer.AnnounceImmediate($"Error opening SimBrief briefing: {ex.Message}");
+            Log.Debug("MainForm", $"Error in OpenSimBriefBriefing: {ex.Message}");
+        }
+    }
+
+    private void ShowDestinationRunwayDialog()
+    {
+        // Deactivate input hotkey mode before showing modal dialog
+        hotkeyManager.ExitInputHotkeyMode();
+
+        if (airportDataProvider == null || !airportDataProvider.DatabaseExists)
+        {
+            announcer.AnnounceImmediate("Airport database not found. Configure database from File menu first.");
+            return;
+        }
+
+        // Validate database matches simulator
+        if (!ValidateDatabaseSimulatorMatch())
+            return;
+
+        var dialog = new DestinationRunwayForm(airportDataProvider, announcer);
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            if (dialog.SelectedRunway != null && dialog.SelectedAirport != null)
+            {
+                simConnectManager.SetDestinationRunway(dialog.SelectedRunway, dialog.SelectedAirport);
+                // Destination just set → ready its online taxiway names + gate aliases, OSM buildings
+                // and scenery NOW, in the air or on the ground, so they are in hand well before the
+                // approach (instead of waiting until ILS guidance or the landing-exit planner opens).
+                _airportWarmUp?.AtDestination(dialog.SelectedAirport.ICAO);
+
+                // The destination arms the landing assist (RefreshRolloutCueArming): the manual-landing
+                // checkbox adds the flare tones, and with RolloutCenterlineToneEnabled the rollout
+                // centerline cue is armed even without it. A re-selection always re-applies — the
+                // pilot's latest choice wins.
+                _rolloutCueDestination = new MSFSBlindAssist.Navigation.RolloutCueDestination(
+                    dialog.SelectedRunway, dialog.SelectedAirport.ICAO,
+                    airportDataProvider.GetRunways(dialog.SelectedAirport.ICAO), dialog.ManualLandingAssist,
+                    dialog.SelectedAirport);
+                _rolloutCueLatest = MSFSBlindAssist.Navigation.RolloutCueSource.Destination;
+                RefreshRolloutCueArming(force: true);
+                if (dialog.ManualLandingAssist)
+                    announcer.AnnounceImmediate($"Destination runway set: {dialog.SelectedAirport.ICAO} Runway {dialog.SelectedRunway.RunwayID}. Manual landing assist armed.");
+                else
+                    announcer.AnnounceImmediate($"Destination runway set: {dialog.SelectedAirport.ICAO} Runway {dialog.SelectedRunway.RunwayID}");
+            }
+        }
+    }
+
+    private void ShowMETARReportDialog()
+    {
+        // Ensure output hotkey mode is deactivated before showing window
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        var dialog = new METARReportForm(announcer);
+        dialog.ShowForm();
+    }
+
+    private void ShowColdTempCorrectionDialog()
+    {
+        // Ensure output hotkey mode is deactivated before showing the window
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        var dialog = new ColdTemperatureCorrectionForm(announcer);
+        dialog.ShowForm();
+    }
+
+    private void ShowFirstOfficerFromHotkey()
+    {
+        // Ensure output hotkey mode is deactivated before showing the window
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        // Shift+C opens this aircraft's First Officer window, checklists and flows (FO-24). An
+        // aircraft without one opens nothing and says so. The A380's LIVE Electronic Checklist
+        // stays on its own key, Ctrl+Shift+C (ShowChecklistECLDialog).
+        if (Forms.FirstOfficer.FirstOfficerWindows.NameFor(currentAircraft) == null)
+        {
+            announcer.AnnounceImmediate("No checklist for this aircraft.");
+            return;
+        }
+
+        ShowFirstOfficerDialog();
+    }
+
+    // Ctrl+Shift+C on the A380: the LIVE Electronic Checklist (ECL) read from the
+    // E/WD — the real normal checklists + active ECAM procedures, with sensed
+    // auto-completion. A380-only; other aircraft have no ECL to drive.
+    private void ShowChecklistECLDialog()
+    {
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        if (currentAircraft?.AircraftCode != "FBW_A380")
+        {
+            // Point to Shift+C only where it opens something: on an aircraft with no First
+            // Officer it says "No checklist for this aircraft." (ShowFirstOfficerFromHotkey).
+            announcer.AnnounceImmediate(Forms.FirstOfficer.FirstOfficerWindows.NameFor(currentAircraft) != null
+                ? "The live Electronic Checklist is only on the A380. Shift+C opens the First Officer."
+                : "The live Electronic Checklist is only on the A380.");
+            return;
+        }
+        // The live ECL reads through the SHARED A380X_EWD monitor connection (only
+        // one Coherent inspector socket per page is allowed). Ensure it's running.
+        if (coherentEWDClient == null) StartA380EWDMonitor();
+        if (fbwA380ChecklistForm == null || fbwA380ChecklistForm.IsDisposed)
+            fbwA380ChecklistForm = new Forms.FBWA380.FBWA380ChecklistForm(announcer, simConnectManager, coherentEWDClient);
+        fbwA380ChecklistForm.Show();
+        fbwA380ChecklistForm.BringToFront();
+        fbwA380ChecklistForm.Activate();
+    }
+
+    public void ShowFenixMonitorManagerDialog()
+    {
+        // Deactivate output hotkey mode before showing dialog
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        // Create form if it doesn't exist or has been disposed
+        if (fenixMonitorManagerForm == null || fenixMonitorManagerForm.IsDisposed)
+        {
+            fenixMonitorManagerForm = new FenixMonitorManagerForm(currentAircraft.GetVariables());
+        }
+
+        // Show the form (reuses same instance to preserve state)
+        fenixMonitorManagerForm.ShowForm();
+    }
+
+    public void ShowA380MonitorManagerDialog()
+    {
+        hotkeyManager.ExitOutputHotkeyMode();
+        if (fbwA380MonitorManagerForm == null || fbwA380MonitorManagerForm.IsDisposed)
+        {
+            fbwA380MonitorManagerForm = new Forms.FBWA380.FBWA380MonitorManagerForm(
+                currentAircraft.GetVariables());
+        }
+        fbwA380MonitorManagerForm.ShowForm();
+    }
+
+    public void ShowA320MonitorManagerDialog()
+    {
+        hotkeyManager.ExitOutputHotkeyMode();
+        if (fbwA320MonitorManagerForm == null || fbwA320MonitorManagerForm.IsDisposed)
+        {
+            fbwA320MonitorManagerForm = new Forms.FlyByWireA320.FlyByWireA320MonitorManagerForm(
+                currentAircraft.GetVariables());
+        }
+        fbwA320MonitorManagerForm.ShowForm();
+    }
+
+    public void ShowHS787MonitorManagerDialog()
+    {
+        hotkeyManager.ExitOutputHotkeyMode();
+        if (hs787MonitorManagerForm == null || hs787MonitorManagerForm.IsDisposed)
+        {
+            hs787MonitorManagerForm = new Forms.HS787.HS787MonitorManagerForm(currentAircraft.GetVariables());
+        }
+        hs787MonitorManagerForm.ShowForm();
+    }
+
+    public void ShowPMDGAnnouncementMonitorDialog()
+    {
+        // Deactivate output hotkey mode before showing dialog
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        // The form snapshots the variables dictionary at construction time,
+        // so we recreate it whenever the loaded aircraft might have changed.
+        // CleanupAircraftSpecificForms() disposes this on aircraft swap, so
+        // a stale instance from the previous aircraft never lingers.
+        if (pmdgAnnouncementMonitorForm == null || pmdgAnnouncementMonitorForm.IsDisposed)
+        {
+            pmdgAnnouncementMonitorForm = new PMDGAnnouncementMonitorForm(currentAircraft.GetVariables());
+        }
+
+        pmdgAnnouncementMonitorForm.ShowForm();
+    }
+
+    private void ShowFenixMCDUDialog()
+    {
+        // Deactivate input hotkey mode before showing dialog
+        hotkeyManager.ExitInputHotkeyMode();
+
+        // Create service if it doesn't exist
+        if (fenixMCDUService == null)
+        {
+            fenixMCDUService = new FenixMCDUService();
+            fenixMCDUService.Connect();
+        }
+
+        // Create form if it doesn't exist or has been disposed
+        if (fenixMCDUForm == null || fenixMCDUForm.IsDisposed)
+        {
+            fenixMCDUForm = new FenixMCDUForm(fenixMCDUService, announcer);
+        }
+
+        // Show the form (reuses same instance to preserve state)
+        fenixMCDUForm.ShowForm();
+    }
+
+    private void ShowFenixEFBDialog()
+    {
+        hotkeyManager.ExitInputHotkeyMode();
+
+        // Reuse a single instance; recreate after it has been disposed (close / swap).
+        if (fenixEFBForm == null || fenixEFBForm.IsDisposed)
+        {
+            fenixEFBForm = new Forms.Fenix.FenixEFBForm(announcer);
+        }
+
+        fenixEFBForm.ShowForm();
+    }
+
+    private void ShowFlyByWireMCDUDialog()
+    {
+        // Deactivate input hotkey mode before showing dialog
+        hotkeyManager.ExitInputHotkeyMode();
+
+        if (flyByWireMCDUService == null)
+        {
+            // The service reads the MCDU over the Coherent debugger (primary) with the
+            // SimBridge relay as fallback. The MCDU's Coherent view title is per airframe
+            // ("A32NX_MCDU"; the Headwind A330's is "A339X_MCDU").
+            string mcduView = (currentAircraft as Aircraft.FlyByWireA320Definition)?.FlightInfoMcduView ?? "A32NX_MCDU";
+            flyByWireMCDUService = new MSFSBlindAssist.Services.FlyByWireMCDUService(mcduView);
+            flyByWireMCDUService.Connect();
+        }
+
+        if (flyByWireMCDUForm == null || flyByWireMCDUForm.IsDisposed)
+        {
+            flyByWireMCDUForm = new MSFSBlindAssist.Forms.FlyByWireA320.FlyByWireMCDUForm(flyByWireMCDUService, announcer);
+            // Poll the Coherent screen fast while the window is visible and at the idle rate
+            // while it is closed (closing hides it: FormClosing → Hide); a closed window still
+            // speaks FMS messages, and the socket stays warm for the D / Shift+D readout.
+            var form = flyByWireMCDUForm;
+            form.VisibleChanged += (_, _) => flyByWireMCDUService?.SetActive(!form.IsDisposed && form.Visible);
+        }
+
+        flyByWireMCDUForm.ShowForm();
+        flyByWireMCDUService.SetActive(true);   // covers the already-visible re-Show path (no VisibleChanged)
+    }
+
+    private void ShowPMDGCDUDialog()
+    {
+        // Deactivate input hotkey mode before showing dialog
+        hotkeyManager.ExitInputHotkeyMode();
+
+        if (simConnectManager?.PMDGDataManager == null) return;
+
+        // Create form if it doesn't exist or has been disposed.
+        // Dispatch by aircraft code: the 777 form takes a concrete
+        // PMDG777DataManager (cast through the abstraction); the 737
+        // form accepts IPMDGDataManager directly.
+        if (pmdgCDUForm == null || pmdgCDUForm.IsDisposed)
+        {
+            if (currentAircraft?.AircraftCode == "PMDG_737")
+            {
+                pmdgCDUForm = new PMDG737CDUForm(simConnectManager.PMDGDataManager, announcer);
+            }
+            else
+            {
+                pmdgCDUForm = new PMDG777CDUForm((PMDG777DataManager)simConnectManager.PMDGDataManager, announcer);
+            }
+        }
+
+        // Show the form (reuses same instance to preserve state)
+        switch (pmdgCDUForm)
+        {
+            case PMDG737CDUForm f737: f737.ShowForm(); break;
+            case PMDG777CDUForm f777: f777.ShowForm(); break;
+        }
+    }
+
+    private void ShowFBWA380MCDUDialog()
+    {
+        hotkeyManager.ExitInputHotkeyMode();
+
+        if (coherentClient == null) { coherentClient = new CoherentDebuggerClient(); coherentClient.Start(); }
+        IMcduBridge bridge = coherentClient;
+
+        if (fbwA380MCDUForm == null || fbwA380MCDUForm.IsDisposed)
+        {
+            fbwA380MCDUForm = new Forms.FBWA380.FBWA380MCDUForm(
+                bridge, announcer,
+                currentAircraft as Aircraft.FlyByWireA380Definition);
+            // Idle-gate the 350 ms MFD scrape to the window's visibility. The form hides
+            // (not closes) on user-close, so VisibleChanged fires on every open/close; the
+            // form and client are both disposed on aircraft swap, so the closure can't
+            // dangle. The connection itself stays warm for D / Shift+D flight info.
+            var form = fbwA380MCDUForm;
+            form.VisibleChanged += (_, _) => coherentClient?.SetActive(!form.IsDisposed && form.Visible);
+        }
+        coherentClient.SetActive(true);   // covers the already-visible re-Show path (no VisibleChanged)
+        fbwA380MCDUForm.ShowForm();
+    }
+
+    private void ShowFbwEfbDialog()
+    {
+        hotkeyManager.ExitInputHotkeyMode();
+
+        if (coherentEFBClient == null) { coherentEFBClient = new CoherentEFBClient(); coherentEFBClient.Start(); }
+        IMcduBridge bridge = coherentEFBClient;
+
+        if (fbwEfbForm == null || fbwEfbForm.IsDisposed)
+        {
+            // One generic flyPad form serves both FBW aircraft; only the window
+            // title differs. The form is disposed on aircraft swap (see the swap
+            // handler), so it is always recreated with the correct title.
+            string title = currentAircraft?.AircraftCode switch
+            {
+                "A320" => "A320 flyPad EFB",
+                "HW_A330" => "A330 flyPad EFB",
+                _ => "A380X flyPad EFB"
+            };
+            fbwEfbForm = new Forms.FBWA380.FbwEfbForm(bridge, announcer, title, "flyPad");
+            // Idle-gate the 600 ms flyPad scrape to the window's visibility (same pattern
+            // as the MCDU window above); the connection + powerOn handshake stay warm.
+            var form = fbwEfbForm;
+            form.VisibleChanged += (_, _) => coherentEFBClient?.SetActive(!form.IsDisposed && form.Visible);
+        }
+        coherentEFBClient.SetActive(true);   // covers the already-visible re-Show path (no VisibleChanged)
+        fbwEfbForm.ShowForm();
+    }
+
+    private void FirstOfficerMenuItem_Click(object? sender, EventArgs e) => ShowFirstOfficerDialog();
+
+    // The current aircraft's First Officer window, built once per aircraft by FirstOfficerWindows
+    // (FO-24: never a per-aircraft field, Show method or type test here). The aircraft swap
+    // disposes it, so a reopen after a swap builds the new aircraft's window.
+    private void ShowFirstOfficerDialog()
+    {
+        if (firstOfficerForm is not { IsDisposed: false })
+            firstOfficerForm = Forms.FirstOfficer.FirstOfficerWindows.Create(
+                currentAircraft, simConnectManager, announcer, MSFSBlindAssist.Settings.SettingsManager.Current);
+        firstOfficerForm?.ShowForm();
+    }
+
+    // PMDG 737/777 EFB tablet over the Coherent debugger — one client + window per
+    // crew side, reusing the generic FbwEfbForm. Mirrors ShowFbwEfbDialog's lazy
+    // client/form creation + non-modal ShowForm pattern.
+    private void ShowPmdgCoherentEfbDialog(bool firstOfficer)
+    {
+        hotkeyManager.ExitInputHotkeyMode();
+        string side = firstOfficer ? "FO" : "CA";
+        string title = (currentAircraft?.AircraftCode == "PMDG_737" ? "PMDG 737 EFB" : "PMDG 777 EFB") + (firstOfficer ? " (First Officer)" : "");
+
+        if (firstOfficer)
+        {
+            if (coherentPmdgEfbFirstOfficer == null) { coherentPmdgEfbFirstOfficer = CoherentPmdgEfbClient.ForPmdg(side); coherentPmdgEfbFirstOfficer.Start(); }
+            if (pmdgCoherentEfbFirstOfficerForm == null || pmdgCoherentEfbFirstOfficerForm.IsDisposed)
+            {
+                pmdgCoherentEfbFirstOfficerForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbFirstOfficer, announcer, title, "EFB", "Universal Flight Tablet");
+                // Idle-gate the 600 ms tablet scrape to the window's visibility (same pattern as
+                // the flyPad form above); the inspector socket + installed agent stay warm. Without
+                // this the scrape runs forever after the first open until aircraft swap.
+                var foForm = pmdgCoherentEfbFirstOfficerForm;
+                foForm.VisibleChanged += (_, _) => coherentPmdgEfbFirstOfficer?.SetActive(!foForm.IsDisposed && foForm.Visible);
+            }
+            coherentPmdgEfbFirstOfficer.SetActive(true);   // covers the already-visible re-Show path (no VisibleChanged)
+            pmdgCoherentEfbFirstOfficerForm.ShowForm();
+        }
+        else
+        {
+            if (coherentPmdgEfbCaptain == null) { coherentPmdgEfbCaptain = CoherentPmdgEfbClient.ForPmdg(side); coherentPmdgEfbCaptain.Start(); }
+            if (pmdgCoherentEfbCaptainForm == null || pmdgCoherentEfbCaptainForm.IsDisposed)
+            {
+                pmdgCoherentEfbCaptainForm = new Forms.FBWA380.FbwEfbForm(coherentPmdgEfbCaptain, announcer, title, "EFB", "Universal Flight Tablet");
+                var caForm = pmdgCoherentEfbCaptainForm;
+                caForm.VisibleChanged += (_, _) => coherentPmdgEfbCaptain?.SetActive(!caForm.IsDisposed && caForm.Visible);
+            }
+            coherentPmdgEfbCaptain.SetActive(true);
+            pmdgCoherentEfbCaptainForm.ShowForm();
+        }
+    }
+
+    // A380 ND OANS / BTV control panel — reuses the WebView2 EFB form, but driven
+    // by the ND Coherent view through CoherentNDClient. Used for BTV (Brake-To-
+    // Vacate) exit selection and airport/runway/exit search.
+    // Open the accessible A380 RMP window (Ctrl+Shift+R in input mode) — replaces the old
+    // per-key RMP button panel. Scrapes A380X_RMP_1/2 live; one window, Captain ↔ FO combo.
+    private void ShowA32NXDcduDialog()
+    {
+        // Opened by an INPUT-mode hotkey — release the mode hotkeys so the
+        // form's Ctrl+1/2 / Alt+1/2 soft keys and PageUp/Down navigation reach
+        // the window instead of the global registrations (RMP/OANS precedent).
+        hotkeyManager.ExitInputHotkeyMode();
+        hotkeyManager.ExitOutputHotkeyMode();
+        if (fbwDcduForm == null || fbwDcduForm.IsDisposed)
+        {
+            fbwDcduForm = new Forms.FlyByWireA320.FlyByWireDcduForm(announcer, simConnectManager);
+        }
+        fbwDcduForm.Show();
+        fbwDcduForm.BringToFront();
+        fbwDcduForm.Activate();
+    }
+
+    private void ShowFBWA380RmpDialog()
+    {
+        if (currentAircraft is not FlyByWireA380Definition a380rmp) return;
+        // CRITICAL: release the mode hotkeys before showing. The RMP window is opened by an
+        // INPUT-mode hotkey (Ctrl+Shift+R), so input mode is still active and its global
+        // RegisterHotKey shortcuts (Ctrl+1/2/3 = FCU pulls, Alt+n, digits via Track Slots,
+        // etc.) would be consumed system-wide and NEVER reach the RMP window — making the
+        // RMP soft keys, page switching and digit entry all appear dead. Exiting both modes
+        // unregisters those, so every keystroke flows to the form. (Mirrors the OANS dialog.)
+        hotkeyManager.ExitInputHotkeyMode();
+        hotkeyManager.ExitOutputHotkeyMode();
+        if (fbwA380RmpForm == null || fbwA380RmpForm.IsDisposed)
+        {
+            fbwA380RmpForm = new Forms.FBWA380.FBWA380RmpForm(announcer, a380rmp, simConnectManager);
+        }
+        fbwA380RmpForm.Show();
+        fbwA380RmpForm.BringToFront();
+        fbwA380RmpForm.Activate();
+    }
+
+    private void ShowFBWA380OansDialog()
+    {
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        if (coherentNDClient == null) { coherentNDClient = new CoherentNDClient(); coherentNDClient.Start(); }
+
+        if (fbwA380OansForm == null || fbwA380OansForm.IsDisposed)
+        {
+            fbwA380OansForm = new Forms.FBWA380.FBWA380OansForm(coherentNDClient, announcer);
+        }
+        fbwA380OansForm.ShowForm();
+    }
+
+    private void ShowHS787FMCDialog()
+    {
+        hotkeyManager.ExitInputHotkeyMode();
+
+        // The CDU now reads + drives over the Coherent debugger (HSB789_MFD_3) — no HTTP
+        // bridge server, no injected JS, no mod-package HTML patching required.
+        if (hs787FMCForm == null || hs787FMCForm.IsDisposed)
+        {
+            hs787FMCForm = new HS787FMCForm(simConnectManager, announcer);
+        }
+
+        hs787FMCForm.ShowForm();
+    }
+
+    private void ShowElectronicFlightBagDialog()
+    {
+        // Ensure output hotkey mode is deactivated before showing dialog
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        // Create form if it doesn't exist or has been disposed
+        if (electronicFlightBagForm == null || electronicFlightBagForm.IsDisposed)
+        {
+            var settings = MSFSBlindAssist.Settings.SettingsManager.Current;
+            electronicFlightBagForm = new ElectronicFlightBagForm(flightPlanManager, simConnectManager, announcer, waypointTracker,
+                settings.SimbriefUsername ?? "",
+                routeDescriptionSession,
+                new MSFSBlindAssist.Navigation.Briefing.RouteBriefingDependencies(
+                    () => airportDataProvider,            // a getter: RefreshDatabaseProvider swaps the instance (re-wrapped by WithTaxiAugmentation)
+                    BuildGateDataSource,
+                    () => sayIntentionsService.GetAssignedStatusAsync()));
+        }
+
+        // Show the form (reuses same instance to preserve flight plan data)
+        electronicFlightBagForm.ShowForm();
+    }
+
+    private void ShowTaxiAssistForm()
+    {
+        if (airportDataProvider == null)
+        {
+            announcer.AnnounceImmediate("Airport database not available. Configure database in settings.");
+            return;
+        }
+
+        // Ensure input and output hotkey modes are deactivated before showing dialog
+        hotkeyManager.ExitInputHotkeyMode();
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        // Get current aircraft position
+        simConnectManager.RequestAircraftPositionAsync(position =>
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(() => OpenTaxiForm(position));
+            }
+            else
+            {
+                OpenTaxiForm(position);
+            }
+        });
+    }
+
+    // The four GSX signals every GateDataSource is given, and the gate-list token is derived from.
+    // Methods, so a GsxService started or replaced later is seen. "Couatl started" is EITHER the
+    // Remote API flag OR L:FSDT_GSX_COUATL_STARTED, which every GSX build publishes — the .ini
+    // overlay, deice pads and stop positions are local-file features and not a version floor.
+    private bool GsxCouatlRunning()
+        => (_gsxService != null && _gsxService.CouatlStarted)
+           || (simConnectManager != null && simConnectManager.GsxCouatlStartedLVar);
+    private IReadOnlyCollection<string> GsxCapabilities() => _gsxService?.Capabilities ?? Array.Empty<string>();
+    private System.Text.Json.JsonElement? GsxHandlerDataAirport() => _gsxService?.GetHandlerDataAirport();
+    // The staleness token behind GateDataSource.GetGateListVersion — a field read, so a per-ICAO
+    // gate cache can notice GSX (re)publishing this airport per keystroke.
+    private long GsxHandlerDataVersion() => _gsxService?.HandlerDataVersion ?? 0;
+
+    /// <summary>
+    /// Wires <see cref="Services.GateDataSource"/> to live GSX data: the pre-existing
+    /// <c>.ini</c>/navdata path (unchanged, gated on <c>CouatlStarted</c> + a matching
+    /// profile), plus the Remote API path added by Spec 2 — GSX's own
+    /// <c>handlerData.airport.parkings</c> for whichever airport GSX currently has loaded.
+    /// The two extra delegates default to "off" when omitted (see
+    /// <see cref="Services.GateDataSource"/>'s own constructor doc), so wiring them here is
+    /// what actually turns the Remote API gate-list path on in the running app — without
+    /// this, <see cref="Services.GateDataSource.GetGates"/> can never take that branch no
+    /// matter what GSX publishes.
+    /// </summary>
+    private Services.GateDataSource? BuildGateDataSource()
+        => airportDataProvider is { } provider ? BuildGateDataSource(provider) : null;
+
+    /// <summary>A GateDataSource over an already-captured <paramref name="provider"/>, so a pool-thread
+    /// caller's gate and navdata reads come from one database even across a switch.</summary>
+    private Services.GateDataSource BuildGateDataSource(IAirportDataProvider provider)
+        => new(provider, GsxCouatlRunning,
+               capabilities: GsxCapabilities,
+               getHandlerDataAirport: GsxHandlerDataAirport,
+               handlerDataVersion: GsxHandlerDataVersion);
+
+    /// <summary>
+    /// GateDataSource.GetGateListVersion's token without constructing a GateDataSource — it is asked
+    /// on every monitor sample. The same four signals BuildGateDataSource uses, so they cannot drift;
+    /// "none" with no database.
+    /// </summary>
+    private string GateListVersion(string icao)
+        => airportDataProvider == null ? "none"
+           : Services.GateDataSource.ComputeGateListVersion(icao, GsxCouatlRunning, GsxCapabilities,
+                                                            GsxHandlerDataAirport, GsxHandlerDataVersion);
+
+    /// <summary>
+    /// Constructs a <see cref="Services.Gsx.Remote.GsxRemoteGateSelector"/> when GSX is
+    /// available in this session. Returns <c>null</c> when there is no GSX service (GSX not
+    /// installed / not yet started), so callers can simply null-check before using it.
+    /// Sends <c>gate.select</c> over the Remote API — one request, one typed response, no
+    /// menu interaction — replacing the retired menu-walking <c>GsxGateSelector</c>. The
+    /// selector itself feature-checks the <c>gate</c> capability before ever sending
+    /// anything (GSX 4.0.8+), so this is safe to construct even against an older GSX or one
+    /// that hasn't sent its <c>hello</c> frame yet.
+    /// </summary>
+    private Services.Gsx.Remote.GsxRemoteGateSelector? BuildGsxGateSelector()
+    {
+        // Captured as a local so the lambdas below close over a specific, narrowed-non-null
+        // GsxService instance rather than the mutable _gsxService field -- flow analysis
+        // cannot trust a field to stay non-null inside a closure that may run long after
+        // this null check (a later aircraft-switch teardown could null the field out), and
+        // a local copy is also the semantically right behavior: this selector should keep
+        // talking to the SAME GsxService instance for its lifetime.
+        var gsxService = _gsxService;
+        if (gsxService == null) return null;
+        return new Services.Gsx.Remote.GsxRemoteGateSelector(
+            async (verb, args) => (await gsxService.SendCommandAsync(verb, args)).Frame,
+            () => gsxService.Capabilities);
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the GSX installation folder
+    /// (%APPDATA%\Virtuali) exists, indicating GSX is likely installed.
+    /// Used to gate the per-ICAO profile rescan: the Refresh() call is only
+    /// useful to pick up a gsx.cfg written by GSX to %APPDATA%\Virtuali\Airplanes,
+    /// which never happens on a machine without GSX.
+    /// </summary>
+    private static bool GsxLikelyInstalled()
+    {
+        try { return System.IO.Directory.Exists(System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Virtuali")); }
+        catch { return false; }
+    }
+
+    private TaxiAssistForm GetOrCreateTaxiAssistForm()
+    {
+        if (taxiAssistForm == null || taxiAssistForm.IsDisposed)
+        {
+            // The form gets the import as a CALLBACK, not a MainForm reference, so it
+            // stays independent of MainForm (same shape as the Settings panel's
+            // taxiway-name refresh). Reaching back into this same method from inside
+            // BuildTaxiRouteFromSayIntentionsAsync returns the instance below, already
+            // constructed — the import re-enters the form it is filling, which is what it
+            // does on the hotkey path too.
+            taxiAssistForm = new TaxiAssistForm(
+                airportDataProvider!, announcer, taxiGuidanceManager, simConnectManager, tcasService,
+                simConnectManager.AircraftWingSpan, BuildGateDataSource(), BuildGsxGateSelector(), dockingGuidanceManager,
+                importFromSayIntentions: BuildTaxiRouteFromSayIntentionsAsync);
+            // Cached-only (never triggers a build on the UI thread) plus the building read the
+            // form awaits itself when nothing is cached yet — see
+            // TaxiAssistForm.SurroundingsCatalogCached/SurroundingsCatalogAsync.
+            taxiAssistForm.SurroundingsCatalogCached = icao =>
+                surroundingsCache.TryGetCached(icao, out var cached) ? cached : null;
+            // GetAsync does the Task.Run itself and is single-flight, so this never stacks a
+            // second build on top of one already running for the same airport.
+            taxiAssistForm.SurroundingsCatalogAsync = icao => surroundingsCache.GetAsync(icao);
+        }
+
+        return taxiAssistForm;
+    }
+
+    private void OpenTaxiForm(SimConnectManager.AircraftPosition position)
+    {
+        taxiAssistForm = GetOrCreateTaxiAssistForm();
+
+        // The airport the aircraft is AT (CurrentAirport.Resolve), so the form opens on the field
+        // Where Am I just named — the old nearest-code rule disagreed at 19,700 fs2024 stands.
+        string airportIcao = MSFSBlindAssist.Services.CurrentAirport.Resolve(
+            airportDataProvider!, position.Latitude, position.Longitude) ?? "";
+
+        // Task 2 — Departure prefetch: when on the ground and we've resolved the airport,
+        // prefetch once per session so taxiway names are cached before taxi starts.
+        // SILENT (fire-and-forget, debounced via _augmentPrefetched). Claimed only while online taxi
+        // data is on — PrefetchAsync fetches nothing otherwise, and a claim with no fetch would
+        // keep this airport from ever being prefetched once the setting is switched on.
+        if (_lastOnGround && !string.IsNullOrEmpty(airportIcao) && _augmentingProvider?.Enabled == true
+            && _augmentPrefetched.Add(airportIcao))
+            _ = _augmentingProvider?.PrefetchAsync(airportIcao, force: true);
+
+        taxiAssistForm.SetAircraftPosition(position.Latitude, position.Longitude, position.HeadingMagnetic, airportIcao);
+
+        // (StateChanged is subscribed once in InitializeManagers. We deliberately do NOT
+        // re-subscribe here — re-subscribing on every form open would either double-fire
+        // the handler or, with the -=/+= pattern previously used here, hide the fact
+        // that other entry points like the Landing Exit Planner were never wired up.)
+
+        taxiAssistForm.Show();
+        taxiAssistForm.BringToFront();
+    }
+
+    /// <summary>
+    /// Opens the Landing Exit Planner form. Pre-fills the airport + runway from the
+    /// pilot's existing ILS destination selection (SimConnectManager.GetDestinationRunway),
+    /// or failing that from the loaded flight plan's arrival (LandingExitPlannerPreset), so
+    /// there's no duplicate UI for picking the destination — the pilot only picks the
+    /// exit taxiway here.
+    /// </summary>
+    private void ShowLandingExitForm()
+    {
+        if (airportDataProvider == null)
+        {
+            announcer.AnnounceImmediate("Airport database not available. Configure database in settings.");
+            return;
+        }
+
+        hotkeyManager.ExitInputHotkeyMode();
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        // Reuse the existing ILS destination selection (already settable via the
+        // "select runway as destination" hotkey); failing that, the loaded flight plan's
+        // arrival airport and runway. Without either, the runway box fell back to the
+        // airport's first runway, which is how issue #234 began. If nothing is known, the
+        // form still opens empty so the pilot can type an ICAO + pick a runway manually.
+        // flightPlanManager can be null after an aircraft switch.
+        bool hasIlsDestination = simConnectManager.HasDestinationRunway();
+        var arrivalPlan = flightPlanManager?.CurrentFlightPlan;
+        var preset = LandingExitPlannerPreset.Resolve(
+            hasIlsDestination ? simConnectManager.GetDestinationAirport()?.ICAO : null,
+            hasIlsDestination ? simConnectManager.GetDestinationRunway()?.RunwayID : null,
+            arrivalPlan?.ArrivalICAO,
+            arrivalPlan?.ArrivalRunway);
+        // Task 1 — Destination prefetch (silent, fire-and-forget; claimed only while online data is on)
+        if (!string.IsNullOrEmpty(preset.Icao) && _augmentingProvider?.Enabled == true && _augmentPrefetched.Add(preset.Icao))
+            _ = _augmentingProvider?.PrefetchAsync(preset.Icao, force: true);
+
+        // Always rebuild the form so the preset (ICAO + runway from the current
+        // ILS destination or flight plan) is fresh. The preset is only consumed by
+        // the constructor/Load handler; reusing a prior instance would show
+        // stale values if the user changed ILS destination between opens.
+        if (landingExitForm != null && !landingExitForm.IsDisposed)
+        {
+            landingExitForm.Close();
+            landingExitForm.Dispose();
+        }
+
+        landingExitForm = new LandingExitForm(
+            airportDataProvider, announcer, landingExitPlanner, preset.Icao, preset.RunwayId,
+            simConnectManager, BuildGateDataSource());
+
+        landingExitForm.Show();
+        landingExitForm.BringToFront();
+        landingExitForm.Activate();
+    }
+
+    private void ShowTrackFixDialog()
+    {
+        // Ensure input and output hotkey modes are deactivated before showing dialog
+        hotkeyManager.ExitInputHotkeyMode();
+        hotkeyManager.ExitOutputHotkeyMode();
+
+        // Create form if it doesn't exist or has been disposed
+        if (trackFixForm == null || trackFixForm.IsDisposed)
+        {
+            var settings = MSFSBlindAssist.Settings.SettingsManager.Current;
+            string navigationDatabasePath = NavdataReaderBuilder.GetDefaultDatabasePath(settings.SimulatorVersion ?? "FS2020");
+            trackFixForm = new TrackFixForm(waypointTracker, simConnectManager, announcer, navigationDatabasePath);
+        }
+
+        // Show the form
+        trackFixForm.ShowForm();
+    }
+}

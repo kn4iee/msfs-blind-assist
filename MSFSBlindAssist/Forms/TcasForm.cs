@@ -18,7 +18,6 @@ namespace MSFSBlindAssist.Forms;
 public class TcasForm : Form
 {
     // ── Compiled regex patterns for hot-path aircraft type parsing ────────────
-    private static readonly Regex RxCallsign       = new(@"^([A-Z]{2,4})(\d{1,4}[A-Z]?)$", RegexOptions.Compiled);
     private static readonly Regex RxWakeSuffix     = new(@"/[LJMHSUA]$", RegexOptions.Compiled);
     private static readonly Regex RxWhitespace     = new(@"\s+", RegexOptions.Compiled);
     private static readonly Regex RxBareIcao       = new(@"^[A-Z]{1,3}\d{1,4}[A-Z]{0,2}$", RegexOptions.Compiled);
@@ -184,7 +183,7 @@ public class TcasForm : Form
 
     // ── List rebuild ──────────────────────────────────────────────────────────
 
-    private static void RebuildList(ListBox list, IReadOnlyList<TcasTraffic> traffic, GateResolver? gateResolver)
+    internal static void RebuildList(ListBox list, IReadOnlyList<TcasTraffic> traffic, GateResolver? gateResolver)
     {
         string? selectedKey = (list.SelectedItem as AircraftItem)?.Traffic
             .Let(t => TrafficKey(t));
@@ -210,7 +209,7 @@ public class TcasForm : Form
 
     // ── Item text builder ─────────────────────────────────────────────────────
 
-    private static string BuildItemText(TcasTraffic t, GateResolver? gateResolver)
+    internal static string BuildItemText(TcasTraffic t, GateResolver? gateResolver)
     {
         string id   = string.IsNullOrEmpty(t.Callsign)
             ? $"unknown {t.ObjectId}"
@@ -257,7 +256,7 @@ public class TcasForm : Form
     /// <summary>
     /// Formats origin→destination route string. Returns empty if neither is available.
     /// </summary>
-    private static string FormatRoute(string from, string to)
+    internal static string FormatRoute(string from, string to)
     {
         bool hasFrom = !string.IsNullOrEmpty(from);
         bool hasTo   = !string.IsNullOrEmpty(to);
@@ -267,29 +266,27 @@ public class TcasForm : Form
         return "";
     }
 
-    private static string TrafficKey(TcasTraffic t) =>
+    internal static string TrafficKey(TcasTraffic t) =>
         string.IsNullOrEmpty(t.Callsign) ? t.ObjectId.ToString() : t.Callsign;
 
     /// <summary>
     /// Inserts a space between the alpha airline prefix and the numeric flight number
     /// so NVDA reads "UAL 123" instead of spelling "U-A-L-1-2-3".
     /// Leaves registrations (N12345, G-ABCD) and already-spaced strings unchanged.
+    /// Delegates to the shared <see cref="GroundTrafficLogic.SpokenCallsign"/> formatter
+    /// (PR #247 review L8) so TCAS and ground traffic space callsigns identically.
     /// </summary>
-    private static string FormatCallsign(string raw)
+    internal static string FormatCallsign(string raw)
     {
+        // TCAS's contract: null / blank comes back exactly as given (the window shows it as is).
         if (string.IsNullOrWhiteSpace(raw)) return raw;
-        raw = raw.Trim();
-        if (raw.Contains(' ') || raw.Contains('-')) return raw;
-        var m = RxCallsign.Match(raw);
-        if (m.Success)
-            return $"{m.Groups[1].Value} {m.Groups[2].Value}";
-        return raw;
+        return Services.GroundTrafficLogic.SpokenCallsign(raw);
     }
 
     /// <summary>
     /// Converts an aircraft type string to a concise ICAO identifier.
     /// </summary>
-    private static string ShortenAircraftType(string raw)
+    internal static string ShortenAircraftType(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return "";
         raw = raw.Trim();

@@ -212,3 +212,69 @@ test('state-suffix change reuses the node in place (NVDA focus preservation)', (
   assert.strictEqual(after, before, 'state-suffix change destroyed and rebuilt the node');
   assert.match(after.textContent, /\(active\)/, 'visible label did not update');
 });
+
+// B5 (review round 2 of PR 189): the after-colon strip is gone. It was an MD-11 heuristic in a shell
+// the flyPad shares, and on the ATC page it merged 'UNICOM 122.800: Set Active' / '...: Set Standby'
+// into one key held apart only by DOM order. A label change keeps its node now only through the
+// explicit key the agent stamps.
+test('an after-colon change WITHOUT a key is a new node; WITH the agent\'s key it is patched in place', () => {
+  const s = loadShell();
+  s.render({ page: 'Ground', elements: [
+    { idx: 30, kind: 'button', controlType: '', text: 'GPU: Connect', clickable: true },
+  ] });
+  const unkeyed = s.root().querySelector('button');
+  assert.ok(unkeyed, 'baseline "GPU: Connect" button not rendered');
+  s.render({ page: 'Ground', elements: [
+    { idx: 30, kind: 'button', controlType: '', text: 'GPU: Disconnect', clickable: true },
+  ] });
+  assert.notStrictEqual(s.root().querySelector('button'), unkeyed, 'an unkeyed after-colon change was matched onto the old node');
+
+  s.render({ page: 'Ground', elements: [
+    { idx: 30, kind: 'button', controlType: '', text: 'GPU: Connect', clickable: true, key: 'tile:GPU' },
+  ] });
+  const keyed = s.root().querySelector('button');
+  s.render({ page: 'Ground', elements: [
+    { idx: 30, kind: 'button', controlType: '', text: 'GPU: Disconnect', clickable: true, key: 'tile:GPU' },
+  ] });
+  assert.strictEqual(s.root().querySelector('button'), keyed, 'a keyed label change destroyed and rebuilt the node');
+  assert.strictEqual(keyed.textContent, 'GPU: Disconnect', 'visible label did not update');
+
+  // Another key never matches, whatever the label says.
+  s.render({ page: 'Ground', elements: [
+    { idx: 30, kind: 'button', controlType: '', text: 'GPU: Disconnect', clickable: true, key: 'tile:ASU' },
+  ] });
+  assert.notStrictEqual(s.root().querySelector('button'), keyed, 'a different key was matched onto the GPU node');
+});
+
+test('the ATC pair keeps two keys: a re-sort leaves each label on its own node', () => {
+  const s = loadShell();
+  const active = { idx: 3, kind: 'button', controlType: '', text: 'UNICOM 122.800: Set Active', clickable: true };
+  const standby = { idx: 4, kind: 'button', controlType: '', text: 'UNICOM 122.800: Set Standby', clickable: true };
+  s.render({ page: 'ATC', elements: [active, standby] });
+  const find = (t) => [...s.root().querySelectorAll('button')].find((b) => b.textContent === t);
+  const a = find('UNICOM 122.800: Set Active');
+  const sb = find('UNICOM 122.800: Set Standby');
+  assert.ok(a && sb && a !== sb, 'both ATC buttons rendered');
+  s.render({ page: 'ATC', elements: [standby, active] });
+  assert.strictEqual(find('UNICOM 122.800: Set Active'), a, 'Set Active was re-homed onto another node');
+  assert.strictEqual(find('UNICOM 122.800: Set Standby'), sb, 'Set Standby was re-homed onto another node');
+});
+
+// Mirrors the shipping shell's focus handling (efb-shell.test.js): a node leaving from above moves
+// nothing below it, a focused node that leaves hands the focus to the next control, and a focused
+// node moved by a re-sort gets the focus back.
+test('the focus stays on its control as nodes leave and re-sort', () => {
+  const s = loadShell();
+  const b = (idx, text) => ({ idx, kind: 'button', controlType: '', text, clickable: true });
+  const find = (t) => [...s.root().querySelectorAll('button')].find((x) => x.textContent === t);
+  const active = () => s.window.document.activeElement;
+  s.render({ page: 'Ground', elements: [b(1, 'Dismiss'), b(2, 'Catering'), b(3, 'Fuel Truck')] });
+  const fuel = find('Fuel Truck');
+  fuel.focus();
+  s.render({ page: 'Ground', elements: [b(2, 'Catering'), b(3, 'Fuel Truck')] });
+  assert.strictEqual(active(), fuel, 'a node leaving from above took the focus');
+  s.render({ page: 'Ground', elements: [b(3, 'Fuel Truck'), b(2, 'Catering')] });
+  assert.strictEqual(active(), fuel, 'a re-sort took the focus');
+  s.render({ page: 'Ground', elements: [b(2, 'Catering'), b(4, 'Baggage')] });
+  assert.strictEqual(active(), find('Catering'), 'the focus did not go to the control after the one that left');
+});

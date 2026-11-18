@@ -1,0 +1,676 @@
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Aircraft;
+
+public partial class FlyByWireA380Definition
+{
+    // Flaps-handle detent names (index = A32NX_FLAPS_HANDLE_INDEX) for the ReadFlaps
+    // hotkey handler below — hoisted out of the handler so it isn't allocated per call.
+    private static readonly string[] ReadFlapsDetents = { "Up", "1", "2", "3", "Full" };
+
+    private static readonly FcuSources Fcu = FcuSources.A380;
+
+    /// <summary>Arm the FCU echo for the value vars <paramref name="evt"/> moves (FcuEchoKeys.For),
+    /// given how the write is confirmed. Call BEFORE the event is sent.</summary>
+    private void ArmFcuEchoFor(string evt, FcuConfirmation confirmation) =>
+        ArmFcuEcho(evt, FcuEchoKeys.For(evt, Fcu, confirmation));
+
+    public override bool HandleHotkeyAction(
+        HotkeyAction action, SimConnectManager simConnect, ScreenReaderAnnouncer announcer,
+        System.Windows.Forms.Form parentForm, HotkeyManager hotkeyManager)
+    {
+        switch (action)
+        {
+            // D / Shift+D — FMS flight progress (distance to destination / top of
+            // descent). The A380 has no PMDG-style SDK struct and no stock SimVar for
+            // these; they come from the MFD's FMS guidance controller, read live via
+            // the Coherent debugger. Delegate to MainForm, which owns that client.
+            case HotkeyAction.ReadDistanceToDest:
+                if (parentForm is MainForm mfDest) { mfDest.AnnounceA380FlightInfo(false); return true; }
+                return false;
+            case HotkeyAction.ReadDistanceToTOD:
+                if (parentForm is MainForm mfTod) { mfTod.AnnounceA380FlightInfo(true); return true; }
+                return false;
+
+            case HotkeyAction.FCUSetHeading:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowTrackedWindow(() => new Forms.FBWA380.FBWA380HeadingWindow(this, simConnect, announcer), w => w.ShowForm());
+                return true;
+            case HotkeyAction.FCUSetSpeed:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowTrackedWindow(() => new Forms.FBWA380.FBWA380SpeedWindow(this, simConnect, announcer), w => w.ShowForm());
+                return true;
+            case HotkeyAction.FCUSetAltitude:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowTrackedWindow(() => new Forms.FBWA380.FBWA380AltitudeWindow(this, simConnect, announcer), w => w.ShowForm());
+                return true;
+            case HotkeyAction.FCUSetVS:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowTrackedWindow(() => new Forms.FBWA380.FBWA380VSWindow(this, simConnect, announcer), w => w.ShowForm());
+                return true;
+            case HotkeyAction.FCUSetAutopilot:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowTrackedWindow(() => new Forms.FBWA380.FBWA380AutopilotWindow(this, simConnect, announcer), w => w.ShowForm());
+                return true;
+
+            // FCU knob push/pull (Shift+1..4 push, Ctrl+1..4 pull).
+            //
+            // (HISTORY, superseded — kept so the dead end isn't re-explored: these once fired
+            // the legacy cockpit H-events `A320_Neo_FCU_<axis>_PUSH/PULL`, on the theory that
+            // the A380X FCU was a self-contained instrument listening to them. That is no
+            // longer how the FCU is driven; see the CRITICAL note below, which is operative.)
+            //
+            // NO readback here (Fenix-style): the managed<->selected RESULT is announced
+            // by the always-on managed-state monitor (Mon "…_MANAGED…" -> "Heading Mode:
+            // Managed/Selected"), which fires only on a REAL transition. The old
+            // RequestFCU*WithStatus readback spoke the value on every press regardless of
+            // whether anything changed, which was identical to the output-mode read query
+            // and masked the dead actuation.
+            // CRITICAL: the A380's NEW FCU consumes K-events (K:A32NX.FCU_*), NOT the dotted
+            // A320 H-events — firing the H-event does NOTHING (this is why one push of the ALT
+            // knob "did nothing" and you had to push again: the first push was the dead H-event).
+            // Route through FireFCUButton, exactly like the FCU window Push/Pull buttons, so a
+            // single push actually fires. readback:false keeps the actuation SILENT (Fenix-style)
+            // — only the managed-state monitor speaks, and only on a real Managed<->Selected
+            // transition. (The FCU value-entry windows still pass readback:true.)
+            case HotkeyAction.FCUHeadingPush: FireFCUButton("A32NX.FCU_HDG_PUSH", simConnect, announcer, readback: false); return true;
+            case HotkeyAction.FCUHeadingPull: FireFCUButton("A32NX.FCU_HDG_PULL", simConnect, announcer, readback: false); return true;
+            case HotkeyAction.FCUSpeedPush: FireFCUButton("A32NX.FCU_SPD_PUSH", simConnect, announcer, readback: false); return true;
+            case HotkeyAction.FCUSpeedPull: FireFCUButton("A32NX.FCU_SPD_PULL", simConnect, announcer, readback: false); return true;
+            case HotkeyAction.FCUAltitudePush: FireFCUButton("A32NX.FCU_ALT_PUSH", simConnect, announcer, readback: false); return true;
+            case HotkeyAction.FCUAltitudePull: FireFCUButton("A32NX.FCU_ALT_PULL", simConnect, announcer, readback: false); return true;
+            // The A380X V/S knob is pull-to-engage (managed vertical is armed via the ALT knob),
+            // so VS push is a no-op on the jet; fire the K-event anyway for consistency.
+            case HotkeyAction.FCUVSPush: FireFCUButton("A32NX.FCU_VS_PUSH", simConnect, announcer, readback: false); return true;
+            case HotkeyAction.FCUVSPull: FireFCUButton("A32NX.FCU_VS_PULL", simConnect, announcer, readback: false); return true;
+
+            case HotkeyAction.ReadFlaps:
+            {
+                // Announce straight from the live cache — the handle index is a monitored
+                // combo, so a forced request of an UNCHANGED value never re-fires
+                // ProcessSimVarUpdate and the read stayed silent (the "] L does nothing"
+                // bug). Fall back to a request only if it isn't cached yet.
+                double? fv = simConnect.GetCachedVariableValue("A32NX_FLAPS_HANDLE_INDEX");
+                if (fv.HasValue)
+                {
+                    int i = (int)Math.Round(fv.Value);
+                    announcer.AnnounceImmediate("Flaps " + (i >= 0 && i < ReadFlapsDetents.Length ? ReadFlapsDetents[i] : fv.Value.ToString()));
+                }
+                else if (simConnect.IsConnected) { _reqFlaps = true; simConnect.RequestVariable("A32NX_FLAPS_HANDLE_INDEX", forceUpdate: true); }
+                return true;
+            }
+            case HotkeyAction.ReadGear:
+            {
+                double? gv = simConnect.GetCachedVariableValue("A32NX_GEAR_HANDLE_POSITION");
+                if (gv.HasValue) announcer.AnnounceImmediate(gv.Value > 0.5 ? "Gear down" : "Gear up");
+                else if (simConnect.IsConnected) { _reqGear = true; simConnect.RequestVariable("A32NX_GEAR_HANDLE_POSITION", forceUpdate: true); }
+                return true;
+            }
+            // On-demand readouts ported from the A320 (vars shared / already defined).
+            case HotkeyAction.ReadSpeedVLS: RequestReadout(simConnect, "A32NX_SPEEDS_VLS", "V L S", "knots"); return true;
+            case HotkeyAction.ReadSpeedF: RequestReadout(simConnect, "A32NX_SPEEDS_F", "F speed", "knots"); return true;
+            case HotkeyAction.ReadSpeedGD: RequestReadout(simConnect, "A32NX_SPEEDS_GD", "Green Dot speed", "knots"); return true;
+            case HotkeyAction.ReadSpeedS: RequestReadout(simConnect, "A32NX_SPEEDS_S", "S speed", "knots"); return true;
+            case HotkeyAction.ReadSpeedVS: RequestReadout(simConnect, "A32NX_SPEEDS_VS", "V S", "knots"); return true;
+            case HotkeyAction.ReadSpeedVFE: RequestReadout(simConnect, "A32NX_SPEEDS_VFEN", "V F E next", "knots"); return true;
+            // Fuel + gross weight are spoken fleet-consistently (matching PMDG / Fenix):
+            // plain key = pounds, Shift key = kilograms, via the shared SimConnectManager
+            // requests (identical phrasing across all aircraft). Deterministic units —
+            // NOT the EFB-following _metricWeight path, so they never surprise the pilot.
+            case HotkeyAction.ReadFuelQuantity: // F -> "Fuel on board N pounds"
+                simConnect.RequestSingleValue((int)SimConnectManager.DATA_DEFINITIONS.DEF_FUEL_QUANTITY, "FUEL TOTAL QUANTITY WEIGHT", "pounds", "FUEL_QUANTITY"); return true;
+            // Phase 4 parity with the A320: ReadFuelInfo (same as ReadFuelQuantity) + a
+            // Ctrl+B "Set Altimeter" dialog (the A380 baro uses the stock KOHLSMAN_SET,
+            // unit = millibars*16, NOT the A320's A32NX.FCU_EFIS_*_BARO_SET events).
+            case HotkeyAction.ReadFuelInfo: // Shift+F -> "Fuel on board N kilograms"
+                simConnect.RequestSingleValue((int)SimConnectManager.DATA_DEFINITIONS.DEF_FUEL_QUANTITY_KG, "FUEL TOTAL QUANTITY WEIGHT", "pounds", "FUEL_QUANTITY_KG"); return true;
+            case HotkeyAction.FCUSetBaro:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowTrackedWindow(() => new Forms.FBWA380.FBWA380BaroWindow(this, simConnect, announcer), w => w.ShowForm());
+                return true;
+            case HotkeyAction.ReadApproachCapability:
+            {
+                // A32NX_APPROACH_CAPABILITY doesn't exist in FBW — decode the FCDC FG
+                // word 1 (same source as the PFD_AUTOLAND display + the PFD FMA).
+                var word = simConnect.GetCachedVariableValue("PFD_AUTOLAND");
+                string cap = word.HasValue
+                    ? A380ApproachCapability.Describe(word.Value) ?? "none computed"
+                    : "not available";
+                announcer.AnnounceImmediate($"Approach capability {cap}");
+                return true;
+            }
+            // Dedicated display WINDOWS were removed for the FBW aircraft: the SD reads
+            // via the ECAM Control Panel page combo + status box, the E/WD has its own
+            // status box (Displays > E/WD panel), and PFD/ND/ISIS flight values stay on
+            // the individual readout hotkeys (ReadAltimeter/ReadSpeed/... — kept). The
+            // ShowPFD/ShowNavigationDisplay/ShowECAM/ShowStatusPage hotkeys were
+            // retired app-wide (enum entries + registrations deleted — no aircraft ever
+            // handled them besides the deleted A32NX windows). The shared ReadDisplay*
+            // actions remain (used by PMDG/Fenix) and fall through to no-op on the FBW
+            // jets. Alt+E still speaks the current E/WD lines.
+            // Alt+E now opens the E/WD as a pop-out WINDOW (auto-refreshing, F5 to
+            // refresh, Escape to close) showing the whole E/WD — engine parameters plus
+            // the live ECAM memo / warning lines — instead of speaking it once. The old
+            // one-shot spoken read (ReadAllEwdWarnings) was removed as dead code once
+            // the window fully replaced it.
+            case HotkeyAction.ReadDisplayUpperECAM:
+                hotkeyManager.ExitOutputHotkeyMode();
+                ShowTrackedWindow(
+                    () => new Forms.FbwEwdWindow("A380 E/WD — Engine / Warning Display",
+                        () => BuildEwdWindowTextAsync(simConnect), announcer),
+                    w => { w.Show(); w.BringToFront(); w.Activate(); });
+                return true;
+            // W repurposed to gross weight in pounds (matches PMDG / Fenix, which also
+            // repurpose the waypoint key). The MCDU/MFD covers waypoint data.
+            case HotkeyAction.ReadWaypointInfo: // W -> "Gross weight N pounds, center of gravity X% MAC"
+                announcer.AnnounceImmediate(_gwKgCache > 0
+                    ? $"Gross weight {_gwKgCache * 2.204625:0} pounds{CgMacPhrase(_gwCgMac)}"
+                    : "Gross weight not available");
+                return true;
+            case HotkeyAction.ReadAltimeter:
+                // Announce the captain's FBW EIS baro — STD/unit-aware, the SAME value + phrasing
+                // as the live auto-announce and the set (PMDG/Fenix-style), instead of the stock
+                // KOHLSMAN in inches (which ignored STD + the selected unit = the "funky" read).
+                // Fenix/PMDG-style: terse, no "Captain" prefix, both units (the A380 EFIS is
+                // split per side but every sibling reads ONE altimeter with no side prefix, so
+                // we speak the captain side only, like the existing handler already chose).
+                // Read STD + the baro value LIVE from the cache so a stale change-tracked
+                // flag can never make this say "standard" while the EFIS is actually on QNH
+                // (same class of fix as the flaps cache read). NOTE: above the transition
+                // altitude the EFIS genuinely IS standard, so "standard" there is correct.
+                double? isStdNow = simConnect.GetCachedVariableValue("A32NX_FCU_LEFT_EIS_BARO_IS_STD");
+                bool stdNow = isStdNow.HasValue ? isStdNow.Value > 0.5 : (_baroStdL == true);
+                if (stdNow) { announcer.AnnounceImmediate("Altimeter standard"); return true; }
+                double hpaNow = _lastBaroL;
+                double? baroWord = simConnect.GetCachedVariableValue("A32NX_FCU_LEFT_EIS_BARO_HPA");
+                if (baroWord.HasValue && BaroHpa(new Arinc429Word(baroWord.Value).ValueOr(0), out double hpaDec) && hpaDec > 0) hpaNow = hpaDec;
+                if (hpaNow > 0) { announcer.AnnounceImmediate($"Altimeter: {hpaNow:0}, {hpaNow / 33.8639:0.00}"); return true; }
+                // Fallback (EIS baro not seeded yet): stock KOHLSMAN.
+                if (simConnect.IsConnected) { _reqBaro = true; simConnect.RequestVariable("KOHLSMAN_HG", forceUpdate: true); }
+                return true;
+            case HotkeyAction.ReadGrossWeightKg: // Shift+W -> "Gross weight N kilograms, center of gravity X% MAC"
+                announcer.AnnounceImmediate(_gwKgCache > 0
+                    ? $"Gross weight {_gwKgCache:0} kilograms{CgMacPhrase(_gwCgMac)}"
+                    : "Gross weight not available");
+                return true;
+            case HotkeyAction.ReadHeading: RequestFCUHeadingWithStatus(simConnect); return true;
+            case HotkeyAction.ReadSpeed: RequestFCUSpeedWithStatus(simConnect); return true;
+            case HotkeyAction.ReadAltitude: RequestFCUAltitudeWithStatus(simConnect); return true;
+            case HotkeyAction.ReadFCUVerticalSpeedFPA: RequestFCUVSWithStatus(simConnect); return true;
+            // Ctrl+W (output): ND TO-waypoint name/distance/bearing via SimVars (no Coherent — see NdWaypointReadout).
+            case HotkeyAction.ReadNDWaypoint: Services.NdWaypointReadout.Announce(simConnect, announcer); return true;
+            case HotkeyAction.MonitorManager:
+                hotkeyManager.ExitOutputHotkeyMode();
+                if (parentForm is MainForm mf) mf.ShowA380MonitorManagerDialog();
+                return true;
+            // Toggle live ECAM E/WD memo/warning call-outs (A32NX-style). The A380
+            // monitors A32NX_EWD_LOWER_* lines in ProcessSimVarUpdate and mutes them
+            // when the FBWA380_ECAM_MEMOS sentinel is in A380DisabledMonitorVariables;
+            // this flips it (also reflected in the Ctrl+M Monitor Manager) and persists.
+            case HotkeyAction.ToggleECAMMonitoring:
+            {
+                var disabled = Settings.SettingsManager.Current.A380DisabledMonitorVariables;
+                string key = Forms.FBWA380.FBWA380MonitorManagerForm.EcamMemosKey;
+                bool turnedOff;
+                if (disabled.Contains(key)) { disabled.Remove(key); turnedOff = false; }
+                else { disabled.Add(key); turnedOff = true; }
+                Settings.SettingsManager.Save();
+                announcer.AnnounceImmediate(turnedOff ? "E W D monitoring disabled" : "E W D monitoring enabled");
+                return true;
+            }
+            default:
+                return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
+        }
+    }
+
+    public void RequestFCUHeadingWithStatus(SimConnectManager s)
+    {
+        if (!s.IsConnected) return;
+        _reqHdg = true; _pHdgVal = _pHdgMgd = null;
+        s.RequestVariable("A32NX_AUTOPILOT_HEADING_SELECTED", forceUpdate: true);
+        s.RequestVariable("A32NX_FCU_HDG_MANAGED_DASHES", forceUpdate: true);
+    }
+
+    public void RequestFCUSpeedWithStatus(SimConnectManager s)
+    {
+        if (!s.IsConnected) return;
+        _reqSpd = true; _pSpdVal = _pSpdMgd = null;
+        s.RequestVariable("A32NX_AUTOPILOT_SPEED_SELECTED", forceUpdate: true);
+        s.RequestVariable("A32NX_FCU_SPD_MANAGED_DOT", forceUpdate: true);
+    }
+
+    public void RequestFCUAltitudeWithStatus(SimConnectManager s)
+    {
+        if (!s.IsConnected) return;
+        // Only the VALUE is requested. The managed/selected word comes from the derived
+        // AltitudeModeTracker at emit time, not from A32NX_FCU_ALT_MANAGED itself — that key
+        // points at FBW #10855's dead L:var (hardcoded to 0) and its value is never read, so
+        // there is nothing worth requesting there.
+        // Unlike HDG/SPD/VS above/below, there is no _pAlt* pending-value field to reset here:
+        // those three genuinely await a SECOND sim delivery to pair up, but altitude's other half
+        // is read straight off the derived tracker at emit time (see the FCU_ALT_VALUE branch in
+        // .SimVarUpdate.cs) — _reqAlt alone is enough. Don't add one back for symmetry.
+        _reqAlt = true;
+        s.RequestVariable("FCU_ALT_VALUE", forceUpdate: true);
+    }
+
+    /// <summary>Mark a Shift+V readout pending (the three halves it pairs up start empty). Split out of
+    /// <see cref="RequestFCUVSWithStatus"/> so a test can reach the pending state without SimConnect.</summary>
+    internal void BeginVsReadout()
+    {
+        _reqVs = true; _pVsVal = _pFpaVal = _pVsMode = null;
+    }
+
+    public void RequestFCUVSWithStatus(SimConnectManager s)
+    {
+        if (!s.IsConnected) return;
+        BeginVsReadout();
+        // All three via the SimConnect data-def path, same as the heading/speed/alt
+        // readouts that work. (VS is non-angular so it reads back unscaled — the
+        // earlier "15 vs -2000" that prompted a MobiFlight read was a paused-sim
+        // artifact, and routing VS through MobiFlight ReadLedVariable regressed the
+        // read-out to silence: its numeric response was being consumed by the
+        // shared ECAM string-read channel before the LED-value handler saw it.)
+        s.RequestVariable("A32NX_TRK_FPA_MODE_ACTIVE", forceUpdate: true);
+        s.RequestVariable("A32NX_AUTOPILOT_VS_SELECTED", forceUpdate: true);
+        s.RequestVariable("A32NX_AUTOPILOT_FPA_SELECTED", forceUpdate: true);
+    }
+
+    // Base FCU readout virtuals (rarely used path) → route to the paired readout.
+    public override void RequestFCUHeading(SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => RequestFCUHeadingWithStatus(simConnect);
+
+    public override void RequestFCUSpeed(SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => RequestFCUSpeedWithStatus(simConnect);
+
+    public override void RequestFCUAltitude(SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => RequestFCUAltitudeWithStatus(simConnect);
+
+    public override void RequestFCUVerticalSpeed(SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => RequestFCUVSWithStatus(simConnect);
+
+    /// <summary>Every A380 FCU panel button is followed by a readout (OnPanelButtonFired) that speaks the
+    /// resulting value, so arm the echo for every value the event moves — including the PRIM V/S and FPA
+    /// words the readout does not read (without this a panel V/S pull was spoken twice).</summary>
+    public override void OnPanelButtonFiring(string varKey) => ArmFcuEchoFor(varKey, FcuConfirmation.ValueReadout);
+
+    // Panel FCU knob push/pull buttons fire their A32NX.FCU_* event (which works),
+    // but the generic panel-button path doesn't read anything back, so they were
+    // silent. Speak the resulting selected/managed value here — identical to what
+    // the Shift+1-4 (push) / Ctrl+1-4 (pull) hotkeys announce.
+    public override void OnPanelButtonFired(string varKey, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        switch (varKey)
+        {
+            case "A32NX.FCU_HDG_PUSH":
+            case "A32NX.FCU_HDG_PULL": RequestFCUHeadingWithStatus(simConnect); break;
+            case "A32NX.FCU_SPD_PUSH":
+            case "A32NX.FCU_SPD_PULL": RequestFCUSpeedWithStatus(simConnect); break;
+            case "A32NX.FCU_ALT_PUSH":
+            case "A32NX.FCU_ALT_PULL": RequestFCUAltitudeWithStatus(simConnect); break;
+            case "A32NX.FCU_VS_PUSH":
+            case "A32NX.FCU_VS_PULL": RequestFCUVSWithStatus(simConnect); break;
+            // SPD/MACH toggle: re-read the speed — the read-out already says
+            // "mach 0.78" vs "280 knots", so it announces the new mode.
+            case "A32NX.FCU_SPD_MACH_TOGGLE_PUSH": RequestFCUSpeedWithStatus(simConnect); break;
+            // HDG·V/S <-> TRK·FPA toggle: re-read heading (its label flips HDG<->TRK).
+            case "A32NX.FCU_TRK_FPA_TOGGLE_PUSH": RequestFCUHeadingWithStatus(simConnect); break;
+        }
+    }
+
+    // hdg: 0-360 whole degrees.
+    public bool SetFCUHeadingValue(int hdg, SimConnectManager s, ScreenReaderAnnouncer a)
+    {
+        if (!s.IsConnected) { a.AnnounceImmediate("Not connected to simulator."); return false; }
+        ArmFcuEchoFor("A32NX.FCU_HDG_SET", FcuConfirmation.None);   // the explicit readback below is the single confirmation
+        s.SendEvent("A32NX.FCU_HDG_SET", (uint)hdg);
+        // Clean Fenix-style readback (NOT the racy RequestFCUHeadingWithStatus, which read the
+        // cache via forceUpdate and spoke the STALE value first): announce the value we just
+        // set plus the cached managed dot, once. The window's SelectAll gives the field echo.
+        string hdgStatus = (s.GetCachedVariableValue("A32NX_FCU_HDG_MANAGED_DASHES") ?? 0) > 0.5 ? "managed" : "selected";
+        a.AnnounceImmediate($"FCU heading {hdg:000}, {hdgStatus}");
+        return true;
+    }
+
+    // internalSpeed: knots (100-399) OR Mach*100 (10-99). Caller does the *100.
+    public bool SetFCUSpeedValue(int internalSpeed, SimConnectManager s, ScreenReaderAnnouncer a)
+    {
+        if (!s.IsConnected) { a.AnnounceImmediate("Not connected to simulator."); return false; }
+        ArmFcuEchoFor("A32NX.FCU_SPD_SET", FcuConfirmation.None);
+        s.SendEvent("A32NX.FCU_SPD_SET", (uint)internalSpeed);
+        // Clean Fenix-style readback (NOT the racy RequestFCUSpeedWithStatus): the value we set
+        // plus the cached managed dot, once. internalSpeed < 100 is Mach*100 (e.g. 78 = 0.78).
+        string spdStatus = (s.GetCachedVariableValue("A32NX_FCU_SPD_MANAGED_DOT") ?? 0) > 0.5 ? "managed" : "selected";
+        if (internalSpeed < 100)
+            a.AnnounceImmediate($"FCU speed mach {internalSpeed / 100.0:0.00}, {spdStatus}");
+        else
+            a.AnnounceImmediate($"FCU speed {internalSpeed}, {spdStatus}");
+        return true;
+    }
+
+    // feet: already converted from metres by the caller if metric.
+    public bool SetFCUAltitudeValue(double feet, SimConnectManager s, ScreenReaderAnnouncer a)
+    {
+        if (!s.IsConnected) { a.AnnounceImmediate("Not connected to simulator."); return false; }
+        uint rounded = (uint)(Math.Round(feet / 100) * 100);
+        // FCU_ALT_SET snaps the target onto the current knob increment (100/1000 ft), so a
+        // non-thousand altitude (e.g. 4500) would land on the 1000-grid. Force 100-ft
+        // granularity FIRST — but ONLY when the target isn't already a 1000-multiple, so the
+        // common FLxx0 case (e.g. 36000) never needlessly fires the increment. When we do
+        // change it, suppress its "Altitude Increment: 100" side-effect auto-announce. The window
+        // has to outlast the once-a-second batch A32NX_FCU_ALT_INCREMENT_1000 rides (plus the
+        // calculator round trip), or the side effect is spoken a moment after the mute lapses.
+        if (rounded % 1000 != 0)
+        {
+            _altIncrAnnounceSuppressUntil = DateTime.UtcNow.AddMilliseconds(2500);
+            s.SendEvent("A32NX.FCU_ALT_INCREMENT_SET", 100);
+            System.Threading.Thread.Sleep(50);
+        }
+        ArmFcuEchoFor("A32NX.FCU_ALT_SET", FcuConfirmation.None);
+        s.SendEvent("A32NX.FCU_ALT_SET", rounded);
+        // Fenix-style readback: speak the FCU altitude + managed/selected state once, using the
+        // value we just set (no racy cache re-read) plus the cached managed dot — mirroring the
+        // "FCU altitude 36000, managed/selected" Fenix announces. The window's SelectAll
+        // separately gives NVDA's "36000 selected" field echo.
+        // ⚠️ The managed word comes from the DERIVED state (AltitudeModeTracker), never from a
+        // direct read of A32NX_FCU_ALT_MANAGED: that L:var has been hardcoded to 0 by the
+        // aircraft since FBW #10855, so a ">0.5" test on it would always read "selected".
+        string altStatus = !_altMode.IsKnown ? "mode not yet known" : _altMode.IsManaged ? "managed" : "selected";
+        if (MetricAlt)
+        {
+            int m = (int)Math.Round(rounded * 0.3048);
+            a.AnnounceImmediate($"FCU altitude {m} metres, {altStatus}");
+        }
+        else a.AnnounceImmediate($"FCU altitude {rounded}, {altStatus}");
+        return true;
+    }
+
+    // value: signed V/S (-6000..6000 fpm) OR FPA (-9.9..9.9 deg). Same calc-code
+    // path the old dialog used (negatives overflow SendEvent's uint).
+    public bool SetFCUVSValue(double value, SimConnectManager s, ScreenReaderAnnouncer a)
+    {
+        if (!s.IsConnected) { a.AnnounceImmediate("Not connected to simulator."); return false; }
+        // FPA is sent ×10 per the FBW protocol (the A380 FCU's VerticalSpeedManager
+        // reads A320_Neo_FCU_VS_SET_DATA and does Math.round(value)/10 in FPA mode,
+        // gated on |value| < 100 — an ×100 encoding was silently IGNORED, not clamped).
+        int toSend = Math.Abs(value) < 100 ? (int)Math.Round(value * 10) : (int)Math.Round(value);
+        SuppressFcuValueChangeEcho(Fcu.VerticalSpeed, Fcu.FlightPathAngle);
+        s.ExecuteCalculatorCode($"{toSend} (>K:A32NX.FCU_VS_SET)");
+        // Consistent Fenix-style readback (V/S has no managed/selected dot, so just the value).
+        if (Math.Abs(value) < 100)
+            a.AnnounceImmediate($"FCU flight path angle {value:0.0}");
+        else
+            a.AnnounceImmediate($"FCU vertical speed {value:0}");
+        return true;
+    }
+
+    /// <summary>Flip HDG·V/S &lt;-&gt; TRK·FPA. Since FBW #10855 L:A32NX_TRK_FPA_MODE_ACTIVE is an FCU-shim
+    /// OUTPUT rewritten every frame, so the mode can only be moved the way the cockpit button moves it:
+    /// the A32NX.FCU_TRK_FPA_TOGGLE_PUSH event, fired only when the requested mode differs (it is a
+    /// toggle). An unknown live mode fires (A380ToggleCommand). Every MSFSBA-origin path — the heading
+    /// window's button and the FCU panel combo — goes through here, which also arms the echo window for
+    /// the re-synced heading, V/S and FPA values.</summary>
+    public void SetTrkFpaMode(bool trkFpa, SimConnectManager s)
+    {
+        const string modeKey = "A32NX_TRK_FPA_MODE_ACTIVE";
+        const string toggleEvent = "A32NX.FCU_TRK_FPA_TOGGLE_PUSH";
+        double desired = trkFpa ? 1 : 0;
+        if (!A380ToggleCommand.ShouldFire(desired, CommandedOrCachedValue(modeKey, s)))
+        {
+            // Nothing sent, so nothing will change: re-read so the combo shows the live mode again.
+            s.RequestVariable(modeKey, forceUpdate: true);
+            return;
+        }
+        ArmFcuEchoFor(toggleEvent, FcuConfirmation.None);
+        RememberCommandedValue(modeKey, desired);
+        s.SendEvent(toggleEvent);
+    }
+
+    /// <summary>The TRK/FPA mode as <see cref="SetTrkFpaMode"/> judges it: a mode just commanded wins over
+    /// the cache — fed by the var's own once-a-second subscription — until the sim confirms it or the
+    /// window lapses. The heading window's button
+    /// reads this, so a quick second press asks for the other mode instead of repeating the first.</summary>
+    internal double? TrkFpaModeCommandedOrCached(SimConnectManager s) =>
+        CommandedOrCachedValue("A32NX_TRK_FPA_MODE_ACTIVE", s);
+
+    // Fire a push/pull/toggle event. When readback is true (the default — used by
+    // the dedicated FCU value-entry windows, where a value confirmation is wanted),
+    // also speak the resulting value via OnPanelButtonFired's switch. The input-mode
+    // FCU hotkey chords (Ctrl/Shift+1-4) pass readback:false so the knob actuates
+    // SILENTLY and only the always-on managed-state monitor (Mon "…_MANAGED…" ->
+    // "Heading/Speed/Altitude Mode: Managed/Selected", which fires only on a REAL
+    // transition) speaks — the Fenix-style behaviour the user asked for. The old
+    // unconditional readback spoke the full value on EVERY press, identical to the
+    // output-mode read query and far too verbose for a knob nudge.
+    public void FireFCUButton(string evt, SimConnectManager s, ScreenReaderAnnouncer a, bool readback = true)
+    {
+        if (!s.IsConnected) { a.AnnounceImmediate("Not connected to simulator."); return; }
+        // A readback speaks the resulting value; without one only the mode monitors speak — the table
+        // decides which value vars that leaves the dial callout to confirm.
+        ArmFcuEchoFor(evt, readback ? FcuConfirmation.ValueReadout : FcuConfirmation.None);
+        // The A380's NEW FCU consumes EVERY A32NX.FCU_* button as a K-EVENT, not the A320-era
+        // H-event the SendEvent path produces — live-verified: (>H:A32NX.FCU_SPD_PUSH) left the
+        // managed dot at 0, (>K:A32NX.FCU_SPD_PUSH) set it to 1. The Speed/Alt/Hdg/VS push-pull
+        // windows already pass the correct A380 event names, so firing them as K-events makes all
+        // those FCU knob buttons work — SPD/MACH included since FBW #10855: see the note on the
+        // SPD/MACH branch in HandleUIVariableSet for why the stock-event RPN it used is dead.
+        // SendEvent routes A32NX.FCU_* down the calculator path AND makes each command unique.
+        // This used to call ExecuteCalculatorCode("(>K:{evt})") directly: that bypassed the probe
+        // (which is why the knob buttons kept working while the combos silently did not) but
+        // carried no sequence prefix, so two presses of the SAME button coalesced — the documented
+        // "one push did nothing, you had to push again". SendEvent now does both correctly.
+        s.SendEvent(evt);
+        if (readback) OnPanelButtonFired(evt, s, a);
+    }
+
+    // FO-21: as on the A32NX — FlyByWire captures the stock AUTOPILOT_ON into a flag nothing
+    // reads, so the universal auto-engage presses AP 1 and verifies on AP 1 / AP 2 active.
+    // FbwAutopilotEngage.PressFor decides whether a press goes out; SendEvent sends A32NX.FCU_*
+    // as a unique K-event and never waits on the probe (SIM-10), so no pressWouldWait is passed.
+    // The service waits for a definite state rather than press on an unknown one.
+    public override void EngageAutopilot(SimConnectManager simConnect)
+    {
+        string? evt = FbwAutopilotEngage.PressFor(simConnect.GetCachedVariableValue);
+        if (evt == null) return;
+        ArmFcuEchoFor(evt, FcuConfirmation.None);   // A320-38; the AP push moves no FCU value
+        simConnect.SendEvent(evt);
+    }
+
+    public override bool? IsAutopilotEngaged(SimConnectManager simConnect)
+        => FbwAutopilotEngage.IsEngaged(simConnect.GetCachedVariableValue);
+
+    public override int AutopilotEngageRetryIntervalMs => FbwAutopilotEngage.RetryIntervalMs;
+
+    public override bool AutopilotEngageWaitsForState => true;
+
+    private void RampSliderTo(string lvar, double target, SimConnectManager simConnect,
+                              double rangeMin = 0.0, double rangeMax = 100.0)
+    {
+        _sliderRampSim = simConnect;
+        target = Math.Max(rangeMin, Math.Min(rangeMax, target));
+        bool rampInFlight = _sliderTarget.ContainsKey(lvar);
+        _sliderTarget[lvar] = target;
+        // Step scales with the var's range so a 0-1 slider ramps over the same ~1.3 s
+        // as a 0-100 one (fixed 3.0 snapped 0-1 sliders to the target in one tick).
+        _sliderStep[lvar] = Math.Max(0.0005, (rangeMax - rangeMin) * 0.03);
+        // Re-seed the ramp's start from the sim whenever no ramp is in flight for this
+        // lvar — NOT only on first use. Some slider vars are also moved OUTSIDE MSFSBA
+        // (the PED dimmer knobs: cockpit knob, FBW lighting presets), and ramping from a
+        // stale remembered value snaps the light back to it (flood 90 -> ~23) before
+        // ramping toward the new target. A mid-ramp retarget keeps its in-flight position.
+        // (The completed-ramp force re-read in SliderRampTick keeps the cache current.)
+        if (!rampInFlight || !_sliderCurrent.ContainsKey(lvar))
+            _sliderCurrent[lvar] = simConnect.GetCachedVariableValue(lvar) ?? target;
+        if (_sliderRampTimer == null)
+        {
+            _sliderRampTimer = new System.Windows.Forms.Timer { Interval = 40 };
+            _sliderRampTimer.Tick += (s, e) => SliderRampTick();
+            _sliderRampTimer.Start();
+        }
+    }
+
+    private void SliderRampTick()
+    {
+        var sim = _sliderRampSim;
+        if (sim == null || !sim.IsConnected) { StopSliderRamp(); return; }
+        foreach (var lvar in _sliderTarget.Keys.ToList())
+        {
+            double step = _sliderStep.TryGetValue(lvar, out var st) ? st : 3.0;
+            double target = _sliderTarget[lvar];
+            double cur = _sliderCurrent.TryGetValue(lvar, out var c) ? c : target;
+            bool reached = Math.Abs(target - cur) <= step;
+            if (reached) { cur = target; _sliderTarget.Remove(lvar); }
+            else cur += Math.Sign(target - cur) * step;
+            _sliderCurrent[lvar] = cur;
+            sim.ExecuteCalculatorCode(cur.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) + " (>L:" + lvar + ")", quiet: true);   // per-frame writer (40ms timer) -- skip per-command debug log
+            // On completion, refresh the cache to the just-written value (after the write,
+            // so the read can't race ahead of it on the shared SimConnect pipe) — the next
+            // ramp's re-seed and the panel thumb then start from reality.
+            if (reached) sim.RequestVariable(lvar, forceUpdate: true);
+        }
+        if (_sliderTarget.Count == 0) StopSliderRamp();
+    }
+
+    private void StopSliderRamp() { _sliderRampTimer?.Stop(); _sliderRampTimer?.Dispose(); _sliderRampTimer = null; }
+
+    /// <summary>
+    /// Halt the seat-motor and slider-ramp timers immediately. Called by MainForm on
+    /// aircraft swap — these UI-thread timers stop themselves only on target-reached /
+    /// sim-disconnect / the 8 s cap, and sim.IsConnected stays TRUE across a swap, so
+    /// a discarded def instance kept firing (>L:SEAT_...) calc writes at the NEW
+    /// aircraft for up to ~8 s.
+    /// </summary>
+    public void StopAllMotion()
+    {
+        try
+        {
+            _seatMotorTimer?.Stop();
+            _seatMotorTimer?.Dispose();
+            _seatMotorTimer = null;
+            _seatMotorDir.Clear();
+        }
+        catch { }
+        try
+        {
+            StopSliderRamp();
+            _sliderTarget.Clear();
+        }
+        catch { }
+        // TCAS RA deferred-compose timer: a discarded def instance must not keep a
+        // UI-thread timer alive (it would speak stale guidance through the captured
+        // announcer at the NEW aircraft). Also drop the announcer reference.
+        try
+        {
+            _tcasRaComposeTimer?.Stop();
+            _tcasRaComposeTimer?.Dispose();
+            _tcasRaComposeTimer = null;
+            _tcasRaAnnouncer = null;
+        }
+        catch { }
+        // Held armed-ALT announcement: a discarded def instance must not speak a call-out it was
+        // holding at the NEW aircraft. (No timer to dispose — the hold is consumed by the
+        // continuous-batch stream, not by a clock.)
+        try { CancelDeferredFlush(); } catch { }
+        // Hotkey windows created by this def (FCU/Baro/E/WD): dispose so they don't
+        // survive the swap holding this def + the E/WD refresh timer.
+        try { DisposeTrackedWindows(); } catch { }
+    }
+
+    // Toggle button: press a direction -> if already moving that way, STOP (+ speak position);
+    // otherwise start moving that way (reversing if it was going the other way). No combo re-read,
+    // so no start/stop/start and no spurious read-out.
+    private void ToggleSeatMotor(string posVar, int dir, SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
+    {
+        _seatMotorSim = simConnect;
+        _seatMotorAnnouncer = announcer;
+        if (_seatMotorDir.TryGetValue(posVar, out var cur) && cur == dir)
+        {
+            // pressing the SAME direction again -> stop this axis + say where it ended up
+            _seatMotorDir.Remove(posVar);
+            AnnounceSeatPosition(posVar);
+            simConnect.RequestVariable(posVar, forceUpdate: true);   // refresh cache for the read-out + next seed
+            if (_seatMotorDir.Count == 0) _seatMotorTimer?.Stop();
+            return;
+        }
+        // start (or reverse) -> seed the tracked position from the live var on a fresh start
+        // (movement itself reads the live value each tick, so the seed only feeds the spoken read-out)
+        if (!_seatMotorDir.ContainsKey(posVar))
+            _seatMotorPos[posVar] = Math.Max(0.0, Math.Min(100.0,
+                simConnect.GetCachedVariableValue(posVar) ?? (_seatMotorPos.TryGetValue(posVar, out var lp) ? lp : 50.0)));
+        _seatMotorDir[posVar] = dir;
+        _seatMotorTicks = 0;
+        if (_seatMotorTimer == null)
+        {
+            _seatMotorTimer = new System.Windows.Forms.Timer { Interval = 20 };
+            _seatMotorTimer.Tick += (s, e) => SeatMotorTick();
+        }
+        if (!_seatMotorTimer.Enabled) _seatMotorTimer.Start();
+    }
+
+    private void SeatMotorTick()
+    {
+        var sim = _seatMotorSim;
+        if (sim == null || !sim.IsConnected || _seatMotorDir.Count == 0) { _seatMotorTimer?.Stop(); return; }
+        const double step = 0.4;   // ~100 units in ~5 s
+        bool hitSafety = ++_seatMotorTicks > 400;   // ~8 s cap so a forgotten "moving" combo can't drive forever
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (var v in _seatMotorDir.Keys.ToList())
+        {
+            long seq = ++_seatMotorSeq;   // makes each tick's calc string unique so MobiFlight re-fires it
+            string expr = _seatMotorDir[v] > 0
+                ? seq + " 0 * (L:" + v + ") " + step.ToString(inv) + " + 100 min (>L:" + v + ")"
+                : seq + " 0 * (L:" + v + ") " + step.ToString(inv) + " - 0 max (>L:" + v + ")";
+            sim.ExecuteCalculatorCode(expr, quiet: true);   // per-frame writer (20ms timer) -- skip per-command debug log
+            double pos = Math.Max(0.0, Math.Min(100.0, (_seatMotorPos.TryGetValue(v, out var p) ? p : 50.0) + _seatMotorDir[v] * step));
+            _seatMotorPos[v] = pos;
+            if (pos <= 0.01 || pos >= 99.99 || hitSafety) { _seatMotorDir.Remove(v); AnnounceSeatPosition(v); }
+        }
+        if (_seatMotorDir.Count == 0) _seatMotorTimer?.Stop();
+    }
+
+    // The user asked, after the seat stops, to hear WHERE it is as a position (not just a number).
+    // Spoken band + percent, derived from the approximate tracked position. Queued (not Immediate)
+    // so it follows NVDA's own "Stopped" combo read-out instead of cutting it off.
+    private void AnnounceSeatPosition(string posVar)
+    {
+        var ann = _seatMotorAnnouncer;
+        if (ann == null) return;
+        double pos = _seatMotorPos.TryGetValue(posVar, out var p) ? p : 50.0;
+        var (disp, hi, lo) = _seatMotorMeta.TryGetValue(posVar, out var m) ? m : ("Seat", "high", "low");
+        ann.Announce($"{disp}: {SeatBand(pos, hi, lo)}, {(int)Math.Round(pos)} percent");
+    }
+
+    private static string SeatBand(double pos, string hi, string lo) =>
+        pos >= 97 ? "fully " + hi :
+        pos >= 70 ? hi :
+        pos >= 56 ? "slightly " + hi :
+        pos >= 44 ? "mid travel" :
+        pos >= 30 ? "slightly " + lo :
+        pos >= 3 ? lo :
+        "fully " + lo;
+
+    // Request the live AP/mode state vars so a window can refresh its button labels.
+    public void RequestAutopilotStates(SimConnectManager s)
+    {
+        if (!s.IsConnected) return;
+        foreach (var v in new[] {
+            "A32NX_AUTOPILOT_1_ACTIVE", "A32NX_AUTOPILOT_2_ACTIVE",
+            // LOC/APPR state = the FCU button lights since FBW #10855 (the old
+            // *_MODE_ACTIVE vars are gone). No EXPED — the A380 FCU has no such button.
+            "A32NX_FCU_LOC_LIGHT_ON", "A32NX_FCU_APPR_LIGHT_ON",
+            A380FlightDirector.StateKey })
+            s.RequestVariable(v, forceUpdate: true);
+    }
+
+    // Toggle the FCU metric-altitude (MTRS) pushbutton — the Altitude window's MTRS button. Asks for
+    // the other mode than the one in force or just commanded, so the window's label and the unit a
+    // typed altitude is taken in follow at once. Since FBW #10855 the button is
+    // A32NX.FCU_METRIC_ALT_TOGGLE_PUSH and the mode is the PRIM's (A380MetricAltitude); the write of
+    // L:A32NX_METRIC_ALT_TOGGLE this used to make has had no reader since.
+    public void ToggleMetricAltitude(SimConnectManager s, ScreenReaderAnnouncer a)
+    {
+        if (!s.IsConnected) return;
+        if (MetricAltitudeCommand(MetricAlt ? 0 : 1) is { } evt) s.SendEvent(evt);
+    }
+
+    // SetAltIncrement lives on BaseAircraftDefinition (the FBW A320/A380 pair); the A380 overrides
+    // it to arm the increment call-out's echo mute (FlyByWireA380Definition.cs).
+}

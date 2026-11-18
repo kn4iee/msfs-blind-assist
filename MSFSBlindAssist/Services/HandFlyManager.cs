@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services;
 
@@ -35,15 +36,42 @@ public class HandFlyManager : IDisposable
     private bool monitorVerticalSpeed;
     private int announcementIntervalMs;
 
+    // Deadline until which the spoken pitch/bank/heading/VS callouts are muted
+    // (the audio tone is never affected). Set via SuppressAnnouncementsFor by the
+    // liftoff auto-handoff: the first post-activation samples all pass their
+    // announce gates (thresholds reset to 0 / first-sample-always-announce), and
+    // AnnounceImmediate interrupts — without a grace window the handoff's single
+    // spoken breadcrumb is clipped after a syllable by the first attitude callout.
+    // Same idea as VisualGuidanceManager's manual-query grace window.
+    private DateTime announceGraceUntil = DateTime.MinValue;
+
     // Configuration constants
     private const int ANNOUNCEMENT_INTERVAL_MS = 500; // 500ms between announcements
-    private const double PITCH_THRESHOLD = 0.1; // Announce if pitch changes by >0.1 degree
+    // 1° pitch threshold matches TakeoffAssistManager so the liftoff handoff is
+    // seamless in the pilot's ears (the old 0.1° re-announced on sensor noise —
+    // far too chatty, and pointless once the spoken value is whole degrees).
+    private const double PITCH_THRESHOLD = 1.0; // Announce if pitch changes by >1 degree
     private const double BANK_THRESHOLD = 1.0; // Announce if bank changes by >1 degree
     private const double HEADING_THRESHOLD = 1.0; // Announce if heading changes by >1 degree
 
     public bool IsActive => isActive;
     public bool MonitorHeading => monitorHeading;
     public bool MonitorVerticalSpeed => monitorVerticalSpeed;
+
+    /// <summary>
+    /// True while this manager is actually SPEAKING attitude callouts. Note this is
+    /// independent of <see cref="SuppressAudio"/>, which only stops the tone — the spoken
+    /// callouts deliberately survive it, so HandFly can narrate attitude underneath another
+    /// feature's tones.
+    ///
+    /// Exists so the manual-landing assist's own bank callouts can stand down when HandFly
+    /// is already speaking them: one condition must never be announced by two sources.
+    /// </summary>
+    public bool IsAnnouncingAttitude =>
+        isActive &&
+        (feedbackMode == HandFlyFeedbackMode.AnnouncementsOnly ||
+         feedbackMode == HandFlyFeedbackMode.Both) &&
+        !AnnouncementsMuted;
 
     public event EventHandler<bool>? HandFlyModeActiveChanged;
 
@@ -80,6 +108,14 @@ public class HandFlyManager : IDisposable
             lastHeadingAnnouncement = DateTime.MinValue;
             lastVSAnnouncement = DateTime.MinValue;
 
+            // A fresh activation must never inherit a still-open announcement
+            // grace window from a previous handoff (Hand Fly toggled off and
+            // back on within the window) — spoken callouts would stay muted for
+            // the remainder for no reason. The liftoff handoff sets its grace
+            // AFTER calling Toggle(), so this reset never erases a grace the
+            // handoff is about to rely on.
+            announceGraceUntil = DateTime.MinValue;
+
             // Start audio if tones are enabled — unless visual guidance has asked us to stay
             // silent. VG's two tones conflict audibly with HandFly's single tone (same Hz/pan
             // mappings, hard to tell which to follow), so when VG is active it suppresses
@@ -93,18 +129,18 @@ public class HandFlyManager : IDisposable
                 {
                     audioGenerator = new AudioToneGenerator();
                     audioGenerator.Start(waveType, volume);
-                    System.Diagnostics.Debug.WriteLine("[HandFlyManager] Audio tone started");
+                    Log.Debug("Services", "Audio tone started");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[HandFlyManager] Failed to start audio: {ex.Message}");
+                    Log.Debug("Services", $"Failed to start audio: {ex.Message}");
                     audioGenerator?.Dispose();
                     audioGenerator = null;
                 }
             }
 
             announcer.AnnounceImmediate("Hand fly mode active");
-            System.Diagnostics.Debug.WriteLine("[HandFlyManager] Activated");
+            Log.Debug("Services", "Activated");
         }
         else
         {
@@ -112,11 +148,28 @@ public class HandFlyManager : IDisposable
             StopAudio();
 
             announcer.AnnounceImmediate("Hand fly mode off");
-            System.Diagnostics.Debug.WriteLine("[HandFlyManager] Deactivated");
+            Log.Debug("Services", "Deactivated");
         }
 
         HandFlyModeActiveChanged?.Invoke(this, isActive);
     }
+
+    /// <summary>
+    /// Mutes the spoken callouts (pitch/bank/heading/VS) for the given window;
+    /// the audio tone keeps updating throughout. Used by the liftoff auto-handoff
+    /// so its breadcrumb announcement can finish before the callout stream starts
+    /// (or, when Hand Fly was pre-armed, before the running stream resumes).
+    /// </summary>
+    public void SuppressAnnouncementsFor(int milliseconds)
+    {
+        announceGraceUntil = DateTime.Now.AddMilliseconds(milliseconds);
+    }
+
+    /// <summary>True while the post-handoff announcement grace window is open —
+    /// spoken callouts hold, the audio tone is never affected (see
+    /// <see cref="SuppressAnnouncementsFor"/>). Same private-property idiom as
+    /// VisualGuidanceManager.RoutineAnnouncementsSuppressed.</summary>
+    private bool AnnouncementsMuted => DateTime.Now < announceGraceUntil;
 
     /// <summary>
     /// Process pitch update during hand fly mode
@@ -129,9 +182,11 @@ public class HandFlyManager : IDisposable
         // Update audio tone frequency in real-time
         audioGenerator?.UpdatePitch(currentPitch);
 
-        // Handle announcements based on feedback mode
-        bool shouldAnnounce = feedbackMode == HandFlyFeedbackMode.AnnouncementsOnly ||
-                             feedbackMode == HandFlyFeedbackMode.Both;
+        // Handle announcements based on feedback mode (muted during the
+        // post-handoff grace window so the breadcrumb isn't interrupted)
+        bool shouldAnnounce = (feedbackMode == HandFlyFeedbackMode.AnnouncementsOnly ||
+                             feedbackMode == HandFlyFeedbackMode.Both) &&
+                             !AnnouncementsMuted;
 
         if (shouldAnnounce)
         {
@@ -148,7 +203,7 @@ public class HandFlyManager : IDisposable
                 lastAnnouncedPitch = currentPitch;
                 lastPitchAnnouncement = DateTime.Now;
 
-                System.Diagnostics.Debug.WriteLine($"[HandFlyManager] Pitch: {currentPitch:F1}° → {announcement}");
+                Log.Debug("Services", $"Pitch: {currentPitch:F1}° → {announcement}");
             }
         }
     }
@@ -165,9 +220,11 @@ public class HandFlyManager : IDisposable
         // Negate to convert SimConnect convention (positive=left, negative=right) to standard convention (positive=right, negative=left)
         audioGenerator?.UpdateBank(-currentBank);
 
-        // Handle announcements based on feedback mode
-        bool shouldAnnounce = feedbackMode == HandFlyFeedbackMode.AnnouncementsOnly ||
-                             feedbackMode == HandFlyFeedbackMode.Both;
+        // Handle announcements based on feedback mode (muted during the
+        // post-handoff grace window so the breadcrumb isn't interrupted)
+        bool shouldAnnounce = (feedbackMode == HandFlyFeedbackMode.AnnouncementsOnly ||
+                             feedbackMode == HandFlyFeedbackMode.Both) &&
+                             !AnnouncementsMuted;
 
         if (shouldAnnounce)
         {
@@ -184,7 +241,7 @@ public class HandFlyManager : IDisposable
                 lastAnnouncedBank = currentBank;
                 lastBankAnnouncement = DateTime.Now;
 
-                System.Diagnostics.Debug.WriteLine($"[HandFlyManager] Bank: {currentBank:F1}° → {announcement}");
+                Log.Debug("Services", $"Bank: {currentBank:F1}° → {announcement}");
             }
         }
     }
@@ -196,6 +253,11 @@ public class HandFlyManager : IDisposable
     public void ProcessHeadingUpdate(double currentHeading)
     {
         if (!isActive || !monitorHeading) return;
+
+        // Post-handoff grace: skip BEFORE the first-sample-always-announce logic
+        // below (which ignores feedback mode entirely), so nothing is marked
+        // announced during the window and the first heading lands right after it.
+        if (AnnouncementsMuted) return;
 
         // Check if we should announce
         bool shouldAnnounce = false;
@@ -231,7 +293,7 @@ public class HandFlyManager : IDisposable
             lastAnnouncedHeading = currentHeading;
             lastHeadingAnnouncement = DateTime.Now;
 
-            System.Diagnostics.Debug.WriteLine($"[HandFlyManager] Heading: {currentHeading:F0}° → {announcement}");
+            Log.Debug("Services", $"Heading: {currentHeading:F0}° → {announcement}");
         }
     }
 
@@ -242,6 +304,9 @@ public class HandFlyManager : IDisposable
     public void ProcessVerticalSpeedUpdate(double currentVS)
     {
         if (!isActive || !monitorVerticalSpeed) return;
+
+        // Post-handoff grace — same reasoning as ProcessHeadingUpdate.
+        if (AnnouncementsMuted) return;
 
         // Check if we should announce
         bool shouldAnnounce = false;
@@ -269,36 +334,50 @@ public class HandFlyManager : IDisposable
             lastAnnouncedVS = currentVS;
             lastVSAnnouncement = DateTime.Now;
 
-            System.Diagnostics.Debug.WriteLine($"[HandFlyManager] VS: {currentVS:F0} fpm → {announcement}");
+            Log.Debug("Services", $"VS: {currentVS:F0} fpm → {announcement}");
         }
     }
 
     /// <summary>
-    /// Formats pitch announcement with decimal precision - always shows value
+    /// Formats pitch announcement in whole degrees — mirrors
+    /// TakeoffAssistManager.FormatPitchAnnouncement exactly, so the spoken pitch
+    /// style doesn't change across the liftoff handoff. Decimals were dropped
+    /// deliberately: a 0.5° distinction is meaningless to fly by ear and made
+    /// the callout stream unbearably wordy.
     /// </summary>
-    private string FormatPitchAnnouncement(double pitch)
+    internal static string FormatPitchAnnouncement(double pitch)
     {
-        if (pitch >= 0)
+        int pitchDegrees = (int)Math.Round(pitch);
+
+        if (pitchDegrees > 0)
         {
-            return $"+{pitch:F1}";
+            return $"+{pitchDegrees}";
+        }
+        else if (pitchDegrees < 0)
+        {
+            return $"{pitchDegrees}";
         }
         else
         {
-            return $"{pitch:F1}";
+            return "level";
         }
     }
 
     /// <summary>
-    /// Formats bank angle announcement - always shows direction and value
+    /// Formats bank angle announcement in whole degrees — same no-decimals
+    /// rationale as pitch. "Wings level" replaces the confusing "left 0".
     /// </summary>
-    private string FormatBankAnnouncement(double bank)
+    internal static string FormatBankAnnouncement(double bank)
     {
-        // Determine direction and magnitude (show decimal precision)
         // Note: SimConnect convention is positive = left, negative = right
-        double bankDegrees = Math.Abs(bank);
-        string direction = bank >= 0 ? "left" : "right";
+        int bankDegrees = (int)Math.Round(Math.Abs(bank));
+        if (bankDegrees == 0)
+        {
+            return "wings level";
+        }
 
-        return $"{direction} {bankDegrees:F1}";
+        string direction = bank >= 0 ? "left" : "right";
+        return $"{direction} {bankDegrees}";
     }
 
     /// <summary>
@@ -345,7 +424,7 @@ public class HandFlyManager : IDisposable
             isActive = false;
             StopAudio();
             HandFlyModeActiveChanged?.Invoke(this, false);
-            System.Diagnostics.Debug.WriteLine("[HandFlyManager] Reset");
+            Log.Debug("Services", "Reset");
         }
     }
 
@@ -385,11 +464,11 @@ public class HandFlyManager : IDisposable
                     {
                         audioGenerator = new AudioToneGenerator();
                         audioGenerator.Start(waveType, volume);
-                        System.Diagnostics.Debug.WriteLine("[HandFlyManager] Audio tone started via settings update");
+                        Log.Debug("Services", "Audio tone started via settings update");
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[HandFlyManager] Failed to start audio: {ex.Message}");
+                        Log.Debug("Services", $"Failed to start audio: {ex.Message}");
                     }
                 }
             }
@@ -401,7 +480,7 @@ public class HandFlyManager : IDisposable
             }
         }
 
-        System.Diagnostics.Debug.WriteLine($"[HandFlyManager] Settings updated: Mode={feedbackMode}, Wave={waveType}, Volume={volume:F2}");
+        Log.Debug("Services", $"Settings updated: Mode={feedbackMode}, Wave={waveType}, Volume={volume:F2}");
     }
 
     /// <summary>
@@ -414,7 +493,7 @@ public class HandFlyManager : IDisposable
             audioGenerator.Stop();
             audioGenerator.Dispose();
             audioGenerator = null;
-            System.Diagnostics.Debug.WriteLine("[HandFlyManager] Audio tone stopped");
+            Log.Debug("Services", "Audio tone stopped");
         }
     }
 
@@ -429,7 +508,7 @@ public class HandFlyManager : IDisposable
     {
         audioSuppressedByVG = true;
         StopAudio();
-        System.Diagnostics.Debug.WriteLine("[HandFlyManager] Audio suppressed by visual guidance");
+        Log.Debug("Services", "Audio suppressed by visual guidance");
     }
 
     /// <summary>
@@ -449,11 +528,11 @@ public class HandFlyManager : IDisposable
             {
                 audioGenerator = new AudioToneGenerator();
                 audioGenerator.Start(waveType, volume);
-                System.Diagnostics.Debug.WriteLine("[HandFlyManager] Audio resumed after visual guidance");
+                Log.Debug("Services", "Audio resumed after visual guidance");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[HandFlyManager] Failed to resume audio: {ex.Message}");
+                Log.Debug("Services", $"Failed to resume audio: {ex.Message}");
                 audioGenerator?.Dispose();
                 audioGenerator = null;
             }

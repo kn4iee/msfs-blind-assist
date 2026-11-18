@@ -1,0 +1,349 @@
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Database;
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Navigation;
+using MSFSBlindAssist.Settings;
+
+namespace MSFSBlindAssist.Services;
+
+public partial class TaxiGuidanceManager
+{
+    /// <summary>
+    /// Formats a distance in meters using the active unit (via DistanceFormatter).
+    /// Long distances (over ~6000 ft) switch to the big unit MATCHING the ground
+    /// distance setting: kilometres in metres mode, nautical miles in feet mode
+    /// (route summaries and status readouts — a metric user should never hear NM
+    /// for a taxi distance).
+    /// </summary>
+    private static string FormatDistance(double meters)
+    {
+        double feet = meters * METERS_TO_FEET;
+        if (feet > 6000)
+        {
+            if (DistanceFormatter.IsMetres)
+            {
+                double km = meters / 1000.0;
+                return $"{km:F1} kilometres";
+            }
+            double nm = meters * METERS_TO_NM;
+            return $"{nm:F1} nautical miles";
+        }
+        return DistanceFormatter.FromMetres(meters);
+    }
+
+    private static string CapFirst(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s;
+        return char.ToUpper(s[0]) + s[1..];
+    }
+
+    internal static double NormalizeAngle(double angle)
+    {
+        while (angle > 180) angle -= 360;
+        while (angle < -180) angle += 360;
+        return angle;
+    }
+
+    /// <summary>
+    /// Computes the spoken turn direction ("left" / "slight right" / "continue")
+    /// FROM THE AIRCRAFT'S CURRENT HEADING toward a target bearing. Used for
+    /// turn callouts so the verbal direction always agrees with the steering
+    /// tone (which is also driven by the aircraft's instantaneous heading).
+    ///
+    /// Why not just use the route's pre-computed `TaxiRouteSegment.TurnDirection`?
+    /// That value is `nextSeg.bearing - currentSeg.bearing` — it assumes the
+    /// aircraft is exactly on-axis with the current segment. When the aircraft
+    /// is off-axis (e.g., still at the gate before pushback rotation, after a
+    /// wide turn, after a brief deviation), the actual turn the aircraft must
+    /// make to align with the next segment differs from the route's intent —
+    /// sometimes in the OPPOSITE direction. The steering tone (real-time pan
+    /// from aircraft-heading vs target-bearing) is always right; the static
+    /// pre-computed verbal was wrong in those cases. Following the tone is
+    /// the correct behavior; this helper makes the verbal match.
+    ///
+    /// Thresholds match `TaxiRouter.GetTurnDirection`: <20° → continue,
+    /// 20–60° → slight, ≥60° → full. The "sharp" prefix is owned by callers
+    /// that read `TurnAngleDegrees` separately.
+    /// </summary>
+    internal static string ComputeTurnVerbalFromHeading(double targetBearing, double aircraftHeadingTrue)
+    {
+        double turn = NormalizeAngle(targetBearing - aircraftHeadingTrue);
+        double absTurn = Math.Abs(turn);
+        if (absTurn < 20) return "continue";
+        if (absTurn < 60) return turn < 0 ? "slight left" : "slight right";
+        return turn < 0 ? "left" : "right";
+    }
+
+    /// <summary>
+    /// Returns the signed along-runway distance in meters from (refLat, refLon)
+    /// to (pointLat, pointLon), measured along the runway heading. Positive
+    /// values mean `point` lies past `ref` in the direction of flight; negative
+    /// values mean `point` is still upfield of `ref`. Equirectangular projection
+    /// — sub-cm accuracy at runway scale.
+    ///
+    /// Runway heading is measured clockwise from true north, so the unit vector
+    /// along the runway in (east, north) coordinates is (sin H, cos H). The
+    /// signed projection is the dot product of (dE, dN) with that unit vector.
+    /// </summary>
+    internal static double SignedAlongRunwayMeters(
+        double pointLat, double pointLon,
+        double refLat, double refLon,
+        double runwayHeadingTrueDeg)
+    {
+        const double METERS_PER_DEG_LAT = 111132.0;
+        double latMidRad = (pointLat + refLat) * 0.5 * Math.PI / 180.0;
+        double metersPerDegLon = METERS_PER_DEG_LAT * Math.Cos(latMidRad);
+        double dN = (pointLat - refLat) * METERS_PER_DEG_LAT;
+        double dE = (pointLon - refLon) * metersPerDegLon;
+        double hdgRad = runwayHeadingTrueDeg * Math.PI / 180.0;
+        return dE * Math.Sin(hdgRad) + dN * Math.Cos(hdgRad);
+    }
+
+    /// <summary>
+    /// Returns true when a hold-short label (which may carry the "runway " prefix and a locative,
+    /// "runway 15R at N") names the same physical pavement as <paramref name="target"/> — either as
+    /// the same designator or its reciprocal (e.g. "09" matches "27", "09L" matches "27R"). Reads the
+    /// FIRST runway a label names; a label naming several goes through
+    /// <see cref="RouteRunwayCrossings.LabelNamesOnlyRunway"/>.
+    /// </summary>
+    internal static bool RunwayDesignatorsMatch(string tagged, string target)
+    {
+        // Parse the designator out of the label with the shared extractor —
+        // labels carry more than a bare "runway " prefix ("runway 15R at N",
+        // "D5, Runway 22R"), which the old Replace-based strip mangled into
+        // never-matching strings. Fall back to the strip for a bare designator
+        // with no "runway" word at all.
+        string a = RouteRunwayCrossings.ExtractRunwayDesignator(tagged)
+            ?? RouteRunwayCrossings.NormalizeDesignator(
+                   tagged.Replace("runway", "", StringComparison.OrdinalIgnoreCase).Trim());
+        string b = RouteRunwayCrossings.NormalizeDesignator(target.Trim());
+        if (a.Equals(b, StringComparison.OrdinalIgnoreCase)) return true;
+        return RouteRunwayCrossings.Reciprocal(a).Equals(b, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// True when an on-route hold line is the one a landing-exit route passes while
+    /// LEAVING the runway it landed on — so "Crossing runway X" would be wrong. All three
+    /// must hold: the route is a landing-exit route; the hold line names the landed
+    /// runway (either end); and the hold line is further from that runway's centreline
+    /// than the aircraft (moving away from it). Every other crossing still announces —
+    /// another runway, any normal taxi route, and a hold line approached from outside.
+    /// </summary>
+    internal static bool IsVacatingLandedRunwayHold(
+        bool isLandingExitRoute, string? landedRunwayId, string holdShortName,
+        double aircraftLateralM, double holdLateralM)
+    {
+        if (!isLandingExitRoute || string.IsNullOrEmpty(landedRunwayId)) return false;
+        if (string.IsNullOrEmpty(holdShortName) || !RunwayDesignatorsMatch(holdShortName, landedRunwayId)) return false;
+        return holdLateralM > aircraftLateralM;
+    }
+
+    /// <summary>
+    /// Projects the aircraft onto a route segment (equirectangular). Outputs the
+    /// remaining along-track distance to the segment's END node
+    /// (<paramref name="alongRemainingM"/>: positive = the node is still ahead in the
+    /// segment direction, ≤ 0 = the aircraft is abeam or past it) and the signed
+    /// perpendicular cross-track offset (<paramref name="crossM"/>). Used by the
+    /// landing-exit "vacate" arrival so the closure fires even when the pilot rolls
+    /// through the final node wide of the exact graph point.
+    /// </summary>
+    private static void AlongTrackToSegmentEnd(
+        double lat, double lon, TaxiRouteSegment seg,
+        out double alongRemainingM, out double crossM)
+    {
+        const double MPD = 111132.0;
+        double latMid = (seg.FromNode.Latitude + seg.ToNode.Latitude) * 0.5;
+        double mpl = MPD * Math.Cos(latMid * Math.PI / 180.0);
+        double dx = (seg.ToNode.Longitude - seg.FromNode.Longitude) * mpl;
+        double dy = (seg.ToNode.Latitude  - seg.FromNode.Latitude)  * MPD;
+        double len = Math.Sqrt(dx * dx + dy * dy);
+        if (len < 1.0) { alongRemainingM = 0.0; crossM = 0.0; return; }
+        double ux = dx / len, uy = dy / len;             // unit vector along segment
+        double ex = (seg.ToNode.Longitude - lon) * mpl;  // aircraft → end node
+        double ey = (seg.ToNode.Latitude  - lat) * MPD;
+        alongRemainingM = ex * ux + ey * uy;             // >0: end node ahead
+        crossM = ex * (-uy) + ey * ux;                   // signed perpendicular
+    }
+
+    /// <summary>
+    /// Absolute lateral (cross-runway) offset in meters of <paramref name="pointLat/Lon"/>
+    /// from the runway centerline. The centerline passes through
+    /// <paramref name="refLat/Lon"/> in direction <paramref name="runwayHeadingTrueDeg"/>.
+    /// Companion to <see cref="SignedAlongRunwayMeters"/> — uses the perpendicular
+    /// component of the same equirectangular projection.
+    /// The projection itself lives in <see cref="SignedLateralFromRunwayMeters"/> — the two
+    /// were byte-identical copies, and they feed gates that must agree about one position.
+    /// </summary>
+    internal static double AbsLateralFromRunwayMeters(
+        double pointLat, double pointLon,
+        double refLat, double refLon,
+        double runwayHeadingTrueDeg)
+        => Math.Abs(SignedLateralFromRunwayMeters(
+            pointLat, pointLon, refLat, refLon, runwayHeadingTrueDeg));
+
+    /// <summary>
+    /// Signed perpendicular offset (metres) of a point from the runway axis, POSITIVE =
+    /// RIGHT of the runway direction. Companion to <see cref="SignedAlongRunwayMeters"/>,
+    /// using the perpendicular component of the same equirectangular projection.
+    ///
+    /// <para>The sign convention matches <c>LandingExit.ExitSide</c>: the graph assigns
+    /// "Right" when <c>NormalizeAngle(exitBearingTrue - runwayHeadingTrue) &gt;= 0</c>, which
+    /// for a due-north runway puts a right-hand exit east of the axis — positive here.</para>
+    /// </summary>
+    internal static double SignedLateralFromRunwayMeters(
+        double pointLat, double pointLon,
+        double refLat, double refLon,
+        double runwayHeadingTrueDeg)
+    {
+        const double METERS_PER_DEG_LAT = 111132.0;
+        double latMidRad = (pointLat + refLat) * 0.5 * Math.PI / 180.0;
+        double metersPerDegLon = METERS_PER_DEG_LAT * Math.Cos(latMidRad);
+        double dN = (pointLat - refLat) * METERS_PER_DEG_LAT;
+        double dE = (pointLon - refLon) * metersPerDegLon;
+        double hdgRad = runwayHeadingTrueDeg * Math.PI / 180.0;
+        return dE * Math.Cos(hdgRad) - dN * Math.Sin(hdgRad);
+    }
+
+    /// <summary>
+    /// True when the aircraft is still laterally within the landing runway's pavement
+    /// (half-width + <see cref="RUNWAY_CLEAR_MARGIN_M"/>). The single answer to "is
+    /// bearing-to-a-node-beside-the-runway still distorted?" — shared by the
+    /// landing-exit arrival gate and the post-exit tone floor, which must agree.
+    ///
+    /// Returns FALSE when there is no rollout runway to measure against: "not known to
+    /// be on the runway" degrades to trusting the live route, which is the safe
+    /// direction for both callers.
+    ///
+    /// Runway.Width is in FEET (as everywhere else in this file), so it is converted
+    /// before comparing against the metre lateral offset — a bare Width * 0.5 read as
+    /// metres makes the band ~3x too wide.
+    ///
+    /// The half-width/margin comparison itself lives in
+    /// <see cref="Navigation.RolloutExitGate.IsLaterallyClearOfRunway"/> so the rollout's
+    /// lateral handoff trigger cannot spell it differently — it did, and the 0.856 m
+    /// disagreement silently disabled the early-vacate retarget (PR #204 review).
+    /// </summary>
+    private bool IsWithinRolloutRunwayLaterally(double lat, double lon)
+    {
+        // Null runway is the only "not set" test: the runway and its heading are always
+        // assigned together, and 0.0 is a legitimate heading (a due-north runway), so
+        // treating it as a sentinel would report every frame as off the pavement.
+        if (_rolloutRunway == null) return false;
+
+        double lateralM = AbsLateralFromRunwayMeters(
+            lat, lon, _rolloutRunway.StartLat, _rolloutRunway.StartLon,
+            _rolloutRunwayHeadingTrue);
+        return !Navigation.RolloutExitGate.IsLaterallyClearOfRunway(
+            lateralM, _rolloutRunway.Width);
+    }
+
+    /// <summary>Max travel from the arrival point before the ended-on-runway clearing
+    /// tone gives up — pathological data must never hold a tone forever. Matches the
+    /// vacate walk's own 400 m budget.</summary>
+    private const double CLEARING_MAX_TRAVEL_M = 400.0;
+
+    /// <summary>
+    /// True when the point is laterally clear of the LANDING runway's pavement band
+    /// (<see cref="IsWithinRolloutRunwayLaterally"/>) AND outside every runway
+    /// centerline corridor at the airport (half-width + <see cref="RUNWAY_CLEAR_MARGIN_M"/>).
+    /// The one shared answer to "has this position genuinely vacated the runway
+    /// system?" — used by the ended-on-runway clearing conclusion AND the backtrack
+    /// handoff/connection-node filter, which must agree: a "Runway vacated." claim
+    /// from one path must mean the same thing as the other's.
+    ///
+    /// Each runway is read through <see cref="Navigation.RunwayShape.For"/> (HLD-7), never
+    /// the start-row segment: at a displaced threshold the pavement runs hundreds of metres
+    /// past the start row (OMDB 12R: 761 m), and a segment test called that pavement clear.
+    /// The margin applies off the ends as well as the edges (<c>IsClearOfAt</c>).
+    /// </summary>
+    private bool IsClearOfAllRunwayCorridors(double lat, double lon)
+    {
+        if (IsWithinRolloutRunwayLaterally(lat, lon)) return false;
+        if (_graph != null)
+        {
+            foreach (var cl in _graph.RunwayCenterlines)
+            {
+                var shape = Navigation.RunwayShape.For(cl);
+                if (shape.IsDegenerate)
+                {
+                    // A collapsed row pair has no axis to project on: treat it as the point it is,
+                    // never as clear, or a pilot on that runway would be told "Off the runway".
+                    double perp = TaxiGraph.PerpendicularDistanceMetersStatic(
+                        lat, lon, cl.Lat1, cl.Lon1, cl.Lat2, cl.Lon2);
+                    if (perp <= cl.HalfWidthMeters + RUNWAY_CLEAR_MARGIN_M) return false;
+                    continue;
+                }
+                var (along, lateral) = shape.Project(lat, lon);
+                if (!shape.IsClearOfAt(along, lateral, RUNWAY_CLEAR_MARGIN_M))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Per-frame drive for the ended-on-runway clearing phase (Arrived state,
+    /// <c>_arrivedRunwayClearing</c>): heading-hold on the cached exit direction so
+    /// "continue ahead until clear" is flyable by tone. Concludes with the normal
+    /// stop-and-hold closure once the aircraft is laterally clear of the landing
+    /// runway AND outside every runway centerline corridor; gives up honestly after
+    /// <see cref="CLEARING_MAX_TRAVEL_M"/> of travel.
+    /// </summary>
+    private void UpdateArrivedRunwayClearing(double lat, double lon, double headingTrue)
+    {
+        if (_arrivedClearingStartLat == 0.0 && _arrivedClearingStartLon == 0.0)
+        {
+            _arrivedClearingStartLat = lat;
+            _arrivedClearingStartLon = lon;
+        }
+
+        if (IsClearOfAllRunwayCorridors(lat, lon))
+        {
+            _arrivedRunwayClearing = false;
+            _steeringTone.Stop();
+            SpeakNow(
+                "Off the runway. Stop and hold position. " +
+                "Open the taxi planner to set a route to your gate.");
+            return;
+        }
+
+        double traveled = TaxiGraph.FastDistanceMeters(
+            _arrivedClearingStartLat, _arrivedClearingStartLon, lat, lon);
+        if (traveled > CLEARING_MAX_TRAVEL_M)
+        {
+            _arrivedRunwayClearing = false;
+            _steeringTone.Stop();
+            SpeakNow(
+                "Exit guidance ended. Check your position and use the taxi planner.");
+            return;
+        }
+
+        double target = _arrivedClearingBearingDeg == 360.0 ? 0.0 : _arrivedClearingBearingDeg;
+        double rawError = NormalizeAngle(target - headingTrue);
+        _smoothedHeadingError = _headingErrorInitialized
+            ? _smoothedHeadingError * (1 - HEADING_ERROR_FILTER_ALPHA) + rawError * HEADING_ERROR_FILTER_ALPHA
+            : rawError;
+        _headingErrorInitialized = true;
+        if (!_steeringToneSuppressed)
+        {
+            _steeringTone.Resume();
+            _steeringTone.UpdateHeadingErrorWithThresholds(
+                _smoothedHeadingError,
+                ROLLOUT_EXIT_TONE_SILENT_DEG,
+                ROLLOUT_EXIT_TONE_ACTIVATION_DEG,
+                ROLLOUT_EXIT_TONE_MAX_PAN_DEG);
+        }
+    }
+
+    /// <summary>
+    /// Perpendicular (cross-track) distance in meters from (plat, plon) to the segment
+    /// (a→b), clamped to endpoints so points beyond either end use the nearest endpoint.
+    /// Uses equirectangular projection — sub-cm accuracy at taxi scale.
+    /// </summary>
+    internal static double PerpendicularDistanceToSegmentMeters(
+        double plat, double plon,
+        double alat, double alon,
+        double blat, double blon)
+        => GuidanceGeometry.PerpendicularDistanceToSegmentMeters(plat, plon, alat, alon, blat, blon);
+
+}

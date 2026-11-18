@@ -16,7 +16,6 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
     private readonly ComboBox modeCombo;
     private readonly ComboBox unitCombo;
     private readonly TextBox valueTextBox;
-    private readonly Button setButton;
     private bool suppressUiEvents;
     private System.Windows.Forms.Timer? _modeTimer;
     // Set on every user-driven combo change. SeedFromSim skips re-seeding within
@@ -56,13 +55,10 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
             AccessibleName = "Altimeter value", AccessibleDescription = "Enter altimeter value, Enter to set"
         };
         valueTextBox.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.Handled = true; e.SuppressKeyPress = true; HandleSet(); } };
-        setButton = new Button { Text = "Set", Location = new Point(190, 65), Size = new Size(90, 30), TabIndex = 3, AccessibleName = "Set Altimeter" };
-        setButton.Click += (s, e) => HandleSet();
         var closeButton = new Button { Text = "Close", Location = new Point(130, 130), Size = new Size(140, 35), TabIndex = 4, DialogResult = DialogResult.OK, AccessibleName = "Close" };
         closeButton.Click += (s, e) => Close();
 
-        Controls.AddRange(new Control[] { modeLabel, modeCombo, unitLabel, unitCombo, valueLabel, valueTextBox, setButton, closeButton });
-        AcceptButton = setButton;
+        Controls.AddRange(new Control[] { modeLabel, modeCombo, unitLabel, unitCombo, valueLabel, valueTextBox, closeButton });
         CancelButton = closeButton;
 
         SeedFromSim();
@@ -84,7 +80,7 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
         try
         {
             // 0=STD, 1=hPa, 2=inHg; while STD the mode carries no unit info — keep the last unit.
-            double mode = simConnect.GetCachedVariableValue("A32NX_FCU_EFIS_L_DISPLAY_BARO_VALUE_MODE") ?? 1;
+            double mode = aircraft.ReadEfisBaroDisplayMode(simConnect);
             bool std = mode < 0.5;
             modeCombo.SelectedIndex = std ? 1 : 0;
             if (!std) unitCombo.SelectedIndex = mode >= 1.5 ? 1 : 0;
@@ -99,7 +95,6 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
         bool std = modeCombo.SelectedIndex == 1;
         unitCombo.Enabled = !std;
         valueTextBox.Enabled = !std;
-        setButton.Enabled = !std;
     }
 
     private void ModeChanged(object? sender, EventArgs e)
@@ -107,10 +102,7 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
         if (suppressUiEvents) return;
         _lastUserChangeUtc = DateTime.UtcNow;
         bool std = modeCombo.SelectedIndex == 1;
-        // PULL = STD, PUSH = QNH — the cockpit knob events, both sides.
-        string action = std ? "PULL" : "PUSH";
-        simConnect.SendEvent($"A32NX.FCU_EFIS_L_BARO_{action}", 0);
-        simConnect.SendEvent($"A32NX.FCU_EFIS_R_BARO_{action}", 0);
+        aircraft.SetEfisBaroStd(std, simConnect);   // both sides; airframe-specific mechanism
         // No announcement: the screen reader already announces the combo change.
         UpdateControlState();
     }
@@ -120,9 +112,7 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
         if (suppressUiEvents) return;
         _lastUserChangeUtc = DateTime.UtcNow;
         bool inHg = unitCombo.SelectedIndex == 1;
-        // Dev-FCU live unit input (read every frame by the FCU model).
-        simConnect.ExecuteCalculatorCode($"{(inHg ? 1 : 0)} (>L:A32NX_FCU_EFIS_L_BARO_IS_INHG)");
-        simConnect.ExecuteCalculatorCode($"{(inHg ? 1 : 0)} (>L:A32NX_FCU_EFIS_R_BARO_IS_INHG)");
+        aircraft.SetEfisBaroUnitInHg(inHg, simConnect);   // both sides; airframe-specific mechanism
         // No announcement: the screen reader already announces the combo change.
     }
 
@@ -133,9 +123,10 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
 
     private void HandleSet()
     {
-        if (!setButton.Enabled) return;
+        // STD: the value box is disabled with the unit (UpdateControlState), so nothing is set.
+        if (!valueTextBox.Enabled) return;
         string input = valueTextBox.Text.Trim();
-        if (!double.TryParse(input, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v))
+        if (!Utils.NumberParsing.TryParseTyped(input, out double v))
         { announcer.AnnounceImmediate("Invalid number format"); valueTextBox.SelectAll(); return; }
         bool inHg = unitCombo.SelectedIndex == 1;
         double hpa = inHg ? v * 33.8639 : v;
@@ -145,9 +136,7 @@ public class FBWA320BaroWindow : FBWA320FCUWindowBase
             valueTextBox.SelectAll();
             return;
         }
-        uint encoded = (uint)Math.Round(hpa * 16);
-        simConnect.SendEvent("A32NX.FCU_EFIS_L_BARO_SET", encoded);
-        simConnect.SendEvent("A32NX.FCU_EFIS_R_BARO_SET", encoded);
+        aircraft.SetEfisBaroPressureHpa(hpa, simConnect);   // both sides; airframe-specific mechanism
         announcer.AnnounceImmediate(inHg ? $"Altimeter set to {v:F2} inches, both sides" : $"Altimeter set to {hpa:F0} hectopascals, both sides");
         valueTextBox.SelectAll();
     }

@@ -1,22 +1,33 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.SimConnect
 {
     /// <summary>
-    /// Reads (and drives) the PMDG tablet EFB through the MSFS Coherent GT
+    /// Reads (and drives) a Coherent-hosted HTML EFB through the MSFS Coherent GT
     /// debugger — the same no-injection WebKit-Inspector endpoint
-    /// (127.0.0.1:19999) the flyPad client uses, but resolved to the PMDG
-    /// tablet's own Coherent view (title contains "PMDGTablet"). We run
-    /// coherent-pmdg-efb-agent.js (window.__MSFSBA_PMDG_EFB) via Runtime.evaluate
-    /// inside the tablet's JS context, where its DOM is directly reachable.
+    /// (127.0.0.1:19999) the flyPad client uses, resolved to the EFB's own
+    /// Coherent view by TITLE. We run an in-page agent script via Runtime.evaluate
+    /// inside the view's JS context, where its DOM is directly reachable.
     ///
-    /// Page ids shift between sim restarts, so the tablet view is resolved BY
-    /// TITLE every (re)connect — never hardcoded. There are TWO PMDGTablet views
-    /// (Captain + First Officer), so resolution is SIDE-AWARE: the candidate
-    /// whose in-page getTabletSide() equals the requested side is chosen.
+    /// GENERIC BY PARAMETER, not by aircraft. The transport here — socket
+    /// lifecycle, agent (re)install, dirty-gated polling, the force-push contract —
+    /// is identical for every such EFB; only three strings and the side probe ever
+    /// differ. So aircraft select their EFB through the constructor rather than by
+    /// copying this file. What is NOT shared is the AGENT: each EFB's DOM is its
+    /// own, so each ships its own <c>coherent-*-efb-agent.js</c> implementing the
+    /// same scrape/clickElement/setValue contract.
+    ///   • PMDG 737/777 — <see cref="ForPmdg"/>: two "PMDGTablet" views (Captain +
+    ///     First Officer), so resolution is SIDE-AWARE — the candidate whose
+    ///     in-page getTabletSide() equals the requested side wins.
+    ///   • TFDi MD-11 — <see cref="ForMd11"/>: ONE "TFDi_MD11_efb" view, so there
+    ///     is no side to probe and the first match is taken.
+    ///
+    /// Page ids shift between sim restarts, so the view is resolved BY TITLE every
+    /// (re)connect — never hardcoded.
     ///
     /// Implements IMcduBridge so FbwEfbForm can consume it exactly like the
     /// flyPad CoherentEFBClient: it raises the same fbw_efb_connected /
@@ -28,7 +39,6 @@ namespace MSFSBlindAssist.SimConnect
     public sealed class CoherentPmdgEfbClient : IMcduBridge, IDisposable
     {
         private const string DebuggerBase = "http://127.0.0.1:19999";
-        private const string TabletTitleNeedle = "PMDGTablet";
         // Background scrape cadence. Kept moderate: a user click forces an immediate
         // re-scrape (the form posts get_display_elements), so this only governs how
         // fast AMBIENT changes (clock, live values) are picked up. 600ms eases the
@@ -45,7 +55,29 @@ namespace MSFSBlindAssist.SimConnect
         public event EventHandler<EFBStateUpdateEventArgs>? StateUpdated;
         public event Action<string>? Error;
 
-        private readonly string _side;
+        /// <summary>Title substring identifying this EFB's Coherent view.</summary>
+        private readonly string _titleNeedle;
+
+        /// <summary>Agent script filename under Resources\.</summary>
+        private readonly string _agentFile;
+
+        /// <summary>
+        /// The agent's window global (e.g. "__MSFSBA_PMDG_EFB"). Its install marker is
+        /// "&lt;global-without-underscores&gt;_INSTALLED", which the agent echoes on injection.
+        /// </summary>
+        private readonly string _agentGlobal;
+
+        /// <summary>The agent's install marker — what a successful injection returns.</summary>
+        private readonly string _installMarker;
+
+        /// <summary>
+        /// Which tablet to resolve when a view title matches more than one physical device.
+        /// NULL means "this EFB has exactly one view" — take the first match and skip the side
+        /// probe entirely (probing would open a second inspector socket for nothing, and Coherent
+        /// allows only one per page).
+        /// </summary>
+        private readonly string? _side;
+
         private readonly SynchronizationContext? _syncContext;
         private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(4) };
         private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -61,16 +93,46 @@ namespace MSFSBlindAssist.SimConnect
         private DateTime _lastGoodScrapeUtc = DateTime.MinValue;
         private bool _connectedPushSent;
         private string _lastElementsHash = "";
+        // Set whenever _lastElementsHash is reset for the SetActive(true)/get_display_elements
+        // force-refresh contract, so a reactivation still fills the form in promptly even when
+        // PollOnce's dirty-gate short-circuit (result.unchanged) fires before the hash check ever
+        // runs. Cleared once the forced push has actually happened (from cache or a full scrape).
+        private bool _forceNextPush = true;
+        // The last Dictionary<string,string> payload raised as "fbw_efb_elements" — by definition
+        // still current whenever the agent reports unchanged:true, so a forced re-push can reuse it
+        // without needing a full scrape.
+        private Dictionary<string, string>? _lastElementsData;
         private bool _disposed;
 
         public bool IsBridgeConnected =>
             _connected && (DateTime.UtcNow - _lastGoodScrapeUtc).TotalSeconds < 5;
 
-        public CoherentPmdgEfbClient(string side)
+        private CoherentPmdgEfbClient(string titleNeedle, string agentFile, string agentGlobal, string? side)
         {
+            _titleNeedle = titleNeedle;
+            _agentFile = agentFile;
+            _agentGlobal = agentGlobal;
+            _installMarker = agentGlobal.TrimStart('_') + "_INSTALLED";
             _side = side;
             _syncContext = SynchronizationContext.Current;
         }
+
+        /// <summary>
+        /// The PMDG 737/777 tablet. <paramref name="side"/> picks Captain or First Officer — both
+        /// are views titled "PMDGTablet", so the side probe is what tells them apart.
+        /// </summary>
+        public static CoherentPmdgEfbClient ForPmdg(string side)
+            => new("PMDGTablet", "coherent-pmdg-efb-agent.js", "__MSFSBA_PMDG_EFB", side);
+
+        /// <summary>
+        /// The TFDi MD-11 EFB. One view ("VCockpit04 - TFDi_MD11_efb"), so no side probe.
+        ///
+        /// It ships as its own package (tfdidesign-aircraft-efb) rather than inside the aircraft,
+        /// but it is still just a Coherent view — a React app mounted at #MSFS_REACT_MOUNT, with a
+        /// real DOM. Verified live 2026-07-17: 112 elements, 8 buttons, zero canvases.
+        /// </summary>
+        public static CoherentPmdgEfbClient ForMd11()
+            => new("TFDi_MD11_efb", "coherent-md11-efb-agent.js", "__MSFSBA_MD11_EFB", side: null);
 
         public void Start()
         {
@@ -82,7 +144,7 @@ namespace MSFSBlindAssist.SimConnect
                 // fail loudly in Debug and log in Release rather than half-support it.
                 if (_cts.IsCancellationRequested)
                 {
-                    System.Diagnostics.Debug.WriteLine(
+                    Log.Debug("SimConnect", 
                         "CoherentPmdgEfbClient.Start() called after Stop() — not supported; create a new instance.");
                     System.Diagnostics.Debug.Assert(false,
                         "CoherentPmdgEfbClient: Start() after Stop() is a no-op. Dispose and create a new client instead.");
@@ -92,19 +154,19 @@ namespace MSFSBlindAssist.SimConnect
             _cts = new CancellationTokenSource();
             try
             {
-                string path = Path.Combine(AppContext.BaseDirectory, "Resources", "coherent-pmdg-efb-agent.js");
+                string path = Path.Combine(AppContext.BaseDirectory, "Resources", _agentFile);
                 _agentJs = File.ReadAllText(path);
             }
             catch (Exception ex)
             {
-                RaiseError($"Could not load PMDG EFB agent script: {ex.Message}");
+                RaiseError($"Could not load EFB agent script {_agentFile}: {ex.Message}");
             }
             // With no agent script every EnsureConnected installs nothing -> never "installed" ->
             // RunLoop would spin forever, opening + aborting an inspector socket on the live tablet
             // every ReconnectDelayMs with only the single error above. Don't start the loop.
             if (string.IsNullOrEmpty(_agentJs))
             {
-                RaiseError("PMDG EFB agent script is missing or empty; EFB unavailable.");
+                RaiseError($"EFB agent script {_agentFile} is missing or empty; EFB unavailable.");
                 return;
             }
             _ = Task.Run(() => RunLoop(_cts.Token));
@@ -128,7 +190,7 @@ namespace MSFSBlindAssist.SimConnect
         public void SetActive(bool active)
         {
             _active = active;
-            if (active) { _lastElementsHash = ""; }
+            if (active) { _lastElementsHash = ""; _forceNextPush = true; }
         }
 
         // ---- IMcduBridge command surface --------------------------------
@@ -155,11 +217,12 @@ namespace MSFSBlindAssist.SimConnect
                     // Force the next poll to re-push the current elements even if
                     // nothing changed, so a form opened mid-session fills in.
                     _lastElementsHash = "";
+                    _forceNextPush = true;
                     return null;
                 case "click_display_element":
-                    return $"window.__MSFSBA_PMDG_EFB && __MSFSBA_PMDG_EFB.clickElement({JsInt(Idx())})";
+                    return $"window.{_agentGlobal} && {_agentGlobal}.clickElement({JsInt(Idx())})";
                 case "set_element_value":
-                    return $"window.__MSFSBA_PMDG_EFB && __MSFSBA_PMDG_EFB.setValue({JsInt(Idx())},{JsStr(Val())})";
+                    return $"window.{_agentGlobal} && {_agentGlobal}.setValue({JsInt(Idx())},{JsStr(Val())})";
                 default:
                     return null;
             }
@@ -188,7 +251,7 @@ namespace MSFSBlindAssist.SimConnect
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"CoherentPmdgEfbClient loop: {ex.Message}");
+                    Log.Debug("SimConnect", $"CoherentPmdgEfbClient loop: {ex.Message}");
                     _connected = false;
                     _agentInstalled = false;
                     try { _ws?.Abort(); } catch { }
@@ -211,7 +274,7 @@ namespace MSFSBlindAssist.SimConnect
             if (_ws != null && _ws.State == WebSocketState.Open)
             {
                 string reinstall = await EvalAsync(_agentJs, ct);
-                _agentInstalled = reinstall.IndexOf("MSFSBA_PMDG_EFB_INSTALLED", StringComparison.Ordinal) >= 0;
+                _agentInstalled = reinstall.IndexOf(_installMarker, StringComparison.Ordinal) >= 0;
                 if (_agentInstalled) { _connected = true; return true; }
             }
 
@@ -254,7 +317,7 @@ namespace MSFSBlindAssist.SimConnect
             _ = Task.Run(() => ReceiveLoop(ws, ct));
 
             string install = await EvalAsync(_agentJs, ct);
-            _agentInstalled = install.IndexOf("MSFSBA_PMDG_EFB_INSTALLED", StringComparison.Ordinal) >= 0;
+            _agentInstalled = install.IndexOf(_installMarker, StringComparison.Ordinal) >= 0;
             _connected = _agentInstalled;
             return _agentInstalled;
         }
@@ -269,11 +332,16 @@ namespace MSFSBlindAssist.SimConnect
                 foreach (var view in doc.RootElement.EnumerateArray())
                 {
                     if (!view.TryGetProperty("title", out var t)) continue;
-                    if ((t.GetString() ?? "").IndexOf(TabletTitleNeedle, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if ((t.GetString() ?? "").IndexOf(_titleNeedle, StringComparison.OrdinalIgnoreCase) < 0) continue;
                     if (!view.TryGetProperty("id", out var idEl)) continue;
                     if (idEl.ValueKind == JsonValueKind.Number) candidates.Add(idEl.GetInt32());
                     else if (int.TryParse(idEl.GetString(), out var n)) candidates.Add(n);
                 }
+                // One-view EFB (MD-11): nothing to disambiguate, so skip the probe. It would open a
+                // second inspector socket on the very page we are about to connect to — Coherent
+                // allows only one per page — for an answer we already have.
+                if (_side == null) return candidates.Count > 0 ? candidates[0] : null;
+
                 foreach (var id in candidates)
                 {
                     string side = await EvalSideAsync(id, ct);
@@ -286,7 +354,7 @@ namespace MSFSBlindAssist.SimConnect
                     }
                 }
             }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"ResolvePmdgTablet: {ex.Message}"); }
+            catch (Exception ex) { Log.Debug("SimConnect", $"ResolvePmdgTablet: {ex.Message}"); }
             return null;
         }
 
@@ -341,7 +409,7 @@ namespace MSFSBlindAssist.SimConnect
 
         private async Task PollOnce(CancellationToken ct)
         {
-            string raw = await EvalAsync("window.__MSFSBA_PMDG_EFB ? __MSFSBA_PMDG_EFB.scrape() : ''", ct);
+            string raw = await EvalAsync($"window.{_agentGlobal} ? {_agentGlobal}.scrape() : ''", ct);
             if (string.IsNullOrEmpty(raw))
             {
                 _agentInstalled = false; // agent gone (page reloaded) — reinstall next round
@@ -360,17 +428,36 @@ namespace MSFSBlindAssist.SimConnect
                 Raise("fbw_efb_connected", new Dictionary<string, string>());
             }
 
+            // Dirty-gate short-circuit: the agent's own MutationObserver saw no page change since
+            // its last full scrape, so it skipped both full-tree traversals entirely and returned
+            // no elements/page at all — keep whatever FbwEfbForm is already showing and skip the
+            // parse/diff/hash work below untouched. The agent always does the FIRST scrape after
+            // (re)injection in full (its own _everScraped latch), so this can only ever be true
+            // once a real element set has already been pushed at least once this connection.
+            //
+            // EXCEPT when SetActive(true)/get_display_elements requested a forced re-fill
+            // (_forceNextPush): that contract promises the form fills in immediately on
+            // reactivation, so this can't just early-return and wait for the next dirty poll (up
+            // to the ~6s FORCE_FULL_EVERY net). The cached elements are by definition still current
+            // (the agent just told us nothing changed), so re-push them via the exact same
+            // event/callback used for a real diff — no full scrape needed.
+            if (result.unchanged)
+            {
+                if (_forceNextPush && _lastElementsData != null)
+                {
+                    Raise("fbw_efb_elements", _lastElementsData);
+                    _forceNextPush = false;
+                    return;
+                }
+                if (!_forceNextPush) return;
+                // _forceNextPush is set but no element set has ever been cached on this connection
+                // (e.g. a reactivation racing the very first scrape) — fall through instead of
+                // early-returning so this poll's (possibly empty) result still gets processed and
+                // _lastElementsHash mismatches, guaranteeing a push once real data does arrive.
+            }
+
             var elements = result.elements ?? new List<ScrapeElement>();
-            var sb = new StringBuilder((result.page ?? "") + "|" + elements.Count + "|");
-            foreach (var e in elements)
-                // e.idx (stamped) is part of the signature: if a reorder changes
-                // which element carries which idx, the form must re-render so its
-                // click/set targets stay correct even when text/value are unchanged.
-                sb.Append(e.idx).Append(':').Append(e.text).Append('/').Append(e.value)
-                  .Append('/').Append(e.controlType).Append('/').Append(e.clickable ? '1' : '0')
-                  .Append('/').Append(e.kind).Append('/').Append(e.level)
-                  .Append('/').Append(e.disabled ? '1' : '0').Append('|');
-            string elHash = sb.ToString();
+            string elHash = ElementsSignature(result.page, elements);
             if (elHash != _lastElementsHash)
             {
                 _lastElementsHash = elHash;
@@ -395,6 +482,13 @@ namespace MSFSBlindAssist.SimConnect
                     data[$"items.{i}.level"] = elements[i].level.ToString();
                     data[$"items.{i}.live"] = elements[i].live ?? "";
                     data[$"items.{i}.disabled"] = elements[i].disabled ? "true" : "false";
+                    // Present only when the agent asked for it (the MD-11 stepper arrows and tiles);
+                    // the form treats absence as false, so no other EFB's push changes by a byte.
+                    if (elements[i].announceChange) data[$"items.{i}.announceChange"] = "true";
+                    // The agent's stable reconcile key: the MD-11 tiles, stepper arrows and read-outs,
+                    // whose label carries changing state. Present only when stamped, so a key-less
+                    // agent's push is unchanged.
+                    if (!string.IsNullOrEmpty(elements[i].key)) data[$"items.{i}.key"] = elements[i].key!;
                     // Options for a real <select>; unit-separator joined.
                     if (elements[i].options is { Count: > 0 })
                         data[$"items.{i}.options"] = string.Join(OptionSeparator, elements[i].options!);
@@ -405,7 +499,33 @@ namespace MSFSBlindAssist.SimConnect
                     if (elements[i].step is { } sp) data[$"items.{i}.step"] = sp.ToString(inv);
                 }
                 Raise("fbw_efb_elements", data);
+                _lastElementsData = data;
+                _forceNextPush = false;
             }
+        }
+
+        /// <summary>
+        /// The push signature. FbwEfbForm is re-rendered only when this changes, so a field it
+        /// renders or keys on that is missing here is a change the pilot never sees. It includes:
+        /// <list type="bullet">
+        /// <item>the stamped idx: a reorder must retarget click/set even when text and value are unchanged;</item>
+        /// <item>the agent's reconcile key: the shell keys its node by it;</item>
+        /// <item>a dropdown's option list: a list that changes under an unchanged value (a new
+        /// airport's runways) would otherwise leave the old choices on screen.</item>
+        /// </list>
+        /// </summary>
+        internal static string ElementsSignature(string? page, IReadOnlyList<ScrapeElement> elements)
+        {
+            var sb = new StringBuilder((page ?? "") + "|" + elements.Count + "|");
+            foreach (var e in elements)
+                sb.Append(e.idx).Append(':').Append(e.text).Append('/').Append(e.value)
+                  .Append('/').Append(e.controlType).Append('/').Append(e.clickable ? '1' : '0')
+                  .Append('/').Append(e.kind).Append('/').Append(e.level)
+                  .Append('/').Append(e.disabled ? '1' : '0')
+                  .Append('/').Append(e.key)
+                  .Append('/').Append(e.options is { Count: > 0 } ? string.Join(OptionSeparator, e.options!) : "")
+                  .Append('|');
+            return sb.ToString();
         }
 
         // ---- Runtime.evaluate over the inspector socket -----------------
@@ -490,7 +610,7 @@ namespace MSFSBlindAssist.SimConnect
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"CoherentPmdgEfbClient receive: {ex.Message}");
+                Log.Debug("SimConnect", $"CoherentPmdgEfbClient receive: {ex.Message}");
             }
             finally
             {
@@ -544,12 +664,17 @@ namespace MSFSBlindAssist.SimConnect
         private sealed class ScrapeResult
         {
             public bool ok { get; set; }
+            // Dirty-gate short-circuit token from the agent's MutationObserver: true means the page
+            // has not changed since the last full scrape, so `elements`/`page` are intentionally
+            // absent — see the check in PollOnce.
+            public bool unchanged { get; set; }
             public string? page { get; set; }
             public string? error { get; set; }
             public List<ScrapeElement>? elements { get; set; }
         }
 
-        private sealed class ScrapeElement
+        // internal, not private, so the xUnit suite can pin ElementsSignature.
+        internal sealed class ScrapeElement
         {
             public int idx { get; set; }
             public string? kind { get; set; }
@@ -562,6 +687,14 @@ namespace MSFSBlindAssist.SimConnect
             public int level { get; set; }
             public string? live { get; set; }
             public bool disabled { get; set; }
+            // Agent opt-in: the shell may speak this control's post-press label change (the MD-11
+            // stepper arrows and the tiles, whose label carries their own new state). Absent on
+            // every other element — and on every other EFB's agent, so the identical lines in
+            // CoherentEFBClient.cs (the flyPad client) are deliberately NOT given this field.
+            public bool announceChange { get; set; }
+            // Agent-stamped reconcile key for an element whose label carries changing state (the MD-11
+            // reader only). The shell keys the node by it instead of the label; absent everywhere else.
+            public string? key { get; set; }
             public List<string>? options { get; set; }
             public double? min { get; set; }
             public double? max { get; set; }

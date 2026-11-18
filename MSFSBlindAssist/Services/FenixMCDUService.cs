@@ -3,6 +3,7 @@ using System.Text;
 using System.Xml.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services;
 
@@ -37,18 +38,12 @@ public class MCDULinePair
 
 public class FenixMCDUService : IDisposable
 {
-    private const string WS_URL = "ws://localhost:8083/graphql";
-    private const string HTTP_URL = "http://localhost:8083/graphql";
-
-    private static readonly Dictionary<char, char> SpecialChars = new Dictionary<char, char>
-    {
-        { '#', '-' },  // box -> hyphen (better for Braille displays)
-        { '&', '\u0394' },  // delta
-        { '\u00A4', '\u2191' }, // ¤ -> up arrow
-        { '\u00A5', '\u2193' }, // ¥ -> down arrow
-        { '\u00A2', '\u2192' }, // ¢ -> right arrow
-        { '\u00A3', '\u2190' }, // £ -> left arrow
-    };
+    // 127.0.0.1, never by name ([A320-40]): the Fenix data service listens on IPv4 only, and
+    // Windows spends about 2 s refusing ::1 on every new connection before it falls back. The key
+    // writes' pooled connection goes after about a minute idle, so by name the first key press
+    // after a pause stalled 2 s.
+    private const string WS_URL = "ws://127.0.0.1:8083/graphql";
+    private const string HTTP_URL = "http://127.0.0.1:8083/graphql";
 
     private ClientWebSocket? _ws;
     private CancellationTokenSource? _cts;
@@ -57,7 +52,8 @@ public class FenixMCDUService : IDisposable
     private bool _isConnected;
     private bool _disposed;
     private int _reconnectAttempt;
-    private int _mcduIndex = 1; // 1 = Captain (left), 2 = F/O (right)
+    // Both screens and the selected side; UI thread only (screens arrive through PostToUI).
+    private readonly FenixMcduScreens _screens = new();
     private static readonly int[] ReconnectDelays = { 3000, 6000, 12000, 30000 };
 
     public event Action<MCDUDisplayData>? DisplayUpdated;
@@ -86,16 +82,23 @@ public class FenixMCDUService : IDisposable
         SetConnected(false);
     }
 
+    /// <summary>
+    /// Shows the other MCDU. Both screens stay subscribed, so a connected service never reconnects:
+    /// it raises <see cref="DisplayUpdated"/> with the stored screen at once (nothing before that
+    /// side's first screen has arrived). While disconnected there is no stored screen, and the
+    /// switch retries the connection at once instead of waiting out the backoff. UI thread only.
+    /// </summary>
     public void SwitchMCDU(int mcduIndex)
     {
-        if (mcduIndex < 1 || mcduIndex > 2) return;
-        if (mcduIndex == _mcduIndex) return;
-        _mcduIndex = mcduIndex;
-        _reconnectAttempt = 0;
-
-        // Reconnect with new MCDU index
-        Disconnect();
-        Connect();
+        if (!_screens.TrySelect(mcduIndex, out var stored)) return;
+        if (stored != null)
+            ShowScreen(stored);
+        else if (!_isConnected)
+        {
+            _reconnectAttempt = 0;
+            Disconnect();
+            Connect();
+        }
     }
 
     private async Task ConnectLoop(CancellationToken ct)
@@ -108,7 +111,7 @@ public class FenixMCDUService : IDisposable
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                System.Diagnostics.Debug.WriteLine($"[FenixMCDU] Connection error: {ex.Message}");
+                Log.Debug("Services", $"Connection error: {ex.Message}");
                 SetConnected(false);
             }
 
@@ -117,7 +120,7 @@ public class FenixMCDUService : IDisposable
             // Reconnect with backoff
             int delay = ReconnectDelays[Math.Min(_reconnectAttempt, ReconnectDelays.Length - 1)];
             _reconnectAttempt++;
-            System.Diagnostics.Debug.WriteLine($"[FenixMCDU] Reconnecting in {delay}ms (attempt {_reconnectAttempt})");
+            Log.Debug("Services", $"Reconnecting in {delay}ms (attempt {_reconnectAttempt})");
 
             try { await Task.Delay(delay, ct); }
             catch (TaskCanceledException) { break; }
@@ -134,8 +137,9 @@ public class FenixMCDUService : IDisposable
         // Send connection_init
         await SendJson(new { type = "connection_init" }, ct);
 
-        // Wait for connection_ack
-        var response = await ReceiveJson(ct);
+        // Wait for connection_ack. One receive buffer for the connection, not one per message.
+        var buffer = new byte[65536];
+        var response = await ReceiveJson(buffer, ct);
         if (response?["type"]?.ToString() != "connection_ack")
         {
             throw new Exception($"Expected connection_ack, got: {response?["type"]}");
@@ -149,18 +153,18 @@ public class FenixMCDUService : IDisposable
             payload = new
             {
                 query = "subscription ($names: [String!]!) { dataRefs(names: $names) { name value } }",
-                variables = new { names = new[] { $"aircraft.mcdu{_mcduIndex}.display" } }
+                variables = new { names = FenixMcduSides.SubscribedRefs }
             }
         }, ct);
 
         _reconnectAttempt = 0;
         SetConnected(true);
-        System.Diagnostics.Debug.WriteLine("[FenixMCDU] Connected and subscribed");
+        Log.Debug("Services", "Connected and subscribed");
 
         // Receive loop
         while (!ct.IsCancellationRequested && _ws.State == WebSocketState.Open)
         {
-            var msg = await ReceiveJson(ct);
+            var msg = await ReceiveJson(buffer, ct);
             if (msg == null) break;
 
             var msgType = msg["type"]?.ToString();
@@ -168,29 +172,77 @@ public class FenixMCDUService : IDisposable
             {
                 try
                 {
-                    var displayXml = msg["payload"]?["data"]?["dataRefs"]?["value"]?.ToString();
-                    if (!string.IsNullOrEmpty(displayXml))
+                    var dataRef = msg["payload"]?["data"]?["dataRefs"];
+                    string? name = dataRef?["name"]?.ToString();
+                    var displayXml = dataRef?["value"]?.ToString();
+                    if (!FenixMcduSides.TryGetSide(name, out int side))
                     {
-                        var displayData = ParseDisplayXml(displayXml);
-                        PostToUI(() => DisplayUpdated?.Invoke(displayData));
+                        Log.Debug("Services", $"Ignoring unexpected dataRef '{name}'");
+                    }
+                    else if (!string.IsNullOrEmpty(displayXml))
+                    {
+                        // Stored raw: only the shown side's screen is parsed (ShowScreen).
+                        PostToUI(() => StoreScreen(side, displayXml));
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[FenixMCDU] Parse error: {ex.Message}");
+                    Log.Debug("Services", $"Parse error: {ex.Message}");
                 }
+            }
+            else if (msgType == "ping")
+            {
+                // graphql-transport-ws keepalive: the service pings about every 15 s and the
+                // protocol expects a pong. Only this loop sends after the subscribe, so this
+                // never overlaps another SendAsync.
+                await SendJson(new { type = "pong" }, ct);
             }
             else if (msgType == "error" || msgType == "complete")
             {
-                System.Diagnostics.Debug.WriteLine($"[FenixMCDU] Received {msgType}");
+                Log.Debug("Services", $"Received {msgType}");
                 break;
             }
         }
     }
 
-    public async Task SendButtonPress(string buttonName)
+    // UI thread (posted from the receive loop). Only the selected side reaches the window; the
+    // other side's screen waits, unparsed, for a switch.
+    private void StoreScreen(int side, string displayXml)
     {
-        var keyName = $"system.switches.S_CDU{_mcduIndex}_KEY_{buttonName}";
+        if (_screens.Store(side, displayXml) is { } show)
+            ShowScreen(show);
+    }
+
+    private void ShowScreen(string displayXml)
+    {
+        MCDUDisplayData data;
+        try
+        {
+            data = ParseDisplayXml(displayXml);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("Services", $"Parse error: {ex.Message}");
+            return;
+        }
+        DisplayUpdated?.Invoke(data);
+    }
+
+    /// <summary>The side now shown in the window (<see cref="FenixMcduSides.Left"/> or Right). UI thread only.</summary>
+    public int SelectedSide => _screens.Selected;
+
+    // The side is read once, so the press and its release reach the same MCDU even if the
+    // pilot switches sides in the 50 ms between them.
+    public Task SendButtonPress(string buttonName) => SendButtonPress(buttonName, _screens.Selected);
+
+    /// <summary>
+    /// Presses a key on the given MCDU. A caller that sends several keys as one entry reads
+    /// <see cref="SelectedSide"/> once and passes it to every press, so a side switch part-way
+    /// through cannot split the entry across both MCDUs.
+    /// </summary>
+    public async Task SendButtonPress(string buttonName, int side)
+    {
+        var keyName = FenixMcduSides.KeyRef(side, buttonName);
 
         // Send key press (value: 1)
         await SendKeyWrite(keyName, 1);
@@ -218,11 +270,11 @@ public class FenixMCDUService : IDisposable
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(HTTP_URL, content);
             response.EnsureSuccessStatusCode();
-            System.Diagnostics.Debug.WriteLine($"[FenixMCDU] Key write sent: {keyName} = {value}");
+            Log.Debug("Services", $"Key write sent: {keyName} = {value}");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[FenixMCDU] Key write error ({keyName} = {value}): {ex.Message}");
+            Log.Debug("Services", $"Key write error ({keyName} = {value}): {ex.Message}");
         }
     }
 
@@ -294,90 +346,8 @@ public class FenixMCDUService : IDisposable
         return data;
     }
 
-    private static readonly HashSet<char> ColorCodeSet = new HashSet<char> { 'a', 'c', 'g', 'm', 'w', 'y' };
-    private static readonly HashSet<char> SizeCodeSet = new HashSet<char> { 's', 'l' };
-
-    private static string StripFormatCodes(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return "";
-
-        // First pass: parse into colored segments
-        var segments = ParseColorSegments(text);
-
-        // Check if this line has mixed colors (indicates toggle/selection options)
-        var distinctColors = new HashSet<char>();
-        foreach (var seg in segments)
-        {
-            if (!string.IsNullOrWhiteSpace(seg.Text))
-                distinctColors.Add(seg.Color);
-        }
-        bool hasMixedColors = distinctColors.Count > 1 && distinctColors.Contains('g');
-
-        // Second pass: build output, marking green segments on mixed-color lines
-        var sb = new StringBuilder();
-        foreach (var seg in segments)
-        {
-            if (hasMixedColors && seg.Color == 'g' && !string.IsNullOrWhiteSpace(seg.Text))
-            {
-                sb.Append('*');
-                sb.Append(seg.Text);
-            }
-            else
-            {
-                sb.Append(seg.Text);
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    private static List<(char Color, string Text)> ParseColorSegments(string text)
-    {
-        var segments = new List<(char Color, string Text)>();
-        char currentColor = 'w'; // default white
-        var currentText = new StringBuilder();
-
-        for (int i = 0; i < text.Length; i++)
-        {
-            char c = text[i];
-
-            if (ColorCodeSet.Contains(c))
-            {
-                // Flush current segment
-                if (currentText.Length > 0)
-                {
-                    segments.Add((currentColor, currentText.ToString()));
-                    currentText.Clear();
-                }
-                currentColor = c;
-                continue;
-            }
-
-            if (SizeCodeSet.Contains(c))
-            {
-                // Skip size codes
-                continue;
-            }
-
-            // Handle special characters
-            if (SpecialChars.TryGetValue(c, out char replacement))
-            {
-                currentText.Append(replacement);
-            }
-            else
-            {
-                currentText.Append(c);
-            }
-        }
-
-        // Flush last segment
-        if (currentText.Length > 0)
-        {
-            segments.Add((currentColor, currentText.ToString()));
-        }
-
-        return segments;
-    }
+    // Format-code decoding lives in FenixMcduFormat (pure + unit-tested).
+    private static string StripFormatCodes(string text) => FenixMcduFormat.StripFormatCodes(text);
 
     private static (string left, string right) SplitLine(string line)
     {
@@ -404,11 +374,10 @@ public class FenixMCDUService : IDisposable
         await _ws.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, ct);
     }
 
-    private async Task<JObject?> ReceiveJson(CancellationToken ct)
+    private async Task<JObject?> ReceiveJson(byte[] buffer, CancellationToken ct)
     {
         if (_ws == null) return null;
 
-        var buffer = new byte[65536];
         var sb = new StringBuilder();
 
         WebSocketReceiveResult result;
@@ -427,7 +396,13 @@ public class FenixMCDUService : IDisposable
     {
         if (_isConnected == connected) return;
         _isConnected = connected;
-        PostToUI(() => ConnectionStatusChanged?.Invoke(connected));
+        PostToUI(() =>
+        {
+            // A dropped connection's stored screens are no longer live: a side switch must not
+            // replay one as current. The reconnect's subscription delivers both screens afresh.
+            if (!connected) _screens.ClearScreens();
+            ConnectionStatusChanged?.Invoke(connected);
+        });
     }
 
     private void PostToUI(Action action)

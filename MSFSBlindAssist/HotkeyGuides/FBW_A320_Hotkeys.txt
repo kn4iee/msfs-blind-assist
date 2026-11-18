@@ -4,6 +4,7 @@ Application Navigation:
   Ctrl+1     Focus Sections List
   Ctrl+2     Focus Panels List
   Ctrl+3     Focus Status Display field of the current panel (refreshes it if empty)
+  F5         Refresh the current panel's Status Display now (it also updates itself live)
 
 Tip: Press the same bracket key again to cancel a mode you activated by accident.
 
@@ -108,6 +109,10 @@ Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
   Y          Taxi Status (current taxiway, next turn, distance to destination)
   Ctrl+Y     Repeat Current Taxi Instruction
   Alt+Y      Where Am I (announces current taxiway, gate, or runway at nearest airport)
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter tunes the selected frequency into COM 1 standby
+                and Shift+Enter tunes it straight into COM 1 active; COM 1 is read back to confirm.
   (Open the form with Input mode > Shift+Y)
 
 Waypoint Tracking (use Fix Track window or EFB route viewer to add):
@@ -130,6 +135,8 @@ Displays:
 Traffic and Weather:
   R          Announce Tracked TCAS Traffic
   Ctrl+R     Open TCAS Traffic Window
+  Shift+O    Open Volanta window (Volanta users and network pilots around you,
+             your Volanta friends and online ATC; also Extras > Volanta)
   Shift+R    Open Weather Radar Window (auto-detects ActiveSky and silently
              uses richer data — surface wind+gust, ceiling, QNH, turbulence,
              METAR-decoded precipitation — when running. Falls back to MSFS
@@ -147,7 +154,7 @@ Displays and Windows:
   Shift+M    Show METAR Report (VATSIM, plus ActiveSky METAR if AS detected)
   Ctrl+Shift+T  Cold Temperature Altitude Correction (offline calculator: field elevation + temperature + published altitudes -> corrected altitudes)
   Shift+B    SimBrief Briefing
-  Shift+C    Show Checklist (static text, cold-and-dark to shutdown)
+  Shift+C    First Officer window (checklists and flows)
 
 Hand Fly Mode Hotkeys:
   A          Read MSL
@@ -182,6 +189,16 @@ Ground Services:
              the window. If multiple GSX services are active, use the Active
              services combo to choose which service drives tooltip announcements.
 
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
 INPUT MODE - Press [ to activate
 
 Teleport:
@@ -214,7 +231,7 @@ FCU Set Values (each opens a window: value entry, knob Push/Pull, mode toggles, 
   Ctrl+H     Heading window (set value; Push/Pull; HDG-V/S / TRK-FPA toggle)
   Ctrl+A     Altitude window (set value; Push/Pull; 100/1000 increment)
   Ctrl+V     Vertical Speed / FPA window (set value; Push/Pull)
-  Ctrl+P     Autopilot panel (AP1/AP2; A/THR engage + disconnect; APPR/LOC/EXPED; Flight Director status)
+  Ctrl+P     Autopilot panel (AP1/AP2; A/THR (says Disengaged, Armed or Active) + disconnect; APPR/LOC/EXPED; Flight Director status)
   Ctrl+B     Altimeter window (enter QNH once -> both sides; STD/QNH; hPa/inHg)
 
 Windows:
@@ -232,12 +249,16 @@ Windows:
              press arms the answer (e.g. Alt+2 = WILCO) and the keys change
              to CANCEL / SEND — the second Alt+2 actually transmits. After
              sending, right 2 becomes CLOSE to dismiss the message.
-             PageUp/PageDown = older/newer message, Ctrl+PageUp/PageDown =
-             scroll within a long message (Ctrl+PageDown = next page). NOTE:
-             on a long multi-page uplink the answer keys stay inactive until
-             you have paged to the END of the message — the window says
-             "not available yet" if you try early. F5 = refresh, Escape =
-             close.
+             PageUp/PageDown = scroll within the message you are reading
+             (PageDown = next page), the same as in the MCDU window.
+             Ctrl+PageUp/PageDown = older/newer message. NOTE: on a long
+             multi-page uplink the answer keys stay inactive until you have
+             paged to the END of the message — the window then says which
+             page you are on, e.g. "WILCO not available yet. Page 1 of 2.
+             Press page down to read on." On a message you HAVE read to the
+             end, a key the unit is still refusing is unblocked automatically
+             and then pressed, so you never get stuck.
+             F5 = refresh, Escape = close.
              Needs a datalink connection: set the ACARS provider (Hoppie /
              SayIntentions / BeyondATC) in the flyPad Settings, then log on
              to ATC from the MCDU ATSU pages — the NOTIFY key needs the ATC
@@ -255,12 +276,23 @@ Taxi Guidance:
 Ground Services:
   Alt+G      Open Access GSX window (accessible GSX Ground Services Pro menu)
 
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
+
 General:
   Escape     Exit active hotkey mode
 
 MCDU Window (open with [ then Shift+M):
-  This is the A32NX MCDU (Captain side — the SimBridge remote protocol does not
-  expose the First Officer MCDU separately).
+  This is the A32NX MCDU (Captain side — the aircraft draws both MCDU screens
+  from one instrument, so there is no separate First Officer MCDU to show).
+  Once you have opened this window, it keeps reading out FMS messages such
+  as DEST EFOB BELOW MIN after you close it. SimBridge is optional: it is
+  only needed for MCDU printouts.
 
 Navigation:
   Up/Down        Read the screen line by line
@@ -306,10 +338,13 @@ Arrow Navigation:
   Alt+Down       Scroll down
 
 Automatic Announcements:
-  - Thrust-lever detents reached (Idle / Climb / Flex MCT / TOGA / Reverse)
   - Flight Mode Annunciator (FMA) — vertical, lateral and autothrust modes
   - ECAM warnings, cautions and memos (toggle with Ctrl+E)
   - Master Warning / Master Caution
   - Altimeter setting, approach minimums, flaps and gear
   - Ground speed callouts while on the ground
+  - "V1", "Rotate" and "V2" on the take-off roll, as the airspeed reaches the
+    speeds entered on the MCDU PERF TAKE OFF page (one call, "V1, Rotate", when
+    V1 and VR are the same). They arm on the ground below 40 knots with V1 and VR
+    entered; mute each with its speed's row (V1, VR, V2).
   Mute any of these from the Monitor Manager (Ctrl+M).

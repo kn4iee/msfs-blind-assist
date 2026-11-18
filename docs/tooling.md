@@ -2,7 +2,7 @@
 
 A detailed reference to every dev/debug tool in `tools/`, written for **agents (Claude/Codex) and human contributors**. It explains the one transport almost all of them share (the MSFS Coherent GT remote debugger), which tool to reach for, how to run it, and how to diagnose the app's crashes.
 
-> **Read this when:** you need to read/write a live FlyByWire L:var, scrape or drive a cockpit display / MCDU / flyPad, verify whether a control's write "sticks", reproduce a `tools/_probe` finding, **adapt a scraper to a different aircraft** (§9), or investigate a crash (§8). For the *methodology* of proving a control works (write-stick rules, the write-mechanism decision tree), this guide points you at the **VARIABLE / CONTROL TROUBLESHOOTING PLAYBOOK** in `CLAUDE.md` — that is the source of truth; this guide is the tool catalogue.
+> **Read this when:** you need to read/write a live FlyByWire L:var, scrape or drive a cockpit display / MCDU / flyPad, verify whether a control's write "sticks", reproduce a `tools/_probe` finding, **adapt a scraper to a different aircraft** (§9), or investigate a crash (§8). For the *methodology* of proving a control works (write-stick rules, the write-mechanism decision tree), this guide points you at the **VARIABLE / CONTROL TROUBLESHOOTING PLAYBOOK** in [troubleshooting-playbook.md](troubleshooting-playbook.md) — that is the source of truth; this guide is the tool catalogue.
 
 ---
 
@@ -13,8 +13,8 @@ These tools assume **MSFS is running with a Coherent aircraft loaded** (the sim 
 | Dependency | Install | Needed for |
 |---|---|---|
 | **PowerShell 7+ (`pwsh`)** — *the assumed/preferred shell* | `winget install Microsoft.PowerShell` | Every `*.ps1` tool: `coherent.ps1`, `coherent-eval.ps1`, `fcu/`, `sd-page-tour.ps1`, `mcdu_*`, `fp_*`, `probe-*.ps1`. |
-| **Node.js 18+ (LTS)** | `winget install OpenJS.NodeJS.LTS` | The offline test harnesses (`flypad-settings-test/`, `flypad-shell-test/`, `perf-builder-test/`) and the Node probes (`fbw-mcdu-probe/`, `efb-dom-tool.js`). Run a one-time `npm install` in each jsdom harness folder. |
-| **.NET 9 SDK** | (see `CLAUDE.md` Build Commands) | Building MSFSBA + the .NET probe apps (`PMDGDispatchTester`, `CDUTest`). |
+| **Node.js 18+ (LTS)** | `winget install OpenJS.NodeJS.LTS` | The offline test harnesses (`flypad-settings-test/`, `flypad-shell-test/`, `perf-builder-test/`, `fenix-efb-test/`) and the Node probes (`fbw-mcdu-probe/`, `efb-dom-tool.js`). Run a one-time `npm install` in each jsdom harness folder. |
+| **.NET 10 SDK** | (see `CLAUDE.md` Build, and [development.md](development.md#build-output-and-traps)) | Building MSFSBA + the .NET probe apps (`PMDGDispatchTester`, `CDUTest`). |
 | **MSFS 2020 or 2024 — running** | — | Hosts the Coherent views + the SimConnect/MobiFlight surface. |
 | **MobiFlight WASM** (optional) | (FBW/community installer) | Only for reliable L:var **writes** via the calculator path (`(>L:VAR)`); not needed for read/scrape. |
 
@@ -30,7 +30,7 @@ Everything under `tools/` falls into two buckets:
 | Bucket | Tools | Status |
 |---|---|---|
 | **Created during the A320/A380 work** (this branch — mine + Gus's) | **`coherent.ps1` (the unified driver)**, `coherent-eval.ps1`, `_probe/`, `fcu/`, `fp_*.{js,ps1}`, `mcdu_*.{js,ps1}`, `mfd_import_and_scrape.ps1`, `sd-page-tour.ps1`, `efb-dom-tool.js`, `fbw-mcdu-probe/`, `flypad-shell-test/`, `flypad-settings-test/`, `probe-*.ps1`, `prove-coherent-scrape.ps1`, `test-coherent-ws.ps1`, and the `*.md` reference catalogs | **Documented + organized here.** Improve/reorganize freely. |
-| **Pre-existing** (on `origin/main` before the FBW work) | `tools/CDUTest`, `tools/PMDGDispatchTester` | **Leave untouched.** Documented in `CLAUDE.md` (Build Commands) only. Not part of the Coherent tooling. See §7. |
+| **Pre-existing** (on `origin/main` before the FBW work) | `tools/CDUTest`, `tools/PMDGDispatchTester` | **Leave untouched.** Documented in [development.md](development.md#build-output-and-traps) (Build output and traps) only. Not part of the Coherent tooling. See §7. |
 
 This guide only reorganizes/improves the first bucket. The two PMDG tools are independent console apps with their own build story and are deliberately out of scope here.
 
@@ -46,9 +46,9 @@ Every A380/A32NX cockpit surface that isn't a plain SimVar — the **MFD/MCDU, f
 
 - **No Developer Mode required.** Verified empirically on MSFS 2024 (cold boot, Dev Mode off): the sim opens port 19999 itself. *(Several of the older `probe-*.ps1` headers still say "DevMode ON" — that instruction is obsolete; it is not needed. See §6.)*
 - **Resolve views by TITLE, never by id.** Page ids in `/pagelist.json` **shuffle every session**. Always fetch `/pagelist.json` and match a title substring.
-- **One inspector socket per page.** Coherent GT (Chromium 49) accepts **only ONE** devtools WebSocket per view. If the app already holds a view's socket (e.g. `CoherentEWDClient` is always connected to `A380X_EWD` while the A380 is loaded; `CoherentEFBClient` owns `- EFB` while the flyPad form is open), a second connection from a tool is **rejected**. Close the relevant app window before driving that view from a tool, and vice-versa.
+- **One inspector socket per page.** Coherent GT (Chromium 49) accepts **only ONE** devtools WebSocket per view. If the app already holds a view's socket (e.g. `CoherentEWDClient` is always connected to `A380X_EWD` while the A380 is loaded; `CoherentEFBClient` owns `- EFB` from the first time the flyPad window is opened), a second connection from a tool is **rejected**. Close the relevant app window before driving that view from a tool, and vice-versa — except for the views below, which a closed window does not free. ⚠️ Closing the flyPad window does NOT free `- EFB`: the form only hides, and `CoherentEFBClient` keeps its socket (idle, so reopening is instant) until the aircraft is switched or the app exits; quit MSFSBA before pointing a tool at the flyPad (verified live 2026-10-23). ⚠️ Closing a window does NOT free the A32NX / Headwind A330 MCDU view (`A32NX_MCDU` / `A339X_MCDU`): once the MCDU window has been opened, the app holds that socket until the aircraft is switched or the app exits (it keeps reading the screen so FMS messages reach a closed window, and D / Shift+D ride it). Switch aircraft or quit MSFSBA before pointing a tool at it — or use a view the app never holds (e.g. `A32NX_PFD_1`, `A32NX_SYSTEMSHOST`).
 - **ES5 only inside agents.** Coherent GT = Chromium 49: `var` (no `let`/`const` arrow funcs), no `String.includes`/`AbortSignal.timeout`, `.indexOf()` instead, top-level `try/catch`. This constrains `Resources/coherent-*-agent.js` and any `-PreFile` you inject — but **not** the WebView2 shell or your PowerShell/Node host code.
-- **Writes: use the calculator path, not data-def.** To make an L:var write stick reliably for FBW vars, write via `SimVar.SetSimVarValue('L:VAR','number',v)` inside a Coherent view, or `(>L:VAR)` / `execute_calculator_code`. The MCP `set_lvar` (native data-def) silently fails for many FBW L:vars and produces false "reverts/uncontrollable" verdicts. (Full rationale: the PLAYBOOK in `CLAUDE.md`.) **Caveat:** a `SimVar.SetSimVarValue` issued *from a Coherent view* is sometimes view-local and lost on disconnect (notably the SD page index — see `sd-page-tour.ps1`); for those, drive the write from the app or the MCP calculator path.
+- **Writes: use the calculator path, not data-def.** To make an L:var write stick reliably for FBW vars, write via `SimVar.SetSimVarValue('L:VAR','number',v)` inside a Coherent view, or `(>L:VAR)` / `execute_calculator_code`. The MCP `set_lvar` (native data-def) silently fails for many FBW L:vars and produces false "reverts/uncontrollable" verdicts. (Full rationale: the PLAYBOOK, [troubleshooting-playbook.md](troubleshooting-playbook.md).) **Caveat:** a `SimVar.SetSimVarValue` issued *from a Coherent view* is sometimes view-local and lost on disconnect (notably the SD page index — see `sd-page-tour.ps1`); for those, drive the write from the app or the MCP calculator path.
 
 ### View title-needles (pass to `-Title`)
 
@@ -107,8 +107,9 @@ flags; no retyping inline PowerShell.
 # 4. Capture a jsdom fixture (live geometry/visibility baked in) for the offline harnesses
 ./coherent.ps1 capture -Title "- EFB"    -Agent ...coherent-flypad-agent.js -Out fixtures\a320-ground.html
 
-# 5. Arbitrary JS (read/write an L:var, call any agent method) — same as coherent-eval.ps1
-./coherent.ps1 eval    -Title A32NX_MCDU -Expr "SimVar.GetSimVarValue('L:A32NX_EFB_USING_METRIC_UNIT','number')"
+# 5. Arbitrary JS (read/write an L:var, call any agent method) — same as coherent-eval.ps1.
+#    A view the app never holds: MSFSBA keeps A32NX_MCDU once its MCDU window has been opened.
+./coherent.ps1 eval    -Title A32NX_PFD_1 -Expr "SimVar.GetSimVarValue('L:A32NX_EFB_USING_METRIC_UNIT','number')"
 ```
 
 `coherent.ps1` delegates the actual CDP round-trip to `coherent-eval.ps1`, so there is exactly
@@ -147,7 +148,7 @@ the same transport, a standalone Node project, or an early bootstrap script it s
 | `atccom_*.js` | A380X_MFD | navigate + scrape ATC COM / CPDLC / D-ATIS (UIService nav) |
 | `surv_*.js`, `radio_diag.js` | A380X_MFD | SURV RadioButtonGroup enabled/disabled + click-actuation |
 | `btv_dist.js`, `rudtrim.js` | A380X_MFD | ARINC429 / plain-metres readouts |
-| `pack_write.js`, `ovhd_flip*.js`, `ovhd_check.js` | A380X_MFD | **write-stick test** (proved the "computed-output" PBs are settable — `CLAUDE.md` #103) |
+| `pack_write.js`, `ovhd_flip*.js`, `ovhd_check.js` | A380X_MFD | **write-stick test** (proved the "computed-output" PBs are settable — #103, [A380-23] in [invariants/a380-panels.md](invariants/a380-panels.md)) |
 | `efb_*.js`, `metric*.js` | `- EFB` | flyPad scrape/navigate, persistent-store metric toggle |
 | `ecl_*.js` | A380X_EWD | ECL `.EclLine` scrape |
 | `uisvc.js`, `sec_read.js` | A380X_MFD | resolve `uiService`; SEC plans read like the active plan |
@@ -188,9 +189,11 @@ These are full mini-projects with `package.json` and tests — not Coherent-eval
 
 | Project | Transport | Purpose |
 |---|---|---|
-| `tools/fbw-mcdu-probe/` | SimBridge MCDU websocket `ws://localhost:8380/interfaces/v1/mcdu` | Node CLI to inspect/drive/capture the **A32NX** MCDU without the C# app: `watch` / `press` / `type` / `replay` (`--export` JSONL captures; `replay` re-renders a capture offline). **`mcdu-format.js` is the authoritative decode reference** and must stay in sync with `Services/FbwMcduFormat.cs`; `node --test` (`mcdu-format.test.js`) covers it. See its `README.md`. |
-| `tools/flypad-shell-test/` | jsdom (no sim) | The canonical **keyed-DOM-reconcile spec** for the flyPad WebView2 shell. `reconcile.test.js` fails on idx-keying and passes on content-keying — it encodes why the shell keys by content, not scrape idx (stops NVDA focus jumps). Mirror any reconcile change here. The reference shell is `Resources/flypad-shell.html`. |
+| `tools/fbw-mcdu-probe/` | SimBridge MCDU websocket `ws://localhost:8380/interfaces/v1/mcdu` | (Since 2026-09 the app reads and drives the A32NX MCDU over the Coherent debugger, `A32NX_MCDU` view; this relay is its fallback and still its ONLY source of MCDU printouts — see docs/a32nx.md. This probe is still the way to watch the relay itself.) Node CLI to inspect/drive/capture the **A32NX** MCDU without the C# app: `watch` / `press` / `type` / `replay` (`--export` JSONL captures; `replay` re-renders a capture offline). **`mcdu-format.js` is the authoritative decode reference** and must stay in sync with `Services/FbwMcduFormat.cs`; `node --test` (`mcdu-format.test.js`) covers it. See its `README.md`. |
+| `tools/flypad-shell-test/` | jsdom (no sim) | The canonical **keyed-DOM-reconcile spec** for the flyPad WebView2 shell (`npm ci && npm test`, also run in CI by the `efb-readers` job). `reconcile.test.js` fails on idx-keying and passes on content-keying — it encodes why the shell keys by content, not scrape idx (stops NVDA focus jumps). Mirror any reconcile change here. The reference shell is `Resources/flypad-shell.html`. `efb-shell.test.js` is different in kind: it extracts the SHIPPING `PageHtml` string out of `Forms/FBWA380/FbwEfbForm.cs`, loads it under jsdom and drives `window.__render`, so it exercises the real shell every EFB window renders (today: the `announceChange` post-press gate) rather than the mirror. |
 | `tools/efb-dom-tool.js` | CDP over `:19999` (Node 18+) | Live CDP scraper/clicker for the **A32NX EFB**: `node tools/efb-dom-tool.js state|scrape|click …`. A Node counterpart to `fp_run.ps1` for the flyPad bridge. |
+| `tools/fenix-efb-test/` | jsdom (no sim) | The offline harness for the **Fenix v3 EFB accessibility layer** (`MSFSBlindAssist/Resources/fenix-efb-accessibility.js`, the page the Fenix EFB window hosts): `npm install`, then `node --test`. `fixtures/*.html` are trimmed captures of the Fenix EFB's markup; `sweep.test.js` checks that every control on all 22 captured screens ends up named, and the other suites pin the navigation, the Fenix app's screens, Settings/Failures/Documents/Charts/quick settings and the Takeoff and Landing calculators. **Not run by CI** (the `efb-readers` job does not include it), so re-take the captures and run it by hand after every Fenix update: `capture.md` holds the capture snippet, the screen list, the credential check and the live check in Chromium that jsdom cannot do (it has no CSS). See "Fenix v3: the EFB window" in [a32nx.md](a32nx.md). |
+| `tools/fenix-gateway/` | Python 3 (`python -I`), HTTP GET only | Not a Node project, listed here with the Fenix EFB tools: `fetch_gateway_bundles.py` downloads the Fenix v3 gateway's EFB and FAP web bundles from your own running Fenix (`127.0.0.1:8083`, read-only) so data names, write calls and GraphQL operations can be checked against the source; `option_labels.py` extracts the EFB's option labels from the bundle chunk that defines `humanizeKey` (regeneration recipe: "Fenix options" in [a32nx.md](a32nx.md)). Save the bundles in their own empty folder outside the repository; never commit them. See its `README.md`. |
 
 ---
 
@@ -227,14 +230,19 @@ These were the **first exploratory scripts** that discovered the no-injection Co
 
 ---
 
-## 7. Pre-existing tools (out of scope — do not modify)
+## 7. Pre-existing tools, and other standalone non-Coherent probes (out of scope — do not fold in)
 
 Two console apps predate the FBW work and are **not** Coherent tools. Documented here only so you don't mistake them for debugger tooling:
 
 - **`tools/PMDGDispatchTester/`** — a console REPL that probes which PMDG NG3 dispatch shape a switch accepts against a live sim. Compiles the main app's `SimConnect/PMDGNG3DataStruct.cs` via a **linked** `<Compile>`. Builds as part of `MSFSBlindAssist.sln`.
 - **`tools/CDUTest/`** — fires a single CDA-write or `TransmitClientEvent` at one chosen PMDG event. Builds on its own (`dotnet build tools/CDUTest`).
 
-Leave these alone. (Details in `CLAUDE.md` → Build Commands.)
+Leave these two alone. (Details in [development.md](development.md#build-output-and-traps) → Build output and traps.)
+
+Two more tools live in this same out-of-scope-for-Coherent bucket — no debugger, no live sim, standalone build — but unlike the two above they are maintained, re-runnable **measurement** harnesses rather than fixed probes, so "leave alone" doesn't apply to them. Both load the database through ONE shared loader, `tools/Shared/NavdataSweepLoader.cs` (linked by each, never copied, so their inputs cannot drift; it mirrors `LittleNavMapProvider`'s readers and opens the database read-only), and both default to or take the pilot's `fs2024.sqlite` (`%APPDATA%\MSFSBlindAssist\databases`):
+
+- **`tools/StandBridgeSweep/`** — sweeps a real navdata database and reports the PR #235 stand-bridge figures: bridge count, distinct airports touched, and the four safety invariants (no bridge on or across runway pavement, none ending on a hold-short node, a stand, or another stand's lead-in chain), plus how many otherwise-unreachable stands the bridges bring onto the main taxi network. It links the production `TaxiGraph`/`RunwayPavement`/`RunwayShape` sources rather than reimplementing their logic — the same linked-`<Compile>` idea `PMDGDispatchTester` uses for the CDA struct above, so its output can never drift from what `TaxiGraph.BridgeOrphanParkingIslands` actually builds. Builds on its own (`dotnet build tools/StandBridgeSweep`), not as part of the solution. **Re-run it before trusting any change to the bridging rule or its safety checks** — see the "Stranded stand stubs are reattached; unreachable destinations are refused" write-up in `docs/taxi-guidance.md` for the currently measured figures.
+- **`tools/LandingExitSweep/`** — writes every runway direction's `GetLandingExits` list (name, distance, type, angle, side, position, hold-short node) as CSV over the REAL production `TaxiGraph` (linked, not reimplemented), and diffs two such CSVs into a markdown report: exits gained and lost, retyped (with a transition table), angle and side changes, and directions that lose every usable exit. Its job is the whole-database before/after of any change to how landing exits are measured: build it once against the current sources and once against the pre-change tree (the two branch-measurement files are linked conditionally, so the same project builds against both), run both over the same database, compare. Build: `dotnet build tools/LandingExitSweep -c Release -r win-x64 --self-contained false`. Run: `LandingExitSweep.exe sweep <db> <out.csv> [maxAirports]` (about 40 s for fs2024) and `LandingExitSweep.exe compare <before.csv> <after.csv> <report.md>`. **Re-run it before trusting any change to exit measurement** — `ExitBranch`, `TaxiGraph.ExitRefinement`, the producers in `TaxiGraph.GetLandingExits`/`FindDownfieldExits`, or any constant the derived-constant tripwire ([ROL-19] in [invariants/rollout-geometry.md](invariants/rollout-geometry.md)) names.
 
 ---
 
@@ -252,9 +260,9 @@ Leave these alone. (Details in `CLAUDE.md` → Build Commands.)
 | `AppDomain.CurrentDomain.UnhandledException` | Background-thread faults: SimConnect receive pump, `Task.Run` poll loops | Logs the cause (with `IsTerminating`). The CLR still tears the process down — this can't *prevent* the crash, only record it. |
 | `TaskScheduler.UnobservedTaskException` | A faulted `Task` whose exception was never awaited | Observes it (prevents a finalizer-time crash) and logs. |
 
-**The startup log DOES capture managed crashes.** `Utils/StartupLogger.Log` writes each line with **`File.AppendAllText`**, which opens→writes→closes per call — i.e. it **flushes to disk on every line**. So if a crash is a managed .NET exception on any of the three channels above, its stack trace **is** on disk at the moment of death.
-
-- **Log location:** `%TEMP%\MSFSBlindAssist_Startup_<yyyyMMdd_HHmmss>.log` (one per launch). Get the exact path at runtime from `StartupLogger.GetLogFilePath()`; it's also shown in the startup-error dialog.
+Startup diagnostics go through the app-wide logging facade: `Log.Channel("startup", truncateOnLaunch: true)`
+(wired in `Program.Main`) writes `%APPDATA%\MSFSBlindAssist\logs\startup.log`, truncated on each launch.
+To diagnose a startup crash, ask for that file (Windows+R → `%APPDATA%\MSFSBlindAssist\logs`).
 
 ### Why a crash can still leave "nothing useful" in the log
 
@@ -266,7 +274,7 @@ If the log shows no exception before the process vanished, the crash was almost 
 
 ### How to diagnose the next occurrence
 
-1. **Read the per-launch log first.** `%TEMP%\MSFSBlindAssist_Startup_*.log` (newest). A logged `Unhandled …exception` line with a stack trace = a **managed** crash → fix at the source named in the trace.
+1. **Read the per-launch log first.** `%APPDATA%\MSFSBlindAssist\logs\startup.log`. A logged `Unhandled …exception` line with a stack trace = a **managed** crash → fix at the source named in the trace.
 2. **No exception line, log ends mid-stream = native crash.** Correlate with **Windows Event Viewer → Windows Logs → Application** for an *Application Error* / *.NET Runtime* / *Faulting module* entry at the crash timestamp. The faulting module name (e.g. `WebView2Loader.dll`, `EmbeddedBrowserWebView.dll`, a Coherent module, `SimConnect.dll`) points at the native culprit.
 3. **Note the activity context** the reporter gave (panel nav / idle / flyPad open / another window opening) and check whether it lines up with a WebView2/Coherent lifecycle event (form open/close, aircraft swap disposing a Coherent client, a poll firing while a view is being torn down).
 4. **Reproduce under a debugger** if possible: run the Debug x64 build from Visual Studio so a native first-chance exception breaks instead of vanishing.
@@ -340,7 +348,7 @@ Identify: the container class for a "line/cell", the field/input elements, the d
 
 **Step 6 — Find the navigation mechanism.** A380 = click a stable page-selector id, or `uiService.navigateTo(uri)` for cross-system jumps. A new aircraft may use page-button clicks, a hardware-key event, or an SDK page command. Whatever it is, expose it as the agent's `navigate*` method so a driver can walk every page.
 
-**Step 7 — Verify by round-trip**, never by assumption: scrape → act → re-scrape and confirm the change landed (the universal write-stick discipline from the `CLAUDE.md` PLAYBOOK).
+**Step 7 — Verify by round-trip**, never by assumption: scrape → act → re-scrape and confirm the change landed (the universal write-stick discipline from the PLAYBOOK, [troubleshooting-playbook.md](troubleshooting-playbook.md)).
 
 ### 9.4 Worked evidence — the flyPad scraper IS cross-aircraft (verified live)
 
@@ -366,6 +374,6 @@ To ground the "flyPad agent serves both FBW jets" claim, this session drove the 
 - **Verify FCU** → `tools/fcu/fcu-read.ps1` (+ roundtrip/set).
 - **Drive the A32NX MCDU without the app** → `tools/fbw-mcdu-probe/` (Node).
 - **Touch the flyPad reconcile** → mirror `tools/flypad-shell-test/`.
-- **A control "doesn't work"** → STOP. Read the **VARIABLE / CONTROL TROUBLESHOOTING PLAYBOOK** in `CLAUDE.md` (calculator-path write-stick test, write-mechanism decision tree, the case studies) before concluding anything.
+- **A control "doesn't work"** → STOP. Read the **VARIABLE / CONTROL TROUBLESHOOTING PLAYBOOK** in [troubleshooting-playbook.md](troubleshooting-playbook.md) (calculator-path write-stick test, write-mechanism decision tree, the case studies) before concluding anything.
 - **"Can I reuse this scraper for another aircraft?"** → §9: transport + generic scrape core are universal; the aircraft-specific selector/nav/input layer must be re-derived (recipe in §9.3).
-- **Crash** → §8: read `%TEMP%\MSFSBlindAssist_Startup_*.log`, then Event Viewer for native faults.
+- **Crash** → §8: read `%APPDATA%\MSFSBlindAssist\logs\startup.log`, then Event Viewer for native faults.

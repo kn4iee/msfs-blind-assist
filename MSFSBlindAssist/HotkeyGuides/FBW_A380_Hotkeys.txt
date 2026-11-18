@@ -4,10 +4,11 @@ Application Navigation:
   Ctrl+1     Focus Sections List
   Ctrl+2     Focus Panels List
   Ctrl+3     Focus Status Display field of the current panel (refreshes it if empty)
+  F5         Refresh the current panel's Status Display now (it also updates itself live)
 
 Tip: Press the same bracket key again to cancel a mode you activated by accident.
 For step-by-step explanations of every feature (MCDU, flyPad, checklists, displays,
-flight planning, systems, a full-flight walkthrough), see docs/a380-manual.html.
+flight planning, systems, a full-flight walkthrough), see Guides/a380-manual.html.
 
 OUTPUT MODE - Press right bracket to activate
 
@@ -67,7 +68,7 @@ Vertical:
   Ctrl+Shift+G  Read last landing peak g-force
 
 Approach:
-  Ctrl+0     Read Approach Capability (CAT rating)
+  Ctrl+0     Read Approach Capability (LAND 2 / LAND 3 single / LAND 3 dual)
 
 Weather:
   I          Wind Info
@@ -111,6 +112,10 @@ Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
   Y          Taxi Status (current taxiway, next turn, distance to destination)
   Ctrl+Y     Repeat Current Taxi Instruction
   Alt+Y      Where Am I (announces current taxiway, gate, or runway at nearest airport)
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter and Shift+Enter only tell you that this aircraft
+                tunes COM 1 through its RMP window (Input mode > Ctrl+Shift+R).
   (Open the form with Input mode > Shift+Y)
 
 Waypoint Tracking (use Fix Track window or EFB route viewer to add):
@@ -133,6 +138,8 @@ Displays:
 Traffic and Weather:
   R          Announce Tracked TCAS Traffic
   Ctrl+R     Open TCAS Traffic Window
+  Shift+O    Open Volanta window (Volanta users and network pilots around you,
+             your Volanta friends and online ATC; also Extras > Volanta)
   Shift+R    Open Weather Radar Window (auto-detects ActiveSky and silently
              uses richer data — surface wind+gust, ceiling, QNH, turbulence,
              METAR-decoded precipitation — when running. Falls back to MSFS
@@ -152,7 +159,7 @@ Displays and Windows:
   Shift+M    Show METAR Report (VATSIM, plus ActiveSky METAR if AS detected)
   Ctrl+Shift+T  Cold Temperature Altitude Correction (offline calculator: field elevation + temperature + published altitudes -> corrected altitudes)
   Shift+B    SimBrief Briefing
-  Shift+C    Show Checklist (static text, cold-and-dark to shutdown)
+  Shift+C    First Officer window (checklists and flows)
 
 Hand Fly Mode Hotkeys:
   A          Read MSL
@@ -182,6 +189,16 @@ guidance not active" if pressed when VG is off).
 
 Ground Services:
   Ctrl+G     Read latest GSX tooltip (no need to open the Access GSX window)
+
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
 
 INPUT MODE - Press [ to activate
 
@@ -215,7 +232,7 @@ FCU Set Values (each opens a window: value entry, knob Push/Pull, mode toggles, 
   Ctrl+H     Heading window (set value; Push/Pull; HDG-V/S / TRK-FPA toggle)
   Ctrl+A     Altitude window (set value; Push/Pull; 100/1000; Metric toggle)
   Ctrl+V     Vertical Speed / FPA window (set value; Push/Pull)
-  Ctrl+P     Autopilot panel (AP1/AP2; A/THR engage + disconnect; APPR/LOC/EXPED; Flight Director status)
+  Ctrl+P     Autopilot panel (AP1/AP2; A/THR (says Disengaged, Armed or Active) + disconnect; APPR/LOC; Flight Director pushbutton)
   Ctrl+B     Altimeter window (enter QNH once -> both sides; STD/QNH; hPa/inHg)
 
 Windows:
@@ -234,6 +251,14 @@ Taxi Guidance:
 
 Ground Services:
   Alt+G      Open Access GSX window (accessible GSX Ground Services Pro menu)
+
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
 
 General:
   Escape     Exit active hotkey mode
@@ -328,4 +353,4 @@ Automatic Announcements:
   - Ground speed callouts while on the ground
   Mute any of these from the Monitor Manager (Ctrl+M).
 
-Full explanations: docs/a380-manual.html.
+Full explanations: Guides/a380-manual.html.

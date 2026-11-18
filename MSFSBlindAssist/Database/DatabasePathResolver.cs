@@ -48,6 +48,29 @@ public static class DatabasePathResolver
     }
 
     /// <summary>
+    /// Gets the canonical (new) databases FOLDER (not a specific file).
+    /// Always returns %APPDATA%\MSFSBlindAssist\databases — does NOT check
+    /// the legacy FBWBA location. Use this anywhere a display/status path
+    /// needs to reference the canonical databases directory without
+    /// re-encoding the folder-name/"databases" path segments.
+    /// </summary>
+    public static string GetCanonicalDatabasesFolder()
+    {
+        return GetDatabasesFolder(CanonicalFolderName);
+    }
+
+    /// <summary>
+    /// The offline location database (GeoNames + Natural Earth) that Output C and Location
+    /// Info read: %APPDATA%\MSFSBlindAssist\databases\location-data.sqlite. One file for both
+    /// simulators, so no legacy FBWBA fallback (it never existed there). Its build files
+    /// (.staging, .building, .ready) and the download folder sit beside it.
+    /// </summary>
+    public static string GetLocationDataPath()
+    {
+        return Path.Combine(GetDatabasesFolder(CanonicalFolderName), "location-data.sqlite");
+    }
+
+    /// <summary>
     /// Resolves the path to an *existing* database file.
     ///
     /// Checks the canonical location first; if missing there, falls back to
@@ -119,10 +142,15 @@ public static class DatabasePathResolver
         return Path.GetFileName(path);
     }
 
-    private static string BuildPath(string folderName, string simulatorVersion)
+    private static string GetDatabasesFolder(string folderName)
     {
         string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        string databaseFolder = Path.Combine(appDataPath, folderName, "databases");
+        return Path.Combine(appDataPath, folderName, "databases");
+    }
+
+    private static string BuildPath(string folderName, string simulatorVersion)
+    {
+        string databaseFolder = GetDatabasesFolder(folderName);
 
         string filename = simulatorVersion?.ToUpper() == "FS2024"
             ? "fs2024.sqlite"

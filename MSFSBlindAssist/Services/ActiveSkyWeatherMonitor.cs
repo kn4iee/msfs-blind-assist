@@ -1,5 +1,6 @@
 using System.Globalization;
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services;
 
@@ -32,9 +33,11 @@ namespace MSFSBlindAssist.Services;
 /// <para><b>Polling interval.</b></para>
 ///
 /// 60 s. AS refreshes at 5–15 min intervals, so 60 s gives sub-minute
-/// detection latency without hammering the local HTTP API. The cost when
-/// AS is down is one ~1.2 s parallel-port probe per minute (cheap), so the
-/// monitor runs unconditionally.
+/// detection latency without hammering the local HTTP API. The monitor is
+/// only started when <see cref="ShouldRun"/> says so (<c>ActiveSkyEnabled</c>
+/// AND <c>WeatherAutoAnnounceEnabled</c>) — MainForm gates launch start, and
+/// ApplyRuntimeSettings starts/stops it live as either setting is toggled —
+/// so a non-AS user never pays even the ~1.2 s parallel-port probe.
 ///
 /// <para><b>Announcement format.</b></para>
 ///
@@ -55,6 +58,16 @@ namespace MSFSBlindAssist.Services;
 /// unreachable mid-flight, we reset the baseline so the next poll after
 /// AS returns is also silent (avoids "weather update" right after sim
 /// resume).
+///
+/// <para><b>Mode-change announcement.</b></para>
+///
+/// The same tick also owns the baseline-first ActiveSky mode-change
+/// announcement, decided by <see cref="ActiveSkyModeTracker"/>. Unlike the
+/// weather baseline above, the mode baseline deliberately SURVIVES
+/// unreachable gaps — the tracker is only ever fed successful reads (the
+/// tick returns early before calling it when AS is unreachable), so a
+/// reconnect in a different mode is a genuine change the pilot must hear,
+/// not a silently re-seeded baseline.
 /// </summary>
 public class ActiveSkyWeatherMonitor : IDisposable
 {
@@ -63,6 +76,8 @@ public class ActiveSkyWeatherMonitor : IDisposable
     private readonly ActiveSkyClient _activeSky;
     private readonly ScreenReaderAnnouncer _announcer;
     private readonly System.Windows.Forms.Timer _timer;
+    private readonly ActiveSkyModeTracker _modeTracker = new();
+    private readonly TurbulenceCategoryTracker _turbulenceTracker = new();
 
     /// <summary>Last seen JSON TimeStamp. 0 = no baseline yet.</summary>
     private long _lastTimeStamp;
@@ -106,6 +121,19 @@ public class ActiveSkyWeatherMonitor : IDisposable
     public void Stop() => _timer.Stop();
 
     /// <summary>
+    /// The single source of truth for whether this monitor may run. It is BOTH an
+    /// ActiveSky feature (it reads only the AS HTTP API — there is no SimConnect
+    /// fallback for decoded station weather) and an announcement feature (it speaks),
+    /// so it requires both opt-ins. Gating on <c>ActiveSkyEnabled</c> alone forced AS
+    /// users who only wanted accurate output+I wind and radar data to also be spoken at.
+    ///
+    /// Called from MainForm.InitializeManagers (launch) and ApplyRuntimeSettings (live
+    /// toggle) — never inline the condition at either site, or the two will drift.
+    /// </summary>
+    public static bool ShouldRun(Settings.UserSettings settings)
+        => settings.ActiveSkyEnabled && settings.WeatherAutoAnnounceEnabled;
+
+    /// <summary>
     /// User-facing toggle: enable/disable the announcement feature without
     /// disposing the monitor. When disabled we don't even poll.
     /// </summary>
@@ -125,7 +153,7 @@ public class ActiveSkyWeatherMonitor : IDisposable
             // user doesn't get a stale announcement when AS comes back.
             if (!await _activeSky.IsRunningAsync())
             {
-                System.Diagnostics.Debug.WriteLine("[ASMonitor] tick: AS not detected; baseline reset");
+                Log.Debug("Services", "tick: AS not detected; baseline reset");
                 _lastTimeStamp = 0;
                 _lastNormalizedMetar = null;
                 _hasBaseline = false;
@@ -134,6 +162,17 @@ public class ActiveSkyWeatherMonitor : IDisposable
                 // timestamp from a previous AS session.
                 _lastAnnouncedAt = DateTime.MinValue;
                 return;
+            }
+
+            // Mode-change announce (baseline-first, silent on first sight). The
+            // probe inside IsRunningAsync just refreshed LastModeText, so this
+            // costs no extra request. Announced even when the weather fetch
+            // below fails — mode is independent of weather data.
+            string? modeChange = _modeTracker.Observe(_activeSky.LastModeText);
+            if (modeChange != null && !_disposed)
+            {
+                Log.Debug("Services", $"mode change: \"{modeChange}\"");
+                _announcer.Announce(modeChange);
             }
 
             // Pull the structured conditions (TimeStamp + ambient/surface fields)
@@ -147,9 +186,23 @@ public class ActiveSkyWeatherMonitor : IDisposable
             var conditions = await conditionsTask;
             string? positionMetar = await positionMetarTask;
 
+            // Turbulence category announce (baseline-first; TurbulenceCategoryTracker).
+            // Needs only `conditions` — deliberately BEFORE the position-METAR check, so a
+            // blank METAR fetch can't delay a boundary crossing to the next tick
+            // (weather.md §10a: the read happens right after the conditions fetch succeeds).
+            if (conditions != null && Settings.SettingsManager.Current.AnnounceTurbulenceEnabled)
+            {
+                string? turb = _turbulenceTracker.Observe(conditions.AmbientTurbulence);
+                if (turb != null && !_disposed)
+                {
+                    Log.Debug("Services", $"turbulence: \"{turb}\"");
+                    _announcer.Announce(turb);
+                }
+            }
+
             if (conditions == null || string.IsNullOrWhiteSpace(positionMetar))
             {
-                System.Diagnostics.Debug.WriteLine("[ASMonitor] tick: AS detected but data fetch failed");
+                Log.Debug("Services", "tick: AS detected but data fetch failed");
                 return;
             }
 
@@ -162,20 +215,20 @@ public class ActiveSkyWeatherMonitor : IDisposable
                 _lastTimeStamp = conditions.TimeStamp;
                 _lastNormalizedMetar = normalized;
                 _hasBaseline = true;
-                System.Diagnostics.Debug.WriteLine(
-                    $"[ASMonitor] baseline: ts={_lastTimeStamp} normalized='{normalized}'");
+                Log.Debug("Services", 
+                    $"baseline: ts={_lastTimeStamp} normalized='{normalized}'");
                 return;
             }
 
             if (!isRefresh)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[ASMonitor] tick: unchanged (ts={conditions.TimeStamp}, last={_lastTimeStamp})");
+                Log.Debug("Services", 
+                    $"tick: unchanged (ts={conditions.TimeStamp}, last={_lastTimeStamp})");
                 return;
             }
 
-            System.Diagnostics.Debug.WriteLine(
-                $"[ASMonitor] tick: REFRESH detected ts {_lastTimeStamp}→{conditions.TimeStamp}");
+            Log.Debug("Services", 
+                $"tick: REFRESH detected ts {_lastTimeStamp}→{conditions.TimeStamp}");
 
             // User-configurable hard floor on announcement rate. Applied on TOP
             // of the smart change-detection so a positive setting strictly
@@ -188,8 +241,8 @@ public class ActiveSkyWeatherMonitor : IDisposable
                 && _lastAnnouncedAt != DateTime.MinValue
                 && DateTime.UtcNow - _lastAnnouncedAt < TimeSpan.FromMinutes(IntervalMinutes))
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[ASMonitor] tick: refresh detected but throttled — last announce was {(DateTime.UtcNow - _lastAnnouncedAt).TotalMinutes:F1}m ago, interval={IntervalMinutes}m");
+                Log.Debug("Services", 
+                    $"tick: refresh detected but throttled — last announce was {(DateTime.UtcNow - _lastAnnouncedAt).TotalMinutes:F1}m ago, interval={IntervalMinutes}m");
                 return;
             }
 
@@ -207,14 +260,14 @@ public class ActiveSkyWeatherMonitor : IDisposable
 
             if (!_disposed && !string.IsNullOrEmpty(spoken))
             {
-                System.Diagnostics.Debug.WriteLine($"[ASMonitor] announcing: \"{spoken}\"");
+                Log.Debug("Services", $"announcing: \"{spoken}\"");
                 _announcer.Announce(spoken);
                 _lastAnnouncedAt = DateTime.UtcNow;
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[ASMonitor] tick error: {ex.GetType().Name}: {ex.Message}");
+            Log.Debug("Services", $"tick error: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -269,14 +322,22 @@ public class ActiveSkyWeatherMonitor : IDisposable
             ? closestStationMetar!
             : positionMetar;
 
-        var decoded = DecodeMetar(metarToUse);
+        return "Active sky weather updated. " + BuildDecodedWeatherText(metarToUse, conditions);
+    }
+
+    /// <summary>The "Decoded weather at {station}. Wind… Altimeter…" text, shared
+    /// verbatim between the auto-announce and the Weather Radar form's on-demand
+    /// closest-station box (spec 2026-07-10 §4.1: identical wording, one code path).
+    /// Internal for the form + tests.</summary>
+    internal static string BuildDecodedWeatherText(string metar, ActiveSkyClient.Conditions conditions)
+    {
+        var decoded = DecodeMetar(metar);
         string locationLabel = decoded.IsPositionMetar
             ? "your position"
             : decoded.Station;
 
         var parts = new List<string>
         {
-            "Active sky weather updated.",
             $"Decoded weather at {locationLabel}."
         };
 
@@ -295,7 +356,8 @@ public class ActiveSkyWeatherMonitor : IDisposable
         else if (conditions.SurfaceVisibility > 0)
         {
             // SurfaceVisibility is in statute miles per the AS JSON API.
-            // CLAUDE.md requires both km and SM in both source paths, so
+            // CLAUDE.md required both km and SM in both source paths (a
+            // weather-radar note no rule or doc has carried since 2026-07), so
             // speak SM verbatim with the km equivalent alongside.
             double sm = conditions.SurfaceVisibility;
             int km = (int)Math.Round(sm * 1.609);
@@ -313,7 +375,7 @@ public class ActiveSkyWeatherMonitor : IDisposable
 
         // Precipitation — METAR weather group decoded by the shared helper.
         // None when the METAR has no weather token.
-        string precip = WeatherRadarFormPrecipShim.ParsePrecipFromMetar(metarToUse);
+        string precip = WeatherRadarFormPrecipShim.ParsePrecipFromMetar(metar);
         if (!string.IsNullOrEmpty(precip))
             parts.Add($"Precipitation: {Capitalise(precip)}.");
         else
@@ -805,6 +867,11 @@ public class ActiveSkyWeatherMonitor : IDisposable
         }
         return string.Join(" ", keep);
     }
+
+    /// <summary>Re-baselines the turbulence announcer (aircraft switch — position
+    /// and airframe discontinuities make the old category baseline meaningless).
+    /// The next successful poll re-baselines silently.</summary>
+    public void ResetTurbulenceTracker() => _turbulenceTracker.Reset();
 
     public void Dispose()
     {

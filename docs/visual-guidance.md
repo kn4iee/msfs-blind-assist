@@ -8,12 +8,12 @@ The visual guidance system uses a **PID controller** to generate pitch and bank 
 
 **Key files:**
 - `MSFSBlindAssist/Services/VisualGuidanceManager.cs` — PID, phase machine, tone modulation, `StandardBank` helper, on-ground auto-deactivation hook
-- `MSFSBlindAssist/Services/AudioToneGenerator.cs` — default 200–800 Hz pitch→Hz / ±10° pitch / ±10° bank→pan; per-instance `Configure(minHz, maxHz, pitchRangeDeg, bankRangeDeg)` for aircraft-specific ranges
+- `MSFSBlindAssist/Services/AudioToneGenerator.cs` — default 200–800 Hz pitch→Hz over −10°/+20° pitch (asymmetric — see below) / ±10° bank→pan; per-instance `Configure(minHz, maxHz, pitchRangeDeg, bankRangeDeg)` for aircraft-specific ranges. That pitch range is applied SYMMETRICALLY and there is deliberately no asymmetric overload — a second one differing only by a trailing `double` made `Configure(min, max, 6.0, 5.0, 12.0)` bind silently with the bank range landing on the nose-up range
 - `MSFSBlindAssist/Aircraft/IAircraftDefinition.cs` — `VisualGuidanceProfile` (per-aircraft tunables incl. tone frequency range)
 - `MSFSBlindAssist/Aircraft/BaseAircraftDefinition.cs` — default A320 profile
 - `MSFSBlindAssist/Settings/UserSettings.cs` — `VisualGuidanceToneWaveform/Volume`, `VisualGuidanceCurrentToneWaveform/Volume`, `VisualGuidanceHardPanTone`
-- `MSFSBlindAssist/Forms/HandFlyOptionsForm.cs` — UI for all visual-guidance audio settings
-- `MSFSBlindAssist/MainForm.cs` (≈line 720) — `SIM_ON_GROUND` handler that auto-deactivates visual guidance on touchdown
+- `MSFSBlindAssist/Forms/Settings/HandFlyPanel.cs` — UI for all visual-guidance audio settings
+- `MSFSBlindAssist/MainForm.Announcers.cs` — `HandleSpecialAnnouncements` method contains the `SIM_ON_GROUND` handler that auto-deactivates visual guidance on touchdown
 
 ## Dual-Tone Audio Cue
 
@@ -24,7 +24,13 @@ Two `AudioToneGenerator` instances always run side-by-side while visual guidance
 | **Desired** | PID-commanded pitch (200–800 Hz over ±6°) | PID-commanded bank (±1.0 over ±5°) | Triangle |
 | **Current** | Aircraft's *actual* pitch | Aircraft's *actual* bank | Sine |
 
-The default ranges are deliberately **tighter than `AudioToneGenerator`'s own defaults** (±10° / ±10°). The narrowing gives **50 Hz of beat per ° of pitch error** (vs 30 Hz/° at the native ±10° default — +67% precision) and **0.20 pan delta per ° of bank error** (vs 0.10 pan/° at ±10° — +100% precision), making sub-degree errors clearly audible. At 0.1° pitch error a pilot hears a 5 Hz beat (slow wobble); at 0.5° they hear a 25 Hz beat (clear fluttering). The trade-off is earlier saturation: the PID can command up to 25° bank during intercept, which saturates the desired tone at full pan. That's fine because the spoken bank-guidance announcements ("3 left", "matched", etc.) already cover the large-error regime — the tones own the precise near-matched-state cue, spoken cues own the gross corrections.
+The default ranges are deliberately **tighter than `AudioToneGenerator`'s own defaults** (−10°/+20° pitch / ±10° bank). The narrowing gives **50 Hz of beat per ° of pitch error** (vs 30 Hz/° nose-down and 15 Hz/° nose-up at the native default) and **0.20 pan delta per ° of bank error** (vs 0.10 pan/° at ±10° — +100% precision), making sub-degree errors clearly audible. At 0.1° pitch error a pilot hears a 5 Hz beat (slow wobble); at 0.5° they hear a 25 Hz beat (clear fluttering). The trade-off is earlier saturation: the PID can command up to 25° bank during intercept, which saturates the desired tone at full pan. That's fine because the spoken bank-guidance announcements ("3 left", "matched", etc.) already cover the large-error regime — the tones own the precise near-matched-state cue, spoken cues own the gross corrections.
+
+The generator's own pitch default is **asymmetric** (−10° nose-down, +20° nose-up) and **piecewise**, anchored so 0° always sits at the centre frequency. Visual guidance is unaffected — it configures a symmetric range, and equal down/up ranges collapse to the single straight line the mapping always was. The asymmetry exists for **hand fly**, which is auto-activated at liftoff where an airliner is already 12–18° nose up: under the old symmetric ±10° default the tone was past saturation from its first update and stayed pinned at 800 Hz for the whole initial climb. Anchoring 0° at the centre is what leaves the nose-down half numerically identical, so widening the top cost nothing already learned by ear.
+
+**Two** consumers inherit these defaults *and* drive pitch: `HandFlyManager`, and the Hand Fly settings panel's Test Tone preview (`HandFlyPanel.StartTestTone`). The preview still sweeps only to +10°, i.e. 650 Hz, so it does **not** demonstrate the top of the range — extending it needs `MaxPitchDeltaPerTick` re-tuned by ear, so it is documented rather than changed. Five further construction sites never call `Configure` either (`AudioPanel`, `TaxiGuidancePanel`, `TaxiSteeringTone`, `ProximityBeeper`, `TakeoffAssistManager`) and are unaffected **only** because none of them calls `UpdatePitch`; add a frequency cue to one of those and it silently inherits this mapping.
+
+The widening is not free. Nose-up resolution goes from 30 Hz/° to **15 Hz/°**, and that applies to the whole flight — cruise and descent included, not just the climb-out. A 1° nose-up excursion in the cruise now moves the tone half as far, with no second tone to beat against. That is the deliberate trade for covering a rotation attitude at all, and it is pinned by `AudioTonePitchMappingTests.TheNoseUpHalfBelowTheOldSaturationEdgeWasDeliberatelyReTuned`.
 
 ### Independence from HandFly mode
 
@@ -66,9 +72,15 @@ The two axes are **independent and continuous** — the pilot is not "first cent
 
 `AudioToneGenerator.UpdateBank` follows the standard convention **positive = right wing down → pan right**. The PID's `desiredBank` output already uses this convention, so the desired tone passes it straight through. SimConnect's `PLANE_BANK_DEGREES`, however, is left-positive — `VisualGuidanceManager.cachedBank` stores the raw SimConnect value. **Always** route `cachedBank` through `VisualGuidanceManager.StandardBank(double)` before passing it to any tone API or computing a bank error. The helper just returns `-simConnectBank` but its name documents the conversion at every call site. `HandFlyManager` does its own inline negation; `AnnounceBankGuidance` and the dual-tone update path both go through `StandardBank`. Forget the conversion and the current tone pans opposite the airplane's actual bank — matching the pans steers the pilot the wrong way.
 
+### Manual-query grace window
+
+When the pilot fires a readout hotkey (the H/V/Q/S/D/B/P/A/F set) while VG is active, `MainForm` calls `visualGuidanceManager.NotifyManualQuery()`, which suppresses the per-second bank-guidance and centerline-deviation callouts (both `AnnounceImmediate`) for 3 s so the readout isn't cut off mid-sentence. Only those two chatty callouts are suppressed — phase changes and distance callouts (rare one-shots) still fire. Skipped callouts lose nothing: both always reflect current state, so the next one carries fresh data. `IsManualReadoutAction` in `MainForm` lists the qualifying hotkey actions.
+
+Also: the PID math, phase machine, and lateral arc-capture logic are untouched by the dual-tone work; the glidepath altitude calibration above is the one deliberate vertical-guidance change (a constant offset that shifts where "on glideslope" sits, not a gain/dynamics change). Failure mode of the tone is a missing audible reference, never a wrong steering command — keep it that way.
+
 ### Settings
 
-All exposed in the Hand Fly Options dialog (`Forms/HandFlyOptionsForm.cs`):
+All exposed in the Hand Fly Options dialog (`Forms/Settings/HandFlyPanel.cs`):
 
 | Setting | Default | Purpose |
 |---|---|---|
@@ -82,8 +94,9 @@ Both tones always play when visual guidance is active; there is no single-tone m
 
 ### Lifecycle
 
-- **Auto-deactivation on touchdown:** when `SIM_ON_GROUND` transitions from airborne to on-ground, visual guidance deactivates automatically (`MainForm.cs` SIM_ON_GROUND handler). From that moment the landing-exit planner / taxi guidance take over — keeping the dual-tone running would compete audibly with the taxi steering tone and serve no useful purpose. Manual activation on the ground (preflight test, etc.) is still allowed; the auto-deactivation fires only on the airborne→on-ground edge.
-- **Deferred Start:** Initialize() instantiates both `AudioToneGenerator` instances but does NOT call `Start()`. The first ProcessUpdate computes real attitude commands and then starts both tones at the correct initial frequencies via `StartTonesIfNeeded`. The phase-continuous oscillator's portamento (~0.23 ms at 44.1 kHz) is well under WaveOut's 150 ms buffer, so the first *audible* note already reflects the airplane's state — no fused-tone glitch at session start.
+- **Auto-deactivation on touchdown:** when `SIM_ON_GROUND` transitions from airborne to on-ground, visual guidance deactivates automatically (the SIM_ON_GROUND handler in `MainForm.Announcers.cs`). From that moment the landing-exit planner / taxi guidance take over — keeping the dual-tone running would compete audibly with the taxi steering tone and serve no useful purpose. `SIM_ON_GROUND` arrives on the 1 Hz batch, so this can come up to a second after the wheels touch: the landing assist's rollout centerline tone, which a destination runway arms, holds its tone and its "Rollout guidance" until then, so it starts after "Visual guidance off" and never plays over the dual tones ([ROL-33]). Manual activation on the ground (preflight test, etc.) is still allowed; the auto-deactivation fires only on the airborne→on-ground edge.
+- **Deferred Start:** Initialize() instantiates both `AudioToneGenerator` instances but does NOT call `Start()`. The first ProcessUpdate computes real attitude commands and then starts both tones at the correct initial frequencies via `StartTonesIfNeeded`. The phase-continuous oscillator's portamento reaches the target frequency in well under a millisecond, far inside the 150 ms `WasapiOut` buffer that first note is written into (the tone is generated at the endpoint's own mix rate, whatever that endpoint mixes at), so the first *audible* note already reflects the airplane's state — no fused-tone glitch at session start. Concretely: without the deferral, both tones would start immediately at the centre 500 Hz (no real attitude command exists yet), producing an audible fused-tone glitch before the first real command arrives — do not re-add a `Start()` call inside `Initialize`.
+- **Start the current (follower) tone only if the desired tone started.** Without a reference, the follower plays a constant centre-pan tone forever — annoying and meaningless. `StartTonesIfNeeded` enforces this; don't reorder its try blocks.
 - **Idempotent Initialize:** if Initialize is called while existing tones are still running (defensive against future callers that bypass `Stop`), Initialize tears them down first before creating new instances. Today's Toggle flow always Stops first, but the guard prevents future leaks.
 
 ### Aircraft-specific tone frequency / attitude range
@@ -94,10 +107,10 @@ For aircraft with attitude envelopes very different from a transport jet (aeroba
 |---|---|---|
 | `ToneMinFrequencyHz` | 200 | Frequency at full nose-down. |
 | `ToneMaxFrequencyHz` | 800 | Frequency at full nose-up. Centre = (min + max) / 2 = 500 Hz. |
-| `TonePitchRangeDeg` | **6** | Pitch (degrees) at which frequency saturates. Tighter than `AudioToneGenerator`'s native 10° default → **50 Hz/° matching slope** (+67% precision). Covers the -3° glideslope + 6° flare command (saturating at the edge). |
+| `TonePitchRangeDeg` | **6** | Pitch (degrees) at which frequency saturates, applied symmetrically. Tighter than `AudioToneGenerator`'s native nose-down default (−10°, 30 Hz/°) → **50 Hz/° matching slope** (+67% precision against that half; the native nose-up half is +20° at 15 Hz/°, so the gain there is larger). Covers the -3° glideslope + 6° flare command (saturating at the edge). |
 | `ToneBankRangeDeg` | **5** | Bank (degrees) at which pan saturates. Tighter than the 10° native default → 0.20 pan/° (+100% precision). Saturates during ≥5° commanded bank (intercept) — spoken bank-guidance covers that regime. |
 
-A320, Fenix A320, and PMDG 777 all keep these visual-guidance defaults. Override per airframe via `VisualGuidanceProfile`; behaviour is unchanged for aircraft that don't override. HandFly mode's own `AudioToneGenerator` instance never calls `Configure` and so keeps the native 10°/10° defaults — VG's tighter precision is scoped to its two tones only.
+A320, Fenix A320, and PMDG 777 all keep these visual-guidance defaults. Override per airframe via `VisualGuidanceProfile`; behaviour is unchanged for aircraft that don't override. HandFly mode's own `AudioToneGenerator` instance never calls `Configure` and so keeps the native **−10°/+20° pitch and ±10° bank** defaults — VG's tighter, and deliberately symmetric, precision is scoped to its two tones only.
 
 ## Aircraft Profile (per-airframe tunables)
 
@@ -202,6 +215,10 @@ The vertical path is **FPM-based** (target FPM derived from 3° glideslope + alt
 | `FPM_SMOOTHING_FACTOR` | 0.7 | EMA on raw VS reading |
 | `flareTargetPitchDeg` `[profile]` | 6.0° (A320) | Per-aircraft target pitch commanded in flare. PMDG 777 = 4.5°. |
 | `MAX_FLARE_PITCH_RATE` | 1.5 | Cap on pitch rate during flare (deg/sec) |
+
+### Pitch PID sign convention (bug history)
+
+The pitch PID has **positive coefficients on `fpmError` / `fpmErrorRate`** — NOT the leading `-` that was historically there. Verified sign: with autothrust holding airspeed, MORE pitch ⇒ LESS descent. So negative `fpmError` (descending less than target ⇒ need more descent) calls for a NEGATIVE pitch correction ⇒ the correction has the SAME sign as `fpmError`. The old `-fpmError * gain` produced wrong-direction guidance that was masked by autopilot tests (tight tracking ⇒ `fpmError ≈ 0` ⇒ the wrong-sign correction was negligible) and would have steered a manually-flying pilot away from the glideslope. Do NOT reintroduce the leading minus.
 
 ## Tuning Guide
 

@@ -21,6 +21,23 @@ public class ParkingSpot
     public GateSource Source { get; set; } = GateSource.Navdata;
     public string? VdgsType { get; set; }              // e.g. "SafeDockT42", "Marshaller"
     public double? MaxWingspanMeters { get; set; }     // GSX "maxwingspan"
+    /// <summary>
+    /// True for a stand GSX's Remote API published with NONE of its profile-derived fields: no
+    /// <c>heading</c> and no <c>hasJetway</c>. No GSX profile section covers such a stand, so its
+    /// <see cref="TerminalName"/> is GSX's own synthesized header (KSAN "N Parking", "Gate W", "Ramp")
+    /// rather than a profile author's section title, and its heading, jet-bridge flag, airline codes
+    /// and size are not GSX data (its type comes from GSX's <c>uiType</c>, not a profile [DCK-43]).
+    /// Measured on the committed captures: KSAN 75 of 79, KATL 4 of 8, KJFK 0 of 231 (Gate 1A lacks
+    /// only its heading and is NOT unconfigured, which is why a missing heading alone is not the
+    /// signal) [DCK-44].
+    /// <para>
+    /// Set ONLY by <c>GsxRemoteParkingReader</c>; false on every other path (navdata, <c>.ini</c>).
+    /// It gates two things: <c>GsxNavdataGeometryFiller</c> borrows the jet-bridge flag and airline
+    /// codes from navdata only for such a stand, and <c>GsxTerminalFeatureSource</c> skips its
+    /// synthesized header.
+    /// </para>
+    /// </summary>
+    public bool GsxUnconfigured { get; set; }
     public double? StopLatitude { get; set; }          // GSX parkingsystem_stopposition lat
     public double? StopLongitude { get; set; }         // GSX parkingsystem_stopposition lon
     public double? StopHeading { get; set; }           // GSX stop-position nose heading (deg true); null for navdata-only
@@ -34,10 +51,107 @@ public class ParkingSpot
     public double? GateDistanceThreshold { get; set; }
 
     /// <summary>
+    /// GSX's own identifier for this stand — the raw <c>uiGateName</c> value from
+    /// <c>handlerData.airport.parkings</c> (Remote API), carried verbatim by
+    /// <c>GsxRemoteParkingReader</c> alongside the parsed <see cref="Name"/>/<see cref="Number"/>/
+    /// <see cref="Suffix"/>. Null for navdata-only spots and for any GSX spot the reader could
+    /// not resolve one for.
+    /// <para>
+    /// It is carried VERBATIM and must never be a label rebuilt from <see cref="Describe"/>
+    /// or from <see cref="Name"/>/<see cref="Number"/>/<see cref="Suffix"/> — a round-trip
+    /// through our own formatting is how the wrong stand gets selected.
+    /// </para>
+    /// <para>
+    /// It is NOT, however, what <c>gate.select</c> answers to. Live-probed against a running
+    /// GSX (KATL, 2026-08-27): sending this value verbatim returns <c>not_found</c>, as does
+    /// the trimmed form and <see cref="GsxUiName"/>. Only a stand NUMBER (as a JSON int) or a
+    /// <c>bglName</c> resolve — and <c>bglName</c> is not published in
+    /// <c>handlerData.airport.parkings</c> at all, reaching a client only inside an
+    /// <c>ambiguous</c> reply's candidate list. <c>GsxGateSelectPlan</c> owns that sequence;
+    /// this value remains the last-resort attempt.
+    /// </para>
+    /// </summary>
+    public string? GsxIdentifier { get; set; }
+
+    /// <summary>
+    /// GSX's FULLY-QUALIFIED name for this stand — the raw <c>uiName</c> from
+    /// <c>handlerData.airport.parkings</c> ("Concourse T (T1-T21) | Gate 5"), carried
+    /// verbatim. Null for navdata and <c>.ini</c> spots, and for the stands GSX publishes
+    /// no <c>uiName</c> for (KATL's unnamed GA ramps — 13 of 294).
+    /// <para>
+    /// It exists because <see cref="GsxIdentifier"/> is NOT unique: at KATL 235 of 294
+    /// stands share their <c>uiGateName</c> with another stand, and <c>" Gate 5"</c> names
+    /// both Concourse T and Delta Tech Ops. <c>uiName</c> is unique for 281 of 294. Two
+    /// consumers need that: <c>GsxGateCandidateMatcher</c> picks our stand out of a
+    /// <c>gate.select</c> ambiguity list with it, and
+    /// <c>GsxGateSelectResult.ResolvedGateContradictsRequest</c> uses it to tell whether
+    /// GSX prepared the stand the pilot actually picked — a check the old identifier could
+    /// not make.
+    /// </para>
+    /// <para>
+    /// It takes NO part in <see cref="Describe"/> (which is pinned at 231 stands / 231
+    /// distinct labels over the KJFK capture), is not copied by <c>GsxStandNameOverlay</c>
+    /// (which copies the concourse letter only), and does not reach <c>GetNamedSpots</c>.
+    /// </para>
+    /// </summary>
+    public string? GsxUiName { get; set; }
+
+    /// <summary>
+    /// The terminal/concourse this stand belongs to, as GSX's Remote API publishes it
+    /// (<c>uiTerminalName</c> — e.g. "Terminal 4 - Concourse B"). Null/empty for navdata and
+    /// <c>.ini</c>-sourced spots, which carry no such field.
+    /// <para>
+    /// It exists because GSX's <c>uiGateName</c> ALONE collides across terminals at a real
+    /// airport — at KJFK "Gate 2" names five physically different stands across five terminals
+    /// — while <c>(uiTerminalName, uiGateName)</c> pairs never do. Without it the dropdown
+    /// would offer one entry where five stands exist (labels are de-duplicated by text), so a
+    /// blind pilot could not reach four of them at all.
+    /// </para>
+    /// <para>
+    /// It is a SEPARATE field, and must never be folded back into <see cref="Name"/>: every
+    /// stand-identity consumer in the app reads <see cref="Name"/> as the concourse LETTER
+    /// (<c>GateAliasResolver</c> parses it with <c>StandId.Parse</c>;
+    /// <c>SayIntentionsClearanceParser.NormalizeParkingName</c> compares it against a
+    /// controller's "B25"). Terminal prose there matches no stand-id shape, so aliases stop
+    /// resolving and SayIntentions' assigned-gate lookup falls through its whole chain to the
+    /// ARRIVAL RUNWAY. <see cref="Describe"/> renders it AFTER the first spaced dash, which is
+    /// exactly the part those two consumers discard.
+    /// </para>
+    /// <para>
+    /// It is DATA, and is kept on every API-sourced stand (the concourse-letter filler reads it);
+    /// whether it is SPOKEN is decided by <see cref="TerminalNameDisambiguates"/>.
+    /// </para>
+    /// </summary>
+    public string? TerminalName { get; set; }
+
+    /// <summary>
+    /// True when another stand in the same list shares this stand's identity (letter, number,
+    /// suffix), so the terminal is the ONLY thing telling the two apart and
+    /// <see cref="Describe"/> must speak it. Set by <c>GsxTerminalDisambiguator</c> at the end of
+    /// <c>GateDataSource</c>'s Remote API path, once the concourse letter is final; false for
+    /// every other stand and on every non-API path.
+    /// <para>
+    /// The terminal is a DISAMBIGUATOR, not a decoration. GSX's <c>uiTerminalName</c> is whatever
+    /// the profile author wrote as the section header: at KJFK "Terminal 4 - Concourse B" (and
+    /// five stands share "Gate 2", so it is essential there); at EHAM "A-Platform =&lt; Medium ",
+    /// "D-Pier =&gt; Heavy ", "K/M-Platform buffer overflow (TD) N/A " — size hints and notes,
+    /// on stands whose names are unique. Rendered unconditionally that made a unique EHAM stand
+    /// read "A 42 - Gate Small, A-Platform =&lt; Medium" — a screen reader says "equals less
+    /// than" — for no information at all.
+    /// </para>
+    /// </summary>
+    public bool TerminalNameDisambiguates { get; set; }
+
+    /// <summary>
     /// Alternative names for this parking spot discovered from online sources (OSM / X-Plane
     /// apt.dat) when those sources use a different label than the navdata <see cref="Name"/>.
-    /// For example, navdata might use "GN 3" while ATC/OSM uses "47" — both refer to the
-    /// same physical stand.
+    /// An alias only ever RE-LETTERS the same stand: bare navdata gate "51" picks up the
+    /// concourse letter OSM spells out ("A51"); navdata "N3" picks up a MARS suffix ("N3A") but
+    /// never "A3", because a letter the navdata name already carries has to agree too.
+    /// <see cref="Number"/> IS the identity — <c>GateAliasResolver</c> rejects any candidate
+    /// whose number differs (and a spot with no number gets no aliases at all). A
+    /// differently-numbered stand is a DIFFERENT stand: letting one lend its label would attach
+    /// the number a pilot searched for to the wrong spot and taxi a blind pilot there.
     /// <para>
     /// In-memory only — never persisted to the database. Empty list when no alias is known.
     /// Navdata <see cref="Name"/> is always authoritative; aliases only ADD extra selectable
@@ -82,6 +196,9 @@ public class ParkingSpot
 
     public string GetFilterCategory()
     {
+        // The families come from ParkingTypes, so this list can never drift from the one the
+        // surroundings features and the Place list read; only the gate SIZES are spelled out,
+        // because the filter lists each size on its own.
         return Type switch
         {
             9 => "Gate Small",
@@ -89,50 +206,81 @@ public class ParkingSpot
             11 => "Gate Large",
             13 => "Gate Heavy",
             14 => "Gate Extra",
-            2 or 3 or 4 or 5 or 15 => "Ramp GA",
-            6 => "Ramp Cargo",
-            7 or 8 => "Ramp Military",
-            12 => "Dock",
+            _ when ParkingTypes.IsGaRamp(Type) => "Ramp GA",
+            _ when ParkingTypes.IsCargo(Type) => "Ramp Cargo",
+            _ when ParkingTypes.IsMilitary(Type) => "Ramp Military",
+            _ when ParkingTypes.IsDock(Type) => "Dock",
             _ => "Other"
         };
     }
 
     /// <summary>True for gate-type stands (Gate Small/Medium/Large/Heavy/Extra) — used to render
     /// an empty-name gate as "Gate {n}" rather than the generic "Spot {n}".</summary>
-    private bool IsGateType() => Type is 9 or 10 or 11 or 13 or 14;
+    private bool IsGateType() => ParkingTypes.IsGate(Type);
+
+    /// <summary>
+    /// How much a stand may be under the aircraft's half-span and still count as fitting.
+    /// <para>
+    /// Navdata parking radii are not measurements, they are round METRE buckets rendered
+    /// in feet — 7, 14, 18, 20, 24, 32, 38.1 and 40 m dominate the whole DB — and the
+    /// buckets land just UNDER the ICAO code ceilings they stand for. 18 m radius caps a
+    /// 36 m span, exactly Code C. 40 m caps 80 m, exactly Code F. But 32 m caps 64 m,
+    /// while Code E runs to 65 m: so a Code E aircraft misses its own stand class by
+    /// centimetres. Measured live 2026-09-20 at EGLL, a 747-400 (64.44 m / 211.4 ft span)
+    /// was excluded from all 86 of Heathrow's 105 ft "Gate Heavy" stands — by 0.7 ft —
+    /// leaving ten cargo stands at the top of the pilot's list. GSX's own menu called 17
+    /// gates suitable at the same moment.
+    /// </para>
+    /// <para>
+    /// 2 % lifts the 64 m bucket to 65.3 m: it admits the Code E aircraft that miss by a
+    /// hair (747-400, 777-300ER, A350-1000 at 64.4-64.8 m) and still refuses the Code F
+    /// ones above them (747-8 at 68.4 m, A380 at 79.75 m — measured whole-DB, the A380's
+    /// admitted-stand count does not move at all). It is far smaller than the real
+    /// clearance margin on any stand, and smaller than the rounding in the data it
+    /// corrects.
+    /// </para>
+    /// </summary>
+    public const double FitToleranceFraction = 0.02;
 
     /// <summary>
     /// Returns whether this spot fits an aircraft with the given wing span
     /// (in FEET — matches <c>SimConnectManager.AircraftWingSpan</c>).
     /// <para>
-    /// UNIT-AWARE by SOURCE:
-    ///   • GSX spots carry the authoritative max allowed wing span in METERS
-    ///     (<see cref="MaxWingspanMeters"/>) — compare directly (aircraft → metres).
-    ///     The GSX-sourced <see cref="Radius"/> is metres (maxwingspan/2), so the old
+    /// UNIT-AWARE, and GSX-FIRST:
+    ///   • <see cref="MaxWingspanMeters"/> wins WHEREVER it exists, whatever the
+    ///     <see cref="Source"/>. It is the scenery author's STATED limit for the stand in
+    ///     METRES, not a radius standing in for one, so it is preferred over the navdata
+    ///     proxy on any spot that carries both. Compare directly (aircraft → metres); the
+    ///     GSX-sourced <see cref="Radius"/> is metres (maxwingspan/2), so the old
     ///     "Radius >= wingspanFeet/2" test mixed metres with a feet threshold and
-    ///     filtered almost everything out. A GSX spot whose profile omits maxwingspan
-    ///     has no reliable size → treat it as fitting (don't hide it).
+    ///     filtered almost everything out.
+    ///   • A GSX spot whose profile omits maxwingspan has no reliable size → treat it as
+    ///     fitting (don't hide it).
     ///   • Navdata spots have a physical parking <see cref="Radius"/> in FEET — keep the
     ///     original "radius holds the half-span" test (both feet).
     /// </para>
+    /// Both size tests carry <see cref="FitToleranceFraction"/>: the same round-bucket
+    /// problem shows up in GSX profiles, which are written in whole metres too.
+    /// <para>
     /// An unknown wing span (&lt;= 0) fits everything (filter is a no-op).
+    /// </para>
     /// </summary>
     public bool FitsAircraft(double aircraftWingspanFeet)
     {
         if (aircraftWingspanFeet <= 0) return true;
 
-        if (Source == GateSource.Gsx)
+        if (MaxWingspanMeters.HasValue)
         {
-            // No GSX size info → don't filter it out (placeholder Radius is not real).
-            if (!MaxWingspanMeters.HasValue) return true;
-
             const double feetToMeters = 0.3048;
             double aircraftWingspanMeters = aircraftWingspanFeet * feetToMeters;
-            return MaxWingspanMeters.Value >= aircraftWingspanMeters;
+            return MaxWingspanMeters.Value * (1.0 + FitToleranceFraction) >= aircraftWingspanMeters;
         }
 
+        // No GSX size info → don't filter it out (placeholder Radius is not real).
+        if (Source == GateSource.Gsx) return true;
+
         // Navdata: physical parking radius (feet) must hold the half-span (feet).
-        return Radius >= aircraftWingspanFeet / 2.0;
+        return Radius * (1.0 + FitToleranceFraction) >= aircraftWingspanFeet / 2.0;
     }
 
     private static string FriendlyVdgs(string? vdgs)
@@ -148,6 +296,20 @@ public class ParkingSpot
         return string.Empty; // "Dummy", "1", or anything not a recognized VDGS -> no suffix
     }
 
+    /// <summary>The stand's NAME as the app says it everywhere, without the type or equipment
+    /// notes: "A 12B", "Parking", "Gate 7A", "Spot 12". A number of 0 means "no number".</summary>
+    public string DescribeIdentity()
+    {
+        string numberPart = Number > 0
+            ? $"{Number}{Suffix}"
+            : (!string.IsNullOrEmpty(Suffix) ? $"0{Suffix}" : "");
+
+        if (!string.IsNullOrEmpty(Name) && !string.IsNullOrEmpty(numberPart)) return $"{Name} {numberPart}";
+        if (!string.IsNullOrEmpty(Name)) return Name;
+        if (!string.IsNullOrEmpty(numberPart)) return IsGateType() ? $"Gate {numberPart}" : $"Spot {numberPart}";
+        return "Parking";
+    }
+
     /// <summary>
     /// Base human description WITHOUT online aliases. Dropdowns that list aliases as their OWN
     /// separate entries (e.g. TaxiAssistForm) use this as the clean base label, then add a
@@ -156,21 +318,26 @@ public class ParkingSpot
     /// </summary>
     public string Describe()
     {
-        string baseDescription;
-        string numberPart = Number > 0
-            ? $"{Number}{Suffix}"
-            : (!string.IsNullOrEmpty(Suffix) ? $"0{Suffix}" : "");
+        string baseDescription = $"{DescribeIdentity()} - {GetParkingType()}";
 
-        if (!string.IsNullOrEmpty(Name) && !string.IsNullOrEmpty(numberPart))
-            baseDescription = $"{Name} {numberPart} - {GetParkingType()}";
-        else if (!string.IsNullOrEmpty(Name))
-            baseDescription = $"{Name} - {GetParkingType()}";
-        else if (!string.IsNullOrEmpty(numberPart))
-            baseDescription = IsGateType()
-                ? $"Gate {numberPart} - {GetParkingType()}"
-                : $"Spot {numberPart} - {GetParkingType()}";
-        else
-            baseDescription = $"Parking - {GetParkingType()}";
+        // The terminal goes HERE — after the type, before the equipment notes — and both
+        // halves of that placement are deliberate.
+        //   AFTER the first spaced dash (the " - " above), because that is the boundary
+        //   SayIntentionsClearanceParser.NormalizeParkingName cuts at: everything from it
+        //   onward is discarded before a stand id is compared, so the terminal can never
+        //   corrupt gate matching the way putting it in Name did.
+        //   BEFORE "(Jetway)"/"[VDGS]", because at a colliding stand name the terminal is
+        //   the ONLY thing telling two entries apart, and a screen reader speaks a combo
+        //   item from the start: KJFK's "Gate 2" at Terminal 4 - Concourse A and at
+        //   Terminal 8 - Concourse B are otherwise identical for ~40 characters.
+        // …and ONLY when it disambiguates (see TerminalNameDisambiguates), spoken through
+        // SpeakableTerminalName so GSX's section-header size hints do not reach the pilot.
+        if (TerminalNameDisambiguates && !string.IsNullOrWhiteSpace(TerminalName))
+        {
+            string spoken = SpeakableTerminalName(TerminalName);
+            if (spoken.Length > 0)
+                baseDescription += $", {spoken}";
+        }
 
         if (HasJetway)
             baseDescription += " (Jetway)";
@@ -180,6 +347,30 @@ public class ParkingSpot
             baseDescription += $" [{vdgs}]";
 
         return baseDescription;
+    }
+
+    /// <summary>
+    /// GSX's <c>uiTerminalName</c> as it should be SPOKEN: trimmed, with the size-hint tail a
+    /// GSX profile author writes into a section header removed ("A-Platform =&lt; Medium " →
+    /// "A-Platform", "D-Pier =&gt; Heavy " → "D-Pier") and a trailing "N/A" dropped ("Gates
+    /// N/A " → "Gates"). The size class already reaches the pilot through the stand type and
+    /// max wingspan, and "=&lt;" is unspeakable. Deliberately NARROW — only those two tails,
+    /// only at the END — so real terminal prose ("Terminal 4 - Concourse B", "R-Platform P
+    /// stands") passes untouched. Pure; pinned by ParkingSpotDescribeTests.
+    /// </summary>
+    public static string SpeakableTerminalName(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+        string s = raw.Trim();
+        // "=< Medium", "=> Heavy", "<= Small", ">= Large" … at the end of the header.
+        s = System.Text.RegularExpressions.Regex.Replace(
+            s, @"\s*(?:=<|=>|<=|>=|<|>)\s*(?:Small|Medium|Large|Heavy|Extra|[A-F])\s*$", string.Empty,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        // A trailing "N/A" (GSX's own "not applicable" note on a header).
+        s = System.Text.RegularExpressions.Regex.Replace(
+            s, @"\s+N/A\s*$", string.Empty,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return s.Trim();
     }
 
     public override string ToString()

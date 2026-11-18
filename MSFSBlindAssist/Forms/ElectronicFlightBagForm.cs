@@ -1,13 +1,17 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using Microsoft.Data.Sqlite;
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Controls;
 using MSFSBlindAssist.Database;
 using MSFSBlindAssist.Database.Models;
 using MSFSBlindAssist.Navigation;
+using MSFSBlindAssist.Navigation.Briefing;
 using MSFSBlindAssist.Services;
+using MSFSBlindAssist.Services.Geography;
+using MSFSBlindAssist.Services.SayIntentions;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Forms;
 /// <summary>
@@ -26,7 +30,13 @@ public partial class ElectronicFlightBagForm : Form
     private readonly ScreenReaderAnnouncer _announcer;
     private readonly WaypointTracker _waypointTracker;
     private readonly string _simbriefUsername;
-    private SimConnectManager.AircraftPosition? _lastKnownPosition;
+    // What the taxi section of the route briefing needs from MainForm; null when the form is built
+    // without it (tests), in which case the block says no navigation database is loaded.
+    private readonly RouteBriefingDependencies? _briefingDependencies;
+    private readonly RouteDescriptionSession _descriptionSession;
+    // This window opened while a briefing started in an earlier (closed) flight bag was still running: its status line
+    // says so, and says so again when that briefing ends, since its own status updates went to the closed window.
+    private bool _awaitingEarlierBriefing;
     private IntPtr previousWindow;
 
     // Navigation tab controls
@@ -38,7 +48,6 @@ public partial class ElectronicFlightBagForm : Form
     private Button refreshPositionButton = null!;
     private Button describeRouteButton = null!;
     private TextBox routeDescriptionTextBox = null!;
-    private readonly GeminiService _geminiService = new();
 
     // Other tab controls
     private TextBox departureIcaoTextBox = null!;
@@ -68,8 +77,10 @@ public partial class ElectronicFlightBagForm : Form
 
     // Airport Lookup tab controls
     private TextBox airportLookupIcaoTextBox = null!;
+    private bool _settingAirportLookupIdent;
+    private bool _airportSearchRunning;
+    private int _airportInfoRequest;
     private ListBox airportLookupRunwaysListBox = null!;
-    private Button airportLookupLoadButton = null!;
     private TextBox airportInfoTextBox = null!;
     private TextBox runwayInfoTextBox = null!;
 
@@ -77,40 +88,76 @@ public partial class ElectronicFlightBagForm : Form
     private SimBriefPlannerForm? _simbriefPlannerForm;
 
     public ElectronicFlightBagForm(FlightPlanManager flightPlanManager, SimConnectManager simConnectManager,
-                                   ScreenReaderAnnouncer announcer, WaypointTracker waypointTracker, string simbriefUsername)
+                                   ScreenReaderAnnouncer announcer, WaypointTracker waypointTracker, string simbriefUsername,
+                                   RouteDescriptionSession descriptionSession,
+                                   RouteBriefingDependencies? briefingDependencies = null)
     {
         _flightPlanManager = flightPlanManager;
         _simConnectManager = simConnectManager;
         _announcer = announcer;
         _waypointTracker = waypointTracker;
         _simbriefUsername = simbriefUsername;
+        _descriptionSession = descriptionSession;
+        _briefingDependencies = briefingDependencies;
 
         InitializeComponent();
         SetupEventHandlers();
         SetupAccessibility();
         SetupWaypointContextMenu();
 
-        // Subscribe to aircraft position updates
-        _simConnectManager.AircraftPositionReceived += OnAircraftPositionReceived;
+        // The session outlives this window: listen while open, stop when closed so it never keeps a closed form alive.
+        _descriptionSession.Changed += OnDescriptionSessionChanged;
+        FormClosed += (_, _) => _descriptionSession.Changed -= OnDescriptionSessionChanged;
 
         // Only auto-load SimBrief if the flight plan is empty (first time opening)
         // This preserves user modifications (SID, STAR, approaches) across window open/close
         if (!string.IsNullOrEmpty(_simbriefUsername) && _flightPlanManager.CurrentFlightPlan.IsEmpty())
         {
-            LoadSimBriefFlightPlan();
+            // A database rebuild drops the plan, so this reload usually fetches the very OFP the kept description was
+            // made for: keep it then, and erase it only when the reload brought a different plan.
+            LoadSimBriefFlightPlan(keepDescriptionForSamePlan: true);
         }
         else if (!_flightPlanManager.CurrentFlightPlan.IsEmpty())
         {
             // Flight plan already loaded - just refresh the display
             RefreshNavigationGrid();
-            if (!string.IsNullOrEmpty(_flightPlanManager.CurrentFlightPlan.ExtractedFlightData))
-                describeRouteButton.Enabled = true;
+        }
+
+        // Show a description kept from an earlier flight bag, and whether Describe Route can be pressed.
+        ApplyDescriptionSession();
+        if (_descriptionSession.IsGenerating)
+        {
+            _awaitingEarlierBriefing = true;
+            UpdateStatus("A route description is still being prepared. Describe Route is available again when it finishes.");
         }
     }
 
-    private void OnAircraftPositionReceived(object? sender, SimConnectManager.AircraftPosition position)
+    private void OnDescriptionSessionChanged(object? sender, EventArgs e)
     {
-        _lastKnownPosition = position;
+        if (IsDisposed) return;
+        ApplyDescriptionSession();
+        if (_awaitingEarlierBriefing && !_descriptionSession.IsGenerating)
+        {
+            _awaitingEarlierBriefing = false;
+            UpdateStatus("Describe Route is available again");
+        }
+    }
+
+    /// <summary>
+    /// Draws the session's description and the Describe Route button's state. The text is written only when it
+    /// differs, so a flag change (a briefing starting) never throws the caret back to the top while the pilot reads.
+    /// </summary>
+    private void ApplyDescriptionSession()
+    {
+        string text = _descriptionSession.Text.Replace("\r\n", "\n").Replace("\n", "\r\n");
+        if (routeDescriptionTextBox.Text != text)
+        {
+            routeDescriptionTextBox.Text = text;
+            routeDescriptionTextBox.SelectionStart = 0;
+        }
+        routeDescriptionTextBox.Visible = text.Length > 0;
+        describeRouteButton.Enabled = !_descriptionSession.IsGenerating &&
+                                      !string.IsNullOrEmpty(_flightPlanManager.CurrentFlightPlan.ExtractedFlightData);
     }
 
     public void ShowForm()
@@ -551,35 +598,24 @@ public partial class ElectronicFlightBagForm : Form
         var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
 
         // ICAO textbox
-        var icaoLabel = new Label { Text = "Airport ICAO:", Location = new Point(20, 20), Width = 200 };
+        var icaoLabel = new Label { Text = "Airport ICAO, name or city:", Location = new Point(20, 20), Width = 250 };
         airportLookupIcaoTextBox = new TextBox
         {
             Location = new Point(20, 45),
-            Width = 100,
+            Width = 250,
             CharacterCasing = CharacterCasing.Upper,
-            MaxLength = 4,
             AccessibleName = "Airport Lookup ICAO",
-            AccessibleDescription = "Enter airport ICAO code for lookup"
+            AccessibleDescription = "Enter an airport ICAO code, or type part of a name or city and press Enter to search"
         };
 
         // Runway listbox
-        var runwayLabel = new Label { Text = "Runways:", Location = new Point(20, 80), Width = 200 };
+        var runwayLabel = new Label { Text = "Runways:", Location = new Point(580, 80), Width = 200 };
         airportLookupRunwaysListBox = new ListBox
         {
-            Location = new Point(20, 105),
+            Location = new Point(580, 105),
             Size = new Size(200, 100),
             AccessibleName = "Airport Lookup Runways",
             AccessibleDescription = "Select runway for detailed information"
-        };
-
-        // Load button
-        airportLookupLoadButton = new Button
-        {
-            Text = "Load",
-            Location = new Point(20, 215),
-            Size = new Size(100, 30),
-            AccessibleName = "Load Airport and Runway Info",
-            AccessibleDescription = "Load detailed airport and runway information"
         };
 
         // Airport info textbox (left side)
@@ -611,10 +647,11 @@ public partial class ElectronicFlightBagForm : Form
         };
 
         panel.Controls.AddRange(new Control[] {
+            // Tab order: field, the airport (its first line reads its ident and name), then the
+            // runways (list, then the picked one). Enter in the field is the only search.
             icaoLabel, airportLookupIcaoTextBox,
-            runwayLabel, airportLookupRunwaysListBox,
-            airportLookupLoadButton,
             airportInfoLabel, airportInfoTextBox,
+            runwayLabel, airportLookupRunwaysListBox,
             runwayInfoLabel, runwayInfoTextBox
         });
         lookupTab.Controls.Add(panel);
@@ -701,8 +738,8 @@ public partial class ElectronicFlightBagForm : Form
 
         // Airport Lookup tab
         airportLookupIcaoTextBox.TextChanged += AirportLookupIcaoTextBox_TextChanged;
+        airportLookupIcaoTextBox.KeyDown += AirportLookupIcaoTextBox_KeyDown;
         airportLookupRunwaysListBox.SelectedIndexChanged += AirportLookupRunwaysListBox_SelectedIndexChanged;
-        airportLookupLoadButton.Click += AirportLookupLoadButton_Click;
 
         // Flight plan manager events
         _flightPlanManager.StatusChanged += (s, msg) => UpdateStatus(msg);
@@ -838,8 +875,9 @@ public partial class ElectronicFlightBagForm : Form
         _announcer.Announce($"Waypoint {waypoint.Ident} tracked in slot {slotNumber}");
     }
 
-    private void LoadSimBriefFlightPlan()
+    private void LoadSimBriefFlightPlan(bool keepDescriptionForSamePlan = false)
     {
+        var planBefore = _flightPlanManager.CurrentFlightPlan;
         try
         {
             if (string.IsNullOrEmpty(_simbriefUsername))
@@ -850,11 +888,8 @@ public partial class ElectronicFlightBagForm : Form
             }
 
             UpdateStatus("Loading flight plan from SimBrief...");
-            routeDescriptionTextBox.Text = "";
-            routeDescriptionTextBox.Visible = false;
             _flightPlanManager.LoadFromSimBrief(_simbriefUsername);
             _announcer.Announce("SimBrief flight plan loaded");
-            describeRouteButton.Enabled = !string.IsNullOrEmpty(_flightPlanManager.CurrentFlightPlan.ExtractedFlightData);
         }
         catch (Exception ex)
         {
@@ -862,10 +897,32 @@ public partial class ElectronicFlightBagForm : Form
                           "SimBrief Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             _announcer.Announce("Error loading SimBrief flight plan");
         }
+        finally
+        {
+            // The ONE place the kept description is erased: whenever the plan was actually replaced -- even if the
+            // load threw afterwards (a failed fetch throws before replacing it, and keeps the description). Also
+            // discards a briefing still running for the replaced plan and frees Describe Route for the new one; the
+            // button follows through Changed.
+            var planNow = _flightPlanManager.CurrentFlightPlan;
+            if (!ReferenceEquals(planBefore, planNow) &&
+                !(keepDescriptionForSamePlan && _descriptionSession.IsFor(planNow.ExtractedFlightData ?? "")))
+                _descriptionSession.Clear();
+        }
     }
+
+    private const string ApiKeyMissingMessage = "AI provider API key not configured. Please configure it in File menu, Settings, AI tab.";
 
     private async Task DescribeRouteAsync()
     {
+        // One at a time, across flight-bag windows: a briefing now finishes even after its window closed, so a
+        // reopened flight bag must not start a second one alongside it.
+        if (_descriptionSession.IsGenerating)
+        {
+            _announcer.Announce("A route description is already being prepared.");
+            return;
+        }
+        bool began = false;
+        int generation = 0;
         try
         {
             if (_flightPlanManager.CurrentFlightPlan.IsEmpty() ||
@@ -874,26 +931,77 @@ public partial class ElectronicFlightBagForm : Form
                 _announcer.Announce("No SimBrief flight plan loaded. Please load a flight plan first.");
                 return;
             }
+            // Before any work is done for it: the taxi section alone can take ~25 s of reads and online
+            // fetches (position, SayIntentions, online taxiway names, both graph builds). Checked here, a
+            // missing key is reported at once instead of after that whole computation.
+            if (!AiProviderFactory.HasApiKey())
+            {
+                _announcer.Announce(ApiKeyMissingMessage);
+                UpdateStatus("AI provider API key not configured");
+                return;
+            }
 
+            var plan = _flightPlanManager.CurrentFlightPlan;
+            // Both before BeginGenerating: if a Changed subscriber throws, the finally must still end THIS generation.
+            generation = _descriptionSession.Generation;
+            began = true;
+            _descriptionSession.BeginGenerating();   // disables Describe Route via Changed
             _announcer.Announce("Generating route description, please wait");
-            describeRouteButton.Enabled = false;
+
+            // Whether the briefing must be thrown away, said out loud when so: Load SimBrief was pressed or the
+            // database was switched while it ran (the session's generation moved on), or this window's plan was
+            // replaced. Closing the window does NOT end it -- the briefing finishes, is kept in the session and shows
+            // when the flight bag reopens.
+            void AnnounceDiscarded()
+            {
+                _announcer.Announce("The flight plan or database changed while the route description was prepared. Press Describe Route again.");
+                UpdateStatus("Route description discarded: the flight plan or database changed");
+            }
+            bool Discarded()
+            {
+                if (generation == _descriptionSession.Generation &&
+                    ReferenceEquals(plan, _flightPlanManager.CurrentFlightPlan))
+                    return false;
+                AnnounceDiscarded();
+                return true;
+            }
+
+            // The taxi section: computed from the pilot's own scenery for THIS press and appended to the
+            // flight data for this AI call only — the stored ExtractedFlightData stays pure SimBrief,
+            // since the facts change when a runway is edited or the aircraft moves. Never blocks the
+            // briefing: every failure renders as an "unavailable" line inside the block.
+            UpdateStatus("Computing taxi routes...");
+            string taxiBlock = await BuildTaxiRoutesBlockAsync(plan);
+            if (Discarded()) return;
             UpdateStatus("Generating route description...");
+            string flightData = plan.ExtractedFlightData + "\n\n" + taxiBlock;
 
-            string description = await _geminiService.DescribeRouteAsync(
-                _flightPlanManager.CurrentFlightPlan.ExtractedFlightData);
+            // Resolve the AI provider fresh on each briefing, so a provider switch in Settings takes effect on the
+            // next briefing. Display/scene reads already resolve per-call; match that.
+            var aiProvider = AiProviderFactory.Create();
+            string description = await aiProvider.DescribeRouteAsync(flightData);
+            if (Discarded()) return;
 
-            routeDescriptionTextBox.Text = description.Replace("\r\n", "\n").Replace("\n", "\r\n");
-            routeDescriptionTextBox.Visible = true;
-            routeDescriptionTextBox.SelectionStart = 0;
-            routeDescriptionTextBox.Focus();
+            // Stored in the session, which redraws whichever flight bag is open (this one, or one reopened meanwhile).
+            if (!_descriptionSession.TryStore(generation, description, plan.ExtractedFlightData ?? ""))
+            {
+                AnnounceDiscarded();
+                return;
+            }
+            if (!IsDisposed)
+            {
+                // The window the pilot pressed Describe Route in is still open: take them to the description.
+                routeDescriptionTextBox.SelectionStart = 0;
+                routeDescriptionTextBox.Focus();
+            }
 
             _announcer.Announce("Route description ready");
             UpdateStatus("Route description generated");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("API key"))
         {
-            _announcer.Announce("Gemini API key not configured. Please configure it in File menu, Gemini Settings.");
-            UpdateStatus("Gemini API key not configured");
+            _announcer.Announce(ApiKeyMissingMessage);
+            UpdateStatus("AI provider API key not configured");
         }
         catch (Exception ex)
         {
@@ -902,7 +1010,83 @@ public partial class ElectronicFlightBagForm : Form
         }
         finally
         {
-            describeRouteButton.Enabled = true;
+            // Re-enables Describe Route in whichever flight bag is open, via Changed.
+            if (began) _descriptionSession.EndGenerating(generation);
+        }
+    }
+
+    private const int OwnPositionTimeoutMs = 1500;
+
+    private async Task<string> BuildTaxiRoutesBlockAsync(FlightPlan plan)
+    {
+        var aircraft = AircraftSizeClass.Resolve(plan.AircraftTypeIcao, plan.AircraftName, plan.AircraftMaxPassengers);
+        // One unit for every distance in the block and its notes: the pilot's ground distance setting.
+        var unit = DistanceFormatter.UnitProvider();
+        // SayIntentions is read while the aircraft position is: a web call to its parking service can take seconds.
+        var siTask = ReadSayIntentionsAsync();
+        // Hoisted so the catch can still name the runway SayIntentions assigned (and why) even when the leg itself
+        // could not be computed -- defaults to the flight plan's own runway, with no note, until the try below picks.
+        BriefingRunway outChoice = new(plan.DepartureRunway, null), inChoice = new(plan.ArrivalRunway, null);
+        try
+        {
+            var provider = _briefingDependencies?.Provider();
+            var gateSource = _briefingDependencies?.GateSource();
+            var own = await ReadOwnPositionAsync();
+            var si = await siTask;
+
+            // SayIntentions' runways and gate count only for THIS flight; its runway wins over the flight plan's and the
+            // leg says so (BriefingRunwayChoice).
+            bool siThisFlight = SayIntentionsArrivalGate.IsThisFlight(si?.Context, plan.DepartureICAO, plan.ArrivalICAO);
+            outChoice = BriefingRunwayChoice.Choose(plan.DepartureRunway, si?.Context.DepartureRunway, siThisFlight);
+            inChoice = BriefingRunwayChoice.Choose(plan.ArrivalRunway, si?.Context.ArrivalRunway, siThisFlight);
+            var siGate = SayIntentionsArrivalGate.FromStatus(si, plan.DepartureICAO, plan.ArrivalICAO);
+
+            var request = new TaxiBriefingRequest(plan.DepartureICAO, outChoice.Runway, plan.ArrivalICAO, inChoice.Runway,
+                                                  aircraft, plan.AirlineIcao, own, siGate, outChoice.Note, inChoice.Note, unit);
+            var briefing = await TaxiBriefingPlanner.PlanAsync(request, provider, gateSource, TaxiBriefingPlanner.DefaultBudget);
+            return TaxiBriefingRenderer.Render(briefing, unit);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("taxi_briefing", $"taxi routes block failed: {ex}");
+            return TaxiBriefingRenderer.Render(TaxiBriefing.Unavailable(aircraft, plan.DepartureICAO, outChoice.Runway,
+                plan.ArrivalICAO, inChoice.Runway, $"taxi route could not be computed ({ex.Message})", outChoice.Note, inChoice.Note), unit);
+        }
+    }
+
+    /// <summary>SayIntentions' status — the flight file and, when it has no gate, the parking service — or null when
+    /// SayIntentions is not wired in or the read fails. A SayIntentions failure costs the briefing SayIntentions' data
+    /// only, never the taxi routes.</summary>
+    private async Task<SayIntentionsStatusResult?> ReadSayIntentionsAsync()
+    {
+        if (_briefingDependencies == null) return null;
+        try
+        {
+            return await _briefingDependencies.SayIntentions();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("taxi_briefing", $"SayIntentions read failed; briefing without it: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>The aircraft's position for the "parked at the origin" test — null when not connected or
+    /// when SimConnect does not answer within <see cref="OwnPositionTimeoutMs"/> (the callback lands on the
+    /// UI message pump, which this await yields to).</summary>
+    private async Task<OwnPosition?> ReadOwnPositionAsync()
+    {
+        if (_simConnectManager?.IsConnected != true) return null;
+        var tcs = new TaskCompletionSource<OwnPosition?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _simConnectManager.RequestAircraftPositionAsync(p =>
+            tcs.TrySetResult(new OwnPosition(p.Latitude, p.Longitude, p.SimOnGround > 0.5)));
+        try
+        {
+            return await tcs.Task.WaitAsync(TimeSpan.FromMilliseconds(OwnPositionTimeoutMs));
+        }
+        catch (TimeoutException)
+        {
+            return null;
         }
     }
 
@@ -1680,6 +1864,9 @@ public partial class ElectronicFlightBagForm : Form
 
     private void UpdateStatus(string message)
     {
+        // A route description keeps running after its flight bag closed; its status lines then have nowhere to go.
+        if (IsDisposed) return;
+
         if (InvokeRequired)
         {
             Invoke(new Action<string>(UpdateStatus), message);
@@ -1692,6 +1879,8 @@ public partial class ElectronicFlightBagForm : Form
     // Airport Lookup tab handlers
     private void AirportLookupIcaoTextBox_TextChanged(object? sender, EventArgs e)
     {
+        if (_settingAirportLookupIdent) return;
+
         string icao = airportLookupIcaoTextBox.Text.Trim();
         if (icao.Length == 4)
         {
@@ -1699,18 +1888,165 @@ public partial class ElectronicFlightBagForm : Form
         }
         else
         {
+            _airportInfoRequest++; // a position answering late must not refill the cleared box
             airportLookupRunwaysListBox.Items.Clear();
             airportInfoTextBox.Clear();
             runwayInfoTextBox.Clear();
         }
     }
 
-    private void LoadRunwaysForAirportLookup(string icao)
+    private async void AirportLookupIcaoTextBox_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode != Keys.Enter) return;
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+        await SearchAirportsAsync();
+    }
+
+    // Enter in the field: searches airports by ICAO, name or city (AirportNameSearch), plus the
+    // airports around a town of that name in the offline location data. An exact ident or the only
+    // match loads at once and is spoken (AirportNameSearch.DirectMatch); otherwise a list opens to
+    // pick from. Nothing matching is spoken. With the aircraft's position each line, and the spoken
+    // airport, ends with the distance from it; with the simulator closed they leave it out.
+    private async Task SearchAirportsAsync()
+    {
+        string query = airportLookupIcaoTextBox.Text.Trim();
+        if (_airportSearchRunning) return;
+        if (query.Length == 0)
+        {
+            _announcer.Announce("Enter an airport ICAO code, name or city first");
+            return;
+        }
+
+        string simulatorVersion = SettingsManager.Current.SimulatorVersion ?? "FS2020";
+        string dbPath = DatabasePathResolver.ResolveExistingDatabasePath(simulatorVersion);
+        if (!File.Exists(dbPath))
+        {
+            _announcer.Announce("Airport database not found");
+            return;
+        }
+
+        _airportSearchRunning = true;
+        try
+        {
+            var positionTask = ReadOwnPositionAsync();
+            var outcome = await Task.Run(() => FindAirports(query, dbPath));
+            if (IsDisposed) return;
+
+            var results = outcome.Results;
+            if (results.Count == 0)
+            {
+                _announcer.Announce(AirportNameSearch.NoMatchMessage(query, simulatorVersion, LocationDataStore.Default.IsAvailable));
+                return;
+            }
+
+            var position = await positionTask;
+            if (IsDisposed) return;
+            (double Lat, double Lon)? aircraft = position is { } p ? (p.Lat, p.Lon) : null;
+
+            if (AirportNameSearch.DirectMatch(results) is { } direct)
+            {
+                ShowAirportLookupResult(direct.Airport, Task.FromResult(position));
+                _announcer.Announce(AirportNameSearch.Describe(direct, aircraft));
+                return;
+            }
+
+            using var dialog = new AirportSearchResultsForm(
+                AirportNameSearch.ListTitle(query, results.Count, outcome.TotalMatches), results, aircraft);
+            var picked = dialog.ShowDialog(this) == DialogResult.OK ? dialog.SelectedAirport : null;
+            // An aircraft switch closes the EFB, even with the list open.
+            if (IsDisposed) return;
+            if (picked != null)
+                ShowAirportLookupResult(picked.Airport, Task.FromResult(position));
+            airportLookupIcaoTextBox.Focus();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("EFB", $"Airport search for '{query}' failed", ex);
+            if (!IsDisposed) _announcer.Announce("Airport search failed");
+        }
+        finally
+        {
+            _airportSearchRunning = false;
+        }
+    }
+
+    // Off the UI thread. The towns are optional: a broken location database means a search
+    // without them, never a failed one.
+    private static AirportSearchOutcome FindAirports(string query, string dbPath)
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var airports = AirportNameSearch.ReadAirports(dbPath);
+        List<TownMatch> towns;
+        try
+        {
+            towns = new OfflineLocationService(LocationDataStore.Default).FindTowns(query, AirportNameSearch.TownLookupLimit);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("EFB", $"Town lookup for '{query}' failed, searching without towns: {ex.Message}");
+            towns = new List<TownMatch>();
+        }
+        var outcome = AirportNameSearch.Search(query, airports, towns);
+        Log.Debug("EFB", $"Airport search '{query}': {outcome.TotalMatches} matches among {airports.Count} airports and {towns.Count} towns in {watch.ElapsedMilliseconds} ms");
+        return outcome;
+    }
+
+    // Puts the found airport's ident in the field (the runway list reads it from there) and loads it
+    // without the field's 4-character auto-load, which would miss 3- and 5-character idents.
+    private void ShowAirportLookupResult(AirportSearchEntry airport, Task<OwnPosition?>? position = null)
+    {
+        _settingAirportLookupIdent = true;
+        try
+        {
+            airportLookupIcaoTextBox.Text = airport.Ident;
+        }
+        finally
+        {
+            _settingAirportLookupIdent = false;
+        }
+        airportLookupIcaoTextBox.SelectionStart = airportLookupIcaoTextBox.TextLength;
+        LoadRunwaysForAirportLookup(airport.Ident, position);
+    }
+
+    // Fills the Airport Information box once per airport: at once when the airport is not in the
+    // database or the simulator is not connected, otherwise with the FROM AIRCRAFT distance when the
+    // aircraft's position answers (at most OwnPositionTimeoutMs). Never refilled after that: new
+    // text puts the caret back on the first line and the screen reader loses its place. A newer
+    // airport, or typing past this one, wins.
+    private void ShowAirportInfo(string icao, Task<OwnPosition?>? position = null)
+    {
+        int request = ++_airportInfoRequest;
+        string text = GetAirportDetailedInfo(icao, null, out bool found);
+        if (!found || _simConnectManager?.IsConnected != true)
+        {
+            SetLookupBoxText(airportInfoTextBox, text);
+            return;
+        }
+        airportInfoTextBox.Clear();
+        _ = FillAirportInfoWithDistanceAsync(icao, request, position ?? ReadOwnPositionAsync());
+    }
+
+    private async Task FillAirportInfoWithDistanceAsync(string icao, int request, Task<OwnPosition?> positionTask)
+    {
+        try
+        {
+            var position = await positionTask;
+            if (request != _airportInfoRequest || IsDisposed) return;
+            SetLookupBoxText(airportInfoTextBox, GetAirportDetailedInfo(icao, position is { } p ? (p.Lat, p.Lon) : null, out _));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("EFB", $"Airport information for {icao} failed: {ex.Message}");
+        }
+    }
+
+    private void LoadRunwaysForAirportLookup(string icao, Task<OwnPosition?>? position = null)
     {
         try
         {
             // Show airport info as soon as a complete ICAO is entered.
-            airportInfoTextBox.Text = GetAirportDetailedInfo(icao);
+            ShowAirportInfo(icao, position);
 
             var runways = _flightPlanManager.GetRunways(icao);
             airportLookupRunwaysListBox.Items.Clear();
@@ -1727,13 +2063,13 @@ public partial class ElectronicFlightBagForm : Form
             }
             else
             {
-                runwayInfoTextBox.Text = "No runways found for this airport.";
+                SetLookupBoxText(runwayInfoTextBox, "No runways found for this airport.");
             }
         }
         catch (Exception ex)
         {
             airportLookupRunwaysListBox.Items.Clear();
-            runwayInfoTextBox.Text = $"Error loading runways: {ex.Message}";
+            SetLookupBoxText(runwayInfoTextBox, $"Error loading runways: {ex.Message}");
         }
     }
 
@@ -1745,52 +2081,31 @@ public partial class ElectronicFlightBagForm : Form
 
         try
         {
-            runwayInfoTextBox.Text = GetRunwayDetailedInfo(icao, selectedRunway.RunwayID);
+            SetLookupBoxText(runwayInfoTextBox, GetRunwayDetailedInfo(icao, selectedRunway.RunwayID));
         }
         catch (Exception ex)
         {
-            runwayInfoTextBox.Text = $"Error loading runway information: {ex.Message}";
+            SetLookupBoxText(runwayInfoTextBox, $"Error loading runway information: {ex.Message}");
         }
     }
 
-    private void AirportLookupLoadButton_Click(object? sender, EventArgs e)
+    // Fills one of Airport Lookup's read-only boxes with the caret on its first line and nothing
+    // selected. Placing the caret also stops Windows Forms selecting the whole text the first time
+    // the box gets keyboard focus, which NVDA reads as "selected 1599 characters" instead of the
+    // first line (the airport's ident and name, EFB-12).
+    private static void SetLookupBoxText(TextBox box, string text)
     {
-        try
-        {
-            string icao = airportLookupIcaoTextBox.Text.Trim();
-            var selectedRunway = airportLookupRunwaysListBox.SelectedItem as Runway;
-
-            if (string.IsNullOrEmpty(icao))
-            {
-                MessageBox.Show("Please enter an airport ICAO code", "Invalid Selection",
-                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Load airport information
-            airportInfoTextBox.Text = GetAirportDetailedInfo(icao);
-
-            // Load runway information if a runway is selected
-            if (selectedRunway != null)
-            {
-                runwayInfoTextBox.Text = GetRunwayDetailedInfo(icao, selectedRunway.RunwayID);
-            }
-            else
-            {
-                runwayInfoTextBox.Text = "No runway selected";
-            }
-
-            UpdateStatus($"Loaded information for {icao}");
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Error loading airport information: {ex.Message}", "Error",
-                          MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+        box.Text = text;
+        box.SelectionStart = 0;
+        box.SelectionLength = 0;
     }
 
-    private string GetAirportDetailedInfo(string icao)
+    /// <summary>The Airport Information text, its first line the ident and name. With the aircraft's
+    /// position it has a FROM AIRCRAFT section: where the airport lies from it ("212 nm southwest").
+    /// <paramref name="found"/> is false when the database has no such airport.</summary>
+    private string GetAirportDetailedInfo(string icao, (double Lat, double Lon)? aircraft, out bool found)
     {
+        found = false;
         var settings = SettingsManager.Current;
         string simulatorVersion = settings.SimulatorVersion ?? "FS2020";
         // Use the central resolver — checks the canonical MSFSBlindAssist\databases
@@ -1822,45 +2137,52 @@ public partial class ElectronicFlightBagForm : Form
                 {
                     if (reader.Read())
                     {
-                        sb.AppendLine("═══════════════════════════════════════════════════");
-                        sb.AppendLine($"  AIRPORT INFORMATION - {reader["ident"]?.ToString() ?? icao}");
-                        sb.AppendLine("═══════════════════════════════════════════════════");
+                        found = true;
+                        // The first line is what Tab from the field reads: "KATL, Hartsfield - Jackson Atlanta I".
+                        string name = reader["name"]?.ToString()?.Trim() ?? "";
+                        string ident = FormatAirportText(reader["ident"]);
+                        sb.AppendLine(name.Length > 0 ? $"{ident}, {name}" : ident);
                         sb.AppendLine();
 
                         // Basic Information
                         sb.AppendLine("BASIC INFORMATION:");
-                        sb.AppendLine($"  ICAO:         {reader["icao"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Ident:        {reader["ident"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Name:         {reader["name"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  IATA:         {reader["iata"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  FAA:          {reader["faa"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Local:        {reader["local"]?.ToString() ?? "N/A"}");
+                        // Navdata leaves the code and place columns empty for almost every
+                        // airport (the ident IS the ICAO code there); an empty one is left
+                        // out rather than read as "N/A", which sounded like "no ICAO code".
+                        AppendAirportTextIfPresent(sb, "  ICAO:         ", reader["icao"]);
+                        sb.AppendLine($"  Ident:        {FormatAirportText(reader["ident"])}");
+                        sb.AppendLine($"  Name:         {FormatAirportText(reader["name"])}");
+                        AppendAirportTextIfPresent(sb, "  IATA:         ", reader["iata"]);
+                        AppendAirportTextIfPresent(sb, "  FAA:          ", reader["faa"]);
+                        AppendAirportTextIfPresent(sb, "  Local:        ", reader["local"]);
                         sb.AppendLine();
+
+                        if (aircraft is { } at && reader["laty"] is not DBNull && reader["lonx"] is not DBNull)
+                        {
+                            sb.AppendLine("FROM AIRCRAFT:");
+                            sb.AppendLine($"  Distance:     {AirportNameSearch.FromAircraft(at, Convert.ToDouble(reader["laty"], System.Globalization.CultureInfo.InvariantCulture), Convert.ToDouble(reader["lonx"], System.Globalization.CultureInfo.InvariantCulture))}");
+                            sb.AppendLine();
+                        }
 
                         // Location
                         sb.AppendLine("LOCATION:");
-                        sb.AppendLine($"  City:         {reader["city"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  State:        {reader["state"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Country:      {reader["country"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Region:       {reader["region"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Latitude:     {reader["laty"]}");
-                        sb.AppendLine($"  Longitude:    {reader["lonx"]}");
-                        sb.AppendLine($"  Altitude:     {reader["altitude"]} ft");
-                        sb.AppendLine($"  Mag Var:      {reader["mag_var"]}°");
+                        AppendAirportTextIfPresent(sb, "  City:         ", reader["city"]);
+                        AppendAirportTextIfPresent(sb, "  State:        ", reader["state"]);
+                        AppendAirportTextIfPresent(sb, "  Country:      ", reader["country"]);
+                        AppendAirportTextIfPresent(sb, "  ICAO Region:  ", reader["region"]);
+                        sb.AppendLine($"  Latitude:     {FormatAirportCoordinate(reader["laty"], 'N', 'S')}");
+                        sb.AppendLine($"  Longitude:    {FormatAirportCoordinate(reader["lonx"], 'E', 'W')}");
+                        sb.AppendLine($"  Altitude:     {FormatAirportFeet(reader["altitude"])}");
+                        sb.AppendLine($"  Mag Var:      {FormatAirportMagVar(reader["mag_var"])}");
                         sb.AppendLine();
 
                         // Frequencies
                         sb.AppendLine("FREQUENCIES:");
-                        var towerFreq = reader["tower_frequency"];
-                        sb.AppendLine($"  Tower:        {(towerFreq != DBNull.Value && Convert.ToInt32(towerFreq) > 0 ? $"{Convert.ToDouble(towerFreq) / 1000000.0:F3} MHz" : "N/A")}");
-                        var atisFreq = reader["atis_frequency"];
-                        sb.AppendLine($"  ATIS:         {(atisFreq != DBNull.Value && Convert.ToInt32(atisFreq) > 0 ? $"{Convert.ToDouble(atisFreq) / 1000000.0:F3} MHz" : "N/A")}");
-                        var awosFreq = reader["awos_frequency"];
-                        sb.AppendLine($"  AWOS:         {(awosFreq != DBNull.Value && Convert.ToInt32(awosFreq) > 0 ? $"{Convert.ToDouble(awosFreq) / 1000000.0:F3} MHz" : "N/A")}");
-                        var asosFreq = reader["asos_frequency"];
-                        sb.AppendLine($"  ASOS:         {(asosFreq != DBNull.Value && Convert.ToInt32(asosFreq) > 0 ? $"{Convert.ToDouble(asosFreq) / 1000000.0:F3} MHz" : "N/A")}");
-                        var unicomFreq = reader["unicom_frequency"];
-                        sb.AppendLine($"  UNICOM:       {(unicomFreq != DBNull.Value && Convert.ToInt32(unicomFreq) > 0 ? $"{Convert.ToDouble(unicomFreq) / 1000000.0:F3} MHz" : "N/A")}");
+                        sb.AppendLine($"  Tower:        {FormatAirportFrequency(reader["tower_frequency"])}");
+                        sb.AppendLine($"  ATIS:         {FormatAirportFrequency(reader["atis_frequency"])}");
+                        sb.AppendLine($"  AWOS:         {FormatAirportFrequency(reader["awos_frequency"])}");
+                        sb.AppendLine($"  ASOS:         {FormatAirportFrequency(reader["asos_frequency"])}");
+                        sb.AppendLine($"  UNICOM:       {FormatAirportFrequency(reader["unicom_frequency"])}");
                         sb.AppendLine();
 
                         // Status
@@ -1905,16 +2227,16 @@ public partial class ElectronicFlightBagForm : Form
                         // Runway Info
                         sb.AppendLine("RUNWAY SUMMARY:");
                         sb.AppendLine($"  Total Runways:          {reader["num_runways"]}");
-                        sb.AppendLine($"  Longest Runway Length:  {reader["longest_runway_length"]} ft");
-                        sb.AppendLine($"  Longest Runway Width:   {reader["longest_runway_width"]} ft");
-                        sb.AppendLine($"  Longest Runway Heading: {reader["longest_runway_heading"]}°");
-                        sb.AppendLine($"  Longest Runway Surface: {reader["longest_runway_surface"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Longest Runway Length:  {FormatAirportFeet(reader["longest_runway_length"])}");
+                        sb.AppendLine($"  Longest Runway Width:   {FormatAirportFeet(reader["longest_runway_width"])}");
+                        sb.AppendLine($"  Longest Runway Heading: {FormatAirportHeading(reader["longest_runway_heading"])}");
+                        sb.AppendLine($"  Longest Runway Surface: {FormatAirportText(reader["longest_runway_surface"])}");
                         sb.AppendLine();
 
                         // Parking Info
                         sb.AppendLine("PARKING:");
-                        sb.AppendLine($"  Largest Ramp:           {reader["largest_parking_ramp"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Largest Gate:           {reader["largest_parking_gate"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Largest Ramp:           {FormatAirportText(reader["largest_parking_ramp"])}");
+                        sb.AppendLine($"  Largest Gate:           {FormatAirportText(reader["largest_parking_gate"])}");
                         sb.AppendLine();
 
                         // Tower
@@ -1924,28 +2246,30 @@ public partial class ElectronicFlightBagForm : Form
                         if (towerAlt != DBNull.Value || towerLonx != DBNull.Value || towerLaty != DBNull.Value)
                         {
                             sb.AppendLine("TOWER:");
-                            sb.AppendLine($"  Altitude:     {(towerAlt != DBNull.Value ? $"{towerAlt} ft" : "N/A")}");
-                            sb.AppendLine($"  Longitude:    {(towerLonx != DBNull.Value ? towerLonx.ToString() : "N/A")}");
-                            sb.AppendLine($"  Latitude:     {(towerLaty != DBNull.Value ? towerLaty.ToString() : "N/A")}");
+                            sb.AppendLine($"  Altitude:     {FormatAirportFeet(towerAlt)}");
+                            sb.AppendLine($"  Longitude:    {FormatAirportCoordinate(towerLonx, 'E', 'W')}");
+                            sb.AppendLine($"  Latitude:     {FormatAirportCoordinate(towerLaty, 'N', 'S')}");
                             sb.AppendLine($"  Has Tower Object: {(Convert.ToInt32(reader["has_tower_object"]) == 1 ? "Yes" : "No")}");
                             sb.AppendLine();
                         }
 
-                        // Transitions
+                        // Transitions. Navdata writes 0, not NULL, where it has none (most
+                        // airports), so a 0 counts as missing and the block is left out.
                         var transAlt = reader["transition_altitude"];
                         var transLevel = reader["transition_level"];
-                        if (transAlt != DBNull.Value || transLevel != DBNull.Value)
+                        bool hasTransAlt = IsPositiveNumber(transAlt);
+                        if (hasTransAlt || IsPositiveNumber(transLevel))
                         {
                             sb.AppendLine("TRANSITIONS:");
-                            sb.AppendLine($"  Transition Altitude:    {(transAlt != DBNull.Value ? $"{transAlt} ft" : "N/A")}");
-                            sb.AppendLine($"  Transition Level:       {(transLevel != DBNull.Value ? $"FL{transLevel}" : "N/A")}");
+                            sb.AppendLine($"  Transition Altitude:    {(hasTransAlt ? FormatAirportFeet(transAlt) : "N/A")}");
+                            sb.AppendLine($"  Transition Level:       {FormatTransitionLevel(transLevel)}");
                             sb.AppendLine();
                         }
 
                         // Scenery
                         sb.AppendLine("SCENERY:");
-                        sb.AppendLine($"  Local Path:   {reader["scenery_local_path"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  BGL File:     {reader["bgl_filename"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Local Path:   {FormatAirportText(reader["scenery_local_path"])}");
+                        sb.AppendLine($"  BGL File:     {FormatAirportText(reader["bgl_filename"])}");
                     }
                     else
                     {
@@ -1958,13 +2282,198 @@ public partial class ElectronicFlightBagForm : Form
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Formats the runway-END-scoped HEADINGS + COORDINATES block from already-resolved
+    /// column values. Extracted as a minimal, behavior-neutral seam (2026-07,
+    /// characterization tests) out of <see cref="GetRunwayDetailedInfo"/> with zero logic
+    /// change. <paramref name="endHeadingTrue"/>/<paramref name="endLonx"/>/
+    /// <paramref name="endLaty"/> must be the SELECTED runway end's own values (aliased in
+    /// the SQL as end_heading/end_lonx/end_laty), never the runway-center/primary-end value
+    /// a bare `re.*` join would ambiguously resolve to (the reciprocal-end, 180°-off heading
+    /// bug this method's rendering assumes has already been avoided — see the SQL comment
+    /// above the query in <see cref="GetRunwayDetailedInfo"/>). NOTE: this method only pins
+    /// correct FORMATTING of already-resolved values — it takes plain doubles/objects, never
+    /// touches the database, and so CANNOT catch a dropped `AS end_heading`/`AS end_lonx`/
+    /// `AS end_laty` SQL alias or a C# revert to the ambiguous bare column name. That SQL-level
+    /// regression is covered separately by the fixture test against
+    /// <see cref="GetRunwayDetailedInfoCore"/> in tests/MSFSBlindAssist.Tests/RunwayInfoAliasingTests.cs.
+    /// </summary>
+    internal static string FormatRunwayHeadingsAndCoordinates(double endHeadingTrue, double magVar, object? endLonx, object? endLaty)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("HEADINGS:");
+        sb.AppendLine($"  True Heading:         {FormatAirportDegrees(endHeadingTrue)}");
+        // Wrapped into 0-360: a north-aligned end (KDEN 34R, true 0.5, var 7.3 E) read "-6.8°".
+        sb.AppendLine($"  Magnetic Heading:     {FormatAirportDegrees(RelativeDirection.Normalize360(endHeadingTrue - magVar))}");
+        sb.AppendLine();
+
+        sb.AppendLine("COORDINATES:");
+        sb.AppendLine($"  Longitude:            {FormatAirportCoordinate(endLonx, 'E', 'W')}");
+        sb.AppendLine($"  Latitude:             {FormatAirportCoordinate(endLaty, 'N', 'S')}");
+        sb.AppendLine();
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Formats the PATTERN block. <paramref name="endAltitudeMsl"/> must be the SELECTED
+    /// runway end's own altitude (aliased end_altitude), same aliasing-fix rationale as
+    /// <see cref="FormatRunwayHeadingsAndCoordinates"/>. Extracted with zero logic change.
+    /// Same scope note as <see cref="FormatRunwayHeadingsAndCoordinates"/>: this only pins
+    /// correct rendering of an already-resolved value, not the SQL alias that resolves it —
+    /// see <see cref="GetRunwayDetailedInfoCore"/> and RunwayInfoAliasingTests.cs for that.
+    /// </summary>
+    internal static string FormatRunwayPatternAltitude(object? patternAltitude, object? endAltitudeMsl)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("PATTERN:");
+        sb.AppendLine($"  Pattern Altitude:     {FormatAirportFeet(patternAltitude)}");
+        sb.AppendLine($"  Altitude (MSL):       {FormatAirportFeet(endAltitudeMsl)}");
+        sb.AppendLine();
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// One airport-row frequency (<c>tower_frequency</c>, <c>atis_frequency</c> and the rest) as
+    /// "118.605 MHz". The unit depends on the build: MSFS 2024 builds store Hz (ESGG tower
+    /// 118605000 in Navdatareader 1.2.3 and 1.2.4 builds), an MSFS 2020 build stored kHz (118605,
+    /// checked in the sim against ESGG's ATIS, 118.380). The airband in kHz (108000-137000) and in
+    /// Hz (108000000-137000000) never overlap, so the size tells them apart: dividing by 1,000,000
+    /// alone read "0.119 MHz" on MSFS 2020, by 1000 alone "118605.000 MHz" on MSFS 2024. Always a
+    /// dot, as on the radio panel, whatever the Windows number format. "N/A" for a missing or zero
+    /// value.
+    /// </summary>
+    internal static string FormatAirportFrequency(object? frequency)
+    {
+        if (frequency == null || frequency == DBNull.Value) return "N/A";
+        double value = Convert.ToDouble(frequency, System.Globalization.CultureInfo.InvariantCulture);
+        if (value <= 0) return "N/A";
+        double mhz = value >= 1_000_000 ? value / 1_000_000.0 : value / 1000.0;
+        return mhz.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + " MHz";
+    }
+
+    /// <summary>A text column of the airport row; "N/A" when empty. A database NULL arrives as
+    /// DBNull, whose ToString() is "", so the old <c>?.ToString() ?? "N/A"</c> printed a blank line
+    /// (navdata leaves country, ICAO, IATA, FAA and local empty for almost every airport).</summary>
+    internal static string FormatAirportText(object? value)
+    {
+        string s = value == null || value == DBNull.Value ? "" : value.ToString()!.Trim();
+        return s.Length == 0 ? "N/A" : s;
+    }
+
+    /// <summary>Appends "<paramref name="label"/><value>" only when the column holds text.</summary>
+    internal static void AppendAirportTextIfPresent(StringBuilder sb, string label, object? value)
+    {
+        string? text = value == null || value == DBNull.Value ? null : value.ToString()?.Trim();
+        if (!string.IsNullOrEmpty(text)) sb.AppendLine(label + text);
+    }
+
+    /// <summary>A latitude or longitude in degrees, to 4 decimals (about 10 m) with its hemisphere:
+    /// 57.6600 N, 54.5682 W. Navdata stores these as 32-bit floats, so the raw double printed
+    /// float noise ("57,65998458862305"). The hemisphere comes from the ROUNDED value, so
+    /// -0.00003 reads "0.0000 E", not "0.0000 W".</summary>
+    internal static string FormatAirportCoordinate(object? degrees, char positive, char negative)
+    {
+        if (degrees == null || degrees == DBNull.Value) return "N/A";
+        double d = Math.Round(Convert.ToDouble(degrees, System.Globalization.CultureInfo.InvariantCulture),
+            4, MidpointRounding.AwayFromZero);
+        return Math.Abs(d).ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture)
+            + " " + (d < 0 ? negative : positive);
+    }
+
+    /// <summary>Magnetic variation to one decimal with its direction: navdata's mag_var is east
+    /// positive (ESGG 5.15 → "5.2° E", CYQX -17.33 → "17.3° W").</summary>
+    internal static string FormatAirportMagVar(object? degrees)
+    {
+        if (degrees == null || degrees == DBNull.Value) return "N/A";
+        double d = Math.Round(Convert.ToDouble(degrees, System.Globalization.CultureInfo.InvariantCulture),
+            1, MidpointRounding.AwayFromZero);
+        string value = Math.Abs(d).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "°";
+        return d == 0 ? value : value + (d < 0 ? " W" : " E");
+    }
+
+    /// <summary>A true heading in whole degrees, said to be true: 206.0055694580078 → "206° true".
+    /// A bare "121°" at KJFK sounds magnetic, and the magnetic heading there is 13° away.</summary>
+    internal static string FormatAirportHeading(object? degrees)
+    {
+        if (degrees == null || degrees == DBNull.Value) return "N/A";
+        double d = RoundedForDisplay(Convert.ToDouble(degrees, System.Globalization.CultureInfo.InvariantCulture), 0);
+        return d.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + "° true";
+    }
+
+    /// <summary>A height or length in whole feet: 510.045959472656 → "510 ft". Navdata stores
+    /// these as 32-bit floats, even in columns declared INTEGER. "N/A" when missing.</summary>
+    internal static string FormatAirportFeet(object? feet)
+    {
+        if (feet == null || feet == DBNull.Value) return "N/A";
+        double d = RoundedForDisplay(Convert.ToDouble(feet, System.Globalization.CultureInfo.InvariantCulture), 0);
+        return d.ToString("0", System.Globalization.CultureInfo.InvariantCulture) + " ft";
+    }
+
+    /// <summary>An angle to one decimal: loc width 3.40000009536743 → "3.4°", runway heading
+    /// 206.004821777344 → "206.0°". With <paramref name="trueHeading"/> it says so ("206.0° true"):
+    /// a localizer heading is true in navdata, and a bare number sounds like the magnetic course
+    /// (KDEN 34R's localizer is 0.5° true, about 353° magnetic). "N/A" when missing.</summary>
+    internal static string FormatAirportDegrees(object? degrees, bool trueHeading = false)
+    {
+        if (degrees == null || degrees == DBNull.Value) return "N/A";
+        double d = RoundedForDisplay(Convert.ToDouble(degrees, System.Globalization.CultureInfo.InvariantCulture), 1);
+        return d.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + (trueHeading ? "° true" : "°");
+    }
+
+    /// <summary>An ILS frequency in MHz to two decimals, as on the radio panel: 108.5 → "108.50 MHz".</summary>
+    internal static string FormatIlsFrequency(double mhz)
+        => RoundedForDisplay(mhz, 2).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " MHz";
+
+    /// <summary>Rounds for display, halves away from zero like every other number on these pages
+    /// (the standard "F1"/"F2" formats round 206.25 to even, "206.2", on .NET 10). A value that rounds
+    /// to zero comes back as plain zero: .NET prints negative zero as "-0", so an altitude of -0.495
+    /// ft (62 airports and 94 runway ends in an MSFS 2024 build) read "minus zero feet".</summary>
+    private static double RoundedForDisplay(double value, int decimals)
+    {
+        double rounded = Math.Round(value, decimals, MidpointRounding.AwayFromZero);
+        return rounded == 0 ? 0 : rounded;
+    }
+
+    /// <summary>The transition level, which navdata stores in feet: 18000 → "FL180" (it read
+    /// "FL18000"). Navdata writes 0 where it has none, so 0 reads "N/A", not "FL0".</summary>
+    internal static string FormatTransitionLevel(object? feet)
+    {
+        if (!IsPositiveNumber(feet)) return "N/A";
+        double fl = Convert.ToDouble(feet, System.Globalization.CultureInfo.InvariantCulture) / 100.0;
+        return "FL" + Math.Round(fl, MidpointRounding.AwayFromZero).ToString("0", System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    internal static bool IsPositiveNumber(object? value)
+        => value != null && value != DBNull.Value
+           && Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture) > 0;
+
     private string GetRunwayDetailedInfo(string icao, string runwayId)
     {
         var settings = SettingsManager.Current;
         string simulatorVersion = settings.SimulatorVersion ?? "FS2020";
         // See note in GetAirportDetailedInfo — central resolver with legacy fallback.
         string dbPath = DatabasePathResolver.ResolveExistingDatabasePath(simulatorVersion);
+        return GetRunwayDetailedInfoCore(dbPath, simulatorVersion, icao, runwayId);
+    }
 
+    /// <summary>
+    /// The DB-path-taking core of <see cref="GetRunwayDetailedInfo"/>, extracted verbatim
+    /// (2026-07, characterization tests) so a synthetic-SQLite fixture test can drive the REAL
+    /// aliased runway/runway_end SQL query below (not just the downstream
+    /// FormatRunwayHeadingsAndCoordinates/FormatRunwayPatternAltitude formatters, which only pin
+    /// correct rendering of already-resolved values and cannot catch a dropped `AS end_heading`
+    /// SQL alias). <paramref name="dbPath"/>/<paramref name="simulatorVersion"/> are exactly what
+    /// GetRunwayDetailedInfo already resolves via DatabasePathResolver/SettingsManager before
+    /// calling this — the public method is now a thin wrapper that resolves the path then
+    /// delegates here, so its output is byte-identical to before this extraction. Zero SQL or
+    /// formatting change from the pre-extraction method body.
+    /// </summary>
+    internal static string GetRunwayDetailedInfoCore(string dbPath, string simulatorVersion, string icao, string runwayId)
+    {
         if (!File.Exists(dbPath))
         {
             return $"Database not found: {dbPath}";
@@ -1994,9 +2503,15 @@ public partial class ElectronicFlightBagForm : Form
             }
 
             // Query runway with runway_end join.
-            // runway and runway_end BOTH have heading/altitude/lonx/laty; with `r.*, re.*` those
-            // ambiguous names resolved to the runway-CENTER (r) values, so a secondary end (e.g. 24L)
-            // showed the primary end's heading (off by 180°). Alias the runway-end values explicitly.
+            // runway and runway_end BOTH declare heading/altitude/lonx/laty, so a bare name in
+            // `r.*, re.*` is ambiguous. (Microsoft.Data.Sqlite resolves such a duplicate to the LAST
+            // occurrence — here re, the runway-end — NOT the first/`r` as once assumed; verified by
+            // probe against this exact query shape.) Rather than depend on that positional accident,
+            // the runway-end values are aliased to explicit `end_*` names and read by those names
+            // below (see the reader["end_heading"]/["end_lonx"]/["end_laty"]/["end_altitude"] uses),
+            // so a secondary end (e.g. 24L) always reports its own heading, never the runway-table
+            // center value. Dropping an alias makes those reads throw "no such column" — the failure
+            // RunwayInfoAliasingTests pins.
             var sql = @"
                 SELECT r.*, re.*,
                        re.heading  AS end_heading,
@@ -2019,51 +2534,107 @@ public partial class ElectronicFlightBagForm : Form
                 {
                     if (reader.Read())
                     {
-                        sb.AppendLine("═══════════════════════════════════════════════════");
-                        sb.AppendLine($"  RUNWAY INFORMATION - {runwayId}");
-                        sb.AppendLine("═══════════════════════════════════════════════════");
+                        sb.AppendLine($"RUNWAY INFORMATION - {runwayId}");
                         sb.AppendLine();
 
-                        sb.AppendLine($"Runway ID:        {reader["name"]?.ToString() ?? runwayId}");
+                        // Every number on this page reads with a dot whatever the Windows number
+                        // format, as on the airport page and the cockpit displays.
+                        var inv = System.Globalization.CultureInfo.InvariantCulture;
+                        var endName = reader["name"] as string;
+                        sb.AppendLine($"Runway ID:        {(string.IsNullOrWhiteSpace(endName) ? runwayId : endName)}");
                         sb.AppendLine();
 
                         // ILS INFORMATION (placed at top as requested)
+                        //
+                        // Resolution order:
+                        //  1. runway_end.ils_ident + an `ils` row SCOPED to this airport (exact
+                        //     airport+runway preferred, then same-airport). ILS idents are NOT unique
+                        //     across airports (498 shared in fs2024), so an ident-only match must never
+                        //     be trusted — an unscoped pick can return a DIFFERENT airport's ILS (the
+                        //     ENSD 26 → DAUA 04 bug; and when this airport's own row is an fs2024
+                        //     orphan, an ident-only tie still favours whichever row the engine scans
+                        //     first — live cases OMAM 31R, UIIR 32, DNMN 05, WSAT 36). Foreign-airport
+                        //     rows are therefore excluded outright, not merely ranked last.
+                        //  2. LittleNavMapProvider.GetILSForRunway — the airport+runway join plus the
+                        //     geometric fallback that recovers fs2024's ~200 "orphan" ILS rows
+                        //     (join columns left NULL, e.g. KPHX 07R) and VALIDATES them against this
+                        //     runway's threshold position and heading. Covers empty, orphaned, and
+                        //     stale runway_end.ils_ident alike.
+                        //  3. "No localizer".
+                        //
+                        // The block opens with LandingAidText's one-line summary ("ILS 110.10,
+                        // course 171" or "Localizer 108.70, course 152"), the same words as the
+                        // runway description. A localizer with
+                        // no glideslope is never labelled ILS: ESST's two localizers read as ILS
+                        // here while the G1000 rightly offered only LOC approaches.
+                        sb.AppendLine("LOCALIZER AND GLIDESLOPE:");
+                        double airportMagVar = reader["mag_var"] is object mv && mv != DBNull.Value
+                            ? Convert.ToDouble(mv, inv) : 0.0;
+                        // The course is the approach chart's (PublishedLocalizerCourse), as in the
+                        // runway lists; worked out from the localizer's heading only when no
+                        // procedure flies it.
+                        List<PublishedLocalizerCourse.Leg>? approachLegs = null;
+                        int LocalizerCourse(string ident, double locHeadingTrue, double localizerMagVar)
+                            => PublishedLocalizerCourse.Select(
+                                   approachLegs ??= PublishedLocalizerCourse.ReadAirport(connection, airportId),
+                                   runwayId, ident)
+                               ?? LandingAidText.MagneticCourse(locHeadingTrue, localizerMagVar);
                         var ilsIdent = reader["ils_ident"]?.ToString();
+                        bool ilsRendered = false;
                         if (!string.IsNullOrEmpty(ilsIdent))
                         {
-                            sb.AppendLine("ILS INFORMATION:");
-                            sb.AppendLine($"  ILS Ident:    {ilsIdent}");
-
-                            // Query ILS table for detailed information
-                            var ilsSql = "SELECT * FROM ils WHERE ident = @IlsIdent LIMIT 1";
+                            var ilsSql = @"SELECT * FROM ils
+                                           WHERE ident = @IlsIdent
+                                             AND UPPER(IFNULL(loc_airport_ident, '')) = UPPER(@ICAO)
+                                           ORDER BY (CASE WHEN UPPER(IFNULL(loc_runway_name, '')) = UPPER(@RunwayId) THEN 0 ELSE 1 END)
+                                           LIMIT 1";
                             using (var ilsCmd = new SqliteCommand(ilsSql, connection))
                             {
                                 ilsCmd.Parameters.AddWithValue("@IlsIdent", ilsIdent);
+                                ilsCmd.Parameters.AddWithValue("@ICAO", icao);
+                                ilsCmd.Parameters.AddWithValue("@RunwayId", runwayId);
                                 using (var ilsReader = ilsCmd.ExecuteReader())
                                 {
                                     if (ilsReader.Read())
                                     {
                                         var freq = ilsReader["frequency"];
-                                        sb.AppendLine($"  ILS Frequency:        {(freq != DBNull.Value ? $"{Convert.ToDouble(freq) / 1000.0:F2} MHz" : "N/A")}");
-                                        sb.AppendLine($"  ILS Name:             {ilsReader["name"]?.ToString() ?? "N/A"}");
-                                        sb.AppendLine($"  ILS Region:           {ilsReader["region"]?.ToString() ?? "N/A"}");
-                                        sb.AppendLine($"  ILS Type:             {ilsReader["type"]?.ToString() ?? "N/A"}");
-                                        sb.AppendLine($"  Loc Heading:          {ilsReader["loc_heading"]}°");
-                                        sb.AppendLine($"  Loc Width:            {ilsReader["loc_width"]}°");
+                                        double? gsRangeRaw = ilsReader["gs_range"] is object gr && gr != DBNull.Value ? Convert.ToDouble(gr, inv) : null;
+                                        double? gsPitchRaw = ilsReader["gs_pitch"] is object gp && gp != DBNull.Value ? Convert.ToDouble(gp, inv) : null;
+                                        double locHeading = ilsReader["loc_heading"] is object lh && lh != DBNull.Value ? Convert.ToDouble(lh, inv) : 0.0;
+                                        string? ilsType = ilsReader["type"] is object ty && ty != DBNull.Value ? Convert.ToString(ty, inv) : null;
+                                        // The localizer's own variation, the airport's only when it has none
+                                        // (LandingAidText.MagneticCourse: the airport's is 38° out at BGTL).
+                                        double ilsMagVar = ilsReader["mag_var"] is object ilsMv && ilsMv != DBNull.Value
+                                            ? Convert.ToDouble(ilsMv, inv) : airportMagVar;
+                                        // ils.frequency is kHz in both the MSFS 2020 and 2024 builds.
+                                        if (freq != DBNull.Value)
+                                        {
+                                            sb.AppendLine("  " + LandingAidText.Describe(
+                                                LandingAidText.HasGlideslope(gsRangeRaw, gsPitchRaw), ilsType,
+                                                Convert.ToDouble(freq, inv) / 1000.0,
+                                                LocalizerCourse(ilsIdent, locHeading, ilsMagVar),
+                                                gsPitchRaw ?? 0.0));
+                                        }
+                                        sb.AppendLine($"  Ident:                {ilsIdent}");
+                                        sb.AppendLine($"  Frequency:            {(freq != DBNull.Value ? FormatIlsFrequency(Convert.ToDouble(freq, inv) / 1000.0) : "N/A")}");
+                                        sb.AppendLine($"  Name:                 {FormatAirportText(ilsReader["name"])}");
+                                        sb.AppendLine($"  Region:               {FormatAirportText(ilsReader["region"])}");
+                                        sb.AppendLine($"  Loc Heading:          {FormatAirportDegrees(ilsReader["loc_heading"], trueHeading: true)}");
+                                        sb.AppendLine($"  Loc Width:            {FormatAirportDegrees(ilsReader["loc_width"])}");
                                         sb.AppendLine($"  Range:                {ilsReader["range"]} NM");
                                         sb.AppendLine($"  Has Backcourse:       {(Convert.ToInt32(ilsReader["has_backcourse"] ?? 0) == 1 ? "Yes" : "No")}");
-                                        sb.AppendLine($"  Performance Indicator:{ilsReader["perf_indicator"]?.ToString() ?? "N/A"}");
-                                        sb.AppendLine($"  Provider:             {ilsReader["provider"]?.ToString() ?? "N/A"}");
-                                        sb.AppendLine($"  Mag Var:              {ilsReader["mag_var"]}°");
+                                        sb.AppendLine($"  Performance Indicator:{FormatAirportText(ilsReader["perf_indicator"])}");
+                                        sb.AppendLine($"  Provider:             {FormatAirportText(ilsReader["provider"])}");
+                                        sb.AppendLine($"  Mag Var:              {FormatAirportMagVar(ilsReader["mag_var"])}");
 
                                         // DME Information
                                         var dmeRange = ilsReader["dme_range"];
                                         if (dmeRange != DBNull.Value && Convert.ToInt32(dmeRange) > 0)
                                         {
                                             sb.AppendLine($"  DME Range:            {dmeRange} NM");
-                                            sb.AppendLine($"  DME Altitude:         {ilsReader["dme_altitude"]} ft");
-                                            sb.AppendLine($"  DME Longitude:        {ilsReader["dme_lonx"]}");
-                                            sb.AppendLine($"  DME Latitude:         {ilsReader["dme_laty"]}");
+                                            sb.AppendLine($"  DME Altitude:         {FormatAirportFeet(ilsReader["dme_altitude"])}");
+                                            sb.AppendLine($"  DME Longitude:        {FormatAirportCoordinate(ilsReader["dme_lonx"], 'E', 'W')}");
+                                            sb.AppendLine($"  DME Latitude:         {FormatAirportCoordinate(ilsReader["dme_laty"], 'N', 'S')}");
                                         }
 
                                         // Glideslope Information
@@ -2071,75 +2642,95 @@ public partial class ElectronicFlightBagForm : Form
                                         if (gsRange != DBNull.Value && Convert.ToInt32(gsRange) > 0)
                                         {
                                             sb.AppendLine($"  GS Range:             {gsRange} NM");
-                                            sb.AppendLine($"  GS Pitch:             {ilsReader["gs_pitch"]}°");
-                                            sb.AppendLine($"  GS Altitude:          {ilsReader["gs_altitude"]} ft");
-                                            sb.AppendLine($"  GS Longitude:         {ilsReader["gs_lonx"]}");
-                                            sb.AppendLine($"  GS Latitude:          {ilsReader["gs_laty"]}");
+                                            sb.AppendLine($"  GS Pitch:             {FormatAirportDegrees(ilsReader["gs_pitch"])}");
+                                            sb.AppendLine($"  GS Altitude:          {FormatAirportFeet(ilsReader["gs_altitude"])}");
+                                            sb.AppendLine($"  GS Longitude:         {FormatAirportCoordinate(ilsReader["gs_lonx"], 'E', 'W')}");
+                                            sb.AppendLine($"  GS Latitude:          {FormatAirportCoordinate(ilsReader["gs_laty"], 'N', 'S')}");
                                         }
 
                                         // Localizer coordinates
-                                        sb.AppendLine($"  Localizer Altitude:   {ilsReader["altitude"]} ft");
-                                        sb.AppendLine($"  Localizer Longitude:  {ilsReader["lonx"]}");
-                                        sb.AppendLine($"  Localizer Latitude:   {ilsReader["laty"]}");
+                                        sb.AppendLine($"  Localizer Altitude:   {FormatAirportFeet(ilsReader["altitude"])}");
+                                        sb.AppendLine($"  Localizer Longitude:  {FormatAirportCoordinate(ilsReader["lonx"], 'E', 'W')}");
+                                        sb.AppendLine($"  Localizer Latitude:   {FormatAirportCoordinate(ilsReader["laty"], 'N', 'S')}");
+                                        ilsRendered = true;
                                     }
                                 }
                             }
-                            sb.AppendLine();
                         }
-                        else
+                        if (!ilsRendered)
                         {
-                            sb.AppendLine("ILS INFORMATION:");
-                            sb.AppendLine("  No ILS available");
-                            sb.AppendLine();
+                            // No airport-scoped ils row: runway_end.ils_ident is empty, stale, or its
+                            // row is one of fs2024's ~200 orphans (join columns NULL, e.g. KPHX 07R;
+                            // OrphanIlsMatcher states the measured count and its date).
+                            // GetILSForRunway spatially validates any recovered row against this
+                            // runway's threshold + heading, so a shared/stale ident can never surface
+                            // another airport's ILS here. Reuses the method's open connection (this
+                            // runs per runway-list keypress on the UI thread).
+                            var recoveredIls = new LittleNavMapProvider(dbPath, simulatorVersion)
+                                .GetILSForRunway(connection, icao, runwayId);
+                            if (recoveredIls != null)
+                            {
+                                sb.AppendLine("  " + LandingAidText.Describe(
+                                    recoveredIls.HasGlideslope, recoveredIls.Type, recoveredIls.Frequency,
+                                    LocalizerCourse(recoveredIls.Ident, recoveredIls.LocalizerHeading, recoveredIls.MagVar ?? airportMagVar),
+                                    recoveredIls.HasGlideslope ? recoveredIls.GlideslopePitch : 0.0));
+                                sb.AppendLine($"  Ident:                {recoveredIls.Ident}");
+                                sb.AppendLine($"  Frequency:            {FormatIlsFrequency(recoveredIls.Frequency)}");
+                                sb.AppendLine($"  Loc Heading:          {FormatAirportDegrees(recoveredIls.LocalizerHeading, trueHeading: true)}");
+                                sb.AppendLine($"  Loc Width:            {FormatAirportDegrees(recoveredIls.LocalizerWidth)}");
+                                if (recoveredIls.Range > 0)
+                                    sb.AppendLine($"  Range:                {recoveredIls.Range} NM");
+                                if (recoveredIls.GlideslopeRange > 0)
+                                {
+                                    sb.AppendLine($"  GS Range:             {recoveredIls.GlideslopeRange} NM");
+                                    sb.AppendLine($"  GS Pitch:             {FormatAirportDegrees(recoveredIls.GlideslopePitch)}");
+                                }
+                                ilsRendered = true;
+                            }
                         }
+                        if (!ilsRendered)
+                        {
+                            sb.AppendLine("  " + LandingAidText.NoLocalizer);
+                        }
+                        sb.AppendLine();
 
                         // DIMENSIONS
                         sb.AppendLine("DIMENSIONS:");
-                        sb.AppendLine($"  Length:               {reader["length"]} ft");
-                        sb.AppendLine($"  Width:                {reader["width"]} ft");
+                        sb.AppendLine($"  Length:               {FormatAirportFeet(reader["length"])}");
+                        sb.AppendLine($"  Width:                {FormatAirportFeet(reader["width"])}");
                         sb.AppendLine();
 
                         // SURFACE
                         sb.AppendLine("SURFACE:");
-                        sb.AppendLine($"  Surface:              {reader["surface"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Surface:              {FormatAirportText(reader["surface"])}");
                         var smoothness = reader["smoothness"];
-                        sb.AppendLine($"  Smoothness:           {(smoothness != DBNull.Value ? smoothness.ToString() : "N/A")}");
-                        sb.AppendLine($"  Shoulder:             {reader["shoulder"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Smoothness:           {(smoothness != DBNull.Value ? Convert.ToDouble(smoothness, inv).ToString("0.00", inv) : "N/A")}");
+                        sb.AppendLine($"  Shoulder:             {FormatAirportText(reader["shoulder"])}");
                         sb.AppendLine();
 
                         // HEADINGS (use the selected runway END's heading, not the runway-center value)
                         var magVar = Convert.ToDouble(reader["mag_var"] ?? 0.0);
                         var heading = Convert.ToDouble(reader["end_heading"] ?? 0.0);
-                        sb.AppendLine("HEADINGS:");
-                        sb.AppendLine($"  True Heading:         {heading:F1}°");
-                        sb.AppendLine($"  Magnetic Heading:     {(heading - magVar):F1}°");
-                        sb.AppendLine();
-
-                        // COORDINATES (threshold of the selected runway end)
-                        sb.AppendLine("COORDINATES:");
-                        sb.AppendLine($"  Longitude:            {reader["end_lonx"]}");
-                        sb.AppendLine($"  Latitude:             {reader["end_laty"]}");
-                        sb.AppendLine();
+                        // Extracted, behavior-neutral seam (2026-07, characterization tests) — see
+                        // FormatRunwayHeadingsAndCoordinates for the pinned runway_end aliasing fix.
+                        sb.Append(FormatRunwayHeadingsAndCoordinates(heading, magVar, reader["end_lonx"], reader["end_laty"]));
 
                         // THRESHOLD DATA
                         sb.AppendLine("THRESHOLD DATA:");
-                        sb.AppendLine($"  Offset Threshold:     {reader["offset_threshold"]} ft");
-                        sb.AppendLine($"  Blast Pad:            {reader["blast_pad"]} ft");
-                        sb.AppendLine($"  Overrun:              {reader["overrun"]} ft");
+                        sb.AppendLine($"  Offset Threshold:     {FormatAirportFeet(reader["offset_threshold"])}");
+                        sb.AppendLine($"  Blast Pad:            {FormatAirportFeet(reader["blast_pad"])}");
+                        sb.AppendLine($"  Overrun:              {FormatAirportFeet(reader["overrun"])}");
                         sb.AppendLine();
 
-                        // PATTERN ALTITUDE
-                        sb.AppendLine("PATTERN:");
-                        sb.AppendLine($"  Pattern Altitude:     {reader["pattern_altitude"]} ft");
-                        sb.AppendLine($"  Altitude (MSL):       {reader["end_altitude"]} ft");
-                        sb.AppendLine();
+                        // PATTERN ALTITUDE — Altitude (MSL) uses the aliased runway-END altitude.
+                        sb.Append(FormatRunwayPatternAltitude(reader["pattern_altitude"], reader["end_altitude"]));
 
                         // LIGHTING
                         sb.AppendLine("LIGHTING:");
-                        sb.AppendLine($"  Edge Light:           {reader["edge_light"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  Center Light:         {reader["center_light"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Edge Light:           {FormatAirportText(reader["edge_light"])}");
+                        sb.AppendLine($"  Center Light:         {FormatAirportText(reader["center_light"])}");
                         sb.AppendLine($"  Has Center Red:       {(Convert.ToInt32(reader["has_center_red"] ?? 0) == 1 ? "Yes" : "No")}");
-                        sb.AppendLine($"  Approach Light System:{reader["app_light_system_type"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Approach Light System:{FormatAirportText(reader["app_light_system_type"])}");
                         sb.AppendLine($"  Has End Lights:       {(Convert.ToInt32(reader["has_end_lights"] ?? 0) == 1 ? "Yes" : "No")}");
                         sb.AppendLine($"  Has REILS:            {(Convert.ToInt32(reader["has_reils"] ?? 0) == 1 ? "Yes" : "No")}");
                         sb.AppendLine($"  Has Touchdown Lights: {(Convert.ToInt32(reader["has_touchdown_lights"] ?? 0) == 1 ? "Yes" : "No")}");
@@ -2158,8 +2749,8 @@ public partial class ElectronicFlightBagForm : Form
                         sb.AppendLine("OPERATIONS:");
                         sb.AppendLine($"  Is Takeoff:           {(Convert.ToInt32(reader["is_takeoff"] ?? 0) == 1 ? "Yes" : "No")}");
                         sb.AppendLine($"  Is Landing:           {(Convert.ToInt32(reader["is_landing"] ?? 0) == 1 ? "Yes" : "No")}");
-                        sb.AppendLine($"  Is Pattern:           {reader["is_pattern"]?.ToString() ?? "N/A"}");
-                        sb.AppendLine($"  End Type:             {reader["end_type"]?.ToString() ?? "N/A"}");
+                        sb.AppendLine($"  Is Pattern:           {FormatAirportText(reader["is_pattern"])}");
+                        sb.AppendLine($"  End Type:             {FormatAirportText(reader["end_type"])}");
                         sb.AppendLine();
 
                         // VASI
@@ -2169,8 +2760,7 @@ public partial class ElectronicFlightBagForm : Form
                         if (!string.IsNullOrEmpty(leftVasiType))
                         {
                             sb.AppendLine($"  Left VASI Type:       {leftVasiType}");
-                            var leftPitch = reader["left_vasi_pitch"];
-                            sb.AppendLine($"  Left VASI Pitch:      {(leftPitch != DBNull.Value ? $"{leftPitch}°" : "N/A")}");
+                            sb.AppendLine($"  Left VASI Pitch:      {FormatAirportDegrees(reader["left_vasi_pitch"])}");
                         }
                         else
                         {
@@ -2180,8 +2770,7 @@ public partial class ElectronicFlightBagForm : Form
                         if (!string.IsNullOrEmpty(rightVasiType))
                         {
                             sb.AppendLine($"  Right VASI Type:      {rightVasiType}");
-                            var rightPitch = reader["right_vasi_pitch"];
-                            sb.AppendLine($"  Right VASI Pitch:     {(rightPitch != DBNull.Value ? $"{rightPitch}°" : "N/A")}");
+                            sb.AppendLine($"  Right VASI Pitch:     {FormatAirportDegrees(reader["right_vasi_pitch"])}");
                         }
                         else
                         {

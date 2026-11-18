@@ -14,6 +14,7 @@ public partial class DestinationRunwayForm : Form
 
     private TextBox icaoTextBox = null!;
     private ListBox runwayListBox = null!;
+    private CheckBox manualLandingCheckBox = null!;
     private Button selectButton = null!;
     private Button cancelButton = null!;
     private Label statusLabel = null!;
@@ -23,6 +24,13 @@ public partial class DestinationRunwayForm : Form
 
     public Runway? SelectedRunway { get; private set; }
     public Airport? SelectedAirport { get; private set; }
+    /// <summary>
+    /// True when the pilot checked "Manual landing assist" — arms the flare tones as well as the
+    /// rollout centerline tone (LandingFlareAssistManager) for this destination. Unchecked by default,
+    /// the choice for ILS-flown approaches: the destination then arms the rollout centerline tone alone
+    /// while the Hand Fly setting RolloutCenterlineToneEnabled is on (MainForm.RefreshRolloutCueArming).
+    /// </summary>
+    public bool ManualLandingAssist => manualLandingCheckBox.Checked;
 
     public DestinationRunwayForm(IAirportDataProvider database, ScreenReaderAnnouncer announcer)
     {
@@ -37,7 +45,7 @@ public partial class DestinationRunwayForm : Form
     private void InitializeComponent()
     {
         Text = "Select Destination Runway";
-        Size = new Size(400, 350);
+        Size = new Size(400, 390);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -84,10 +92,23 @@ public partial class DestinationRunwayForm : Form
         runwayListBox.SelectedIndexChanged += RunwayListBox_SelectedIndexChanged;
         runwayListBox.KeyDown += RunwayListBox_KeyDown;
 
+        // Manual landing assist checkbox (unchecked by default). When checked, the flare tones
+        // arm as well as the rollout centerline tone; unchecked (the normal choice for ILS-flown
+        // approaches) the rollout centerline tone alone follows the Hand Fly setting.
+        manualLandingCheckBox = new CheckBox
+        {
+            Text = "Manual landing assist (adds flare tones)",
+            Location = new Point(20, 262),
+            Size = new Size(350, 22),
+            Checked = false,
+            AccessibleName = "Manual landing assist",
+            AccessibleDescription = "When checked, a flare guidance tone plays from 50 feet, then the centerline tone guides the rollout. Leave unchecked for ILS approaches: the rollout centerline tone still plays after touchdown while it is switched on in the Hand Fly settings, which it is by default."
+        };
+
         // Status Label
         statusLabel = new Label
         {
-            Location = new Point(20, 265),
+            Location = new Point(20, 290),
             Size = new Size(350, 20),
             AccessibleName = "Status",
             Text = "Enter an airport ICAO code to see available runways"
@@ -97,7 +118,7 @@ public partial class DestinationRunwayForm : Form
         selectButton = new Button
         {
             Text = "Select",
-            Location = new Point(215, 290),
+            Location = new Point(215, 315),
             Size = new Size(75, 30),
             Enabled = false,
             AccessibleName = "Select Destination Runway",
@@ -108,7 +129,7 @@ public partial class DestinationRunwayForm : Form
         cancelButton = new Button
         {
             Text = "Cancel",
-            Location = new Point(295, 290),
+            Location = new Point(295, 315),
             Size = new Size(75, 30),
             DialogResult = DialogResult.Cancel,
             AccessibleName = "Cancel",
@@ -119,7 +140,7 @@ public partial class DestinationRunwayForm : Form
         Controls.AddRange(new Control[]
         {
             icaoLabel, icaoTextBox, runwayLabel, runwayListBox,
-            statusLabel, selectButton, cancelButton
+            manualLandingCheckBox, statusLabel, selectButton, cancelButton
         });
 
         AcceptButton = selectButton;
@@ -131,8 +152,9 @@ public partial class DestinationRunwayForm : Form
         // Set tab order for logical navigation
         icaoTextBox.TabIndex = 0;
         runwayListBox.TabIndex = 1;
-        selectButton.TabIndex = 2;
-        cancelButton.TabIndex = 3;
+        manualLandingCheckBox.TabIndex = 2;
+        selectButton.TabIndex = 3;
+        cancelButton.TabIndex = 4;
 
         // Focus and bring window to front when opened
         Load += (sender, e) =>

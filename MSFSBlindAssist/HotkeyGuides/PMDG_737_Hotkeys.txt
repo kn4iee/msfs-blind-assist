@@ -1,4 +1,4 @@
-PMDG 737-800 HOTKEY REFERENCE
+PMDG 737 HOTKEY REFERENCE
 
 Application Navigation:
   Ctrl+1     Focus Sections List
@@ -42,6 +42,14 @@ Weight:
 
 Flaps:
   L          Read Flap Position
+
+Flap Maneuver Speeds (calculated for your current weight):
+  Shift+1    Flaps up maneuver speed
+  Shift+2    Flaps 1 maneuver speed
+  Shift+3    Flaps 5 maneuver speed
+  Shift+4    Flaps 10 maneuver speed
+  Shift+5    Flaps 15 maneuver speed
+  Shift+6    Flaps 25 maneuver speed
 
 Landing Gear:
   Shift+G    Read Gear Position
@@ -98,6 +106,10 @@ Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
   Y          Taxi Status (current taxiway, next turn, distance to destination)
   Ctrl+Y     Repeat Current Taxi Instruction
   Alt+Y      Where Am I (announces current taxiway, gate, or runway at nearest airport)
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter tunes the selected frequency into COM 1 standby
+                and Shift+Enter tunes it straight into COM 1 active; COM 1 is read back to confirm.
   (Open the form with Input mode > Shift+Y)
 
 Waypoint Tracking (use Fix Track window to add):
@@ -107,16 +119,61 @@ Waypoint Tracking (use Fix Track window to add):
   4          Track Slot 4
   5          Track Slot 5
 
-AI Display Reading (requires Gemini API key in File > Gemini Settings):
-  Alt+P      Read PFD (use Ctrl+2 cockpit view first)
-  Alt+N      Read Navigation Display (use Ctrl+2 cockpit view first)
-  Alt+I      Read ISFD backup instruments (use Ctrl+2 cockpit view first)
-  Alt+E      Read EICAS display (use Ctrl+2 cockpit view first)
+Engine displays (no AI key needed):
+  Alt+E      Open the Engine displays window: the upper and lower engine
+             displays as two live lists (page name first, then N1, EGT,
+             fuel flow, alerts, fuel; N2, oil, vibration; or the SYS page),
+             then MFD ENG, MFD SYS, Lower DU Captain, Fuel Flow Used,
+             Fuel Flow Reset, N1 SET and Manual N1 (type the N1 reference
+             and press Enter; N1 SET on 1, 2 or BOTH). Tab moves, Escape
+             closes. If the displays cannot be read, it reads the upper
+             display with AI instead.
+
+Navigation display (no AI key needed):
+  Alt+N      Open the Navigation display window: the Captain's ND as one
+             live list, top of the screen to the bottom (mode and range,
+             GS, TAS and wind, the track, the active waypoint, the map
+             buttons on, then each item on the map with its distance and
+             degrees off the top of the map, the bottom corners and the
+             messages), then Mode, Range, CTR, TFC, WXR, STA, WPT, ARPT,
+             DATA, POS, TERR, VOR/ADF 1 and VOR/ADF 2. Tab moves, Escape
+             closes. If the ND cannot be read, it reads the ND with AI
+             instead.
+  Ctrl+W     Active waypoint as the ND shows it: name, arrival time and
+             distance to go.
+
+Primary flight display (no AI key needed):
+  Alt+P      Open the Primary flight display window: the Captain's PFD as
+             one live list, part by part (the FMA, above, on and below the
+             speed tape, the attitude with the flight director and the
+             approach pointers, the altitude tape, vertical speed, heading,
+             then the messages), then MINS mode, Minimums, MINS RST, Baro
+             units, Altimeter, STD, FPV, MTRS, Flight director, Speed
+             reference and Speed reference value (type it and press Enter;
+             the selector on V1, VR, WT, VREF or BUG). Tab moves, Escape
+             closes. If the PFD cannot be read, it reads the PFD with AI
+             instead; with the classic EFIS display selected, it says so
+             first.
+
+AI Display Reading (requires an AI API key — Gemini or Claude — in File > Settings > AI tab):
+  Alt+I      Read ISFD backup instruments
+  Alt+S      Read Lower Display Unit (N2, oil, vibration — or the ND when
+             the LOWER DU selector is set to it)
   Alt+D      Describe outside scene
+
+  You no longer need to select a cockpit view first: the app moves the
+  simulator camera to the display it is reading and puts it back afterwards —
+  including a saved custom camera such as a cabin or wing view.
+  From an outside view it says "Switch to a cockpit view first" and does
+  nothing. If it cannot put your view back it says so rather than leaving
+  you somewhere you did not choose, and the next display read you take will
+  try again to return you there.
 
 Traffic and Weather:
   R          Announce Tracked TCAS Traffic
   Ctrl+R     Open TCAS Traffic Window
+  Shift+O    Open Volanta window (Volanta users and network pilots around you,
+             your Volanta friends and online ATC; also Extras > Volanta)
   Shift+R    Open Weather Radar Window (auto-detects ActiveSky and silently
              uses richer data — surface wind+gust, ceiling, QNH, turbulence,
              METAR-decoded precipitation — when running. Falls back to MSFS
@@ -132,7 +189,7 @@ Displays and Windows:
   Shift+L    Location Info
   Shift+M    Show METAR Report (VATSIM, plus ActiveSky METAR if AS detected)
   Shift+B    SimBrief Briefing
-  Shift+C    Show Checklist
+  Shift+C    First Officer window (checklists and flows)
 
 INPUT MODE - PMDG EFB Tablet:
   Shift+T    PMDG EFB Tablet - Captain tablet
@@ -154,6 +211,16 @@ Hand Fly Mode Hotkeys:
 Visual Guidance Mode Hotkeys:
   F          Read Target VS
 
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
 INPUT MODE - Press [ to activate
 
 Teleport:
@@ -170,6 +237,11 @@ MCP Set Values:
   Ctrl+A     Set Altitude (opens dialog with Intervene, VNAV, Level Change, ALT HOLD toggles)
   Ctrl+V     Set Vertical Speed (opens dialog with VS Engage toggle)
 
+Note: in these four dialogs a button press that works is confirmed by the
+button's new label, the "MCP:" line and the "FMA:" line; a press that
+changes nothing is read back about 3 seconds later. A button that shows no
+state, such as Altitude Intervene, says "Altitude Intervene pressed" at once.
+
 Altimeter:
   Ctrl+B     Set altimeter (input dialog accepts hPa 900-1060 or
              inHg 26.50-31.30; branches on entered magnitude, so both
@@ -178,8 +250,9 @@ Altimeter:
 
 Radios:
   Ctrl+N     Set NAV radios (input dialog with NAV 1 and NAV 2 frequency
-             and course; pre-filled with current values, applies all on
-             Set; frequency 108.00-117.95 MHz, course 0-359 degrees)
+             and course; pre-filled with current values, Enter in any
+             field applies all four; frequency 108.00-117.95 MHz, course
+             0-359 degrees)
 
 Taxi Guidance:
   Shift+Y    Open Taxi Assist Form (enter ATC taxi clearance, start guidance)
@@ -189,6 +262,14 @@ Taxi Guidance:
              touchdown; guidance auto-starts when you land — reuses the ILS
              destination runway if one is set; announces headwind/tailwind on
              runway selection so you can pick an exit that matches the rollout)
+
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
 
 General:
   Escape     Exit active hotkey mode
@@ -234,8 +315,37 @@ line-select keys: F1-F6 for L1-L6 and F7-F12 for R1-R6. With this on,
 the default Ctrl+1-6 / Alt+1-6 chords are disabled.
 
 Automatic Announcements:
-  - MCP value changes (speed, heading, altitude, vertical speed)
-  - Autopilot mode changes (AP, AT, LNAV, VNAV, LVL CHG, HDG SEL, VS, ALT HOLD, VOR/LOC, APP)
+  - MCP value changes (speed, heading, altitude, vertical speed), switches and
+    knobs, each starting with "MCP:", for example "MCP: altitude 10000 feet"
+    or "MCP: Bank Limit: 25"
+  - Autopilot mode changes (AP, AT, LNAV, VNAV, LVL CHG, HDG SEL, VS, ALT HOLD, VOR/LOC, APP),
+    for example "MCP: Level Change: engaged"
+  - Flight mode annunciator (FMA) changes, starting with "FMA:", in Boeing's
+    wording: A/T, roll and pitch modes, armed modes and the AFDS status, for
+    example "FMA: Roll: VOR/LOC, Pitch: G/S"; a mode with no word is said as
+    "unrecognised". The Primary flight display window (Output Alt+P) lists the
+    whole FMA at the top. The MCP lights are still announced too, and neither
+    cuts the other off (mute "Flight Mode Annunciator" in Ctrl+M; the window still
+    lists it). Needs PMDG's SDK data: until it arrives, nothing is announced and
+    the window says "FMA reader waiting for PMDG SDK data". Says "FMA announcements unavailable"
+    once if it cannot read the FMA: at once for an unrecognised PMDG file, after
+    two minutes if the FMA is not found in the aircraft's memory or does not match
+    the aircraft, and then it keeps trying every 30 seconds. Says "stopped" if it
+    loses the FMA in flight (its reading stops matching the aircraft, or the memory
+    is lost), and "resumed" when it reads the FMA again, with any mode change you
+    missed; after "stopped: unexpected values" it waits for a new flight. After
+    a reload where you heard "stopped", it says "resumed" when it reads the new
+    flight's FMA. While stopped, the window's FMA line says the same, and when its
+    reading does not match, adds the last known FMA
+  - Engine display alerts appearing and going, starting with the display they
+    are on, for example "Upper DU alert: engine 1 START VALVE OPEN" and
+    "Upper DU alert gone: engine 1 LOW OIL PRESSURE"; gauge colours, for
+    example "Upper DU: engine 1 EGT amber" (then red or normal; vibration
+    "high"); the thrust mode, for example "Upper DU: thrust mode CLB".
+    Nothing while the displays are dark or for a few seconds after they come
+    on. Three Ctrl+M rows: "Engine display alerts", "Engine gauge colors",
+    "Thrust mode". The start valve and overhead light announcements are
+    kept as well.
   - Master Warning / Master Caution (with cleared state)
   - All annunciator lights (on and off)
   - Speed brake position changes

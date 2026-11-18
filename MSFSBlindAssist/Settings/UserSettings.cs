@@ -1,3 +1,5 @@
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using MSFSBlindAssist.Services;
 
 namespace MSFSBlindAssist.Settings;
@@ -46,12 +48,43 @@ public class UserSettings
         /// </summary>
         public bool AnnounceTimeWithSeconds { get; set; } = false;
 
+        // ── VATSIM (vPilot) announcements ────────────────────────────────────
+        // Master switch is OFF by default: turning it on is what installs the plugin
+        // into vPilot's Plugins folder, so it must be a deliberate act.
+        public bool VatsimAnnouncementsEnabled { get; set; } = false;
+        public bool VatsimAnnounceConnect { get; set; } = true;
+        public bool VatsimAnnounceDisconnect { get; set; } = true;
+        public bool VatsimAnnouncePrivateMessages { get; set; } = true;
+        public bool VatsimAnnounceRadioMessages { get; set; } = true;
+        public bool VatsimAnnounceSelcal { get; set; } = true;
+
+        // ── Updates ──────────────────────────────────────────────────────────
+        // Release by default: preview builds carry the newest changes but have had far
+        // less flying time, so opting in is a deliberate act guarded by a confirmation in
+        // the Updates settings tab.
+        public UpdateChannel UpdateChannel { get; set; } = UpdateChannel.Release;
+
+        // On by default. The check is one HTTP call fired after the main window is shown;
+        // it never blocks startup and stays completely silent on any failure.
+        public bool CheckForUpdatesOnStartup { get; set; } = true;
+
+        // On by default: at launch, offer the navigation database and the location data while
+        // either is missing (Services/StartupDataCheck, UPD-9). The ONLY thing that silences the
+        // dialog: a dismissal is never remembered.
+        public bool CheckForMissingDataOnStartup { get; set; } = true;
+
         // Hand Fly Settings
-        public HandFlyFeedbackMode HandFlyFeedbackMode { get; set; } = HandFlyFeedbackMode.TonesOnly;
+        // Default is Both (tone + spoken pitch/bank): spoken pitch is safety-relevant
+        // whenever Hand Fly engages — the auto-handoff at rotation AND a manual
+        // activation on a go-around — so it must not silently vanish behind a
+        // tones-only default. Pilots who prefer pure tones switch the mode back.
+        public HandFlyFeedbackMode HandFlyFeedbackMode { get; set; } = HandFlyFeedbackMode.Both;
         public double HandFlyToneVolume { get; set; } = 0.05; // 0.0 to 1.0 (default 5%)
         public HandFlyWaveType HandFlyWaveType { get; set; } = HandFlyWaveType.Sine;
         public bool HandFlyMonitorHeading { get; set; } = true;
-        public bool HandFlyMonitorVerticalSpeed { get; set; } = true;
+        // Default OFF: with pitch/bank now spoken by default (feedback mode Both),
+        // per-second VS numbers on top are too verbose. Heading stays default-on.
+        public bool HandFlyMonitorVerticalSpeed { get; set; } = false;
         public int HandFlyAnnouncementIntervalMs { get; set; } = 1000; // Configurable interval for heading/VS announcements
 
         // Visual Guidance Settings
@@ -74,7 +107,31 @@ public class UserSettings
         public HandFlyWaveType TakeoffAssistToneWaveform { get; set; } = HandFlyWaveType.Sine;
         public double TakeoffAssistToneVolume { get; set; } = 0.05; // 0.0 to 1.0 (default 5%)
         public bool TakeoffAssistMuteCenterlineAnnouncements { get; set; } = false; // Mute centerline deviation announcements
-        public bool TakeoffAssistInvertPanning { get; set; } = false; // Invert panning direction
+        // LEGACY (pre-PR-#111): kept only so SeedTakeoffAssistToneConvention can read
+        // the user's old choice; no runtime code consults this anymore.
+        public bool TakeoffAssistInvertPanning { get; set; } = false;
+
+        /// <summary>
+        /// True (default) = the tone plays on the side to STEER TOWARD (taxi-tone
+        /// convention; steer into the tone to centre). False = steer away.
+        /// Replaces the runtime use of TakeoffAssistInvertPanning — under the OLD
+        /// heading-error tone, InvertPanning == true was the steer-toward mapping,
+        /// so the one-time migration in SettingsManager seeds this from that value
+        /// to preserve each existing user's experienced direction.
+        /// </summary>
+        public bool TakeoffAssistSteerTowardTone { get; set; } = true;
+
+        /// <summary>
+        /// One-time migration flag for the PR #111 tone changes. False in settings
+        /// files that predate TakeoffAssistSteerTowardTone; set true after
+        /// SettingsManager seeds (a) the steer-toward setting from the old
+        /// InvertPanning choice and (b) a stored threshold 0 ("Always") to 1° so
+        /// every user gets the new silent-on-track behavior once (deliberate 1–5
+        /// values are kept; post-migration choices — including re-selecting
+        /// "Always" — stick). See SeedTakeoffAssistToneConvention.
+        /// </summary>
+        public bool TakeoffAssistToneConventionMigrated { get; set; } = false;
+
         /// <summary>
         /// When true, the takeoff-assist centerline tone hard-pans to full
         /// ±1 instead of the proportional headingDiff / 5° curve. Useful
@@ -83,8 +140,20 @@ public class UserSettings
         /// </summary>
         public bool TakeoffAssistHardPanTone { get; set; } = false;
         public bool TakeoffAssistLegacyMode { get; set; } = false; // Legacy mode: heading-based instead of centerline tracking
-        public int TakeoffAssistHeadingToneThreshold { get; set; } = 0; // 0 = Always, 1-5 = degrees threshold
-        public bool TakeoffAssistEnableCallouts { get; set; } = true; // Enable speed callouts (80kt, 100kt, V1, rotate)
+        // 0 = Always play (continuous centred tone), 1-5 = silent until the steer
+        // error exceeds N degrees. Default 1 = silent when on track, only sounds
+        // when you need to steer back — matches "silent on the deadband".
+        public int TakeoffAssistHeadingToneThreshold { get; set; } = 1;
+        public bool TakeoffAssistEnableCallouts { get; set; } = true; // Enable the 80kt and 100kt callouts (V1, Rotate and V2 come from the aircraft definitions)
+
+        /// <summary>
+        /// When true (default), a destination runway or a landing exit plan arms the landing assist's
+        /// rollout centerline cue on its own: Takeoff Assist's centerline tone and settings from touchdown
+        /// until exit guidance needs the tone for the exit, autolands included. The destination dialog's
+        /// manual-landing checkbox is independent of this and adds the flare tones. Added after an A300
+        /// autoland yawed off KSEA 16R at 90-70 kt with no cue (2026-10-15).
+        /// </summary>
+        public bool RolloutCenterlineToneEnabled { get; set; } = true;
 
         /// <summary>
         /// When true (default), taxi guidance will automatically activate
@@ -98,33 +167,69 @@ public class UserSettings
         /// </summary>
         public bool TakeoffAssistAutoActivateOnLineup { get; set; } = true;
 
+        /// <summary>
+        /// When true (default), lifting off with Takeoff Assist active hands
+        /// guidance to Hand Fly mode: Takeoff Assist is deactivated and Hand Fly
+        /// turns on (if the pilot pre-armed Hand Fly on the ground, only Takeoff
+        /// Assist is turned off). The handoff is debounced — it fires only after
+        /// the aircraft stays airborne for a confirm window at takeoff speed, so
+        /// a roll bump or oleo flicker can't drop centerline guidance mid-roll.
+        /// Completes the taxi-lineup → Takeoff Assist → Hand Fly hands-free
+        /// chain. A pilot who doesn't want the auto-handoff disables this in
+        /// the Hand Fly settings tab. Naturally one-shot per takeoff: once
+        /// airborne, Takeoff Assist is off, so the handoff can't re-fire until
+        /// it is re-armed on the ground.
+        /// </summary>
+        public bool HandFlyAutoActivateOnTakeoff { get; set; } = true;
+
         // Simulator Settings
         public string SimulatorVersion { get; set; } = "FS2020";
 
         // Aircraft Settings
         public string LastAircraft { get; set; } = "A320";
 
-        // GeoNames API Settings
-        public string GeoNamesApiUsername { get; set; } = "";
+        // Nearest-place announcements (Output C's periodic form). There is NO GeoNames username any
+        // more: Output C and Location Info read the offline location data downloaded from the
+        // GeoNames tab, so the online API account (and its old setting) was retired.
         public int NearestCityAnnouncementInterval { get; set; } = 0; // 0 = Off, otherwise seconds
 
         // SimBrief Settings
         public string SimbriefUsername { get; set; } = "";
+
+        // SayIntentions Settings
+        // There is NO API key setting: SayIntentions always publishes the key in
+        // %LOCALAPPDATA%\SayIntentionsAI\flight.json, so a hand-entered copy of it
+        // was redundant. Auto-start defaults OFF: the taxi route is built from parsed
+        // ATC speech, so the pilot reviews the pre-filled dialog before guidance begins.
+        public bool SayIntentionsAutoStartTaxiGuidance { get; set; } = false;
+
+        // iFly 737 MAX8 Settings — the SP1 EFB HTTP server port (iFly Manager
+        // default 8084; user-configurable there since hotfix 1.1.0.1).
+        public int IFlyEfbPort { get; set; } = 8084;
+
+        // AI provider selection. Gemini (default) preserves existing behavior; Claude routes ALL
+        // three AI features (display reading, scene description, route briefing) through Anthropic.
+        public AiProvider AiProvider { get; set; } = AiProvider.Gemini;
 
         // Gemini AI Settings
         public string GeminiApiKey { get; set; } = "";
         public bool GeminiSearchGrounding { get; set; } = false;
         public string GeminiModel { get; set; } = "gemini-flash-latest";
 
+        // Claude (Anthropic) AI Settings — used when AiProvider == Claude. User-supplied key only.
+        public string ClaudeApiKey { get; set; } = "";
+        public string ClaudeModel { get; set; } = "claude-opus-4-8";
+        public bool ClaudeWebSearch { get; set; } = false;
+
         // Range Settings (in selected distance units)
         public int NearbyCitiesRange { get; set; } = 25;
         public int RegionalCitiesRange { get; set; } = 50;
         public int MajorCitiesRange { get; set; } = 185;
+        // One range for all four landmark lists (airports, terrain, water, tourist landmarks).
         public int LandmarksRange { get; set; } = 30;
-        public int AirportsRange { get; set; } = 50;
-        public int TerrainRange { get; set; } = 30;
-        public int WaterBodiesRange { get; set; } = 20;
-        public int TouristLandmarksRange { get; set; } = 25;
+        // Over land, Output C and Location Info mention the sea coast only within this distance.
+        // At sea and over lakes the nearest land or shore is always said (owner, 2026-10-10).
+        public int CoastRange { get; set; } = 50;
 
         // Display Limits
         public int MaxNearbyPlacesToShow { get; set; } = 10;
@@ -136,7 +241,6 @@ public class UserSettings
 
         // City Filtering
         public int MajorCityPopulationThreshold { get; set; } = 50000;
-        public string MajorCityAPIThreshold { get; set; } = "cities15000";
 
         // Units
         public string DistanceUnits { get; set; } = "miles";
@@ -149,12 +253,72 @@ public class UserSettings
         /// </summary>
         public DistanceUnit GroundDistanceUnit { get; set; } = DistanceUnit.Metres;
 
+        /// <summary>Use Fahrenheit for the Output O outside-temperature readout. Default is Celsius.</summary>
+        public bool UseFahrenheitForOutsideTemperature { get; set; } = false;
+
         // Independent of GroundDistanceUnit: ground-traffic proximity alerts have their own
         // metres/feet toggle (default feet). Not governed by the app-wide distance-units setting.
         public bool GroundTrafficUseMetres { get; set; } = false;
 
         // Fenix Monitor Manager Settings
         public List<string> FenixDisabledMonitorVariables { get; set; } = new List<string>();
+
+        /// <summary>
+        /// Runtime-only HashSet sidecar of <see cref="FenixDisabledMonitorVariables"/> for
+        /// O(1) per-SimVar-event lookups (the list can be mutated live via the Ctrl+M monitor
+        /// manager). Rebuilt by <see cref="RebuildDisabledMonitorVariableCaches"/> — never
+        /// mutate this directly; mutate the List and let SettingsManager.Save rebuild it.
+        /// </summary>
+        [JsonIgnore]
+        public HashSet<string> FenixDisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
+        // First Officer (PMDG 777/737) automation.
+        // Gear management is split into two independent toggles: raise on the climb
+        // (positive rate) and lower on the descent (2000 ft AGL). The legacy single
+        // FOAutoGearEnabled flag is kept ONLY so old settings files still deserialize;
+        // SettingsManager.MigrateFOGearSplit seeds the two new flags from it once.
+        public bool FOAutoGearEnabled     { get; set; } = false;  // legacy — migrated, do not read directly
+        public bool FOAutoGearUpEnabled   { get; set; } = false;  // auto-raise gear on positive rate (climb)
+        public bool FOAutoGearDownEnabled { get; set; } = false;  // auto-lower gear at 2000 ft AGL (descent)
+        public bool FOAutoGearSplitMigrated { get; set; } = false; // one-time migration guard
+        public bool FOAutoFlapsEnabled    { get; set; } = false;
+        public bool FOAutoApEnabled       { get; set; } = false;
+
+        // Height (ft AGL) at which the FO auto-engages the autopilot on climbout —
+        // one global value shared by all four aircraft (default 350).
+        public int FOAutoApEngageAltitudeAgl { get; set; } = 350;
+
+        // Phase-monitor light automation: switch the landing (and nose, where fitted)
+        // lights at the 10,000 ft crossing. Default ON — matches the behavior before
+        // this toggle existed; a missing key in old settings files deserializes to it.
+        public bool FOAutoLights10kEnabled { get; set; } = true;
+
+        // Phase-monitor altimeter automation: STD climbing through the transition altitude,
+        // out of STD descending through the transition level. Default ON — matches the
+        // behavior before this toggle existed. Off, the FO only reminds (FO-23).
+        public bool FOAutoAltimetersEnabled { get; set; } = true;
+
+        // "Speak flow progress": a flow speaks each step as it goes. Default ON — the behavior
+        // before this toggle existed. Off, only the step-by-step lines go quiet; Captain actions,
+        // skips, timeouts, failures and "flow complete" still speak (FlowManager.SpeakProgress).
+        public bool FOSpeakFlowProgress { get; set; } = true;
+
+        // PMDG 737/777 center-tank fuel pump auto-management. Default OFF (F11): opt-in like
+        // every other FO automation, it actuates a safety-relevant switch and speaks unprompted,
+        // and it has a long defect history — it should not be on for users who never asked.
+        // Only the two PMDG jets act on it; other aircraft store-and-ignore.
+        public bool FOAutoCenterPumpsEnabled { get; set; } = false;
+
+        // Auto seat-belt-sign automation, actuated via each aircraft's own seatbelt control:
+        // 0 = Disabled (default), 1 = switch at the 10,000 ft crossing, 2 = off at Top of
+        // Climb / on at Top of Descent (vertical-speed profile). See FoSeatbeltMode.
+        public int FOAutoSeatbeltMode { get; set; } = 0;
+
+        /// <summary>737 GPWS self-test variant run by the First Officer preflight flow and
+        /// checklist tick: false = short test (quick press), true = long test (5 s hold).
+        /// Both panel buttons exist regardless; this only selects the flow/checklist variant.
+        /// Read at DISPATCH time by the 737 executor, so a change applies immediately.</summary>
+        public bool FOGpws737LongTest { get; set; } = false;
 
         // One-time seed marker (SettingsManager.SeedFenixMonitorDefaults). Two groups
         // are added to FenixDisabledMonitorVariables by default so they don't speak:
@@ -166,6 +330,15 @@ public class UserSettings
         // after the user deliberately re-enables one.
         public bool FenixMonitorDefaultsSeeded { get; set; } = false;
 
+        // One-time seed marker (SettingsManager.SeedPmdgMonitorDefaults). The 737's
+        // window-heat ON annunciators (ICE_annunON_0..3) are added to
+        // PMDGDisabledMonitorVariables by default: the window-heat controller cycles
+        // them thermostatically (especially on the ground), so every cycle spoke
+        // "Window N Heat On: on/off" with no switch moving. They stay toggleable in
+        // the PMDG Announcement Monitor; this flag stops re-seeding after a
+        // deliberate re-enable.
+        public bool PmdgMonitorDefaultsSeeded { get; set; } = false;
+
         // PMDG Announcement Monitor Settings — variable keys that the user has
         // unticked in PMDGAnnouncementMonitorForm. The MainForm continuous-
         // monitoring branch consults this list when the loaded aircraft's
@@ -174,20 +347,79 @@ public class UserSettings
         // doesn't have to re-tick on every launch.
         public List<string> PMDGDisabledMonitorVariables { get; set; } = new List<string>();
 
+        /// <summary>Runtime-only HashSet sidecar of <see cref="PMDGDisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> PMDGDisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
         // A380 Monitor Manager Settings — variable keys the user has unticked in
         // FBWA380MonitorManagerForm. Consulted (and ECAM-memo sentinel honoured)
         // when AircraftCode == "FBW_A380". Persisted across sessions.
         public List<string> A380DisabledMonitorVariables { get; set; } = new List<string>();
+
+        /// <summary>Runtime-only HashSet sidecar of <see cref="A380DisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> A380DisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
 
         // Auto-announced HS787 variables the user has muted via the 787 Monitor Manager
         // (Ctrl+M, HS787MonitorManagerForm). Consulted in MainForm.OnSimVarUpdated when
         // AircraftCode == "HS_787". Persisted across sessions.
         public List<string> HS787DisabledMonitorVariables { get; set; } = new List<string>();
 
+        /// <summary>Runtime-only HashSet sidecar of <see cref="HS787DisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> HS787DisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
         // FlyByWire A32NX Monitor Manager — variable keys the user has un-checked in
         // FlyByWireA320MonitorManagerForm. Consulted (and ECAM-memo sentinel honoured)
         // when AircraftCode == "A320". Persisted across sessions.
         public List<string> A32NXDisabledMonitorVariables { get; set; } = new List<string>();
+
+        /// <summary>Runtime-only HashSet sidecar of <see cref="A32NXDisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> A32NXDisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
+        // Auto-announced iFly 737 MAX8 variables the user has muted via the iFly
+        // Monitor Manager (Ctrl+M, IFly737MonitorManagerForm). Consulted in
+        // MainForm.OnSimVarUpdated when AircraftCode == "IFLY_737MAX8" — both at
+        // the generic Step-6 gate AND via the Step-2.5 iflyMuted Suppressed-wrap
+        // (the iFly def announces annunciators/MCP lights from INSIDE
+        // ProcessSimVarUpdate, the HS787 pattern). Persisted across sessions.
+        public List<string> IFlyDisabledMonitorVariables { get; set; } = new List<string>();
+
+        /// <summary>Runtime-only HashSet sidecar of <see cref="IFlyDisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> IFlyDisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
+        // Monitor Manager (Ctrl+M, Md11MonitorManagerForm). Consulted in MainForm.OnSimVarUpdated
+        // when AircraftCode == "TFDI_MD11" — both at the generic gate AND via the Suppressed wrap,
+        // because the MD-11 announces its flap read-out from INSIDE ProcessSimVarUpdate (the HS787
+        // pattern) where the generic gate never runs.
+        //
+        // This matters more on the MD-11 than on most aircraft: it registers 532 announcing
+        // annunciator lamps, which is the whole point (a blind pilot cannot see a lamp light) but
+        // is also a lot of voice in a busy phase. Persisted across sessions.
+        public List<string> Md11DisabledMonitorVariables { get; set; } = new List<string>();
+
+        /// <summary>Runtime-only HashSet sidecar of <see cref="Md11DisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> Md11DisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
+        // Auto-announced BlueBird 757-200 variables the user has muted via the 757 Monitor Manager
+        // (Ctrl+M, BBS757MonitorManagerForm). Consulted in MainForm.OnSimVarUpdated when
+        // AircraftCode == "BBS_757" — at the generic gate (the status rows) AND via the Suppressed
+        // wrap (the base trim and glideslope call-outs speak from INSIDE ProcessSimVarUpdate).
+        // Persisted across sessions.
+        public List<string> BBS757DisabledMonitorVariables { get; set; } = new List<string>();
+
+        /// <summary>Runtime-only HashSet sidecar of <see cref="BBS757DisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>
+        [JsonIgnore]
+        public HashSet<string> BBS757DisabledMonitorVariablesSet { get; private set; } = new HashSet<string>();
+
+        // The MD-11 walker's learned step polarity (docs/md11.md §3): node ids whose step events run
+        // INVERTED relative to the walker's conventional guess (left click / wheel up = increase).
+        // Absent = conventional. Written the moment a wrong-way step teaches the walker, read on the
+        // first walk of each control, so a control pays for its calibration once, ever.
+        public List<string> Md11InvertedStepControls { get; set; } = new List<string>();
 
         // Announce each 1,000-foot crossing while airborne ("5,000 feet", …). Default on.
         public bool AltitudeCalloutsEnabled { get; set; } = true;
@@ -219,6 +451,23 @@ public class UserSettings
         public HandFlyWaveType TaxiGuidanceToneWaveform { get; set; } = HandFlyWaveType.Sine;
         public double TaxiGuidanceToneVolume { get; set; } = 0.05;
 
+        // Guidance tone output device. Applies to EVERY tone MSFS BA generates — taxi
+        // steering, takeoff assist centerline, hand fly, visual landing guidance (both
+        // tones) and the docking proximity beeps — so sim audio can stay on speakers while
+        // the guidance tones go to a headset. Screen-reader speech is unaffected; NVDA and
+        // JAWS own their own output device.
+        //
+        // Empty Id = follow the Windows default device, which is what every build before
+        // this setting existed did, so upgrading users see no change.
+        //
+        // The Id is a WASAPI endpoint ID: stable across reboots and across other devices
+        // being plugged in or removed. (A WaveOut device index is not, which is why one is
+        // not stored here — the index shifts and a saved selection silently starts pointing
+        // at a different device.) The Name is display-only, so the settings status line can
+        // name a device that is currently disconnected instead of showing a raw GUID.
+        public string GuidanceToneDeviceId { get; set; } = "";
+        public string GuidanceToneDeviceName { get; set; } = "";
+
         /// <summary>
         /// When true, inverts the steering tone's stereo pan: a tone in the
         /// right ear means steer LEFT to centre it (rather than right).
@@ -248,18 +497,37 @@ public class UserSettings
         /// blind pilots monitoring taxi speed against the FAA / SOP caps (30 kt
         /// straight, 10 kt turns) and for the takeoff roll. Suggested values: 5 or
         /// 10 kt. Active during BOTH taxi guidance and takeoff assist phases — the
-        /// callouts complement each other (10/20/30 kt taxi → 80/100/V1/rotate
-        /// takeoff). Default 0 (off) so existing users see no behaviour change.
+        /// callouts complement each other (10/20/30 kt taxi → the 80 and 100 kt
+        /// takeoff calls). Default 0 (off) so existing users see no behaviour change.
         /// </summary>
         public int TaxiGuidanceGroundSpeedAnnounceInterval { get; set; } = 0;
 
         /// <summary>
-        /// When true (default), the augmenting provider fetches taxiway names from
-        /// OpenStreetMap and the X-Plane Scenery Gateway to enrich unnamed navdata
-        /// segments. Disabling this reverts to pure-navdata names only, with no
-        /// online requests. Requires app restart to take effect.
+        /// When true (default), the app fetches airport data navdata lacks: taxiway names and gate
+        /// aliases (OpenStreetMap, X-Plane Scenery Gateway) and the OSM buildings the surroundings
+        /// features use. Off means navdata and installed scenery only, no online requests. Applied
+        /// live by <c>MainForm.ApplyRuntimeSettings</c>.
         /// </summary>
         public bool TaxiAugmentEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Read the installed scenery package's placement BGLs for named buildings (hangars,
+        /// concourses, tower…) at add-on airports. Offline; cached under %APPDATA%\MSFSBlindAssist\scenery-index.
+        /// </summary>
+        public bool SceneryIndexEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Opt-in "Passing Concourse B, on the left." callouts while taxiing (AirportSurroundingsMonitor).
+        /// Default OFF like every other automatic announcement. Applies immediately.
+        /// </summary>
+        public bool SurroundingsCalloutsEnabled { get; set; } = false;
+
+        /// <summary>
+        /// "Off the pavement, on grass." — separate from <see cref="SurroundingsCalloutsEnabled"/> on
+        /// purpose: a safety callout must not hide behind a switch people turn off for chattiness.
+        /// Default OFF like every other automatic announcement. Applies immediately.
+        /// </summary>
+        public bool SurfaceChangeCalloutsEnabled { get; set; } = false;
 
         /// <summary>
         /// Ground-speed announcement cadence used WHILE TAKEOFF ASSIST IS ACTIVE,
@@ -279,8 +547,25 @@ public class UserSettings
         public bool DockingGuidanceEnabled { get; set; } = true;
         public HandFlyWaveType DockingBeepWaveform { get; set; } = HandFlyWaveType.Sine;
         public double DockingBeepVolume { get; set; } = 0.05;
+        /// <summary>
+        /// Speak ground speed at every 1-knot change while docking guidance is engaged.
+        /// The global ground-speed announcer works in 5/10-knot buckets, so it is silent
+        /// across the whole 0-5 kt docking band — exactly where fine speed control decides
+        /// whether the squaring turn can be completed before the stop. A pilot flying with
+        /// one hand on the tiller and one on the thrust levers cannot poll it by hotkey.
+        /// Default ON; opinions differ on callout density, hence the switch.
+        /// </summary>
+        public bool DockingSpeedCalloutsEnabled { get; set; } = true;
 
         // Weather Settings
+        /// <summary>
+        /// Master switch for the HiFi ActiveSky integration (Weather settings tab).
+        /// Default OFF: most users run the sim's own weather engine, and the AS
+        /// liveness probe has a ~1.2 s floor when AS is absent — so NO ActiveSky
+        /// code path may run unless the user opts in. Gated centrally in
+        /// ActiveSkyClient.IsRunningAsync (returns false instantly when off).
+        /// </summary>
+        public bool ActiveSkyEnabled { get; set; } = false;
         public bool WeatherAutoAnnounceEnabled { get; set; } = false;
 
         /// <summary>
@@ -297,6 +582,40 @@ public class UserSettings
         public bool PirepProximityAlertsEnabled { get; set; } = false;
         public int SigmetProximityRangeNm { get; set; } = 100;
         public bool DecodeWeatherAdvisories { get; set; } = false;
+
+        /// <summary>
+        /// Speak turbulence category transitions (ActiveSky-sourced; rides the
+        /// decoded-weather monitor, so it needs ActiveSkyEnabled AND
+        /// WeatherAutoAnnounceEnabled to be live). Default on.
+        /// </summary>
+        public bool AnnounceTurbulenceEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Speak airframe ice-accretion start/clear (sim-truth STRUCTURAL ICE PCT,
+        /// any weather engine; rides the ambient auto-announce tick, so it needs
+        /// WeatherAutoAnnounceEnabled to be live). Default on.
+        /// </summary>
+        public bool AnnounceIcingEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Announce a NEW SIGMET/AIRMET appearing on the flight-plan route loaded in
+        /// ActiveSky (parameterless GetActiveSigmetsAt; AS's SimBrief link keeps the
+        /// route current). Independent of WeatherAutoAnnounceEnabled — a sibling of
+        /// the SIGMET/PIREP proximity alerts — but requires ActiveSkyEnabled.
+        /// Default on.
+        /// </summary>
+        public bool AnnounceRouteAdvisoriesEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Approach-ring distance (nautical miles) for the en-route advisory proximity
+        /// announcements (<see cref="Services.RouteAdvisoryProximityTracker"/>) — the ring
+        /// at which an ahead advisory first announces "approach". Independent of
+        /// <see cref="SigmetProximityRangeNm"/> (the nearby-SIGMET/AIRMET/PIREP alert range)
+        /// BY DESIGN: tuning one must not silently move the other. Default 100 (matches the
+        /// tracker's former fixed constant); UI-clamped 10-500. A missing key in an older
+        /// settings JSON deserializes to this property initializer's default, 100.
+        /// </summary>
+        public int RouteAdvisoryProximityNm { get; set; } = 100;
 
         // HS787 bridge — community folder override for non-standard installs
         public string? Hs787CommunityFolderOverride { get; set; } = null;
@@ -328,91 +647,45 @@ public class UserSettings
         }
 
     /// <summary>
+    /// Rebuilds the eight *DisabledMonitorVariables HashSet sidecars from their backing Lists.
+    /// Every known mutation of those lists (the Fenix/PMDG/A380/HS787/A32NX/iFly/MD-11/757 monitor-manager
+    /// forms' ItemCheck handlers, FlyByWireA380Definition's ToggleECAMMonitoring hotkey, and
+    /// SettingsManager.SeedFenixMonitorDefaults) is immediately followed by SettingsManager.Save,
+    /// which calls this — so a mutation is never visible to the List without also being visible
+    /// to the HashSet. Also called after deserializing settings from disk (SettingsManager.Load)
+    /// and after the deserialization inside <see cref="Clone"/>.
+    /// </summary>
+    public void RebuildDisabledMonitorVariableCaches()
+    {
+        FenixDisabledMonitorVariablesSet = new HashSet<string>(FenixDisabledMonitorVariables);
+        PMDGDisabledMonitorVariablesSet = new HashSet<string>(PMDGDisabledMonitorVariables);
+        A380DisabledMonitorVariablesSet = new HashSet<string>(A380DisabledMonitorVariables);
+        HS787DisabledMonitorVariablesSet = new HashSet<string>(HS787DisabledMonitorVariables);
+        A32NXDisabledMonitorVariablesSet = new HashSet<string>(A32NXDisabledMonitorVariables);
+        IFlyDisabledMonitorVariablesSet = new HashSet<string>(IFlyDisabledMonitorVariables);
+        Md11DisabledMonitorVariablesSet = new HashSet<string>(Md11DisabledMonitorVariables);
+        BBS757DisabledMonitorVariablesSet = new HashSet<string>(BBS757DisabledMonitorVariables);
+    }
+
+    /// <summary>
     /// Creates a copy of this settings instance.
     /// </summary>
+    /// <remarks>
+    /// A serializer round-trip through the SAME options SettingsManager persists with, so a
+    /// clone is exactly what Save → Load would produce: every persisted property is copied by
+    /// construction (the serializer materialises a fresh List&lt;string&gt; per list — a deep copy),
+    /// and a property added later needs no matching line here. This replaced a hand-written
+    /// member-by-member initializer that had silently dropped ten properties — the MD-11 monitor
+    /// mutes and learned step polarity among them — because nothing enforced its completeness.
+    /// The [JsonIgnore] *Set sidecars are runtime-only and are rebuilt from their lists, exactly
+    /// as SettingsManager.Load does after deserializing.
+    /// </remarks>
     public UserSettings Clone()
     {
-        return new UserSettings
-        {
-            AnnouncementMode = AnnouncementMode,
-            AnnounceTimeWithSeconds = AnnounceTimeWithSeconds,
-            HandFlyFeedbackMode = HandFlyFeedbackMode,
-            HandFlyToneVolume = HandFlyToneVolume,
-            HandFlyWaveType = HandFlyWaveType,
-            HandFlyMonitorHeading = HandFlyMonitorHeading,
-            HandFlyMonitorVerticalSpeed = HandFlyMonitorVerticalSpeed,
-            HandFlyAnnouncementIntervalMs = HandFlyAnnouncementIntervalMs,
-            VisualGuidanceToneWaveform = VisualGuidanceToneWaveform,
-            VisualGuidanceToneVolume = VisualGuidanceToneVolume,
-            VisualGuidanceCurrentToneWaveform = VisualGuidanceCurrentToneWaveform,
-            VisualGuidanceCurrentToneVolume = VisualGuidanceCurrentToneVolume,
-            VisualGuidanceHardPanTone = VisualGuidanceHardPanTone,
-            TakeoffAssistToneWaveform = TakeoffAssistToneWaveform,
-            TakeoffAssistToneVolume = TakeoffAssistToneVolume,
-            TakeoffAssistMuteCenterlineAnnouncements = TakeoffAssistMuteCenterlineAnnouncements,
-            TakeoffAssistInvertPanning = TakeoffAssistInvertPanning,
-            TakeoffAssistHardPanTone = TakeoffAssistHardPanTone,
-            TakeoffAssistLegacyMode = TakeoffAssistLegacyMode,
-            TakeoffAssistHeadingToneThreshold = TakeoffAssistHeadingToneThreshold,
-            TakeoffAssistEnableCallouts = TakeoffAssistEnableCallouts,
-            TakeoffAssistAutoActivateOnLineup = TakeoffAssistAutoActivateOnLineup,
-            SimulatorVersion = SimulatorVersion,
-            LastAircraft = LastAircraft,
-            GeoNamesApiUsername = GeoNamesApiUsername,
-            NearestCityAnnouncementInterval = NearestCityAnnouncementInterval,
-            SimbriefUsername = SimbriefUsername,
-            GeminiApiKey = GeminiApiKey,
-            GeminiSearchGrounding = GeminiSearchGrounding,
-            GeminiModel = GeminiModel,
-            NearbyCitiesRange = NearbyCitiesRange,
-            RegionalCitiesRange = RegionalCitiesRange,
-            MajorCitiesRange = MajorCitiesRange,
-            LandmarksRange = LandmarksRange,
-            AirportsRange = AirportsRange,
-            TerrainRange = TerrainRange,
-            WaterBodiesRange = WaterBodiesRange,
-            TouristLandmarksRange = TouristLandmarksRange,
-            MaxNearbyPlacesToShow = MaxNearbyPlacesToShow,
-            MaxMajorCitiesToShow = MaxMajorCitiesToShow,
-            MaxAirportsToShow = MaxAirportsToShow,
-            MaxTerrainFeaturesToShow = MaxTerrainFeaturesToShow,
-            MaxWaterBodiesToShow = MaxWaterBodiesToShow,
-            MaxTouristLandmarksToShow = MaxTouristLandmarksToShow,
-            MajorCityPopulationThreshold = MajorCityPopulationThreshold,
-            MajorCityAPIThreshold = MajorCityAPIThreshold,
-            DistanceUnits = DistanceUnits,
-            GroundDistanceUnit = GroundDistanceUnit,
-            GroundTrafficUseMetres = GroundTrafficUseMetres,
-            FenixDisabledMonitorVariables = new List<string>(FenixDisabledMonitorVariables),
-            FenixMonitorDefaultsSeeded = FenixMonitorDefaultsSeeded,
-            PMDGDisabledMonitorVariables = new List<string>(PMDGDisabledMonitorVariables),
-            A380DisabledMonitorVariables = new List<string>(A380DisabledMonitorVariables),
-            HS787DisabledMonitorVariables = new List<string>(HS787DisabledMonitorVariables),
-            A32NXDisabledMonitorVariables = new List<string>(A32NXDisabledMonitorVariables),
-            AltitudeCalloutsEnabled = AltitudeCalloutsEnabled,
-            MCDUUseAlternateLSKKeys = MCDUUseAlternateLSKKeys,
-            PMDGEnhancedDistanceMode = PMDGEnhancedDistanceMode,
-            WeatherAutoAnnounceEnabled = WeatherAutoAnnounceEnabled,
-            WeatherAutoAnnounceIntervalMinutes = WeatherAutoAnnounceIntervalMinutes,
-            SigmetProximityAlertsEnabled = SigmetProximityAlertsEnabled,
-            PirepProximityAlertsEnabled = PirepProximityAlertsEnabled,
-            SigmetProximityRangeNm = SigmetProximityRangeNm,
-            DecodeWeatherAdvisories = DecodeWeatherAdvisories,
-            TaxiGuidanceToneWaveform = TaxiGuidanceToneWaveform,
-            TaxiGuidanceToneVolume = TaxiGuidanceToneVolume,
-            TaxiGuidanceInvertSteeringTone = TaxiGuidanceInvertSteeringTone,
-            TaxiGuidanceHardPanTone = TaxiGuidanceHardPanTone,
-            TaxiGuidanceAnnounceCrossings = TaxiGuidanceAnnounceCrossings,
-            TaxiGuidanceGroundSpeedAnnounceInterval = TaxiGuidanceGroundSpeedAnnounceInterval,
-            TaxiAugmentEnabled = TaxiAugmentEnabled,
-            TakeoffAssistGroundSpeedAnnounceInterval = TakeoffAssistGroundSpeedAnnounceInterval,
-            Hs787CommunityFolderOverride = Hs787CommunityFolderOverride,
-            Hs787SimVersionOverride = Hs787SimVersionOverride,
-            GsxBackgroundMonitoring = GsxBackgroundMonitoring,
-            GsxAutoSelectGateOnRoute = GsxAutoSelectGateOnRoute,
-            DockingGuidanceEnabled = DockingGuidanceEnabled,
-            DockingBeepWaveform = DockingBeepWaveform,
-            DockingBeepVolume = DockingBeepVolume
-        };
+        string json = JsonSerializer.Serialize(this, SettingsManager.JsonOptions);
+        var clone = JsonSerializer.Deserialize<UserSettings>(json, SettingsManager.JsonOptions)
+            ?? throw new InvalidOperationException("UserSettings round-trip produced no object.");
+        clone.RebuildDisabledMonitorVariableCaches();
+        return clone;
     }
 }

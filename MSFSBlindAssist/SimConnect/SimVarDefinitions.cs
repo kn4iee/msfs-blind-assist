@@ -31,6 +31,31 @@ public class SimVarDefinition
     public bool OnlyAnnounceValueDescriptionMatches { get; set; }  // True to only announce when value matches a ValueDescriptions key (within tolerance), skip intermediate values
 
     /// <summary>
+    /// A value below this is a "not set" sentinel, spoken as "DisplayName: not set" instead of a
+    /// number. For a var the aircraft clears to a sentinel such as -1 or 0 — the FBW takeoff speeds
+    /// (FBW #10855 moved the A32NX's cleared V1/VR from 0 to -1, so every climb-out was announced as
+    /// "V1: -1 knots"). A threshold, not a <see cref="ValueDescriptions"/> key: a sentinel written in
+    /// one unit and read back through another need not come back bit-exact. Null (the default) = none.
+    /// </summary>
+    public double? NotSetBelow { get; set; }
+
+    /// <summary>Whether <paramref name="value"/> is this var's "not set" sentinel (<see cref="NotSetBelow"/>).
+    /// The ONE test both the spoken readout and the status-box panels use, so they cannot disagree.</summary>
+    public bool IsNotSet(double value) => NotSetBelow is double below && value < below;
+
+    /// <summary>
+    /// How far a delivered value must move from the cached one to count as a CHANGE — to fire
+    /// SimVarUpdated (unless force-read). Null, the default, means the shared
+    /// <see cref="SimConnectManager.ChangeTolerance"/> (0.001); both delivery paths apply it through
+    /// <see cref="SimConnectManager.IsValueChange"/>. Widen it only for a var whose readers need a
+    /// coarse line and whose ripple costs work — the TFDi MD-11's DC bus voltage (0.5 V) feeds a
+    /// power gate that needs only the 20 V line. The cache still takes every delivery, so a drift
+    /// slower than the tolerance per sample never fires a change: never widen a var whose reader
+    /// acts on a small cumulative change.
+    /// </summary>
+    public double? ChangeTolerance { get; set; }
+
+    /// <summary>
     /// When true, exclude this variable from the batched continuous monitoring (GenericBatch1..5)
     /// and register it as its own per-second continuous subscription. Used when the batched read
     /// has been observed to deliver wrong/oscillating values due to data-definition position
@@ -75,7 +100,8 @@ public class SimVarDefinition
     // UI customization properties (aircraft-specific)
     public bool RenderAsButton { get; set; }  // True to render as button instead of combo box (e.g., APU Start)
     /// <summary>
-    /// When true (opt-in, set by the FBW momentary-button helpers), the panel label
+    /// When true (opt-in, set by the momentary-button definitions of the FBW A320/A380, the
+    /// iFly 737 and the TFDi MD-11), the panel label
     /// SUPPRESSES the value-0 resting state ("Released"/"Off"/"Idle") — a momentary
     /// push-button has no meaningful resting value, so appending it reads as noise.
     /// MUST stay opt-in: PMDG 777 MCP buttons and the HS787 Baro STD use value-0
@@ -83,6 +109,50 @@ public class SimVarDefinition
     /// blanket suppression silenced them (PR #85 review finding M4).
     /// </summary>
     public bool SuppressRestingButtonState { get; set; }
+    /// <summary>
+    /// Opt-in for the generic UI-set echo gate: suppress on the TIME WINDOW
+    /// alone, ignoring the value. For combos whose readback legitimately lands on a
+    /// sibling encoding of the picked value (a guard bit or arm light folded into the
+    /// same field — iFly EEC/cargo-fire/start levers), where the value-matched gate
+    /// silently misses and the change the user just made re-announces.
+    /// </summary>
+    public bool UiEchoMatchesAnyValue { get; set; } = false;
+    /// <summary>
+    /// Key of a SEPARATE variable that reads this control's new state back, such as a switch's
+    /// own light (the Fenix ACP reception knobs: `S_ASP_VHF_2_REC_LATCH` lights
+    /// `I_ASP_VHF_2_REC`). A panel pick marks that key in MainForm's UI-set echo gate too, with
+    /// the same value, so the light's change is not spoken after the screen reader already said
+    /// the pick (CORE-7). The partner must read back the value the switch was set to; the gate
+    /// stays value-matched, so a different change to the light inside the window still speaks.
+    /// </summary>
+    public string? UiEchoVariable { get; set; }
+
+    /// <summary>
+    /// Opt-in for a pushbutton whose press flips its own <see cref="StateVariable"/> light (the Fenix EFIS
+    /// FD, LS and map option buttons: the light is the button's own "on" light). The panel relabels the button when the
+    /// light changes, so the screen reader already reads the button's new state; pressing it from the panel
+    /// marks the light in MainForm's UI-set echo gate with the value the press should leave
+    /// (<see cref="StateVariableAfterPress"/>), so the light's own announcement is not spoken after it
+    /// (CORE-7). The gate stays value-matched ([CORE-8], [CORE-9]): a change to the light from anywhere else
+    /// (the other side through a linking option, the First Officer, a click in the virtual cockpit) still speaks.
+    /// Default off: the buttons whose light is spoken after the press (Bus Tie) keep their announcement.
+    /// </summary>
+    public bool PressTogglesStateVariable { get; set; }
+
+    /// <summary>
+    /// The value <see cref="StateVariable"/> reads after a press of a <see cref="PressTogglesStateVariable"/>
+    /// button, from the value it read before (<paramref name="cached"/>): a lit light goes dark (0), a dark
+    /// one lights (1), as <see cref="DescribeStateLight"/> reads them. Null when the control does not opt in,
+    /// has no light, or the light has not been read (NaN is not read), so nothing is marked for a press whose
+    /// result is unknown.
+    /// </summary>
+    public double? StateVariableAfterPress(double? cached)
+    {
+        if (!PressTogglesStateVariable || string.IsNullOrEmpty(StateVariable)) return null;
+        if (cached is not double before || double.IsNaN(before)) return null;
+        return before != 0 ? 0 : 1;
+    }
+
     // Accessible SLIDER (WinForms TrackBar) for a continuous axis control (cockpit window/
     // sunshade/seat position, speedbrake handle, trims). The TrackBar is 0-100 and maps linearly
     // to [SliderMin, SliderMax]; on change MSFSBA writes the mapped value live (HandleUIVariableSet,
@@ -91,6 +161,78 @@ public class SimVarDefinition
     public double SliderMin { get; set; } = 0;
     public double SliderMax { get; set; } = 100;
     public string? StateVariable { get; set; }  // LVar name to read for actual button on/off state (e.g., I_ indicator for S_ switch buttons)
+
+    /// <summary>
+    /// What a lit and a dark <see cref="StateVariable"/> mean, for a button whose light is not an ON
+    /// legend: the Fenix's ADR, IR, Bus Tie and Cockpit Door Video light their OFF legend (measured
+    /// 2026-10-22), so "On" for a lit light read backwards. Null (the default) keeps "On" / "Off".
+    /// Both MainForm label sites read them through <see cref="DescribeStateLight"/>.
+    /// </summary>
+    public string? StateLitText { get; set; }
+
+    /// <inheritdoc cref="StateLitText"/>
+    public string? StateDarkText { get; set; }
+
+    /// <summary>
+    /// A .NET numeric format for the value spoken on the generic announce path, applied in the
+    /// invariant culture: the Fenix FCU V/S speaks "+300" with "+0;-0;0", as the FBW A320 and iFly
+    /// V/S call-outs already do. Null (the default) keeps the unit-based formatting.
+    /// </summary>
+    public string? SpokenNumberFormat { get; set; }
+
+    /// <summary>The button's state for a <see cref="StateVariable"/> value: any non-zero value is lit.</summary>
+    public string DescribeStateLight(double lightValue) =>
+        lightValue != 0 ? StateLitText ?? "On" : StateDarkText ?? "Off";
+
+    /// <summary>
+    /// Variable KEYS this control's SPOKEN STATE depends on, for definitions that compose the
+    /// state themselves through <see cref="Aircraft.IAircraftDefinition.TryDescribeControlState"/>
+    /// (the TFDi MD-11: a button's legend lamps, its latching var and the DC-power gate).
+    /// MainForm relabels the control through that hook whenever any listed key — or the
+    /// control's own key — updates. Null (the default) means the control has no composed
+    /// state and the older <see cref="StateVariable"/> / ValueDescriptions labelling applies.
+    /// </summary>
+    public IReadOnlyList<string>? StateVariables { get; set; }
+
+    /// <summary>
+    /// Maps a raw value onto the <see cref="ValueDescriptions"/> KEY that describes it, for a
+    /// variable whose keys are positions but whose value is a continuous travel — the TFDi MD-11
+    /// gear lever: keys {0 Up, 1 Down} from the control map, value 0-25 with Down at &gt;= 20. Null
+    /// (the default) means the raw value IS the key. Consulted through
+    /// <see cref="DescriptionKeyFor"/> by EVERY panel path that turns a delivered value into a
+    /// description — the combo's build-time seed and its refresh, and the read-only status box's
+    /// build-time seed and its refresh. All four, deliberately: wiring only the two combo sites
+    /// left a var that is both classifier-backed and read-only rendering as a bare number on the
+    /// panel and keeping that number forever, because the status lookup never asked. A pick still
+    /// writes the KEY, and the raw value still reaches every other reader (the SimConnect cache,
+    /// hotkey read-outs, the MD-11 walker) untouched.
+    ///
+    /// Known limit: a combo pick caches its own KEY as the value until the next delivery, so a
+    /// classifier whose key space overlaps its value space can mislabel a combo REBUILT inside
+    /// that window (the gear lever's Down key, 1, classifies as Up — travel 1 genuinely is up).
+    /// It heals on the next real delivery; do not try to make the classifier idempotent on keys.
+    /// </summary>
+    public Func<double, double>? ValueToDescriptionKey { get; set; }
+
+    /// <summary>The ValueDescriptions key for <paramref name="value"/>: through <see cref="ValueToDescriptionKey"/> when set, else the value itself.</summary>
+    public double DescriptionKeyFor(double value) => ValueToDescriptionKey?.Invoke(value) ?? value;
+
+    /// <summary>
+    /// A panel control whose definition announces it from INSIDE <c>ProcessSimVarUpdate</c> (which
+    /// returns true, so MainForm skips its generic control refresh) but whose open control must
+    /// still FOLLOW a change made elsewhere: MainForm's def-handled branch refreshes it for each
+    /// delivered value this predicate accepts. Accept only values the control can truthfully show —
+    /// a lever's resting positions, never the values it sweeps through, or a focused combo is
+    /// narrated at every one. Set only where the control's write fires on a user commit alone (a
+    /// combo's SelectionChangeCommitted under <c>updatingFromSim</c>), so a refresh can never send
+    /// anything — the HS787-style controls whose write handler reacts to programmatic updates must
+    /// never set it. First user: the iFly 737 MAX speed-brake lever, which the auto speed brake moves.
+    /// </summary>
+    public Func<double, bool>? RefreshControlWhenDefHandled { get; set; }
+
+    /// <summary>Whether MainForm's def-handled branch refreshes this control for <paramref name="value"/>
+    /// (<see cref="RefreshControlWhenDefHandled"/>; never when that is unset).</summary>
+    public bool RefreshesControlWhenDefHandled(double value) => RefreshControlWhenDefHandled?.Invoke(value) == true;
 
     // ----- ARINC429 auto-decode -----
     // When true, the raw double is a FlyByWire ARINC429 word (numeric-truncate to u64; low
@@ -103,6 +245,14 @@ public class SimVarDefinition
     public string Arinc429Format { get; set; } = "0";                 // .NET numeric format, e.g. "0.0"
     public string Arinc429NotAvailableText { get; set; } = "not available";
     public bool PreventTextInput { get; set; }  // True to prevent text input UI for _SET variables (e.g., autobrake)
+    /// <summary>
+    /// For a "_SET" numeric-input field: when the typed text does not parse, hand the aircraft's
+    /// HandleUIVariableSet double.NaN instead of the historical 0. Opt-in, because 0 is a real value
+    /// for some fields (an FCU heading of 0 is north) and every other field's handler was written
+    /// against the 0; only set it where the handler refuses NaN (the A32NX-family FCU heading, speed
+    /// and altitude fields, through FcuValueEntry).
+    /// </summary>
+    public bool UnparseableTextAsNaN { get; set; }
     /// <summary>
     /// For a "_SET" numeric-input control: the variable KEY whose cached current
     /// value pre-fills this input field (seeded on creation and on focus-in, then
@@ -137,6 +287,15 @@ public class SimVarDefinition
     public double Scale { get; set; } = 1.0;
     public double Offset { get; set; } = 0.0;
     public string? HelpText { get; set; }  // Optional help text read by screen reader (overrides default AccessibleDescription)
+
+    /// <summary>
+    /// For a typed <c>_SET</c> field only: what the screen reader says about the field, in place of the default "Type a
+    /// value and press Enter to set". It is the reader's only cue that Enter applies the value, so it must say so. Null for
+    /// every field but one whose entry is not obvious (the Fenix pitch trim, in degrees). <see cref="HelpText"/> is not
+    /// used for a typed field: the MD-11's still says "press Set", for the Set button removed on 2026-10-18, and the PMDG
+    /// 737's say nothing of Enter.
+    /// </summary>
+    public string? EntryHelpText { get; set; }
 
     // MobiFlight WASM support properties
     public bool UseMobiFlight { get; set; }  // Flag to route through MobiFlight WASM

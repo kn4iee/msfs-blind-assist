@@ -51,8 +51,22 @@ public partial class PMDG737CDUForm : Form
 
         FormClosing += (s, e) =>
         {
-            e.Cancel = true;
+            // Stop the poll on every close path (hide AND real shutdown) before the
+            // exit-reason gate below can return early.
             _pollTimer.Stop();
+
+            // Let real app/OS shutdown through: Application.Exit raises FormClosing on
+            // every open form (hidden included) and ABORTS the whole exit if any form
+            // cancels — an unconditional cancel here left the auto-updater stalled
+            // against a still-running exe. Everything else still hides.
+            if (e.CloseReason is CloseReason.ApplicationExitCall
+                or CloseReason.WindowsShutDown
+                or CloseReason.TaskManagerClosing)
+            {
+                return;
+            }
+
+            e.Cancel = true;
             Hide();
 
             if (_previousWindow != IntPtr.Zero)
@@ -158,18 +172,10 @@ public partial class PMDG737CDUForm : Form
         // Update ListBox items efficiently
         int savedIndex = cduDisplay.SelectedIndex;
 
-        cduDisplay.BeginUpdate();
-        while (cduDisplay.Items.Count > lines.Count)
-            cduDisplay.Items.RemoveAt(cduDisplay.Items.Count - 1);
-        while (cduDisplay.Items.Count < lines.Count)
-            cduDisplay.Items.Add("");
-
-        for (int i = 0; i < lines.Count; i++)
-        {
-            if (cduDisplay.Items[i]?.ToString() != lines[i])
-                cduDisplay.Items[i] = lines[i];
-        }
-        cduDisplay.EndUpdate();
+        // Shared in-place reconcile (grow/shrink tail + rewrite changed rows). This form's own
+        // selection semantics run BELOW and override the helper's content-based restore —
+        // CDU screens are positional (LSK rows), so index restore / page force-select wins.
+        Forms.DisplayList.UpdateInPlace(cduDisplay, lines);
 
         // Announce title change
         bool titleChanged = !string.IsNullOrWhiteSpace(title) &&
@@ -180,7 +186,7 @@ public partial class PMDG737CDUForm : Form
             if (cduDisplay.Items.Count > 0)
                 cduDisplay.SelectedIndex = 0;
         }
-        else if (savedIndex >= 0 && savedIndex < cduDisplay.Items.Count)
+        else if (savedIndex >= 0 && savedIndex < cduDisplay.Items.Count && cduDisplay.SelectedIndex != savedIndex)
         {
             cduDisplay.SelectedIndex = savedIndex;
         }
@@ -391,23 +397,7 @@ public partial class PMDG737CDUForm : Form
         // Alt+letter: 737 page button hotkeys
         if (e.Alt && !e.Control && !e.Shift)
         {
-            string? key = e.KeyCode switch
-            {
-                Keys.I => "INIT_REF",
-                Keys.R => "RTE",
-                Keys.B => "CLB",
-                Keys.Z => "CRZ",
-                Keys.D => "DES",
-                Keys.M => "MENU",
-                Keys.G => "LEGS",
-                Keys.A => "DEP_ARR",
-                Keys.H => "HOLD",
-                Keys.P => "PROG",
-                Keys.N => "N1_LIMIT",
-                Keys.F => "FIX",
-                Keys.E => "EXEC",
-                _ => null
-            };
+            string? key = AltPageKey(e.KeyCode);
 
             if (key != null)
             {
@@ -418,6 +408,26 @@ public partial class PMDG737CDUForm : Form
             }
         }
     }
+
+    /// <summary>The CDU key a plain Alt+letter presses in this window (window-local keys; Output mode's Alt+P, Alt+N
+    /// and Alt+E, which open the PFD, ND and Engine displays, are the global hotkeys), or null.</summary>
+    internal static string? AltPageKey(Keys key) => key switch
+    {
+        Keys.I => "INIT_REF",
+        Keys.R => "RTE",
+        Keys.B => "CLB",
+        Keys.Z => "CRZ",
+        Keys.D => "DES",
+        Keys.M => "MENU",
+        Keys.G => "LEGS",
+        Keys.A => "DEP_ARR",
+        Keys.H => "HOLD",
+        Keys.P => "PROG",
+        Keys.N => "N1_LIMIT",
+        Keys.F => "FIX",
+        Keys.E => "EXEC",
+        _ => null
+    };
 
     private void ScratchpadInput_KeyDown(object? sender, KeyEventArgs e)
     {

@@ -4,6 +4,7 @@ Application Navigation:
   Ctrl+1     Focus Sections List
   Ctrl+2     Focus Panels List
   Ctrl+3     Focus Status Display field of the current panel (refreshes it if empty)
+  F5         Refresh the current panel's Status Display now (it also updates itself live)
 
 Tip: Press the same bracket key again to cancel a mode you activated by accident.
 
@@ -71,6 +72,8 @@ Location:
 Traffic and Weather:
   R          Announce Tracked TCAS Traffic
   Ctrl+R     Open TCAS Traffic Window
+  Shift+O    Open Volanta window (Volanta users and network pilots around you,
+             your Volanta friends and online ATC; also Extras > Volanta)
   Shift+R    Open Weather Radar Window
 
 Cockpit Display Read-outs:
@@ -82,21 +85,25 @@ Cockpit Display Read-outs:
   Alt+S      System Synoptic Display (HYD, ELEC, FUEL, AIR, APU, OXYGEN, status
              messages) - opens a live, navigable text window (arrow keys to read,
              F5 refreshes, Escape closes). No API key needed.
-  Alt+N      Read the Navigation Display via AI vision (requires a Gemini API key
-             in File > Gemini Settings; use the Ctrl+2 cockpit view first). The
+  Alt+N      Read the Navigation Display via AI vision (requires an AI API key —
+             Gemini or Claude — in File > Settings > AI tab; use the Ctrl+2
+             cockpit view first). The
              waypoint/distance data is also on D / Shift+D / W / Ctrl+W.
-  Alt+P      Read PFD via AI vision (Gemini key + Ctrl+2 view). Airspeed, altitude,
+  Alt+P      Read PFD via AI vision (AI key + Ctrl+2 view). Airspeed, altitude,
              heading and baro are also on B / Shift+S / Shift+H / A / Q.
-  Alt+I      Read the standby instrument via AI vision (Gemini key + Ctrl+2 view).
+  Alt+I      Read the standby instrument via AI vision (AI key + Ctrl+2 view).
   Alt+D      Describe outside scene (AI vision)
 
 Displays and Windows:
   Shift+E    Electronic Flight Bag (route viewer, procedure planner, airport lookup)
   Shift+L    Location Info
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter tunes the selected frequency into COM 1 standby
+                and Shift+Enter tunes it straight into COM 1 active; COM 1 is read back to confirm.
   Shift+M    Show VATSIM METAR Report
   Ctrl+Shift+T  Cold Temperature Altitude Correction (offline calculator: field elevation + temperature + published altitudes -> corrected altitudes)
   Shift+B    SimBrief Briefing
-  Shift+C    Show Checklist
 
 Background Announcements:
   Ctrl+M     787 Monitor Manager - a checklist of every variable the 787 announces
@@ -132,6 +139,16 @@ Hand Fly Mode Hotkeys:
 Visual Guidance Mode Hotkeys:
   F          Read Target VS
 
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
 INPUT MODE - Press [ to activate
 
 Teleport:
@@ -156,6 +173,14 @@ Autopilot Panel:
 
 FMC / CDU Windows:
   Shift+M    Open 787 FMC Window (no mod required; reads the FMC live)
+
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
 
 General:
   Escape     Exit active hotkey mode

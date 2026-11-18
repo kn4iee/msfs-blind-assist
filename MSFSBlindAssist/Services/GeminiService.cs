@@ -9,12 +9,12 @@ namespace MSFSBlindAssist.Services;
 /// <summary>
 /// Service for analyzing cockpit displays using Google Gemini AI.
 /// </summary>
-public class GeminiService
+public class GeminiService : IAiProvider
 {
     private static readonly HttpClient httpClient = new HttpClient();
 
     // The model is user-selectable (UserSettings.GeminiModel, populated from a live fetch in the
-    // Gemini Settings dialog). DEFAULT_MODEL is a rolling alias that always resolves to a current
+    // Settings dialog's AI tab). DEFAULT_MODEL is a rolling alias that always resolves to a current
     // Flash model, so a fresh install / failed fetch still has a working default.
     private const string API_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
     private const string DEFAULT_MODEL = "gemini-flash-latest";
@@ -38,33 +38,20 @@ public class GeminiService
             : SettingsManager.Current.GeminiApiKey;
     }
 
-    /// <summary>A Gemini model usable for generateContent, for the settings dropdown.</summary>
-    public sealed class GeminiModelInfo
-    {
-        public string Id { get; }
-        public string DisplayName { get; }
-        public GeminiModelInfo(string id, string displayName)
-        {
-            Id = id;
-            DisplayName = displayName;
-        }
-        public override string ToString() => DisplayName;
-    }
-
     /// <summary>
     /// Fetches the account's available models, filtered to generateContent-capable Gemini
     /// chat/vision models, collapsed to one (latest) entry per family, sorted newest-first.
     /// Throws on HTTP/network failure (caller falls back to a curated
     /// list). Does not retry — this is an interactive, best-effort dialog populate.
     /// </summary>
-    public async Task<IReadOnlyList<GeminiModelInfo>> ListAvailableModelsAsync()
+    public async Task<IReadOnlyList<AiModelInfo>> ListAvailableModelsAsync()
     {
         if (string.IsNullOrEmpty(apiKey))
         {
             throw new InvalidOperationException("Gemini API key is not configured.");
         }
 
-        var models = new List<GeminiModelInfo>();
+        var models = new List<AiModelInfo>();
         string? pageToken = null;
         do
         {
@@ -91,7 +78,7 @@ public class GeminiService
                     string displayName = string.IsNullOrWhiteSpace(m.DisplayName) ? id : m.DisplayName!;
                     if (IsNonChatModel(id, displayName)) continue;
 
-                    models.Add(new GeminiModelInfo(id, displayName));
+                    models.Add(new AiModelInfo(id, displayName));
                 }
             }
             pageToken = list?.NextPageToken;
@@ -99,7 +86,7 @@ public class GeminiService
 
         // Collapse every variant of a model line (dated snapshots, -preview, -exp) to ONE
         // representative per family so the picker isn't flooded with snapshots.
-        List<GeminiModelInfo> result = SelectFamilyRepresentatives(models);
+        List<AiModelInfo> result = SelectFamilyRepresentatives(models);
 
         // Newest-first: descending by the leading version number parsed from the id; unversioned
         // ids (rolling aliases like gemini-flash-latest) sort last; ties broken alphabetically.
@@ -121,9 +108,9 @@ public class GeminiService
     /// stable snapshot > newest preview/experimental. The rolling "*-latest" aliases are their
     /// own families and are kept.
     /// </summary>
-    private static List<GeminiModelInfo> SelectFamilyRepresentatives(List<GeminiModelInfo> models)
+    private static List<AiModelInfo> SelectFamilyRepresentatives(List<AiModelInfo> models)
     {
-        var byFamily = new Dictionary<string, GeminiModelInfo>(StringComparer.OrdinalIgnoreCase);
+        var byFamily = new Dictionary<string, AiModelInfo>(StringComparer.OrdinalIgnoreCase);
         foreach (var m in models)
         {
             string family = FamilyKey(m.Id);
@@ -132,7 +119,7 @@ public class GeminiService
                 byFamily[family] = m;
             }
         }
-        return new List<GeminiModelInfo>(byFamily.Values);
+        return new List<AiModelInfo>(byFamily.Values);
     }
 
     /// <summary>
@@ -221,14 +208,33 @@ public class GeminiService
         UpperECAM,     // Upper ECAM / Engine Warning Display
         ND,            // Navigation Display
         ISIS,          // Integrated Standby Instrument System
+        NDFenix,       // Navigation Display (Fenix A320) — its frame holds the captain's PFD and ND, so this one names the ND
+        StandbyFenix,  // Standby instruments (Fenix A320) — three round gauges on some variants, a digital ISIS on others
+        StandbyFenixIsis,     // Standby (Fenix A320) when the livery fits an ISIS, B_CONFIG_STDBY 0
+        StandbyFenixAnalogue, // Standby (Fenix A320) when the livery fits the three round standby gauges
         EICAS,         // Engine Indicating and Crew Alerting System (Boeing 777)
         PFD777,        // Primary Flight Display (Boeing 777)
         ND777,         // Navigation Display (Boeing 777)
         ISFD,          // Integrated Standby Flight Display (Boeing 777)
+        LowerDisplay777, // Lower display / MFD (Boeing 777) — secondary engine, a synoptic, or an ND
         PFD737,        // Primary Flight Display (Boeing 737 NG3)
         ND737,         // Navigation Display (Boeing 737 NG3)
         ISFD737,       // Integrated Standby Flight Display (Boeing 737 NG3)
-        EICAS737       // Upper Engine Display / "EICAS-equivalent" / DU3 (Boeing 737 NG3)
+        EICAS737,      // Upper Engine Display / "EICAS-equivalent" / DU3 (Boeing 737 NG3)
+        LowerDU737,    // Lower Display Unit / DU4 — secondary engine data, or the ND when selected (Boeing 737 NG3)
+        PFDiFly,       // Primary Flight Display (iFly 737 MAX 8)
+        NDiFly,        // Navigation Display (iFly 737 MAX 8)
+        ISFDiFly,      // Integrated Standby Flight Display (iFly 737 MAX 8)
+        EICASiFly,     // Engine indications + crew alerts, "EICAS-equivalent" (iFly 737 MAX 8)
+        PFDMd11,       // Captain's Primary Flight Display (TFDi MD-11) — instrument view 1
+        NDMd11,        // Captain's Navigation Display (TFDi MD-11) — instrument view 1
+        EADMd11,       // Engine and Alert Display, the MD-11's EICAS (TFDi MD-11) — instrument view 1
+        SDMd11,        // System Display, the page currently selected (TFDi MD-11) — instrument view 3
+        ISFDMd11,      // Standby instrument on the forward pedestal (TFDi MD-11) — instrument view 4
+        Adi757,        // Attitude Director Indicator, the 757's PFD-equivalent (BlueBird 757-200) — instrument view 1
+        Ehsi757,       // Electronic Horizontal Situation Indicator, the map display (BlueBird 757-200) — instrument view 1
+        UpperEicas757, // Upper EICAS: engine gauges and crew alert messages (BlueBird 757-200) — instrument view 2
+        LowerEicas757  // Lower EICAS: secondary engine data or a system page (BlueBird 757-200) — instrument view 2
     }
 
     /// <summary>
@@ -268,7 +274,7 @@ public class GeminiService
     /// <summary>
     /// Generates a prompt for scene description focused on the visual experience.
     /// </summary>
-    private string GetScenePrompt()
+    internal static string GetScenePrompt()
     {
         return @"You are describing the visual flight simulator scene for a blind pilot.
 
@@ -320,7 +326,7 @@ Describe what you see directly and factually, helping someone understand the vis
     /// <summary>
     /// Generates an appropriate prompt for each display type.
     /// </summary>
-    private string GetPromptForDisplay(DisplayType displayType)
+    internal static string GetPromptForDisplay(DisplayType displayType)
     {
         return displayType switch
         {
@@ -355,6 +361,41 @@ Skip normal colors (green, white, magenta) - only mention warning/alert colors (
 Report: display mode (ROSE NAV, ARC, PLAN), range setting, aircraft heading/track, active waypoints in sequence, distance/time to next waypoint, course deviation if present, weather radar returns if shown, TCAS traffic if present.
 Use line breaks to separate information. Put mode and range on the first line, heading/track on the next line, then each waypoint on its own line.
 Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
+
+            DisplayType.NDFenix => @"You are reading the CAPTAIN'S Navigation Display of an Airbus A320 for a screen reader user.
+The image contains the captain's two main displays side by side: the Primary Flight Display (attitude, speed and altitude tapes) on the left and the Navigation Display (the map) on the right. Describe ONLY the Navigation Display, the right-hand display. Ignore the Primary Flight Display, the standby instruments, any part of the ECAM displays at the edge and everything else.
+Do not report values from the Primary Flight Display instead: if the Navigation Display is blank or off, say so in one line and stop.
+Be extremely concise and direct. Skip descriptions of map layouts, visual positioning, and symbology explanations. Only report actual values, modes, and navigation data.
+Skip normal colors (green, white, magenta) - only mention warning/alert colors (amber, red).
+Report: display mode (ROSE NAV, ARC, PLAN), range setting, aircraft heading/track, ground speed and true airspeed, wind direction and speed, active waypoints in sequence, distance/time to next waypoint, course deviation if present, weather radar returns if shown, TCAS traffic if present.
+Use line breaks to separate information. Put mode and range on the first line, heading/track on the next line, then each waypoint on its own line.
+Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
+
+            DisplayType.StandbyFenix => @"You are reading the STANDBY INSTRUMENTS of an Airbus A320 for a screen reader user.
+The image contains the whole centre panel. Describe ONLY the standby instruments, which sit between the captain's navigation display and the ECAM displays. Ignore the navigation displays, the ECAM displays, and the landing gear and autobrake panels.
+This aircraft is fitted with ONE of two kinds. Identify which is present from its appearance, say so on the first line, then report it:
+
+If it is THREE ROUND DIAL GAUGES - first line ""Round standby gauges"" - report each on its own line: the standby airspeed in knots from the pointer, the standby altitude in feet from the drum or pointers, the barometric setting in the small window on the altimeter face (give the number and say whether it is hPa or inches of mercury), and the pitch and bank from the standby attitude indicator if either is other than level. If a DME or VOR bearing indicator is beside them, report its distance and bearing last.
+
+If it is a SINGLE DIGITAL SCREEN - first line ""Digital ISIS"" - report airspeed, altitude, barometric setting (including STD if standard is selected), pitch and bank if other than level, and any mode annunciations or flags.
+
+If the standby instruments are dark or not visible in this image, say so in one line and stop. Do not report values from the navigation displays or the ECAM instead.
+Skip normal colors - only mention warning/alert colors (amber, red).
+Use line breaks to separate values. Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
+
+            DisplayType.StandbyFenixIsis => @"You are reading the ISIS (integrated standby instrument system) of an Airbus A320 for a screen reader user.
+The image contains the whole centre panel. Describe ONLY the ISIS, the single small digital screen between the captain's navigation display and the ECAM displays. Ignore the navigation displays, the ECAM displays, and the landing gear and autobrake panels. It may be the older or the newer ISIS style; read either the same way.
+Report, each on its own line: airspeed, altitude, the barometric setting (the number and whether it is hPa or inches of mercury, or STD), pitch and bank if either is other than level, and any flags or annunciations.
+If the standby instruments are dark or not visible in this image, say so in one line and stop. Do not report values from the navigation displays or the ECAM instead.
+Skip normal colors - only mention warning/alert colors (amber, red).
+Use line breaks to separate values. Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
+
+            DisplayType.StandbyFenixAnalogue => @"You are reading the STANDBY INSTRUMENTS of an Airbus A320 for a screen reader user.
+The image contains the whole centre panel. Describe ONLY the standby instruments, three round dial gauges: airspeed, altimeter and attitude. They sit between the captain's navigation display and the ECAM displays. Ignore the navigation displays, the ECAM displays, and the landing gear and autobrake panels.
+Report each on its own line: the standby airspeed in knots from the pointer, the standby altitude in feet from the drum or pointers, the barometric setting in the small window on the altimeter face (give the number and say whether it is hPa or inches of mercury), and the pitch and bank from the standby attitude indicator if either is other than level. If a separate metric altitude gauge is fitted, report its reading too. If a DME or VOR bearing indicator is beside them, report its distance and bearing last.
+If the standby instruments are dark or not visible in this image, say so in one line and stop. Do not report values from the navigation displays or the ECAM instead.
+Skip normal colors - only mention warning/alert colors (amber, red).
+Use line breaks to separate values. Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
 
             DisplayType.ISIS => @"You are reading the ISIS backup display for a screen reader user.
 The image may contain multiple displays. ONLY describe the ISIS (center backup instrument). Ignore any other displays.
@@ -505,7 +546,171 @@ Skip normal colors (green, white) — only mention warning/alert colors (amber, 
 Use line breaks to separate parameters. Put thrust mode on the first line, TAT/SAT on the next, then each engine on its own line, then fuel quantities, then limits, then any alerts.
 Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
 
-            _ => "Report what you see on this display in plain text. No markdown formatting. No explanations. Just the data."
+            DisplayType.LowerDU737 => @"You are reading the Lower Display Unit (DU4, the lower centre display) of a Boeing 737 (NG3 family — 737-600 / -700 / -800 / -900) for a screen reader user.
+The image may contain multiple displays. ONLY describe the lower centre display, below the Upper Engine Display. Ignore the PFD, the navigation displays, the ISFD, the Upper Engine Display (N1, EGT) and the CDU.
+
+This display unit shows one of two things, selected by the pilot on the LOWER DU selector. Identify which is present from its content and say so on the first line, then report it:
+
+If it shows SECONDARY ENGINE INDICATIONS — first line ""Secondary engine"" — report for each engine (ENG 1 / ENG 2 or Left / Right), each on its own line: N2 percentage, fuel flow (FF), oil pressure, oil temperature, oil quantity percentage, and engine vibration. Then any other values or crew alert text present.
+
+If it shows a NAVIGATION DISPLAY — first line ""Navigation display"" — report it as a navigation display: mode and range, heading or track, active waypoint with distance and time, wind, and any weather-radar or terrain indications.
+
+Important: N1 and EGT belong to the Upper Engine Display, not this one — do not report them here. Fuel flow appears on BOTH displays (verified in the simulator, 2026-09-20); report the value shown on THIS one.
+If the display is blank or off, say so in one line and stop.
+Skip normal colors (green, white) — only mention warning/alert colors (amber, red).
+Use line breaks to separate values. Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
+
+            DisplayType.LowerDisplay777 => @"You are reading the LOWER display (the lower centre screen, sometimes called the lower EICAS or the MFD) of a Boeing 777 for a screen reader user.
+The image shows the whole forward panel. Describe ONLY the lower centre screen, the one directly BELOW the upper EICAS. Ignore the upper EICAS above it, the standby instrument, the primary flight displays, the navigation displays and the CDU keypads.
+
+This screen is selectable and shows one of several things. Identify which is present from its content, say so on the first line, then report it:
+
+If it shows SECONDARY ENGINE INDICATIONS - first line ""Secondary engine"" - report for each engine, left then right, each on its own line: N2 percentage, fuel flow, oil pressure, oil temperature, oil quantity, and engine vibration. Report the numbers as shown.
+
+If it shows a SYNOPTIC page - first line the page name, for example ""Hydraulic synoptic"", ""Electrical synoptic"", ""Fuel synoptic"", ""Air synoptic"", ""Door synoptic"", ""Gear synoptic"", ""Flight controls synoptic"" or ""Status"" - report the quantities, valve and pump states, and any amber or red items on it, each on its own line.
+
+If it shows a NAVIGATION DISPLAY - first line ""Navigation display"" - report mode and range, heading or track, the active waypoint with distance and time, and any weather radar or terrain indications.
+
+If the screen is blank or off, say so in one line and stop.
+Skip normal colors (green, white) - only mention warning/alert colors (amber, red).
+Use line breaks to separate values. Do not use markdown formatting. Do not explain what things mean. Just state the essential data.",
+
+            DisplayType.PFDiFly => @"You are reading the Primary Flight Display (PFD) of an iFly Boeing 737 MAX 8 for a screen reader user. The image may contain several displays. ONLY describe the PFD — the display showing the artificial-horizon attitude indicator with a speed tape on its left and an altitude tape on its right. Ignore the navigation display, the engine indications, the ISFD standby, the flight-information/data page, and the CDU.
+Report in this order:
+Flight Mode Annunciator (FMA) across the top, left to right: autothrottle mode (e.g. N1, RETARD, ARM, FMC SPD), roll mode (e.g. LNAV, HDG SEL, VOR/LOC, LOC), pitch mode (e.g. VNAV PTH, VNAV SPD, ALT, V/S, G/S, FLARE), and AFDS status (FD, CMD, or single/dual channel).
+Airspeed: current indicated airspeed, the selected/MCP speed if shown, and any relevant speed bugs.
+Attitude: pitch and bank only if unusual (otherwise say wings level).
+Altitude: current altitude, the selected altitude, and the barometric setting (e.g. 29.71 IN, 1013 HPA, or STD).
+Vertical speed if shown.
+Heading and track at the bottom, plus the selected heading.
+Radio altitude if displayed.
+Localizer and glideslope deviation if an approach is shown.
+Any flags, failure flags, or amber/red annunciations.
+Skip normal colors (green, white, magenta); only call out amber and red. Put each parameter on its own line. Do not use markdown. Do not explain what things mean. Just state the data.",
+
+            DisplayType.NDiFly => @"You are reading the Navigation Display (ND) of an iFly Boeing 737 MAX 8 for a screen reader user. The image may contain several displays. ONLY describe the ND — the display showing the compass arc or map with the aircraft symbol. Engine indications may appear on the same physical display unit, to the right of the map; do NOT report engine data — describe only the navigation/map portion.
+Report in this order:
+Mode and range (e.g. MAP 5, VOR, PLAN, APP; range in nautical miles).
+Current track and heading (e.g. TRK 008 MAG); ground speed and true airspeed if shown.
+Active waypoint: name, distance, and time or ETA (e.g. TIKNI 51.8 NM).
+Next waypoints along the magenta route line, in order, if legible.
+Wind: direction and speed.
+Weather radar returns: whether any are painted, their intensity (green, amber/yellow, red), and rough bearing and distance.
+Terrain: any terrain shading and its color.
+Traffic (TCAS): any traffic symbols, with relative bearing, range, and relative altitude if shown.
+VOR/ADF pointers and tuned stations if shown.
+RNP/ANP figures and any navigation flags or messages.
+Skip normal colors; only call out amber and red. Put each item on its own line. Do not use markdown. Do not explain. Just state the data.",
+
+            DisplayType.ISFDiFly => @"You are reading the Integrated Standby Flight Display (ISFD) of an iFly Boeing 737 MAX 8 for a screen reader user — the small standby instrument in the centre of the main panel, between the two pilots' display units, a compact attitude indicator with its own speed and altitude readouts. The image may contain several displays. ONLY describe the ISFD; ignore the main PFD, the ND, the engine display, and the CDU.
+Report: airspeed; attitude (pitch and bank only if unusual); altitude; barometric setting (e.g. 1013 HPA, 29.71 IN, or STD); and any mode annunciations (e.g. APP, ILS) or flags.
+Skip normal colors; only call out amber and red. Put each parameter on its own line. Do not use markdown. Do not explain. Just state the data.",
+
+            DisplayType.EICASiFly => @"You are reading the engine indications and crew-alert messages of an iFly Boeing 737 MAX 8 for a screen reader user. On the 737 MAX these appear on the inboard display unit, to the right of the navigation display. The image may contain several displays. Describe ONLY the engine indications and the crew-alert message text; ignore the PFD attitude, the ND map, the ISFD, and the CDU.
+Important: on the 737 MAX the engine display shows N1, N2, EGT, fuel flow, and oil indications together (unlike the 737 NG, where N2 is on a separate lower display). Report all of them.
+Report in this order:
+Thrust mode label if shown (e.g. TO, R-TO, CLB, CLB1, CLB2, CON, CRZ, GA).
+TAT and SAT if shown, in degrees Celsius.
+For each engine, ENG 1 then ENG 2 (left then right):
+  N1 percent, and the N1 reference/limit bug value if shown.
+  EGT in degrees Celsius.
+  N2 percent.
+  Fuel flow (e.g. 2.26 meaning 2260 pounds per hour).
+  Oil pressure, oil temperature, oil quantity, and vibration if shown.
+Flap position and landing-gear indications if shown on this display.
+Fuel quantity: left, center, right, and total if shown, in thousands of pounds.
+Then, most important, the crew alert messages: read every caution (amber) and warning (red) message line exactly as written, top to bottom. If there are none, say ""No alerts"".
+Skip normal colors (green, white); call out amber and red. Put the thrust mode first, then TAT/SAT, then each engine on its own line, then flaps/gear, then fuel, then the alerts. Do not use markdown. Do not explain. Just state the data.",
+
+            DisplayType.PFDMd11 => @"You are reading the captain's Primary Flight Display (PFD) of a McDonnell Douglas MD-11 for a screen reader user. The image may contain several displays. ONLY describe the PFD — the leftmost display, with the attitude sphere, a speed tape on its left and an altitude tape on its right. Ignore the navigation display, the engine display and everything else.
+The flight mode annunciator across the top of the PFD is the most important part: it is the only place the engaged autoflight modes exist. Report it first, in three windows from left to right: the speed and thrust window (the target speed or Mach and the thrust mode, e.g. "".815 THRUST"", ""250 PITCH"", ""IDLE""), the roll window (e.g. NAV1, NAV2, HDG, TRK, LOC, LAND ARMED, ROLLOUT), and the pitch window (e.g. HOLD 32000, ALT CAP, PROF, V/S, FPA, G/S, FLARE). Read each word exactly as written and give its colour: white means selected on the flight control panel, magenta means commanded by the FMS. Then the line beneath the windows: AP1, AP2 or FD, and any armed mode shown there.
+Then report, one per line:
+Airspeed: the indicated airspeed, the Mach number, and any speed bugs shown on the tape.
+Altitude: the current altitude, the selected altitude at the top of the tape, and the metric altitude if a metres readout is shown.
+Vertical speed.
+Heading or track at the bottom, with MAG or TRUE.
+Barometric setting below the altitude tape (inches or hectopascals, or STD).
+Decision height or minimums (DH, MDA) and the radio altitude if displayed.
+Localizer and glideslope deviation if an approach is displayed and they are not centred.
+Any flags, failure flags, or amber or red annunciations.
+Be extremely concise and direct. Skip descriptions of tape layouts, scales and positioning. Skip normal colours for flight data (green, white); only call out amber and red there. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.NDMd11 => @"You are reading the captain's Navigation Display (ND) of a McDonnell Douglas MD-11 for a screen reader user. The image may contain several displays. ONLY describe the ND — the display to the right of the PFD, showing a compass arc or rose with the aircraft symbol. Ignore the PFD, the engine display beside the ND, and everything else.
+Report in this order, one item per line:
+Display mode (MAP, PLAN, VOR, APPR or TCAS) and the range in nautical miles (the RNG box).
+Heading or track at the top of the compass, and whether MAG or TRUE is selected.
+Ground speed (GS) and true airspeed (TAS).
+Wind direction and speed.
+The active waypoint at the top right: its name, distance and time or ETA.
+Further waypoints along the route in order, if legible.
+Bearing pointers and the stations they point to (VOR, ADF) if shown.
+TCAS traffic: relative bearing, range and relative altitude of each symbol, and any TA or RA.
+Weather radar returns and their colour, and terrain shading and its colour, if displayed.
+The clock and elapsed time if shown.
+Any flags or messages (e.g. TERRAIN, WX, the navigation source).
+Skip normal colours (green, white, magenta, cyan); only call out amber and red. Skip descriptions of map layout and symbology. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.EADMd11 => @"You are reading the Engine and Alert Display (EAD) of a McDonnell Douglas MD-11 for a screen reader user. The EAD is this aircraft's EICAS. The image may contain several displays. ONLY describe the EAD — the centre display with three columns of round engine gauges (one column per engine) and an alert area below them. Ignore the navigation display to its left, the system display to its right, and the PFD. The small ""GEAR LIMIT SPD"" placard printed below the display, next to the gear handle, is NOT part of the display; do not report it.
+Report in this order, one item per line:
+The thrust limit line at the top (e.g. ""1.45 CRZ LIM"", ""TO"", ""CLB"", ""GA"") and TAT.
+For each engine, engine 1 then 2 then 3 (left to right): EPR (Pratt and Whitney) or N1 (General Electric) with the limit bug value if shown, EGT in degrees Celsius, N1 percent, N2 percent, and fuel flow (FF).
+Flap and slat position, landing gear indications, and pitch trim if shown on this display (a green box around the flap and trim values means take-off configuration is good; say so).
+Then, most important, the alert area at the bottom of the display: read every message exactly as written, top to bottom, with its colour — red is a warning (level 3), amber is a caution (level 2), cyan is a level 1 alert or a memo such as NO SMOKING. If there are none, say ""No alerts"".
+Be extremely concise and direct. Skip descriptions of gauge layout, arc positions and visual formatting. Skip normal colours (green, white); call out amber, red and cyan in the alert area only. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.SDMd11 => @"You are reading the System Display (SD) of a McDonnell Douglas MD-11 for a screen reader user. The image may contain several displays. ONLY describe the SD — the display to the right of the gear handle, showing one system synoptic page. Ignore the engine display to its left, the navigation displays and the PFD.
+First line: the page name. The SD shows one of these pages: ENG (secondary engine data: oil pressure, temperature and quantity, nacelle temperature, vibration, plus gross weight, CG, fuel, cabin altitude and rate, stabilizer trim), HYD (hydraulics), ELEC (electrical), AIR (air conditioning and pneumatics), FUEL (fuel quantities and pumps), CONFIG (configuration: flaps, slats, gear, trim, spoilers), MISC (miscellaneous), STATUS, CONSEQ (consequences of a failure), or a third navigation display. Identify the page from its title or its content.
+Then report every value with its unit and every system state, one per line: quantities, pressures, temperatures, voltages, frequencies, ON/OFF, OPEN/CLOSED, pump and valve states, and any messages on the page.
+Skip descriptions of layouts, diagrams and visual positioning. Skip normal colours (green, white, cyan); only call out amber and red. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.ISFDMd11 => @"You are reading the standby instrument of a McDonnell Douglas MD-11 for a screen reader user — the small integrated standby flight display at the top centre of the forward pedestal, between the two MCDUs and above the autobrake selector, with its own attitude sphere, speed tape and altitude tape. The image may contain several displays. ONLY describe the standby instrument; ignore the MCDUs and the main panel displays.
+Report, one per line: pitch and bank only if unusual (otherwise say wings level); airspeed and the Mach number; altitude and the metric altitude in the box beside it if shown; the barometric setting (IN or HPA, or STD); heading at the bottom; and any flags or amber or red annunciations.
+Skip normal colours; only call out amber and red. Skip descriptions of instrument layout and positioning. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.Adi757 => @"You are reading the Attitude Director Indicator (ADI) of a Boeing 757 for a screen reader user. The image may contain several displays. ONLY describe the ADI — the display with the artificial horizon (the attitude sphere) and the flight mode annunciations across the top. Ignore the EHSI (the compass or map display) and everything else in the frame, including any separate airspeed indicator, altimeter or standby instrument beside the ADI.
+The flight mode annunciations across the top of the ADI are the most important part: they are the only place the engaged autoflight modes show. Report them first, left to right: the autothrottle mode (e.g. SPD, EPR, THR HLD, IDLE, GA), the roll mode (e.g. HDG SEL, HDG HOLD, LNAV, LOC, B/CRS, ROLLOUT) and the pitch mode (e.g. V/S, FLCH, ALT HOLD, ALT CAP, VNAV PTH, VNAV SPD, G/S, FLARE). Then any armed modes, and the autopilot or flight director status (CMD, FD). Read each word exactly as written.
+Next, the AUTOLAND STATUS annunciator, the small separate annunciator beside the ADI: if it shows a message (for example LAND 3, LAND 2, NO LAND 3 or NO AUTOLAND), report it on its own line exactly as written, with its color if it is amber or red; if it is blank, leave it out.
+Then report the following, one per line, only if the ADI itself shows it. Never read a separate instrument beside the ADI, except the AUTOLAND STATUS annunciator above, and never guess or estimate a value: leave out anything the ADI does not show.
+Airspeed: the indicated airspeed, the selected speed and any speed bugs.
+Attitude: pitch and bank only if unusual (otherwise say wings level).
+Altitude: the current altitude, the selected altitude and the barometric setting.
+Vertical speed.
+Heading or track.
+Radio altitude, and decision height or minimums.
+Localizer and glideslope deviation, if an approach is displayed and they are not centered.
+Any flags, failure flags, or amber or red annunciations.
+Be extremely concise and direct. Skip descriptions of scales, layouts and positioning. Skip normal colors (green, white, magenta); only call out amber and red. Give every word exactly as the display presents it. Do not expand abbreviations or convert units. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.Ehsi757 => @"You are reading the Electronic Horizontal Situation Indicator (EHSI) of a Boeing 757 for a screen reader user. The image may contain several displays. ONLY describe the EHSI — the display showing the compass rose or the map with the aircraft symbol. Ignore the ADI, the display with the artificial horizon, and everything else in the frame.
+Report in this order, one item per line:
+Display mode as shown (e.g. MAP, CTR MAP, PLN, VOR, APP) and the range.
+Heading or track at the top of the compass, and whether MAG or TRUE is shown.
+Ground speed (GS) and true airspeed (TAS) if shown.
+Wind direction and speed.
+The active waypoint: its name, distance, and time or ETA.
+Further waypoints along the route in order, if legible.
+In a VOR or APP mode: the selected course, the deviation bar, and the tuned station with its distance.
+Bearing pointers and the stations they point to, if shown.
+TCAS traffic: relative bearing, range and relative altitude of each symbol, and any TA or RA.
+Weather radar returns and terrain shading, with their colors, if displayed.
+Any flags or messages.
+Be extremely concise and direct. Skip descriptions of map layout and symbology. Skip normal colors (green, white, magenta, cyan); only call out amber and red. Give every word exactly as the display presents it. Do not expand abbreviations or convert units. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.UpperEicas757 => @"You are reading the upper EICAS display of a Boeing 757 for a screen reader user. The upper EICAS is the upper of the two EICAS CRTs: it shows the primary engine gauges and the crew alert messages. The image may contain several displays. ONLY describe the upper EICAS. Ignore the lower EICAS below it, the MCP, the standby instruments, the autobrake selector, the flap gauge, the gear lever, the first officer's airspeed indicator, and everything else in the frame.
+Report in this order, one item per line:
+The thrust mode or limit label at the top if shown (e.g. TO, CLB, CRZ, GA) and TAT.
+For each engine, left then right: EPR with its limit or command bug value if shown, N1, and EGT. Also any other engine value this display shows.
+Then, most important, the alert messages: read every message exactly as written, top to bottom. Name the color only for red or amber messages. Include the page indicator if one is shown (e.g. PAGE 1) and a STATUS cue if one is shown. If there are no messages, say ""No alerts"".
+If the screen is blank or off, say so in one line and stop.
+Be extremely concise and direct. Skip descriptions of gauge layout, arc positions and visual formatting. Skip normal colors (green, white); call out amber and red in the alert area only. Give every word and number exactly as the display presents it. Do not expand abbreviations or convert units. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            DisplayType.LowerEicas757 => @"You are reading the lower EICAS display of a Boeing 757 for a screen reader user. The lower EICAS is the lower of the two EICAS CRTs, below the upper EICAS: it shows either the secondary engine data or one system page. The image may contain several displays. ONLY describe the lower EICAS. Ignore the upper EICAS above it, the MCP, the standby instruments, the autobrake selector, the flap gauge, the gear lever, the first officer's airspeed indicator, and everything else in the frame.
+First line: the page title exactly as shown on the display. If the display shows the engine columns with no page title, the first line is ""Secondary engine data"". Apart from that label, never name a page the display does not title.
+Then report every value and every system state, one per line, left to right and top to bottom: quantities, pressures, temperatures, voltages, ON/OFF, OPEN/CLOSED, pump and valve states, and any messages on the page, each exactly as written. For the engine columns that means each value with its own label as the display writes it, left engine then right, for example N2, fuel flow, oil pressure, oil temperature, oil quantity and vibration.
+If the screen is blank or off, say so in one line and stop.
+Be extremely concise and direct. Skip descriptions of layouts, diagrams and visual positioning. Skip normal colors (green, white, cyan); only call out amber and red. Give every word and number exactly as the display presents it. Do not expand abbreviations or convert units. Do not use markdown formatting. Do not explain what things mean. Just state the data.",
+
+            _ =>"Report what you see on this display in plain text. No markdown formatting. No explanations. Just the data."
         };
     }
 
@@ -517,9 +722,12 @@ Do not use markdown formatting. Do not explain what things mean. Just state the 
     /// <returns>Text description of the route</returns>
     public async Task<string> DescribeRouteAsync(string flightData)
     {
-        string prompt = GetRouteDescriptionPrompt(flightData);
         bool enableSearch = SettingsManager.Current.GeminiSearchGrounding;
-        return await SendTextRequestAsync(prompt, enableSearch: enableSearch);
+        // The prompt is told whether THIS request can search, so a taxi leg's check line never claims current charts.
+        string prompt = GetRouteDescriptionPrompt(flightData, webSearch: enableSearch);
+        // The prompt forbids writing its real-world question out; a model does not always comply (live KMEM→KATL,
+        // 2026-09-26), so the echo is removed here too.
+        return RouteBriefingText.RemoveEchoedTaxiQuestion(await SendTextRequestAsync(prompt, enableSearch: enableSearch));
     }
 
     /// <summary>
@@ -592,7 +800,7 @@ Do not use markdown formatting. Do not explain what things mean. Just state the 
     {
         if (string.IsNullOrEmpty(apiKey))
         {
-            throw new InvalidOperationException("Gemini API key is not configured. Please configure it in File > Gemini Settings.");
+            throw new InvalidOperationException("Gemini API key is not configured. Please configure it in File > Settings > AI tab.");
         }
 
         string model = SettingsManager.Current.GeminiModel;
@@ -622,7 +830,7 @@ Do not use markdown formatting. Do not explain what things mean. Just state the 
             {
                 // HttpClient 120s timeout. No caller token is ever passed, so a cancellation here is
                 // always the timeout. Do NOT gate on ex.CancellationToken.IsCancellationRequested —
-                // on .NET 9 the timeout token IS signaled, so that filter never matches a timeout
+                // on modern .NET (9+) the timeout token IS signaled, so that filter never matches a timeout
                 // (matches the SimBriefService pattern). Transient — retry with backoff.
                 lastTransient = new HttpRequestException("Gemini API request timed out.", ex);
                 response = null;
@@ -663,7 +871,7 @@ Do not use markdown formatting. Do not explain what things mean. Just state the 
                 string errorContent = await response.Content.ReadAsStringAsync();
                 response.Dispose();
                 string message = status == System.Net.HttpStatusCode.NotFound
-                    ? $"Gemini model '{model}' is unavailable — choose a different model in File > Gemini Settings. ({errorContent})"
+                    ? $"Gemini model '{model}' is unavailable — choose a different model in File > Settings > AI tab. ({errorContent})"
                     : $"Gemini API request failed with status {code}: {errorContent}";
                 throw new HttpRequestException(message);
             }
@@ -704,15 +912,35 @@ Do not use markdown formatting. Do not explain what things mean. Just state the 
             responseJson = await response.Content.ReadAsStringAsync();
         }
 
+        return ParseResponse(responseJson);
+    }
+
+    /// <summary>Spoken/read suffix when Gemini stopped at its output cap — the blind pilot cannot
+    /// see that a briefing just stops. Mirrors ClaudeService's max_tokens note.</summary>
+    internal const string IncompleteNote = "\n\n(Response may be incomplete — Gemini stopped before finishing.)";
+
+    /// <summary>What a reply that stopped before any text says: a thinking model can spend its whole token budget
+    /// before writing a word, and then MAX_TOKENS arrives with no parts at all.</summary>
+    internal const string StoppedBeforeResponse = "Gemini stopped before completing a response. Please try again.";
+
+    /// <summary>The response parsing formerly inline in SendRequestAsync; internal so GeminiResponseTests can pin it.
+    /// The finish reason is read BEFORE the parts check — a thinking model can spend its whole token budget before
+    /// writing a word, so the common MAX_TOKENS shape is content with no parts at all (or no content at all), and
+    /// that must reach <see cref="StoppedBeforeResponse"/> rather than the generic "no content" exception.</summary>
+    internal static string ParseResponse(string responseJson)
+    {
         var result = JsonConvert.DeserializeObject<GeminiResponse>(responseJson);
         if (result?.Candidates == null || result.Candidates.Length == 0)
         {
             throw new InvalidOperationException("Gemini API returned no candidates in response.");
         }
 
-        var candidateContent = result.Candidates[0].Content;
+        var candidate = result.Candidates[0];
+        bool truncated = string.Equals(candidate.FinishReason, "MAX_TOKENS", StringComparison.OrdinalIgnoreCase);
+        var candidateContent = candidate.Content;
         if (candidateContent?.Parts == null || candidateContent.Parts.Length == 0)
         {
+            if (truncated) return StoppedBeforeResponse;
             throw new InvalidOperationException("Gemini API returned no content in response.");
         }
 
@@ -720,7 +948,11 @@ Do not use markdown formatting. Do not explain what things mean. Just state the 
         string combined = string.Concat(candidateContent.Parts
             .Where(p => !string.IsNullOrEmpty(p.Text))
             .Select(p => p.Text));
-        return string.IsNullOrWhiteSpace(combined) ? "No description available." : combined;
+        if (string.IsNullOrWhiteSpace(combined))
+        {
+            return truncated ? StoppedBeforeResponse : "No description available.";
+        }
+        return truncated ? combined + IncompleteNote : combined;
     }
 
     private static int GetRetryDelay(HttpResponseMessage response, int attempt)
@@ -738,10 +970,56 @@ Do not use markdown formatting. Do not explain what things mean. Just state the 
     }
 
     /// <summary>
+    /// The owner's real-world taxi question, asked for each taxi leg in the TAXI OUT AND TAXI IN section. An INSTRUCTION to the AI,
+    /// never text for the briefing: the prompt forbids writing it out, and <see cref="RouteBriefingText"/> removes it
+    /// if it comes back anyway (live KMEM→KATL, 2026-09-26).
+    /// </summary>
+    internal const string RealWorldTaxiQuestion =
+        "Provide the step-by-step taxi route at [ICAO Code] from [Runway] to [Terminal/Gate] in a [Aircraft Type]. " +
+        "Please include the expected taxiways, hold short points, and any specific restrictions.";
+
+    /// <summary>
+    /// How each taxi leg's check line begins when the AI checked the scenery's route against its own knowledge of the airport
+    /// — always so when the request has no web search (<see cref="GetRouteDescriptionPrompt"/>'s <c>webSearch</c>). Heard by
+    /// the pilot, so it says what the check was made against (owner, 2026-09-27).
+    /// </summary>
+    internal const string RouteCheckFromMemory = "Real-world check, from memory rather than live charts:";
+
+    /// <summary>How a check line begins only when a web search in that briefing found and read the airport's current charts.</summary>
+    internal const string RouteCheckAgainstCharts = "Real-world check, against current charts:";
+
+    /// <summary>
+    /// How each taxi leg's optional suggestions paragraph begins: what the scenery cannot provide — preferred exits from the
+    /// charts, size restrictions, usual routing — flagged so it is never mistaken for the scenery's route (owner, 2026-09-27).
+    /// </summary>
+    internal const string RouteSuggestionsOpening = "Real-world suggestions, not from your scenery:";
+
+    /// <summary>Section 7's search sentence when the request carrying the prompt has no web search.</summary>
+    internal const string RouteSearchOffSentence =
+        $"Web search is off for this briefing, so every check line begins \"{RouteCheckFromMemory}\".";
+
+    /// <summary>
+    /// Section 7's search sentence when the request carrying the prompt has web search. "Before you write any part of the
+    /// briefing" is deliberate, not "before you start writing" — the latter reads as "before this section", and with
+    /// Claude only the text after the last tool block survives <see cref="ClaudeService"/>'s response parsing, so a
+    /// lookup delayed until section 7 would drop sections 1-6 of the briefing entirely. NOTAMs are named FIRST, ahead of
+    /// the chart lookup: <see cref="ClaudeService"/>'s search budget is shared across both airports' NOTAMs, the weather
+    /// and SIGMETs, and now one chart lookup per airport too, so a budget that still runs out drops charts, not NOTAMs.
+    /// </summary>
+    internal const string RouteSearchOnSentence =
+        "Web search is on for this briefing: do any lookups before you write any part of the briefing, looking up both " +
+        "airports' current NOTAMs first; you may also look up each airport's current airport diagram and chart notes; a " +
+        "check line says current charts only when that search found and read them.";
+
+    /// <summary>
     /// Generates the prompt for route description.
     /// </summary>
-    private string GetRouteDescriptionPrompt(string flightData)
+    /// <param name="webSearch">Whether the request carrying this prompt has web search (Gemini's grounding, Claude's
+    /// web_search tool). It chooses section 7's search sentence and nothing else, so a taxi leg's check line can never
+    /// claim current charts the AI could not have looked at.</param>
+    internal static string GetRouteDescriptionPrompt(string flightData, bool webSearch)
     {
+        string searchSentence = webSearch ? RouteSearchOnSentence : RouteSearchOffSentence;
         return $@"You are writing a flight briefing for a blind flight simulator pilot. Based on the flight plan data below, write a narrative description of the route that helps the pilot understand what they will experience during this flight.
 
 Cover the following topics, using descriptive section headings separated by blank lines:
@@ -788,14 +1066,50 @@ Cover the following topics, using descriptive section headings separated by blan
    - If no significant NOTAMs are found, state that no notable NOTAMs were found for these airports
    - Skip routine or minor NOTAMs (e.g. crane notifications, wildlife warnings) unless they affect runway operations
 
+7. TAXI OUT AND TAXI IN
+   The flight plan data ends with a TAXI ROUTES block worked out from the pilot's own simulator scenery.
+   Write this section as two legs, the taxi out at the departure airport and then the taxi in at the arrival airport, each in up to three parts in this order: the route paragraph, the check line and the suggestions paragraph, each part on its own line.
+   For each leg, answer the question below from that leg's lines of the TAXI ROUTES block, taking the bracketed items (the airport, the runway, the stand or terminal, and the aircraft type) from them (the runway there may be the one SayIntentions assigned rather than the flight plan's):
+      ""{RealWorldTaxiQuestion}""
+   That question is an instruction to you, not text for the pilot: write only your answer, and never write the question itself into the briefing, as shown here or with the items filled in.
+   For the taxi out, the route runs from the stand to the departure runway; for the taxi in, it runs from the landing runway, via the exit, to the stand.
+   The route paragraph is one short paragraph per leg, in the voice of real-world operations, and apart from the general-knowledge route described below, nothing in it comes from your own knowledge.
+   The route comes from the block only: the stand, the taxiways in order with the turn at each change of taxiway and into the stand wherever the block gives one, every hold-short point and the runway it protects, and for the arrival which side to leave the runway (left or right), the exit taxiway and its distance from the threshold, the next exit if that one is missed, every runway crossed, and the gate.
+   Use ONLY the taxiway, exit and stand names given in the block, and repeat distances, sides and turn directions exactly as given; where the block gives no turn for a taxiway, give none.
+   Give the total taxi distance for each leg the block gives one for, and never estimate one.
+   At the end of each route paragraph, say in a short phrase that this is the expected route on the pilot's scenery and that SayIntentions or ATC will give the actual taxi clearance.
+   Always give every runway the route crosses, including one a note says has no hold short point, and when a note says the mapped route leaves the runway on another taxiway, say which.
+   Mention any other note from the block only when it changes what the pilot does or hears, such as a runway SayIntentions assigned that differs from the flight plan, a representative stand (say it is typical, not assigned), a SayIntentions gate the scenery lists under another name, does not have, or places at a different position, a stand the scenery marks as a fuel or other special stand, or a taxiway width or stand size note.
+   When a leg's route comes from OpenStreetMap or from X-Plane's airport data, say so in a few words, and call it the expected route on that map rather than on the pilot's scenery; taxi guidance cannot use it.
+   If the block says a leg is unavailable, say so in a few words, and still give whatever the block does give for that leg, such as the exit with its side and distance, and the stand.
+   When the reason is that the aircraft is already at the runway, give no route for that leg.
+   Otherwise you may give that leg's usual route from your own knowledge, saying it is general knowledge and not checked against the scenery; where the leg has a ""Taxiway names at"" list, name only taxiways from it, and only a leg with no such list may name taxiways the block does not give.
+   A ""Taxiway names at"" line that reads ""{MSFSBlindAssist.Navigation.Briefing.TaxiBriefingRenderer.SameListAsTaxiOut}"" gives that leg the taxi out's list, and that list counts as the leg's own wherever this section speaks of a leg's list.
+   The scenery phrase belongs only to a route the block gives: end a general-knowledge route by saying only that SayIntentions or ATC will give the actual taxi clearance, never that it is the expected route on the pilot's scenery, and give no scenery phrase for a leg with no route.
+   The check line is one sentence after each route paragraph that checks the block's route, exit and stand for that leg against the real airport as you know it.
+   Begin it with ""{RouteCheckFromMemory}"", or with ""{RouteCheckAgainstCharts}"" only when a web search in this briefing found and read that airport's current airport diagram or chart notes.
+   {searchSentence}
+   When they agree, say so in a few words; when something differs, name what differs instead; when you do not know the airport well enough to check it, say so; never claim an agreement or a difference you cannot support.
+   Leave the check line out for a leg the block gives no route, exit or stand for.
+   The suggestions paragraph comes after the check line (or after the route paragraph when there is none), only when you have something to add that the scenery cannot provide, and otherwise is left out; it begins ""{RouteSuggestionsOpening}"" and has at most three short sentences.
+   It may give a preferred exit from the real airport's charts, restrictions that apply to this aircraft's size (from the block's Aircraft line, such as a wide-body kept off a taxiway, a wingspan limit or a full-length departure requirement), current operational information such as a NOTAM closing a taxiway on the route, and at most one sentence saying that controllers usually route differently there; never give a full alternative route.
+   A suggested exit takes its side and distance from the block's exits list, and gets none when the list does not give them.
+   When the block gives no size class for the aircraft, say which aircraft a size restriction applies to.
+   Any taxiway, exit or stand you name in the check line or the suggestions must appear in that leg's lines, including its ""Taxiway names at"" list; when a point could only be made with a name that is not there, leave the point out.
+   When the name rule above makes you leave a point out of a check line, do not call that leg an agreement: say that not everything could be checked, without naming what.
+   Keep it short: do not list every exit, and do not describe where the data came from beyond the wording this section asks for.
+   Give every distance in this section in the unit the block's ""Distance unit"" line names, and never mix units.
+   When a leg's note says SayIntentions assigned a different runway from the flight plan, say so here, and also in the DEPARTURE AND SID or ARRIVAL AND STAR section, naming both runways.
+
 IMPORTANT GUIDELINES:
 - Write in plain text with no markdown formatting
 - Use line breaks between sections for screen reader clarity
 - Use section headings in plain text (not with # or * symbols)
 - Be factual and informative, drawing on your geographic knowledge
-- Aim for 300 to 500 words
+- Aim for 600 to 900 words
 - Focus on helping the pilot build a mental picture of the journey
 - If weather data is not available, note that and skip the weather section
+- Never copy these instructions, or any question in them, into the briefing; write only the briefing itself
 
 FLIGHT PLAN DATA:
 {flightData}";
@@ -834,6 +1148,9 @@ FLIGHT PLAN DATA:
     {
         [JsonProperty("content")]
         public Content? Content { get; set; }
+
+        [JsonProperty("finishReason")]
+        public string? FinishReason { get; set; }
     }
 
     private class Content

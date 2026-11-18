@@ -27,6 +27,15 @@ public class LandingExit
     public double Latitude { get; set; }
     public double Longitude { get; set; }
 
+    /// <summary>
+    /// How far DOWN the runway (feet, ≥ 0) from this junction the exit path actually
+    /// leaves the centreline — non-zero only where the scenery draws the taxiway along
+    /// the runway first (LROP 08R D: 147 ft). The rollout measures its turn cues and
+    /// its missed-exit test from junction + this offset; nothing else reads it, so the
+    /// exit list, types and routes are identical to an offset of 0.
+    /// </summary>
+    public double TurnPointOffsetFeet { get; set; }
+
     /// <summary>Along-runway distance from the landing threshold to this exit, in feet.</summary>
     public double DistanceFromThresholdFeet { get; set; }
 
@@ -50,6 +59,22 @@ public class LandingExit
     /// 180° = aligned opposite direction (runway end).
     /// </summary>
     public double ExitAngleDegrees { get; set; }
+
+    /// <summary>
+    /// How steeply the exit's path leaves its own node, in degrees off the runway heading: its first
+    /// stretch of at least <see cref="ExitBranch.MinStrokeMetres"/> from where the exit stands, never more
+    /// than <see cref="ExitAngleDegrees"/>. The overshoot margin and the alignment handoff read this: a
+    /// pilot correctly following a curved rapid exit is only as far off the runway as its first stretch
+    /// takes them - EDDB 24L M3 leaves at 6.9° where its branch's sharpest turn is 24.3°, and read at
+    /// 24.3° a correct turn was called missed 100 ft past the node. <see cref="ExitAngleDegrees"/> (type,
+    /// too-fast line) stays the sharpest turn. Unset, it is <see cref="ExitAngleDegrees"/>.
+    /// </summary>
+    public double DivergenceAngleDegrees
+    {
+        get => double.IsNaN(_divergenceAngleDegrees) ? ExitAngleDegrees : _divergenceAngleDegrees;
+        set => _divergenceAngleDegrees = value;
+    }
+    private double _divergenceAngleDegrees = double.NaN;
 
     /// <summary>
     /// True bearing (0–360°) of the best taxiway edge leading away from the
@@ -77,12 +102,60 @@ public class LandingExit
     /// </summary>
     public string ExitSide { get; set; } = "";
 
+    /// <summary>
+    /// False when the taxi graph offers NO route from this exit that gets the aircraft
+    /// clear of the runway pavement — the navdata maps nothing past the junction (one
+    /// graph edge, pointing back at the runway). Set by the Landing Exit form using the
+    /// same <see cref="LandingExitDestination"/> resolution the rollout handoff runs, so
+    /// the warning shown before the flight matches what actually happens on rollout.
+    /// <para>Defaults TRUE — an exit is presumed usable unless the check has been run
+    /// and failed, so nothing is ever labelled as bad merely because it wasn't tested.</para>
+    /// </summary>
+    public bool VacatesRunway { get; set; } = true;
+
+    /// <summary>
+    /// For an END exit whose only way off the runway is to turn round and backtrack (a
+    /// turn pad / runway-end loop — LROP 08R's "D" at 11,185 ft), the earlier exit the
+    /// backtrack heads for (D at 7,793 ft); otherwise null. Set by
+    /// <see cref="LandingExitBacktrack.Mark"/>. Shown as "(backtrack required)" in place of
+    /// the generic no-taxiway warning, which reads as a data fault for a normal turnaround.
+    /// </summary>
+    public LandingExit? BacktrackVia { get; set; }
+
+    public bool NeedsBacktrack => BacktrackVia != null;
+
+    /// <summary>
+    /// The way off the runway from this junction starts by running BACK down it — a reverse
+    /// exit, usable only with a sharp turn back at taxi speed (KMSP 04 A: only W, back down the
+    /// runway). Set by the exit list (<see cref="LandingExitDestination.RequiresTurnBack"/>);
+    /// spoken in the label and the touchdown callout. VirtualPilot 2026-09-18: without it the
+    /// first a pilot heard was "Make a U-turn" at the turn-now point, at rollout speed.
+    /// </summary>
+    public bool RequiresTurnBack { get; set; }
+
+    /// <summary>
+    /// True when the exit's branch is a turnaround as read from its junction and forward only as met at the
+    /// exit's own node (<see cref="ExitBranch.FromExitNode"/>): the junction the inward walk reached lies past
+    /// the lead-in's own start (SBGL 15 F). Such an exit only fills a gap in the planner list - its per-name
+    /// dedup takes it for its name only when no exit read forward from its junction holds the name, and it is
+    /// never coverage for one. Taking the name's place instead, KLIT 22R's D crossing near the threshold
+    /// displaced the D rapid exit 4,600 ft on, which came back 700 ft late on its own arc (whole-database
+    /// sweep, 2026-09-26).
+    /// </summary>
+    public bool ForwardOnlyFromItsNode { get; set; }
+
     public override string ToString()
     {
         string dist = MSFSBlindAssist.Services.DistanceFormatter.FromFeet(DistanceFromThresholdFeet, shortForm: true, round: false);
         int angle = (int)Math.Round(ExitAngleDegrees);
         string nameLabel = string.IsNullOrEmpty(TaxiwayName) ? "(unnamed)" : TaxiwayName;
         string sideLabel = string.IsNullOrEmpty(ExitSide) ? "" : $", {ExitSide.ToLower()}";
-        return $"{nameLabel} — {dist} from threshold ({ExitType}{sideLabel}, {angle}°)";
+        // The warning goes at the END so the screen reader speaks the identity of the
+        // exit first — a blind pilot arrowing through the list needs the name and
+        // distance immediately, not a caution prefix repeated on every bad entry.
+        string warn = VacatesRunway ? (RequiresTurnBack ? " (sharp turn back)" : "")
+            : NeedsBacktrack ? " (backtrack required)"
+            : " — WARNING: no taxiway mapped clear of the runway";
+        return $"{nameLabel} — {dist} from threshold ({ExitType}{sideLabel}, {angle}°){warn}";
     }
 }

@@ -1,12 +1,42 @@
 using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Database;
+
+/// <summary>
+/// The active database file as it is on disk: the configured simulator version, its path, and the file's
+/// size and last write time (zero and <see cref="DateTime.MinValue"/> when it does not exist). See
+/// <see cref="DatabaseSelector.CurrentStamp"/>.
+/// </summary>
+public readonly record struct DatabaseStamp(string SimulatorVersion, string Path, long Length, DateTime LastWriteUtc);
+
 /// <summary>
 /// Selects the appropriate database provider based on user configuration.
 /// Uses only navdatareader-generated databases (fs2020.sqlite or fs2024.sqlite).
 /// </summary>
 public static class DatabaseSelector
 {
+    /// <summary>
+    /// The stamp of the database <see cref="SelectProvider"/> would load now. MainForm keeps the stamp of the
+    /// database it loaded, so closing the Database Settings window reloads — and runs the database-switch
+    /// reset that clears the landing exit plan and disarms the landing assist ([EXIT-11]) — only when the
+    /// database actually changed: the setting switched, or the file was rebuilt or removed.
+    /// </summary>
+    public static DatabaseStamp CurrentStamp()
+    {
+        string simulatorVersion = SettingsManager.Current.SimulatorVersion ?? "FS2020";
+        return StampOf(simulatorVersion, NavdataReaderBuilder.GetDefaultDatabasePath(simulatorVersion));
+    }
+
+    /// <summary>The stamp of the database file at <paramref name="path"/> — <c>DatabaseStampTests</c>.</summary>
+    internal static DatabaseStamp StampOf(string simulatorVersion, string path)
+    {
+        var file = new FileInfo(path);
+        return file.Exists
+            ? new DatabaseStamp(simulatorVersion, path, file.Length, file.LastWriteTimeUtc)
+            : new DatabaseStamp(simulatorVersion, path, 0, DateTime.MinValue);
+    }
+
     /// <summary>
     /// Selects and creates the appropriate airport data provider based on settings.
     /// Uses navdatareader-generated database for the configured simulator version.
@@ -22,18 +52,18 @@ public static class DatabaseSelector
 
         if (!File.Exists(navdataPath))
         {
-            System.Diagnostics.Debug.WriteLine($"[DatabaseSelector] Database not found for {simulatorVersion}: {navdataPath}");
+            Log.Debug("Database", $"Database not found for {simulatorVersion}: {navdataPath}");
             return null;
         }
 
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[DatabaseSelector] Using navdatareader database for {simulatorVersion}: {navdataPath}");
+            Log.Debug("Database", $"Using navdatareader database for {simulatorVersion}: {navdataPath}");
             return new LittleNavMapProvider(navdataPath, simulatorVersion);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[DatabaseSelector] Failed to load database: {ex.Message}");
+            Log.Debug("Database", $"Failed to load database: {ex.Message}");
             return null;
         }
     }

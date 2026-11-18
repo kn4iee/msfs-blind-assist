@@ -10,7 +10,25 @@ public record ToggleButtonDef(
     string Label,
     Func<string> GetCurrentState,
     Action OnPressed
-);
+)
+{
+    /// <summary>
+    /// Optional enable gate, polled by windows that refresh their buttons from live
+    /// state. Null means always enabled. The PMDG autopilot window uses it to disable
+    /// stateful toggles while the CDA snapshot is missing — a toggle press computes
+    /// its flip target from the current state, which is unreadable until then.
+    /// </summary>
+    public Func<bool>? IsEnabled { get; init; }
+
+    /// <summary>
+    /// Optional, asked just before the post-press state announce: true SUPPRESSES it. For a press
+    /// the aircraft REFUSED — the dialog's announce is an interrupting <c>AnnounceImmediate</c>
+    /// fired 1.2 s later, so it truncated the refusal the action itself had queued, and the label
+    /// is the redundant half (the screen reader already read the control when it was pressed).
+    /// Null, the default, announces exactly as before.
+    /// </summary>
+    public Func<bool>? SuppressStateAnnounce { get; init; }
+}
 
 public partial class ValueInputForm : Form
     {
@@ -24,7 +42,6 @@ public partial class ValueInputForm : Form
         private TextBox valueTextBox = null!;
         private Label titleLabel = null!;
         private Label rangeLabel = null!;
-        private Button okButton = null!;
         private Button cancelButton = null!;
 
         public string InputValue { get; private set; } = null!;
@@ -145,28 +162,41 @@ public partial class ValueInputForm : Form
                     // Wait for sim to process, then update ALL toggle buttons
                     Task.Delay(1200).ContinueWith(_ =>
                     {
-                        if (capturedBtn.IsDisposed || !capturedBtn.IsHandleCreated) return;
-                        capturedBtn.Invoke(() =>
+                        // try/catch closes the TOCTOU window: the form can be disposed between the
+                        // IsHandleCreated check and Invoke, which would throw on this threadpool
+                        // continuation as an unobserved task exception.
+                        try
                         {
-                            // Update all buttons — pressing one toggle can affect others
-                            for (int j = 0; j < _toggleButtons.Count; j++)
+                            if (capturedBtn.IsDisposed || !capturedBtn.IsHandleCreated) return;
+                            capturedBtn.Invoke(() =>
                             {
-                                var b = _toggleButtons[j];
-                                var d = _toggleDefs[j];
-                                string s = d.GetCurrentState();
-                                string lbl = string.IsNullOrEmpty(s) ? d.Label : $"{d.Label}: {s}";
-                                b.Text = lbl;
-                                b.AccessibleName = lbl.Replace("&", "");
-                            }
-                            UpdateInputEnabled();
-                            // Announce the pressed button's new state
-                            string newState = capturedDef.GetCurrentState();
-                            string announceLabel = capturedDef.Label.Replace("&", "");
-                            if (string.IsNullOrEmpty(newState))
-                                announcer.AnnounceImmediate(announceLabel);
-                            else
-                                announcer.AnnounceImmediate($"{announceLabel} {newState}");
-                        });
+                                // Update all buttons — pressing one toggle can affect others
+                                for (int j = 0; j < _toggleButtons.Count; j++)
+                                {
+                                    var b = _toggleButtons[j];
+                                    var d = _toggleDefs[j];
+                                    string s = d.GetCurrentState();
+                                    string lbl = string.IsNullOrEmpty(s) ? d.Label : $"{d.Label}: {s}";
+                                    b.Text = lbl;
+                                    b.AccessibleName = lbl.Replace("&", "");
+                                }
+                                UpdateInputEnabled();
+                                // Announce the pressed button's new state — unless the action
+                                // refused. This is an INTERRUPTING announce 1.2 s after the press,
+                                // so on a refused press it cut off the refusal the action itself
+                                // had queued; the label is the redundant half, since the screen
+                                // reader already read the control when it was pressed.
+                                if (capturedDef.SuppressStateAnnounce?.Invoke() == true) return;
+                                string newState = capturedDef.GetCurrentState();
+                                string announceLabel = capturedDef.Label.Replace("&", "");
+                                if (string.IsNullOrEmpty(newState))
+                                    announcer.AnnounceImmediate(announceLabel);
+                                else
+                                    announcer.AnnounceImmediate($"{announceLabel} {newState}");
+                            });
+                        }
+                        catch (ObjectDisposedException) { }
+                        catch (InvalidOperationException) { }
                     });
                 };
 
@@ -174,16 +204,7 @@ public partial class ValueInputForm : Form
                 toggleY += 35;
             }
 
-            okButton = new Button
-            {
-                Text = "Set",
-                Location = new Point(185, 105 + toggleOffset),
-                Size = new Size(60, 30),
-                AccessibleName = $"Set {parameterType}",
-                TabIndex = tabIdx++
-            };
-            okButton.Click += OkButton_Click;
-
+            // No Set button: Enter in the box sets the value (ValueTextBox_KeyDown).
             cancelButton = new Button
             {
                 Text = "Cancel",
@@ -199,10 +220,8 @@ public partial class ValueInputForm : Form
             foreach (var btn in _toggleButtons)
                 Controls.Add(btn);
             Controls.Add(valueTextBox);
-            Controls.Add(okButton);
             Controls.Add(cancelButton);
 
-            AcceptButton = okButton;
             CancelButton = cancelButton;
         }
 
@@ -221,7 +240,6 @@ public partial class ValueInputForm : Form
             if (_lastInputEnabledState == enabled) return;
             _lastInputEnabledState = enabled;
             valueTextBox.ReadOnly = !enabled;
-            okButton.Enabled = enabled;
             valueTextBox.AccessibleDescription = enabled
                 ? $"Enter {parameterType} value and press Enter to set"
                 : $"Engage mode first to enter a value";
@@ -285,7 +303,10 @@ public partial class ValueInputForm : Form
         {
             if (e.KeyCode == Keys.Enter)
             {
+                // With no Set button as the form's AcceptButton, Enter reaches the box itself;
+                // SuppressKeyPress stops the edit control's ding.
                 e.Handled = true;
+                e.SuppressKeyPress = true;
                 if (_inputEnabledCheck == null || _inputEnabledCheck())
                     SetValue();
             }
@@ -301,11 +322,6 @@ public partial class ValueInputForm : Form
                     SetForegroundWindow(previousWindow);
                 }
             }
-        }
-
-        private void OkButton_Click(object? sender, EventArgs e)
-        {
-            SetValue();
         }
 
         private void SetValue()

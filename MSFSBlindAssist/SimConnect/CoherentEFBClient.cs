@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.SimConnect
 {
@@ -78,7 +79,7 @@ namespace MSFSBlindAssist.SimConnect
                 // fail loudly in Debug and log in Release rather than half-support it.
                 if (_cts.IsCancellationRequested)
                 {
-                    System.Diagnostics.Debug.WriteLine(
+                    Log.Debug("SimConnect", 
                         "CoherentEFBClient.Start() called after Stop() — not supported; create a new instance.");
                     System.Diagnostics.Debug.Assert(false,
                         "CoherentEFBClient: Start() after Stop() is a no-op. Dispose and create a new client instead.");
@@ -177,7 +178,7 @@ namespace MSFSBlindAssist.SimConnect
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"CoherentEFBClient loop: {ex.Message}");
+                    Log.Debug("SimConnect", $"CoherentEFBClient loop: {ex.Message}");
                     _connected = false;
                     _agentInstalled = false;
                     try { _ws?.Abort(); } catch { }
@@ -279,7 +280,7 @@ namespace MSFSBlindAssist.SimConnect
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"ResolveEfbPageId: {ex.Message}");
+                Log.Debug("SimConnect", $"ResolveEfbPageId: {ex.Message}");
             }
             return null;
         }
@@ -314,7 +315,7 @@ namespace MSFSBlindAssist.SimConnect
                 sb.Append(e.idx).Append(':').Append(e.text).Append('/').Append(e.value)
                   .Append('/').Append(e.controlType).Append('/').Append(e.clickable ? '1' : '0')
                   .Append('/').Append(e.kind).Append('/').Append(e.level)
-                  .Append('/').Append(e.disabled ? '1' : '0').Append('|');
+                  .Append('/').Append(e.disabled ? '1' : '0').Append('/').Append(e.key).Append('|');
             string elHash = sb.ToString();
             if (elHash != _lastElementsHash)
             {
@@ -340,6 +341,9 @@ namespace MSFSBlindAssist.SimConnect
                     data[$"items.{i}.level"] = elements[i].level.ToString();
                     data[$"items.{i}.live"] = elements[i].live ?? "";
                     data[$"items.{i}.disabled"] = elements[i].disabled ? "true" : "false";
+                    // A notice's own identity (notice:<id>): the shell keys its node on it, and the
+                    // form speaks a repeat of the same error text again under a new one.
+                    if (!string.IsNullOrEmpty(elements[i].key)) data[$"items.{i}.key"] = elements[i].key!;
                     // Options for a real <select>; unit-separator joined (rare on the flyPad).
                     if (elements[i].options is { Count: > 0 })
                         data[$"items.{i}.options"] = string.Join(OptionSeparator, elements[i].options!);
@@ -435,7 +439,7 @@ namespace MSFSBlindAssist.SimConnect
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"CoherentEFBClient receive: {ex.Message}");
+                Log.Debug("SimConnect", $"CoherentEFBClient receive: {ex.Message}");
             }
             finally
             {
@@ -507,6 +511,7 @@ namespace MSFSBlindAssist.SimConnect
             public int level { get; set; }
             public string? live { get; set; }
             public bool disabled { get; set; }
+            public string? key { get; set; }
             public List<string>? options { get; set; }
             public double? min { get; set; }
             public double? max { get; set; }

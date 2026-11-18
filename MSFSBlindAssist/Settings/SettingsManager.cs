@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Settings;
 
@@ -25,7 +26,9 @@ public static class SettingsManager
     private static UserSettings? _currentSettings;
     private static readonly object _lock = new object();
 
-    private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+    // Internal, not private: UserSettings.Clone round-trips through these SAME options so a
+    // clone is exactly what Save → Load would produce — including any converter added here later.
+    internal static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
     {
         WriteIndented = true,
         PropertyNameCaseInsensitive = true
@@ -68,9 +71,12 @@ public static class SettingsManager
                 // If settings file doesn't exist, create with defaults
                 if (!File.Exists(SettingsFilePath))
                 {
-                    System.Diagnostics.Debug.WriteLine("[SettingsManager] Settings file not found, using defaults");
+                    Log.Debug("Settings", "Settings file not found, using defaults");
                     UserSettings defaultSettings = new UserSettings();
+                    MigrateFOGearSplit(defaultSettings);
+                    SeedTakeoffAssistToneConvention(defaultSettings, freshInstall: true);
                     SeedFenixMonitorDefaults(defaultSettings); // sets flag + saves
+                    SeedPmdgMonitorDefaults(defaultSettings);
                     return defaultSettings;
                 }
 
@@ -80,45 +86,167 @@ public static class SettingsManager
 
                 if (settings == null)
                 {
-                    Debug.WriteLine("[SettingsManager] Failed to deserialize settings, using defaults");
+                    Log.Warn("Settings", "Failed to deserialize settings, using defaults");
                     settings = new UserSettings();
                     Save(settings);
                 }
                 else
                 {
-                    Debug.WriteLine("[SettingsManager] Settings loaded successfully from JSON");
+                    Log.Debug("Settings", "Settings loaded successfully from JSON");
                 }
 
+                MigrateFOGearSplit(settings);       // one-time: seed split gear flags from the legacy flag
+                // SeedFenixMonitorDefaults only saves when ITS OWN flag was just set, so a
+                // stored file that already has FenixMonitorDefaultsSeeded=true would leave
+                // our migration unpersisted on disk if we didn't guard+save it ourselves here
+                // (mirrors the Fenix helper's own save-only-when-newly-set pattern).
+                if (!settings.TakeoffAssistToneConventionMigrated)
+                {
+                    SeedTakeoffAssistToneConvention(settings, freshInstall: false);
+                    Save(settings);
+                }
                 SeedFenixMonitorDefaults(settings); // one-time: default-disable the noisy clock counters
+                SeedPmdgMonitorDefaults(settings);  // one-time: default-silence the cycling window-heat ON annunciators
+                if (CarryRenamedMonitorMutes(settings)) Save(settings);
+                // Deserialization bypasses the property setters' usual mutation path, so the
+                // *DisabledMonitorVariablesSet sidecars (populated by field initializers to
+                // empty, pre-deserialization) must be rebuilt explicitly here.
+                settings.RebuildDisabledMonitorVariableCaches();
                 return settings;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[SettingsManager] Error loading settings: {ex.Message}");
+                Log.Error("Settings", "Error loading settings", ex);
                 // Return default settings on error
                 return new UserSettings();
             }
         }
 
         /// <summary>
+        /// One-time migration of the legacy single First-Officer auto-gear flag into the
+        /// two split flags (raise on climb / lower on descent). Existing users who had
+        /// auto-gear enabled keep both behaviours; everyone else stays at the false default.
+        /// Guarded by FOAutoGearSplitMigrated so a deliberate single-side choice is never
+        /// overwritten on a later load.
+        /// </summary>
+        private static void MigrateFOGearSplit(UserSettings s)
+        {
+            if (s.FOAutoGearSplitMigrated) return;
+            s.FOAutoGearSplitMigrated = true;
+            if (s.FOAutoGearEnabled)
+            {
+                s.FOAutoGearUpEnabled   = true;
+                s.FOAutoGearDownEnabled = true;
+            }
+            // Persist the guard NOW so the migration doesn't re-run every launch. The
+            // follow-up SeedFenixMonitorDefaults early-returns without saving for any
+            // already-seeded (i.e. upgrading) user, so we cannot rely on its Save.
+            Save(s);
+        }
+
+        /// <summary>
+        /// A Ctrl+M mute on a monitor row that was RE-KEYED moves to the new key. FBW #10855 moved
+        /// four A380 controls onto new variables (fixed 2026-09-25): the flight-director combos
+        /// FD_1_CTL/FD_2_CTL became the one FD light, the altitude increment moved to the FCU's own
+        /// input, and the per-side baro-unit selectors moved to the EFIS-CP's BARO_IS_INHG inputs.
+        /// The iFly 737 MAX's trim call-out moved from the shared degrees row (MON_ElevatorTrim) to
+        /// its own units field (2026-09-30). Fenix v3 renamed two lamps (2026-10-21): the DC SERVICE bus
+        /// (a typo fixed) and the overhead cockpit-door VIDEO light. Idempotent without a flag because
+        /// the OLD key leaves the list: left in place, it would re-mute the new row on every launch
+        /// after the pilot un-ticked it, and no Ctrl+M row is left to clear it from. Returns whether
+        /// anything moved (the caller saves).
+        /// </summary>
+        internal static bool CarryRenamedMonitorMutes(UserSettings settings)
+        {
+            bool moved = Carry(settings.A380DisabledMonitorVariables, A380RenamedMonitorKeys);
+            moved |= Carry(settings.IFlyDisabledMonitorVariables, IFlyRenamedMonitorKeys);
+            moved |= Carry(settings.FenixDisabledMonitorVariables, FenixRenamedMonitorKeys);
+            return moved;
+
+            static bool Carry(List<string> muted, (string Old, string New)[] renamed)
+            {
+                bool any = false;
+                foreach (var (oldKey, newKey) in renamed)
+                {
+                    if (!muted.Remove(oldKey)) continue;
+                    if (!muted.Contains(newKey))
+                        muted.Add(newKey);
+                    any = true;
+                }
+                return any;
+            }
+        }
+
+        // Literal keys: Settings does not reach into the aircraft definitions. The new names are
+        // A380FlightDirector.StateKey and the A380's A32NX_FCU_ALT_INCREMENT_1000 and
+        // A32NX_FCU_EFIS_{L,R}_BARO_IS_INHG combos.
+        private static readonly (string Old, string New)[] A380RenamedMonitorKeys =
+        {
+            ("FD_1_CTL", "A32NX_FCU_FD_LIGHT_ON"),
+            ("FD_2_CTL", "A32NX_FCU_FD_LIGHT_ON"),
+            ("XMLVAR_AUTOPILOT_ALTITUDE_INCREMENT", "A32NX_FCU_ALT_INCREMENT_1000"),
+            ("XMLVAR_Baro_Selector_HPA_1", "A32NX_FCU_EFIS_L_BARO_IS_INHG"),
+            ("XMLVAR_Baro_Selector_HPA_2", "A32NX_FCU_EFIS_R_BARO_IS_INHG"),
+        };
+
+        // The new name is IFly737MAXDefinition.StabTrimUnitsKey.
+        private static readonly (string Old, string New)[] IFlyRenamedMonitorKeys =
+        {
+            ("MON_ElevatorTrim", "Stabilizer_Trim_Pointer_Status"),
+        };
+
+        // Fenix v3 (3.0.0.7426) renamed two lamps; the new names are registered in FenixA320Definition.
+        private static readonly (string Old, string New)[] FenixRenamedMonitorKeys =
+        {
+            ("B_ELEC_BUS_POWER_DC_SERIVICE", "B_ELEC_BUS_POWER_DC_SERVICE"),
+            ("I_OH_DOOR_VIDEO", "I_OH_COCKPIT_DOOR_VIDEO"),
+        };
+
+        /// <summary>
+        /// One-time seed for the PR #111 takeoff-tone changes (Robin-confirmed
+        /// 2026-07-03). Two migrations under one flag:
+        /// (a) Pan convention: the tone used to pan on the heading DEVIATION side
+        ///     (steer AWAY at InvertPanning=false); it now pans on the STEER side.
+        ///     Under the old semantics InvertPanning==true WAS the steer-toward
+        ///     mapping, so seeding SteerTowardTone from it preserves each existing
+        ///     user's experienced direction exactly.
+        /// (b) Threshold: a stored 0 ("Always") becomes 1° so every user gets the
+        ///     new silent-on-track behavior once; deliberate 1–5 values are kept,
+        ///     and post-migration choices (incl. re-selecting "Always") stick.
+        /// Fresh installs keep the class defaults (steer-toward, 1°).
+        /// </summary>
+        internal static void SeedTakeoffAssistToneConvention(UserSettings settings, bool freshInstall)
+        {
+            if (settings.TakeoffAssistToneConventionMigrated) return;
+            if (!freshInstall)
+            {
+                settings.TakeoffAssistSteerTowardTone = settings.TakeoffAssistInvertPanning;
+                if (settings.TakeoffAssistHeadingToneThreshold == 0)
+                {
+                    settings.TakeoffAssistHeadingToneThreshold = 1;
+                }
+            }
+            settings.TakeoffAssistToneConventionMigrated = true;
+        }
+
+        /// <summary>
         /// One-time seed of Fenix vars that should be auto-monitored but NOT spoken by
         /// default — added to the Fenix disabled-monitor list (the combo/display still
         /// tracks them; only the spoken call-out is gated off):
-        ///   * CLOCK CHRONO / ELAPSED / UTC and the FenixQuartz chrono/ET counters —
+        ///   * CLOCK CHRONO / ELAPSED / UTC —
         ///     raw-seconds counters that tick every second.
         ///   * the four seat height/distance switches — Continuous so the combo can spring
         ///     to "Stop" at the travel limit, but silent (the user just wants the value).
         /// Runs once (guarded by FenixMonitorDefaultsSeeded) so a deliberate re-enable in
         /// the Ctrl+M monitor is never overwritten.
         /// </summary>
-        private static void SeedFenixMonitorDefaults(UserSettings s)
+        internal static void SeedFenixMonitorDefaults(UserSettings s)
         {
             if (s.FenixMonitorDefaultsSeeded) return;
             s.FenixMonitorDefaultsSeeded = true;
             string[] defaultSilent =
             {
                 "N_MIP_CLOCK_CHRONO", "N_MIP_CLOCK_ELAPSED", "N_MIP_CLOCK_UTC",
-                "FNX2PLD_clockChr", "FNX2PLD_clockEt",
                 "S_SEAT_HEIGHT_CAPT", "S_SEAT_DISTANCE_CAPT",
                 "S_SEAT_HEIGHT_FO", "S_SEAT_DISTANCE_FO",
             };
@@ -126,6 +254,33 @@ public static class SettingsManager
             {
                 if (!s.FenixDisabledMonitorVariables.Contains(key))
                     s.FenixDisabledMonitorVariables.Add(key);
+            }
+            Save(s);
+        }
+
+        /// <summary>
+        /// One-time seed of PMDG vars that should be auto-monitored but NOT spoken by
+        /// default — added to the shared PMDG disabled-monitor list (panel displays
+        /// still track them; only the spoken call-out is gated off):
+        ///   * the 737 window-heat ON annunciators (ICE_annunON_0..3, "Window N Heat
+        ///     On") — the window-heat controller cycles them thermostatically as the
+        ///     windows reach temperature, most visibly on the ground, so every cycle
+        ///     spoke an on/off announcement while no switch moved (reported 2026-07-03).
+        /// Re-enable any of them in the PMDG Announcement Monitor (Ctrl+M); this runs
+        /// once (guarded by PmdgMonitorDefaultsSeeded) so that choice sticks.
+        /// </summary>
+        private static void SeedPmdgMonitorDefaults(UserSettings s)
+        {
+            if (s.PmdgMonitorDefaultsSeeded) return;
+            s.PmdgMonitorDefaultsSeeded = true;
+            string[] defaultSilent =
+            {
+                "ICE_annunON_0", "ICE_annunON_1", "ICE_annunON_2", "ICE_annunON_3",
+            };
+            foreach (var key in defaultSilent)
+            {
+                if (!s.PMDGDisabledMonitorVariables.Contains(key))
+                    s.PMDGDisabledMonitorVariables.Add(key);
             }
             Save(s);
         }
@@ -151,6 +306,12 @@ public static class SettingsManager
             {
                 lock (_lock)
                 {
+                    // Every known mutation site for the seven *DisabledMonitorVariables lists
+                    // (monitor-manager ItemCheck handlers, ToggleECAMMonitoring,
+                    // SeedFenixMonitorDefaults) calls Save immediately after mutating — so this
+                    // is the single choke point that keeps the HashSet sidecars from going stale.
+                    settings.RebuildDisabledMonitorVariableCaches();
+
                     // Serialize to JSON with formatting (reads the mutable shared
                     // object — must be under the lock).
                     json = JsonSerializer.Serialize(settings, JsonOptions);
@@ -167,11 +328,11 @@ public static class SettingsManager
 
                 File.WriteAllText(SettingsFilePath, json);
 
-                Debug.WriteLine($"[SettingsManager] Settings saved to {SettingsFilePath}");
+                Log.Debug("Settings", $"Settings saved to {SettingsFilePath}");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[SettingsManager] Error saving settings: {ex.Message}");
+                Log.Error("Settings", "Error saving settings", ex);
                 throw;
             }
         }
@@ -190,12 +351,24 @@ public static class SettingsManager
         /// </summary>
         public static void Reset()
         {
+            // Mirror Save's own discipline (see its comment above): only the
+            // in-memory publish of the new settings reference happens under
+            // _lock. Save() itself takes _lock again (reentrant) for its
+            // serialize+publish step and then writes the file OUTSIDE any
+            // lock — but calling it from inside this lock would keep _lock
+            // held for the full File.WriteAllText duration, stalling the
+            // 30 Hz SimConnect position path that also contends on _lock via
+            // SettingsManager.Current. So capture the new instance, release
+            // the lock, then Save it.
+            UserSettings newSettings;
             lock (_lock)
             {
-                _currentSettings = new UserSettings();
-                Save(_currentSettings);
-                System.Diagnostics.Debug.WriteLine("[SettingsManager] Settings reset to defaults");
+                newSettings = new UserSettings();
+                _currentSettings = newSettings;
             }
+
+            Save(newSettings);
+            Log.Debug("Settings", "Settings reset to defaults");
         }
 
         /// <summary>
@@ -216,7 +389,7 @@ public static class SettingsManager
                 // Only migrate if legacy settings exist and new settings don't
                 if (File.Exists(LegacySettingsFilePath) && !File.Exists(SettingsFilePath))
                 {
-                    System.Diagnostics.Debug.WriteLine("[SettingsManager] Migrating settings from FBWBA to MSFSBlindAssist");
+                    Log.Debug("Settings", "Migrating settings from FBWBA to MSFSBlindAssist");
 
                     // Ensure new directory exists
                     if (!Directory.Exists(SettingsDirectory))
@@ -226,12 +399,12 @@ public static class SettingsManager
 
                     // Copy the settings file
                     File.Copy(LegacySettingsFilePath, SettingsFilePath);
-                    System.Diagnostics.Debug.WriteLine("[SettingsManager] Settings migration complete");
+                    Log.Debug("Settings", "Settings migration complete");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[SettingsManager] Error migrating legacy settings: {ex.Message}");
+                Log.Error("Settings", "Error migrating legacy settings", ex);
                 // Migration failure is non-fatal; app will create new settings
             }
         }

@@ -28,7 +28,6 @@
   var A = {};
 
   A.ROW_Y_TOLERANCE_PX = 14;
-  A._elements = [];
 
   function clean(s) { return (s || "").replace(/\s+/g, " ").replace(/^\s+|\s+$/g, ""); }
   function lower(s) { return (s || "").toString().toLowerCase(); }
@@ -45,13 +44,56 @@
     return false;
   };
 
-  A.isVisible = function (n) {
+  // Per-scrape memoization generation counter, bumped once at the top of
+  // A.enumerate(). A.isVisible/A.classify below are memoizing wrappers around
+  // the real (expensive) computation in A._isVisibleRaw/A._classifyRaw; a
+  // node's cached __msfsba* expandos are only trusted when its __msfsbaGen
+  // stamp equals the CURRENT A._gen — so nothing survives across scrapes (the
+  // page mutates between the 600ms polls). This turns enumerate()'s O(n^2)
+  // pattern (containsInteractive re-classifying whole subtrees, pass 2
+  // re-running classify per element) into one real computation per node per
+  // scrape plus cheap O(1) cache hits for every repeat visit.
+  //
+  // isVisible and classify share ONE __msfsbaGen stamp per node but are each
+  // filled by an INDEPENDENT call site, and either one can be the FIRST to
+  // touch a given node in a new generation (both call orders occur in this
+  // file: isVisible-then-classify in the scrape loops, but classify alone
+  // from A.setValue). So each wrapper, on seeing a stale gen, resets BOTH
+  // cached fields — not just its own — before recomputing. Without that, the
+  // wrapper that runs SECOND in a new generation would see a fresh
+  // __msfsbaGen (just stamped by the first wrapper) paired with the OTHER
+  // field's STALE value from the previous generation, and wrongly treat it as
+  // a same-gen cache hit.
+  //
+  // Between scrapes, A.setValue/A.clickElement (invoked directly by the C#
+  // side, not through enumerate) also call A.classify/A.isVisible; A._gen
+  // hasn't advanced since the last scrape, so those calls reuse whatever was
+  // cached during that scrape. That's correct, not a leak: setValue/
+  // clickElement only ever act on a data-fbw-efb-idx the LAST scrape itself
+  // assigned, so "reuse the last scrape's classification of this control" is
+  // exactly the intended semantics. The invariant that actually matters —
+  // never returning a value computed before the CURRENT scrape started once a
+  // new scrape begins — is enforced purely by the gen-mismatch check above.
+  A._gen = 0;
+
+  A._isVisibleRaw = function (n) {
     try {
       var st = window.getComputedStyle(n);
       if (st.display === "none" || st.visibility === "hidden") return false;
       var r = n.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
+    // Fail-CLOSED: the flyPad DOM is HTML/React (divs/spans/inputs). Generic
+    // sweeps and helpers (e.g. A.refuelIconStarted) do pass inline icon
+    // <svg> elements directly to isVisible, but the SVGs this page contains
+    // are decorative icon glyphs with no readable text — so fail-closed
+    // loses nothing even when it lands on one of them.
     } catch (e) { return false; }
+  };
+
+  A.isVisible = function (n) {
+    if (n.__msfsbaGen !== A._gen) { n.__msfsbaGen = A._gen; n.__msfsbaKind = undefined; n.__msfsbaVis = undefined; }
+    if (n.__msfsbaVis === undefined) n.__msfsbaVis = A._isVisibleRaw(n);
+    return n.__msfsbaVis;
   };
 
   // The React flyPad mounts under MSFS_REACT_MOUNT (#EFB is an empty shell).
@@ -160,7 +202,7 @@
 
   // Returns one of: link, input, slider, checkbox, select, heading, toggle,
   // tab, button, or null (not an element we surface as its own line).
-  A.classify = function (n) {
+  A._classifyRaw = function (n) {
     var c = lower(A.cls(n));
     var role = lower(n.getAttribute && n.getAttribute("role") || "");
     var tag = n.tagName.toLowerCase();
@@ -240,6 +282,16 @@
     // last so the specific branches above win first.
     if (A.isStatusBarIcon(n)) return "button";
     return null;
+  };
+
+  // Memoizing wrapper — see the A._gen comment above A.isVisible for the
+  // shared-stamp/gen-reset design. classify's result can legitimately be
+  // `null` (not-a-control), so the cache-hit test is `!== undefined`, not
+  // truthiness.
+  A.classify = function (n) {
+    if (n.__msfsbaGen !== A._gen) { n.__msfsbaGen = A._gen; n.__msfsbaVis = undefined; n.__msfsbaKind = undefined; }
+    if (n.__msfsbaKind === undefined) n.__msfsbaKind = A._classifyRaw(n);
+    return n.__msfsbaKind;
   };
 
   // The C# side maps "kind" to a native control. We collapse the rich classify
@@ -627,7 +679,12 @@
   // when n belongs to a SelectInput — isOpt=true for nodes inside the OPEN
   // options panel (the .absolute.z-10 child; the chevron svg is .absolute too,
   // so the z-10 token is required), isOpt=false for the value cell / chevron.
+  // Gated on A._pageHasSelectInput (set once per scrape, top of A.enumerate):
+  // a cheap page-level presence check so a page with NO SelectInput at all
+  // (most pages) skips every per-leaf 8-ancestor walk entirely, rather than
+  // walking up from every text leaf just to find nothing.
   A.selectInputContext = function (n) {
+    if (!A._pageHasSelectInput) return null;
     try {
       var cur = n, hops = 0, panel = null;
       while (cur && cur.nodeType === 1 && hops < 8) {
@@ -965,8 +1022,8 @@
   A.markOwned = function (n) { if (n && n.setAttribute) n.setAttribute("data-fbw-ground-region", "1"); };
 
   // A380 Quick Controls "Cabin Lighting" row — suppressed. Its rc-slider has no native
-  // input and the injected agent CANNOT write SimVars (Coherent restriction — see the
-  // CLAUDE.md flyPad note), so it can't be set from here; it surfaced as a misleading
+  // input and the injected agent CANNOT write SimVars (Coherent restriction — see
+  // [FPD-1]), so it can't be set from here; it surfaced as a misleading
   // "0%Set Cabin Lighting" button. Cabin brightness/auto are now app-side panel controls
   // (A380 Interior Lighting). Own the whole row so the generic passes skip it.
   A.suppressCabinLighting = function (root) {
@@ -1886,6 +1943,20 @@
   };
 
   A.enumerate = function (root) {
+    // New scrape generation: invalidates every per-node isVisible/classify
+    // memo left over from the previous scrape (a node stamped with the old
+    // gen is recomputed the next time either wrapper touches it). See the
+    // A._gen comment above A.isVisible for the full design.
+    A._gen++;
+    // One-shot page-level gate for A.selectInputContext's per-leaf 8-ancestor
+    // walk (see that function). Deliberately an OVER-approximation (superset)
+    // of real SelectInput roots — matching the class-attribute substring is
+    // enough to decide "don't bother walking", and a false positive here just
+    // means the (still-correct) per-leaf walk runs and finds nothing; a false
+    // negative would wrongly hide real dropdowns, so this must never be made
+    // narrower than A.isSelectInputRoot's own requirements.
+    A._pageHasSelectInput = !!root.querySelector('[class*="border-theme-accent"]');
+
     var stale = root.querySelectorAll("[data-fbw-efb-idx]");
     for (var s = 0; s < stale.length; s++) stale[s].removeAttribute("data-fbw-efb-idx");
     var staleR = root.querySelectorAll("[data-fbw-ground-region]");
@@ -1935,10 +2006,15 @@
     // Interior Lighting panel control). No-op on the A320 / when the pane is closed.
     A.suppressCabinLighting(root);
 
+    // FBW's react-toastify pop-ups are read through the notice list (A.noticeItems), which holds
+    // them until dismissed; their own nodes (text + an icon-only "close") are skipped here.
+    var toastRoot = root.querySelector(".Toastify");
+
     for (var i = 0; i < all.length && idx <= 400; i++) {
       var n = all[i];
       if (!A.isVisible(n)) continue;
       if (A.insideGroundRegion(n)) continue;
+      if (toastRoot && toastRoot.contains(n)) continue;
       var kind = A.classify(n);
       if (!kind) continue;
 
@@ -2072,8 +2148,37 @@
     for (var ti = 0; ti < all.length && items.length < 600; ti++) {
       var tn = all[ti];
       if (!A.isVisible(tn)) continue;
+      // Large read-only PREFORMATTED text (the Dispatch OFP <pre>, and any weather /
+      // NOTAM dump rendered the same way): SimBrief dumps the whole operational flight
+      // plan — route, fuel, weights, wind, NOTAMs — into one monospace <pre>. Its text
+      // is thousands of chars, so the 80-char leaf-text cap below dropped it ENTIRELY:
+      // the flight plan was unreadable and only the interspersed status badges (U/S,
+      // CLSD…) leaked through as scattered one-word lines. Emit the whole block as one
+      // "pre" element (the C# renders controlType "pre" as a monospace, newline-
+      // preserving div, change-diffed so it doesn't churn the screen reader), and mark
+      // it owned so those badge spans aren't re-captured. Bounded so a pathological OFP
+      // can't bloat every poll. Keyed on the tag (NOT on insideGroundRegion) so it re-
+      // emits every scrape — markOwned persists on the node, so a self-guard would make
+      // the OFP vanish after the first poll; the mark only suppresses the child badges.
+      if (tn.tagName === "PRE") {
+        var preRaw = (tn.textContent || "").replace(/\r\n/g, "\n")
+          .replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "");
+        if (preRaw) {
+          if (preRaw.length > 1000000) preRaw = preRaw.slice(0, 1000000) + "\n… (text truncated)";
+          var preR = tn.getBoundingClientRect();
+          items.push({
+            top: preR.top - rootRect.top, left: preR.left - rootRect.left,
+            idx: 0, kind: "text", tag: "pre", role: "", text: preRaw, value: "",
+            controlType: "pre", clickable: false, level: 0, live: "", disabled: false,
+            options: [], _axis: 0, navRail: false, _selRoot: null, _selOpt: false
+          });
+          A.markOwned(tn);
+        }
+        continue;
+      }
       if (A.insideGroundRegion(tn)) continue; // owned by a Ground builder
       if (A.insideStatusBar(tn)) continue;    // collapsed into the one status line
+      if (toastRoot && toastRoot.contains(tn)) continue; // read via A.noticeItems
       if (A.classify(tn)) continue;        // already captured (interactive/heading)
       if (A.isInsideStamped(tn)) continue; // text inside a captured control
       var own = A.directText(tn);          // immediate text only -> leaf labels/values
@@ -2161,7 +2266,6 @@
     for (var sx = 0; sx < items.length; sx++) items[sx]._selRoot = null;
 
     items = A.dedupe(items);
-    A._elements = items;
     return items;
   };
 
@@ -2326,12 +2430,206 @@
     return clean(document.title || "");
   };
 
+  // ---- notices: FBW toasts and inline validation errors -------------------
+  // A react-toastify pop-up lives 250 ms to 5 s (FBW sets autoClose per call), often between two
+  // polls, and the old scrape read the ones it did catch as plain text nobody heard. A
+  // MutationObserver copies each one the moment FBW adds it. An ERROR stays at the top of the
+  // scrape, with a Dismiss button, until the pilot dismisses it or presses the control that raised
+  // it again (a retry: if it fails, FBW raises a new one). Every other toast type is listed for
+  // NOTICE_FLASH_MS, long enough for a poll to deliver it, so the shell speaks it once.
+  // Inline errors are page text FBW shows only while the problem exists (the throttle-calibration
+  // overlap and deadzone headings); they are read from the DOM each scrape, so fixing the problem
+  // removes them. Dismissing one hides it until FBW hides it and shows it again.
+  // Dismiss buttons carry idx NOTICE_IDX_BASE + id, far above the per-scrape stamps (capped near
+  // 400), and positive, so the client's culture-formatted int needs no minus sign.
+  A.NOTICE_IDX_BASE = 100000;
+  A.NOTICE_FLASH_MS = 6000;
+  A.NOTICE_MAX = 10;
+  // An error FBW raises within this long of a press is that press's (its own validation, the
+  // Takeoff calculation: FBW shows the toast a frame or two later). One arriving later (a failed
+  // download or lookup) may follow another press made meanwhile, so it gets no origin and only
+  // Dismiss clears it: a wrong origin would clear it silently on an unrelated press.
+  A.NOTICE_ORIGIN_MS = 1000;
+  A._notices = [];          // { id, type, text, at, origin }
+  A._noticeSeq = 0;
+  A._inlineIds = {};        // inline error text -> id, while FBW shows it
+  A._dismissedInline = {};  // inline error text -> true, until FBW hides it
+  A._lastPress = null;      // { node, at } of the last control the pilot pressed or set
+
+  A.toastType = function (el) {
+    var m = /(^|\s)Toastify__toast--([a-z]+)(\s|$)/.exec(A.cls(el));
+    return m ? m[2] : "default";
+  };
+
+  // A toast's message: its body's text (FBW's icon-only close button sits outside it).
+  A.toastText = function (el) {
+    var body = el.querySelector(".Toastify__toast-body");
+    return clean((body || el).textContent);
+  };
+
+  // queued: react-toastify let this toast in from its queue (FBW's ToastContainer has limit={2}),
+  // so it was raised earlier and the last press is not its origin; only Dismiss clears it.
+  A.captureToast = function (el, queued) {
+    var text = A.toastText(el);
+    if (!text) return;
+    // Marked on the node, which outlives this agent: a re-install never reads it again, even once
+    // the pilot has dismissed or retried it while FBW still shows it (A.watchToasts).
+    el.__msfsbaToast = true;
+    var now = Date.now();
+    var origin = (!queued && A._lastPress && now - A._lastPress.at < A.NOTICE_ORIGIN_MS) ? A._lastPress.node : null;
+    var keep = [];
+    for (var i = 0; i < A._notices.length; i++) if (A._notices[i].text !== text) keep.push(A._notices[i]);
+    keep.push({ id: ++A._noticeSeq, type: A.toastType(el), text: text, at: now, origin: origin });
+    // Over the cap, drop the oldest passing notice first, the one just added included: a burst of
+    // info toasts must not push out an error the pilot has not dismissed yet.
+    while (keep.length > A.NOTICE_MAX) {
+      var drop = 0;
+      for (var d = 0; d < keep.length; d++) if (keep[d].type !== "error") { drop = d; break; }
+      keep.splice(drop, 1);
+    }
+    A._notices = keep;
+  };
+
+  A.isToastNode = function (n) {
+    return n.nodeType === 1 && A.cls(n).indexOf("Toastify") >= 0;
+  };
+
+  A.onToastMutations = function (muts) {
+    // A toast added in the same batch that removed one is react-toastify filling the freed slot
+    // from its queue: it closes the old toast and mounts the waiting one in one go.
+    var queued = false;
+    for (var r = 0; r < muts.length && !queued; r++) {
+      var removed = muts[r].removedNodes;
+      for (var q = 0; q < removed.length; q++) {
+        var rn = removed[q];
+        if (A.isToastNode(rn) && (A.hasClassToken(rn, "Toastify__toast") || rn.querySelector(".Toastify__toast"))) { queued = true; break; }
+      }
+    }
+    for (var i = 0; i < muts.length; i++) {
+      var added = muts[i].addedNodes;
+      for (var j = 0; j < added.length; j++) {
+        var n = added[j];
+        if (!A.isToastNode(n)) continue;
+        if (A.hasClassToken(n, "Toastify__toast")) { A.captureToast(n, queued); continue; }
+        var inner = n.querySelectorAll(".Toastify__toast");
+        for (var k = 0; k < inner.length; k++) A.captureToast(inner[k], queued);
+      }
+    }
+  };
+
+  // Watch FBW's toast container itself (div.Toastify, which its ToastContainer always renders),
+  // not the whole flyPad, whose clock, maps and charts mutate many times a second. Called at
+  // install and at the top of every scrape: when FBW re-mounts the container (a flyPad power
+  // cycle), the observer moves to the new one.
+  A.watchToasts = function () {
+    if (typeof MutationObserver === "undefined") return;
+    var host = document.querySelector(".Toastify");
+    if (!host || host === A._toastHost) return;
+    if (A._toastObs) A._toastObs.disconnect();
+    else A._toastObs = new MutationObserver(A.onToastMutations);
+    A._toastHost = host;
+    A._toastObs.observe(host, { childList: true, subtree: true });
+    // A toast already open in it is caught now, unless this agent or a previous install caught it
+    // before (its mark), whether it is still listed or the pilot has dismissed or retried it.
+    var open = host.querySelectorAll(".Toastify__toast");
+    for (var i = 0; i < open.length; i++) if (!open[i].__msfsbaToast) A.captureToast(open[i]);
+  };
+
+  // Inline error text FBW is showing now. A heading coloured text-utility-red is an error (the
+  // deadzone warning); the throttle-calibration overlap is a plain h2, told apart from the
+  // harmless "Remember to configure MSFS…" h2 in the same kind of box only by the red strip
+  // holding the exclamation-circle icon just before it (ThrottleConfig.tsx). Only that strip: in
+  // four-axis mode each axis title is an h2 too, beside a pencil icon. The throttle page is known
+  // by the deadzone headings it always renders (hidden until needed), never by its translated h1.
+  A.inlineErrors = function (root) {
+    var out = [], seen = {};
+    var throttlePage = root.querySelector("h2.text-utility-red") !== null;
+    var hs = root.querySelectorAll("h1, h2, h3, h4, h5, h6");
+    for (var i = 0; i < hs.length; i++) {
+      var h = hs[i];
+      if (!A.isVisible(h)) continue;
+      var t = clean(h.textContent);
+      if (!t || seen[t]) continue;
+      var strip = h.previousElementSibling;
+      var overlap = throttlePage && h.tagName === "H2" && !!strip && A.hasClassToken(strip, "bg-utility-red") && !!strip.querySelector("svg");
+      if (A.hasClassToken(h, "text-utility-red") || overlap) { seen[t] = true; out.push(t); }
+    }
+    return out;
+  };
+
+  A.noticePrefix = function (type) {
+    return type === "error" ? "Error: " : type === "warning" ? "Warning: " : "";
+  };
+
+  function noticeItem(kind, key, idx, text) {
+    var button = kind === "button";
+    return {
+      idx: idx, kind: kind, tag: button ? "button" : "p", role: "", text: text, value: "",
+      controlType: "", clickable: button, level: 0, live: button ? "" : "assertive",
+      disabled: false, options: [], key: key
+    };
+  }
+
+  A.noticeItems = function (root) {
+    var out = [], keep = [], now = Date.now();
+    // A control FBW has unmounted can never be pressed again, so it is no retry: let it go, or the
+    // node would hold its whole unmounted React subtree for as long as the error stays.
+    if (A._lastPress && !document.contains(A._lastPress.node)) A._lastPress = null;
+    for (var i = 0; i < A._notices.length; i++) {
+      var n = A._notices[i], error = n.type === "error";
+      if (!error && now - n.at > A.NOTICE_FLASH_MS) continue;
+      if (n.origin && !document.contains(n.origin)) n.origin = null;
+      keep.push(n);
+      out.push(noticeItem("alert", "notice:" + n.id, 0, A.noticePrefix(n.type) + n.text));
+      if (error) out.push(noticeItem("button", "notice-dismiss:" + n.id, A.NOTICE_IDX_BASE + n.id, "Dismiss: " + n.text));
+    }
+    A._notices = keep;
+
+    var shown = A.inlineErrors(root), live = {};
+    for (var j = 0; j < shown.length; j++) {
+      var t = shown[j];
+      live[t] = true;
+      if (!A._inlineIds[t]) A._inlineIds[t] = ++A._noticeSeq;
+      if (A._dismissedInline[t]) continue;
+      out.push(noticeItem("alert", "inline:" + t, 0, "Error: " + t));
+      out.push(noticeItem("button", "inline-dismiss:" + t, A.NOTICE_IDX_BASE + A._inlineIds[t], "Dismiss: " + t));
+    }
+    var k;
+    for (k in A._inlineIds) if (A._inlineIds.hasOwnProperty(k) && !live[k]) delete A._inlineIds[k];
+    for (k in A._dismissedInline) if (A._dismissedInline.hasOwnProperty(k) && !live[k]) delete A._dismissedInline[k];
+    return out;
+  };
+
+  A.dismissNotice = function (id) {
+    var keep = [];
+    for (var i = 0; i < A._notices.length; i++) if (A._notices[i].id !== id) keep.push(A._notices[i]);
+    A._notices = keep;
+    for (var t in A._inlineIds) if (A._inlineIds.hasOwnProperty(t) && A._inlineIds[t] === id) A._dismissedInline[t] = true;
+    return "ok";
+  };
+
+  // A press (or a typed value) on the control that raised an error is a retry: drop that error
+  // now, so a repeat failure arrives as a new notice (spoken again) and a success leaves none.
+  // Matched by the node itself, never its label: the Takeoff and Landing pages both have a
+  // "Calculate". If FBW re-mounts the control, the retry no longer matches and Dismiss clears it.
+  A.notePress = function (node) {
+    A._lastPress = { node: node, at: Date.now() };
+    var keep = [];
+    for (var i = 0; i < A._notices.length; i++) {
+      var n = A._notices[i];
+      if (!(n.type === "error" && n.origin === node)) keep.push(n);
+    }
+    A._notices = keep;
+  };
+
   // ---- public: read ------------------------------------------------------
   A.scrape = function () {
     try {
       var root = A.findRoot();
       if (!root) return JSON.stringify({ ok: false, error: "flyPad root not found (powered up?)" });
-      var els = A.enumerate(root);
+      A.watchToasts();               // follows FBW's toast container if it was re-mounted
+      var els = A.enumerate(root);   // first: it advances A._gen, which inlineErrors' isVisible reads
+      els = A.noticeItems(root).concat(els);
       return JSON.stringify({ ok: true, page: A.pageLabel(root), elements: els });
     } catch (e) {
       return JSON.stringify({ ok: false, error: (e && e.message) ? e.message : String(e) });
@@ -2351,9 +2649,11 @@
   };
 
   A.clickElement = function (index) {
+    if (index >= A.NOTICE_IDX_BASE) return A.dismissNotice(index - A.NOTICE_IDX_BASE);
     var node = A.findByIdx(index);
     if (!node) return "missing";
     if (A.disabledFor(node)) return "disabled";
+    A.notePress(node);
     A.clickNode(node);
     return "ok";
   };
@@ -2376,6 +2676,8 @@
   A.setValue = function (index, value) {
     var node = A.findByIdx(index);
     if (!node) return "missing";
+    if (A.disabledFor(node)) return "disabled";
+    A.notePress(node);
     var kind = A.classify(node);
     value = (value === null || value === undefined) ? "" : String(value);
 
@@ -2452,6 +2754,24 @@
     } catch (e) {}
     return "ok";
   };
+
+  // A re-install must not leave the previous agent's observer feeding a list nobody reads. The
+  // client also re-installs over a LIVE agent after one slow scrape, so take over its notices and
+  // counter: dropping them loses errors the pilot has not dismissed, and restarting the counter
+  // reuses a key (notice:1) the form has already spoken, so the next error stays silent.
+  var previous = window.__MSFSBA_FLYPAD;
+  if (previous && previous._toastObs) { try { previous._toastObs.disconnect(); } catch (e) {} }
+  // Nodes still carry the previous agent's memo stamps (__msfsbaGen): counting on from its
+  // generation keeps a stamp from ever matching a new scrape's.
+  if (previous && typeof previous._gen === "number") A._gen = previous._gen;
+  if (previous && previous._notices instanceof Array) {
+    A._notices = previous._notices;
+    A._noticeSeq = previous._noticeSeq || 0;
+    A._inlineIds = previous._inlineIds || {};
+    A._dismissedInline = previous._dismissedInline || {};
+    if (previous._lastPress && previous._lastPress.node) A._lastPress = previous._lastPress;
+  }
+  A.watchToasts();
 
   window.__MSFSBA_FLYPAD = A;
   return "MSFSBA_FLYPAD_INSTALLED";

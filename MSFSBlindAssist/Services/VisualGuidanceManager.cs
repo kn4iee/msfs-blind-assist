@@ -3,13 +3,16 @@ using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Database.Models;
 using MSFSBlindAssist.Navigation;
 using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services;
 
 /// <summary>
 /// Manages visual landing guidance using dual audio tones.
-/// The DESIRED tone encodes the PID-commanded pitch (frequency, default 200–800 Hz over ±10°) and
-/// commanded bank (stereo pan over ±10°). The CURRENT tone always plays alongside it, mirroring
+/// The DESIRED tone encodes the PID-commanded pitch (frequency, 200–800 Hz over the profile's
+/// TonePitchRangeDeg — ±6° by default, configured SYMMETRICALLY so the mapping stays one
+/// straight line, unlike the generator's own asymmetric −10°/+20° defaults which belong to hand
+/// fly) and commanded bank (stereo pan over ±5° by default). The CURRENT tone plays alongside it, mirroring
 /// the same mapping against the aircraft's *actual* pitch and bank, so frequency match
 /// (zero-beat) means correct pitch attitude / vertical speed and pan match means correct bank.
 /// Aircraft-specific tunables (approach AoA, Vref, rate caps, tone frequency range) come from
@@ -34,11 +37,28 @@ public class VisualGuidanceManager : IDisposable
     private HandFlyWaveType currentToneWaveType = HandFlyWaveType.Sine;
     private double currentToneVolume = 0.05;
     private bool hardPanTone = false;  // see VisualGuidanceHardPanTone setting
+    // The aircraft's dual-tone frequency/pan mapping, set from VisualGuidanceProfile in
+    // Initialize (populated the same way as the other "aircraft-specific tunables" fields
+    // below). Cached here — rather than read once from Initialize's own `profile` parameter —
+    // because ProcessUpdate's tone-pair re-arm (see there) has to replay the same Configure()
+    // call on a freshly reconstructed generator pair, and a method parameter does not survive
+    // past Initialize's return. Defaults are the A320 numbers, matching every other tunable
+    // below when no profile has been applied yet.
+    private VisualGuidanceProfile visualGuidanceProfile = new();
     // Defer audible Start() until the first ProcessUpdate computes real pitch/bank — otherwise
     // the user hears ~33 ms of fused 500 Hz center-pan tone that represents nothing. Both tones
     // are instantiated in Initialize so disposal/lifecycle stays simple; this flag controls
-    // when WaveOut actually fires up.
+    // when the audio output actually fires up.
     private bool tonesNeedStart = false;
+
+    // One re-arm (dispose + rebuild + restart of the tone pair) per device-loss EPISODE. Set
+    // when the re-arm in ProcessUpdate fires; cleared when both tones are playing again (and
+    // on Initialize/DisposeTones). Needed because a failed restart no longer nulls the tones
+    // (they stay registered so the router's next sweep can retry them) — without this latch
+    // the re-arm would see their NeedsDevice again on the very next 1 Hz tick and rebuild the
+    // pair per tick, a per-tick WASAPI open on the UI thread, i.e. the self-sustaining retry
+    // loop docs/audio.md's known-limitations section forbids.
+    private bool toneReArmSpent = false;
 
     // Bank (degrees, standard convention) at which hard-pan mode snaps to full left / right.
     // Below this magnitude the tone stays centered, avoiding twitchy flips around 0°.
@@ -89,7 +109,7 @@ public class VisualGuidanceManager : IDisposable
     // P pitch, S speed, etc.) while VG is active, the per-second bank-guidance and
     // centerline-deviation callouts — both AnnounceImmediate — would cut the readout
     // off mid-sentence. NotifyManualQuery() sets this timestamp; the two chatty
-    // callouts skip while DateTime.Now is before it. Skipped callouts lose nothing:
+    // callouts skip while DateTime.UtcNow is before it. Skipped callouts lose nothing:
     // both always reflect CURRENT state, so the next un-suppressed one carries fresh
     // data. One-shot announcements (phase changes, distance callouts) are NOT
     // suppressed — they're rare and important enough to let through.
@@ -249,11 +269,11 @@ public class VisualGuidanceManager : IDisposable
     public void NotifyManualQuery()
     {
         if (!isActive) return;
-        routineAnnouncementsSuppressedUntil = DateTime.Now.AddSeconds(MANUAL_QUERY_GRACE_SECONDS);
+        routineAnnouncementsSuppressedUntil = DateTime.UtcNow.AddSeconds(MANUAL_QUERY_GRACE_SECONDS);
     }
 
     /// <summary>True while a manual-query grace window is open (see <see cref="NotifyManualQuery"/>).</summary>
-    private bool RoutineAnnouncementsSuppressed => DateTime.Now < routineAnnouncementsSuppressedUntil;
+    private bool RoutineAnnouncementsSuppressed => DateTime.UtcNow < routineAnnouncementsSuppressedUntil;
 
     /// <summary>
     /// Initializes visual guidance with runway, audio preferences, and aircraft-specific tunables.
@@ -312,6 +332,8 @@ public class VisualGuidanceManager : IDisposable
         flareAltitudeBiasFt = profile.FlareAltitudeBiasFt;
         flareTriggerWheelHeightFt = profile.FlareTriggerWheelHeightFt;
         flareTargetPitchDeg = profile.FlareTargetPitchDeg;
+        // Cached for ProcessUpdate's tone-pair re-arm — see the field comment.
+        visualGuidanceProfile = profile;
 
         // Reset state
         currentPhase = GuidancePhase.NotStarted;
@@ -359,11 +381,11 @@ public class VisualGuidanceManager : IDisposable
             currentAttitudeTone.Configure(profile.ToneMinFrequencyHz, profile.ToneMaxFrequencyHz,
                                           profile.TonePitchRangeDeg, profile.ToneBankRangeDeg);
             tonesNeedStart = true;
-            System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] Tones instantiated ({profile.ToneMinFrequencyHz}–{profile.ToneMaxFrequencyHz} Hz over ±{profile.TonePitchRangeDeg}° pitch, pan ±{profile.ToneBankRangeDeg}° bank); deferring Start until first ProcessUpdate");
+            Log.Debug("VisualGuidance", $"Tones instantiated ({profile.ToneMinFrequencyHz}–{profile.ToneMaxFrequencyHz} Hz over ±{profile.TonePitchRangeDeg}° pitch, pan ±{profile.ToneBankRangeDeg}° bank); deferring Start until first ProcessUpdate");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] Failed to instantiate tones: {ex.Message}");
+            Log.Debug("VisualGuidance", $"Failed to instantiate tones: {ex.Message}");
             desiredAttitudeTone?.Dispose();
             desiredAttitudeTone = null;
             currentAttitudeTone?.Dispose();
@@ -372,7 +394,7 @@ public class VisualGuidanceManager : IDisposable
         }
 
         announcer.AnnounceImmediate($"Visual guidance active, runway {runway.RunwayID}");
-        System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] Initialized for runway {runway.RunwayID}");
+        Log.Debug("VisualGuidance", $"Initialized for runway {runway.RunwayID}");
     }
 
     /// <summary>
@@ -404,7 +426,7 @@ public class VisualGuidanceManager : IDisposable
         VisualGuidanceActiveChanged?.Invoke(this, false);
         if (announce)
             announcer.Announce("Visual guidance off");
-        System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] Stopped (announce={announce})");
+        Log.Debug("VisualGuidance", $"Stopped (announce={announce})");
     }
 
     /// <summary>
@@ -428,12 +450,22 @@ public class VisualGuidanceManager : IDisposable
             currentAttitudeTone = null;
         }
         tonesNeedStart = false;  // re-armed by next Initialize
+        toneReArmSpent = false;  // a fresh pair starts a fresh episode
     }
 
     /// <summary>
     /// First-call audible-Start for both tones. Honors the "follower starts only if reference
-    /// started" rule from Initialize. After this returns, both tones are either playing (and
-    /// ready to be modulated by UpdatePitch/UpdateBank in the same frame) or null (init failure).
+    /// started" rule from Initialize.
+    ///
+    /// A tone that FAILS to start is KEPT, never disposed or nulled: a failed
+    /// <c>Start</c> leaves the generator registered in the router with <c>NeedsDevice</c> set,
+    /// which is exactly the set the next routing sweep (a device arriving, a settings save)
+    /// retries — it restarts the tone with the wave/volume recorded here. The old
+    /// dispose-and-null gave up on the whole approach after ONE failed attempt: the disposed
+    /// generators left the router's registry, ProcessUpdate's top guard returned on the null
+    /// forever, and audio coming back seconds later found nothing to restore. The follower is
+    /// still not STARTED until the reference plays (a lone follower is a constant drone);
+    /// ProcessUpdate's pair-completion check starts it on the reference's own recovery edge.
     /// </summary>
     private void StartTonesIfNeeded()
     {
@@ -450,23 +482,20 @@ public class VisualGuidanceManager : IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] Desired-attitude tone Start threw (unexpected): {ex.Message}");
+            Log.Debug("VisualGuidance", $"Desired-attitude tone Start threw (unexpected): {ex.Message}");
         }
 
         // If the desired tone failed to actually start (audio device error, driver issue),
-        // dispose it AND skip starting the follower — a current-tone-only setup is useless
-        // (nothing to match against) and would just play a constant 500 Hz background drone.
+        // skip starting the follower — a current-tone-only setup is useless (nothing to match
+        // against) and would just play a constant 500 Hz background drone. Both generators
+        // stay alive and registered so the router can retry the reference; see the class doc.
         if (desiredAttitudeTone == null || !desiredAttitudeTone.IsPlaying)
         {
-            System.Diagnostics.Debug.WriteLine("[VisualGuidanceManager] Desired-attitude tone did not start (or failed); tearing both down");
-            desiredAttitudeTone?.Dispose();
-            desiredAttitudeTone = null;
-            currentAttitudeTone?.Dispose();
-            currentAttitudeTone = null;
+            Log.Debug("VisualGuidance", "Desired-attitude tone did not start; leaving the pair registered for the router's next sweep");
             return;
         }
 
-        System.Diagnostics.Debug.WriteLine("[VisualGuidanceManager] Desired-attitude tone started");
+        Log.Debug("VisualGuidance", "Desired-attitude tone started");
 
         if (currentAttitudeTone != null)
         {
@@ -476,20 +505,20 @@ public class VisualGuidanceManager : IDisposable
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] Current-attitude tone Start threw (unexpected): {ex.Message}");
+                Log.Debug("VisualGuidance", $"Current-attitude tone Start threw (unexpected): {ex.Message}");
             }
 
             if (currentAttitudeTone.IsPlaying)
             {
-                System.Diagnostics.Debug.WriteLine("[VisualGuidanceManager] Current-attitude tone started");
+                Log.Debug("VisualGuidance", "Current-attitude tone started");
             }
             else
             {
-                // Follower failed to start — desired tone still plays alone, which is at least
-                // useful (pilot has the PID commands; just no current-attitude reference).
-                System.Diagnostics.Debug.WriteLine("[VisualGuidanceManager] Current-attitude tone did not start; desired tone running alone");
-                currentAttitudeTone.Dispose();
-                currentAttitudeTone = null;
+                // Follower failed to start — the reference plays alone for the moment, but the
+                // follower stays registered with NeedsDevice set, so the router's next sweep
+                // retries it (the pilot has the PID commands meanwhile; just no
+                // current-attitude reference).
+                Log.Debug("VisualGuidance", "Current-attitude tone did not start; leaving it registered for the router's next sweep");
             }
         }
     }
@@ -561,7 +590,7 @@ public class VisualGuidanceManager : IDisposable
         if (knots > 0)
         {
             airspeedReferenceKnots = knots;
-            System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] ReferenceVref updated to {knots:F0} kt (live override)");
+            Log.Debug("VisualGuidance", $"ReferenceVref updated to {knots:F0} kt (live override)");
         }
     }
     public void UpdateHeading(double headingDegrees) => cachedHeading = headingDegrees;
@@ -582,6 +611,127 @@ public class VisualGuidanceManager : IDisposable
         if (!isActive || runway == null || desiredAttitudeTone == null)
         {
             return;
+        }
+
+        // The pair invariant StartTonesIfNeeded enforces at startup has to hold continuously:
+        // a device change rebinds the two generators independently, so EITHER one can die
+        // while the other survives, and a lone tone is useless in both directions. The
+        // follower alone is a constant drone the pilot cannot match anything against; the
+        // reference alone is a commanded attitude with nothing to compare it to, which is the
+        // same silence dressed up as guidance. Re-arming here restores the invariant on the
+        // next update instead of leaving it broken for the rest of the approach.
+        //
+        // WATCHES BOTH TONES, deliberately. Gating on the reference alone covered exactly one
+        // of the two orderings: a sweep that rebound desiredAttitudeTone successfully and then
+        // failed to reopen currentAttitudeTone left the follower registered with NeedsDevice
+        // set and silent, the re-arm never fired, and the pilot flew the rest of the approach
+        // hearing the commanded attitude with nothing to zero-beat it against.
+        // currentAttitudeTone stays null-conditional defensively (Initialize's catch nulls
+        // both tones on a construction failure, and the top guard only checks the reference).
+        //
+        // Gated on NeedsDevice, NOT IsPlaying -- IsPlaying is the wrong signal here and reads
+        // false for the ENTIRE DURATION of a healthy, in-flight rebind, not just a failed one.
+        // AudioToneGenerator.RebindTo sets isPlaying = false BEFORE it reopens the device, and
+        // StartLocked does not set it back to true until the new WasapiOut has actually been
+        // built and Play() has been called -- the WASAPI enumerate, GetDevice, construction and
+        // Init/Play in between all run with isPlaying still false. That rebind happens on the
+        // router's own worker thread with no synchronisation against this UI-thread tick, so a
+        // ProcessUpdate landing mid-rebind would read a healthy, about-to-succeed tone as dead.
+        // DisposeTones's first Stop() blocks on the very startStopLock the router thread is
+        // holding; by the time it is released the router has already reopened a good session,
+        // which this block would then immediately stop and dispose again -- tearing down the
+        // follower too even though ITS rebind may have succeeded cleanly -- for an avoidable
+        // extra teardown/reopen and audio gap during the exact device change the router's
+        // "move it without stopping guidance" sweep exists to make seamless.
+        // NeedsDevice does not have that transient-false window: StartLocked sets it ONLY at
+        // the two genuinely terminal outcomes of an open attempt (opened == null, or the catch
+        // block) and clears it only on that same attempt's full success -- never on an
+        // in-progress one -- and OnPlaybackStopped sets it the instant a live fault is detected.
+        // So NeedsDevice==true always means "as of the last attempt, this generator ended up
+        // with no device," never "an attempt is currently in flight." Do not swap this back to
+        // IsPlaying, and do not require IsPlaying == false in addition to NeedsDevice: the two
+        // can legitimately both be true right after OnPlaybackStopped fires on a still-flagged-
+        // playing session, and requiring IsPlaying too would just delay detection of that case
+        // until some later rebind attempt touches the flag.
+        //
+        // !tonesNeedStart is what stops this from firing on the very first frame after
+        // Initialize -- the tones are constructed there but not yet Start()ed, so NeedsDevice
+        // is still false at that point too (it defaults false and nothing has attempted an open
+        // yet). tonesNeedStart only latches back to false once StartTonesIfNeeded has actually
+        // attempted a Start, so this block cannot see a "not started yet" tone as a "died" tone.
+        // Once it does fire it sets tonesNeedStart back to true and returns -- it does not call
+        // Start itself -- so the very next StartTonesIfNeeded (later in this same call, once the
+        // cached-data guard below has passed) consumes that flag and is the only thing that can
+        // flip it false again.
+        //
+        // ONE re-arm per device-loss episode (toneReArmSpent). A failed restart KEEPS the pair
+        // -- StartTonesIfNeeded no longer disposes or nulls on failure, precisely so the
+        // generators stay in the router's registry with NeedsDevice set and a device arriving
+        // restarts them -- which means NeedsDevice can still read true on the next 1 Hz tick.
+        // Without the latch this block would rebuild the pair per tick (a per-tick WASAPI open
+        // on the UI thread, the retry loop docs/audio.md forbids); with it, the second and
+        // later retries belong to the router's event-driven sweeps. The latch clears once both
+        // tones are playing again, so a LATER outage in the same approach re-arms once more.
+        bool desiredNeedsDevice = desiredAttitudeTone != null && desiredAttitudeTone.NeedsDevice;
+        bool currentNeedsDevice = currentAttitudeTone?.NeedsDevice == true;
+        if (!tonesNeedStart && (desiredNeedsDevice || currentNeedsDevice))
+        {
+            if (!toneReArmSpent)
+            {
+                string which = desiredNeedsDevice && currentNeedsDevice ? "Both attitude tones need"
+                    : desiredNeedsDevice ? "The desired-attitude tone needs"
+                    : "The current-attitude tone needs";
+                Log.Debug("VisualGuidance", $"{which} a device (rebind failed or its endpoint was lost); restarting both tones");
+                DisposeTones();
+                // AFTER DisposeTones, which resets the latch for its other callers
+                // (Stop/Initialize) — set before it, the latch would clear itself and the
+                // re-arm would fire again every tick.
+                toneReArmSpent = true;
+                desiredAttitudeTone = new AudioToneGenerator();
+                currentAttitudeTone = new AudioToneGenerator();
+                desiredAttitudeTone.Configure(visualGuidanceProfile.ToneMinFrequencyHz, visualGuidanceProfile.ToneMaxFrequencyHz,
+                                              visualGuidanceProfile.TonePitchRangeDeg, visualGuidanceProfile.ToneBankRangeDeg);
+                currentAttitudeTone.Configure(visualGuidanceProfile.ToneMinFrequencyHz, visualGuidanceProfile.ToneMaxFrequencyHz,
+                                              visualGuidanceProfile.TonePitchRangeDeg, visualGuidanceProfile.ToneBankRangeDeg);
+                tonesNeedStart = true;
+            }
+            // else: this episode's one re-arm already ran; the registered NeedsDevice
+            // generators are the router's to retry on its next sweep.
+        }
+        else if (!tonesNeedStart
+                 && desiredAttitudeTone?.IsPlaying == true
+                 && currentAttitudeTone != null
+                 && !currentAttitudeTone.IsPlaying
+                 && !currentAttitudeTone.NeedsDevice)
+        {
+            // PAIR COMPLETION. The router healed the reference (it was registered with
+            // NeedsDevice and a sweep restarted it), but the follower was never STARTED --
+            // StartTonesIfNeeded starts it only after the reference plays, so a failed
+            // reference start leaves the follower cold, and a cold tone (no NeedsDevice) is
+            // one the router deliberately refuses to start on its own. Start it here, on the
+            // reference's own recovery edge. Self-limiting: after this call the follower is
+            // either playing (this branch stops matching) or flagged NeedsDevice (the router's
+            // to retry), so it cannot fire per tick.
+            try
+            {
+                currentAttitudeTone.Start(currentToneWaveType, currentToneVolume);
+                Log.Debug("VisualGuidance", currentAttitudeTone.IsPlaying
+                    ? "Current-attitude tone started on the reference's recovery"
+                    : "Current-attitude tone still has no device; leaving it registered for the router's next sweep");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("VisualGuidance", $"Current-attitude tone Start threw (unexpected): {ex.Message}");
+            }
+        }
+
+        // Both tones sounding again closes the device-loss episode: a later outage in this
+        // same approach gets its own one-shot re-arm.
+        if (toneReArmSpent
+            && desiredAttitudeTone?.IsPlaying == true
+            && currentAttitudeTone?.IsPlaying == true)
+        {
+            toneReArmSpent = false;
         }
 
         // Ensure we have all required data
@@ -608,12 +758,13 @@ public class VisualGuidanceManager : IDisposable
             double desiredPitch = CalculateDesiredPitch(lat, lon, agl, altMSL);
             double currentBankStandard = StandardBank(cachedBank ?? 0.0);
 
-            // First-frame deferred Start — by the time WaveOut's 150 ms buffer fills, the
-            // phase-continuous oscillator's portamento has reached the target frequency
-            // (~0.23 ms at 44.1 kHz), so the very first audible note already reflects the
-            // commanded / actual attitude. No fused-tone glitch at session start.
-            // NOTE: StartTonesIfNeeded can null out desiredAttitudeTone if WaveOut.Init throws
-            // (bad audio device, driver issue). Re-check both tones after this point — the
+            // First-frame deferred Start — by the time the 150 ms WasapiOut buffer fills, the
+            // phase-continuous oscillator's portamento has reached the target frequency (well
+            // under a millisecond, whatever rate the endpoint mixes at), so the very first
+            // audible note already reflects the commanded / actual attitude. No fused-tone
+            // glitch at session start.
+            // NOTE: StartTonesIfNeeded can null out desiredAttitudeTone if no output opens or
+            // Init throws (bad audio device, driver issue). Re-check both tones after this — the
             // early-out at the top of ProcessUpdate only proves they were non-null on entry.
             StartTonesIfNeeded();
 
@@ -647,7 +798,7 @@ public class VisualGuidanceManager : IDisposable
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[VisualGuidanceManager] Error processing update: {ex.Message}");
+            Log.Debug("VisualGuidance", $"Error processing update: {ex.Message}");
         }
     }
 
@@ -673,8 +824,8 @@ public class VisualGuidanceManager : IDisposable
         double wheelHeightAGL = calculatedAGL - flareAltitudeBiasFt;
 
         // Diagnostic logging to help identify sensor issues
-        System.Diagnostics.Debug.WriteLine(
-            $"[VisualGuidance] AGL: SimConnect={agl:F1}ft, Calculated={calculatedAGL:F1}ft, " +
+        Log.Debug("VisualGuidance", 
+            $"AGL: SimConnect={agl:F1}ft, Calculated={calculatedAGL:F1}ft, " +
             $"WheelHeight={wheelHeightAGL:F1}ft, Diff={Math.Abs(agl - calculatedAGL):F1}ft");
 
         GuidancePhase previousPhase = currentPhase;
@@ -804,7 +955,7 @@ public class VisualGuidanceManager : IDisposable
 
             // Calculate cross-track rate (derivative term) for damping using multi-sample averaging
             // Add current sample to history buffer
-            crossTrackHistory.Enqueue((signedCrossTrackNM, DateTime.Now));
+            crossTrackHistory.Enqueue((signedCrossTrackNM, DateTime.UtcNow));
 
             // Maintain history size limit (rolling window)
             while (crossTrackHistory.Count > CROSS_TRACK_HISTORY_SIZE)
@@ -938,8 +1089,8 @@ public class VisualGuidanceManager : IDisposable
                     lat, lon, runway.StartLat, runway.StartLon);
 
                 // Debug output for arc mode
-                System.Diagnostics.Debug.WriteLine(
-                    $"[VisualGuidance] {guidancePhase}: XTE={signedCrossTrackNM:F3}NM, Rate={crossTrackRate:F3}NM/s, " +
+                Log.Debug("VisualGuidance", 
+                    $"{guidancePhase}: XTE={signedCrossTrackNM:F3}NM, Rate={crossTrackRate:F3}NM/s, " +
                     $"IntAngle={interceptAngle:F1}°, Damped={dampedInterceptAngle:F1}°, " +
                     $"TgtHdg={targetHeading:F1}°, ActTrk={actualTrackAngle:F1}°, HdgErr={headingError:F1}°, " +
                     $"Bank={desiredBank:F1}°, Dist={distanceNM:F1}NM, GS={currentGroundSpeedKnots:F0}kt");
@@ -980,8 +1131,8 @@ public class VisualGuidanceManager : IDisposable
                     lat, lon, runway.StartLat, runway.StartLon);
 
                 // Debug output for precision mode
-                System.Diagnostics.Debug.WriteLine(
-                    $"[VisualGuidance] {guidancePhase}: XTE={signedCrossTrackNM:F3}NM, Rate={crossTrackRate:F3}NM/s, " +
+                Log.Debug("VisualGuidance", 
+                    $"{guidancePhase}: XTE={signedCrossTrackNM:F3}NM, Rate={crossTrackRate:F3}NM/s, " +
                     $"TrkErr={trackAngleError:F1}°, P={proportionalTerm:F2}° D={derivativeTerm:F2}° H={headingTerm:F2}° " +
                     $"→ Bank={desiredBank:F1}°, Dist={distanceNM:F1}NM, GS={currentGroundSpeedKnots:F0}kt");
             }
@@ -993,16 +1144,16 @@ public class VisualGuidanceManager : IDisposable
             double impliedMagVar = cachedGroundTrack.HasValue ?
                 NormalizeHeading(cachedGroundTrack.Value - heading) : 0.0;
 
-            System.Diagnostics.Debug.WriteLine(
-                $"[VisualGuidance] MAGNETIC DEBUG: RunwayMag={runway.HeadingMag:F1}° AircraftHdg={heading:F1}° " +
+            Log.Debug("VisualGuidance", 
+                $"MAGNETIC DEBUG: RunwayMag={runway.HeadingMag:F1}° AircraftHdg={heading:F1}° " +
                 $"GroundTrack={cachedGroundTrack?.ToString("F1") ?? "N/A"}° ActualTrack={actualTrackAngle:F1}° " +
                 $"TrackErr={trackAngleError:F1}° ImpliedMagVar={impliedMagVar:F1}°");
 
             // Phase-specific debug output (INTERCEPT phases only - CAPTURE_TRACK logs inside its block)
             if (guidancePhase.StartsWith("INTERCEPT"))
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[VisualGuidance] {guidancePhase}: XTE={signedCrossTrackNM:F3}NM, " +
+                Log.Debug("VisualGuidance", 
+                    $"{guidancePhase}: XTE={signedCrossTrackNM:F3}NM, " +
                     $"ActualTrk={actualTrackAngle:F1}°, TrkErr={trackAngleError:F1}°, " +
                     $"GS={currentGroundSpeedKnots:F0}kt → Bank={desiredBank:F1}°");
             }
@@ -1044,11 +1195,11 @@ public class VisualGuidanceManager : IDisposable
     /// </summary>
     private double CalculateDesiredPitch(double lat, double lon, double agl, double altMSL)
     {
-        System.Diagnostics.Debug.WriteLine($"[VisualGuidance] CalculateDesiredPitch called: Phase={currentPhase}, AGL={agl:F0}ft, Runway={(runway != null ? "OK" : "NULL")}, GS={currentGroundSpeedKnots:F1}kt, VS={currentVerticalSpeedFPM:F0}fpm, CurPitch={currentPitch:F2}°");
+        Log.Debug("VisualGuidance", $"CalculateDesiredPitch called: Phase={currentPhase}, AGL={agl:F0}ft, Runway={(runway != null ? "OK" : "NULL")}, GS={currentGroundSpeedKnots:F1}kt, VS={currentVerticalSpeedFPM:F0}fpm, CurPitch={currentPitch:F2}°");
 
         if (runway == null)
         {
-            System.Diagnostics.Debug.WriteLine("[VisualGuidance] Runway is NULL - returning 0.0");
+            Log.Debug("VisualGuidance", "Runway is NULL - returning 0.0");
             return 0.0;
         }
 
@@ -1067,8 +1218,8 @@ public class VisualGuidanceManager : IDisposable
 
             lastFlarePitch = targetPitch;
 
-            System.Diagnostics.Debug.WriteLine(
-                $"[VisualGuidance] Flare: AGL={agl:F0}ft, Commanding pitch: {targetPitch:F1}°");
+            Log.Debug("VisualGuidance", 
+                $"Flare: AGL={agl:F0}ft, Commanding pitch: {targetPitch:F1}°");
 
             return targetPitch;
         }
@@ -1123,8 +1274,8 @@ public class VisualGuidanceManager : IDisposable
                 // LOCK MODE: Maintain steady 3° descent rate, no altitude corrections
                 targetFPM = natural3DegDescentRateFPM;
 
-                System.Diagnostics.Debug.WriteLine(
-                    $"[VisualGuidance] LOCK MODE: Dist={distanceToThresholdNM:F2}nm, " +
+                Log.Debug("VisualGuidance", 
+                    $"LOCK MODE: Dist={distanceToThresholdNM:F2}nm, " +
                     $"Maintaining steady 3° descent: {targetFPM:F0}fpm");
             }
             else
@@ -1144,8 +1295,8 @@ public class VisualGuidanceManager : IDisposable
                 double effectiveMaxDescent = Math.Min(MAX_DESCENT_RATE_FPM, natural3DegDescentRateFPM * 1.3);
                 targetFPM = Math.Clamp(targetFPM, effectiveMaxDescent, 0.0);
 
-                System.Diagnostics.Debug.WriteLine(
-                    $"[VisualGuidance] CORRECTION MODE: AltErr={altitudeError:F0}ft, " +
+                Log.Debug("VisualGuidance", 
+                    $"CORRECTION MODE: AltErr={altitudeError:F0}ft, " +
                     $"Natural={natural3DegDescentRateFPM:F0}fpm, Correction={correctionRateFPM:F0}fpm, " +
                     $"Target={targetFPM:F0}fpm, Dist={distanceToThresholdNM:F2}nm");
             }
@@ -1161,7 +1312,7 @@ public class VisualGuidanceManager : IDisposable
             double fpmErrorRate = 0.0;
             if (previousGlideslopeDeviation.HasValue && previousGlideslopeTimestamp.HasValue)
             {
-                double deltaTime = (DateTime.Now - previousGlideslopeTimestamp.Value).TotalSeconds;
+                double deltaTime = (DateTime.UtcNow - previousGlideslopeTimestamp.Value).TotalSeconds;
                 if (deltaTime > 0.01)
                 {
                     // Using previousGlideslopeDeviation to store previous FPM error
@@ -1171,7 +1322,7 @@ public class VisualGuidanceManager : IDisposable
 
             // Update tracking state for next iteration
             previousGlideslopeDeviation = fpmError;  // Reusing field for FPM error history
-            previousGlideslopeTimestamp = DateTime.Now;
+            previousGlideslopeTimestamp = DateTime.UtcNow;
 
             // Calculate nominal pitch for descent.
             // Prefer LIVE angle of attack (SimConnect INCIDENCE ALPHA) over the static profile
@@ -1241,8 +1392,8 @@ public class VisualGuidanceManager : IDisposable
             // Update for next iteration
             previousDesiredPitch = desiredPitch;
 
-            System.Diagnostics.Debug.WriteLine(
-                $"[VisualGuidance] Vertical: Target={targetFPM:F0}fpm, Current={smoothedFPM:F0}fpm, Error={fpmError:F0}fpm, " +
+            Log.Debug("VisualGuidance", 
+                $"Vertical: Target={targetFPM:F0}fpm, Current={smoothedFPM:F0}fpm, Error={fpmError:F0}fpm, " +
                 $"AGL={currentAGL:F0}ft, IdealAGL={idealAltitudeAGL:F0}ft, AltErr={altitudeError:F0}ft, " +
                 $"Dist={distanceToThresholdNM:F2}nm, GS={currentGroundSpeedKnots:F0}kt, " +
                 $"P={proportionalTerm:F2}° D={derivativeTerm:F2}° → Pitch={desiredPitch:F1}°");
@@ -1289,13 +1440,13 @@ public class VisualGuidanceManager : IDisposable
         if (currentlyBehind != wasBehindLastCheck)
         {
             // State is trying to change - check if enough time has passed
-            if ((DateTime.Now - lastBehindStateChange).TotalMilliseconds < STATE_CHANGE_DELAY_MS)
+            if ((DateTime.UtcNow - lastBehindStateChange).TotalMilliseconds < STATE_CHANGE_DELAY_MS)
             {
                 // Not enough time passed, return previous state (ignore this change)
                 return wasBehindLastCheck;
             }
             // Enough time passed, allow state change
-            lastBehindStateChange = DateTime.Now;
+            lastBehindStateChange = DateTime.UtcNow;
         }
 
         // Update tracking and return current state
@@ -1336,7 +1487,7 @@ public class VisualGuidanceManager : IDisposable
     /// </summary>
     private void AnnouncePhaseChange(string message)
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         if ((now - lastPhaseAnnouncement).TotalMilliseconds >= ANNOUNCEMENT_INTERVAL_MS)
         {
             announcer.Announce(message);
@@ -1351,7 +1502,7 @@ public class VisualGuidanceManager : IDisposable
     {
         if (runway == null) return;
 
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         if ((now - lastDistanceAnnouncement).TotalMilliseconds < ANNOUNCEMENT_INTERVAL_MS)
             return;
 
@@ -1380,7 +1531,7 @@ public class VisualGuidanceManager : IDisposable
     {
         if (runway == null || currentPhase != GuidancePhase.Extending) return;
 
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         if ((now - lastExtendingProgressAnnouncement).TotalMilliseconds < EXTENDING_PROGRESS_INTERVAL_MS)
             return;
 

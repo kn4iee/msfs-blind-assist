@@ -20,7 +20,6 @@ public partial class HS787FMCForm : Form
     private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     private readonly CoherentHS787CduClient _cdu;
-    private readonly SimConnectManager _simConnect;
     private readonly ScreenReaderAnnouncer _announcer;
 
     // Latest screen rows from the bridge (row0..row12)
@@ -43,7 +42,6 @@ public partial class HS787FMCForm : Form
         // bridge, no injected hs787-mfd-bridge.js, no HTML patching. The form owns the client.
         _cdu = new CoherentHS787CduClient();
         _cdu.Start();
-        _simConnect = simConnect;
         _announcer = announcer;
 
         InitializeComponent();
@@ -71,6 +69,17 @@ public partial class HS787FMCForm : Form
 
         FormClosing += (s, e) =>
         {
+            // Let real app/OS shutdown through: Application.Exit raises FormClosing on
+            // every open form (hidden included) and ABORTS the whole exit if any form
+            // cancels — an unconditional cancel here left the auto-updater stalled
+            // against a still-running exe. Everything else still hides.
+            if (e.CloseReason is CloseReason.ApplicationExitCall
+                or CloseReason.WindowsShutDown
+                or CloseReason.TaskManagerClosing)
+            {
+                return;
+            }
+
             e.Cancel = true;
             Hide();
             if (_previousWindow != IntPtr.Zero)
@@ -217,15 +226,10 @@ public partial class HS787FMCForm : Form
         // Update ListBox
         int savedIndex = fmcDisplay.SelectedIndex;
 
-        fmcDisplay.BeginUpdate();
-        while (fmcDisplay.Items.Count > lines.Count) fmcDisplay.Items.RemoveAt(fmcDisplay.Items.Count - 1);
-        while (fmcDisplay.Items.Count < lines.Count) fmcDisplay.Items.Add("");
-        for (int i = 0; i < lines.Count; i++)
-        {
-            if (fmcDisplay.Items[i]?.ToString() != lines[i])
-                fmcDisplay.Items[i] = lines[i];
-        }
-        fmcDisplay.EndUpdate();
+        // Shared in-place reconcile (grow/shrink tail + rewrite changed rows). This form's own
+        // selection semantics run BELOW and override the helper's content-based restore —
+        // CDU screens are positional (LSK rows), so index restore / page force-select wins.
+        Forms.DisplayList.UpdateInPlace(fmcDisplay, lines);
 
         // Announce title change
         string title = rows[0].Trim();
@@ -236,7 +240,7 @@ public partial class HS787FMCForm : Form
             if (fmcDisplay.Items.Count > 0)
                 fmcDisplay.SelectedIndex = 0;
         }
-        else if (savedIndex >= 0 && savedIndex < fmcDisplay.Items.Count)
+        else if (savedIndex >= 0 && savedIndex < fmcDisplay.Items.Count && fmcDisplay.SelectedIndex != savedIndex)
         {
             fmcDisplay.SelectedIndex = savedIndex;
         }

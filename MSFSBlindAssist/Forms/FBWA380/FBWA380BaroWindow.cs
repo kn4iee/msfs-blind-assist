@@ -10,18 +10,19 @@ namespace MSFSBlindAssist.Forms.FBWA380;
 //   QNH value : aircraft.ApplyUIVariable("CAPT_QNH_SET", v, ...) — validates,
 //               converts to mb*16, fires K:KOHLSMAN_SET (moves BOTH altimeters).
 //   STD/QNH   : aircraft.ApplyUIVariable("A32NX_FCU_LEFT/RIGHT_EIS_BARO_IS_STD",...)
-//               → HandleUIVariableSet fires H:A380X_EFIS_CP_BARO_{PULL|PUSH}_{1|2}
-//               (PULL=STD, PUSH=QNH; MsfsBaroManager.ts). State is read back from
+//               → HandleUIVariableSet fires A32NX.FCU_EFIS_{L|R}_BARO_{PUSH|PULL}
+//               (PUSH=STD, PULL=QNH — opposite of the A32NX knob; the name and the
+//               polarity evidence live on BaroModeEvent). State is read back from
 //               KOHLSMAN SETTING STD:1 via the re-keyed def (IS_STD L:vars removed
 //               in dev FBW).
-//   Unit      : aircraft.ApplyUIVariable("XMLVAR_Baro_Selector_HPA_1", ...)
-//               + "_2" (dev FBW honors only _1 — upstream FIXME; set both).
+//   Unit      : aircraft.ApplyUIVariable("A32NX_FCU_EFIS_L_BARO_IS_INHG", ...) + "_R_" — the
+//               EFIS-CP selector's own var since FBW #10855 (1 = inHg), which the FCU reads
+//               every frame. NOT XMLVAR_Baro_Selector_HPA_{1,2}: nothing reads that any more.
 public class FBWA380BaroWindow : FBWA380FCUWindowBase
 {
     private readonly ComboBox modeCombo;
     private readonly ComboBox unitCombo;
     private readonly TextBox valueTextBox;
-    private readonly Button setButton;
     private bool suppressUiEvents;
     private System.Windows.Forms.Timer? _modeTimer;
     // Set on every user-driven combo change. SeedFromSim skips re-seeding within
@@ -61,13 +62,10 @@ public class FBWA380BaroWindow : FBWA380FCUWindowBase
             AccessibleName = "Altimeter value", AccessibleDescription = "Enter altimeter value, Enter to set"
         };
         valueTextBox.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.Handled = true; e.SuppressKeyPress = true; HandleSet(); } };
-        setButton = new Button { Text = "Set", Location = new Point(190, 65), Size = new Size(90, 30), TabIndex = 3, AccessibleName = "Set Altimeter" };
-        setButton.Click += (s, e) => HandleSet();
         var closeButton = new Button { Text = "Close", Location = new Point(130, 130), Size = new Size(140, 35), TabIndex = 4, DialogResult = DialogResult.OK, AccessibleName = "Close" };
         closeButton.Click += (s, e) => Close();
 
-        Controls.AddRange(new Control[] { modeLabel, modeCombo, unitLabel, unitCombo, valueLabel, valueTextBox, setButton, closeButton });
-        AcceptButton = setButton;
+        Controls.AddRange(new Control[] { modeLabel, modeCombo, unitLabel, unitCombo, valueLabel, valueTextBox, closeButton });
         CancelButton = closeButton;
 
         SeedFromSim();
@@ -91,8 +89,8 @@ public class FBWA380BaroWindow : FBWA380FCUWindowBase
             // STD state: read from KOHLSMAN SETTING STD:1 via the re-keyed IS_STD def.
             bool std = (simConnect.GetCachedVariableValue("A32NX_FCU_LEFT_EIS_BARO_IS_STD") ?? 0) > 0.5;
             modeCombo.SelectedIndex = std ? 1 : 0;
-            // Unit: XMLVAR_Baro_Selector_HPA_1 (1=hPa, 0=inHg). Keep last unit in STD mode.
-            bool inHg = (simConnect.GetCachedVariableValue("XMLVAR_Baro_Selector_HPA_1") ?? 1) < 0.5;
+            // Unit: the captain's selector, A32NX_FCU_EFIS_L_BARO_IS_INHG (1 = inHg). Keep last unit in STD mode.
+            bool inHg = (simConnect.GetCachedVariableValue("A32NX_FCU_EFIS_L_BARO_IS_INHG") ?? 0) > 0.5;
             if (!std)
                 unitCombo.SelectedIndex = inHg ? 1 : 0;
             else if (unitCombo.SelectedIndex < 0)
@@ -107,7 +105,6 @@ public class FBWA380BaroWindow : FBWA380FCUWindowBase
         bool std = modeCombo.SelectedIndex == 1;
         unitCombo.Enabled = !std;
         valueTextBox.Enabled = !std;
-        setButton.Enabled = !std;
     }
 
     private void ModeChanged(object? sender, EventArgs e)
@@ -127,9 +124,9 @@ public class FBWA380BaroWindow : FBWA380FCUWindowBase
         if (suppressUiEvents) return;
         _lastUserChangeUtc = DateTime.UtcNow;
         bool inHg = unitCombo.SelectedIndex == 1;
-        // XMLVAR_Baro_Selector_HPA_1/2: 1=hPa, 0=inHg. Dev FBW honors _1; set _2 anyway.
-        aircraft.ApplyUIVariable("XMLVAR_Baro_Selector_HPA_1", inHg ? 0 : 1, simConnect, announcer);
-        aircraft.ApplyUIVariable("XMLVAR_Baro_Selector_HPA_2", inHg ? 0 : 1, simConnect, announcer);
+        // Both EFIS-CP unit selectors (1 = inHg), the way the Baro window sets both altimeters.
+        aircraft.ApplyUIVariable("A32NX_FCU_EFIS_L_BARO_IS_INHG", inHg ? 1 : 0, simConnect, announcer);
+        aircraft.ApplyUIVariable("A32NX_FCU_EFIS_R_BARO_IS_INHG", inHg ? 1 : 0, simConnect, announcer);
         // No announcement: the screen reader already announces the combo change.
     }
 
@@ -140,9 +137,10 @@ public class FBWA380BaroWindow : FBWA380FCUWindowBase
 
     private void HandleSet()
     {
-        if (!setButton.Enabled) return;
+        // STD: the value box is disabled with the unit (UpdateControlState), so nothing is set.
+        if (!valueTextBox.Enabled) return;
         string input = valueTextBox.Text.Trim();
-        if (!double.TryParse(input, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double v))
+        if (!Utils.NumberParsing.TryParseTyped(input, out double v))
         { announcer.AnnounceImmediate("Invalid number format"); valueTextBox.SelectAll(); return; }
         bool inHg = unitCombo.SelectedIndex == 1;
         double hpa = inHg ? v * 33.8639 : v;

@@ -2,7 +2,7 @@
 
 Index of the dev/debug tools in this directory. **Full guide: [`../docs/tooling.md`](../docs/tooling.md)** — read it for the shared transport (the MSFS Coherent GT remote debugger on `:19999`), how to run each tool, and crash diagnosis.
 
-For the *methodology* of proving a control works (calculator-path write-stick test, the write-mechanism decision tree, the case studies), see the **VARIABLE / CONTROL TROUBLESHOOTING PLAYBOOK** in [`../CLAUDE.md`](../CLAUDE.md).
+For the *methodology* of proving a control works (calculator-path write-stick test, the write-mechanism decision tree, the case studies), see the **VARIABLE / CONTROL TROUBLESHOOTING PLAYBOOK** in [`../docs/troubleshooting-playbook.md`](../docs/troubleshooting-playbook.md).
 
 ---
 
@@ -28,8 +28,14 @@ For the *methodology* of proving a control works (calculator-path write-stick te
 | Project | Job |
 |---|---|
 | [`fbw-mcdu-probe/`](fbw-mcdu-probe/README.md) | Inspect/drive/capture the **A32NX** MCDU over the SimBridge websocket (no C# app). `mcdu-format.js` = authoritative decode ref (sync with `Services/FbwMcduFormat.cs`). |
-| [`flypad-shell-test/`](flypad-shell-test/) | Canonical keyed-DOM-reconcile spec for the flyPad WebView2 shell (jsdom). |
+| [`flypad-shell-test/`](flypad-shell-test/) | Canonical keyed-DOM-reconcile spec for the flyPad WebView2 shell (jsdom; also run in CI). |
 | [`efb-dom-tool.js`](efb-dom-tool.js) | Node CDP scraper/clicker for the **A32NX** EFB. |
+
+## Standalone Python scripts
+
+| Project | Job |
+|---|---|
+| [`fenix-gateway/`](fenix-gateway/README.md) | Python scripts for the **Fenix** v3 gateway's web apps: `fetch_gateway_bundles.py` reads (HTTP GET only) your own running Fenix at `127.0.0.1:8083` and saves its EFB/FAP bundles; `option_labels.py` reads a saved chunk file, not the gateway, and extracts the EFB's option labels (feeds `Services/FenixOptionLabels.cs`). |
 
 ## Reference catalogs (`*.md`)
 
@@ -41,4 +47,4 @@ Static research notes mined from FBW source (var names, page-index maps): `a380-
 
 ## Pre-existing — do NOT modify
 
-`PMDGDispatchTester/` and `CDUTest/` predate the FBW work and are independent PMDG console apps (not Coherent tooling). See [`../CLAUDE.md`](../CLAUDE.md) → Build Commands. Leave them untouched.
+`PMDGDispatchTester/` and `CDUTest/` predate the FBW work and are independent PMDG console apps (not Coherent tooling). See [`../docs/development.md`](../docs/development.md#build-output-and-traps) → Build output and traps. Leave them untouched.

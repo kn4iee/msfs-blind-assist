@@ -56,7 +56,11 @@ public sealed class VisualGuidanceProfile
     /// <summary>Pitch (degrees) at which the tone frequency saturates to the min/max. Default
     /// is ±6°, which covers the transport-jet approach envelope (-3° glideslope, +6° flare
     /// AoA at the saturation edge) and gives a **50 Hz/° matching slope** — 67% more sensitive
-    /// than the AudioToneGenerator's native ±10° default (30 Hz/°). At this slope a 0.1° pitch
+    /// than the AudioToneGenerator's native nose-DOWN default (−10°, 30 Hz/°). That native
+    /// default is ASYMMETRIC: its nose-up half is +20° at 15 Hz/°, widened for hand fly's
+    /// liftoff auto-activation, so against that half the gain is larger still. This value is
+    /// applied SYMMETRICALLY (Configure takes one pitch range), which is what keeps the
+    /// visual-guidance mapping a single straight line. At this slope a 0.1° pitch
     /// error produces a 5 Hz beat (slow audible wobble); 0.5° produces a 25 Hz beat (clear
     /// fluttering). Wider envelopes (aerobatic, fighter) should raise this; tighter envelopes
     /// can lower it further for even finer resolution near zero (at the cost of earlier
@@ -240,6 +244,10 @@ public interface IAircraftDefinition
     /// </summary>
     void OnPanelButtonFired(string varKey, SimConnect.SimConnectManager simConnect, Accessibility.ScreenReaderAnnouncer announcer);
 
+    /// <summary>Called just before a panel Event-type button's event is sent, so an aircraft can arm
+    /// anything that must be in place before the sim can answer (the FCU value echo).</summary>
+    void OnPanelButtonFiring(string varKey);
+
     /// <summary>
     /// Called once after a panel is built/shown, so an aircraft with a multi-page
     /// status box (driven by a page combo) can populate the box with the combo's
@@ -256,6 +264,18 @@ public interface IAircraftDefinition
     /// </summary>
     bool TryGetDisplayOverride(string varKey, double value, out string displayText);
 
+    /// <summary>
+    /// Lets an aircraft compose the SPOKEN STATE of a panel control (a button's label suffix or a
+    /// read-only status row's text) from several variables it reads itself — the TFDi MD-11's
+    /// legend lamps plus latching var plus DC-power gate. Return true and set
+    /// <paramref name="stateText"/> ("On", "Available, On", "unpowered"); return false to fall
+    /// through to the StateVariable / ValueDescriptions labelling. Called on the UI thread when a
+    /// panel is built and whenever a key in the control's
+    /// <see cref="SimConnect.SimVarDefinition.StateVariables"/> updates; must read cached values
+    /// only, never request.
+    /// </summary>
+    bool TryDescribeControlState(string varKey, out string stateText);
+
     // Variable Update Processing
 
     /// <summary>
@@ -269,6 +289,29 @@ public interface IAircraftDefinition
     /// <param name="announcer">Screen reader announcer for user feedback</param>
     /// <returns>True if the update was fully processed and no further generic processing needed, false otherwise</returns>
     bool ProcessSimVarUpdate(string varName, double value, Accessibility.ScreenReaderAnnouncer announcer);
+
+    /// <summary>
+    /// True when <see cref="ProcessSimVarUpdate"/> for <paramref name="varName"/> speaks a call-out that
+    /// ANOTHER Ctrl+M row owns. MainForm's mute wrap (<see cref="Services.DefAnnounceMuteSets"/>)
+    /// skips such a variable: applied there, muting this variable's row would also silence the
+    /// other row's call-out. Its branch checks each call-out's own row itself, and anything the
+    /// variable says for ITSELF either falls through to the generic monitor, which checks this row
+    /// after the return, or checks it locally. Only the mute half of the wrap is skipped; the
+    /// UI-echo half still applies.
+    /// </summary>
+    bool IsMuteWrapExempt(string varName);
+
+    /// <summary>
+    /// The per-SIM_FRAME airspeed feed of this aircraft's take-off roll callouts
+    /// (<see cref="TakeoffVSpeedCallouts"/>), or null when it has none. MainForm pauses that one
+    /// subscription while <see cref="TakeoffCalloutFeedNeeded"/> is false and resumes it when it turns
+    /// true again, checked after every delivery of the feed and of <c>SIM_ON_GROUND</c>.
+    /// </summary>
+    string? TakeoffCalloutFeedKey { get; }
+
+    /// <summary>Whether the callouts need the feed now — on the ground, or on a roll still armed
+    /// (<see cref="TakeoffVSpeedCallouts.NeedsSamples"/>). Meaningless without a feed key.</summary>
+    bool TakeoffCalloutFeedNeeded { get; }
 
     // UI Variable Setting (Panel Controls)
 
@@ -287,6 +330,68 @@ public interface IAircraftDefinition
     bool HandleUIVariableSet(string varKey, double value, SimConnect.SimVarDefinition varDef,
         SimConnect.SimConnectManager simConnect, Accessibility.ScreenReaderAnnouncer announcer);
 
+    /// <summary>
+    /// A typed panel field's raw text (Enter in a "_SET" box), offered before the text is parsed for
+    /// <see cref="HandleUIVariableSet"/>. True when the aircraft handled it, and the numeric call is then
+    /// not made. For a field whose words depend on what was typed, which the parsed double cannot tell
+    /// apart (an empty box and letters both arrive as NaN): the BlueBird 757's squawk field. Default:
+    /// not handled, so every other aircraft keeps the numeric path unchanged.
+    /// </summary>
+    bool HandleUITypedText(string varKey, string text, SimConnect.SimVarDefinition varDef,
+        SimConnect.SimConnectManager simConnect, Accessibility.ScreenReaderAnnouncer announcer) => false;
+
+    /// <summary>
+    /// Engage the autopilot for the universal auto-AP-engage feature. The default fires the
+    /// stock <c>AUTOPILOT_ON</c> event. Aircraft whose autopilot ignores or misreads that event
+    /// override this to press their own engage switch: the PMDG jets (CMD A on the 737, A/P L on
+    /// the 777), the FlyByWire family (AP 1 — FBW captures AUTOPILOT_ON into a flag nothing
+    /// reads, FO-21), the iFly 737 (CMD A), the TFDi MD-11 (AUTO FLIGHT) and the Fenix (the FCU's
+    /// AP1 pushbutton). Implementations should no-op unless the autopilot reads definitely off,
+    /// so a toggle-style engage switch can't disconnect it.
+    /// </summary>
+    void EngageAutopilot(SimConnect.SimConnectManager simConnect);
+
+    /// <summary>
+    /// Hard floor (ft AGL) below which THIS aircraft's autopilot refuses to engage, so the
+    /// universal auto-engage never presses into a rejection. 0 = no floor. The PMDG 737's
+    /// AFDS inhibits CMD engagement below 400 ft RA after takeoff — pressing at the 350 ft
+    /// default was silently rejected by the aircraft (the 2026-08 "AP never engages" bug).
+    /// </summary>
+    int MinimumAutopilotEngageAltitudeAgl { get; }
+
+    /// <summary>
+    /// Whether the autopilot is currently engaged: <c>true</c>/<c>false</c> when the aircraft
+    /// can be read, <c>null</c> when it exposes no engaged state OR its data feed isn't ready
+    /// yet. Never return <c>false</c> for "don't know" — the universal auto-engage retries a
+    /// definitive <c>false</c>, and the PMDG engage switches are TOGGLES, so a guessed
+    /// <c>false</c> over an engaged autopilot would disconnect it.
+    /// </summary>
+    bool? IsAutopilotEngaged(SimConnect.SimConnectManager simConnect);
+
+    /// <summary>
+    /// Minimum time (ms) the universal auto-engage waits after an attempt, a press or a wait for a
+    /// reading, before trying again or giving up. 0 = retry every tick (the stock, idempotent
+    /// <c>AUTOPILOT_ON</c>). An aircraft whose engage is a TOGGLE and whose engaged state reaches the
+    /// cache no faster than the 1 Hz feed sets 3000 (the FlyByWire family, FO-21; the PMDG 737 and
+    /// 777, the iFly 737, the TFDi MD-11 and the Fenix), so a retry never lands on an autopilot the
+    /// previous press already engaged.
+    /// </summary>
+    int AutopilotEngageRetryIntervalMs { get; }
+
+    /// <summary>
+    /// True where the universal auto-engage must never press while <c>IsAutopilotEngaged</c> reads
+    /// <c>null</c>. The service waits for a definite reading instead, and if none comes within its
+    /// attempts it gives the Captain call. Every aircraft whose engage is a toggle sets it: the
+    /// FlyByWire family (FO-21, the AP 1 push), the PMDG 737 and 777 (CMD A, A/P L, null until the
+    /// first CDA snapshot), the iFly 737 (CMD A), the TFDi MD-11 (AUTO FLIGHT, whose own engage presses
+    /// nothing on an unread state), the Fenix (AP1) and the HorizonSim 787 (its AP_MASTER engage, with
+    /// an engaged read-back): a blind press could disconnect an autopilot that is already on, and their
+    /// <c>null</c> means "not read yet". False (the default) takes the open-loop press-and-announce on a
+    /// null reading, which only the stock <c>AUTOPILOT_ON</c> aircraft keep (any aircraft without an
+    /// engage of its own).
+    /// </summary>
+    bool AutopilotEngageWaitsForState { get; }
+
     // Display System Monitoring (ECAM for Airbus, EICAS for Boeing, etc.)
     // Aircraft without these systems should use the default implementation (does nothing)
 
@@ -304,6 +409,127 @@ public interface IAircraftDefinition
     /// </summary>
     void StopDisplayMonitoring(SimConnect.SimConnectManager simConnect);
 
+    /// <summary>
+    /// Re-baseline the definition's "first reading is silent" trackers. Called on a
+    /// SimConnect RECONNECT as well as an aircraft switch: the definition object survives
+    /// a reconnect while SimConnect clears its value cache, so a tracker not reset here
+    /// compares flight 2's first reading against a value spoken on flight 1 and announces
+    /// a phantom change. MainForm resets its OWN trackers (ice, turbulence, SIGMET
+    /// proximity, turnaround) at the same site; this is the definition-owned half. Aircraft
+    /// with no such trackers should use the default implementation (does nothing).
+    ///
+    /// ⚠️ A definition that adds a tracker gated on a "not yet seen" sentinel — a -1, a
+    /// bool?, a _prev*/_last* consulted before announcing, a ??= latch, an absent-key
+    /// check on a Dictionary — MUST reset it. This list is maintained BY HAND, not
+    /// generated: two separate review sweeps of FlyByWireA380Definition/
+    /// FlyByWireA320Definition have each found it incomplete, so it is only ever as
+    /// complete as the last person who remembered to extend it when they added a tracker.
+    /// ⚠️ But reset it in <see cref="OnSimContextReset"/>, not here: this runs on the Connected
+    /// branch AFTER the reconnect's first batch has re-fired every variable, so a sentinel reset
+    /// here eats the next real change (see OnSimContextReset). What belongs here is what must not
+    /// survive into the new session whatever the ordering — latches, pending timers, an armed
+    /// state machine.
+    /// </summary>
+    void ResetAnnouncementBaselines();
+
+    /// <summary>
+    /// The values about to arrive describe a DIFFERENT situation from the ones before: the
+    /// simulator connection has just dropped (SimConnectManager.ConnectionLost, raised on every
+    /// drop — never on a failed connection attempt), or a flight or aircraft has just been
+    /// loaded (the AircraftLoaded system event, which fires before the new aircraft's variables
+    /// settle). This — not <see cref="ResetAnnouncementBaselines"/> — is
+    /// where a baseline-first tracker (a "not yet seen" sentinel, a first-sample seed) is wiped,
+    /// so the next delivery of each variable re-seeds it silently and the change AFTER that
+    /// speaks. Ordering is the whole point: after a reconnect the cache is cleared, so every
+    /// variable re-fires once into ProcessSimVarUpdate, and that first delivery lands BEFORE the
+    /// Connected branch calls ResetAnnouncementBaselines; a tracker wiped there loses the
+    /// baseline it has just taken and eats the NEXT real change as its baseline — on the MD-11
+    /// that was the first master caution, the first COM tune, the first altimeter wind and the
+    /// pilot's first perf entry of every reconnected session (found 2026-09-08). The base
+    /// (BaseAircraftDefinition) starts the FCU hardware-dial announcer's settle here (a drop then
+    /// upgrades it through <see cref="OnVariableCacheCleared"/>), so an override on an aircraft that
+    /// uses AnnounceFcuValue must call base; otherwise definitions with no such trackers need not
+    /// override it. ⚠️ The two callers differ: a
+    /// disconnect clears the cache, so the reconnect re-fires EVERY variable and a wiped tracker
+    /// re-seeds on delivery; a flight load clears nothing and the batch fires only on a CHANGED
+    /// value, so a tracker wiped for it must be re-seeded from the cache once the values have
+    /// settled (the MD-11's SeedFromCache, released by its Md11SeedGate on the batch deliveries'
+    /// evidence — a full cycle, a change of the aircraft's own, then quiet — through
+    /// <see cref="OnContinuousBatchDelivered"/>;
+    /// never a wall clock) or the wipe eats its first change.
+    ///
+    /// ⚠️ Both halves of that ordering are shared code, so the finding APPLIES to the FBW and
+    /// iFly definitions too: each sentinel they reset in ResetAnnouncementBaselines eats its
+    /// first post-reconnect change (a COM tune, a baro wind, a squawk, a thrust detent…). Only
+    /// the per-tracker consequences are unreviewed; moving those resets here is the fix.
+    /// </summary>
+    void OnSimContextReset();
+
+    /// <summary>
+    /// The SimConnect variable cache was cleared on a connection drop, so the reconnect re-fires every
+    /// variable. Called right after <see cref="OnSimContextReset"/> by MainForm.OnConnectionLost. The base
+    /// makes the FCU callouts' settle treat that re-fire as the aircraft publishing (Md11SeedGate's rule).
+    /// </summary>
+    void OnVariableCacheCleared();
+
+    /// <summary>
+    /// A continuous batch has finished dispatching: every SimVarUpdated it carried has reached
+    /// ProcessSimVarUpdate, whether or not anything in it moved. Raised on the UI thread after
+    /// that batch's updates, for every delivery the UI thread can vouch for — MainForm skips one
+    /// it would be servicing off-thread or with updates still queued, and the next delivery of
+    /// that batch is a period later — so it is evidence that the cache is current for a sample,
+    /// not a guarantee of one call per period. The MD-11's context-reset seed pass waits on a
+    /// full cycle of these and on the deliveries going quiet (Md11SeedGate);
+    /// <see cref="DeferredFlushWatchVariable"/> is the narrower "the batch carrying THIS
+    /// variable arrived" form. The base counts the delivery toward the FCU hardware-dial announcer's
+    /// settle and speaks the FCU callouts staged while this batch dispatched (a callout is judged on
+    /// the whole sample, with the FCU health var wherever it sorts in the batch), so an override on an
+    /// aircraft that uses AnnounceFcuValue must call base.
+    /// </summary>
+    void OnContinuousBatchDelivered(int batchNum);
+
+    /// <summary>
+    /// An event SimConnectManager queued while the calc-path probe was pending has just been sent
+    /// (SimConnectManager.QueuedEventDispatched). Default (base): restart that event's FCU echo window.
+    /// </summary>
+    void OnQueuedEventDispatched(string eventName);
+
+    /// <summary>
+    /// The monitored variable whose continuous-batch delivery completes an announcement this
+    /// definition is currently HOLDING, or null when nothing is held.
+    ///
+    /// A definition's ProcessSimVarUpdate branch for variable A sometimes needs the value of a
+    /// variable B that is dispatched later in the same 1 Hz sample; naming A inline then reads
+    /// B's PREVIOUS value. Waiting on B's own branch does not work either, because that branch
+    /// runs only when B CHANGED. Waiting on B's BATCH does work: the batch message arrives on
+    /// schedule regardless, so once it has been dispatched, B is current for this sample
+    /// whether or not it moved. Declare B here and the flush arrives through
+    /// <see cref="OnDeferredFlushBatchDelivered"/>.
+    ///
+    /// Where B sorts into a LATER batch than A, this costs at most one batch period; where it
+    /// shares A's batch, the flush lands at the end of that same message (no delay at all).
+    /// Return the LAST-sorting variable when several must be current together — waiting on it
+    /// waits on the others too, whether or not they share a batch.
+    /// </summary>
+    string? DeferredFlushWatchVariable { get; }
+
+    /// <summary>
+    /// The batch carrying <see cref="DeferredFlushWatchVariable"/> has finished dispatching.
+    /// Speak the held announcement, if it is still worth speaking.
+    ///
+    /// ⚠ This runs OUTSIDE MainForm's <c>announcer.Suppressed</c> wrap around
+    /// ProcessSimVarUpdate, so a definition muted centrally (the A32NX family) must consult its
+    /// own Ctrl+M disabled set here.
+    /// </summary>
+    void OnDeferredFlushBatchDelivered(Accessibility.ScreenReaderAnnouncer announcer);
+
+    /// <summary>
+    /// Drop any held announcement without speaking it. Called when the context it belongs to is
+    /// gone (SimConnect disconnect, aircraft swap, shutdown) — a held call-out must never be
+    /// spoken at a different aircraft, or after the sim it describes has gone away.
+    /// </summary>
+    void CancelDeferredFlush();
+
     // Visual Landing Guidance Profile
 
     /// <summary>
@@ -319,7 +545,51 @@ public interface IAircraftDefinition
     /// centres BEFORE the nose reaches the new heading (pilot reaction time +
     /// airframe yaw inertia). Per-aircraft because sim steering response
     /// differs sharply: FBW Airbuses overshoot chronically; PMDG Boeings
-    /// barely at all. 0 disables the projection.
+    /// barely at all. 0 disables the projection. On an aircraft that sets a different
+    /// <see cref="TaxiSharpTurnLeadSeconds"/>, this is the lead for gentle turns.
     /// </summary>
     double TaxiTurnLeadSeconds { get; }
+
+    /// <summary>
+    /// Taxi-turn lead, seconds, once a turn has swept past
+    /// <c>GuidanceGeometry.SHARP_TURN_RAMP_END_DEG</c> of heading; the lead ramps from
+    /// <see cref="TaxiTurnLeadSeconds"/> from <c>SHARP_TURN_RAMP_START_DEG</c>. For an airframe
+    /// that carries more swing out of a big turn than a small one. Base default: equal to
+    /// <see cref="TaxiTurnLeadSeconds"/>, a constant lead.
+    /// </summary>
+    double TaxiSharpTurnLeadSeconds { get; }
+
+    /// <summary>
+    /// Ceiling, degrees, on the heading the taxi-turn lead may anticipate
+    /// (|yawRate × lead| is clamped to it). Per-aircraft because it binds only on an
+    /// airframe that taxis at high yaw rates with a long lead: at 30° a 1.7 s lead stops
+    /// growing above 17.6°/s. Base default 30.
+    /// </summary>
+    double TaxiTurnLeadMaxDegrees { get; }
+
+    /// <summary>
+    /// True when this aircraft announces its own ice accretion (e.g. the FBW A380's
+    /// ice-stick announcer). MainForm's generic STRUCTURAL ICE PCT announcer is
+    /// skipped entirely for such aircraft so an icing episode never speaks twice —
+    /// the same one-condition-one-call-out rule as the PB-light/ECAM-memo invariant.
+    /// </summary>
+    bool HasOwnIcingAnnouncer { get; }
+
+    /// <summary>
+    /// True when this aircraft plays its own take-off speed callouts (the BlueBird 757 calls 80 knots,
+    /// V1 and rotate itself). Takeoff Assist then does not call "80 knots" on it, so a roll never hears
+    /// it twice; its "100 knots", which the aircraft does not call, its centerline tone and its pitch
+    /// calls are unchanged. False (the default) keeps both speed calls, which every
+    /// other aircraft does: the definition-owned V1 / Rotate / V2 machines
+    /// (<see cref="TakeoffVSpeedCallouts"/>) are separate and are not governed by this.
+    /// </summary>
+    bool PlaysOwnTakeoffSpeedCallouts { get; }
+
+    /// <summary>
+    /// Null when this aircraft's COM 1 takes the stock tuning events (COM_STBY_RADIO_SET_HZ,
+    /// COM1_RADIO_SWAP) the surroundings window's Frequencies list sends on Enter / Shift+Enter;
+    /// otherwise the sentence to speak INSTEAD of sending them. The FBW A380 ignores them
+    /// (live-verified: its radios tune only through the RMP).
+    /// </summary>
+    string? StockComTuningRefusal { get; }
 }

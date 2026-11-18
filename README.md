@@ -1,6 +1,6 @@
 # MSFS Blind Assist
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue.svg)
-[![.NET 9](https://img.shields.io/badge/.NET-9-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/9.0)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
 ![GitHub Downloads](https://img.shields.io/github/downloads/oasis1701/msfs-blind-assist/total.svg)
 
 > A screen reader accessible Windows application allowing totally blind flight simulation enthusiasts to control and fly aircraft in Microsoft Flight Simulator with a keyboard and their choice of peripherals.
@@ -8,6 +8,17 @@
 ## About
 
 This application uses Windows standard controls, screen reader announcements and global hotkeys to give full control of supported aircraft in MSFS2020 and MSFS2024 to people who are blind or visually impaired.
+
+## Download
+
+- **Stable release:** [Download MSFSBA.zip (latest release)](https://github.com/oasis1701/msfs-blind-assist/releases/latest/download/MSFSBA.zip). The release notes are on the [latest release page](https://github.com/oasis1701/msfs-blind-assist/releases/latest), and older versions on the [Releases page](https://github.com/oasis1701/msfs-blind-assist/releases).
+- **Preview build:** [Download MSFSBA-preview.zip (rolling preview)](https://github.com/oasis1701/msfs-blind-assist/releases/download/preview/MSFSBA-preview.zip). The preview is rebuilt every time a change lands on `main`, so it has the newest work, reviewed and tested, but with far less flying time than a release: bugs and stability problems are more likely. Everything it contains since the last release is listed on the [preview release page](https://github.com/oasis1701/msfs-blind-assist/releases/tag/preview).
+
+Both builds come as a zip. Extract it to a folder of your choice and run `MSFSBlindAssist.exe`. To update by hand, close MSFS Blind Assist and extract the new zip over the same folder.
+
+MSFS Blind Assist needs the **.NET 10 Desktop Runtime (x64)** from the [.NET 10 download page](https://dotnet.microsoft.com/download/dotnet/10.0). If it is missing, the app says so when you start it and points you to the download.
+
+Once installed, the app checks GitHub for updates at startup and installs them for you. It offers release builds by default; switch to the preview channel under **Settings → Updates** to be offered previews as well. See [Updates and release channels](docs/updates.md) for the details, including how to go back from a preview to a release.
 
 ## Features
 - Panels for supported aircraft that allow blind users to use their keyboard to scroll through switches, knobs, and similar controls and interact with them.
@@ -20,12 +31,14 @@ This application uses Windows standard controls, screen reader announcements and
 - Additional tools to assist visually impaired pilots to fly, for example, take-off assistance which announces when the pilot is deviating from the runway, as well as pitch monitoring.
 - Touchdown feedback on every aircraft: read your last landing rate (touchdown vertical speed) and the peak g-force of the landing with a hotkey.
 - Aircraft-specific dedicated systems. On the FlyByWire A32NX for example, blind users can hear and read all engine and display warning messages, read fuel and payload and weight/balance details in full, hear Flight Mode Annunciator messages, get on-demand information on next waypoint, etc.
-- An extensive text-based location and map viewer. Configurable with filters, lets users read direction and distance to major and small cities, landmarks, terrain and water bodies while they fly!
+- An extensive text-based location and map viewer. Configurable with filters, lets users read direction and distance to major and small cities, landmarks, terrain and water bodies while they fly, plus the sea, bay or lake they are over and how far the coast is! It works offline from free location data (GeoNames and Natural Earth) downloaded once from the settings, with no account needed.
 - A full-featured flight plan route viewer that supports SID, STAR and approach procedures, with waypoint tracking during flight.
 - Airport and runway lookup
 - Much more
 
 ## Requirements
+
+Windows 10 or 11 (64-bit) with the **.NET 10 Desktop Runtime (x64)**; see [Download](#download).
 
 ### MobiFlight WASM module
 
@@ -43,7 +56,7 @@ Full accessibility support for the free FlyByWire A32NX.
 - The PFD, ND, ISIS and System Display pages are read through the accessible panel status boxes; the E/WD also opens as a pop-out window (Alt+E).
 - All FCU controls accessible, with dedicated value-entry windows (speed, heading, altitude, V/S, autopilot, altimeter) and knob push/pull.
 - Fuel, payload, weight and balance details fully supported.
-- MCDU accessible directly through FBW's SimBridge for full FMS programming.
+- MCDU accessible straight from the aircraft's own display for full FMS programming (FBW's SimBridge is optional: used for printouts, and as a fallback).
 - Accessible **DCDU (CPDLC datalink) window**, opened with Ctrl+Shift+D: read ATC uplinks and answer them — WILCO, STANDBY, UNABLE, and the real two-step send — with any FBW ACARS provider (Hoppie, SayIntentions, BeyondATC).
 - Spoken **TCAS guidance**: traffic and resolution advisories announce as they happen, including the "what to fly" vertical-speed instruction during a resolution advisory.
 - Accessible flyPad EFB (Electronic Flight Bag), opened with Shift+T: the live flyPad tablet is rendered as a browsable document you read and operate with your screen reader — Dashboard, Ground Services, Payload, Fuel, Settings, Navigraph, Checklists and more. (This supersedes the old mouse-coordinate workaround — the EFB is now fully accessible.)
@@ -58,7 +71,7 @@ MSFS Blind Assist now supports the Fenix A320. It allows totally blind individua
 - Using the power of Google Gemini to read Fenix displays, such as ECAM, ISIS, PFD and Navigation displays, Requires users own free AIStudio API key.
 - All our previous features are already integrated to this aircraft as well, including the route viewer, gate/runway teleport, metar report, our full-featured location info and text-based map and many more.
 - Comes with a hotkey list guide that shows all the global hotkeys that are currently supported through the input and output modes.
-- Work in progress checklist viewer, easily editable and readable by screen readers.
+- A First Officer, opened with Shift+C in output mode: interactive checklists that tick themselves as the aircraft is set up, and flows the First Officer runs for you.
 
 #### Fenix A320 MCDU access
 
@@ -123,7 +136,15 @@ Full accessibility support for the FlyByWire A380X — the free, high-fidelity A
 - Automatic announcements: Master Warning/Caution, the full **FMA**, autopilot, approach capability, **spoken TCAS guidance** (traffic/resolution advisories with the "what to fly" vertical-speed instruction), ROW/ROP runway-overrun protection, and **OANS + Brake-To-Vacate (BTV)** with dry/wet stopping distance and rollout call-outs.
 - Honours the A380's own units in MSFSBA's read-outs: **metric altitude** (FCU MTRS — every altitude reads, and the FCU altitude input is entered, in metres) and **kg/lb weight**; the clock chronometer and elapsed-time counter; pitch/rudder trim; fuel pumps; and the audio control panel.
 - All our shared features are integrated as well, including taxi guidance, the landing exit planner, route viewer, gate/runway teleport, METAR report, location info and text-based map.
-- A complete screen-reader-first manual ships in `docs/a380-manual.html`.
+- A complete screen-reader-first manual ships in the `Guides` folder (`Guides/a380-manual.html`).
+
+## VATSIM (vPilot)
+
+MSFS Blind Assist can announce VATSIM network activity reported by [vPilot](https://vpilot.rosscarlson.dev/) through your screen reader: connections and disconnections, private messages, radio chatter on the frequencies you're tuned to, and SELCAL alerts.
+
+It's off by default. Turn it on from **Settings → VATSIM**: tick the master switch and press OK, and MSFS Blind Assist finds your vPilot installation and installs the plugin for you — you just need to restart vPilot afterwards so it picks the plugin up. Mute announcements for the rest of a flight at any time with **Output mode > Alt+V**, without opening Settings.
+
+If you used the older standalone `vPilot-to-TTS` tray application, its vPilot plugin is removed automatically the first time this feature installs its own — you only need to uninstall the old tray application yourself.
 
 ## Discord
 Please join us on discord for support or to hang out with us:
@@ -159,11 +180,12 @@ Navdata Reader command-line tool by Alexander Barthel to build the airport and n
 - Gus Pacleb ([@kn4iee](https://github.com/kn4iee), &lt;augustu.pacleb@gmail.com&gt;) — FlyByWire accessibility contributor: the shared accessible flyPad EFB for both FBW jets (WebView2 browser mode over the Coherent DevTools transport — Ground Services / Payload / Fuel, Settings, Quick Controls, door open/closed states, throttle calibration), the FlyByWire A32NX accessible MCDU (SimBridge relay), the FlyByWire A32NX cockpit parity audit pass (decoded SD pages and Upper E/WD, weight-unit and distance/top-of-descent hotkeys, light-switch and V-speed fixes, safety aurals), and the data-only OANS/BTV rework, Fenix-style FCU windows (speed / heading / altitude / V-S / autopilot / baro), screen-faithful MFD F-PLN/PERF/SURV/D-ATIS read-outs and colour-aware E/WD auto-announce on the A380X; plus A380X systems fixes (engine-start ignition fan-out, hydraulics, fuel pumps, seats, cabin lighting, GPU and ground-service announcements, ROW/ROP and BTV rollout call-outs, distance/time-to-destination hotkeys), HorizonSim 787-9 FMC bridge FS2024 support (in-place patching, community-folder detection), PMDG 777 center/right CDU index fixes, and the Coherent-debugger developer tooling
 
 ## Usage and Documentation
-MSFS Blind Assist is available to download in the releases page. It is currently in active development and a small group of testers are using it daily. A thorough documentation is in the works and a hotkey list is included in the application.
+See [Download](#download) above for the current release and preview builds. The complete user guide is online at [msfsblindassist.com/guide](https://msfsblindassist.com/guide/), with a separate edition for the preview build, and comes with the app as one page: Help, User Guide. Its source is the [guide](guide/) folder, which changes together with the app (see [docs/user-guide.md](docs/user-guide.md)). The app also lists every hotkey under File, Hotkey List.
 
-## Donations
-Consider donating to support me and my project! Every bit helps, and it would be extremely helpful. Thank you!
-[Support me on Ko-fi](https://ko-fi.com/oasis1701)
+## Contributing
+Pure-logic changes should come with characterization tests in tests/MSFSBlindAssist.Tests (CI runs them on every PR).
+
+To add an aircraft or a feature, follow the walkthroughs in [docs/adding-features.md](docs/adding-features.md), with the short forms in [docs/QUICK-REFERENCE.md](docs/QUICK-REFERENCE.md). Their code examples compile as part of the test suite.
 
 ## License
 

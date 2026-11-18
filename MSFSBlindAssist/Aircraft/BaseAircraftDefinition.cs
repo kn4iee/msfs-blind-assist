@@ -1,5 +1,7 @@
+using System.Globalization;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -11,17 +13,53 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
 {
     // Cached dictionaries for performance (avoid recreating large dictionaries on every call)
     private Dictionary<string, List<string>>? _cachedPanelControls;
+    private Dictionary<string, SimConnect.SimVarDefinition>? _cachedVariables;
 
     // Elevator trim announcement toggle and debounce.
     // Toggle is protected so aircraft that source trim from a custom variable
     // (e.g. the PMDG 737 reads the L-var ElevTrimTT — the stock ELEVATOR TRIM
     // POSITION SimVar is not driven by the NG3) can honour the shared Shift+T
-    // gate from their own ProcessSimVarUpdate.
+    // gate from their own ProcessSimVarUpdate. An aircraft that keeps the stock
+    // var but speaks its own scale overrides DescribeElevatorTrim instead; the
+    // last-announced KEY below is whatever that override returns (stabiliser
+    // units on the PMDG 777, rounded degrees by default).
     protected bool _trimAnnouncementsEnabled = true;
-    private double _lastAnnouncedTrimDeg = double.NaN;
+    private double _lastAnnouncedTrimKey = double.NaN;
+
+    // A typed trim the pilot was just told about (NoteElevatorTrimAnnounced), by its key, and until when the call-out
+    // waits for the trim to arrive at it. NaN while there is none.
+    private double _typedTrimTargetKey = double.NaN;
+    private long _typedTrimUntilMs;
+
+    /// <summary>
+    /// How long after a typed trim the call-out waits, at most, for the value to arrive at it, in milliseconds. Until then
+    /// every value on the way, and the old trim if it is delivered first, is the pilot's own action and is not spoken
+    /// (CORE-7). Long enough for the A320's whole THS travel (DN 4.0 to UP 13.5) at the trim motor's rate; the travel was
+    /// not measured on the Fenix, so the wait ends early as soon as the target is reached.
+    /// </summary>
+    internal const long TypedTrimTravelMs = 20_000;
+
+    /// <summary>For tests: the clock the typed-trim wait reads, in milliseconds.</summary>
+    internal Func<long> TrimClockMs { get; set; } = () => Environment.TickCount64;
+
+    /// <summary>
+    /// How far past a step boundary a trim value must travel before the new step is spoken, in
+    /// the scale the value ARRIVES in (degrees for <c>MON_ElevatorTrim</c>, units for the PMDG
+    /// 737's own path). Three times the 0.01 hydraulic jitter seen live, and far below any step
+    /// (0.1° default, 0.25 unit on the 777), so a genuine step is never swallowed.
+    /// </summary>
+    protected const double TrimHysteresis = 0.03;
 
     // Glideslope alive/lost tracking
     private bool _previousGlideSlopeAlive = false;
+
+    /// <summary>
+    /// True when the aircraft's VOR and ILS receivers are the sim's own NAV radios, so the stock
+    /// NAV variables say what the cockpit shows. False for an aircraft whose own receivers leave
+    /// the sim's NAV radios untouched: it registers no glideslope row (and so no Ctrl+M row) and the
+    /// shared "Glideslope alive / lost" call-out never speaks, since NAV 1 would be wrong there.
+    /// </summary>
+    public virtual bool UsesStockNavReceivers => true;
 
     // Abstract members from IAircraftDefinition that must be implemented
     public abstract string AircraftName { get; }
@@ -33,7 +71,8 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     /// </summary>
     public virtual string? CurrentFlightPhase => null;
 
-    public abstract Dictionary<string, SimConnect.SimVarDefinition> GetVariables();
+    public Dictionary<string, SimConnect.SimVarDefinition> GetVariables() => _cachedVariables ??= BuildVariables();
+    protected abstract Dictionary<string, SimConnect.SimVarDefinition> BuildVariables();
     public abstract Dictionary<string, List<string>> GetPanelStructure();
 
     /// <summary>
@@ -43,7 +82,7 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     /// </summary>
     protected virtual Dictionary<string, SimConnect.SimVarDefinition> GetBaseVariables()
     {
-        return new Dictionary<string, SimConnect.SimVarDefinition>
+        var vars = new Dictionary<string, SimConnect.SimVarDefinition>
         {
             // Ground state - universal SimConnect variable that works with all aircraft
             ["SIM_ON_GROUND"] = new SimConnect.SimVarDefinition
@@ -70,7 +109,20 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "feet",
                 UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
-                IsAnnounced = true  // Required for batched continuous monitoring (custom logic handles actual announcements)
+                IsAnnounced = true,  // Required for batched continuous monitoring (custom logic handles actual announcements)
+                // Never spoken from the generic monitor path: ProcessSimVarUpdate (below) returns
+                // true for this key without ever calling announcer.Announce, so the generic
+                // wasProcessedByAircraft early-return in MainForm.OnSimVarUpdated fires before
+                // Step 6's per-aircraft mute check is ever reached. The mute WRAP around that
+                // call (announcer.Suppressed) still runs when the row is unchecked - it just
+                // wraps a no-op here, since the real 1,000-ft callout is produced separately and
+                // earlier, by HandleSpecialAnnouncements → AltitudeCalloutAnnouncer. So its
+                // Ctrl+M row could never silence anything. It also collided with the MCP
+                // "Altitude" row on the PMDG 737 and 777, leaving the pilot two identical
+                // checkboxes, one of them inert. The pilot's real control is the "Announce
+                // 1,000-foot altitude crossings" checkbox on the Announcements settings tab
+                // (UserSettings.AltitudeCalloutsEnabled), which AltitudeCalloutAnnouncer gates on.
+                ExcludeFromMonitorManager = true
             },
 
             // Ground speed - universal SimConnect variable feeding the GLOBAL ground-speed
@@ -87,7 +139,18 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
                 Type = SimConnect.SimVarType.SimVar,
                 Units = "knots",
                 UpdateFrequency = SimConnect.UpdateFrequency.Continuous,
-                IsAnnounced = true
+                IsAnnounced = true,
+                // Its Ctrl+M row could never silence anything either: the GROUND_VELOCITY
+                // case in HandleSpecialAnnouncements (above) is reached at Step 2 of
+                // MainForm.OnSimVarUpdated and returns true, which is a TERMINAL return -
+                // the method exits right there. The announcer.Suppressed wrap and the
+                // per-aircraft disabled-variable check that a Ctrl+M un-tick relies on both
+                // live at Step 2.5 and later, so neither is ever reached for this key. The
+                // pilot's real control for these callouts is the ground-speed announce-
+                // interval setting (UserSettings.TaxiGuidanceGroundSpeedAnnounceInterval /
+                // TakeoffAssistGroundSpeedAnnounceInterval), which the announcer already
+                // self-gates on.
+                ExcludeFromMonitorManager = true
             },
             // Vertical g-force — fed continuously to the LandingRateAnnouncer so it can capture
             // the PEAK g of a touchdown (the ReadLastLandingPeakG output hotkey). Not announced
@@ -104,10 +167,12 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
                 // 1 Hz continuous batch missed the touchdown impact spike entirely, so
                 // the peak-g readout under-reported every landing. MainForm routes
                 // G_FORCE to the landing tracker and suppresses the generic call-out
-                // (HandleSpecialAnnouncements).
+                // (HandleSpecialAnnouncements). That handler returns before every Ctrl+M mute
+                // gate, so a row here could never silence anything - hidden, like INDICATED_ALTITUDE.
                 IsAnnounced = true,
                 ExcludeFromBatch = true,
-                HighFrequency = true
+                HighFrequency = true,
+                ExcludeFromMonitorManager = true
             },
             // Touchdown vertical speed — the sim latches this at touchdown and it persists until
             // the next landing, so the ReadLastLandingRate output hotkey reads it straight from
@@ -122,8 +187,10 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
                 // MUST be IsAnnounced=true to be monitored at all (continuous batch =
                 // Continuous + IsAnnounced; SimConnectManager ~L805). With it false the cache
                 // stayed empty and ReadLastLandingRate always said "no landing recorded".
-                // MainForm.HandleSpecialAnnouncements suppresses its generic call-out.
-                IsAnnounced = true
+                // MainForm.HandleSpecialAnnouncements suppresses its generic call-out - and returns
+                // before every Ctrl+M mute gate, so a row here could never silence anything: hidden.
+                IsAnnounced = true,
+                ExcludeFromMonitorManager = true
             },
 
             // Glideslope signal - monitors NAV1 glideslope alive/lost transitions
@@ -224,6 +291,11 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
                 Units = "degrees"
             }
         };
+
+        // NAV 1's glideslope is wrong on an aircraft whose own receivers leave the sim's NAV radios
+        // untouched (the BlueBird 757, [B757-5]): no row, so no Ctrl+M row either.
+        if (!UsesStockNavReceivers) vars.Remove("MON_GlideSlopeAlive");
+        return vars;
     }
 
     /// <summary>
@@ -279,6 +351,11 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
         Form parentForm,
         HotkeyManager hotkeyManager)
     {
+        // AI display reads (Alt+P / Alt+N / Alt+E / Alt+S / Alt+I in output mode), from the
+        // aircraft's own DisplayReads table. A derived switch has already had its say by the time
+        // we get here, so an aircraft that means something else by one of these keys keeps it.
+        if (TryReadDisplayFor(action, simConnect, announcer, parentForm)) return true;
+
         // Try simple variable mapping first
         var variableMap = GetHotkeyVariableMap();
         if (variableMap.TryGetValue(action, out string? eventName))
@@ -390,14 +467,18 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     /// Resolves the spoken time-zone name at a given lat/lon. Falls back to
     /// the system's local time zone when lat/lon are missing, the
     /// GeoTimeZone lookup fails, or no Windows mapping exists for the IANA
-    /// id. Always returns a non-null, non-empty string.
+    /// id. Always returns a non-null, non-empty string. Also used by the Location Info
+    /// window's "Where you are" box (<c>Services/Geography/OfflineLocationService</c>).
     /// </summary>
-    private static string LookupTimeZoneName(double? lat, double? lon)
+    internal static string LookupTimeZoneName(double? lat, double? lon)
     {
         try
         {
             if (lat.HasValue && lon.HasValue)
             {
+                // NOT a Task/blocking call: GetTimeZone is synchronous and returns a
+                // TimeZoneResult struct whose .Result property is the primary IANA id
+                // (.Alternatives holds any others) — this is not async-Task.Result.
                 string ianaId = GeoTimeZone.TimeZoneLookup.GetTimeZone(lat.Value, lon.Value).Result;
                 if (!string.IsNullOrEmpty(ianaId)
                     && TimeZoneConverter.TZConvert.TryGetTimeZoneInfo(ianaId, out TimeZoneInfo? tz)
@@ -452,13 +533,15 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
         var dialog = new Forms.ValueInputForm(title, parameterType, rangeText, announcer, validator);
         if (dialog.ShowDialog(parentForm) == DialogResult.OK && dialog.IsValidInput)
         {
-            if (double.TryParse(dialog.InputValue, out double value))
+            if (Utils.NumberParsing.TryParseTyped(dialog.InputValue, out double value))
             {
                 uint valueToSend = valueConverter != null ? valueConverter(value) : (uint)value;
                 simConnect.SendEvent(eventName, valueToSend);
                 announcer.AnnounceImmediate($"{parameterType} set to {value}");
                 return true;
             }
+            // The validator accepted what TryParseTyped refuses: say so rather than send nothing silently.
+            announcer.AnnounceImmediate("Invalid number format");
         }
 
         return false;
@@ -511,6 +594,14 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     }
 
     /// <summary>
+    /// Called just BEFORE a panel Event-type button's event is sent, so an aircraft can arm anything
+    /// that must be in place before the sim can answer (the FCU value echo). Default: no-op.
+    /// </summary>
+    public virtual void OnPanelButtonFiring(string varKey)
+    {
+    }
+
+    /// <summary>
     /// Called once after a panel's controls are built/shown. Aircraft with a
     /// multi-page status box driven by a page combo override this to POPULATE the box
     /// with the combo's CURRENT page immediately — so the user doesn't have to cycle
@@ -532,6 +623,17 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     }
 
     /// <summary>
+    /// Default: no composed state — MainForm labels the control from StateVariable /
+    /// ValueDescriptions as before. Aircraft whose state lives in several variables (MD-11
+    /// legend lamps) override this.
+    /// </summary>
+    public virtual bool TryDescribeControlState(string varKey, out string stateText)
+    {
+        stateText = "";
+        return false;
+    }
+
+    /// <summary>
     /// Generic ARINC429 decode. If the var is flagged <see cref="SimConnect.SimVarDefinition.IsArinc429"/>,
     /// decode the raw double via <see cref="SimConnect.Arinc429Word"/> and return "&lt;value&gt; &lt;unit&gt;"
     /// (SSM NormalOperation/FunctionalTest) or the not-available text. Returns false for non-ARINC vars so
@@ -543,13 +645,134 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
         text = "";
         if (!GetVariables().TryGetValue(varKey, out var def) || !def.IsArinc429) return false;
         var w = new SimConnect.Arinc429Word(value);
-        if (!(w.IsNormalOperation || w.IsFunctionalTest)) { text = def.Arinc429NotAvailableText; return true; }
+        if (!w.HasData) { text = def.Arinc429NotAvailableText; return true; }
         string v = w.Value.ToString(def.Arinc429Format, System.Globalization.CultureInfo.InvariantCulture);
         text = string.IsNullOrEmpty(def.Arinc429Unit) ? v : $"{v} {def.Arinc429Unit}";
         return true;
     }
 
+    // ---- Shared MCP/FCU selected-value change announcer (777-MCP parity) ----
+    // The PMDG 777 speaks every MCP value change ("MCP heading 250", "MCP altitude 10000
+    // feet", ...) as the pilot dials hardware. The FlyByWire jets get the same behaviour through
+    // AnnounceFcuValue: the definition composes the PHRASE for each delivery of a value var
+    // (FcuValuePhrases — null while the window shows dashes) and FcuValueAnnouncer decides whether
+    // it is spoken: the first sample of a key is a silent baseline, a dashed window or an unavailable
+    // FCU is recorded but silent, a muted or echoed change is absorbed, a change is STAGED and spoken
+    // only once its batch has finished dispatching (judged with the FCU health var of that sample,
+    // whichever side of the value it sorts on),
+    // and after a flight load, a reconnect or an FCU power-up changes are absorbed until the aircraft
+    // has published and gone quiet (OnSimContextReset / OnVariableCacheCleared +
+    // OnContinuousBatchDelivered below).
+    private readonly FcuValueAnnouncer _fcuValues = new();
+
+    /// <summary>The announcer the last FCU value delivery used; the batch-end release speaks through it.</summary>
+    private ScreenReaderAnnouncer? _fcuAnnouncer;
+
+    /// <summary>Depth of the shared announcement queue at which a released FCU callout is dropped. A knob
+    /// position is perishable — a stale one spoken behind an ECAM backlog is worse than silence — and
+    /// <see cref="ScreenReaderAnnouncer.Announce"/> speaks past the queue. Deliberately LOWER than
+    /// VatsimAnnouncementService.MaxSharedQueueDepth (5): a callout is dropped as soon as a real backlog
+    /// forms, where VATSIM chatter is only capped so it never blocks ECAM.</summary>
+    private const int FcuMaxSharedQueueDepth = 3;
+
+    /// <summary>Mute the FCU value-change announcer for the named keys for a short window after
+    /// MSFSBA itself set them (the set method already speaks its own confirmation). Pass every
+    /// key the write actually moves and NO others — a knob push/pull that touches no value var
+    /// must pass none. Arm it BEFORE the write, so its echo can never arrive first.</summary>
+    protected void SuppressFcuValueChangeEcho(params string[] keys) =>
+        _fcuValues.SuppressEcho(keys, Environment.TickCount64);
+
+    /// <summary>Arm the FCU echo window for the value vars an MSFSBA-origin FCU event moves (from
+    /// <see cref="FcuEchoKeys.For"/>). Call it BEFORE the event is sent.</summary>
+    protected void ArmFcuEcho(string evt, IReadOnlyList<string> keys) =>
+        _fcuValues.SuppressEcho(keys, Environment.TickCount64, forEvent: evt);
+
+    /// <summary>Whether a delivery of this FCU value var proves the aircraft itself has published
+    /// after a flight load (<see cref="FcuValueAnnouncer"/>'s settle). A stock SimVar does not: the
+    /// sim core can restore it from the flight file before the aircraft's WASM has run.</summary>
+    internal static bool CountsAsFcuLoadEvidence(SimConnect.SimVarDefinition? def) =>
+        def?.Type != SimConnect.SimVarType.SimVar;
+
+    /// <summary>
+    /// Record an MCP/FCU selected value for the hardware-dial callouts. <paramref name="phrase"/> is null
+    /// while the window shows dashes and <see cref="FcuValuePhrases.Unavailable"/> while the FCU is off —
+    /// call it for EVERY delivery of the var. The callout is released by <see cref="OnContinuousBatchDelivered"/>,
+    /// OUTSIDE MainForm's announcer.Suppressed wrap, so <paramref name="muted"/> must carry the aircraft's
+    /// own Ctrl+M mute (and a readout that is about to speak this very value).
+    /// </summary>
+    protected void AnnounceFcuValue(string key, string? phrase, ScreenReaderAnnouncer announcer, bool muted = false)
+    {
+        _fcuAnnouncer = announcer;
+        GetVariables().TryGetValue(key, out var def);
+        _fcuValues.Observe(key, phrase, muted, Environment.TickCount64,
+            countsAsLoadEvidence: CountsAsFcuLoadEvidence(def));
+    }
+
+    /// <summary>The aircraft's FCU health var was delivered (true = the FCU publishes real values).</summary>
+    protected void ObserveFcuHealth(bool healthy) => _fcuValues.ObserveFcuHealth(healthy);
+
+    /// <summary>Record an FCU value's phrase silently (its words changed, its value did not).</summary>
+    protected void RebaselineFcuValue(string key, string? phrase) => _fcuValues.Rebaseline(key, phrase);
+
+    /// <summary>What the FCU window for <paramref name="key"/> last showed (for the readouts).</summary>
+    internal FcuWindowState FcuWindowStateOf(string key) => _fcuValues.StateOf(key);
+
+    /// <summary>Begin the FCU callouts' settle (MainForm: a profile switched while a flight loads).</summary>
+    internal void BeginFcuValueSettle() => _fcuValues.BeginSettle();
+
+    /// <summary>A flight load, reconnect or FCU power-up is still settling: the values arriving now
+    /// describe a new situation, not a change anyone made.</summary>
+    protected bool IsFcuValueSettling => _fcuValues.IsSettling;
+
     // Variable Update Processing
+
+    /// <summary>
+    /// Converts the value <c>MON_ElevatorTrim</c> delivers into degrees, positive = UP, before the
+    /// shared call-out describes and debounces it. The default is the stock <c>ELEVATOR TRIM
+    /// POSITION</c>, already degrees. An airframe that points <c>MON_ElevatorTrim</c> at its own
+    /// variable in another scale converts here (the Fenix: thousandths of a degree), so
+    /// <see cref="TrimHysteresis"/> and <see cref="DescribeElevatorTrim"/> keep working in degrees.
+    /// </summary>
+    protected virtual double ElevatorTrimDegrees(double value) => value;
+
+    /// <summary>
+    /// Records a trim the pilot just set and was told about as already announced, so its arrival
+    /// on <c>MON_ElevatorTrim</c> is not spoken a second time (CORE-7). Neither is the way there:
+    /// until a value arrives at the target's key, or <see cref="TypedTrimTravelMs"/> has passed,
+    /// the values on the way are taken silently (the old trim delivered first, the stabilizer
+    /// traveling). A trim that stops elsewhere is spoken once the wait is over, as any change.
+    /// </summary>
+    protected void NoteElevatorTrimAnnounced(double degrees)
+    {
+        double key = DescribeElevatorTrim(degrees).Key;
+        _lastAnnouncedTrimKey = key;
+        _typedTrimTargetKey = key;
+        _typedTrimUntilMs = TrimClockMs() + TypedTrimTravelMs;
+    }
+
+    /// <summary>
+    /// Renders <c>ELEVATOR TRIM POSITION</c> (degrees) for announcement, returning BOTH the
+    /// spoken phrase and the key the debounce compares — the two must move together, or a type
+    /// announcing a coarser scale would re-speak the same phrase on every sub-step change.
+    /// The key is compared EXACTLY against the last announced key, so it must already be
+    /// quantised to the announcement step (a <c>Math.Round</c> product), never raw, and must not
+    /// decrease as the degrees increase (the <see cref="TrimHysteresis"/> band pulls the value
+    /// back toward the last key and re-describes it).
+    /// <para>
+    /// The default is degrees with an up/down word, which is the only thing a generic aircraft
+    /// can say; an airframe with its own trim scale overrides it (e.g. <see cref="PMDG777Definition"/>).
+    /// It steps in TENTHS of a degree, as the Airbus ECAM shows the THS and as the PMDG 737's own
+    /// trim call-out does. Hundredths re-announced every 0.01° of hydraulic jitter on a parked
+    /// aircraft ("Trim up 1.43", "1.44", "1.43"…) and talked over everything else. The number is
+    /// invariant-formatted: a trim value reads with a dot, as the cockpit writes it.
+    /// </para>
+    /// </summary>
+    protected virtual (double Key, string Phrase) DescribeElevatorTrim(double degrees)
+    {
+        double rounded = Math.Round(degrees, 1);
+        string direction = rounded >= 0 ? "up" : "down";
+        return (rounded, string.Create(CultureInfo.InvariantCulture, $"Trim {direction} {Math.Abs(rounded):F1}"));
+    }
 
     /// <summary>
     /// Processes variable updates with custom logic.
@@ -570,32 +793,59 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
             return true;
         }
 
-        // Elevator trim — announce in degrees with up/down, debounced to 0.01 degree
+        // Elevator trim — rendered by DescribeElevatorTrim, debounced on the value it reports
         if (varName == "MON_ElevatorTrim")
         {
             if (!_trimAnnouncementsEnabled)
                 return true; // Suppress when toggled off
 
-            double rounded = Math.Round(value, 2);
+            double degrees = ElevatorTrimDegrees(value);
+            var (key, phrase) = DescribeElevatorTrim(degrees);
+
+            // A typed trim on its way: silent until it arrives or the wait is over (NoteElevatorTrimAnnounced).
+            // Past the wait, a value that never reached the target falls through and is compared with it.
+            if (!double.IsNaN(_typedTrimTargetKey))
+            {
+                if (key == _typedTrimTargetKey || TrimClockMs() < _typedTrimUntilMs)
+                {
+                    if (key == _typedTrimTargetKey) _typedTrimTargetKey = double.NaN;
+                    return true;
+                }
+
+                _typedTrimTargetKey = double.NaN;
+            }
 
             // First update: store silently, don't announce initial value on app load
-            if (double.IsNaN(_lastAnnouncedTrimDeg))
+            if (double.IsNaN(_lastAnnouncedTrimKey))
             {
-                _lastAnnouncedTrimDeg = rounded;
+                _lastAnnouncedTrimKey = key;
                 return true;
             }
 
-            if (Math.Abs(rounded - _lastAnnouncedTrimDeg) < 0.005)
-                return true; // Debounce — skip if less than 0.01 degree change
+            // Exact compare: the key is already quantised by DescribeElevatorTrim (a Math.Round
+            // product — equal decimals are bit-identical, and -0.0 == 0.0), so "unchanged" is
+            // simply "same key".
+            if (key == _lastAnnouncedTrimKey)
+                return true; // Debounce — skip when the reported value has not moved
 
-            _lastAnnouncedTrimDeg = rounded;
-            string direction = rounded >= 0 ? "up" : "down";
-            announcer.Announce($"Trim {direction} {Math.Abs(rounded):F2}");
+            // Hysteresis: a new step is spoken only once the value is TrimHysteresis past the
+            // boundary, i.e. the key still differs with the value pulled that far back toward the
+            // last announced one. Without it a trim resting on a boundary (1.45°, ±0.01° jitter)
+            // flips 1.4 / 1.5 every sample. Done here, on the raw degrees every override receives,
+            // so each override's own step gets the same band.
+            double pullBack = key > _lastAnnouncedTrimKey ? -TrimHysteresis : TrimHysteresis;
+            if (DescribeElevatorTrim(degrees + pullBack).Key == _lastAnnouncedTrimKey)
+                return true;
+
+            _lastAnnouncedTrimKey = key;
+            announcer.Announce(phrase);
             return true;
         }
 
         if (varName == "MON_GlideSlopeAlive")
         {
+            // NAV 1 is not this aircraft's receiver: never registered, and silent should it arrive.
+            if (!UsesStockNavReceivers) return true;
             bool alive = value > 0;
             if (alive && !_previousGlideSlopeAlive)
                 announcer.Announce("Glideslope alive");
@@ -613,6 +863,22 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     // Aircraft with special UI value setting logic should override
 
     /// <summary>
+    /// Whether this panel variable's control should be shown when a panel is built.
+    /// Default: always visible. Aircraft whose panel content depends on the loaded
+    /// VARIANT (e.g. the PMDG 777 freighter cargo temp knobs vs the passenger cabin
+    /// temp knob) override this to hide controls that don't exist on the running
+    /// airframe. Called on every panel (re)build, so the answer may change as
+    /// variant detection completes — return true when the variant is still unknown
+    /// (a control that appears is better than one that never does; the
+    /// HandleUIVariableSet guards still protect a hidden-should-have-been control
+    /// that got built before detection).
+    /// </summary>
+    public virtual bool IsPanelControlVisible(string varKey, SimConnect.SimConnectManager? simConnect)
+    {
+        return true;
+    }
+
+    /// <summary>
     /// Default implementation returns false (use generic handling).
     /// Aircraft with special variable setting logic (validation, conversion, multi-step) should override.
     /// </summary>
@@ -622,6 +888,47 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
         // Default: not handled - let MainForm use generic logic
         return false;
     }
+
+    /// <summary>Default: the raw text is not handled, and MainForm parses it for <see cref="HandleUIVariableSet"/> as always.</summary>
+    public virtual bool HandleUITypedText(string varKey, string text, SimConnect.SimVarDefinition varDef,
+        SimConnect.SimConnectManager simConnect, ScreenReaderAnnouncer announcer) => false;
+
+    /// <summary>
+    /// Default autopilot engage: the stock <c>AUTOPILOT_ON</c> event (idempotent in the stock
+    /// autopilot). Aircraft whose own autopilot ignores it override this: the PMDG jets press
+    /// their MCP engage switch, the FlyByWire family presses AP 1 (FO-21).
+    /// </summary>
+    public virtual void EngageAutopilot(SimConnect.SimConnectManager simConnect)
+        => simConnect.SendEvent("AUTOPILOT_ON");
+
+    /// <summary>
+    /// Default: no engage floor. Aircraft whose autopilot REFUSES to engage below a height
+    /// override this (the PMDG 737 inhibits CMD below 400 ft RA after takeoff).
+    /// </summary>
+    public virtual int MinimumAutopilotEngageAltitudeAgl => 0;
+
+    /// <summary>
+    /// Default: no readable engaged state, so the auto-engage can't be verified. Aircraft
+    /// with an engage annunciator override this (the PMDG jets read theirs from the CDA).
+    /// </summary>
+    public virtual bool? IsAutopilotEngaged(SimConnect.SimConnectManager simConnect) => null;
+
+    /// <summary>Default: retry every tick (FO-18's bounded retry), for the stock <c>AUTOPILOT_ON</c>,
+    /// which is idempotent. Every aircraft whose engage is a TOGGLE read back no faster than about
+    /// once a second overrides it with <see cref="ToggleAutopilotEngageRetryIntervalMs"/> (the PMDG
+    /// jets, the iFly, the MD-11, the Fenix) or the FlyByWire family's own (FO-21).</summary>
+    public virtual int AutopilotEngageRetryIntervalMs => 0;
+
+    /// <summary>The press spacing for a toggle engage whose state is read about once a second (a PMDG
+    /// CDA snapshot, the iFly SDK snapshot, a 1 Hz L:var batch): with no spacing, a retry on the next
+    /// position answer (two a second once the First Officer window exists) read the snapshot from
+    /// before the press and pressed CMD A again, which switched it off. The FlyByWire family's 3 s.</summary>
+    protected const int ToggleAutopilotEngageRetryIntervalMs = 3000;
+
+    /// <summary>Default false: a null reading takes the open-loop press-and-announce, which only the
+    /// stock <c>AUTOPILOT_ON</c> aircraft keep. Every aircraft with a toggle engage overrides it, so its
+    /// engage waits for a definite reading (FO-21).</summary>
+    public virtual bool AutopilotEngageWaitsForState => false;
 
     // Display Monitoring Methods - Default implementations (do nothing)
     // Aircraft with ECAM/EICAS/etc. should override these methods
@@ -643,70 +950,511 @@ public abstract class BaseAircraftDefinition : IAircraftDefinition
     }
 
     /// <summary>
+    /// Re-baseline the definition's "first reading is silent" trackers. Called on a
+    /// SimConnect RECONNECT as well as an aircraft switch: the definition object survives
+    /// a reconnect while SimConnect clears its value cache, so a tracker not reset here
+    /// compares flight 2's first reading against a value spoken on flight 1 and announces
+    /// a phantom change. MainForm resets its OWN trackers (ice, turbulence, SIGMET
+    /// proximity, turnaround) at the same site; this is the definition-owned half.
+    ///
+    /// ⚠️ A definition that adds a tracker gated on a "not yet seen" sentinel — a -1, a
+    /// bool?, a _prev*/_last* consulted before announcing, a ??= latch, an absent-key
+    /// check on a Dictionary — MUST reset it here. This list is maintained BY HAND, not
+    /// generated: two separate review sweeps of FlyByWireA380Definition/
+    /// FlyByWireA320Definition have each found it incomplete, so it is only ever as
+    /// complete as the last person who remembered to extend it when they added a tracker.
+    /// </summary>
+    public virtual void ResetAnnouncementBaselines() { }
+
+    /// <inheritdoc />
+    /// <remarks>The base starts the FCU value announcer's settle: an override on an aircraft that uses
+    /// <see cref="AnnounceFcuValue"/> must call base.</remarks>
+    public virtual void OnSimContextReset() => _fcuValues.BeginSettle();
+
+    /// <inheritdoc />
+    /// <remarks>The base upgrades the FCU settle so the reconnect's re-fire counts as the aircraft
+    /// publishing (the cache was cleared on the way down).</remarks>
+    public virtual void OnVariableCacheCleared() => _fcuValues.BeginSettle(refireIsEvidence: true);
+
+    /// <inheritdoc />
+    /// <remarks>The base counts the delivery toward the FCU settle and speaks the FCU callouts this batch
+    /// completed: an override on an aircraft that uses <see cref="AnnounceFcuValue"/> must call base.</remarks>
+    public virtual void OnContinuousBatchDelivered(int batchNum)
+    {
+        IReadOnlyList<string> due = _fcuValues.OnBatchDelivered(batchNum);
+        if (due.Count == 0 || _fcuAnnouncer is not { } announcer) return;
+        foreach (string phrase in due)
+        {
+            if (announcer.QueuedAnnouncementCount >= FcuMaxSharedQueueDepth) return;
+            announcer.Announce(phrase);
+        }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>The base restarts the FCU value echo the event was armed with (Task 3 of the PR #140
+    /// fixes): the A32NX queues dotted FCU events until the calc-path probe concludes, which can be a
+    /// minute after the echo armed at the call site expired.</remarks>
+    public virtual void OnQueuedEventDispatched(string eventName) =>
+        _fcuValues.RearmEcho(eventName, Environment.TickCount64);
+
+    /// <inheritdoc />
+    /// <remarks>None by default: a branch's call-outs are its own row's.</remarks>
+    public virtual bool IsMuteWrapExempt(string varName) => false;
+
+    /// <inheritdoc />
+    /// <remarks>None by default: only the airframes with take-off roll callouts have a feed.</remarks>
+    public virtual string? TakeoffCalloutFeedKey => null;
+
+    /// <inheritdoc />
+    public virtual bool TakeoffCalloutFeedNeeded => true;
+
+    /// <inheritdoc />
+    /// <remarks>Most definitions hold nothing, so the batch hook never fires for them.</remarks>
+    public virtual string? DeferredFlushWatchVariable => null;
+
+    /// <inheritdoc />
+    public virtual void OnDeferredFlushBatchDelivered(Accessibility.ScreenReaderAnnouncer announcer) { }
+
+    /// <inheritdoc />
+    public virtual void CancelDeferredFlush() { }
+
+    /// <summary>
     /// Default visual-guidance profile (A320 numbers). Override on heavier or smaller airframes.
     /// </summary>
     public virtual VisualGuidanceProfile GetVisualGuidanceProfile() => new();
 
     public virtual double TaxiTurnLeadSeconds => 1.2;   // neutral default; airframes tune via override
+    public virtual double TaxiSharpTurnLeadSeconds => TaxiTurnLeadSeconds;   // constant lead unless measured otherwise
+    public virtual double TaxiTurnLeadMaxDegrees => 30.0;
+
+    public virtual bool HasOwnIcingAnnouncer => false;
+
+    /// <inheritdoc />
+    public virtual bool PlaysOwnTakeoffSpeedCallouts => false;
+
+    public virtual string? StockComTuningRefusal => null;
+
+    // One capture at a time, app-wide — the scene description takes the same gate, because the
+    // camera both of them capture is the SIMULATOR's, not this definition's. See
+    // Services/DisplayReadGate for why it is shared and why it must be released before any dialog.
 
     /// <summary>
-    /// Captures an MSFS window screenshot and analyzes the indicated cockpit display via Gemini AI.
-    /// Shared by all aircraft definitions that support Gemini display capture.
+    /// Captures an MSFS window screenshot and analyzes the indicated cockpit display via the
+    /// selected AI provider. Shared by all aircraft definitions that support display capture.
+    ///
+    /// With <paramref name="instrumentView"/>, the simulator camera is first moved to that
+    /// instrument view (0-based index into the aircraft's cameras.cfg instrument cameras) — the
+    /// pilot presses nothing in the sim to get the display on screen.
+    /// The camera is put back after the capture and before the AI call — verified by read-back,
+    /// and a failure is spoken once rather than assumed. A restore was removed on 2026-09-09 and
+    /// reinstated on 2026-09-18; see <see cref="Services.InstrumentViewPlan"/> for what that
+    /// removal got wrong.
+    /// Without it the flow is exactly what it always was: the current view is captured.
     /// </summary>
     protected async void ReadDisplay(Services.GeminiService.DisplayType displayType,
                                       string displayName,
                                       ScreenReaderAnnouncer announcer,
-                                      System.Windows.Forms.Form parentForm)
+                                      System.Windows.Forms.Form parentForm,
+                                      Services.InstrumentViewRequest? instrumentView = null)
     {
+        if (!Services.DisplayReadGate.Shared.TryEnter())
+        {
+            announcer.Announce(Services.DisplayReadGate.BusyMessage);
+            return;
+        }
+
+        // Held until the gate is released BELOW. MessageBox.Show does not return until the pilot
+        // dismisses the dialog, so showing one inside the guarded region held the gate for as long
+        // as it stood — and every later display read, on every aircraft, then answered "already in
+        // progress" when nothing was.
+        (string Caption, string Body, System.Windows.Forms.MessageBoxIcon Icon)? dialog = null;
         try
         {
-            announcer.Announce($"Capturing {displayName}...");
-
-            var screenshotService = new Services.ScreenshotService();
-            var geminiService = new Services.GeminiService();
-
-            if (!screenshotService.IsMsfsWindowAvailable())
+            try
             {
-                announcer.Announce("Microsoft Flight Simulator window not found. Make sure the simulator is running.");
-                return;
-            }
+                announcer.Announce($"Capturing {displayName}...");
 
-            byte[]? screenshot = await screenshotService.CaptureAsync();
-            if (screenshot == null || screenshot.Length == 0)
+                var screenshotService = new Services.ScreenshotService();
+                var aiProvider = Services.AiProviderFactory.Create();
+
+                if (!screenshotService.IsMsfsWindowAvailable())
+                {
+                    announcer.Announce("Microsoft Flight Simulator window not found. Make sure the simulator is running.");
+                    return;
+                }
+
+                Services.InstrumentViewSwitcher? switcher = null;
+                Services.InstrumentViewSession? view = null;
+                if (instrumentView != null)
+                {
+                    switcher = new Services.InstrumentViewSwitcher(instrumentView.Camera);
+                    view = await switcher.EnterAsync(instrumentView.ViewIndex);
+                    if (view.Outcome == Services.InstrumentViewOutcome.NotInCockpit)
+                    {
+                        announcer.Announce("Switch to a cockpit view first.");
+                        return;
+                    }
+                    if (!view.Verified)
+                    {
+                        // "Could not confirm", never "could not switch": Switch and Unknown both ATTEMPT the
+                        // write before verifying — and InstrumentViewSwitcher swallows a write that THROWS
+                        // and polls anyway — so either the write or the read-back failed, and the camera may
+                        // or may not have moved. "Could not confirm" is the honest claim in both cases.
+                        announcer.Announce("Could not confirm the cockpit view switch; reading what is on screen.");
+                    }
+                }
+
+                byte[]? screenshot = null;
+                try
+                {
+                    screenshot = await screenshotService.CaptureAsync();
+                }
+                finally
+                {
+                    // Put the camera back BEFORE the AI call, not after: that call is a network
+                    // round-trip of several seconds and the camera only has to be on the display
+                    // for the capture itself, so the pilot's own view is gone for well under a
+                    // second. In a finally so a capture that returned nothing — or threw —
+                    // restores too. RestoreAsync never throws, so it cannot swallow an exception
+                    // on its way out.
+                    if (switcher != null && view != null && !await switcher.RestoreAsync(view))
+                        announcer.Announce("Could not return to your previous view.");
+                }
+
+                if (screenshot == null || screenshot.Length == 0)
+                {
+                    announcer.Announce($"Failed to capture {displayName} screenshot.");
+                    return;
+                }
+
+                string analysis = await aiProvider.AnalyzeDisplayAsync(screenshot, displayType);
+
+                var resultForm = new Forms.DisplayReadingResultForm(displayName, analysis);
+                resultForm.ShowForm();
+
+                announcer.Announce($"{displayName} analysis ready.");
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("API key"))
             {
-                announcer.Announce($"Failed to capture {displayName} screenshot.");
-                return;
+                announcer.Announce("AI provider API key not configured. Please go to File menu, Settings, AI tab.");
+                dialog = ("API Key Required",
+                    "AI provider API key is not configured.\n\n" +
+                    "Please choose a provider (Gemini or Claude) and configure its API key in:\n" +
+                    "File > Settings > AI tab",
+                    System.Windows.Forms.MessageBoxIcon.Warning);
             }
-
-            string analysis = await geminiService.AnalyzeDisplayAsync(screenshot, displayType);
-
-            var resultForm = new Forms.DisplayReadingResultForm(displayName, analysis);
-            resultForm.ShowForm();
-
-            announcer.Announce($"{displayName} analysis ready.");
+            catch (Exception ex)
+            {
+                announcer.Announce($"Error analyzing {displayName}: {ex.Message}");
+                dialog = ("Error",
+                    $"Error analyzing {displayName}:\n\n{ex.Message}",
+                    System.Windows.Forms.MessageBoxIcon.Error);
+            }
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("API key"))
+        finally
         {
-            announcer.Announce("Gemini API key not configured. Please go to File menu, Gemini Settings.");
-            System.Windows.Forms.MessageBox.Show(
-                parentForm,
-                "Gemini API key is not configured.\n\n" +
-                "Please configure your API key in:\n" +
-                "File > Gemini Settings\n\n" +
-                "Get a free API key at: https://aistudio.google.com/apikey",
-                "API Key Required",
-                System.Windows.Forms.MessageBoxButtons.OK,
-                System.Windows.Forms.MessageBoxIcon.Warning);
+            Services.DisplayReadGate.Shared.Exit();
         }
-        catch (Exception ex)
+
+        if (dialog is { } pending)
         {
-            announcer.Announce($"Error analyzing {displayName}: {ex.Message}");
-            System.Windows.Forms.MessageBox.Show(
-                parentForm,
-                $"Error analyzing {displayName}:\n\n{ex.Message}",
-                "Error",
-                System.Windows.Forms.MessageBoxButtons.OK,
-                System.Windows.Forms.MessageBoxIcon.Error);
+            System.Windows.Forms.MessageBox.Show(parentForm, pending.Body, pending.Caption,
+                System.Windows.Forms.MessageBoxButtons.OK, pending.Icon);
+        }
+    }
+
+    /// <summary>
+    /// This aircraft's AI display reads — the hotkey, the prompt, the spoken name and the
+    /// instrument camera view each one needs. Empty means the aircraft has none.
+    ///
+    /// <para>
+    /// An aircraft gains display reads by supplying a measured table and NOTHING else: the base
+    /// dispatches it from <see cref="HandleHotkeyAction"/>, so there is no per-aircraft dispatch
+    /// line to copy and no second way to wire a display read. A derived override's own switch
+    /// still runs first, so an aircraft that means something different by one of these hotkeys —
+    /// the FlyByWire A320/A380 open their E/WD window on Alt+E, the HorizonSim 787 announces CAS
+    /// alerts on Alt+E and opens a Coherent synoptic on Alt+S — keeps its own arm untouched.
+    /// </para>
+    ///
+    /// <para>
+    /// A row with a null <see cref="AiDisplayRead.InstrumentViewIndex"/> captures whatever is on
+    /// screen, which is what an aircraft whose camera views have never been measured wants.
+    /// </para>
+    /// </summary>
+    protected virtual IReadOnlyList<AiDisplayRead> DisplayReads => Array.Empty<AiDisplayRead>();
+
+    /// <summary>
+    /// Dispatches <paramref name="action"/> when it is one of <see cref="DisplayReads"/>: captures
+    /// that display and reads it back, first moving the simulator camera to the instrument view
+    /// that frames it when the row names one.
+    /// </summary>
+    private bool TryReadDisplayFor(HotkeyAction action,
+                                   SimConnect.SimConnectManager simConnect,
+                                   ScreenReaderAnnouncer announcer,
+                                   System.Windows.Forms.Form parentForm)
+    {
+        if (!AiDisplayRead.TryGet(DisplayReads, action, out var read)) return false;
+
+        ReadDisplay(read.DisplayType, read.SpokenName, announcer, parentForm,
+            read.InstrumentViewIndex is { } view
+                ? new Services.InstrumentViewRequest(simConnect, view)
+                : null);
+        return true;
+    }
+
+    // ---- Tracked single-instance hotkey windows (FCU value windows, Baro, E/WD pop-out,
+    // ---- the PMDG Ctrl+P autopilot window). ----
+    // Reuse-if-open: a second press of the hotkey focuses the existing window instead of
+    // stacking a duplicate (HS787 _autopilotWindow pattern).
+    //
+    // DisposeTrackedWindows() is called UNCONDITIONALLY on the outgoing def by
+    // MainForm.SwitchAircraft — that call is the authoritative teardown for EVERY def,
+    // present and future, not just the two FBW ones that also call it from their own
+    // StopAllMotion(). It must stay unconditional: a discarded def instance that keeps a
+    // live window running against the new aircraft is not merely stale UI, it is a
+    // mis-actuation hazard. The window's buttons still dispatch into the OLD def's
+    // HandleUIVariableSet, and the PMDG 737 and 777 EventIds tables use different
+    // event_base + N numberings — so a surviving 777 window can actuate an arbitrary
+    // wrong control on a loaded 737 (and renders the new aircraft's CDA data under the
+    // old aircraft's labels). The refresh timers keep ticking too.
+    private readonly Dictionary<Type, System.Windows.Forms.Form> _trackedWindows = new();
+
+    protected void ShowTrackedWindow<T>(Func<T> factory, Action<T> show) where T : System.Windows.Forms.Form
+    {
+        if (_trackedWindows.TryGetValue(typeof(T), out var existing) && !existing.IsDisposed) { show((T)existing); return; }
+        var form = factory();
+        _trackedWindows[typeof(T)] = form;
+        form.FormClosed += (s, _) =>
+        {
+            if (_trackedWindows.TryGetValue(typeof(T), out var cur) && ReferenceEquals(cur, s))
+                _trackedWindows.Remove(typeof(T));
+        };
+        show(form);
+    }
+
+    /// <summary>
+    /// Closes and disposes every tracked window this def instance created. Public because
+    /// MainForm.SwitchAircraft calls it on the outgoing def for every aircraft type.
+    /// Idempotent: it skips already-disposed forms and clears the dictionary, so the
+    /// second call (the FBW defs also reach it via StopAllMotion()) iterates nothing.
+    /// </summary>
+    public void DisposeTrackedWindows()
+    {
+        foreach (var f in _trackedWindows.Values.ToList())
+        {
+            try
+            {
+                if (f.IsDisposed) continue;
+                if (f.IsHandleCreated) f.Close();
+                if (!f.IsDisposed) f.Dispose();
+            }
+            catch { /* best-effort teardown on aircraft swap */ }
+        }
+        _trackedWindows.Clear();
+    }
+
+    /// <summary>
+    /// Called by MainForm.SwitchAircraft on the OUTGOING definition, for every aircraft type, beside
+    /// <see cref="DisposeTrackedWindows"/>: stop every timer this definition owns that could still
+    /// speak against the aircraft that follows (the PMDG speed-brake settle announcer — a lever moved
+    /// just before the switch was otherwise announced over the next aircraft). Base: nothing.
+    /// </summary>
+    public virtual void OnSwitchedAway() { }
+
+    /// <summary>
+    /// Shows the PMDG Ctrl+P autopilot engage-cluster window. Shared by the 737 and 777,
+    /// which differ only in their row table and window title — the binder, the echo
+    /// suppression and the tracked-window lifecycle are identical, so they live here
+    /// rather than being duplicated across both defs.
+    /// </summary>
+    protected void ShowPMDGAutopilotWindow(
+        IReadOnlyList<ApRowSpec> rows,
+        string title,
+        SimConnect.SimConnectManager simConnect,
+        ScreenReaderAnnouncer announcer,
+        System.Windows.Forms.Form parentForm)
+    {
+        if (!simConnect.IsConnected)
+        {
+            announcer.Announce("Not connected to simulator");
+            return;
+        }
+
+        // Bind inside the factory: on the reuse path (window already open, second
+        // Ctrl+P) the existing instance keeps its original closures, so binding
+        // eagerly here would do the work only to discard it.
+        ShowTrackedWindow(
+            () =>
+            {
+                var (buttons, selectors) = Forms.PMDG.PMDGAutopilotRowBinder.Bind(
+                    rows,
+                    GetVariables(),
+                    simConnect,
+                    (key, expected) => (parentForm as MainForm)?.SuppressUiEcho(key, expected),
+                    (key, value, varDef) => HandleUIVariableSet(key, value, varDef, simConnect, announcer));
+                return new Forms.PMDG.PMDGAutopilotWindow(title, buttons, selectors);
+            },
+            w => w.ShowForm());
+    }
+
+    // Momentary L:var pulse: write 1 then auto-release to 0 (~250 ms) via the calc path so the
+    // systems logic latches on the rising edge; announce the press. Callers keep their own guard.
+    protected void PulseMomentaryLVar(SimConnect.SimConnectManager simConnect, ScreenReaderAnnouncer announcer, string varKey, string displayName)
+    {
+        simConnect.ExecuteCalculatorCode($"1 (>L:{varKey})");
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            try { await System.Threading.Tasks.Task.Delay(250); simConnect.ExecuteCalculatorCode($"0 (>L:{varKey})"); }
+            catch { /* best-effort auto-release */ }
+        });
+        announcer.Announce($"{displayName} pressed");
+    }
+
+    // ---- FMA armed-mode decode (FBW A320/A380 parity) ----
+    // Legacy A32NX_FMA_*_ARMED bitmasks (bit 0 = ALT). Decodes to mode names so arming a
+    // mode speaks "Altitude armed" / "NAV armed" instead of the old raw bitmask number.
+    // The bit tables themselves stay per-aircraft (identical _vertArmedBits/_latArmedBits
+    // static fields on each definition) and are passed in.
+    protected static string DecodeArmedModes(int v, (int bit, string name)[] bits)
+    {
+        return string.Join(", ", DecodeArmedModeNames(v, bits));
+    }
+
+    /// <summary>
+    /// Parts-returning counterpart of <see cref="DecodeArmedModes"/> for callers that
+    /// only need to iterate the individual names (e.g. to announce each one) — avoids a
+    /// join-then-re-Split round trip through a joined string.
+    /// </summary>
+    protected static List<string> DecodeArmedModeNames(int v, (int bit, string name)[] bits)
+    {
+        var names = new List<string>();
+        foreach (var b in bits) if ((v & b.bit) != 0) names.Add(b.name);
+        return names;
+    }
+
+    // Spoken CG suffix for the gross-weight readouts (FBW A320/A380 parity). Empty
+    // (suppressed) when the CG isn't available/sane, so the gross-weight readout never
+    // breaks or says "CG 0". Takes the cached %MAC value as a parameter since each
+    // aircraft caches its own _gwCgMac field.
+    protected static string CgMacPhrase(double gwCgMac) =>
+        (gwCgMac > 5 && gwCgMac < 60) ? $", center of gravity {gwCgMac:0.0} percent MAC" : "";
+
+    // Set the FCU altitude increment (100 or 1000 ft) — FBW A320/A380 parity. Kept as an
+    // instance method (not static) because it's invoked externally via an aircraft-typed
+    // instance reference (FBWA320AltitudeWindow/FBWA380AltitudeWindow), which a static
+    // member can't be called through.
+    public virtual void SetAltIncrement(int inc, SimConnect.SimConnectManager s)
+    {
+        if (!s.IsConnected) return;
+        s.SendEvent("A32NX.FCU_ALT_INCREMENT_SET", (uint)inc);
+    }
+
+    // ---- PMDG 737/777 NG3 SDK ETA/distance read-outs (byte-identical pair) ----
+
+    /// <summary>
+    /// Format ETA as ": HH:MM:SS" given remaining distance in nautical miles
+    /// and current ground speed in knots. Returns empty string at low ground
+    /// speed (taxi / ground) where the estimate is meaningless.
+    /// </summary>
+    protected static string FormatEtaFromDistance(double distanceNm, double groundSpeedKnots)
+    {
+        if (groundSpeedKnots < 30) return "";   // not airborne / too slow
+        if (distanceNm <= 0) return "";
+
+        double hours = distanceNm / groundSpeedKnots;
+        int totalSeconds = (int)Math.Round(hours * 3600.0);
+        int hh = totalSeconds / 3600;
+        int mm = (totalSeconds % 3600) / 60;
+        int ss = totalSeconds % 60;
+        return $": {hh:D2}:{mm:D2}:{ss:D2}";
+    }
+
+    /// <summary>
+    /// SDK-offset readout for distance to top of descent on the NG3.
+    /// </summary>
+    protected static void AnnounceTODFromSDK(
+        SimConnect.SimConnectManager simConnect,
+        SimConnect.IPMDGDataManager dm,
+        ScreenReaderAnnouncer announcer)
+    {
+        float dist = (float)dm.GetFieldValue("FMC_DistanceToTOD");
+        if (dist < 0)
+        {
+            announcer.AnnounceImmediate("Top of descent not available");
+            return;
+        }
+        if (dist < 0.1f)
+        {
+            announcer.AnnounceImmediate("Past top of descent");
+            return;
+        }
+        simConnect.RequestAircraftPositionAsync(position =>
+        {
+            string eta = FormatEtaFromDistance(dist, position.GroundSpeedKnots);
+            announcer.AnnounceImmediate($"{dist:F0} miles to top of descent{eta}");
+        });
+    }
+
+    /// <summary>
+    /// SDK-offset readout for distance to destination on the NG3.
+    /// </summary>
+    protected static void AnnounceDestFromSDK(
+        SimConnect.SimConnectManager simConnect,
+        SimConnect.IPMDGDataManager dm,
+        ScreenReaderAnnouncer announcer)
+    {
+        float dist = (float)dm.GetFieldValue("FMC_DistanceToDest");
+        if (dist < 0)
+        {
+            announcer.AnnounceImmediate("Distance to destination not available");
+            return;
+        }
+        simConnect.RequestAircraftPositionAsync(position =>
+        {
+            string eta = FormatEtaFromDistance(dist, position.GroundSpeedKnots);
+            announcer.AnnounceImmediate($"{dist:F0} miles to destination{eta}");
+        });
+    }
+
+    // Cached set of RenderAsButton keys that are NOT annunciators (PMDG 737/777 parity).
+    // Used in ProcessSimVarUpdate to suppress raw value announcements without
+    // re-allocating GetVariables() on every call.
+    protected HashSet<string> BuildSuppressedButtonKeys()
+    {
+        var set = new HashSet<string>();
+        foreach (var kvp in GetVariables())
+        {
+            if (kvp.Value.RenderAsButton && !kvp.Value.Name.Contains("_annun"))
+                set.Add(kvp.Key);
+        }
+        return set;
+    }
+
+    // Fenix/FBW A320 parity: request the stock fuel-total-quantity SimVar via a
+    // temp data definition (ONCE period). logCategory parameterizes the Log.Debug
+    // category on failure (each caller's own aircraft-name tag).
+    protected static void RequestFuelQuantity(SimConnect.SimConnectManager simConnectMgr, string logCategory)
+    {
+        var simConnect = simConnectMgr.SimConnectInstance;
+        if (simConnectMgr.IsConnected && simConnect != null)
+        {
+            try
+            {
+                var tempDefId = SimConnect.SimConnectManager.DATA_DEFINITIONS.DEF_FUEL_QUANTITY;
+                simConnect.ClearDataDefinition(tempDefId);
+                simConnect.AddToDataDefinition(tempDefId,
+                    "FUEL TOTAL QUANTITY WEIGHT", "pounds",
+                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_DATATYPE.FLOAT64, 0.0f, 0);
+                simConnect.RegisterDataDefineStruct<SimConnect.SimConnectManager.SingleValue>(tempDefId);
+                simConnect.RequestDataOnSimObject(SimConnect.SimConnectManager.DATA_REQUESTS.REQUEST_FUEL_QUANTITY,
+                    tempDefId, Microsoft.FlightSimulator.SimConnect.SimConnect.SIMCONNECT_OBJECT_ID_USER,
+                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_PERIOD.ONCE,
+                    Microsoft.FlightSimulator.SimConnect.SIMCONNECT_DATA_REQUEST_FLAG.DEFAULT, 0, 0, 0);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(logCategory, $"Error requesting fuel quantity: {ex.Message}");
+            }
         }
     }
 }

@@ -20,7 +20,7 @@ public class TaxiEdge
 /// Builds and represents a taxi graph from navdatareader taxi_path data.
 /// Each taxi_path row defines a centerline segment; endpoints within ~1m are merged into shared nodes.
 /// </summary>
-public class TaxiGraph
+public partial class TaxiGraph
 {
     // Merge threshold in METERS. Using a distance-based check keeps merging consistent
     // across latitudes — a degree-based check was asymmetric (NS vs EW) at high latitudes
@@ -32,6 +32,67 @@ public class TaxiGraph
 
     public Dictionary<int, TaxiNode> Nodes { get; } = new();
     public Dictionary<int, List<TaxiEdge>> Adjacency { get; } = new();
+
+    /// <summary>
+    /// The taxiway designator a pilot would use for this node, read from the names of the
+    /// edges that meet at it. Prefers a connector-style name carrying both a letter and a
+    /// digit (A5, NB1, K12 — the shortest, ties broken ordinally) over a plain main-taxiway
+    /// name (A, B, K — the longest, ties broken ordinally), and returns "" for a node whose
+    /// edges carry no name at all. This is the ranking <see cref="Build"/> has always used to
+    /// name a hold-short node; the post-landing backtrack's "Taxiway H ahead" reads the same
+    /// method so the two can never name one node differently.
+    /// </summary>
+    public string PreferredTaxiwayNameAt(int nodeId)
+    {
+        if (!Adjacency.TryGetValue(nodeId, out var edges)) return "";
+
+        var distinctNames = new HashSet<string>();
+        foreach (var edge in edges)
+        {
+            if (!string.IsNullOrEmpty(edge.TaxiwayName))
+                distinctNames.Add(edge.TaxiwayName);
+        }
+
+        // Tier 1: names that look like connector/holding-point designators
+        string? connectorName = null;
+        foreach (var n in distinctNames)
+        {
+            bool hasLetter = false, hasDigit = false;
+            foreach (char c in n)
+            {
+                if (char.IsLetter(c)) hasLetter = true;
+                else if (char.IsDigit(c)) hasDigit = true;
+            }
+            if (hasLetter && hasDigit)
+            {
+                // Among connectors, prefer the shortest (A5 > KILO5A);
+                // ties broken by alpha order for determinism.
+                if (connectorName == null ||
+                    n.Length < connectorName.Length ||
+                    (n.Length == connectorName.Length &&
+                     string.Compare(n, connectorName, StringComparison.Ordinal) < 0))
+                {
+                    connectorName = n;
+                }
+            }
+        }
+        if (connectorName != null) return connectorName;
+
+        // No connector pattern — fall back to any name.
+        // Prefer longer over single-letter (more specific).
+        string? best = null;
+        foreach (var n in distinctNames)
+        {
+            if (best == null ||
+                n.Length > best.Length ||
+                (n.Length == best.Length &&
+                 string.Compare(n, best, StringComparison.Ordinal) < 0))
+            {
+                best = n;
+            }
+        }
+        return best ?? "";
+    }
 
     /// <summary>
     /// One physical runway as a centerline segment between its two thresholds,
@@ -50,14 +111,146 @@ public class TaxiGraph
         public string Name2 = "";          // designator at opposite end (e.g. "09R")
         public double HeadingDeg1;         // heading from end 1 (0..360, true)
         public double HalfWidthMeters;     // centerline → edge tolerance
+
+        // The PAVEMENT, as the runway table describes it (Pavement1 is the end named Name1). Lat1..Lon2
+        // above are the navdata `start` rows, repaired only LATERALLY, so at a displaced threshold they
+        // sit hundreds of metres inside the pavement; HalfWidthMeters is a fixed 75 ft default. Filled
+        // from the runway table when Build has one, else copied from the start rows. Never read these
+        // directly: RunwayShape.For decides when they are usable (a hand-built centerline leaves them
+        // unset; a heading-pass mis-pair can carry another runway's) and is the one definition every
+        // on-the-runway question uses. See docs/taxi-guidance.md, "Runway crossings and entries".
+        public double PavementLat1, PavementLon1;
+        public double PavementLat2, PavementLon2;
+        public double PavementHalfWidthMeters;
     }
     public List<RunwayCenterline> RunwayCenterlines { get; } = new();
+
+    /// <summary>
+    /// PathType carried by the edges <see cref="BridgeOrphanParkingIslands"/> fabricates to join a
+    /// stranded stand stub to the main taxi network. Distinct from navdata's "P" lead-ins so no
+    /// consumer can mistake a guessed straight line for a navdata row.
+    /// </summary>
+    public const string StandBridgePathType = "STAND_BRIDGE";
+
+    /// <summary>
+    /// True when <paramref name="edge"/> is a fabricated stand bridge (<see cref="StandBridgePathType"/>).
+    /// A fabricated stand bridge leads to a stranded stand. It is never part of a landing-exit
+    /// corridor, an exit extension, or a post-landing vacate path.
+    /// </summary>
+    public static bool IsStandBridge(TaxiEdge edge) =>
+        string.Equals(edge.PathType, StandBridgePathType, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Every member of an island <see cref="BridgeOrphanParkingIslands"/> successfully bridged —
+    /// recorded there, before components are renumbered, from the island's own member list (node
+    /// IDs, never component IDs: the renumbering that follows resets every
+    /// <see cref="TaxiNode.ComponentId"/> to -1 and reassigns them, so a component id captured here
+    /// would be meaningless one line later). Never a main-network node — the bridge's network end
+    /// keeps its real taxiway edges and is not a member of the island being bridged. See
+    /// <see cref="IsBridgeOnlyStandStub"/>.
+    /// </summary>
+    private readonly HashSet<int> _bridgeOnlyStandStubNodes = new();
+
+    /// <summary>
+    /// True when <paramref name="nodeId"/>'s only way out of its original navdata island is a
+    /// fabricated <see cref="StandBridgePathType"/> edge — the mirror of the GCLP S5 defect the
+    /// <c>requiredComponentId</c> filter was added for, except here the bridge itself is what
+    /// satisfies that filter (bridging merges the stub into the main component). A node like this
+    /// must never be picked as a route START — <see cref="FindNearestNode"/>,
+    /// <see cref="FindNearestNodeInDirection"/> and <see cref="FindNearestNodeOnTaxiway"/> all take
+    /// an <c>excludeBridgeOnlyStandStubs</c> parameter for exactly that — or the route opens inside
+    /// a stand lead-in and crosses the guessed bridge line to get out, landing the first
+    /// steering-tone target in a stand the pilot was never cleared into. It stays reachable as a
+    /// DESTINATION: nothing filters a destination lookup (e.g. the gate/deice dropdowns in
+    /// TaxiAssistForm) on this predicate, and it must not start to — reaching that stand is the
+    /// entire reason the bridge exists.
+    ///
+    /// <para><b>The contract for every future route-start picker (PR #238 review, Minor 3):</b> a
+    /// node under this predicate cannot be told apart from a real network node by
+    /// <c>ComponentId</c> alone once bridged, and it is NOT safely excluded by assuming a stand
+    /// lead-in ("P") row is unnamed — measured against the real fs2024 database, 1,810 of 319,004
+    /// "P" rows carry a non-empty name (KNZY 503, KCLT 119, plus LEMG/LEMD/CYVR/EPWR), so a stub's
+    /// node can register on a real taxiway name too, including one a real network node also
+    /// carries. Any method that can hand its return value to a caller which uses it as (or derives)
+    /// an A*/Dijkstra start node — not just the three named above — must add the same
+    /// <c>excludeBridgeOnlyStandStubs</c> opt-in (default <c>false</c>, so destination lookups are
+    /// unaffected unless they explicitly ask) and every call site that feeds a route start must
+    /// pass <c>true</c>. <see cref="SplitEdgeAt"/> is the other half of the contract: a node it
+    /// mints on an edge interior to an already-bridged island inherits membership too, so a search
+    /// that subdivides pavement (<see cref="InsertHoldingPointNodeOnEdge"/>) can't mint an
+    /// unmarked escape hatch.</para>
+    /// </summary>
+    public bool IsBridgeOnlyStandStub(int nodeId) => _bridgeOnlyStandStubNodes.Contains(nodeId);
+
+    /// <summary>
+    /// Node ids <see cref="Build"/> recorded as hold-short from the navdata endpoint TYPES (the set
+    /// <see cref="BridgeOrphanParkingIslands"/> uses), kept for DescribeLocation's near-a-runway gate.
+    /// Never <see cref="TaxiNode.Type"/>: the parking pass overwrites it to Parking for any node
+    /// within 100 m of a stand — exactly the hold-short nodes that gate needs. Empty for a hand-built graph.
+    /// </summary>
+    private HashSet<int> _navdataHoldShortNodeIds = new();
+
+    /// <summary>Whether navdata recorded this node as a hold-short — the identity to use, never
+    /// <see cref="TaxiNode.Type"/> (see <see cref="_navdataHoldShortNodeIds"/>).</summary>
+    public bool IsNavdataHoldShort(int nodeId) => _navdataHoldShortNodeIds.Contains(nodeId);
+
+    /// <summary>
+    /// Component id of the largest connected component (the main taxi network), or -1 for a graph
+    /// Build has not finished. Set once at the end of <see cref="Build"/>, after orphan-stand
+    /// bridges are added and components renumbered. Ties do occur (EGUW has two 63-node
+    /// components; measured against the real fs2024 database, ~0.6% of airports tie) and are
+    /// broken on the component containing the node with the smallest (latitude, longitude) pair —
+    /// never on component id / node order. Component ids are assigned in node-insertion order,
+    /// which follows <c>ORDER BY taxi_path_id</c>, i.e. scenery authoring order: a row-order tie-
+    /// break meant a scenery update that merely reordered rows could flip which half of a
+    /// genuinely split airport is "main" with no change to the airfield itself.
+    /// </summary>
+    public int MainComponentId { get; private set; } = -1;
+
+    /// <summary>
+    /// A taxiway that meets a runway partway down its length — an intersection
+    /// (a.k.a. intersection-departure) point. Enumerated by
+    /// <see cref="GetRunwayIntersections"/> so the Taxi form can offer "depart
+    /// from taxiway W" instead of taxiing to the full-length threshold.
+    /// </summary>
+    public class RunwayIntersection
+    {
+        public string TaxiwayName = "";
+        public int NodeId;                      // graph node where the taxiway meets the runway
+        public double Latitude, Longitude;      // that node projected ONTO the centerline
+        public double AlongMetersFromThreshold; // from the named runway's takeoff-end threshold
+        public double RemainingMeters;          // runway ahead in the takeoff direction
+        /// <summary>
+        /// Along-track of the node where this taxiway crosses onto the runway pavement from the
+        /// LEFT / RIGHT of the takeoff direction (its cluster node farthest from the centreline on
+        /// that side), NaN when it does not reach that edge — where an ANGLED entry really reaches
+        /// the runway. See GetRunwayIntersections.
+        /// </summary>
+        public double PavementEntryAlongLeft = double.NaN, PavementEntryAlongRight = double.NaN;
+
+        /// <summary>
+        /// For a NAMED holding point (<see cref="ResolveHoldingPointEntries"/>): the graph
+        /// node the PAINTED HOLD LINE itself snapped to, as opposed to <see cref="NodeId"/>
+        /// (where its stub meets the runway). 0 for runway intersections, and for a painted
+        /// point whose line didn't snap to a distinct reachable node.
+        /// <para>Routing pins the route THROUGH this node so the pilot taxis up the stub they
+        /// named. Without it only the runway ENTRY is fixed and the approach corridor is a
+        /// free A* choice, which at EGLL 27R took a pilot who picked A2 up the neighbouring A3
+        /// stub — A2 and A3 merge just short of the runway, so the route rejoined A2 for its
+        /// last 60 m and the hold-short (navdata-authoritative, the LAST hold node on the
+        /// route) landed on and announced A3.</para>
+        /// </summary>
+        public int HoldNodeId;
+    }
 
     // Max perpendicular distance (metres) from a hold-short node to a runway
     // centerline for the node to be named after that runway. Above a CAT III /
     // code-F holding-position setback (~107 m) so real hold lines match, below
     // major-airport parallel-runway spacing so a node binds to its OWN runway.
-    private const double HOLDSHORT_RUNWAY_MATCH_M = 150.0;
+    // internal (not private): HoldShortNodeResolver.HS_NODE_MATCH_M references
+    // this directly so its designated-node trust window can never drift from
+    // the naming tolerance.
+    internal const double HOLDSHORT_RUNWAY_MATCH_M = 150.0;
 
     // Start at 1 so node ID 0 is a permanent "not set" sentinel. TaxiGuidanceManager
     // uses _destinationNodeId = 0 to mark a cleared route (e.g. after
@@ -67,6 +260,29 @@ public class TaxiGraph
     private int _nextNodeId = 1;
     private readonly Dictionary<string, List<int>> _spatialHash = new();
     private readonly Dictionary<string, List<int>> _taxiwayNodeIndex = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Serialises post-Build structure changes against the one query that runs off the UI thread:
+    /// <see cref="DescribeLocation"/> (Alt+L, via TaxiGuidanceManager.DescribeCurrentLocation, often
+    /// on the active guidance graph). The only post-Build change is the painted holding-point
+    /// projection (<see cref="InsertHoldingPointNodeOnEdge"/> → <see cref="SplitEdgeAt"/>), which
+    /// TaxiAssistForm runs on the UI thread; unserialised, the query hit "Collection was modified".
+    /// <para>The query holds it for its whole run (cell index included), the projection for its whole
+    /// scan-then-split. UI-thread readers need no lock because every mutation is on the UI thread too.
+    /// A new pool-thread query or post-Build mutation MUST take it. Nothing nests another lock inside
+    /// it, and TaxiGuidanceManager releases _stateLock before asking the graph.</para>
+    /// </summary>
+    private readonly object _structureLock = new();
+
+    /// <summary>
+    /// Build-time-only dedup sidecar for <see cref="RegisterTaxiwayNode"/>: mirrors the node-id
+    /// SET for each taxiway in <see cref="_taxiwayNodeIndex"/> so the per-registration "already
+    /// added?" check is O(1) instead of an O(n) <see cref="List{T}.Contains"/> scan (large airports
+    /// register thousands of (taxiway, node) pairs during Build). The LIST in
+    /// <see cref="_taxiwayNodeIndex"/> remains the single source of truth for iteration order —
+    /// <see cref="GetNodesOnTaxiway"/> reads only the list, never this set.
+    /// </summary>
+    private readonly Dictionary<string, HashSet<int>> _taxiwayNodeIdSet = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Maps a normalized alias (see TaxiDataMerger.NormalizeTaxiwayName) to the canonical
@@ -115,28 +331,226 @@ public class TaxiGraph
     /// 200-500ms and would otherwise stall the UI thread. Runs on the thread pool.
     /// </summary>
     public static System.Threading.Tasks.Task<TaxiGraph> BuildAsync(
-        List<TaxiPath> paths, List<ParkingSpot> parkingSpots, List<StartPosition> runwayStarts)
+        List<TaxiPath> paths, List<ParkingSpot> parkingSpots, List<StartPosition> runwayStarts,
+        IReadOnlyList<Runway>? runways = null)
     {
-        return System.Threading.Tasks.Task.Run(() => Build(paths, parkingSpots, runwayStarts));
+        return System.Threading.Tasks.Task.Run(() => Build(paths, parkingSpots, runwayStarts, runways));
+    }
+
+    /// <summary>
+    /// One spelling per taxiway, resolvable from any spelling that appears for it.
+    ///
+    /// Scenery data really does carry the same taxiway under two casings — CYVR navdata
+    /// holds both "D" and "d" — and two accessors on this class then disagreed about the
+    /// airport. <see cref="GetAllTaxiwayNames"/> dedupes into a HashSet with
+    /// StringComparer.OrdinalIgnoreCase, so it reported ONE of them; <see cref="GetNamedEdges"/>
+    /// returned each edge's raw name, so it reported BOTH. The SayIntentions import consumes
+    /// the two TOGETHER — the first to resolve the spoken clearance, the second to snap the
+    /// published ground track — so a live 2026-08-19 CYVR import produced "d" and "D" as
+    /// separate legs and the form could seat only one of them.
+    ///
+    /// The canonical spelling is THE ONE THE DATA MOSTLY USES, with the ordinally smallest
+    /// breaking an even vote. Ordinal-smallest ALONE was tried first and is wrong for
+    /// word-shaped names: uppercase sorts before lowercase at the first differing letter
+    /// ('I' 0x49 &lt; 'i' 0x69), so a SINGLE row spelled "LINK 5" renamed every "Link 5"
+    /// segment at the airport — and TaxiwayName is SPOKEN VERBATIM, so a screen reader then
+    /// reads it letter by letter. docs/taxi-guidance.md states the rule that breaks: "The
+    /// stored name is always the original human-readable form from the authoritative
+    /// source." Counting rows honours it wherever the data has a predominant spelling, and
+    /// the ordinal tie-break keeps the whole rule deterministic and independent of
+    /// enumeration order — the same property GetNamedEdges' own sort key exists to
+    /// guarantee — while still preferring the conventional "D" over "d" for a
+    /// single-letter designator, where the two spellings are genuinely one row each.
+    ///
+    /// A row the graph itself DISCARDS gets no vote: <see cref="Build"/> skips a path whose
+    /// endpoints resolve to one node, but only AFTER this fold has run, so a zero-length row
+    /// could otherwise decide the spelling of every real segment while contributing no node,
+    /// no edge and no RegisterTaxiwayNode call. Such a row still MAPS (it is a key like any
+    /// other) so that whatever Build does with it lands on the same spelling; it just does
+    /// not choose. A group with nothing but discarded rows falls back to the ordinal
+    /// tie-break naturally, because every vote in it is zero.
+    ///
+    /// This does NOT only arise where an airport's OWN data is inconsistently cased — an
+    /// earlier version of this comment claimed it did, and that is wrong. The list reaching
+    /// <see cref="Build"/> is the AUGMENTED one: AugmentingAirportDataProvider writes OSM /
+    /// apt.dat names into TaxiPath.Name for segments navdata left unnamed, un-normalised, so
+    /// an online spelling competes here with a navdata one.
+    ///
+    /// So PROVENANCE OUTRANKS THE VOTE: a spelling with a navdata row behind it beats one
+    /// with none, however many online rows carry the latter. "navdata is AUTHORITATIVE — an
+    /// existing navdata taxiway/gate name is never overwritten" ([AUG-1]) is enforced by
+    /// TaxiDataMerger when it merges, which refuses to overwrite a named segment; without
+    /// this the fold could undo it one layer up, because a taxiway navdata names on two
+    /// segments and an online source fills on three would lose 3-2 on count alone. The vote
+    /// then decides inside the winning provenance, and ordinal-smallest inside that. A group
+    /// with no navdata row at all is decided by the vote exactly as before.
+    ///
+    /// A discarded row confers no authority either — the navdata tally counts only rows Build
+    /// will keep, for the same reason the vote does.
+    ///
+    /// The returned dictionary holds ONE entry per case-insensitive group, keyed by the
+    /// first spelling seen for it — not one entry per spelling. Lookups are
+    /// OrdinalIgnoreCase, so every spelling still resolves; do not read <c>Keys</c> expecting
+    /// the canonical form.
+    ///
+    /// Safe to apply at the point names enter the graph because every consumer of
+    /// TaxiEdge.TaxiwayName that COMPARES names already does so OrdinalIgnoreCase (TaxiRouter,
+    /// TaxiGuidanceManager, TaxiLeadIn, ResolveTaxiwayName). That is not a class invariant —
+    /// this file's own edge dedups and SayIntentionsTaxiPathSnapper compare ordinally — it is
+    /// what makes folding safe for them, and this fold is what makes their ordinal compares
+    /// safe in turn. The only behavioural change is that one taxiway now has one spelling
+    /// wherever it is displayed, emitted or seated.
+    /// </summary>
+    /// <summary>How many rows carry one exact spelling, and how many of those are
+    /// navdata's rather than an online source's. Discarded rows count in neither.</summary>
+    private readonly record struct Tally(int Navdata, int Total);
+
+    internal static Dictionary<string, string> BuildCanonicalTaxiwayNames(List<TaxiPath> paths)
+    {
+        // Case-insensitive group -> per exact spelling, how many SUBSTANTIAL rows carry it
+        // and how many of those came from navdata rather than an online source.
+        var votes = new Dictionary<string, Dictionary<string, Tally>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in paths)
+        {
+            string name = path.Name?.Trim() ?? "";
+            if (name.Length == 0) continue;
+
+            if (!votes.TryGetValue(name, out var perSpelling))
+            {
+                perSpelling = new Dictionary<string, Tally>(StringComparer.Ordinal);
+                votes[name] = perSpelling;
+            }
+
+            // Zero weight for a row Build will discard: it still gets an entry, so the
+            // spelling maps, but it cannot outvote - or lend authority to - pavement that
+            // is not there.
+            bool discardedByBuild = FastDistanceMeters(
+                path.StartLat, path.StartLon, path.EndLat, path.EndLon) < MERGE_THRESHOLD_METERS;
+            int weight = discardedByBuild ? 0 : 1;
+            int navdataWeight = path.NameFromOnlineSource ? 0 : weight;
+
+            var seen = perSpelling.TryGetValue(name, out var t) ? t : default;
+            perSpelling[name] = new Tally(seen.Navdata + navdataWeight, seen.Total + weight);
+        }
+
+        var canonical = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in votes)
+        {
+            string? best = null;
+            var bestTally = new Tally(-1, -1);
+            foreach (var (spelling, tally) in group.Value)
+            {
+                if (Beats(spelling, tally, best, bestTally))
+                {
+                    best = spelling;
+                    bestTally = tally;
+                }
+            }
+
+            canonical[group.Key] = best!;
+        }
+
+        return canonical;
+
+        // Total order: navdata authority first, then most rows, then ordinally smallest.
+        // Every step is a property of the data rather than of enumeration order, so the same
+        // airport always folds the same way however the paths list was ordered.
+        static bool Beats(string spelling, Tally tally, string? best, Tally bestTally)
+        {
+            if (tally.Navdata != bestTally.Navdata) return tally.Navdata > bestTally.Navdata;
+            if (tally.Total != bestTally.Total) return tally.Total > bestTally.Total;
+            return string.CompareOrdinal(spelling, best) < 0;
+        }
     }
 
     /// <summary>
     /// Builds the taxi graph from raw taxi path data and parking spots.
     /// </summary>
-    public static TaxiGraph Build(List<TaxiPath> paths, List<ParkingSpot> parkingSpots, List<StartPosition> runwayStarts)
+    public static TaxiGraph Build(List<TaxiPath> paths, List<ParkingSpot> parkingSpots, List<StartPosition> runwayStarts,
+        IReadOnlyList<Runway>? runways = null)
     {
         var graph = new TaxiGraph();
+
+        // Repair laterally-bogus start rows against the runway table when the caller has
+        // one (see SnapStartToRunwayCenterline for the EGKK evidence). Everything below —
+        // runway-start node marking, the centerlines, the hold-short naming fallback —
+        // reads runwayStarts, so correcting it once here covers all three. Callers with no
+        // runway table (tests, probes) keep today's behavior exactly.
+        if (runways != null && runways.Count > 0 && runwayStarts.Count > 0)
+        {
+            var byName = new Dictionary<string, Runway>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in runways)
+                if (!string.IsNullOrEmpty(r.RunwayID)) byName.TryAdd(r.RunwayID.Trim(), r);
+
+            var snapped = new List<StartPosition>(runwayStarts.Count);
+            foreach (var s in runwayStarts)
+            {
+                if (!byName.TryGetValue(s.RunwayName?.Trim() ?? "", out var rwy))
+                {
+                    snapped.Add(s);
+                    continue;
+                }
+                var (lat, lon) = SnapStartToRunwayCenterline(
+                    s.Latitude, s.Longitude, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+                // ... and then, separately, a row sitting far OUTBOARD of the pavement ends is slid
+                // back onto the nearer one: the runway shape envelopes the start rows, so a bogus
+                // row extends the runway by up to 800 m and claims taxiway nodes with it (§4).
+                // Not where taxi pavement runs out along the runway's own axis to the row: that is a starter
+                // extension (EGKK 26L, 406 m behind its runway_end), a real departure point the lineup must keep.
+                if (!StarterExtensionReachesRow(paths, rwy, lat, lon))
+                    (lat, lon) = PullOutboardStartRowOntoPavement(
+                        lat, lon, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon, s.RunwayName);
+                if (Math.Abs(lat - s.Latitude) < 1e-9 && Math.Abs(lon - s.Longitude) < 1e-9)
+                {
+                    snapped.Add(s);
+                    continue;
+                }
+                // Copy rather than mutate: the caller's list is often a cached provider
+                // result that other features read.
+                snapped.Add(new StartPosition
+                {
+                    RunwayName = s.RunwayName,
+                    Type = s.Type,
+                    Heading = s.Heading,
+                    Altitude = s.Altitude,
+                    Latitude = lat,
+                    Longitude = lon,
+                });
+            }
+            runwayStarts = snapped;
+        }
+
+        // One spelling per taxiway, decided across ALL paths before any is processed —
+        // see BuildCanonicalTaxiwayNames for the CYVR "D"/"d" case this removes.
+        var canonicalTaxiwayNames = BuildCanonicalTaxiwayNames(paths);
+
+        // Navdata endpoint identity for BridgeOrphanParkingIslands. Recorded from the rows'
+        // endpoint types because TaxiNode.Type is later overwritten by the parking pass (the
+        // node nearest a parking spot becomes Parking, in any component).
+        var standNodes = new HashSet<int>();
+        var holdShortNodes = new HashSet<int>();
 
         foreach (var path in paths)
         {
             // Defense-in-depth: trim here in case the path was constructed directly
-            // (e.g. tests) bypassing the DB provider normalization.
+            // (e.g. tests) bypassing the DB provider normalization. Then fold the
+            // trimmed name onto the airport's canonical spelling of it, so nodes, edges,
+            // RegisterTaxiwayNode, _normalizedRealNames and the alias labels below all
+            // agree with GetAllTaxiwayNames().
             string name = path.Name?.Trim() ?? "";
+            if (name.Length > 0 && canonicalTaxiwayNames.TryGetValue(name, out string? canonicalName))
+            {
+                name = canonicalName;
+            }
 
             // Resolve start and end nodes (create if new, merge if close) — pass the
             // trimmed name so node.TaxiwayNames HashSet entries are canonical.
             int startNodeId = graph.ResolveNode(path.StartLat, path.StartLon, path.StartType, name);
             int endNodeId = graph.ResolveNode(path.EndLat, path.EndLon, path.EndType, name);
+
+            RecordEndpointIdentity(path.StartType, startNodeId, standNodes, holdShortNodes);
+            RecordEndpointIdentity(path.EndType, endNodeId, standNodes, holdShortNodes);
 
             if (startNodeId == endNodeId)
                 continue; // degenerate segment
@@ -226,6 +640,9 @@ public class TaxiGraph
             }
         }
 
+        // Before the parking pass below can overwrite Type (see _navdataHoldShortNodeIds).
+        graph._navdataHoldShortNodeIds = holdShortNodes;
+
         // Mark parking nodes by matching to parking spot coordinates (spatial-hash FindNearestNode)
         foreach (var spot in parkingSpots)
         {
@@ -256,16 +673,115 @@ public class TaxiGraph
             }
         }
 
-        // Build runway centerlines by pairing opposing runway-start positions.
-        // Each physical runway has two `start` rows whose headings differ by 180°
-        // (e.g. 27L heading ~270° pairs with 09R heading ~90°). We pair them up so
-        // DescribeLocation can detect "on runway X" anywhere along the runway,
-        // not just within 50 m of a threshold node — the previous edge-scan path
-        // required taxi_path.type='R' which doesn't exist in the navdatareader DB.
-        // Half-width defaults to 75 ft (≈23 m) when we can't infer it from a
-        // nearby taxi_path edge — covers most Code C/D/E runways.
+        // Build runway centerlines by pairing opposing runway-start positions, so
+        // DescribeLocation can detect "on runway X" anywhere along the runway, not just
+        // within 50 m of a threshold node — the previous edge-scan path required
+        // taxi_path.type='R', which doesn't exist in the navdatareader DB. Half-width
+        // defaults to 75 ft (≈23 m) when we can't infer it from a nearby taxi_path edge,
+        // which covers most Code C/D/E runways.
+        //
+        // TWO PASSES, DESIGNATOR FIRST. Designators are reciprocal BY DEFINITION (number
+        // differs by 18, L↔R swapped, C/none unchanged) and the side letter keeps
+        // parallels apart — 08L can only ever pair with 26R — whereas `start.heading` is
+        // wrong often enough to mis-pair whole airports. LEMD stores 0° on runways that
+        // point 322°, which made the heading test read 32R as the reciprocal of 18L and
+        // 32L as the reciprocal of 18R: two lines drawn DIAGONALLY ACROSS THE AIRFIELD,
+        // and no correct line at all. EGKK stores 08L and 26R both at 257.6° and 08R and
+        // 26L both at ~168°, so nothing paired and it built ZERO centerlines.
+        //
+        // Measured over the whole fs2020 navdata (41.8 k airports, 47.9 k centerlines),
+        // running the designator pass first changes 10 airports and improves ALL TEN —
+        // mis-paired lines fall from 662 to 642 and LEMD goes from 2 wrong lines to 4
+        // right ones. Nothing regresses, which is why the order is safe to fix.
         const double DEFAULT_HALF_WIDTH_FT = 75.0;
         var paired = new HashSet<int>();
+
+        // Pavement geometry for the centerlines below, from the runway table when the caller
+        // supplied one. See RunwayCenterline's Pavement* fields for why the start rows are
+        // not good enough for an "is this ON the runway?" test.
+        var runwayByName = new Dictionary<string, Runway>(StringComparer.OrdinalIgnoreCase);
+        if (runways != null)
+            foreach (var r in runways)
+                if (!string.IsNullOrEmpty(r.RunwayID)) runwayByName.TryAdd(r.RunwayID.Trim(), r);
+
+        // Fills the pavement fields from the runway table, falling back to the start-row
+        // endpoints + default half-width so a caller without a runway table is unchanged.
+        void ApplyPavement(RunwayCenterline cl, string? name1, string? name2)
+        {
+            cl.PavementLat1 = cl.Lat1; cl.PavementLon1 = cl.Lon1;
+            cl.PavementLat2 = cl.Lat2; cl.PavementLon2 = cl.Lon2;
+            cl.PavementHalfWidthMeters = cl.HalfWidthMeters;
+
+            if (!runwayByName.TryGetValue(name1?.Trim() ?? "", out var rwy) &&
+                !runwayByName.TryGetValue(name2?.Trim() ?? "", out rwy))
+                return;
+
+            // The runway row is stored per END, so its Start* may be either end of this
+            // line. Orient it to match Lat1/Lon1 (which carries Name1).
+            bool startMatchesEnd1 =
+                string.Equals(rwy.RunwayID?.Trim(), name1?.Trim(), StringComparison.OrdinalIgnoreCase);
+
+            cl.PavementLat1 = startMatchesEnd1 ? rwy.StartLat : rwy.EndLat;
+            cl.PavementLon1 = startMatchesEnd1 ? rwy.StartLon : rwy.EndLon;
+            cl.PavementLat2 = startMatchesEnd1 ? rwy.EndLat : rwy.StartLat;
+            cl.PavementLon2 = startMatchesEnd1 ? rwy.EndLon : rwy.StartLon;
+            if (rwy.Width > 0) cl.PavementHalfWidthMeters = rwy.Width * 0.3048 / 2.0;
+        }
+
+        for (int i = 0; i < runwayStarts.Count; i++)
+        {
+            if (paired.Contains(i)) continue;
+            var a = runwayStarts[i];
+            string? reciprocal = ReciprocalRunwayName(a.RunwayName);
+            if (reciprocal == null) continue;
+
+            for (int j = i + 1; j < runwayStarts.Count; j++)
+            {
+                if (paired.Contains(j)) continue;
+                var b = runwayStarts[j];
+                if (!string.Equals(b.RunwayName?.Trim(), reciprocal, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Sanity: opposing thresholds should be 200 m – 6000 m apart
+                // (smaller = same end, larger = different runway pair).
+                double sep = FastDistanceMeters(a.Latitude, a.Longitude, b.Latitude, b.Longitude);
+                if (sep < 200.0 || sep > 6000.0) continue;
+
+                // Does the a→b direction actually match what "a" is called? This replaces
+                // the stored heading as the geometry check. The tolerance is wide (45°)
+                // because the designator is magnetic while the computed bearing is true,
+                // and magnetic variation reaches ~20° at high latitudes; the exact-
+                // reciprocal-name and separation tests do the real work.
+                double designatorHdg = RunwayDesignatorHeading(a.RunwayName);
+                double actualHdg = NavigationCalculator.CalculateBearing(
+                    a.Latitude, a.Longitude, b.Latitude, b.Longitude);
+                if (Math.Abs(NormalizeAngle(designatorHdg - actualHdg)) > 45.0) continue;
+
+                var clDesignator = new RunwayCenterline
+                {
+                    Lat1 = a.Latitude, Lon1 = a.Longitude,
+                    Lat2 = b.Latitude, Lon2 = b.Longitude,
+                    Name1 = a.RunwayName,
+                    Name2 = b.RunwayName,
+                    // The stored heading is what we just declined to trust — use the
+                    // measured one, which is also what every consumer of this line means.
+                    HeadingDeg1 = actualHdg,
+                    HalfWidthMeters = (DEFAULT_HALF_WIDTH_FT * 0.3048),
+                };
+                ApplyPavement(clDesignator, a.RunwayName, b.RunwayName);
+                graph.RunwayCenterlines.Add(clDesignator);
+                paired.Add(i);
+                paired.Add(j);
+                break;
+            }
+        }
+
+        // SECOND PASS — the leftovers, by reciprocal HEADING (±15° to absorb mag/true
+        // conventions). Still needed, and not merely as a safety net: it is what rescues
+        // the NAME-SWAPPED airports, where the row labelled for one end physically sits at
+        // the other. AYCH's "03" row sits at the 21 threshold carrying 21's heading, so the
+        // designator pass correctly refuses it (the a→b bearing is 185° from what "03"
+        // claims) while the heading pass still finds the true pair.
         for (int i = 0; i < runwayStarts.Count; i++)
         {
             if (paired.Contains(i)) continue;
@@ -274,15 +790,12 @@ public class TaxiGraph
             {
                 if (paired.Contains(j)) continue;
                 var b = runwayStarts[j];
-                // Reciprocal heading check (allow ±15° to absorb mag/true conventions).
                 double hdgDelta = Math.Abs(NormalizeAngle(a.Heading - b.Heading + 180.0));
                 if (hdgDelta > 15.0) continue;
-                // Sanity: opposing thresholds should be 200 m – 6000 m apart
-                // (smaller = same end, larger = different runway pair).
                 double sep = FastDistanceMeters(a.Latitude, a.Longitude, b.Latitude, b.Longitude);
                 if (sep < 200.0 || sep > 6000.0) continue;
 
-                graph.RunwayCenterlines.Add(new RunwayCenterline
+                var clHeading = new RunwayCenterline
                 {
                     Lat1 = a.Latitude, Lon1 = a.Longitude,
                     Lat2 = b.Latitude, Lon2 = b.Longitude,
@@ -290,12 +803,63 @@ public class TaxiGraph
                     Name2 = b.RunwayName,
                     HeadingDeg1 = a.Heading,
                     HalfWidthMeters = (DEFAULT_HALF_WIDTH_FT * 0.3048),
-                });
+                };
+                ApplyPavement(clHeading, a.RunwayName, b.RunwayName);
+                graph.RunwayCenterlines.Add(clHeading);
                 paired.Add(i);
                 paired.Add(j);
                 break;
             }
         }
+
+        // Give each centerline its runway's REAL half-width where the caller supplied
+        // the runway table. The 75 ft default under-reads a wide runway by tens of
+        // metres — at KDTW a vacate stop point 26 m off 09L's centreline sat on the
+        // real 200 ft-wide pavement but outside the default 22.9 m corridor, so
+        // RunwayVacateResolver.IsOnDifferentRunway called it clear and "stop and hold
+        // position" was announced ON the runway (708 such resolver-invisible stop
+        // points DB-wide, 2026-08-26) — and over-reads a narrow GA runway the other
+        // way. Matching is by COLLINEARITY with the runway's own axis (both centerline
+        // endpoints within the same 30 m lateral the resolver's IsLandingRunway uses,
+        // headings parallel or reciprocal ±20°), never by name — start rows can be
+        // name-swapped (AYCH). No match keeps the default; the width can move in
+        // either direction because it is the pavement's real edge, not a tolerance.
+        if (runways != null && runways.Count > 0 && graph.RunwayCenterlines.Count > 0)
+        {
+            foreach (var cl in graph.RunwayCenterlines)
+            {
+                foreach (var rwy in runways)
+                {
+                    if (rwy.Width <= 0.0) continue;
+                    double hdgRad = rwy.Heading * Math.PI / 180.0;
+                    double cosHw = Math.Cos(hdgRad), sinHw = Math.Sin(hdgRad);
+                    double LateralM(double lat, double lon)
+                    {
+                        double latR = (rwy.StartLat + lat) * 0.5 * Math.PI / 180.0;
+                        double dN = (lat - rwy.StartLat) * 111132.0;
+                        double dE = (lon - rwy.StartLon) * 111132.0 * Math.Cos(latR);
+                        return Math.Abs(dE * cosHw - dN * sinHw);
+                    }
+                    const double COLLINEAR_LATERAL_M = 30.0;   // same as RunwayVacateResolver.SameRunwayLateralM
+                    if (LateralM(cl.Lat1, cl.Lon1) > COLLINEAR_LATERAL_M) continue;
+                    if (LateralM(cl.Lat2, cl.Lon2) > COLLINEAR_LATERAL_M) continue;
+                    double hd = Math.Abs(NormalizeAngle(cl.HeadingDeg1 - rwy.Heading));
+                    if (hd > 20.0 && hd < 160.0) continue;
+                    cl.HalfWidthMeters = rwy.Width * 0.5 * 0.3048;
+                    break;
+                }
+            }
+        }
+
+        // Bridge small same-named modelling gaps BEFORE hold-short naming and
+        // component assignment, so both see the repaired connectivity. Needs the
+        // centerlines above for its never-cross-a-runway gate.
+        graph.BridgeSameNamedGaps();
+
+        // Then close TINY dead-end gaps at junctions between DIFFERENT taxiways
+        // (EGKK AS→A). Runs second so a same-named chain repair wins first and
+        // this pass only sees the dead ends that remain.
+        graph.BridgeTinyDeadEndGaps();
 
         // Assign hold-short names using the node's taxiway designator and nearest runway.
         // The taxiway name on the hold-short node IS the holding point designator (e.g. NB1, A5).
@@ -322,67 +886,9 @@ public class TaxiGraph
                 // Prefer connector-style designators (A5, NB1, K12) over plain
                 // main taxiway names (A, B, K) because the connector name is
                 // the actual *holding point* designator pilots use with ATC.
-                //
-                // Ranking (best first):
-                //   1. Name contains BOTH a letter and a digit (e.g., "A5", "NB1", "K12")
-                //   2. Any non-empty name (longest-first — gives "MAIN" over "A")
-                //   3. Fallback: empty
-                string holdPointName = "";
-                if (graph.Adjacency.TryGetValue(node.NodeId, out var edges))
-                {
-                    var distinctNames = new HashSet<string>();
-                    foreach (var edge in edges)
-                    {
-                        if (!string.IsNullOrEmpty(edge.TaxiwayName))
-                            distinctNames.Add(edge.TaxiwayName);
-                    }
-
-                    // Tier 1: names that look like connector/holding-point designators
-                    string? connectorName = null;
-                    foreach (var n in distinctNames)
-                    {
-                        bool hasLetter = false, hasDigit = false;
-                        foreach (char c in n)
-                        {
-                            if (char.IsLetter(c)) hasLetter = true;
-                            else if (char.IsDigit(c)) hasDigit = true;
-                        }
-                        if (hasLetter && hasDigit)
-                        {
-                            // Among connectors, prefer the shortest (A5 > KILO5A);
-                            // ties broken by alpha order for determinism.
-                            if (connectorName == null ||
-                                n.Length < connectorName.Length ||
-                                (n.Length == connectorName.Length &&
-                                 string.Compare(n, connectorName, StringComparison.Ordinal) < 0))
-                            {
-                                connectorName = n;
-                            }
-                        }
-                    }
-
-                    if (connectorName != null)
-                    {
-                        holdPointName = connectorName;
-                    }
-                    else if (distinctNames.Count > 0)
-                    {
-                        // No connector pattern — fall back to any name.
-                        // Prefer longer over single-letter (more specific).
-                        string? best = null;
-                        foreach (var n in distinctNames)
-                        {
-                            if (best == null ||
-                                n.Length > best.Length ||
-                                (n.Length == best.Length &&
-                                 string.Compare(n, best, StringComparison.Ordinal) < 0))
-                            {
-                                best = n;
-                            }
-                        }
-                        holdPointName = best ?? "";
-                    }
-                }
+                // The ranking is PreferredTaxiwayNameAt's, shared with the
+                // post-landing backtrack's "Taxiway H ahead".
+                string holdPointName = graph.PreferredTaxiwayNameAt(node.NodeId);
 
                 // Primary: associate by nearest runway CENTERLINE (length-invariant),
                 // so a mid-runway crossing of a long runway is named after the runway,
@@ -418,12 +924,385 @@ public class TaxiGraph
         // upgrades are in place.
         graph.AssignConnectedComponents();
 
+        // Reattach stand stubs the navdata stranded, then renumber. Runs after the first
+        // component assignment (it needs to know what is an island) and before the main
+        // component is recorded (a bridge can change which component is largest).
+        graph.BridgeOrphanParkingIslands(standNodes, holdShortNodes);
+        graph.MainComponentId = graph.ComputeMainComponentId();
+
         return graph;
     }
 
     /// <summary>
+    /// Distance within which a stranded stand stub is treated as a navdata SEAM rather than
+    /// genuinely disconnected ground, and joined to the main taxi network with one bridge edge.
+    /// Bridging further would draw a straight steering line across whatever is actually between
+    /// them. The narrowed rule's bridge counts are recorded in docs/taxi-guidance.md's "Stranded
+    /// stand stubs are reattached" bullet, so the figures cannot drift between copies.
+    /// </summary>
+    private const double MAX_ORPHAN_PARKING_BRIDGE_M = 50.0;
+
+
+    /// <summary>
+    /// How far from a stand <see cref="MarkStandLeadInChains"/> follows its lead-in chain. Long
+    /// enough to cover a real multi-segment lead-in bend (the review's KJFK bend sat 45 m from its
+    /// stand); short enough that a tiny airport whose only taxiway is one unbranched path is not
+    /// excluded end to end.
+    ///
+    /// <para><see cref="Briefing.BriefingTurns.MaxUnnamedStretchMetres"/> reads this value too — it is the longest
+    /// unnamed stretch the route briefing states a turn across, so a change here moves the briefing's cut-off
+    /// as well.</para>
+    /// </summary>
+    internal const double STAND_LEAD_IN_CHAIN_MAX_M = 100.0;
+
+
+    /// <summary>
+    /// Joins each stranded STAND STUB to the main (largest) taxi network with one fabricated edge
+    /// of type <see cref="StandBridgePathType"/>, then renumbers components so every caller sees
+    /// the repaired reachability.
+    ///
+    /// <para>Motivating defect (issue #228, OMDB gate B 18R): the stand and its connector are one
+    /// "P" lead-in row whose open end stops 12 m short of taxiway U. Build's node merge is 1.5 m, so
+    /// the stub stayed its own component, and LoadRoute, which picks start nodes only from the
+    /// DESTINATION's component, found no start node: "Could not find a nearby taxiway node."</para>
+    ///
+    /// <para>What qualifies: a component other than the main one whose EVERY edge is a navdata
+    /// lead-in (PathType "P") and which contains a stand. Identity comes from the endpoint types
+    /// Build recorded, <paramref name="standNodes"/> ("P") and <paramref name="holdShortNodes"/>
+    /// (HS/HSND/IHS/IHSND), never from <see cref="TaxiNode.Type"/>, which the parking pass stamps
+    /// on whichever node is nearest a spot, in any component. An island carrying any taxiway or
+    /// apron edge is never bridged: that is the GCLP S5 shape the start-node filter exists to
+    /// reject, and bridging whole networks at their closest pair drew routes along runways and
+    /// kilometre-long detours through a single guessed line.</para>
+    ///
+    /// <para>The island end of a bridge is never a stand or a hold-short node (for a two-node stub
+    /// that is the connector), and when only the stand is within range nothing is bridged. One
+    /// bridge per island keeps it a dead-end spur.</para>
+    ///
+    /// <para>The network end is never a stand, a hold-short node, a node on runway pavement, or a
+    /// node on another stand's lead-in chain (<see cref="MarkStandLeadInChains"/>), and a pair
+    /// whose straight line would touch runway pavement is skipped for the next closest
+    /// (<see cref="RunwayPavement"/>). Without these, bridges ran along runways with no hold-short
+    /// instruction, produced false "Crossing runway" callouts, and steered pilots up a
+    /// neighbouring stand's lead-in.</para>
+    /// </summary>
+    private void BridgeOrphanParkingIslands(HashSet<int> standNodes, HashSet<int> holdShortNodes)
+    {
+        int mainComponentId = ComputeMainComponentId();
+        if (mainComponentId < 0) return;
+
+        var islands = new Dictionary<int, List<TaxiNode>>();
+        foreach (var node in Nodes.Values)
+        {
+            if (node.ComponentId == mainComponentId) continue;
+            if (!islands.TryGetValue(node.ComponentId, out var members))
+                islands[node.ComponentId] = members = new List<TaxiNode>();
+            members.Add(node);
+        }
+
+        var standStubs = islands.Values.Where(island => IsStandStubIsland(island, standNodes)).ToList();
+        if (standStubs.Count == 0) return;
+
+        // Coarse grid over the main component's eligible nodes so each island node only measures
+        // against its own neighbourhood. Each cell is one bridge distance across ON THE GROUND, so
+        // the 3x3 block around a node always contains every candidate within that distance. The
+        // longitude cell is widened by 1/cos(latitude) to match FastDistanceMeters, which scales
+        // longitude the same way: a uniform degree cell spans only 50 x cos(lat) metres east-west
+        // (25 m at ENGM, 10 m at ENSB). An airport spans a negligible latitude range, so one cosine
+        // from any of its nodes serves all of them; the floor keeps the cell finite near a pole.
+        const double METERS_PER_DEG_LAT = 111132.0;
+        double latCell = MAX_ORPHAN_PARKING_BRIDGE_M / METERS_PER_DEG_LAT;
+        double cosLat = Math.Max(Math.Cos(Nodes.Values.First().Latitude * (Math.PI / 180.0)), 0.01);
+        double lonCell = latCell / cosLat;
+
+        var leadInChainNodes = MarkStandLeadInChains(standNodes);
+
+        // One RunwayShape per centerline, built ONCE for this whole graph build rather than once
+        // per node/pair below: RunwayShape.For allocates (and PavementIsUsable allocates a second
+        // shape inside it), and IsEligibleMainEndpoint alone runs for every main-component node
+        // (~3891 at a KMSP-sized graph) — ~62k allocations at a KMSP-sized graph before this hoist.
+        var runwayShapes = RunwayPavement.BuildShapes(RunwayCenterlines);
+
+        var grid = new Dictionary<(long, long), List<TaxiNode>>();
+        foreach (var node in Nodes.Values)
+        {
+            if (node.ComponentId != mainComponentId) continue;
+            if (!IsEligibleMainEndpoint(node, standNodes, holdShortNodes, leadInChainNodes, runwayShapes)) continue;
+            var key = ((long)Math.Floor(node.Latitude / latCell),
+                       (long)Math.Floor(node.Longitude / lonCell));
+            if (!grid.TryGetValue(key, out var bucket))
+                grid[key] = bucket = new List<TaxiNode>();
+            bucket.Add(node);
+        }
+        if (grid.Count == 0) return;
+
+        bool bridged = false;
+        foreach (var island in standStubs)
+        {
+            var pairs = new List<(double Distance, TaxiNode IslandNode, TaxiNode MainNode)>();
+            foreach (var member in island)
+            {
+                if (standNodes.Contains(member.NodeId) || holdShortNodes.Contains(member.NodeId)) continue;
+                long gLat = (long)Math.Floor(member.Latitude / latCell);
+                long gLon = (long)Math.Floor(member.Longitude / lonCell);
+                for (long dLat = -1; dLat <= 1; dLat++)
+                    for (long dLon = -1; dLon <= 1; dLon++)
+                    {
+                        if (!grid.TryGetValue((gLat + dLat, gLon + dLon), out var bucket)) continue;
+                        foreach (var main in bucket)
+                        {
+                            double d = FastDistanceMeters(
+                                member.Latitude, member.Longitude, main.Latitude, main.Longitude);
+                            if (d < MAX_ORPHAN_PARKING_BRIDGE_M) pairs.Add((d, member, main));
+                        }
+                    }
+            }
+
+            var chosen = ChooseBridgePair(pairs, runwayShapes);
+            if (chosen == null) continue;
+
+            AddOrphanParkingBridge(chosen.Value.IslandNode, chosen.Value.MainNode, chosen.Value.Distance);
+            // Every member of THIS island — not just the node the bridge actually attaches to —
+            // has no way out but that one fabricated edge (Task 6 Defect A). Record node ids now,
+            // before the renumbering below resets every ComponentId to -1.
+            foreach (var member in island)
+                _bridgeOnlyStandStubNodes.Add(member.NodeId);
+            bridged = true;
+        }
+
+        if (!bridged) return;
+
+        foreach (var node in Nodes.Values)
+            node.ComponentId = -1;
+        AssignConnectedComponents();
+    }
+
+
+    /// <summary>
+    /// The bridge to build from an island's candidate pairs: the closest whose straight line does
+    /// not touch runway pavement, ties broken by node ids so the choice never depends on grid
+    /// enumeration order. Null when no pair is valid.
+    /// </summary>
+    private (double Distance, TaxiNode IslandNode, TaxiNode MainNode)? ChooseBridgePair(
+        List<(double Distance, TaxiNode IslandNode, TaxiNode MainNode)> pairs,
+        IReadOnlyList<RunwayShape> runwayShapes)
+    {
+        foreach (var pair in pairs.OrderBy(p => p.Distance)
+                                  .ThenBy(p => p.IslandNode.NodeId)
+                                  .ThenBy(p => p.MainNode.NodeId))
+        {
+            if (RunwayPavement.SegmentTouchesPavement(
+                    pair.IslandNode.Latitude, pair.IslandNode.Longitude,
+                    pair.MainNode.Latitude, pair.MainNode.Longitude,
+                    runwayShapes, out _))
+                continue;
+            return pair;
+        }
+        return null;
+    }
+
+
+    /// <summary>
+    /// Component id of the largest connected component, or -1 when the graph has no nodes. Ties
+    /// are broken on the component containing the node with the smallest (latitude, longitude)
+    /// pair — an attribute intrinsic to the geometry — NEVER on component id or node order.
+    /// Component ids are assigned in node-insertion order, which follows
+    /// <c>ORDER BY taxi_path_id</c>, i.e. scenery authoring order, so breaking ties on id/order
+    /// let a scenery update that merely reordered rows flip which component is "main" (Task 9,
+    /// PR #238 review) with the airfield itself unchanged.
+    /// </summary>
+    private int ComputeMainComponentId()
+    {
+        var sizes = new Dictionary<int, int>();
+        foreach (var node in Nodes.Values)
+            sizes[node.ComponentId] = sizes.GetValueOrDefault(node.ComponentId) + 1;
+
+        int mainSize = -1;
+        foreach (var size in sizes.Values)
+            if (size > mainSize) mainSize = size;
+
+        // Empty-graph contract (PR #238 review, Minor 4): carried by mainId's own initializer,
+        // not by a guard here. When Nodes is empty, sizes is empty too, so the loop above never
+        // runs (mainSize stays -1) and the scan below never runs either (it also iterates
+        // Nodes.Values) — mainId is returned exactly as initialized, -1. A prior "if (mainSize <
+        // 0) return -1" guard here was dead code (mutation-proved: removing it left the full
+        // suite green) that only obscured this.
+        int mainId = -1;
+        double bestLat = double.MaxValue, bestLon = double.MaxValue;
+        foreach (var node in Nodes.Values)
+        {
+            if (sizes[node.ComponentId] != mainSize) continue;
+            if (node.Latitude > bestLat || (node.Latitude == bestLat && node.Longitude >= bestLon))
+                continue;
+            bestLat = node.Latitude;
+            bestLon = node.Longitude;
+            mainId = node.ComponentId;
+        }
+        return mainId;
+    }
+
+
+    /// <summary>True when every edge in the island is a navdata stand lead-in and the island
+    /// holds a stand.</summary>
+    private bool IsStandStubIsland(List<TaxiNode> island, HashSet<int> standNodes)
+    {
+        bool hasStand = false, hasEdge = false;
+        foreach (var node in island)
+        {
+            if (standNodes.Contains(node.NodeId)) hasStand = true;
+            if (!Adjacency.TryGetValue(node.NodeId, out var edges)) continue;
+            foreach (var e in edges)
+            {
+                if (!IsParkingLeadIn(e)) return false;
+                hasEdge = true;
+            }
+        }
+        return hasStand && hasEdge;
+    }
+
+    /// <summary>Records a stand ("P") or hold-short (HS/HSND/IHS/IHSND) endpoint, classified by the
+    /// same <see cref="MapNodeType"/> Build uses for node types.</summary>
+    private static void RecordEndpointIdentity(
+        string? endpointType, int nodeId, HashSet<int> standNodes, HashSet<int> holdShortNodes)
+    {
+        switch (MapNodeType(endpointType ?? ""))
+        {
+            case TaxiNodeType.Parking:
+                standNodes.Add(nodeId);
+                break;
+            case TaxiNodeType.HoldShort:
+            case TaxiNodeType.ILSHoldShort:
+                holdShortNodes.Add(nodeId);
+                break;
+        }
+    }
+
+
+    /// <summary>A stand lead-in row (navdata path type "P"): never part of a runway exit or the taxi pavement map.</summary>
+    internal static bool IsParkingLeadIn(TaxiEdge edge) =>
+        string.Equals(edge.PathType, "P", StringComparison.OrdinalIgnoreCase);
+
+
+    /// <summary>
+    /// True when a main-network node may be the network end of a stand-stub bridge: not a stand,
+    /// not a hold-short node, not on another stand's lead-in chain, and not on runway pavement.
+    /// </summary>
+    private bool IsEligibleMainEndpoint(
+        TaxiNode node, HashSet<int> standNodes, HashSet<int> holdShortNodes, HashSet<int> leadInChainNodes,
+        IReadOnlyList<RunwayShape> runwayShapes)
+    {
+        if (standNodes.Contains(node.NodeId)) return false;
+        if (holdShortNodes.Contains(node.NodeId)) return false;
+        if (leadInChainNodes.Contains(node.NodeId)) return false;
+        // USED to only prune candidates ChooseBridgePair's segment-touches-pavement check would
+        // reject anyway (a pair whose main end is on the pavement always touches it) — an early
+        // filter, not a second guarantee. That held only while both read the same clamped
+        // distance to the same pavement line. IsOnPavement now goes through RunwayShape.Contains,
+        // which is EXTENT-bounded, and the extent envelopes an outboard start row
+        // (RunwayShapeTests.The_extent_covers_an_outboard_start_row, e.g. LIMC 17L) — so a node
+        // can sit inside the extent here, and be excluded, while its clamped distance to the raw
+        // pavement SEGMENT (what SegmentTouchesPavement measures) exceeds the half-width. In that
+        // outboard case this filter now prunes a candidate the touches check alone would allow —
+        // a second guarantee after all, not merely an early one.
+        if (RunwayPavement.IsOnPavement(node.Latitude, node.Longitude, runwayShapes)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Nodes lying on a stand's own lead-in chain. From each stand the walk follows every edge
+    /// outward and, at each node reached:
+    /// <list type="bullet">
+    ///   <item>exactly 2 distinct neighbours: mark it and continue to its other neighbour;</item>
+    ///   <item>1 neighbour (a dead end): mark it and stop;</item>
+    ///   <item>3 or more (a junction): stop without marking;</item>
+    ///   <item>also stop at another stand, on revisiting a node, or once the walk has covered
+    ///   <see cref="STAND_LEAD_IN_CHAIN_MAX_M"/>.</item>
+    /// </list>
+    ///
+    /// <para>Navdata draws a multi-segment lead-in as taxiway-type rows plus a final "P" row, so
+    /// its bend nodes carry a non-P edge and a "lies only on P edges" test can never see them. A
+    /// bridge onto such a bend ran a KJFK route 31.6 m up stand GD 7's lead-in and then 109° across
+    /// open apron. At airports whose
+    /// main component is itself a stand stub, the dead-end rule marks its connector, so no
+    /// stub-to-stub bridge is built.</para>
+    /// </summary>
+    private HashSet<int> MarkStandLeadInChains(HashSet<int> standNodes)
+    {
+        var marked = new HashSet<int>();
+        foreach (int standId in standNodes)
+        {
+            if (!Adjacency.TryGetValue(standId, out var standEdges)) continue;
+            foreach (int firstId in standEdges.Select(e => e.ToNodeId).Distinct())
+            {
+                int previousId = standId;
+                int currentId = firstId;
+                var visited = new HashSet<int> { standId };
+                double walked = 0.0;
+                while (Nodes.TryGetValue(currentId, out var current))
+                {
+                    var previous = Nodes[previousId];
+                    walked += FastDistanceMeters(
+                        previous.Latitude, previous.Longitude, current.Latitude, current.Longitude);
+                    if (walked > STAND_LEAD_IN_CHAIN_MAX_M) break;
+                    if (standNodes.Contains(currentId)) break;
+                    if (!visited.Add(currentId)) break;
+
+                    var neighbours = Adjacency.TryGetValue(currentId, out var edges)
+                        ? edges.Select(e => e.ToNodeId).Distinct().ToList()
+                        : new List<int>();
+                    if (neighbours.Count == 1)
+                    {
+                        marked.Add(currentId);
+                        break;
+                    }
+                    if (neighbours.Count != 2) break;
+
+                    marked.Add(currentId);
+                    int nextId = neighbours[0] == previousId ? neighbours[1] : neighbours[0];
+                    previousId = currentId;
+                    currentId = nextId;
+                }
+            }
+        }
+        return marked;
+    }
+
+    /// <summary>
+    /// Adds the two directions of one stand-stub bridge: unnamed (there is no taxiway to announce),
+    /// typed <see cref="StandBridgePathType"/> so nothing can mistake it for a navdata lead-in, with
+    /// the widest pavement width either end already carries (the steering tone scales its corridor
+    /// by it and a zero falls back to a generic baseline).
+    /// </summary>
+    private void AddOrphanParkingBridge(TaxiNode a, TaxiNode b, double distanceMeters)
+    {
+        double width = 0.0;
+        foreach (int id in new[] { a.NodeId, b.NodeId })
+            if (Adjacency.TryGetValue(id, out var existing))
+                foreach (var e in existing)
+                    if (e.WidthFeet > width) width = e.WidthFeet;
+
+        double bearing = NavigationCalculator.CalculateBearing(
+            a.Latitude, a.Longitude, b.Latitude, b.Longitude);
+
+        AddEdge(new TaxiEdge
+        {
+            FromNodeId = a.NodeId, ToNodeId = b.NodeId,
+            DistanceMeters = distanceMeters, TaxiwayName = "",
+            BearingDegrees = bearing, WidthFeet = width, PathType = StandBridgePathType,
+        });
+        AddEdge(new TaxiEdge
+        {
+            FromNodeId = b.NodeId, ToNodeId = a.NodeId,
+            DistanceMeters = distanceMeters, TaxiwayName = "",
+            BearingDegrees = (bearing + 180.0) % 360.0, WidthFeet = width, PathType = StandBridgePathType,
+        });
+    }
+
+    /// <summary>
     /// Assigns each node a ComponentId so callers can filter start-node candidates
-    /// by reachability. Runs once at Build time after all edges are added. BFS over
+    /// by reachability. Runs at Build time after all edges are added, and again after
+    /// BridgeOrphanParkingIslands adds bridges; it only assigns nodes whose ComponentId is -1,
+    /// so a re-run must reset every node first. BFS over
     /// Adjacency; nodes in the same connected component share an integer ID
     /// starting at 0.
     ///
@@ -465,6 +1344,283 @@ public class TaxiGraph
     }
 
     /// <summary>
+    /// Node ids created by <see cref="InsertHoldingPointNodeOnEdge"/>. These are placements for
+    /// PAINTED HOLD LINES, never junctions, so any search that is looking for real navdata
+    /// topology must skip them — see the skip in <see cref="ResolveHoldingPointEntries"/>.
+    /// </summary>
+    private readonly HashSet<int> _holdingPointProjectionNodes = new();
+
+    /// <summary>True when the node was inserted by the holding-point edge projection.</summary>
+    public bool IsHoldingPointProjectionNode(int nodeId) =>
+        _holdingPointProjectionNodes.Contains(nodeId);
+
+    /// <summary>
+    /// Subdivides the taxi edge nearest <paramref name="lat"/>/<paramref name="lon"/> at the
+    /// perpendicular projection of that point and returns the inserted node — the fallback that
+    /// lets a PAINTED holding point which sits on the pavement but between two navdata vertices
+    /// be used as a destination. Returns null when no edge lies within
+    /// <paramref name="maxPerpMeters"/>, so the caller still DROPS the point rather than
+    /// misplacing it.
+    ///
+    /// <para>Motivating measurement (EGLL, 2026-08): 11 of the airport's 14 unresolved painted
+    /// points sit ≤2 m from a taxiway centreline yet 31-63 m from the nearest vertex, because MSFS
+    /// only puts vertices at junctions and bends. LOMAN is the clean case — 0.0 m from the taxiway
+    /// A edge, 34.7 m from a vertex, and equidistant between the two vertices either side, so it is
+    /// unreachable by ANY node-snap radius: widening the radius would place the hold ~35 m up or
+    /// down the taxiway from the paint. Projection is the only placement that lands on the line.</para>
+    ///
+    /// <para>Topologically this is a pure subdivision: the new node has degree 2, the two halves
+    /// sum to the original length, and no connectivity is created or removed — so A* costs and
+    /// every route are unchanged, and the node is <see cref="TaxiNodeType.Normal"/> so it can never
+    /// be mistaken for a scenery hold-short node by the (navdata-authoritative, safety-critical)
+    /// hold-short placement walks. Parking connectors are skipped for the same reason
+    /// <see cref="NamedHoldingPointResolver.SnapToNode"/> skips them: a stand connector is not a
+    /// holding point. A projection landing on (or within the merge threshold of) an endpoint is
+    /// refused — that case is already the node snap's, and splitting there would create a
+    /// zero-length edge.</para>
+    ///
+    /// <para>Holds <see cref="_structureLock"/> for the whole scan-then-split, so the edge scanned is
+    /// the edge split and no reader sees the graph in between.</para>
+    /// </summary>
+    public TaxiNode? InsertHoldingPointNodeOnEdge(double lat, double lon, double maxPerpMeters)
+    {
+        lock (_structureLock)
+            return InsertHoldingPointNodeOnEdgeLocked(lat, lon, maxPerpMeters);
+    }
+
+    /// <summary>
+    /// The point on taxiway <paramref name="taxiwayName"/> (exact edge name, case-insensitive)
+    /// nearest <paramref name="lat"/>/<paramref name="lon"/>, within <paramref name="maxPerpMeters"/>.
+    /// Read-only — returns where a node WOULD go so the caller can vet it before
+    /// <see cref="PlaceNodeOnNamedTaxiway"/> changes the graph. Parking connectors are skipped.
+    /// Used by sign-sourced holding points (<see cref="NamedHoldingPointResolver.ResolveSigns"/>),
+    /// which must land on the taxiway the sign names, never on the nearest pavement.
+    /// </summary>
+    public (TaxiEdge Edge, double Lat, double Lon, double PerpMeters)? ProjectOntoNamedTaxiway(
+        double lat, double lon, string taxiwayName, double maxPerpMeters)
+    {
+        if (string.IsNullOrWhiteSpace(taxiwayName)) return null;
+        TaxiEdge? bestEdge = null;
+        double bestPerp = maxPerpMeters, bestLat = 0, bestLon = 0;
+
+        foreach (int nodeId in GetNodesOnTaxiway(taxiwayName))
+        {
+            if (!Adjacency.TryGetValue(nodeId, out var edges)) continue;
+            foreach (var e in edges)
+            {
+                if (!string.Equals(e.TaxiwayName, taxiwayName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!Nodes.TryGetValue(e.FromNodeId, out var a) ||
+                    !Nodes.TryGetValue(e.ToNodeId, out var b)) continue;
+                if (a.Type == TaxiNodeType.Parking || b.Type == TaxiNodeType.Parking) continue;
+
+                var (perp, _, projLat, projLon) = ProjectOntoSegmentClamped(
+                    lat, lon, a.Latitude, a.Longitude, b.Latitude, b.Longitude);
+                if (perp >= bestPerp) continue;
+                bestPerp = perp; bestEdge = e; bestLat = projLat; bestLon = projLon;
+            }
+        }
+        return bestEdge == null ? null : (bestEdge, bestLat, bestLon, bestPerp);
+    }
+
+    /// <summary>
+    /// Puts a node at a point <see cref="ProjectOntoNamedTaxiway"/> returned: the edge's own
+    /// endpoint when the point is within the merge threshold of it (no zero-length edges),
+    /// otherwise a new node splitting the edge — recorded as a holding-point projection node, so
+    /// every entry/topology scan that skips those skips this one too.
+    /// </summary>
+    public TaxiNode PlaceNodeOnNamedTaxiway(TaxiEdge edge, double lat, double lon)
+    {
+        var a = Nodes[edge.FromNodeId];
+        var b = Nodes[edge.ToNodeId];
+        if (FastDistanceMeters(lat, lon, a.Latitude, a.Longitude) < MERGE_THRESHOLD_METERS) return a;
+        if (FastDistanceMeters(lat, lon, b.Latitude, b.Longitude) < MERGE_THRESHOLD_METERS) return b;
+        return SplitEdgeAt(edge, lat, lon);
+    }
+
+    /// <summary>The body of <see cref="InsertHoldingPointNodeOnEdge"/>; the caller holds <see cref="_structureLock"/>.</summary>
+    private TaxiNode? InsertHoldingPointNodeOnEdgeLocked(double lat, double lon, double maxPerpMeters)
+    {
+        TaxiEdge? bestEdge = null;
+        double bestPerp = maxPerpMeters;
+        double bestLat = 0, bestLon = 0;
+
+        // Build stores every segment as a forward + reverse pair, so visit each undirected
+        // pair once. Keyed on (min,max,name) rather than a From<To filter so a one-directional
+        // edge (if one ever exists) is still considered.
+        var visited = new HashSet<(int, int, string)>();
+
+        foreach (var edges in Adjacency.Values)
+        {
+            foreach (var e in edges)
+            {
+                var key = e.FromNodeId < e.ToNodeId
+                    ? (e.FromNodeId, e.ToNodeId, e.TaxiwayName)
+                    : (e.ToNodeId, e.FromNodeId, e.TaxiwayName);
+                if (!visited.Add(key)) continue;
+
+                if (!Nodes.TryGetValue(e.FromNodeId, out var a) ||
+                    !Nodes.TryGetValue(e.ToNodeId, out var b)) continue;
+                if (a.Type == TaxiNodeType.Parking || b.Type == TaxiNodeType.Parking) continue;
+                // Task 6 Defect B: a fabricated stand bridge's network end is guaranteed NOT to be
+                // a stand, so neither endpoint carries the Parking flag the check above relies on —
+                // the bridge is a live candidate for the Parking-only guard and must be excluded
+                // explicitly, or a painted holding point within range gets projected onto the
+                // guessed bridge line and SplitEdgeAt subdivides it, pinning a Progressive Taxi
+                // terminator or a named holding-point departure to fabricated geometry.
+                if (IsStandBridge(e)) continue;
+
+                var (perp, t, projLat, projLon) = ProjectOntoSegmentClamped(
+                    lat, lon, a.Latitude, a.Longitude, b.Latitude, b.Longitude);
+                if (perp >= bestPerp) continue;
+                if (t <= 0.0 || t >= 1.0) continue;
+                if (FastDistanceMeters(projLat, projLon, a.Latitude, a.Longitude) < MERGE_THRESHOLD_METERS) continue;
+                if (FastDistanceMeters(projLat, projLon, b.Latitude, b.Longitude) < MERGE_THRESHOLD_METERS) continue;
+
+                bestPerp = perp;
+                bestEdge = e;
+                bestLat = projLat;
+                bestLon = projLon;
+            }
+        }
+
+        return bestEdge == null ? null : SplitEdgeAt(bestEdge, bestLat, bestLon);
+    }
+
+    /// <summary>
+    /// Replaces the undirected edge <paramref name="fwd"/> (and its reverse twin, when present)
+    /// with two halves meeting at a new node placed at <paramref name="lat"/>/<paramref name="lon"/>.
+    /// The new node inherits the edge's taxiway name (so taxiway-keyed lookups see it as part of
+    /// that taxiway, like every other vertex on it) and its endpoint's ComponentId — correct by
+    /// construction, since a subdivision cannot change reachability, and needed because
+    /// AssignConnectedComponents has already run by the time holding points resolve.
+    ///
+    /// <para>Takes <see cref="_structureLock"/> itself (re-entrant), so no structure change depends on
+    /// its caller remembering.</para>
+    /// </summary>
+    private TaxiNode SplitEdgeAt(TaxiEdge fwd, double lat, double lon)
+    {
+        lock (_structureLock)
+            return SplitEdgeAtLocked(fwd, lat, lon);
+    }
+
+    /// <summary>The body of <see cref="SplitEdgeAt"/>; the caller holds <see cref="_structureLock"/>.</summary>
+    private TaxiNode SplitEdgeAtLocked(TaxiEdge fwd, double lat, double lon)
+    {
+        // It removes an edge before the AddEdge calls below, so drop the index here too.
+        InvalidateCellIndex();
+
+        int aId = fwd.FromNodeId, bId = fwd.ToNodeId;
+        var a = Nodes[aId];
+        var b = Nodes[bId];
+
+        int newId = _nextNodeId++;
+        var node = new TaxiNode
+        {
+            NodeId = newId,
+            Latitude = lat,
+            Longitude = lon,
+            Type = TaxiNodeType.Normal,
+            ComponentId = a.ComponentId,
+        };
+        if (!string.IsNullOrEmpty(fwd.TaxiwayName))
+            node.TaxiwayNames.Add(fwd.TaxiwayName);
+        // Minor 5 (PR #238 review): a holding point can project onto a "P" lead-in edge INTERIOR
+        // to an already-bridged stand-stub island — a bend node on a multi-segment lead-in, where
+        // neither endpoint is Parking-typed (the parking pass stamps only the single nearest node
+        // per spot) and the edge isn't the fabricated bridge itself (Defect B's IsStandBridge skip
+        // only excludes StandBridgePathType, not an ordinary "P" edge), so it is a live candidate
+        // for InsertHoldingPointNodeOnEdge. Inherit island membership the same way ComponentId is
+        // inherited just above — correct by construction, since subdividing an edge cannot change
+        // which bridge (if any) is its only way out. Both endpoints, not just one: fwd's two ends
+        // are always either both inside the same bridged island or both outside it (an island's
+        // edges never cross its boundary — the bridge itself is a distinct, separately-excluded
+        // edge type), so this can never half-mark a real taxiway/bridge edge's endpoint.
+        if (_bridgeOnlyStandStubNodes.Contains(aId) && _bridgeOnlyStandStubNodes.Contains(bId))
+            _bridgeOnlyStandStubNodes.Add(newId);
+
+        Nodes[newId] = node;
+        Adjacency[newId] = new List<TaxiEdge>();
+        _holdingPointProjectionNodes.Add(newId);
+
+        string hashKey = GetSpatialHashKey(lat, lon);
+        if (!_spatialHash.ContainsKey(hashKey))
+            _spatialHash[hashKey] = new List<int>();
+        _spatialHash[hashKey].Add(newId);
+
+        if (!string.IsNullOrEmpty(fwd.TaxiwayName))
+            RegisterTaxiwayNode(fwd.TaxiwayName, newId);
+
+        double distA = FastDistanceMeters(a.Latitude, a.Longitude, lat, lon);
+        double distB = FastDistanceMeters(lat, lon, b.Latitude, b.Longitude);
+        double bearAn = NavigationCalculator.CalculateBearing(a.Latitude, a.Longitude, lat, lon);
+        double bearNb = NavigationCalculator.CalculateBearing(lat, lon, b.Latitude, b.Longitude);
+
+        Adjacency[aId].Remove(fwd);
+        TaxiEdge? rev = null;
+        if (Adjacency.TryGetValue(bId, out var bEdges))
+        {
+            foreach (var e in bEdges)
+            {
+                if (e.ToNodeId == aId && e.TaxiwayName == fwd.TaxiwayName && e.PathType == fwd.PathType)
+                {
+                    rev = e;
+                    break;
+                }
+            }
+            if (rev != null) bEdges.Remove(rev);
+        }
+
+        AddEdge(Half(fwd, aId, newId, distA, bearAn));
+        AddEdge(Half(fwd, newId, bId, distB, bearNb));
+        if (rev != null)
+        {
+            AddEdge(Half(rev, bId, newId, distB, (bearNb + 180.0) % 360.0));
+            AddEdge(Half(rev, newId, aId, distA, (bearAn + 180.0) % 360.0));
+        }
+
+        return node;
+
+        static TaxiEdge Half(TaxiEdge src, int from, int to, double dist, double bearing) => new()
+        {
+            FromNodeId = from,
+            ToNodeId = to,
+            DistanceMeters = dist,
+            TaxiwayName = src.TaxiwayName,
+            BearingDegrees = bearing,
+            WidthFeet = src.WidthFeet,
+            PathType = src.PathType,
+        };
+    }
+
+    /// <summary>
+    /// Perpendicular distance and projection of a point onto the SEGMENT a→b, with the
+    /// parameter clamped to [0,1]. Distinct from <see cref="ProjectOntoCenterline"/>, which
+    /// deliberately leaves the parameter unclamped so callers can reason about along-track
+    /// positions beyond a runway threshold.
+    /// </summary>
+    private static (double perp, double t, double projLat, double projLon) ProjectOntoSegmentClamped(
+        double plat, double plon, double alat, double alon, double blat, double blon)
+    {
+        const double METERS_PER_DEG_LAT = 111132.0;
+        double metersPerDegLon = METERS_PER_DEG_LAT * Math.Cos((alat + blat) * 0.5 * (Math.PI / 180.0));
+
+        double bx = (blon - alon) * metersPerDegLon, by = (blat - alat) * METERS_PER_DEG_LAT;
+        double px = (plon - alon) * metersPerDegLon, py = (plat - alat) * METERS_PER_DEG_LAT;
+
+        double lenSq = bx * bx + by * by;
+        if (lenSq < 1e-9)
+            return (Math.Sqrt(px * px + py * py), 0.0, alat, alon);
+
+        double t = (px * bx + py * by) / lenSq;
+        if (t < 0.0) t = 0.0;
+        else if (t > 1.0) t = 1.0;
+
+        double ex = px - t * bx, ey = py - t * by;
+        return (Math.Sqrt(ex * ex + ey * ey), t,
+                alat + t * (blat - alat), alon + t * (blon - alon));
+    }
+
+    /// <summary>
     /// Resolves a coordinate to an existing node (if within merge threshold) or creates a new one.
     /// </summary>
     private int ResolveNode(double lat, double lon, string nodeType, string? taxiwayName)
@@ -492,7 +1648,8 @@ public class TaxiGraph
             }
         }
 
-        // Create new node
+        // Create new node: every structure change drops the cell index, by construction.
+        InvalidateCellIndex();
         int newId = _nextNodeId++;
         var newNode = new TaxiNode
         {
@@ -516,6 +1673,8 @@ public class TaxiGraph
 
     private void AddEdge(TaxiEdge edge)
     {
+        InvalidateCellIndex();   // a structure change — see InvalidateCellIndex
+
         if (!Adjacency.ContainsKey(edge.FromNodeId))
             Adjacency[edge.FromNodeId] = new List<TaxiEdge>();
 
@@ -533,12 +1692,687 @@ public class TaxiGraph
             Adjacency[edge.FromNodeId].Add(edge);
     }
 
+    /// <summary>
+    /// Diagnostic record of every gap <see cref="BridgeSameNamedGaps"/> closed —
+    /// (dead-end node, dead-end node, taxiway name, gap metres). Read by probes and
+    /// sweeps; empty at almost every airport.
+    /// </summary>
+    public List<(int NodeA, int NodeB, string TaxiwayName, double GapMeters)> BridgedGaps { get; } = new();
+
+    /// <summary>Largest modelling gap the dead-end bridge will close.</summary>
+    private const double BRIDGE_MAX_GAP_M = 40.0;
+    /// <summary>Bridge must CONTINUE each chain's direction — not chord a hairpin.</summary>
+    private const double BRIDGE_MAX_CONTINUATION_DEG = 45.0;
+    /// <summary>
+    /// Two ends already connected within this much taxiing are left alone — a
+    /// bridge there would be a routing shortcut, not a repair.
+    /// </summary>
+    private const double BRIDGE_ALREADY_CONNECTED_WALK_M = 300.0;
+
+    /// <summary>
+    /// Repairs small MODELLING GAPS in a taxiway: two dead-end chains carrying the
+    /// SAME name, whose ends face each other a few tens of metres apart, are joined
+    /// by a synthetic edge so routing, the landing-exit vacate walk and hold-short
+    /// logic see the taxiway the scenery meant to draw.
+    ///
+    /// <para>Motivating defect (EDDB M5, 2026-08-30): the scenery models rapid-exit
+    /// M5 as two pieces with a 31 m hole between them. The runway-side chain
+    /// dead-ends 47.6 m from the 24L centreline; the outer piece — which joins M4
+    /// and carries the actual holding points at 120 m and 165 m — was unreachable.
+    /// The vacate walk therefore stopped the pilot 47.6 m out and announced "Off the
+    /// runway. Stop and hold position." short of the holding point with the tail
+    /// still in the runway strip — exactly what the EDDB AIP's "when vacating via
+    /// M4/M5 always continue until you have crossed the holding point. NEVER STOP IN
+    /// FRONT OF THE INTERSECTING TAXIWAY" instruction forbids.</para>
+    ///
+    /// <para>Every gate below is required — the bridge must only ever ADD
+    /// connectivity the real pavement has (whole-DB sweep 2026-08-30: zero exits
+    /// resolve worse, see docs/taxi-guidance.md):</para>
+    /// <list type="bullet">
+    /// <item>Both nodes are TRUE dead ends (exactly one edge), so no existing route
+    /// through them can change — only new ones become possible.</item>
+    /// <item>Both dead-end edges carry the same non-empty taxiway name and neither
+    /// is a runway edge. Two pieces of one named taxiway are the repair target;
+    /// unnamed stubs and parking lead-ins stay untouched.</item>
+    /// <item>Gap ≤ <see cref="BRIDGE_MAX_GAP_M"/> — real multi-piece taxiways that
+    /// are legitimately separate sit much further apart (EGLL S5W U-link 946 ft,
+    /// KBNA same-letter turnoffs ≥ 1400 ft).</item>
+    /// <item>The bridge CONTINUES both chains (bearing within
+    /// <see cref="BRIDGE_MAX_CONTINUATION_DEG"/> of each end's direction of travel)
+    /// — a same-named hairpin's two ends face the wrong way and are refused.</item>
+    /// <item>The bridge segment neither crosses any runway centerline nor has its
+    /// midpoint inside a runway corridor — a gap is never an excuse to route over
+    /// a runway.</item>
+    /// <item>The two ends are NOT already connected within
+    /// <see cref="BRIDGE_ALREADY_CONNECTED_WALK_M"/> of non-runway taxiing —
+    /// otherwise the "bridge" would be a shortcut chord across a curve, which
+    /// CHANGES existing routes instead of only adding unreachable ones. (EDDB M5's
+    /// two pieces connect only via runway pavement, which doesn't count.)</item>
+    /// </list>
+    /// </summary>
+    private void BridgeSameNamedGaps()
+    {
+        // Snapshot the dead ends first — bridging mutates Adjacency. Sorted by node
+        // id for a deterministic result regardless of dictionary enumeration order.
+        var deadEnds = new List<(int NodeId, TaxiEdge Edge)>();
+        foreach (var kv in Adjacency)
+        {
+            if (kv.Value.Count != 1) continue;
+            var e = kv.Value[0];
+            if (string.IsNullOrEmpty(e.TaxiwayName)) continue;
+            if (string.Equals(e.PathType, "R", StringComparison.OrdinalIgnoreCase)) continue;
+            deadEnds.Add((kv.Key, e));
+        }
+        if (deadEnds.Count < 2) return;
+        deadEnds.Sort((a, b) => a.NodeId.CompareTo(b.NodeId));
+
+        for (int i = 0; i < deadEnds.Count; i++)
+        {
+            var (aId, aEdge) = deadEnds[i];
+            if (Adjacency[aId].Count != 1) continue;   // bridged earlier in this pass
+            if (!Nodes.TryGetValue(aId, out var na)) continue;
+
+            int bestB = -1;
+            TaxiEdge? bestBEdge = null;
+            double bestGap = double.MaxValue;
+            foreach (var (bId, bEdge) in deadEnds)
+            {
+                if (bId == aId || Adjacency[bId].Count != 1) continue;
+                if (bId == aEdge.ToNodeId) continue;   // the two ends of one isolated segment
+                if (!string.Equals(aEdge.TaxiwayName, bEdge.TaxiwayName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!Nodes.TryGetValue(bId, out var nb)) continue;
+
+                double gap = CalculateDistanceMeters(na.Latitude, na.Longitude, nb.Latitude, nb.Longitude);
+                if (gap < 1.0 || gap > BRIDGE_MAX_GAP_M || gap >= bestGap) continue;
+
+                // Continuation, both ends: travelling INTO a dead end is the reverse
+                // of its single outgoing edge; the bridge must carry on that way.
+                double bridgeAB = NavigationCalculator.CalculateBearing(
+                    na.Latitude, na.Longitude, nb.Latitude, nb.Longitude);
+                double intoA = (aEdge.BearingDegrees + 180.0) % 360.0;
+                double intoB = (bEdge.BearingDegrees + 180.0) % 360.0;
+                if (Math.Abs(NormalizeAngle(bridgeAB - intoA)) > BRIDGE_MAX_CONTINUATION_DEG) continue;
+                if (Math.Abs(NormalizeAngle(bridgeAB + 180.0 - intoB)) > BRIDGE_MAX_CONTINUATION_DEG) continue;
+
+                // Never bridge over (or inside) a runway.
+                bool nearRunway = false;
+                double midLat = (na.Latitude + nb.Latitude) * 0.5;
+                double midLon = (na.Longitude + nb.Longitude) * 0.5;
+                foreach (var cl in RunwayCenterlines)
+                {
+                    if (EdgeCrossesRunwayStatic(na.Latitude, na.Longitude, nb.Latitude, nb.Longitude,
+                                                cl.PavementLat1, cl.PavementLon1, cl.PavementLat2, cl.PavementLon2)
+                        || PerpendicularDistanceMetersStatic(midLat, midLon,
+                               cl.PavementLat1, cl.PavementLon1, cl.PavementLat2, cl.PavementLon2)
+                           <= cl.PavementHalfWidthMeters)
+                    {
+                        nearRunway = true;
+                        break;
+                    }
+                }
+                if (nearRunway) continue;
+
+                if (ConnectedWithinWalk(aId, bId, BRIDGE_ALREADY_CONNECTED_WALK_M)) continue;
+
+                bestB = bId;
+                bestBEdge = bEdge;
+                bestGap = gap;
+            }
+            if (bestB < 0 || bestBEdge == null) continue;
+
+            var nbBest = Nodes[bestB];
+            double dist = CalculateDistanceMeters(na.Latitude, na.Longitude, nbBest.Latitude, nbBest.Longitude);
+            double bearing = NavigationCalculator.CalculateBearing(
+                na.Latitude, na.Longitude, nbBest.Latitude, nbBest.Longitude);
+            AddEdge(new TaxiEdge
+            {
+                FromNodeId = aId, ToNodeId = bestB,
+                DistanceMeters = dist, TaxiwayName = aEdge.TaxiwayName,
+                BearingDegrees = bearing, WidthFeet = aEdge.WidthFeet,
+                PathType = aEdge.PathType,
+            });
+            AddEdge(new TaxiEdge
+            {
+                FromNodeId = bestB, ToNodeId = aId,
+                DistanceMeters = dist, TaxiwayName = aEdge.TaxiwayName,
+                BearingDegrees = (bearing + 180.0) % 360.0, WidthFeet = aEdge.WidthFeet,
+                PathType = aEdge.PathType,
+            });
+            BridgedGaps.Add((aId, bestB, aEdge.TaxiwayName, dist));
+        }
+    }
+
+    /// <summary>
+    /// Diagnostic record of every junction <see cref="BridgeTinyDeadEndGaps"/> repaired —
+    /// (dead-end node, target node, the dead-end edge's taxiway name, gap metres).
+    /// Read by probes and sweeps; empty at almost every airport.
+    /// </summary>
+    public List<(int DeadEndNode, int TargetNode, string TaxiwayName, double GapMeters)> TinyGapBridges { get; } = new();
+
+    /// <summary>Largest endpoint gap the tiny dead-end bridge will close.</summary>
+    private const double TINY_BRIDGE_MAX_GAP_M = 6.0;
+
+    /// <summary>
+    /// Repairs a MISSED JUNCTION between two DIFFERENT taxiways: a named taxiway
+    /// whose chain dead-ends a wingspan-fraction short of another taxiway's node —
+    /// above <see cref="MERGE_THRESHOLD_METERS"/> so endpoint merging never joined
+    /// them, but far too close to be anything except the same piece of pavement.
+    ///
+    /// <para>Motivating defect (EGKK 26L, 2026-08-31, live): taxiway AS's easternmost
+    /// vertex sits 3.56 m from taxiway A, which carries the A1 holding point and the
+    /// runway entry onto the 26L starter extension. With the junction missing, an
+    /// aircraft holding AT A1 cleared "via A1, line up 26L" was routed 712 m the wrong
+    /// way — back along AS, up P, around the whole AN north arm and down A — to reach
+    /// a runway entry 94 m in front of its nose. ATC told the pilot to disregard and
+    /// line up directly; the tone pointed 176° behind them throughout.</para>
+    ///
+    /// <para><see cref="BridgeSameNamedGaps"/> cannot close this class of gap: the
+    /// names differ (AS vs A) and the surviving side is a mid-taxiway vertex, not a
+    /// dead end. This pass therefore bridges a TRUE dead end to the NEAREST node
+    /// within <see cref="TINY_BRIDGE_MAX_GAP_M"/>, under the same safety framing —
+    /// only ever ADD connectivity the real pavement has:</para>
+    /// <list type="bullet">
+    /// <item>The source is a TRUE dead end (exactly one edge), so no existing route
+    /// through it can change — only new ones become possible.</item>
+    /// <item>The dead-end edge carries a non-empty taxiway name and is not a runway
+    /// edge; unnamed stubs and parking lead-ins stay untouched (same rationale as
+    /// the same-named pass). The target only needs one non-runway edge.</item>
+    /// <item>Gap ≤ <see cref="TINY_BRIDGE_MAX_GAP_M"/> — whole-DB census 2026-08-31:
+    /// 936 candidate gaps at 377 of 21,892 airports, median 3.1 m, p90 5.4 m; at
+    /// EGKK the rule closes exactly the one AS→A gap. At this scale the gap is a
+    /// digitising seam, not a modelling decision.</item>
+    /// <item>NO continuation-angle gate, deliberately: at ≤6 m the stub's own bearing
+    /// is junction noise, and the target is usually a mid-taxiway vertex for which
+    /// "continuation" is undefined. Shortcut-chord protection comes from the
+    /// connected-within-walk gate alone, which is sufficient here — a hairpin's two
+    /// sides ARE connected around the bend, so they are refused.</item>
+    /// <item>The bridge segment neither crosses any runway centerline nor has its
+    /// midpoint inside a runway corridor (identical gate to the same-named pass).</item>
+    /// <item>The two nodes are NOT already connected within
+    /// <see cref="BRIDGE_ALREADY_CONNECTED_WALK_M"/> of non-runway taxiing.</item>
+    /// </list>
+    /// </summary>
+    private void BridgeTinyDeadEndGaps()
+    {
+        // Snapshot dead ends first — bridging mutates Adjacency. Sorted by node id
+        // for a deterministic result regardless of dictionary enumeration order.
+        var deadEnds = new List<(int NodeId, TaxiEdge Edge)>();
+        foreach (var kv in Adjacency)
+        {
+            if (kv.Value.Count != 1) continue;
+            var e = kv.Value[0];
+            if (string.IsNullOrEmpty(e.TaxiwayName)) continue;
+            if (string.Equals(e.PathType, "R", StringComparison.OrdinalIgnoreCase)) continue;
+            deadEnds.Add((kv.Key, e));
+        }
+        if (deadEnds.Count == 0) return;
+        deadEnds.Sort((a, b) => a.NodeId.CompareTo(b.NodeId));
+
+        // Candidate targets enumerated in node-id order so the nearest-wins strict
+        // '<' tie-breaks to the lower id deterministically.
+        var nodeIds = new List<int>(Nodes.Keys);
+        nodeIds.Sort();
+
+        // Cheap coordinate prefilter box: 6 m in degrees, padded.
+        const double DEG_BOX = TINY_BRIDGE_MAX_GAP_M / 111132.0 * 1.5;
+
+        foreach (var (aId, aEdge) in deadEnds)
+        {
+            if (Adjacency[aId].Count != 1) continue;   // repaired earlier in this pass
+            if (!Nodes.TryGetValue(aId, out var na)) continue;
+
+            int bestB = -1;
+            double bestGap = double.MaxValue;
+            foreach (int bId in nodeIds)
+            {
+                if (bId == aId || bId == aEdge.ToNodeId) continue;
+                if (!Nodes.TryGetValue(bId, out var nb)) continue;
+                if (Math.Abs(nb.Latitude - na.Latitude) > DEG_BOX) continue;
+                // Longitude degrees shrink with cos(lat); ×5 keeps the box valid to ~82° lat.
+                if (Math.Abs(nb.Longitude - na.Longitude) > DEG_BOX * 5.0) continue;
+
+                double gap = CalculateDistanceMeters(na.Latitude, na.Longitude, nb.Latitude, nb.Longitude);
+                if (gap < 1.0 || gap > TINY_BRIDGE_MAX_GAP_M || gap >= bestGap) continue;
+
+                // The target must be pavement the graph can taxi on — at least one
+                // non-runway edge.
+                if (!Adjacency.TryGetValue(bId, out var bEdges)) continue;
+                bool taxiable = false;
+                foreach (var be in bEdges)
+                    if (!string.Equals(be.PathType, "R", StringComparison.OrdinalIgnoreCase)) { taxiable = true; break; }
+                if (!taxiable) continue;
+
+                // Never bridge over (or inside) a runway.
+                bool nearRunway = false;
+                double midLat = (na.Latitude + nb.Latitude) * 0.5;
+                double midLon = (na.Longitude + nb.Longitude) * 0.5;
+                foreach (var cl in RunwayCenterlines)
+                {
+                    if (EdgeCrossesRunwayStatic(na.Latitude, na.Longitude, nb.Latitude, nb.Longitude,
+                                                cl.PavementLat1, cl.PavementLon1, cl.PavementLat2, cl.PavementLon2)
+                        || PerpendicularDistanceMetersStatic(midLat, midLon,
+                               cl.PavementLat1, cl.PavementLon1, cl.PavementLat2, cl.PavementLon2)
+                           <= cl.PavementHalfWidthMeters)
+                    {
+                        nearRunway = true;
+                        break;
+                    }
+                }
+                if (nearRunway) continue;
+
+                if (ConnectedWithinWalk(aId, bId, BRIDGE_ALREADY_CONNECTED_WALK_M)) continue;
+
+                bestB = bId;
+                bestGap = gap;
+            }
+            if (bestB < 0) continue;
+
+            var nbBest = Nodes[bestB];
+            double dist = CalculateDistanceMeters(na.Latitude, na.Longitude, nbBest.Latitude, nbBest.Longitude);
+            double bearing = NavigationCalculator.CalculateBearing(
+                na.Latitude, na.Longitude, nbBest.Latitude, nbBest.Longitude);
+            AddEdge(new TaxiEdge
+            {
+                FromNodeId = aId, ToNodeId = bestB,
+                DistanceMeters = dist, TaxiwayName = aEdge.TaxiwayName,
+                BearingDegrees = bearing, WidthFeet = aEdge.WidthFeet,
+                PathType = aEdge.PathType,
+            });
+            AddEdge(new TaxiEdge
+            {
+                FromNodeId = bestB, ToNodeId = aId,
+                DistanceMeters = dist, TaxiwayName = aEdge.TaxiwayName,
+                BearingDegrees = (bearing + 180.0) % 360.0, WidthFeet = aEdge.WidthFeet,
+                PathType = aEdge.PathType,
+            });
+            TinyGapBridges.Add((aId, bestB, aEdge.TaxiwayName, dist));
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="fromId"/> can reach <paramref name="toId"/> within
+    /// <paramref name="maxWalkM"/> metres of NON-RUNWAY taxiing. Bounded Dijkstra —
+    /// the bound keeps it cheap and is the semantic ("connected nearby"), not a
+    /// perf shortcut.
+    /// </summary>
+    private bool ConnectedWithinWalk(int fromId, int toId, double maxWalkM)
+    {
+        var dist = new Dictionary<int, double> { [fromId] = 0.0 };
+        var queue = new PriorityQueue<int, double>();
+        queue.Enqueue(fromId, 0.0);
+        while (queue.TryDequeue(out int cur, out double d))
+        {
+            if (cur == toId) return true;
+            if (d > dist.GetValueOrDefault(cur, double.MaxValue)) continue;
+            if (!Adjacency.TryGetValue(cur, out var edges)) continue;
+            foreach (var e in edges)
+            {
+                if (string.Equals(e.PathType, "R", StringComparison.OrdinalIgnoreCase)) continue;
+                double nd = d + e.DistanceMeters;
+                if (nd > maxWalkM) continue;
+                if (nd >= dist.GetValueOrDefault(e.ToNodeId, double.MaxValue)) continue;
+                dist[e.ToNodeId] = nd;
+                queue.Enqueue(e.ToNodeId, nd);
+            }
+        }
+        return false;
+    }
+
     private void RegisterTaxiwayNode(string taxiwayName, int nodeId)
     {
         if (!_taxiwayNodeIndex.ContainsKey(taxiwayName))
             _taxiwayNodeIndex[taxiwayName] = new List<int>();
-        if (!_taxiwayNodeIndex[taxiwayName].Contains(nodeId))
+        if (!_taxiwayNodeIdSet.TryGetValue(taxiwayName, out var seen))
+        {
+            seen = new HashSet<int>();
+            _taxiwayNodeIdSet[taxiwayName] = seen;
+        }
+        // HashSet.Add returns false (and is a no-op) when nodeId is already present, so this
+        // preserves the exact same dedup semantics — and the exact same list order — as the
+        // original List.Contains check, just in O(1) instead of O(n).
+        if (seen.Add(nodeId))
             _taxiwayNodeIndex[taxiwayName].Add(nodeId);
+    }
+
+    /// <summary>
+    /// Returns every node id that has at least one edge whose <see cref="TaxiEdge.TaxiwayName"/>
+    /// matches <paramref name="name"/> (case-insensitive, same comparer as the index and every
+    /// TaxiRouter scan site). Backed by the private <c>_taxiwayNodeIndex</c> built during
+    /// <see cref="Build"/> — O(1) lookup instead of a full <see cref="Adjacency"/> scan. Returns an
+    /// empty list (never null) for an unknown/unregistered taxiway name.
+    /// </summary>
+    public IReadOnlyList<int> GetNodesOnTaxiway(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return Array.Empty<int>();
+        return _taxiwayNodeIndex.TryGetValue(name, out var nodes) ? nodes : Array.Empty<int>();
+    }
+
+    /// <summary>
+    /// Destination node for a RUNWAY departure: the node a route should end at when the
+    /// lineup target is <paramref name="lineupLat"/>/<paramref name="lineupLon"/>. Normally
+    /// this is simply <see cref="FindNearestNode"/> of the lineup point, and that is what is
+    /// returned — this method only does something different when that node is more than
+    /// <paramref name="maxAcceptableCrossM"/> laterally off the runway centerline, i.e.
+    /// EXACTLY the case that today produces TaxiGuidanceManager's "this route does not reach
+    /// Runway X" warning. Below that threshold nothing changes, so no route that works today
+    /// can be affected.
+    ///
+    /// <para>The failure it fixes: the lineup point comes from the navdata <c>start</c> row,
+    /// which is trusted for WHERE ALONG the runway the departure begins — correct at a
+    /// displaced threshold, and the reason <see cref="SnapStartToRunwayCenterline"/> exists.
+    /// But nothing guarantees a taxiway MEETS the runway at that point. LPPT 20 has a 1955 ft
+    /// (596 m) displaced threshold and its start row sits on it, ~619 m into the takeoff run,
+    /// while the taxi network touches that centerline only at S3 (~70 m, the full-length end)
+    /// and U5/U6 (~1396 m). Nearest-node therefore returned an S3 node 204 m away and 201 m
+    /// OFF TO THE SIDE — abeam the runway, not on it. The route dead-ended there and the
+    /// lineup intercept would have dragged the aircraft across ~200 m of grass.</para>
+    ///
+    /// <para>The replacement is a real runway ENTRANCE: on the pavement (within half-width),
+    /// on the runway proper, and connected to something off-runway
+    /// (<see cref="HasOffRunwayNeighbour"/> — the same entrance test
+    /// <see cref="FindBacktrackEntryNode"/> uses), in the same connected component as the
+    /// nearest node so it stays reachable. Only candidates AT OR BEHIND the lineup point are
+    /// eligible, nearest first: an entrance further down the runway is an intersection
+    /// departure, i.e. LESS runway than the pilot selected, and that must never be
+    /// substituted silently (the intersection-departure checkbox exists for that and
+    /// announces it). At LPPT 20 this resolves to the S3 entrance at the full-length end —
+    /// on the centerline, full length, correct.</para>
+    ///
+    /// <para>When no entrance qualifies the plain nearest node is returned unchanged, so a runway
+    /// whose lineup point the taxi network genuinely cannot reach still trips the warning rather
+    /// than being silently retargeted somewhere arbitrary. Do NOT label that case "PHNL 04L" —
+    /// the original 2026-06-13 failure was a route TRUNCATED to a hold beside the runway, not a
+    /// bad destination node: measured 2026-08-24, PHNL 04L's lineup point has a taxiway-F node
+    /// 3.7 m away and 3.2 m off the centerline. See docs/taxi-guidance.md.</para>
+    /// </summary>
+    /// <param name="aircraftLat">Optional: where the aircraft is. Used ONLY to anchor the
+    /// connected-component filter, the way <see cref="FindBacktrackEntryNode"/> does — an
+    /// entrance is only useful if the aircraft can actually taxi to it. Anchoring on the
+    /// nearest node to the LINEUP POINT instead is wrong in the one case that matters: when
+    /// that node is on an isolated taxi island (a documented shape here — GCLP S5 — and a
+    /// plausible cause of the &gt;120 m offset that triggers this search), every real entrance
+    /// is filtered out and the island node becomes the route destination. Null (the form
+    /// before SimConnect has reported a position) keeps the previous anchor exactly.</param>
+    public TaxiNode? FindRunwayLineupEntryNode(
+        double lineupLat, double lineupLon,
+        double thrLat, double thrLon, double farLat, double farLon,
+        double halfWidthMeters, double maxAcceptableCrossM,
+        double? aircraftLat = null, double? aircraftLon = null)
+    {
+        var plain = FindNearestNode(lineupLat, lineupLon);
+        if (plain == null) return null;
+
+        int reachableComponentId = plain.ComponentId;
+        if (aircraftLat.HasValue && aircraftLon.HasValue)
+        {
+            var acNode = FindNearestNode(aircraftLat.Value, aircraftLon.Value);
+            if (acNode != null) reachableComponentId = acNode.ComponentId;
+        }
+
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return plain;
+
+        var (plainPerp, _, _, _) = ProjectOntoCenterline(
+            plain.Latitude, plain.Longitude, thrLat, thrLon, farLat, farLon);
+        if (plainPerp <= maxAcceptableCrossM) return plain;
+
+        var (_, lineupAlong, _, _) = ProjectOntoCenterline(
+            lineupLat, lineupLon, thrLat, thrLon, farLat, farLon);
+
+        // Same tolerances as FindBacktrackEntryNode: a few metres of slop above the
+        // stored half-width for navdata rounding at the runway edge, and a far-end
+        // margin so a nub past the end of the usable pavement can't win.
+        double maxPerp = halfWidthMeters + 5.0;
+        const double MIN_REMAINING_M = 45.0;
+        // A meeting point within this much of the lineup point IS the lineup point's own
+        // entrance (connector geometry rarely lands exactly on it), so it counts as at
+        // the lineup point rather than as an intersection departure.
+        const double AT_LINEUP_TOLERANCE_M = 25.0;
+        // How far BEHIND the runway_end pavement edge an entrance may sit. A starter
+        // extension puts both the lineup point and its only entrance behind that edge —
+        // iniBuilds EGLL 09L is entered only from AB13, 300-355 m back, and EGKK 26L
+        // departs 406 m back — so an `along >= 0` floor rejects exactly the entrance
+        // those runways depend on. Same phenomenon the holding-point entry floor's
+        // fallback scan exists for.
+        const double MAX_BEHIND_THRESHOLD_M = 500.0;
+
+        TaxiNode? best = null; double bestGap = double.MaxValue;
+
+        foreach (var node in Nodes.Values)
+        {
+            if (node.ComponentId != reachableComponentId) continue;
+            // A node planted on a painted hold LINE is not a runway entrance. It sits close
+            // to the centerline by construction, so it clears the perpendicular filter and
+            // (through its far end on the taxiway) HasOffRunwayNeighbour, and it can beat
+            // the real junction on along-track proximity — which would make it the ROUTE
+            // DESTINATION. ResolveHoldingPointEntries' scan has always skipped these for
+            // the same reason; the graph can carry them here because
+            // NamedHoldingPointResolver inserts into the live graph and TaxiAssistForm
+            // re-runs PopulateDestinations on every destination-type change.
+            if (IsHoldingPointProjectionNode(node.NodeId)) continue;
+            var (perp, along, _, _) = ProjectOntoCenterline(
+                node.Latitude, node.Longitude, thrLat, thrLon, farLat, farLon);
+            if (perp > maxPerp) continue;
+            if (along < -MAX_BEHIND_THRESHOLD_M || totalLen - along < MIN_REMAINING_M) continue;
+            // AT OR BEHIND the lineup point ONLY. An entrance further DOWN the runway is
+            // an intersection departure, and taking one here would silently hand the
+            // pilot a shorter takeoff run than the runway they selected — measured over
+            // the whole fs2020 DB, allowing it moved 2,209 runway ends, EGLL 09L by
+            // 755 m and EHAM 36R by 1,417 m, with nothing spoken. Where only a
+            // downfield entrance exists, the plain nearest node is returned instead and
+            // TaxiGuidanceManager's reach warning fires exactly as it does today: an
+            // honest "reprogram this route" beats a silently shortened runway. The pilot
+            // can still take that entrance deliberately via the intersection-departure
+            // checkbox, which announces what it is doing.
+            if (along > lineupAlong + AT_LINEUP_TOLERANCE_M) continue;
+            if (!HasOffRunwayNeighbour(node, thrLat, thrLon, farLat, farLon, maxPerp)) continue;
+
+            double gap = Math.Abs(lineupAlong - along);
+            if (gap < bestGap) { bestGap = gap; best = node; }
+        }
+
+        return best ?? plain;
+    }
+
+    /// <summary>
+    /// The <see cref="RunwayCenterline"/> for a runway DESIGNATOR ("04L", or the "Runway 04L"
+    /// form the destination dropdown uses), or null when this graph built no line for it
+    /// (`Build` needs both ends to pair — see the centerline-pairing section in
+    /// docs/taxi-guidance.md, where several airports legitimately end up with none). Matching is
+    /// on either end's name, so the caller gets the same physical line whichever direction it
+    /// asks for; callers that care about direction must order the endpoints themselves.
+    ///
+    /// <para>Both sides go through <see cref="RouteRunwayCrossings.NormalizeDesignator"/>, whose
+    /// own doc requires it of every designator compare in this codebase: the centerline is named
+    /// from the <c>start</c> table while a destination name comes from <c>runway_end</c>, two
+    /// tables that need not agree on zero-padding, and a miss here fails SILENTLY in the
+    /// safe-looking direction — RouteEndWalkToRunwayMeters reads null as "no answer", which
+    /// disarms the ended-short warning entirely. Normalization is exact, not fuzzy: 09L still
+    /// never matches 09R.</para>
+    /// </summary>
+    public RunwayCenterline? FindCenterlineByName(string designator)
+    {
+        if (string.IsNullOrWhiteSpace(designator)) return null;
+        string bare = designator.Trim();
+        if (bare.StartsWith("Runway ", StringComparison.OrdinalIgnoreCase))
+            bare = bare.Substring("Runway ".Length).Trim();
+        bare = RouteRunwayCrossings.NormalizeDesignator(bare);
+
+        foreach (var cl in RunwayCenterlines)
+        {
+            if (string.Equals(RouteRunwayCrossings.NormalizeDesignator(cl.Name1 ?? ""), bare,
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(RouteRunwayCrossings.NormalizeDesignator(cl.Name2 ?? ""), bare,
+                    StringComparison.OrdinalIgnoreCase))
+                return cl;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Graph (taxi-network) distance in metres from <paramref name="fromNodeId"/> to the nearest
+    /// node lying ON the given runway's pavement — i.e. "how much further would this aircraft
+    /// have to taxi to be on the runway". Returns 0 when the node is already on it, and
+    /// <see cref="double.PositiveInfinity"/> when no on-runway node is reachable within
+    /// <paramref name="maxSearchMeters"/>.
+    ///
+    /// <para>This is the reachability question a route's END has to answer, and it is NOT the
+    /// same as the perpendicular distance to the centerline. A set-back CAT II/III hold sits far
+    /// off the perpendicular (EGKK A3, 162 m) yet is one short taxi from the runway, while a
+    /// taxiway that merely PARALLELS the runway can be closer in a straight line and still have
+    /// no connector at all. Nor is it distance to the LINEUP node: the runway pavement is not a
+    /// continuous corridor in the taxi graph, so a node sitting on the runway 900 m downfield
+    /// measures over a kilometre to the lineup point (PHNL 04L taxiway E: 0.1 m perpendicular,
+    /// 1,399 m of graph to the lineup node, 0 m to the pavement).</para>
+    ///
+    /// <para>Dijkstra from the single source, stopping at the first on-runway node popped, and
+    /// bounded by <paramref name="maxSearchMeters"/> so a disconnected end can never walk the
+    /// whole airport. Called once per route load, never per frame.</para>
+    /// </summary>
+    public double GraphWalkToRunwayPavement(
+        int fromNodeId,
+        double thrLat, double thrLon, double farLat, double farLon,
+        double halfWidthMeters, double maxSearchMeters)
+    {
+        if (!Nodes.ContainsKey(fromNodeId)) return double.PositiveInfinity;
+
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return double.PositiveInfinity;
+        double maxPerp = halfWidthMeters + 5.0;
+
+        bool OnRunway(TaxiNode n)
+        {
+            var (perp, along, _, _) = ProjectOntoCenterline(
+                n.Latitude, n.Longitude, thrLat, thrLon, farLat, farLon);
+            return perp <= maxPerp && along >= -50.0 && along <= totalLen + 50.0;
+        }
+
+        if (OnRunway(Nodes[fromNodeId])) return 0.0;
+
+        var dist = new Dictionary<int, double> { [fromNodeId] = 0.0 };
+        var pq = new PriorityQueue<int, double>();
+        pq.Enqueue(fromNodeId, 0.0);
+
+        while (pq.TryDequeue(out int cur, out double d))
+        {
+            if (d > maxSearchMeters) return double.PositiveInfinity;
+            if (d > dist.GetValueOrDefault(cur, double.MaxValue)) continue;
+            if (OnRunway(Nodes[cur])) return d;
+            if (!Adjacency.TryGetValue(cur, out var edges)) continue;
+            foreach (var e in edges)
+            {
+                int other = e.FromNodeId == cur ? e.ToNodeId : e.FromNodeId;
+                if (!Nodes.ContainsKey(other)) continue;
+                double nd = d + e.DistanceMeters;
+                if (nd > maxSearchMeters) continue;
+                if (nd < dist.GetValueOrDefault(other, double.MaxValue))
+                {
+                    dist[other] = nd;
+                    pq.Enqueue(other, nd);
+                }
+            }
+        }
+        return double.PositiveInfinity;
+    }
+
+    /// <summary>
+    /// Every named taxiway edge in the graph as flat (name, endpoint-coordinate) tuples —
+    /// airport pavement geometry for <c>SayIntentionsTaxiPathSnapper.Snap</c> to measure a
+    /// SayIntentions taxi-path point against, instead of parsing an ATC clearance's
+    /// phrasing. Returns a tuple rather than <see cref="TaxiEdge"/> (or the snapper's own
+    /// <c>NamedEdge</c>) so Navigation carries no dependency on Services.SayIntentions.
+    ///
+    /// <see cref="Adjacency"/> stores BOTH directions of every physical segment — the
+    /// forward copy in the start node's list, the reverse copy in the end node's — so a
+    /// bare walk would double the snapper's per-point work for no benefit. Two node ids on
+    /// one edge are never equal (<see cref="Build"/> skips degenerate same-node segments),
+    /// so of a segment's two directional copies exactly one always has
+    /// <c>FromNodeId &lt; ToNodeId</c>; keeping only that one selects exactly one
+    /// representative per physical segment without a separate seen-set.
+    ///
+    /// A blank <see cref="TaxiEdge.TaxiwayName"/> is skipped — nothing downstream filters
+    /// an unnamed segment out, so a blank would flow straight through into a snapped route
+    /// as an empty leg name. An edge whose endpoint node id is missing from
+    /// <see cref="Nodes"/> is also skipped rather than resolved to (0,0): Build() never
+    /// leaves a dangling reference itself, but a (0,0) edge would sit ~5000 km from any
+    /// real airport and could still win a nearest-edge distance comparison for an outlier
+    /// point, so this stays defensive rather than assuming the invariant always holds.
+    ///
+    /// Output order is explicit and deterministic — sorted by ascending TaxiwayName, then by
+    /// the FROM endpoint's latitude/longitude, then the TO endpoint's — and must never be
+    /// replaced by a bare Adjacency/Dictionary walk: Dictionary&lt;TKey,TValue&gt; enumeration
+    /// order is an implementation detail, not a contract. The snapper resolves nearest-edge
+    /// ties with a strict "&lt;" (first candidate in the sequence wins on an exact tie), so a
+    /// reordering here can silently change which taxiway a pilot is told — on a live LSZH
+    /// capture one point was decided by a 3.24 cm margin, and two taxiways meeting at a
+    /// junction can legitimately sit at an exactly equal distance from a point.
+    ///
+    /// The key is intrinsic to each edge's own data, deliberately NOT the node-id pair: node
+    /// ids are stable only WITHIN one <see cref="Build"/> call — they are assigned by a
+    /// monotonic counter in the order the caller's <c>paths</c> list was processed, not by
+    /// anything about the edge's geography or name. So the very same physical edges fed to
+    /// <see cref="Build"/> in a different order (a navdata re-import that changes
+    /// <c>taxi_path_id</c> assignment, or any future caller that doesn't share today's
+    /// <c>ORDER BY taxi_path_id</c> query) would silently reorder a node-id-keyed result even
+    /// though the airport itself never changed. Sorting on name plus coordinates instead makes
+    /// the order hold across rebuilds, independent of processing order — it depends only on
+    /// the edges themselves. This introduces no new ties: <see cref="ResolveNode"/>'s merge
+    /// check (endpoints within <see cref="MERGE_THRESHOLD_METERS"/> of each other are merged
+    /// into one node) guarantees two DISTINCT nodes can never share bit-identical coordinates
+    /// — they would have been merged into one — so a coordinate+name key is exactly as
+    /// tie-free as the node-id key it replaces.
+    /// </summary>
+    public IEnumerable<(string Name, double FromLat, double FromLon, double ToLat, double ToLon)> GetNamedEdges()
+    {
+        var candidates = new List<TaxiEdge>();
+
+        foreach (var nodeEdges in Adjacency.Values)
+        {
+            foreach (var edge in nodeEdges)
+            {
+                if (string.IsNullOrEmpty(edge.TaxiwayName)) continue;
+                // Reciprocal copy of this physical segment — the other direction
+                // represents it (see method doc comment).
+                if (edge.FromNodeId >= edge.ToNodeId) continue;
+                if (!Nodes.ContainsKey(edge.FromNodeId) || !Nodes.ContainsKey(edge.ToNodeId)) continue;
+                candidates.Add(edge);
+            }
+        }
+
+        // Explicit, total-order sort — never rely on Dictionary/Adjacency enumeration
+        // order, and never on FromNodeId/ToNodeId. See method doc comment for why: node ids
+        // are stable only within one Build() call (assigned by processing order), not across
+        // rebuilds, so a node-id key can silently reorder the same physical airport. Keyed on
+        // TaxiwayName, then the FROM endpoint's coordinates, then the TO endpoint's —
+        // intrinsic to the edge's own data, so the order holds regardless of the order paths
+        // were supplied to Build(). All candidates already passed the Nodes-containment check
+        // above, so these lookups cannot throw.
+        candidates.Sort((a, b) =>
+        {
+            int cmp = string.CompareOrdinal(a.TaxiwayName, b.TaxiwayName);
+            if (cmp != 0) return cmp;
+            var fromA = Nodes[a.FromNodeId];
+            var fromB = Nodes[b.FromNodeId];
+            cmp = fromA.Latitude.CompareTo(fromB.Latitude);
+            if (cmp != 0) return cmp;
+            cmp = fromA.Longitude.CompareTo(fromB.Longitude);
+            if (cmp != 0) return cmp;
+            var toA = Nodes[a.ToNodeId];
+            var toB = Nodes[b.ToNodeId];
+            cmp = toA.Latitude.CompareTo(toB.Latitude);
+            if (cmp != 0) return cmp;
+            return toA.Longitude.CompareTo(toB.Longitude);
+        });
+
+        var result = new List<(string Name, double FromLat, double FromLon, double ToLat, double ToLon)>(candidates.Count);
+        foreach (var edge in candidates)
+        {
+            var from = Nodes[edge.FromNodeId];
+            var to = Nodes[edge.ToNodeId];
+            result.Add((edge.TaxiwayName, from.Latitude, from.Longitude, to.Latitude, to.Longitude));
+        }
+        return result;
     }
 
     /// <summary>
@@ -547,11 +2381,20 @@ public class TaxiGraph
     /// connected component are considered (the spatial-hash ring and the
     /// full-scan fallback both honour it) — used to keep an aircraft's start
     /// node in the destination's component.
+    /// <paramref name="excludeBridgeOnlyStandStubs"/> is a SEPARATE, narrower filter (Task 6
+    /// Defect A): when true, a node with no way out but a fabricated stand bridge
+    /// (<see cref="IsBridgeOnlyStandStub"/>) is skipped even though bridging already put it in the
+    /// SAME component as everything else, so <paramref name="requiredComponentId"/> alone cannot
+    /// exclude it. Route-START callers must pass true; a DESTINATION lookup (e.g. resolving a gate
+    /// or deice pad to its nearest graph node) must leave it false, or the very stand the bridge
+    /// exists to reach could stop resolving as a destination.
     /// </summary>
-    public TaxiNode? FindNearestNode(double lat, double lon, int? requiredComponentId = null)
+    public TaxiNode? FindNearestNode(double lat, double lon, int? requiredComponentId = null,
+        bool excludeBridgeOnlyStandStubs = false)
     {
-        // Fast path: search the spatial hash with an expanding ring of cells.
-        // Precision 5 = ~1.1m cells at equator. Rings 1, 3, 10, 30 cover up to ~330m cheaply.
+        // Fast path: expanding rings of 1e-5° cells (1, 3, 10, 30 cells: up to ±33 m north-south,
+        // cos(latitude) of that east-west). The first ring with a node passing the filters answers;
+        // the full scan runs only when ring 30 has none.
         foreach (int ringRadius in new[] { 1, 3, 10, 30 })
         {
             TaxiNode? best = null;
@@ -569,6 +2412,8 @@ public class TaxiGraph
                         {
                             var node = Nodes[nodeId];
                             if (requiredComponentId.HasValue && node.ComponentId != requiredComponentId.Value)
+                                continue;
+                            if (excludeBridgeOnlyStandStubs && IsBridgeOnlyStandStub(nodeId))
                                 continue;
                             double dist = FastDistanceMeters(lat, lon, node.Latitude, node.Longitude);
                             if (dist < bestDist)
@@ -590,6 +2435,8 @@ public class TaxiGraph
         {
             if (requiredComponentId.HasValue && node.ComponentId != requiredComponentId.Value)
                 continue;
+            if (excludeBridgeOnlyStandStubs && IsBridgeOnlyStandStub(node.NodeId))
+                continue;
             double dist = FastDistanceMeters(lat, lon, node.Latitude, node.Longitude);
             if (dist < fallbackDist)
             {
@@ -598,6 +2445,31 @@ public class TaxiGraph
             }
         }
         return fallback;
+    }
+
+    /// <summary>
+    /// Every node of <paramref name="taxiwayName"/> within <paramref name="maxDistanceM"/> that
+    /// lies within <paramref name="maxOffNoseDeg"/> of <paramref name="headingTrue"/> (or under
+    /// 5 m away), nearest first.
+    /// </summary>
+    public List<TaxiNode> FindNodesOnTaxiwayAhead(
+        double lat, double lon, string taxiwayName, double maxDistanceM,
+        int? requiredComponentId, double headingTrue, double maxOffNoseDeg = 90.0)
+    {
+        var found = new List<(TaxiNode n, double d)>();
+        if (string.IsNullOrEmpty(taxiwayName)) return new List<TaxiNode>();
+        foreach (var node in Nodes.Values)
+        {
+            if (requiredComponentId.HasValue && node.ComponentId != requiredComponentId.Value) continue;
+            if (!node.TaxiwayNames.Contains(taxiwayName)) continue;
+            double d = FastDistanceMeters(lat, lon, node.Latitude, node.Longitude);
+            if (d > maxDistanceM) continue;
+            if (d >= 5.0 && Math.Abs(NormalizeAngle(MSFSBlindAssist.Navigation.NavigationCalculator.CalculateBearing(
+                    lat, lon, node.Latitude, node.Longitude) - headingTrue)) > maxOffNoseDeg)
+                continue;
+            found.Add((node, d));
+        }
+        return found.OrderBy(x => x.d).ThenBy(x => x.n.NodeId).Select(x => x.n).ToList();
     }
 
     /// <summary>
@@ -610,11 +2482,23 @@ public class TaxiGraph
     /// null if no node on <paramref name="taxiwayName"/> lies within
     /// <paramref name="maxDistanceM"/> of the position (and within the requested
     /// component if set).
+    /// <paramref name="excludeBridgeOnlyStandStubs"/> is the same Task 6 Defect A filter
+    /// <see cref="FindNearestNode"/> documents — this is a THIRD unfiltered route-start picker
+    /// found in PR #238 review (Important 1): a bridge-only stand stub's node is not always
+    /// unnamed. Measured against the real fs2024 database, 1,810 of 319,004 "P" (stand lead-in)
+    /// rows carry a non-empty name (KNZY 503, KCLT 119, plus LEMG/LEMD/CYVR/EPWR) — <c>Build</c>
+    /// adds a row's trimmed name to both of its endpoints' <see cref="TaxiNode.TaxiwayNames"/>
+    /// unconditionally, regardless of <c>PathType</c>, so a stub can register under a real
+    /// taxiway name (including the SAME name a real network node carries, at EPWR/KCLT). A
+    /// route-START caller must pass true or this method can hand back the stub the component
+    /// filter cannot exclude on its own. A DESTINATION lookup must leave it false.
     /// </summary>
     public TaxiNode? FindNearestNodeOnTaxiway(
         double lat, double lon, string taxiwayName,
         double maxDistanceM = 800.0,
-        int? requiredComponentId = null)
+        int? requiredComponentId = null,
+        bool excludeBridgeOnlyStandStubs = false,
+        Func<TaxiNode, bool>? accept = null)
     {
         if (string.IsNullOrEmpty(taxiwayName)) return null;
 
@@ -625,7 +2509,10 @@ public class TaxiGraph
         {
             if (requiredComponentId.HasValue && node.ComponentId != requiredComponentId.Value)
                 continue;
+            if (excludeBridgeOnlyStandStubs && IsBridgeOnlyStandStub(node.NodeId))
+                continue;
             if (!node.TaxiwayNames.Contains(taxiwayName)) continue;
+            if (accept != null && !accept(node)) continue;
             double d = FastDistanceMeters(lat, lon, node.Latitude, node.Longitude);
             if (d < bestDist)
             {
@@ -647,11 +2534,16 @@ public class TaxiGraph
     /// something far away. Caller can pass <paramref name="requiredComponentId"/>
     /// to restrict candidates (including the fallback) to a connected component
     /// (typically the destination's) so isolated-island taxiways are skipped —
-    /// see <see cref="FindNearestNodeOnTaxiway"/>.
+    /// see <see cref="FindNearestNodeOnTaxiway"/>. <paramref name="excludeBridgeOnlyStandStubs"/> is
+    /// the same Task 6 Defect A filter <see cref="FindNearestNode"/> documents — a separate,
+    /// narrower exclusion the component filter cannot express because bridging already merged the
+    /// stub into <paramref name="requiredComponentId"/>'s component. It is honoured in the "ahead"
+    /// search below AND threaded into the overall-nearest fallback, so a route-start caller cannot
+    /// be handed the stub either way.
     /// </summary>
     public TaxiNode? FindNearestNodeInDirection(
         double lat, double lon, double headingDeg,
-        int? requiredComponentId = null)
+        int? requiredComponentId = null, bool excludeBridgeOnlyStandStubs = false)
     {
         // Tiered caps: prefer ahead-of-aircraft nodes within 300m (the common case at
         // a gate pushback), widen to 800m before giving up. Small airports with a large
@@ -670,6 +2562,8 @@ public class TaxiGraph
             // against navdata defects where a nearby taxiway is an isolated island
             // (e.g. GCLP S5 in fs2024 — 13 nodes, 0 external connections).
             if (requiredComponentId.HasValue && node.ComponentId != requiredComponentId.Value)
+                continue;
+            if (excludeBridgeOnlyStandStubs && IsBridgeOnlyStandStub(node.NodeId))
                 continue;
 
             double dist = FastDistanceMeters(lat, lon, node.Latitude, node.Longitude);
@@ -704,7 +2598,7 @@ public class TaxiGraph
 
         // Nothing ahead — try the overall nearest, but only if within the extended range
         // AND (when filtering) in the requested component.
-        var fallback = FindNearestNode(lat, lon);
+        var fallback = FindNearestNode(lat, lon, excludeBridgeOnlyStandStubs: excludeBridgeOnlyStandStubs);
         if (fallback == null) return null;
         if (requiredComponentId.HasValue && fallback.ComponentId != requiredComponentId.Value)
             return null;
@@ -717,72 +2611,119 @@ public class TaxiGraph
     /// "Taxiway Bravo", or "" if nothing plausible is nearby.
     ///
     /// Priority order (more specific wins):
-    ///   1. Parking node within 40 m (gate).
-    ///   2. Runway edge within half-width+5 m perpendicular distance (on the runway surface).
+    ///   1. Parking node within 40 m (gate) in every direction — but near a runway (on its pavement,
+    ///      a runway-start answer in reach, or a hold-short node within 40 m) only a stand also inside
+    ///      <see cref="RunwayStartReach"/> may answer.
+    ///   2. Runway edge (PathType 'R') within half-width+5 m, then the runway shape (RunwayShape) within half-width+5 m.
     ///      Runway edges are those with PathType indicating a runway (first char 'R').
-    ///   3. Runway threshold node within 50 m (near a runway start).
+    ///   3. Runway threshold node within 50 m (near a runway start), only inside
+    ///      <see cref="RunwayStartReach"/> — narrow on purpose (owner ruling).
     ///   4. Taxiway edge within half-width+3 m perpendicular distance (on a named taxiway).
-    ///   5. Nearest node's first taxiway name as a fallback (within 60 m).
+    ///   5. The nearest node carrying a taxiway name, within 60 m (fallback).
+    ///   Stand and fallback radii are true metres at any latitude (<see cref="NodesNear"/>,
+    ///   <see cref="EdgesNear"/>).
     ///
-    /// This does NOT depend on guidance being active — it's a pure query against the graph.
+    /// Runs on a pool thread for Alt+L against a graph the UI thread may subdivide, and builds the
+    /// cell index on first use, so it holds <see cref="_structureLock"/> for its whole run.
     /// Caller is responsible for prepending " at ICAO" if desired.
     /// </summary>
     public string DescribeLocation(double lat, double lon)
+    {
+        lock (_structureLock)
+            return DescribeLocationLocked(lat, lon);
+    }
+
+    /// <summary>The body of <see cref="DescribeLocation"/>; the caller holds <see cref="_structureLock"/>.</summary>
+    private string DescribeLocationLocked(double lat, double lon)
     {
         const double PARKING_RADIUS_M = 40.0;
         const double RUNWAY_THRESHOLD_RADIUS_M = 50.0;
         const double NODE_FALLBACK_RADIUS_M = 60.0;
         const double EDGE_SCAN_RADIUS_M = 120.0; // generous — runway surfaces are wide
 
-        // --- Pass 1: scan nearby nodes via spatial hash ---
-        TaxiNode? nearestParking = null;      double nearestParkingDist = double.MaxValue;
-        TaxiNode? nearestRunwayThreshold = null; double nearestRunwayDist = double.MaxValue;
-        TaxiNode? nearestAnyNode = null;      double nearestAnyDist = double.MaxValue;
+        // --- Pass 1: the three node answers — stand (1), near a runway start (3), fallback (5) ---
+        // Candidates come from a metre-sized ring (NodesNear). The old fixed ±30-cell ring of the
+        // 1.1 m hash reached only ±20 m east-west at 52°N (±7 m at 78°N), so stands a little east or
+        // west were never seen. The runway-start answer keeps exactly that old reach (RunwayStartReach).
+        // nearestParkingInRing tracks the nearest stand inside that old reach too, because near a
+        // runway only it may answer — which is not known until the centreline scan below.
+        TaxiNode? nearestParking = null;            double nearestParkingDist = double.MaxValue;
+        TaxiNode? nearestParkingInRing = null;      double nearestParkingInRingDist = double.MaxValue;
+        TaxiNode? nearestRunwayThreshold = null;    double nearestRunwayDist = double.MaxValue;
+        TaxiNode? nearestNamedNode = null;          double nearestNamedDist = double.MaxValue;
+        bool holdShortWithinStandRadius = false;
+        RunwayStartReach? runwayStartReach = null;   // built on the first candidate that needs the ring test
 
-        double step = Math.Pow(10, -SPATIAL_HASH_PRECISION);
-        // ring radius 30 cells ~= 330 m at equator — covers EDGE_SCAN_RADIUS_M comfortably
-        for (int dlat = -30; dlat <= 30; dlat++)
+        foreach (var node in NodesNear(lat, lon, NODE_FALLBACK_RADIUS_M))
         {
-            for (int dlon = -30; dlon <= 30; dlon++)
+            double dist = FastDistanceMeters(lat, lon, node.Latitude, node.Longitude);
+
+            // Only a named node may answer the fallback; a nearer unnamed one used to silence it.
+            if (node.TaxiwayNames.Count > 0 && dist < nearestNamedDist)
             {
-                string key = GetSpatialHashKey(lat + dlat * step, lon + dlon * step);
-                if (!_spatialHash.TryGetValue(key, out var nodeIds)) continue;
+                nearestNamedDist = dist;
+                nearestNamedNode = node;
+            }
 
-                foreach (int nodeId in nodeIds)
+            if (node.Type == TaxiNodeType.Parking &&
+                !string.IsNullOrEmpty(node.ParkingName) &&
+                !node.ParkingName.StartsWith("Runway", StringComparison.OrdinalIgnoreCase))
+            {
+                if (dist < nearestParkingDist)
                 {
-                    var node = Nodes[nodeId];
-                    double dist = FastDistanceMeters(lat, lon, node.Latitude, node.Longitude);
-
-                    if (dist < nearestAnyDist)
-                    {
-                        nearestAnyDist = dist;
-                        nearestAnyNode = node;
-                    }
-
-                    if (node.Type == TaxiNodeType.Parking &&
-                        !string.IsNullOrEmpty(node.ParkingName) &&
-                        !node.ParkingName.StartsWith("Runway", StringComparison.OrdinalIgnoreCase) &&
-                        dist < nearestParkingDist)
-                    {
-                        nearestParkingDist = dist;
-                        nearestParking = node;
-                    }
-
-                    if (!string.IsNullOrEmpty(node.ParkingName) &&
-                        node.ParkingName.StartsWith("Runway", StringComparison.OrdinalIgnoreCase) &&
-                        dist < nearestRunwayDist)
-                    {
-                        nearestRunwayDist = dist;
-                        nearestRunwayThreshold = node;
-                    }
+                    nearestParkingDist = dist;
+                    nearestParking = node;
+                }
+                if (dist < nearestParkingInRingDist &&
+                    (runwayStartReach ??= new RunwayStartReach(lat, lon)).Contains(node.Latitude, node.Longitude))
+                {
+                    nearestParkingInRingDist = dist;
+                    nearestParkingInRing = node;
                 }
             }
+
+            if (!string.IsNullOrEmpty(node.ParkingName) &&
+                node.ParkingName.StartsWith("Runway", StringComparison.OrdinalIgnoreCase) &&
+                dist < nearestRunwayDist &&
+                (runwayStartReach ??= new RunwayStartReach(lat, lon)).Contains(node.Latitude, node.Longitude))
+            {
+                nearestRunwayDist = dist;
+                nearestRunwayThreshold = node;
+            }
+
+            // "Near a runway" (c): a hold-short node within the stand radius, by navdata identity
+            // only (never TaxiNode.Type — see _navdataHoldShortNodeIds).
+            if (!holdShortWithinStandRadius && dist <= PARKING_RADIUS_M && IsNavdataHoldShort(node.NodeId))
+                holdShortWithinStandRadius = true;
         }
 
-        // Gate wins if close enough
-        if (nearestParking != null && nearestParkingDist <= PARKING_RADIUS_M)
+        // Runway centerline scan over the whole length: on the runway shape within half-width + 5 m,
+        // named after the nearer end. Run ahead of the gate decision, which needs its result.
+        string? runwayCenterlineMatch = null;
+        foreach (var rwy in RunwayCenterlines)
         {
-            string raw = nearestParking.ParkingName!.Trim();
+            var shape = RunwayShape.For(rwy);
+            var (along, lateral) = shape.Project(lat, lon);
+            if (!shape.ContainsAlongLateral(along, lateral, 5.0)) continue;
+            runwayCenterlineMatch = $"Runway {shape.NameAt(along)}";
+            break;
+        }
+
+        bool runwayThresholdAvailable = nearestRunwayThreshold != null && nearestRunwayDist <= RUNWAY_THRESHOLD_RADIUS_M &&
+            !string.IsNullOrEmpty(nearestRunwayThreshold.ParkingName);
+
+        // "Near a runway": on runway pavement (a), a runway-start answer in reach (b), or a hold-short
+        // node within the stand radius (c). There a stand answers only from nearestParkingInRing —
+        // the wider reach put a stand ahead of "Runway X" at ~2,255 fs2024 hold-short nodes and on
+        // runway pavement at >= 1,660 more. This only ever narrows which stand is eligible.
+        bool nearRunway = runwayCenterlineMatch != null || runwayThresholdAvailable || holdShortWithinStandRadius;
+
+        // Gate wins if close enough.
+        var gateCandidate = nearRunway ? nearestParkingInRing : nearestParking;
+        double gateCandidateDist = nearRunway ? nearestParkingInRingDist : nearestParkingDist;
+        if (gateCandidate != null && gateCandidateDist <= PARKING_RADIUS_M)
+        {
+            string raw = gateCandidate.ParkingName!.Trim();
             // Parking name may already be "Gate A25" or just "A25" / "G 10" — prefix "Gate" once
             if (raw.StartsWith("Gate", StringComparison.OrdinalIgnoreCase) ||
                 raw.StartsWith("Parking", StringComparison.OrdinalIgnoreCase) ||
@@ -797,55 +2738,44 @@ public class TaxiGraph
         TaxiEdge? bestRunwayEdge = null;  double bestRunwayEdgePerp = double.MaxValue;
         TaxiEdge? bestTaxiwayEdge = null; double bestTaxiwayEdgePerp = double.MaxValue;
 
-        // Collect candidate edges from adjacency of all nodes within EDGE_SCAN_RADIUS_M.
-        // We dedupe by (from,to) pair since adjacency holds both directions.
-        var visitedEdges = new HashSet<long>();
-
-        foreach (var kvp in Adjacency)
+        // Candidate edges come from the edge index, keyed on each segment's own footprint. Gathered
+        // from nearby nodes instead, a segment longer than 240 m had a dead middle: standing on
+        // EHAM's taxiway Delta, 1.7 m from a 339 m segment's centreline, answered "Not on a known
+        // taxiway" (3,788 km of fs2024 centreline was blind that way).
+        foreach (var edge in EdgesNear(lat, lon, EDGE_SCAN_RADIUS_M))
         {
-            int fromId = kvp.Key;
-            var fromNode = Nodes[fromId];
-            double fromDist = FastDistanceMeters(lat, lon, fromNode.Latitude, fromNode.Longitude);
-            if (fromDist > EDGE_SCAN_RADIUS_M) continue;
+            var fromNode = Nodes[edge.FromNodeId];
+            var toNode = Nodes[edge.ToNodeId];
+            double perp = PerpendicularDistanceMeters(
+                lat, lon,
+                fromNode.Latitude, fromNode.Longitude,
+                toNode.Latitude, toNode.Longitude);
 
-            foreach (var edge in kvp.Value)
+            // Half-width in meters (width stored as feet)
+            double halfWidthM = (edge.WidthFeet * 0.3048) * 0.5;
+
+            bool isRunway = !string.IsNullOrEmpty(edge.PathType) &&
+                            edge.PathType.StartsWith("R", StringComparison.OrdinalIgnoreCase);
+
+            double tolerance = isRunway ? halfWidthM + 5.0 : halfWidthM + 3.0;
+            if (tolerance < 5.0) tolerance = 5.0; // minimum tolerance if width is missing/zero
+
+            if (perp <= tolerance)
             {
-                // Dedupe
-                long edgeKey = Math.Min(edge.FromNodeId, edge.ToNodeId) * 1_000_000L + Math.Max(edge.FromNodeId, edge.ToNodeId);
-                if (!visitedEdges.Add(edgeKey)) continue;
-
-                var toNode = Nodes[edge.ToNodeId];
-                double perp = PerpendicularDistanceMeters(
-                    lat, lon,
-                    fromNode.Latitude, fromNode.Longitude,
-                    toNode.Latitude, toNode.Longitude);
-
-                // Half-width in meters (width stored as feet)
-                double halfWidthM = (edge.WidthFeet * 0.3048) * 0.5;
-
-                bool isRunway = !string.IsNullOrEmpty(edge.PathType) &&
-                                edge.PathType.StartsWith("R", StringComparison.OrdinalIgnoreCase);
-
-                double tolerance = isRunway ? halfWidthM + 5.0 : halfWidthM + 3.0;
-                if (tolerance < 5.0) tolerance = 5.0; // minimum tolerance if width is missing/zero
-
-                if (perp <= tolerance)
+                if (isRunway)
                 {
-                    if (isRunway)
+                    if (perp < bestRunwayEdgePerp)
                     {
-                        if (perp < bestRunwayEdgePerp)
-                        {
-                            bestRunwayEdgePerp = perp;
-                            bestRunwayEdge = edge;
-                        }
+                        bestRunwayEdgePerp = perp;
+                        bestRunwayEdge = edge;
                     }
-                    else if (!string.IsNullOrEmpty(edge.TaxiwayName))
+                }
+                else if (!string.IsNullOrEmpty(edge.TaxiwayName))
+                {
+                    if (perp < bestTaxiwayEdgePerp)
                     {
-                        if (perp < bestTaxiwayEdgePerp)
-                        {
-                            bestTaxiwayEdgePerp = perp;
-                            bestTaxiwayEdge = edge;
-                        }
+                        bestTaxiwayEdgePerp = perp;
+                        bestTaxiwayEdge = edge;
                     }
                 }
             }
@@ -855,48 +2785,26 @@ public class TaxiGraph
         // NOTE: this branch only fires for DBs that store runway centerlines as
         // taxi_path.type='R' rows. The current navdatareader schema does NOT —
         // every taxi_path row is type T / PT / P. The runway-centerline scan
-        // below covers the common case using start-table threshold pairs.
+        // above covers the common case using start-table threshold pairs.
         if (bestRunwayEdge != null && !string.IsNullOrEmpty(bestRunwayEdge.TaxiwayName))
             return $"Runway {bestRunwayEdge.TaxiwayName}";
 
-        // Runway centerline scan (works for the whole length, not just the
-        // thresholds). Each RunwayCenterline is the segment between the two
-        // opposing-end thresholds; if the aircraft is within half-width-plus-
-        // a-bit of that segment, it's on the runway. Pick the runway end whose
-        // heading is closer to the aircraft's bearing along the centerline so
-        // we report the correct designator (27L vs 09R).
-        foreach (var rwy in RunwayCenterlines)
-        {
-            double perp = PerpendicularDistanceMeters(
-                lat, lon, rwy.Lat1, rwy.Lon1, rwy.Lat2, rwy.Lon2);
-            double tolerance = rwy.HalfWidthMeters + 5.0;
-            if (perp > tolerance) continue;
-
-            // Pick the directional name. For a stationary aircraft we can't use
-            // its heading, so default to the end the aircraft is closer to:
-            // it'll be lined up to take off in that direction. (For a rolling
-            // aircraft this same convention happens to match the takeoff end.)
-            double d1 = FastDistanceMeters(lat, lon, rwy.Lat1, rwy.Lon1);
-            double d2 = FastDistanceMeters(lat, lon, rwy.Lat2, rwy.Lon2);
-            string name = d1 <= d2 ? rwy.Name1 : rwy.Name2;
-            if (string.IsNullOrEmpty(name)) name = rwy.Name1;
-            return $"Runway {name}";
-        }
+        // Runway centerline match, computed above.
+        if (runwayCenterlineMatch != null)
+            return runwayCenterlineMatch;
 
         // Otherwise if we're near a runway threshold node
-        if (nearestRunwayThreshold != null && nearestRunwayDist <= RUNWAY_THRESHOLD_RADIUS_M &&
-            !string.IsNullOrEmpty(nearestRunwayThreshold.ParkingName))
-            return nearestRunwayThreshold.ParkingName; // already "Runway 22L"
+        if (runwayThresholdAvailable)
+            return nearestRunwayThreshold!.ParkingName!; // already "Runway 22L"
 
         // On taxiway
         if (bestTaxiwayEdge != null && !string.IsNullOrEmpty(bestTaxiwayEdge.TaxiwayName))
             return $"Taxiway {bestTaxiwayEdge.TaxiwayName}";
 
-        // Fallback: nearest node's first taxiway name
-        if (nearestAnyNode != null && nearestAnyDist <= NODE_FALLBACK_RADIUS_M &&
-            nearestAnyNode.TaxiwayNames.Count > 0)
+        // Fallback: the nearest node that carries a taxiway name
+        if (nearestNamedNode != null && nearestNamedDist <= NODE_FALLBACK_RADIUS_M)
         {
-            string name = nearestAnyNode.TaxiwayNames.First();
+            string name = nearestNamedNode.TaxiwayNames.First();
             return $"Near taxiway {name}";
         }
 
@@ -904,8 +2812,8 @@ public class TaxiGraph
     }
 
     /// <summary>
-    /// Detects which runway the aircraft is sitting on, using the same half-width
-    /// tolerance as DescribeLocation but exposing structured data for callers that
+    /// Detects which runway the aircraft is sitting on — on the runway shape, strictly, with no
+    /// margin (unlike DescribeLocation) — exposing structured data for callers that
     /// need geometry (threshold lat/lon, true heading, designator) rather than a
     /// spoken string. Uses the aircraft's true heading to pick the correct
     /// reciprocal designator (e.g. 27L vs 09R) — the "threshold" is the upwind
@@ -925,7 +2833,7 @@ public class TaxiGraph
     /// Out: true heading of the runway in the takeoff direction (degrees, 0..360).
     /// </param>
     /// <returns>
-    /// True if the aircraft is within half-width of a runway centerline. False
+    /// True if the aircraft is on a runway's shape (within its half-width and inside its extent). False
     /// if the aircraft is not on any runway in this graph's RunwayCenterlines list.
     /// </returns>
     public bool TryGetRunwayAtPosition(
@@ -940,64 +2848,28 @@ public class TaxiGraph
 
         foreach (var rwy in RunwayCenterlines)
         {
-            double perp = PerpendicularDistanceMeters(
-                lat, lon, rwy.Lat1, rwy.Lon1, rwy.Lat2, rwy.Lon2);
-            // Strict half-width (no +5 m tolerance). Stricter than DescribeLocation
-            // because takeoff-assist centerline math depends on the chosen runway
-            // actually being the one under the aircraft — a 5 m fudge could
-            // mis-attribute when the aircraft is sitting on a high-speed exit
-            // immediately adjacent to a runway.
-            if (perp > rwy.HalfWidthMeters) continue;
+            // Strict: the runway shape's own half-width, no margin. Stricter than DescribeLocation
+            // because takeoff-assist centerline math depends on the chosen runway actually being the
+            // one under the aircraft — a 5 m fudge could mis-attribute when the aircraft is sitting on
+            // a high-speed exit immediately adjacent to a runway.
+            var shape = RunwayShape.For(rwy);
+            if (!shape.Contains(lat, lon, 0.0)) continue;
 
-            // Pick the end whose takeoff heading is closer to the aircraft's
-            // heading. End 1's takeoff heading is HeadingDeg1; end 2's is
-            // HeadingDeg1 + 180 (mod 360).
-            double hdg1 = NormalizeHeading(rwy.HeadingDeg1);
-            double hdg2 = NormalizeHeading(rwy.HeadingDeg1 + 180.0);
-            double diff1 = Math.Abs(NormalizeAngle(aircraftHeadingTrue - hdg1));
-            double diff2 = Math.Abs(NormalizeAngle(aircraftHeadingTrue - hdg2));
-
-            if (diff1 <= diff2)
-            {
-                runwayId = rwy.Name1;
-                thresholdLat = rwy.Lat1;
-                thresholdLon = rwy.Lon1;
-                runwayHeadingTrue = hdg1;
-            }
-            else
-            {
-                runwayId = rwy.Name2;
-                thresholdLat = rwy.Lat2;
-                thresholdLon = rwy.Lon2;
-                runwayHeadingTrue = hdg2;
-            }
-
-            // Fallback if the chosen end has an empty Name (shouldn't happen
-            // in well-formed navdata, but defensive — an empty designator
-            // would propagate into the spoken callout). When we fall over to
-            // the other end's name, also re-point the threshold + heading to
-            // that other end so the geometry stays consistent with the name.
-            // If both names are empty, leave the geometry on the originally
-            // chosen end — the empty runwayId will be the caller's signal
-            // that data is malformed, but threshold + heading remain valid
-            // approximations.
-            if (string.IsNullOrEmpty(runwayId))
-            {
-                if (rwy.Name1.Length > 0)
-                {
-                    runwayId = rwy.Name1;
-                    thresholdLat = rwy.Lat1;
-                    thresholdLon = rwy.Lon1;
-                    runwayHeadingTrue = hdg1;
-                }
-                else if (rwy.Name2.Length > 0)
-                {
-                    runwayId = rwy.Name2;
-                    thresholdLat = rwy.Lat2;
-                    thresholdLon = rwy.Lon2;
-                    runwayHeadingTrue = hdg2;
-                }
-            }
+            // The END, its threshold and its heading come from that SAME shape, together
+            // (PR #238 deferred finding §5). They used to be picked from rwy.HeadingDeg1 and
+            // rwy.Lat1/Lat2 — the START-ROW frame — while DescribeLocation named the end through
+            // RunwayShape.NameAt, the pavement frame, so on a name-swapped centreline (AYCH, OIII,
+            // URWW, EDVQ: measured, four of 405) the two answered OPPOSITE ENDS at the same point.
+            // A blind pilot asking Where-Am-I was told one runway while the takeoff-assist reference
+            // seeded at the same spot carried the other, along with that end's threshold.
+            //
+            // The threshold is still a `start` row — runway-destination lineup anchors on the start
+            // table — but the row paired with this end BY POSITION rather than by name index.
+            var end = shape.DepartureEndFor(aircraftHeadingTrue);
+            runwayId = end.Designator;
+            thresholdLat = end.ThresholdLat;
+            thresholdLon = end.ThresholdLon;
+            runwayHeadingTrue = end.HeadingTrue;
 
             return true;
         }
@@ -1013,12 +2885,910 @@ public class TaxiGraph
     }
 
     /// <summary>
+    /// Enumerates the taxiways that meet a runway partway along its length — the
+    /// valid intersection-departure points, one per MEETING POINT.
+    /// Qualifying nodes on the same taxiway are clustered by along-track
+    /// distance (a gap > 100 m starts a new cluster — paired high-speed-exit
+    /// branches sharing one name sit 105-555 m apart in fs2024 navdata, while
+    /// polyline nodes along a single entrance are far denser). Each cluster is
+    /// ONE meeting point and contributes its node closest to the centerline,
+    /// with distance measured from the DEPARTURE threshold (so "remaining" is
+    /// the runway ahead in the takeoff direction).
+    /// Sorted threshold-first. The threshold connector itself and the far-end
+    /// nubs are filtered out.
+    ///
+    /// Parallel taxiways that run alongside the runway (e.g. a full-length
+    /// parallel) never have a node within half-width, so they're correctly
+    /// excluded — only taxiways that genuinely enter the runway are offered.
+    ///
+    /// The centerline is passed as explicit PHYSICAL geometry
+    /// (<paramref name="thrLat"/>..<paramref name="farLon"/>, from the runway_end
+    /// thresholds via the <c>Runway</c> model) — NOT the <see cref="RunwayCenterline"/>
+    /// list, which is built from the <c>start</c> table and can sit hundreds of
+    /// metres inside the pavement at displaced-threshold runways (that would make
+    /// "remaining" badly understate the real runway length).
+    /// </summary>
+    /// <param name="thrLat">Departure-end threshold latitude (takeoff direction origin).</param>
+    /// <param name="thrLon">Departure-end threshold longitude.</param>
+    /// <param name="farLat">Opposite-end (rollout-end) latitude.</param>
+    /// <param name="farLon">Opposite-end longitude.</param>
+    /// <param name="halfWidthMeters">Runway half-width; a node must be within this of the centerline to count.</param>
+    /// <param name="lineupLat">Optional: latitude of the full-length lineup point
+    /// (start-table row). When given, meeting points at or before it (+50 m) are
+    /// dropped — they are the NORMAL departure entrance, not an intersection
+    /// shortcut. Matters at displaced-threshold runways (KJFK 22R: ~1 km displaced),
+    /// where that entrance otherwise lists as a bogus "intersection".</param>
+    /// <param name="lineupLon">Optional: longitude of the full-length lineup point.</param>
+    public List<RunwayIntersection> GetRunwayIntersections(
+        double thrLat, double thrLon, double farLat, double farLon, double halfWidthMeters,
+        double? lineupLat = null, double? lineupLon = null,
+        double? aircraftLat = null, double? aircraftLon = null)
+    {
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return new List<RunwayIntersection>();
+
+        // Meeting points at or before the full-length lineup point are the normal
+        // departure entrance, not a shortcut; 50 m of margin absorbs connector
+        // geometry around the lineup spot.
+        const double FULL_LENGTH_MARGIN_M = 50.0;
+
+        double minAlong = MIN_ALONG_M;
+        if (lineupLat.HasValue && lineupLon.HasValue)
+        {
+            var (_, lineupAlong, _, _) = ProjectOntoCenterline(
+                lineupLat.Value, lineupLon.Value, thrLat, thrLon, farLat, farLon);
+            // Sanity clamp: a lineup point past mid-runway is a corrupt start
+            // row — ignore the filter rather than emptying the list.
+            if (lineupAlong > 0 && lineupAlong <= totalLen / 2.0)
+                minAlong = Math.Max(minAlong, lineupAlong + FULL_LENGTH_MARGIN_M);
+        }
+
+        var result = ScanRunwayMeetingPoints(
+            thrLat, thrLon, farLat, farLon, halfWidthMeters,
+            totalLen, minAlong, MIN_REMAINING_M);
+
+        // Quote the runway an aircraft really has left. On an entry angled BACK against the takeoff
+        // direction the taxiway reaches the pavement further along than the node nearest the
+        // centreline, then runs back to it — and the aircraft turns onto the runway where it meets
+        // the pavement: KORD 04R Y4 is listed at 1356 m but meets the pavement at 1535 m, and a pilot
+        // following the lineup tone was "Lined up" 140-250 m further down than the list said
+        // (VirtualPilot 2026-09-18). Overstating the remaining runway is the unsafe direction, so
+        // the label uses the pavement entry — only ever moved FURTHER down the runway (an entry
+        // angled forward, EGLL 09L A8, keeps today's point: moving it back would promise runway the
+        // lineup turn uses up). Bounded: a cluster spread further than this is not one entry.
+        // The side is the aircraft's: a taxiway that crosses the whole runway reaches the far edge
+        // somewhere else (EGLL 09L A8), and that is not where this pilot turns on. Unknown position
+        // → no adjustment.
+        const double ANGLED_ENTRY_MAX_SPREAD_M = 300.0;
+        if (aircraftLat.HasValue && aircraftLon.HasValue)
+        {
+            bool fromLeft = SideOfLine(aircraftLat.Value, aircraftLon.Value, thrLat, thrLon, farLat, farLon) > 0;
+            foreach (var ix in result)
+            {
+                double entry = fromLeft ? ix.PavementEntryAlongLeft : ix.PavementEntryAlongRight;
+                double spread = entry - ix.AlongMetersFromThreshold;
+                if (spread > 0 && spread <= ANGLED_ENTRY_MAX_SPREAD_M)
+                {
+                    ix.AlongMetersFromThreshold = entry;
+                    ix.RemainingMeters = totalLen - entry;
+                }
+            }
+        }
+
+        result.Sort((a, b) => a.AlongMetersFromThreshold.CompareTo(b.AlongMetersFromThreshold));
+        return result;
+    }
+
+    /// <summary>Exclude the threshold connector itself.</summary>
+    private const double MIN_ALONG_M = 15.0;
+
+    /// <summary>Exclude far-end nubs (~150 ft of runway left).</summary>
+    private const double MIN_REMAINING_M = 45.0;
+
+    /// <summary>
+    /// The shared scan behind <see cref="GetRunwayIntersections"/> and
+    /// <see cref="FindFullLengthEntrance"/>: every NAMED taxiway that has a node on the
+    /// runway pavement, clustered into one meeting point per genuine entrance.
+    /// Unsorted; the callers order it for their own purpose.
+    ///
+    /// Only the named-taxiway index is walked, which is what makes the answer meaningful:
+    /// the runway's own pavement is itself a chain of UNNAMED taxi_path nodes in navdata
+    /// (there is no <c>type='R'</c>), so a scan over all graph nodes would return the
+    /// centerline rather than the entrances onto it.
+    /// </summary>
+    /// <param name="minAlong">Along-track floor. May be NEGATIVE: an entrance BEHIND the
+    /// pavement edge is real (starter extensions — EGLL 09L is entered only from AB13,
+    /// 300-355 m back), and <see cref="FindFullLengthEntrance"/> depends on seeing them.</param>
+    private List<RunwayIntersection> ScanRunwayMeetingPoints(
+        double thrLat, double thrLon, double farLat, double farLon, double halfWidthMeters,
+        double totalLen, double minAlong, double minRemaining)
+    {
+        var result = new List<RunwayIntersection>();
+
+        // Small tolerance above the stored half-width to absorb navdata rounding
+        // at the runway edge (the node is often exactly on the centerline, but a
+        // few metres of slop keeps a wide runway's entrance node in).
+        double maxPerp = halfWidthMeters + 5.0;
+
+        // Two qualifying nodes on the SAME taxiway further apart than this along
+        // the runway are distinct meeting points (the paired branches of a
+        // high-speed exit sharing one name). Over-splitting is benign — both
+        // points are genuinely on the runway and the labels carry distances;
+        // under-splitting hides a real branch, which is the failure that matters.
+        const double CLUSTER_GAP_M = 100.0;
+
+        foreach (var kv in _taxiwayNodeIndex)
+        {
+            string twName = kv.Key;
+            if (string.IsNullOrEmpty(twName)) continue;
+
+            // All qualifying nodes on this taxiway. Gating HERE — not after
+            // picking a best node — means a taxiway's near-threshold connector
+            // node (along < MIN_ALONG_M) or a far-end nub can't shadow a genuine
+            // mid-field entrance further down the same taxiway.
+            var candidates = new List<(double along, double perp, int nodeId, double lat, double lon)>();
+            foreach (int nid in kv.Value)
+            {
+                if (!Nodes.TryGetValue(nid, out var n)) continue;
+                var (perp, along, projLat, projLon) =
+                    ProjectOntoCenterline(n.Latitude, n.Longitude, thrLat, thrLon, farLat, farLon);
+                if (along < minAlong || along > totalLen) continue;
+                if (totalLen - along < minRemaining) continue;
+                if (perp > maxPerp) continue;
+                candidates.Add((along, perp, nid, projLat, projLon));
+            }
+            if (candidates.Count == 0) continue;
+            candidates.Sort((a, b) => a.along.CompareTo(b.along));
+
+            // Walk the sorted candidates; a >CLUSTER_GAP_M along-track gap closes
+            // the current cluster. Emit each cluster's min-perpendicular node.
+            int clusterStart = 0;
+            for (int i = 1; i <= candidates.Count; i++)
+            {
+                if (i < candidates.Count &&
+                    candidates[i].along - candidates[i - 1].along <= CLUSTER_GAP_M)
+                    continue;
+
+                var best = candidates[clusterStart];
+                for (int j = clusterStart + 1; j < i; j++)
+                    if (candidates[j].perp < best.perp) best = candidates[j];
+                // Where the taxiway crosses onto the pavement on each side: its node farthest from
+                // the centreline there, if that node is near the edge at all.
+                double entryLeft = double.NaN, entryRight = double.NaN, perpLeft = 0, perpRight = 0;
+                for (int j = clusterStart; j < i; j++)
+                {
+                    var c = candidates[j];
+                    if (c.perp < halfWidthMeters - PAVEMENT_ENTRY_EDGE_BAND_M) continue;
+                    var cn = Nodes[c.nodeId];
+                    if (SideOfLine(cn.Latitude, cn.Longitude, thrLat, thrLon, farLat, farLon) > 0)
+                    { if (c.perp > perpLeft) { perpLeft = c.perp; entryLeft = c.along; } }
+                    else if (c.perp > perpRight) { perpRight = c.perp; entryRight = c.along; }
+                }
+
+                result.Add(new RunwayIntersection
+                {
+                    TaxiwayName = twName,
+                    NodeId = best.nodeId,
+                    Latitude = best.lat,
+                    Longitude = best.lon,
+                    AlongMetersFromThreshold = best.along,
+                    RemainingMeters = totalLen - best.along,
+                    PavementEntryAlongLeft = entryLeft,
+                    PavementEntryAlongRight = entryRight,
+                });
+                clusterStart = i;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// How far PAST the full-length lineup point a taxiway may meet the runway and still be
+    /// the full-length entrance. Deliberately wider than <c>GetRunwayIntersections</c>'
+    /// 50 m exclusion margin, which exists to keep a full-length entrance OUT of the
+    /// intersection list and is tuned tight for that job: OMDB 12R is entered full length
+    /// from K5, which meets the runway 72 m past the start row and would otherwise be
+    /// reported as an intersection departure. Tight all the same — every metre past the
+    /// lineup point is runway the pilot does not get, so this is the direction that turns
+    /// a full-length departure into an intersection one.
+    /// </summary>
+    public const double FULL_LENGTH_ENTRANCE_AHEAD_M = 150.0;
+
+    /// <summary>
+    /// How far BEHIND the lineup point the same entrance may be. Much wider, and
+    /// deliberately asymmetric: an entrance behind the lineup point costs the pilot
+    /// nothing — it leaves at least the full runway ahead — so the only thing bounding it
+    /// is not wandering onto unrelated pavement. Starter extensions genuinely sit this far
+    /// back (iniBuilds EGLL 09L is entered only from AB13, 300-355 m behind the pavement
+    /// edge; EGKK 26L departs 406 m beyond its own runway_end). Measured over 1,952
+    /// airports with &gt;300 taxi paths, widening 150 m → 400 m names 172 runway ends that
+    /// were silent.
+    /// </summary>
+    public const double FULL_LENGTH_ENTRANCE_BEHIND_M = 400.0;
+
+    /// <summary>
+    /// The taxiway a plain (no intersection, no named holding point) departure enters this
+    /// runway by — the named entrance nearest the full-length LINEUP POINT, which is where
+    /// the sim starts a full-length takeoff.
+    ///
+    /// This is the navdata-only answer to the question the painted holding-point call-out
+    /// answers from OSM: at an airport whose hold lines carry no <c>ref</c> in OSM (OMDB has
+    /// 235 holding_position nodes and not one name) there is no painted name to speak, but
+    /// the ENTRANCE still has one. Returns null when nothing named meets the runway inside
+    /// the lineup point's window — silence is correct
+    /// there, because the nearest named taxiway may be most of the way down the runway
+    /// (OMDB 30L before its K16 stub is named: the first named entrance after it is M18,
+    /// 695 m in) and naming that would describe an intersection departure as a full-length one.
+    ///
+    /// An INDICATION, exactly like the holding-point call-out: the route's actual entrance is
+    /// the router's choice, and hold-short placement stays navdata-authoritative.
+    /// </summary>
+    /// <param name="lineupLat">Full-length lineup point (the <c>start</c> row, snapped).</param>
+    public RunwayIntersection? FindFullLengthEntrance(
+        double thrLat, double thrLon, double farLat, double farLon, double halfWidthMeters,
+        double lineupLat, double lineupLon)
+    {
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return null;
+
+        var (_, lineupAlong, _, _) = ProjectOntoCenterline(
+            lineupLat, lineupLon, thrLat, thrLon, farLat, farLon);
+        // Same sanity rule as GetRunwayIntersections: a lineup point past mid-runway is a
+        // corrupt start row. There it degrades to "no filter"; here the point IS the
+        // reference, so there is nothing to fall back to.
+        if (lineupAlong > totalLen / 2.0) return null;
+
+        // Entrances BEHIND the pavement edge are admitted (negative along) — a full-length
+        // stub routinely meets the runway at or just behind the lineup point, and at OMDB
+        // 30L the entrance, K16, sits 6 m behind the pavement edge.
+        var entrances = ScanRunwayMeetingPoints(
+            thrLat, thrLon, farLat, farLon, halfWidthMeters, totalLen,
+            minAlong: lineupAlong - FULL_LENGTH_ENTRANCE_BEHIND_M,
+            minRemaining: MIN_REMAINING_M);
+
+        RunwayIntersection? best = null;
+        double bestDelta = double.MaxValue;
+        foreach (var e in entrances)
+        {
+            if (e.AlongMetersFromThreshold > lineupAlong + FULL_LENGTH_ENTRANCE_AHEAD_M) continue;
+            double delta = Math.Abs(e.AlongMetersFromThreshold - lineupAlong);
+            // Ties break toward the entrance FURTHER BACK — more runway ahead, and the one
+            // a full-length clearance means.
+            if (delta < bestDelta - 0.01 ||
+                (Math.Abs(delta - bestDelta) <= 0.01 && best != null &&
+                 e.AlongMetersFromThreshold < best.AlongMetersFromThreshold))
+            {
+                best = e;
+                bestDelta = delta;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Finds the taxiway→runway entrance node to use for a FULL-LENGTH BACKTRACK
+    /// departure: the pilot enters the runway partway down, backtracks toward the
+    /// departure threshold, turns around, and lines up full length.
+    ///
+    /// Purely GEOMETRIC and NAME-INDEPENDENT (unlike <see cref="GetRunwayIntersections"/>,
+    /// which keys on taxiway names) — many third-party sceneries model backtrack
+    /// airports with UNNAMED taxi_path segments (iniBuilds EGNM: every taxiway name
+    /// is empty), so a name-based scan finds nothing there. This walks the graph
+    /// nodes instead.
+    ///
+    /// <paramref name="thrLat"/>/<paramref name="thrLon"/> is the DEPARTURE-END
+    /// threshold (the takeoff end of the named runway); <paramref name="farLat"/>/
+    /// <paramref name="farLon"/> is the opposite end. An entrance qualifies when it:
+    ///   • lies on the runway (perpendicular ≤ half-width + slop),
+    ///   • is genuinely down-field of the departure threshold (so a backtrack is
+    ///     actually required) yet not a far-end nub,
+    ///   • has at least one graph neighbour OFF the runway (a real taxiway junction,
+    ///     not a mid-runway centerline node), and
+    ///   • is reachable from the aircraft (same connected component).
+    /// Among those, the one CLOSEST to the departure threshold is returned — that
+    /// minimises the backtrack distance and matches real procedure (e.g. EGNM 32
+    /// enters at D1, ~575 m from the 32 threshold, not at the far-end A1). Returns
+    /// null when the airport has no such entrance (caller falls back to a normal
+    /// full-length departure).
+    /// </summary>
+    public TaxiNode? FindBacktrackEntryNode(
+        double thrLat, double thrLon, double farLat, double farLon,
+        double halfWidthMeters, double aircraftLat, double aircraftLon)
+    {
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return null;
+
+        double maxPerp = halfWidthMeters + 5.0;
+        const double MIN_ALONG_M     = 40.0;  // past the threshold connector — a backtrack is genuinely needed
+        const double MIN_REMAINING_M = 45.0;  // and on the runway proper, not a far-end nub
+
+        // Pass 1 — every GEOMETRY-qualified entrance, component-blind.
+        var candidates = new List<(TaxiNode node, double along)>();
+        foreach (var node in Nodes.Values)
+        {
+            var (perp, along, _, _) = ProjectOntoCenterline(
+                node.Latitude, node.Longitude, thrLat, thrLon, farLat, farLon);
+            if (perp > maxPerp) continue;
+            if (along < MIN_ALONG_M || along > totalLen - MIN_REMAINING_M) continue;
+            if (!HasOffRunwayNeighbour(node, thrLat, thrLon, farLat, farLon, maxPerp)) continue;
+            candidates.Add((node, along));
+        }
+        if (candidates.Count == 0) return null;
+
+        // Reachability: restrict to a component the aircraft's network can reach.
+        // A shared ComponentId guarantees A* can path to the node (undirected
+        // graph), so an entrance on an isolated pad/runway island must never win.
+        // BUT the anchor cannot be the literal nearest node to the aircraft:
+        // sceneries routinely leave ORPHAN 2-3 node parking-connector stubs, and
+        // an aircraft parked on one snapped its anchor to the stub's component —
+        // no entrance ever matched and the whole ticked backtrack died with "No
+        // backtrack entrance found" at exactly the airports that need it (LICR:
+        // main network 89 nodes in one component, a dozen 2-node stubs, stand 1's
+        // nearest node on one of them). The anchor is therefore the nearest node
+        // to the aircraft AMONG nodes in a component that actually CONTAINS a
+        // qualified entrance — the network the aircraft will really taxi on
+        // (LoadRoute snaps its start node into the destination's component the
+        // same way, so the resulting route is consistent with this choice).
+        var candidateComps = new HashSet<int>();
+        foreach (var (node, _) in candidates) candidateComps.Add(node.ComponentId);
+
+        TaxiNode? anchor = null;
+        double anchorDist = double.MaxValue;
+        foreach (var node in Nodes.Values)
+        {
+            if (!candidateComps.Contains(node.ComponentId)) continue;
+            double d = FastDistanceMeters(aircraftLat, aircraftLon, node.Latitude, node.Longitude);
+            if (d < anchorDist) { anchorDist = d; anchor = node; }
+        }
+        if (anchor == null) return null;
+
+        TaxiNode? best = null;
+        double bestAlong = double.MaxValue;
+        foreach (var (node, along) in candidates)
+        {
+            if (node.ComponentId != anchor.ComponentId) continue;
+
+            // Closest to the departure threshold = least backtrack. This is what
+            // makes the choice DIRECTION-AWARE: measured from the takeoff-end
+            // threshold, the nearest entrance is the correct one for THIS runway
+            // direction (the reciprocal picks the entrance near the other end).
+            if (along < bestAlong) { bestAlong = along; best = node; }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// True when a full-length departure from this runway direction REQUIRES a
+    /// runway backtrack — i.e. the taxi network only reaches the runway partway
+    /// down, so getting the full length means entering mid-field and backtaxiing
+    /// to the head (LICR 15/33, EGNM class). Drives the "(backtrack required)"
+    /// affordance on the Taxi planner's runway list, so a blind pilot hears it
+    /// while arrowing the destination combo instead of discovering it from a
+    /// route that quietly ends short.
+    ///
+    /// <para>Decided in three steps, each pinned by the LICR probe (2026-08-28):</para>
+    /// <para>1. No backtrack entrance at all (<see cref="FindBacktrackEntryNode"/>
+    /// finds nothing mid-field) → false. Nothing to backtrack from; the plain
+    /// route and its reach warnings own whatever is wrong.</para>
+    /// <para>2. A backtrack entrance exists but NO full-length entrance does
+    /// (no on-runway node with an off-runway neighbour at/behind the lineup
+    /// point, in the entrance's own component) → true. LICR 15: the network
+    /// meets the runway only ~620 m downfield; the unticked route ends ~360 m
+    /// short of the threshold with no warning (the destination node sits just
+    /// under the reach warning's 120 m bar).</para>
+    /// <para>3. BOTH exist → they must be connected OFF the runway corridor, or
+    /// the "full-length entrance" is an island only reachable by taxiing the
+    /// runway itself. LICR 33: the scenery models the 33-head turn pad and a
+    /// threshold node, but the pad's only link back to the network IS the runway
+    /// centerline path — a de-facto backtrack whatever the graph calls the
+    /// pavement. A bounded BFS from the full-length entrance over off-corridor
+    /// nodes must reach the backtrack entrance('s network); at a normal airport
+    /// the parallel taxiway connects the two off-runway and this returns false.</para>
+    /// </summary>
+    public bool RunwayNeedsBacktrack(
+        double lineupLat, double lineupLon,
+        double thrLat, double thrLon, double farLat, double farLon,
+        double halfWidthMeters, double aircraftLat, double aircraftLon)
+        => RunwayNeedsBacktrack(lineupLat, lineupLon, thrLat, thrLon, farLat, farLon,
+                                halfWidthMeters, aircraftLat, aircraftLon, out _);
+
+    /// <summary>Diagnostic overload — <paramref name="reason"/> names the deciding step
+    /// (probe/sweep use; the spoken affordance uses only the bool).</summary>
+    public bool RunwayNeedsBacktrack(
+        double lineupLat, double lineupLon,
+        double thrLat, double thrLon, double farLat, double farLon,
+        double halfWidthMeters, double aircraftLat, double aircraftLon,
+        out string reason)
+    {
+        reason = "";
+        var bk = FindBacktrackEntryNode(thrLat, thrLon, farLat, farLon,
+                                        halfWidthMeters, aircraftLat, aircraftLon);
+        if (bk == null) { reason = "no mid-field entrance"; return false; }
+
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return false;
+        const double MIN_REMAINING_M = 45.0;
+        const double MAX_BEHIND_THRESHOLD_M = 500.0; // starter extensions (EGLL 09L)
+        // A "backtrack" the affordance should name is a real taxi down the runway.
+        // FindBacktrackEntryNode returns the MINIMUM-along entrance, so when even
+        // that sits within this margin of the lineup point, full length is directly
+        // accessible (EHAM 09: the head entrance itself passes the mid-field
+        // finder's 40 m floor) — no advisory.
+        const double BACKTRACK_MIN_DISTANCE_M = 200.0;
+        // How close to the head (along-track past the lineup point) and how far
+        // abeam (lateral) a reachable node may sit and still count as "head
+        // access". Deliberately LOOSER than the routing entry finders: head entry
+        // stubs routinely end just outside the strict half-width+5 band, a node
+        // up to 150 m past the lineup point still gives essentially the full
+        // length, and at simple fields a parallel taxiway passing ~50 m abeam the
+        // head IS the access (the lineup intercept covers the last metres, as it
+        // does today). This is an advisory about a MID-FIELD-ONLY runway, not a
+        // lineup-point picker.
+        const double AT_LINEUP_TOLERANCE_M = 150.0;
+        // Head access = within this straight-line radius of the lineup point.
+        // Radius, not a lateral corridor band: a remote-head runway's holding
+        // area legitimately sits well abeam the centerline (EHAM 18R Polderbaan's
+        // V-holds), while LICR 15's nearest apron node — the one the unticked
+        // route strands you at, 357 m short — must stay OUTSIDE.
+        const double HEAD_ACCESS_RADIUS_M = 250.0;
+
+        var (_, lineupAlong, _, _) = ProjectOntoCenterline(
+            lineupLat, lineupLon, thrLat, thrLon, farLat, farLon);
+        var (_, bkAlong, _, _) = ProjectOntoCenterline(
+            bk.Latitude, bk.Longitude, thrLat, thrLon, farLat, farLon);
+        if (bkAlong <= lineupAlong + BACKTRACK_MIN_DISTANCE_M)
+        {
+            reason = $"nearest entrance ~at the head (bkAlong {bkAlong:F0}, lineupAlong {lineupAlong:F0})";
+            return false;
+        }
+
+        // THE question, asked once: can the taxi network reach the HEAD AREA at
+        // all without riding the runway? BFS from the mid-field entrance (where
+        // the network provably meets the runway) in which the FORBIDDEN edges are
+        // exactly the runway's own pavement: an edge whose BOTH endpoints lie
+        // inside the runway corridor (half-width + 15 m, the exit-admission
+        // slack) AND whose bearing folds to within 30° of the runway axis — the
+        // along-the-runway legs a backtrack rides. A perpendicular connector stub
+        // is traversable even where several of its nodes sit inside the corridor
+        // (EGLL/EGKK-class stubs carry nodes at perp 20-40 m). Success is a
+        // POSITION, never a specific node id — demanding one exact node re-read
+        // whole airports as backtrack-required whenever that node's own last
+        // approach edge happened to be runway-aligned (EHAM 27, LEBL 24L).
+        // Bounded — this runs once per runway item at combo population, never
+        // per frame.
+        double corridorPerp = halfWidthMeters + 15.0;
+        var onCorridor = new Dictionary<int, bool>();
+        bool OnCorridorNode(int id)
+        {
+            if (onCorridor.TryGetValue(id, out bool v)) return v;
+            bool res = false;
+            if (Nodes.TryGetValue(id, out var n))
+            {
+                var (perp, along, _, _) = ProjectOntoCenterline(
+                    n.Latitude, n.Longitude, thrLat, thrLon, farLat, farLon);
+                res = perp <= corridorPerp && along >= -60.0 && along <= totalLen + 60.0;
+            }
+            onCorridor[id] = res;
+            return res;
+        }
+        double rwyHeading = Math.Atan2(
+            (farLon - thrLon) * Math.Cos(thrLat * Math.PI / 180.0),
+            farLat - thrLat) * 180.0 / Math.PI;
+        bool RunwayAligned(double bearingDeg)
+        {
+            double d = Math.Abs(NormalizeAngle(bearingDeg - rwyHeading));
+            if (d > 90.0) d = 180.0 - d;
+            return d <= 30.0;
+        }
+        bool IsHeadAccess(TaxiNode n)
+        {
+            if (FastDistanceMeters(n.Latitude, n.Longitude, lineupLat, lineupLon)
+                    > HEAD_ACCESS_RADIUS_M) return false;
+            var (_, along, _, _) = ProjectOntoCenterline(
+                n.Latitude, n.Longitude, thrLat, thrLon, farLat, farLon);
+            return along >= -MAX_BEHIND_THRESHOLD_M
+                && along <= lineupAlong + AT_LINEUP_TOLERANCE_M
+                && totalLen - along >= MIN_REMAINING_M;
+        }
+
+        var visited = new HashSet<int> { bk.NodeId };
+        var queue = new Queue<int>();
+        queue.Enqueue(bk.NodeId);
+        const int BFS_NODE_BUDGET = 6000;
+        while (queue.Count > 0 && visited.Count < BFS_NODE_BUDGET)
+        {
+            int cur = queue.Dequeue();
+            if (!Adjacency.TryGetValue(cur, out var edges)) continue;
+            bool curOn = OnCorridorNode(cur);
+            foreach (var e in edges)
+            {
+                // The runway pavement itself is the only forbidden surface. The
+                // entrance's OWN edges are always traversable: its connector stub
+                // is the network link, and on a shallow high-speed stub the first
+                // edge is runway-aligned inside the corridor — forbidding it
+                // sealed the BFS at one node and read the whole runway as
+                // backtrack-required (LEBL 24L, EHAM 27).
+                if (cur != bk.NodeId
+                    && curOn && OnCorridorNode(e.ToNodeId) && RunwayAligned(e.BearingDegrees))
+                    continue;
+                if (!visited.Add(e.ToNodeId)) continue;
+                if (!Nodes.TryGetValue(e.ToNodeId, out var cand)) continue;
+                if (IsHeadAccess(cand))
+                {
+                    reason = $"head reachable off-runway (via node {cand.NodeId})";
+                    return false;
+                }
+                queue.Enqueue(e.ToNodeId);
+            }
+        }
+        reason = $"head unreachable off-runway (bk {bk.NodeId}, bfs {visited.Count})";
+        return true;   // only the runway itself links the head to the network
+    }
+
+    /// <summary>
+    /// Resolves named PAINTED HOLDING POINTS (OSM aeroway=holding_position refs, e.g.
+    /// LSZH "A2") to runway entry nodes, so the Taxi planner can offer "depart from
+    /// holding point A2" even where the entry stub taxiway is UNNAMED in navdata
+    /// (MK Studios LSZH: every taxi_path is nameless, so the name-keyed
+    /// <see cref="GetRunwayIntersections"/> can't list those entries).
+    ///
+    /// GEOMETRIC and name-independent, mirroring <see cref="FindBacktrackEntryNode"/>:
+    /// a holding point belongs to this runway when it sits within
+    /// <paramref name="maxPointPerpMeters"/> of the centerline, and its entry node is the nearest
+    /// same-component on-runway node with an off-runway neighbour (a real
+    /// taxiway↔runway junction) within <paramref name="maxNodeDistMeters"/> of the
+    /// point. The painted point only ever SELECTS the entry — hold-short placement on
+    /// the resulting route stays authoritative from navdata (TruncateToHoldShort),
+    /// per the augmentation anti-geometry rule.
+    ///
+    /// Returns one <see cref="RunwayIntersection"/> per resolved point (TaxiwayName
+    /// carries the HOLDING-POINT name; Latitude/Longitude is the entry node projected
+    /// onto the centerline — the same lineup-target convention as
+    /// <see cref="GetRunwayIntersections"/>), sorted by distance from the departure
+    /// threshold. Full-length entries are deliberately INCLUDED (unlike the
+    /// intersection list): picking the full-length holding point by name (A2 vs A1)
+    /// is exactly the use case. Same-name points resolving to the same entry node are
+    /// deduplicated; distinct entries sharing a name are all returned (the caller's
+    /// labels carry distances).
+    ///
+    /// <paramref name="thrLat"/>/<paramref name="thrLon"/> must be the DEPARTURE
+    /// lineup point (the `start` table row), never the runway_end pavement edge —
+    /// see the caller's note in TaxiAssistForm.PopulateHoldingPoints. Both along-track
+    /// gates below are written against that anchor.
+    ///
+    /// BEHIND-THRESHOLD holds (EGCC 23L): some airports paint their full-length
+    /// departure holds well BEHIND the threshold, on the lead-in taxiways of a
+    /// holding/queue area — EGCC's Runway 2 has VB1 73 m and T1 430 m behind the 23L
+    /// pavement edge, and the whole area was silently dropped by the old
+    /// "ptAlong ≥ −30" gate (unlike EGKK 26L, whose set-back holding area is rescued
+    /// by the start-row envelope, EGCC's start row sits INTO the runway so the
+    /// envelope never grows backwards). Such a point is admitted only under THREE
+    /// gates, all required, so other airports never gain false entries:
+    /// (1) <paramref name="behindThresholdEligible"/> says its OSM
+    /// holding_position:type marks a line that GUARDS a runway ("runway"/"ils" —
+    /// never "intermediate" queue-ladder holds, never untagged points; callers
+    /// without kind data pass null and keep the old behavior exactly);
+    /// (2) no OTHER runway's centerline is closer to the point than this one's
+    /// (see <see cref="AnotherRunwayClaimsPoint"/> — EGCC's V1–V6 sit almost midway
+    /// between the parallels and must not migrate between lists), which needs
+    /// <paramref name="runwayName"/> to tell self/reciprocal apart;
+    /// (3) its entry binds no farther away than the threshold anchor itself is
+    /// (+60 m slack), so a behind-threshold point can only ever select the
+    /// full-length entry, never a junction downfield.
+    ///
+    /// Such a point's entry may ALSO lie behind the threshold — the normal
+    /// <c>MIN_ALONG_M</c> (-40 m) entry floor is relaxed to the point's own
+    /// along-track (plus the same 60 m slack) for it, and for it only. A runway
+    /// with a STARTER EXTENSION is entered nowhere else: iniBuilds EGLL 09L's only
+    /// on-centreline junction is AB13, 300-355 m behind the runway_end, so under the
+    /// flat floor that runway had NO full-length entry at all — the default-hold
+    /// call-out went silent while the picker still listed its partway (intersection)
+    /// entries, and 27R, entered from A1 at +66…+77 m, announced normally. The
+    /// relaxation cannot reach past the painted line itself, so an off-end nub
+    /// beyond it stays excluded.
+    /// </summary>
+    public List<RunwayIntersection> ResolveHoldingPointEntries(
+        IReadOnlyList<(string Name, double Lat, double Lon)> holdingPoints,
+        double thrLat, double thrLon, double farLat, double farLon,
+        double halfWidthMeters, double aircraftLat, double aircraftLon,
+        double maxNodeDistMeters = 200.0,
+        // Own tolerance rather than HOLDSHORT_RUNWAY_MATCH_M (150 m). That constant sizes
+        // a DIFFERENT judgement — "which runway is this hold-short node protecting" — where
+        // being tight matters, because EGKK's two centerlines run only ~200 m apart and a
+        // loose gate would name a hold after the wrong runway. Here the runway is already
+        // decided by the caller and the entry NODE still has to sit on this centerline, so
+        // the point gate only has to be wide enough to admit a legitimately set-back
+        // CAT II/III hold: EGKK's A3 is 162 m out and was silently missing from the picker.
+        double maxPointPerpMeters = 200.0,
+        // Opt-in for the behind-threshold admission above: given a point's NAME, is its
+        // OSM kind one that guards a runway ("runway"/"ils")? Null = feature off.
+        Func<string, bool>? behindThresholdEligible = null,
+        // This runway's designator ("23L"), used only to exclude self + reciprocal from
+        // the other-runway ownership guard. Null = guard unusable, behind-threshold
+        // points stay excluded (safe default).
+        string? runwayName = null)
+    {
+        var result = new List<RunwayIntersection>();
+        if (holdingPoints == null || holdingPoints.Count == 0) return result;
+
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return result;
+
+        double maxPerp = halfWidthMeters + 5.0;
+        // The anchor is the departure lineup point, and a FULL-LENGTH entry stub meets
+        // the runway right at it — often a few metres behind, since the lineup point is
+        // where the nose sits and the stub joins the pavement abeam or short of that.
+        // A 5 m floor (correct when this was anchored on the pavement edge) filtered the
+        // full-length junction out entirely, and the full-length holding points then
+        // snapped to the NEXT entry down the runway: at EGKK 26L, M1/M3 resolved to the
+        // A entrance 112 m in, silently mislabelling which stub you were selecting.
+        const double MIN_ALONG_M = -40.0;     // allow the full-length junction itself; still exclude off-end nubs
+        const double MIN_REMAINING_M = 45.0;  // far-end nubs are not a usable departure entry
+        // Connector slack for a BEHIND-THRESHOLD point's entry floor. Same 60 m the
+        // bindCap gate below uses, and for the same reason: the painted line and the
+        // junction it leads to are a short connector apart, not co-located.
+        const double BEHIND_ENTRY_SLACK_M = 60.0;
+
+        // Reachability: same connected component as the aircraft (matches
+        // FindBacktrackEntryNode — guarantees A* can path to the entry).
+        var acNode = FindNearestNode(aircraftLat, aircraftLon);
+        if (acNode == null) return result;
+        int comp = acNode.ComponentId;
+
+        // Behind-threshold admission window (gate 1 of the three in the doc comment).
+        // 1000 m spans the largest holding area measured (EGCC V1 is 901 m back); the
+        // eligibility/ownership/binding gates are what carry the precision.
+        const double MAX_BEHIND_ALONG_M = 1000.0;
+
+        var seen = new HashSet<(string, int)>();
+        var scored = new List<(RunwayIntersection Entry, double PointToEntryMeters)>();
+        foreach (var (name, hLat, hLon) in holdingPoints)
+        {
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            // OSM names a runway-crossing hold line after the RUNWAY it protects
+            // ("08L/26R" at EGKK), not after a taxiway. That is never something ATC
+            // clears you to depart from, and in a picker it reads as a second runway
+            // having appeared in the list — drop it.
+            if (IsRunwayDesignatorLabel(name) || IsDescriptiveHoldLabel(name)) continue;
+
+            // Does this painted point belong to THIS runway?
+            var (ptPerp, ptAlong, _, _) = ProjectOntoCenterline(hLat, hLon, thrLat, thrLon, farLat, farLon);
+            if (ptPerp > maxPointPerpMeters) continue;
+            // Beyond the far end is the RECIPROCAL's holding area — always its list, never ours.
+            if (ptAlong > totalLen) continue;
+
+            double bindCap = maxNodeDistMeters;
+            double relaxedFloor = MIN_ALONG_M;
+            if (ptAlong < -30.0)
+            {
+                // Behind the threshold: admit only under all three gates (doc comment).
+                if (ptAlong < -MAX_BEHIND_ALONG_M) continue;
+                if (behindThresholdEligible == null || !behindThresholdEligible(name)) continue;
+                if (runwayName == null ||
+                    AnotherRunwayClaimsPoint(hLat, hLon, ptPerp, runwayName, MAX_BEHIND_ALONG_M)) continue;
+                // Gate 3: the entry may sit no farther from the point than the threshold
+                // anchor itself (+60 m connector slack) — structurally, only the
+                // full-length entry (or something even nearer) can bind.
+                bindCap = Math.Max(maxNodeDistMeters,
+                    FastDistanceMeters(hLat, hLon, thrLat, thrLon) + 60.0);
+
+                // …and its ENTRY may lie behind the threshold too — but only as a LAST
+                // RESORT, see the second scan below.
+                relaxedFloor = Math.Min(MIN_ALONG_M, ptAlong - BEHIND_ENTRY_SLACK_M);
+            }
+
+            // Nearest qualifying entry node to the painted point.
+            TaxiNode? best = null;
+            double bestDist = bindCap;
+            double bestAlong = 0, bestProjLat = 0, bestProjLon = 0;
+
+            void ScanForEntry(double floor)
+            {
+                foreach (var node in Nodes.Values)
+                {
+                    if (node.ComponentId != comp) continue;
+                    // A hold-line projection node is a painted LINE's position, not a runway
+                    // junction. Skipping it keeps this entry list byte-identical to what it was
+                    // before the projection fallback existed: an earlier point in this same loop
+                    // can insert one, and a mid-stub node close enough to the centreline would
+                    // otherwise outrank the real junction and move the entry short of the runway.
+                    if (IsHoldingPointProjectionNode(node.NodeId)) continue;
+                    var (perp, along, projLat, projLon) = ProjectOntoCenterline(
+                        node.Latitude, node.Longitude, thrLat, thrLon, farLat, farLon);
+                    if (perp > maxPerp) continue;
+                    if (along < floor || along > totalLen - MIN_REMAINING_M) continue;
+                    if (!HasOffRunwayNeighbour(node, thrLat, thrLon, farLat, farLon, maxPerp)) continue;
+
+                    double dist = FastDistanceMeters(node.Latitude, node.Longitude, hLat, hLon);
+                    if (dist < bestDist)
+                    {
+                        bestDist = dist;
+                        best = node;
+                        bestAlong = along;
+                        bestProjLat = projLat;
+                        bestProjLon = projLon;
+                    }
+                }
+            }
+
+            ScanForEntry(MIN_ALONG_M);
+
+            // STARTER-EXTENSION fallback, and ONLY a fallback: a behind-threshold point
+            // that found nothing above may look for an entry behind the threshold too.
+            // MIN_ALONG_M (-40 m) assumes the full-length stub meets the pavement at or
+            // just behind the lineup point, which is false where the runway has a starter
+            // extension — iniBuilds EGLL 09L is entered ONLY from AB13, whose 19
+            // on-centreline nodes sit 300-355 m back, so every candidate was discarded,
+            // the runway had no full-length entry at all, and AnnounceDefaultHoldingPoint
+            // went silent over a picker full of PARTWAY (intersection) entries, while 27R
+            // (A1 at +66…+77 m) announced normally. EGKK 26R was silent for the same reason.
+            //
+            // It must stay a fallback, never a preference: ANY taxiway crossing the
+            // extended centreline behind the threshold puts nodes within maxPerp with an
+            // off-runway neighbour, so a first-class relaxed scan binds to a crossing
+            // rather than the runway entrance whenever one is nearer to the paint.
+            // Measured: run as a preference it MOVED four EDDF 25C holds (T/T2/U/U2) from
+            // the real +41 m entrance to nodes 561-680 m behind the runway, changing the
+            // announced default from T to U2, and pushed EDDF 07C's P8 from +20 m to
+            // -862 m. Scanning the normal floor FIRST makes the change additive: it can
+            // only give an entry to a point that had none.
+            if (best == null && relaxedFloor < MIN_ALONG_M) ScanForEntry(relaxedFloor);
+
+            if (best == null) continue;
+            if (!seen.Add((name.Trim().ToUpperInvariant(), best.NodeId))) continue;
+
+            // The painted line's OWN node, snapped per point (not per name — a name can be
+            // painted twice). Routing pins the route through it so the pilot taxis up THIS
+            // stub; see RunwayIntersection.HoldNodeId for what goes wrong without it.
+            // Same-component only (the pin must be routable) and never the entry node itself
+            // (pinning to the destination is a no-op).
+            int holdNodeId = 0;
+            if (NamedHoldingPointResolver.SnapOrInsert(this, hLat, hLon) is { } holdSnap
+                && holdSnap.Node.ComponentId == comp
+                && holdSnap.Node.NodeId != best.NodeId)
+            {
+                holdNodeId = holdSnap.Node.NodeId;
+            }
+
+            scored.Add((new RunwayIntersection
+            {
+                TaxiwayName = name.Trim(),
+                NodeId = best.NodeId,
+                Latitude = bestProjLat,
+                Longitude = bestProjLon,
+                AlongMetersFromThreshold = bestAlong,
+                RemainingMeters = totalLen - bestAlong,
+                HoldNodeId = holdNodeId,
+            }, bestDist));
+        }
+
+        // Along-track first (the picker's reading order). Several behind-threshold
+        // holds share the full-length entry and so tie exactly on along-track; break
+        // the tie by the painted line NEAREST its entry — the line closest to the
+        // runway is "the normal clearance" AnnounceDefaultHoldingPoint promises to
+        // name (EGCC 23L: VB1 at ~90 m beats T1 at ~430 m) — then by name so the
+        // order is deterministic across sessions.
+        scored.Sort((a, b) =>
+        {
+            int byAlong = a.Entry.AlongMetersFromThreshold.CompareTo(b.Entry.AlongMetersFromThreshold);
+            if (byAlong != 0) return byAlong;
+            int byDist = a.PointToEntryMeters.CompareTo(b.PointToEntryMeters);
+            if (byDist != 0) return byDist;
+            return string.Compare(a.Entry.TaxiwayName, b.Entry.TaxiwayName, StringComparison.OrdinalIgnoreCase);
+        });
+        result.AddRange(scored.Select(s => s.Entry));
+        return result;
+    }
+
+    /// <summary>
+    /// Ownership guard for a BEHIND-THRESHOLD holding point candidate (see
+    /// <see cref="ResolveHoldingPointEntries"/>): true when some OTHER runway's
+    /// centerline is strictly closer to the point than the runway being resolved is
+    /// — the point is that runway's hold, not ours. "Other" excludes the resolved
+    /// runway's own centerline by designator (either end — one centerline carries
+    /// both names, so this also excludes the reciprocal). The along window is that
+    /// runway's own span EXTENDED by the same behind-threshold band the admission
+    /// uses (<paramref name="behindBandMeters"/>, both ends — the centerline serves
+    /// both directions): the claim window must equal the admission window, or a
+    /// point behind BOTH runways' thresholds is in neither narrow window and the
+    /// guard never fires — at LEMD, Y-1 (36R's hold, 82 m from its line) was also
+    /// admitted to 14L's list at 169 m perp through exactly that gap.
+    /// </summary>
+    private bool AnotherRunwayClaimsPoint(
+        double lat, double lon, double perpToThisRunwayMeters, string runwayName, double behindBandMeters)
+    {
+        foreach (var cl in RunwayCenterlines)
+        {
+            // Shared matcher: this compare trimmed but did not fold the leading zero, so a
+            // "9L"/"09L" spelling difference let a runway fail to recognise ITSELF here and
+            // claim its own point.
+            if (RouteRunwayCrossings.CenterlineHasDesignator(cl, runwayName)) continue;
+            double len = FastDistanceMeters(cl.Lat1, cl.Lon1, cl.Lat2, cl.Lon2);
+            if (len < 1.0) continue;
+            var (perp, along, _, _) = ProjectOntoCenterline(lat, lon, cl.Lat1, cl.Lon1, cl.Lat2, cl.Lon2);
+            if (along < -behindBandMeters || along > len + behindBandMeters) continue;
+            // 5 m margin: a real claim is closer by tens of metres; the margin keeps a
+            // same-runway centerline that slipped past the name check (designator
+            // format drift) from "claiming" its own point on float noise, since that
+            // line is collinear with the envelope line the caller measured against.
+            if (perp < perpToThisRunwayMeters - 5.0) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True when <paramref name="node"/> has at least one adjacent node that is
+    /// OFF the given runway centerline (perpendicular &gt; <paramref name="maxPerp"/>)
+    /// — i.e. the node is a real taxiway↔runway junction, not a node buried in the
+    /// runway pavement. Used by <see cref="FindBacktrackEntryNode"/> to reject
+    /// mid-runway nodes that no taxiway actually connects to.
+    /// </summary>
+    private bool HasOffRunwayNeighbour(
+        TaxiNode node, double thrLat, double thrLon, double farLat, double farLon, double maxPerp)
+    {
+        if (!Adjacency.TryGetValue(node.NodeId, out var edges)) return false;
+        foreach (var e in edges)
+        {
+            int otherId = e.FromNodeId == node.NodeId ? e.ToNodeId : e.FromNodeId;
+            if (!Nodes.TryGetValue(otherId, out var other)) continue;
+            var (perp, _, _, _) = ProjectOntoCenterline(
+                other.Latitude, other.Longitude, thrLat, thrLon, farLat, farLon);
+            if (perp > maxPerp) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Projects a point onto the runway centerline (a→b). Returns the
+    /// perpendicular distance, the signed along-track distance from a (metres),
+    /// and the foot-of-perpendicular point in lat/lon. Equirectangular frame —
+    /// accurate at runway scale. Unlike <see cref="PerpendicularDistanceMeters"/>
+    /// the along-track value is NOT clamped, so callers can reject points beyond
+    /// the thresholds.
+    /// </summary>
+    /// <summary>How close to the runway edge a taxiway node must be to count as where it crosses onto the pavement.</summary>
+    private const double PAVEMENT_ENTRY_EDGE_BAND_M = 10.0;
+
+    /// <summary>&gt; 0 when the point lies LEFT of the line a→b, &lt; 0 right (flat-earth, runway scale).</summary>
+    internal static double SideOfLine(double plat, double plon, double alat, double alon, double blat, double blon)
+    {
+        double k = Math.Cos((alat + blat) * 0.5 * (Math.PI / 180.0));
+        double bx = (blon - alon) * k, by = blat - alat;
+        double px = (plon - alon) * k, py = plat - alat;
+        return bx * py - by * px;
+    }
+
+    internal static (double perp, double along, double projLat, double projLon) ProjectOntoCenterline(
+        double plat, double plon, double alat, double alon, double blat, double blon)
+    {
+        const double METERS_PER_DEG_LAT = 111132.0;
+        double metersPerDegLon = METERS_PER_DEG_LAT * Math.Cos((alat + blat) * 0.5 * (Math.PI / 180.0));
+
+        double bx = (blon - alon) * metersPerDegLon, by = (blat - alat) * METERS_PER_DEG_LAT;
+        double px = (plon - alon) * metersPerDegLon, py = (plat - alat) * METERS_PER_DEG_LAT;
+
+        double lenSq = bx * bx + by * by;
+        if (lenSq < 1e-9)
+            return (Math.Sqrt(px * px + py * py), 0.0, alat, alon);
+
+        double t = (px * bx + py * by) / lenSq;
+        double fx = t * bx, fy = t * by;
+        double ex = px - fx, ey = py - fy;
+        double perp = Math.Sqrt(ex * ex + ey * ey);
+        double along = t * Math.Sqrt(lenSq);
+        double projLat = alat + t * (blat - alat);
+        double projLon = alon + t * (blon - alon);
+        return (perp, along, projLat, projLon);
+    }
+
+    /// <summary>
     /// Runway designator a hold-short node holds short of, found by the NEAREST
     /// runway centerline (full length, perpendicular distance clamped to the
     /// threshold endpoints). Length-invariant: a hold-short where a taxiway
     /// crosses a long runway far from either threshold is still matched — unlike a
-    /// distance-to-threshold test. Returns the closer-end designator (same
-    /// convention as DescribeLocation / WhichRunwayContains), or null when no
+    /// distance-to-threshold test. Returns the designator of the nearer runway END on
+    /// the runway shape (same convention as DescribeLocation), or null when no
     /// centerline is within <paramref name="maxMatchMeters"/> (the caller then
     /// falls back to the threshold heuristic). Public static for probe coverage.
     /// </summary>
@@ -1035,12 +3805,11 @@ public class TaxiGraph
                 lat, lon, rwy.Lat1, rwy.Lon1, rwy.Lat2, rwy.Lon2);
             if (perp > maxMatchMeters || perp >= bestPerp) continue;
 
-            // Closer-end designator (same convention as DescribeLocation): the end
-            // the aircraft is nearer is the one it would line up to depart from.
-            double d1 = FastDistanceMeters(lat, lon, rwy.Lat1, rwy.Lon1);
-            double d2 = FastDistanceMeters(lat, lon, rwy.Lat2, rwy.Lon2);
-            string name = d1 <= d2 ? rwy.Name1 : rwy.Name2;
-            if (string.IsNullOrEmpty(name)) name = rwy.Name1;
+            // MATCHING stays on the start rows above (tuned: at EGKK the nodes between 26L and 26R are
+            // 26L's lines, and a pavement match would rename them). Only the END named uses the runway
+            // shape, so the name agrees with crossing designators and Where-Am-I.
+            var shape = RunwayShape.For(rwy);
+            string name = shape.NameAt(shape.Project(lat, lon).Along);
             if (string.IsNullOrEmpty(name)) continue; // unnamed centerline — skip
 
             best = name;
@@ -1051,14 +3820,55 @@ public class TaxiGraph
 
     /// <summary>
     /// Public wrapper for the internal perpendicular-distance calculation, so
-    /// other components (e.g. TaxiGuidanceManager.WhichRunwayContains) can do
-    /// runway-pavement membership tests without duplicating the projection math.
+    /// other components (e.g. the landing-exit handoff's first-segment check in
+    /// TaxiGuidanceManager.Rollout) can measure a point's distance to a segment without
+    /// duplicating the projection math. Runway membership goes through RunwayShape instead.
     /// </summary>
     public static double PerpendicularDistanceMetersStatic(
         double plat, double plon,
         double alat, double alon,
         double blat, double blon)
         => PerpendicularDistanceMeters(plat, plon, alat, alon, blat, blon);
+
+    /// <summary>
+    /// True when the straight line (lat1,lon1)→(lat2,lon2) stays clear of every
+    /// runway pavement corridor at this airport (pavement half-width +
+    /// <paramref name="marginM"/>). The safety gate for the UNCHARTED APRON
+    /// crossing leg (TaxiRouter.FindCrossComponentPath): a synthetic segment must
+    /// never steer a pilot across a runway. Samples every ~10 m including both
+    /// endpoints; uses the PAVEMENT extent fields (real pavement, not the
+    /// start-row extent, which can sit hundreds of metres inboard at displaced
+    /// thresholds), falling back to the start-row values when Build had no runway
+    /// table.
+    /// </summary>
+    public bool LineIsClearOfRunwayCorridors(
+        double lat1, double lon1, double lat2, double lon2, double marginM = 10.0)
+    {
+        if (RunwayCenterlines.Count == 0) return true;
+
+        double lenM = FastDistanceMeters(lat1, lon1, lat2, lon2);
+        int steps = Math.Max(1, (int)Math.Ceiling(lenM / 10.0));
+        for (int i = 0; i <= steps; i++)
+        {
+            double t = (double)i / steps;
+            double lat = lat1 + (lat2 - lat1) * t;
+            double lon = lon1 + (lon2 - lon1) * t;
+            foreach (var cl in RunwayCenterlines)
+            {
+                bool hasPavement = cl.PavementLat1 != 0 || cl.PavementLon1 != 0;
+                double la1 = hasPavement ? cl.PavementLat1 : cl.Lat1;
+                double lo1 = hasPavement ? cl.PavementLon1 : cl.Lon1;
+                double la2 = hasPavement ? cl.PavementLat2 : cl.Lat2;
+                double lo2 = hasPavement ? cl.PavementLon2 : cl.Lon2;
+                double half = cl.PavementHalfWidthMeters > 0
+                    ? cl.PavementHalfWidthMeters : cl.HalfWidthMeters;
+                double perp = PerpendicularDistanceMeters(lat, lon, la1, lo1, la2, lo2);
+                if (perp <= half + marginM)
+                    return false;
+            }
+        }
+        return true;
+    }
 
     /// <summary>
     /// Perpendicular distance (meters) from point (plat, plon) to segment (a→b).
@@ -1099,23 +3909,13 @@ public class TaxiGraph
     }
 
     /// <summary>
-    /// True when the taxi edge (a→b) crosses the runway centerline (t1→t2)
-    /// between the thresholds — a proper segment-segment intersection.
+    /// True when the taxi edge (a→b) crosses the segment t1→t2 (a runway centerline between its
+    /// thresholds) — a proper, strict opposite-sides segment-segment intersection, so an edge that merely
+    /// touches an endpoint or runs alongside is not flagged.
     ///
-    /// This is the CORRECT "does the route cross this runway" test. A taxiway
-    /// crosses a runway via an EDGE that spans the pavement, with its endpoint
-    /// NODES sitting OFF the runway on either side — so a "is a node ON the
-    /// pavement?" test (perpendicular distance ≤ half-width) silently misses the
-    /// crossing whenever the flanking nodes are more than ~half-width+5 m from
-    /// the centerline. KBOS taxiway C over runway 04L is the motivating case:
-    /// C plainly crosses 04L, but C's nearest node is 35 m from the 04L
-    /// centerline (half-width is 25 m), so the node test found nothing and no
-    /// hold-short was inserted — even though the route clearly traverses the
-    /// runway. The edge-intersection test catches it regardless of node spacing.
-    ///
-    /// "Proper" (strict opposite-sides) intersection by design: a taxiway that
-    /// merely touches a threshold endpoint or runs parallel alongside the runway
-    /// is NOT flagged, avoiding false hold-shorts.
+    /// A segment-intersection primitive kept for tools/ProgressiveTaxiProbe and TaxiGraphStaticsTests. The
+    /// runway crossing pass does not use it: whether a route crosses or enters a runway is decided by
+    /// <see cref="RunwayRouteClassifier"/> (docs/taxi-guidance.md, "Runway crossings and entries").
     /// </summary>
     public static bool EdgeCrossesRunwayStatic(
         double aLat, double aLon, double bLat, double bLon,
@@ -1466,11 +4266,198 @@ public class TaxiGraph
         return fallback;
     }
 
+    #region Cell index
+
+    /// <summary>
+    /// Cell-index cell size in decimal places of a degree (~111 m). Coarser than
+    /// <see cref="SPATIAL_HASH_PRECISION"/> because an edge is filed under every cell it crosses: a
+    /// 340 m taxiway takes ~4 cells instead of ~300, and a 120 m scan is 49 lookups at the equator
+    /// against the old 1.1 m node ring's ~48,000.
+    /// </summary>
+    private const int EDGE_CELL_PRECISION = 3;
+
+    /// <summary>One cell's side in degrees (both axes).</summary>
+    private static readonly double EdgeCellStepDegrees = Math.Pow(10, -EDGE_CELL_PRECISION);
+
+    /// <summary>
+    /// The lazily built cell index: each edge under every cell its segment crosses, each node under its
+    /// own cell. Null until needed and after any structure change (<see cref="InvalidateCellIndex"/>).
+    /// After Build, read and written only under <see cref="_structureLock"/>.
+    /// </summary>
+    private Dictionary<(int Lat, int Lon), List<TaxiEdge>>? _edgeCells;
+    private Dictionary<(int Lat, int Lon), List<TaxiNode>>? _nodeCells;
+
+    /// <summary>How many times the cell index was built — for TaxiGraphCellIndexTests, since a stale
+    /// index still answers correctly today and would stop silently the day a mutation moves pavement.</summary>
+    internal int CellIndexBuildCount { get; private set; }
+
+    /// <summary>
+    /// Drops the cell index; the next query rebuilds it. Called wherever this class changes structure:
+    /// <see cref="AddEdge"/>, <see cref="SplitEdgeAt"/> (which also removes an edge) and
+    /// <see cref="ResolveNode"/> when it creates a node.
+    /// <para>Writing the public <see cref="Nodes"/>/<see cref="Adjacency"/> directly (test graphs, the
+    /// standalone probes) drops nothing, so never do it to a graph DescribeLocation will be asked about.</para>
+    /// </summary>
+    private void InvalidateCellIndex()
+    {
+        _edgeCells = null;
+        _nodeCells = null;
+    }
+
+    private static (int Lat, int Lon) EdgeCellOf(double lat, double lon)
+        => ((int)Math.Floor(lat / EdgeCellStepDegrees), (int)Math.Floor(lon / EdgeCellStepDegrees));
+
+    /// <summary>
+    /// Builds the cell index if absent: every edge under each cell its SEGMENT passes through (so a
+    /// long segment is findable from the middle), sampled at half-cell steps — a corner-clipped cell
+    /// is covered by the query ring's margin — and every node under its own cell. Caller holds
+    /// <see cref="_structureLock"/>.
+    /// </summary>
+    private void EnsureCellIndex()
+    {
+        if (_edgeCells != null && _nodeCells != null) return;
+
+        var edgeCells = new Dictionary<(int, int), List<TaxiEdge>>();
+        double step = EdgeCellStepDegrees;
+        var seen = new HashSet<long>();
+
+        foreach (var edges in Adjacency.Values)
+            foreach (var edge in edges)
+            {
+                // Adjacency holds both directions; index each undirected edge once.
+                long key = Math.Min(edge.FromNodeId, edge.ToNodeId) * 1_000_000L + Math.Max(edge.FromNodeId, edge.ToNodeId);
+                if (!seen.Add(key)) continue;
+                // Node ids are not dense, so test membership.
+                if (!Nodes.TryGetValue(edge.FromNodeId, out var a) || !Nodes.TryGetValue(edge.ToNodeId, out var b)) continue;
+                double dLat = b.Latitude - a.Latitude, dLon = b.Longitude - a.Longitude;
+                // Half-cell sampling in the dimension that spans the most cells.
+                int steps = (int)Math.Ceiling(Math.Max(Math.Abs(dLat), Math.Abs(dLon)) / (step * 0.5));
+                if (steps < 1) steps = 1;
+
+                // A straight segment visits each cell in one unbroken run, so skipping a repeat of
+                // the previous cell is the whole dedup.
+                var last = ((int)int.MinValue, (int)int.MinValue);
+                for (int i = 0; i <= steps; i++)
+                {
+                    double f = (double)i / steps;
+                    var cell = EdgeCellOf(a.Latitude + dLat * f, a.Longitude + dLon * f);
+                    if (cell == last) continue;
+                    last = cell;
+                    if (!edgeCells.TryGetValue(cell, out var list)) edgeCells[cell] = list = new List<TaxiEdge>();
+                    list.Add(edge);
+                }
+            }
+
+        // Every node, not only edge endpoints, so Pass 1 never depends on a node having an edge.
+        var nodeCells = new Dictionary<(int, int), List<TaxiNode>>();
+        foreach (var node in Nodes.Values)
+        {
+            var cell = EdgeCellOf(node.Latitude, node.Longitude);
+            if (!nodeCells.TryGetValue(cell, out var list)) nodeCells[cell] = list = new List<TaxiNode>();
+            list.Add(node);
+        }
+
+        _edgeCells = edgeCells;
+        _nodeCells = nodeCells;
+        CellIndexBuildCount++;
+    }
+
+    /// <summary>
+    /// The centre cell and how many cells to walk each way to cover <paramref name="radiusMetres"/>,
+    /// sized separately for latitude and longitude (cos 78° ≈ 0.21 at ENSB), plus one cell of margin.
+    /// Shared by <see cref="EdgesNear"/> and <see cref="NodesNear"/> so they agree on "within R metres".
+    /// </summary>
+    private static ((int Lat, int Lon) Centre, int RingLat, int RingLon) CellRing(
+        double lat, double lon, double radiusMetres)
+    {
+        double metresPerDegLat = 111132.0;
+        double metresPerDegLon = metresPerDegLat * Math.Cos(lat * (Math.PI / 180.0));
+        if (metresPerDegLon < 1.0) metresPerDegLon = 1.0;   // guard near-pole degeneracy
+
+        int ringLat = (int)Math.Ceiling(radiusMetres / (EdgeCellStepDegrees * metresPerDegLat)) + 1;
+        int ringLon = (int)Math.Ceiling(radiusMetres / (EdgeCellStepDegrees * metresPerDegLon)) + 1;
+        return (EdgeCellOf(lat, lon), ringLat, ringLon);
+    }
+
+    /// <summary>Every edge within roughly <paramref name="radiusMetres"/>, deduped — a superset the
+    /// caller filters by real distance. Caller holds <see cref="_structureLock"/> while enumerating.</summary>
+    private IEnumerable<TaxiEdge> EdgesNear(double lat, double lon, double radiusMetres)
+    {
+        EnsureCellIndex();
+        var edgeCells = _edgeCells!;
+        if (edgeCells.Count == 0) yield break;
+
+        var (centre, ringLat, ringLon) = CellRing(lat, lon, radiusMetres);
+        var emitted = new HashSet<TaxiEdge>();
+        for (int dLat = -ringLat; dLat <= ringLat; dLat++)
+            for (int dLon = -ringLon; dLon <= ringLon; dLon++)
+            {
+                if (!edgeCells.TryGetValue((centre.Lat + dLat, centre.Lon + dLon), out var list)) continue;
+                foreach (var edge in list)
+                    if (emitted.Add(edge)) yield return edge;
+            }
+    }
+
+    /// <summary>Every node within roughly <paramref name="radiusMetres"/> (same ring as
+    /// <see cref="EdgesNear"/>), a superset the caller filters by real distance. Caller holds
+    /// <see cref="_structureLock"/> while enumerating.</summary>
+    private IEnumerable<TaxiNode> NodesNear(double lat, double lon, double radiusMetres)
+    {
+        EnsureCellIndex();
+        var nodeCells = _nodeCells!;
+
+        var (centre, ringLat, ringLon) = CellRing(lat, lon, radiusMetres);
+        for (int dLat = -ringLat; dLat <= ringLat; dLat++)
+            for (int dLon = -ringLon; dLon <= ringLon; dLon++)
+            {
+                if (!nodeCells.TryGetValue((centre.Lat + dLat, centre.Lon + dLon), out var list)) continue;
+                foreach (var node in list)
+                    yield return node;
+            }
+    }
+
+    #endregion
+
     #region Helpers
 
     private static string GetSpatialHashKey(double lat, double lon)
     {
         return $"{Math.Round(lat, SPATIAL_HASH_PRECISION)},{Math.Round(lon, SPATIAL_HASH_PRECISION)}";
+    }
+
+    /// <summary>
+    /// The reach of DescribeLocation's "near a runway start" answer: exactly the nodes the old fixed
+    /// ±30-cell ring of this node hash saw (±33 m north-south, ±33·cos(latitude) m east-west).
+    /// <para>Narrow by the owner's ruling: Build names the node nearest each runway start "Runway X",
+    /// and that answer outranks the taxiway you are on, so widening it would change what is said at
+    /// hold lines. Do not widen it without asking the owner again.</para>
+    /// <para>It replicates the ring's key arithmetic (the same <c>lat + d * step</c> sums and
+    /// Math.Round as <see cref="GetSpatialHashKey"/>, compared by bit pattern since "-0" and "0" were
+    /// different string keys) rather than a distance, because only that gives the same set. Pinned
+    /// against a verbatim copy of the old ring by TaxiGraphLocationRadiusTests.</para>
+    /// </summary>
+    private sealed class RunwayStartReach
+    {
+        private const int RingCells = 30;
+        private readonly HashSet<long> _latKeys = new();
+        private readonly HashSet<long> _lonKeys = new();
+
+        public RunwayStartReach(double lat, double lon)
+        {
+            double step = Math.Pow(10, -SPATIAL_HASH_PRECISION);
+            for (int d = -RingCells; d <= RingCells; d++)
+            {
+                _latKeys.Add(Key(lat + d * step));
+                _lonKeys.Add(Key(lon + d * step));
+            }
+        }
+
+        public bool Contains(double lat, double lon)
+            => _latKeys.Contains(Key(lat)) && _lonKeys.Contains(Key(lon));
+
+        // GetSpatialHashKey's rounding of one coordinate, as bits.
+        private static long Key(double coordinate)
+            => BitConverter.DoubleToInt64Bits(Math.Round(coordinate, SPATIAL_HASH_PRECISION));
     }
 
     private static IEnumerable<string> GetNearbyCellKeys(double lat, double lon)
@@ -1524,11 +4511,435 @@ public class TaxiGraph
         return Math.Sqrt(dLat * dLat + dLon * dLon);
     }
 
-    private static double NormalizeAngle(double angle)
+    internal static double NormalizeAngle(double angle)
     {
         while (angle > 180) angle -= 360;
         while (angle < -180) angle += 360;
         return angle;
+    }
+
+    /// <summary>
+    /// Of a runway end's `start`-table rows, the FULL-LENGTH departure point — the one
+    /// furthest back along the takeoff direction.
+    ///
+    /// A runway end can carry several rows, and taking whichever the DB returned first picks
+    /// an arbitrary one: EGLL 09R's first row is 342 m down the runway while a 67 m row sits
+    /// right there, and VRMM 18's is 826 m in versus 28 m. 14 airports in the fs2020 navdata
+    /// carry duplicates, and 13 runway ends were choosing a worse row. The full-length point
+    /// is by definition the furthest back, so there is nothing to weigh up.
+    ///
+    /// Rows are compared by along-track only — lateral error is <see cref="SnapStartToRunwayCenterline"/>'s
+    /// business. Returns null for an empty sequence.
+    ///
+    /// Returns null too when even the best row lies past <paramref name="maxAlongFraction"/> of
+    /// the runway, because such a row is not describing a departure point at all and the caller
+    /// is better off with the threshold. LatinVFR's LEMD is the case: its 32R, 32L, 18L and 18R
+    /// rows all sit at 47-48 % — the runway MIDPOINT, a placeholder never dragged to the
+    /// threshold — with no taxiway within 220-660 m, and two of them carry a heading of 0° on a
+    /// runway that points 322°. Selecting LEMD 32R as a taxi destination therefore routed to a
+    /// taxiway a third of the way down the runway and aimed the lineup mid-field.
+    ///
+    /// The 40 % bar comes from the shape of the data, not taste: across all 97,488 rows in the
+    /// live fs2020 navdata, 93.5 % sit within the first 10 % of their runway and over half
+    /// between 2 % and 5 %. Only 115 rows (0.12 %) lie past 40 %, and the ones inspected —
+    /// LEMD's four, URWW 05/23 at 99-101 %, KMWH 18 at 103 %, N15 16/34 at 97-98 % — are all
+    /// plainly broken. Runways under 100 m are exempt: the fraction is meaningless on a strip.
+    /// </summary>
+    public static StartPosition? PickFullLengthStart(
+        IEnumerable<StartPosition> rows,
+        double thrLat, double thrLon, double farLat, double farLon,
+        double maxAlongFraction = 0.40)
+    {
+        StartPosition? best = null;
+        double bestAlong = double.MaxValue;
+        foreach (var row in rows)
+        {
+            var (_, along, _, _) = ProjectOntoCenterline(
+                row.Latitude, row.Longitude, thrLat, thrLon, farLat, farLon);
+            if (best == null || along < bestAlong)
+            {
+                best = row;
+                bestAlong = along;
+            }
+        }
+        if (best == null) return null;
+
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen >= 100.0 && bestAlong > totalLen * maxAlongFraction) return null;
+        return best;
+    }
+
+    /// <summary>
+    /// Picks the runway extent the named-holding-point picker measures against: the OUTER
+    /// ENVELOPE of the pavement edges (runway_end) and the departure lineup points.
+    ///
+    /// Neither source alone works, because navdata disagrees with itself in both directions.
+    /// EGKK 26L departs 406 m BEYOND its `runway_end` on a starter extension, so anchoring on
+    /// the edge hides the entire A/M holding area behind the anchor. But EGLL 09R and EHAM 36C
+    /// put the start row 45 m and 480 m INTO the runway, so anchoring on the lineup point
+    /// instead drops the full-length holds that sit behind it — measured, that cost EGLL 09R
+    /// its N1/NB1 and 27L its N8/NB8, and EHAM 36C its CAT III hold.
+    ///
+    /// Taking the furthest-back near end and the furthest-forward far end is inclusive by
+    /// construction: the window can only ever grow, so no entry either source would have
+    /// offered can be lost. Callers with no reciprocal lineup point pass the far pavement edge
+    /// for both far arguments, which degrades to the edge.
+    ///
+    /// LineupAlong (never negative) is where the departure point sits inside that window, so
+    /// the caller can still tell a full-length entry from a partway one.
+    /// </summary>
+    public static (double ThrLat, double ThrLon, double FarLat, double FarLon, double LineupAlong)
+        ChooseHoldingPointExtent(
+            double edgeThrLat, double edgeThrLon, double edgeFarLat, double edgeFarLon,
+            double lineupLat, double lineupLon,
+            double farLineupLat, double farLineupLon)
+    {
+        double thrLat = edgeThrLat, thrLon = edgeThrLon;
+        var (_, lineupOnEdge, _, _) = ProjectOntoCenterline(
+            lineupLat, lineupLon, edgeThrLat, edgeThrLon, edgeFarLat, edgeFarLon);
+        if (lineupOnEdge < 0)
+        {
+            thrLat = lineupLat;
+            thrLon = lineupLon;
+        }
+
+        double farLat = edgeFarLat, farLon = edgeFarLon;
+        var (_, edgeFarAlong, _, _) = ProjectOntoCenterline(
+            edgeFarLat, edgeFarLon, thrLat, thrLon, edgeFarLat, edgeFarLon);
+        var (_, farLineupAlong, _, _) = ProjectOntoCenterline(
+            farLineupLat, farLineupLon, thrLat, thrLon, edgeFarLat, edgeFarLon);
+        if (farLineupAlong > edgeFarAlong)
+        {
+            farLat = farLineupLat;
+            farLon = farLineupLon;
+        }
+
+        var (_, lineupAlong, _, _) = ProjectOntoCenterline(
+            lineupLat, lineupLon, thrLat, thrLon, farLat, farLon);
+        return (thrLat, thrLon, farLat, farLon, Math.Max(0.0, lineupAlong));
+    }
+
+    /// <summary>
+    /// Pulls a `start`-table lineup point back ONTO the runway_end centerline, keeping
+    /// its along-track position. A no-op (to the metre) wherever the start row is sound.
+    ///
+    /// The start table is the right source for WHERE ALONG the runway a departure begins —
+    /// it accounts for displaced thresholds and starter extensions, which runway_end does
+    /// not — but it is not always laterally trustworthy. EGKK (fs2020) is the case that
+    /// forced this: three of its four start rows sit 99-122 m to the SIDE of their own
+    /// runway (and carry headings 90-180° out), while every other airport probed —
+    /// EGLL, EGCC, EGSS, EGGW, EHAM, LFPG, KJFK, KBOS, LEBL — lands within 5 m. Left
+    /// alone, that lateral error propagates into the route destination, the LINEUP TARGET
+    /// a blind pilot steers by, and the runway centerlines; at EGKK 26L it aimed the
+    /// lineup ~109 m north of the pavement.
+    ///
+    /// Projecting rather than rejecting keeps the along-track value that made the start
+    /// table worth using: EGKK 26L's row projects 406 m BEHIND the landing threshold,
+    /// which is exactly the full-length departure point on the starter extension.
+    /// Negative along-track is therefore expected and preserved.
+    ///
+    /// This ONLY ever repairs the lateral error, and only inside a plausible along-track
+    /// window; anything else is returned UNCHANGED so today's behaviour is preserved
+    /// exactly. Both refusals are load-bearing:
+    ///
+    /// - Further than <paramref name="maxOffsetMeters"/> off the line, the row is not
+    ///   "offset", it is describing something else, and we have no basis to relocate it.
+    /// - Past midfield (or as far behind), the row is not this runway's departure point at
+    ///   all. Some airports carry NAME-SWAPPED start rows — AYCH's "03" row sits at the 21
+    ///   threshold with 21's heading, and URWW's "05" sits 2854 m away at the 23 end.
+    ///   Projecting those onto their named runway put both of an airport's rows at
+    ///   midfield, on top of each other, which then failed the 200 m separation test and
+    ///   COST AYCH the centerline it used to have. Refusing leaves that pre-existing data
+    ///   problem exactly as it was rather than converting it into a new one.
+    /// </summary>
+    public static (double Lat, double Lon) SnapStartToRunwayCenterline(
+        double startLat, double startLon,
+        double thrLat, double thrLon, double farLat, double farLon,
+        double maxOffsetMeters = 250.0)
+    {
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return (startLat, startLon);
+
+        var (perp, along, projLat, projLon) =
+            ProjectOntoCenterline(startLat, startLon, thrLat, thrLon, farLat, farLon);
+
+        if (perp <= 1.0) return (startLat, startLon);          // already on the line
+        if (perp > maxOffsetMeters) return (startLat, startLon); // not this runway's line at all
+
+        // The along-track window: anywhere from a starter extension half a runway behind
+        // the landing threshold, up to midfield. Outside it, this row is not describing
+        // this runway's departure point — leave it alone.
+        double half = totalLen / 2.0;
+        if (along < -half || along > half) return (startLat, startLon);
+
+        return (projLat, projLon);
+    }
+
+    /// <summary>
+    /// How far behind the runway_end pavement edge a lineup point may sit before
+    /// <see cref="DepartureLineupPoint"/> asks whether the taxi network actually reaches back
+    /// there. Below this it is rounding and is left alone.
+    /// </summary>
+    internal const double LINEUP_BEHIND_EDGE_TOLERANCE_M = 10.0;
+
+    /// <summary>
+    /// THE departure lineup point for a runway end: the start row PickFullLengthStart picks,
+    /// pulled onto the centerline by SnapStartToRunwayCenterline — then, when that point sits
+    /// BEHIND the runway_end pavement edge, kept there ONLY if taxi pavement reaches back to it.
+    /// Every caller that turns a runway into a taxi destination (TaxiAssistForm, VirtualPilot,
+    /// ClearanceProbe and the sweeps) goes through this so they cannot disagree.
+    ///
+    /// <para>Why the last step: a lineup point behind the pavement edge is legitimate on a
+    /// starter extension — EGKK 26L departs 406 m back, iniBuilds EGLL 09L from AB13 300-355 m
+    /// back — and there the taxi network is modelled back to it. Taxi2Gate LFPG 09L's start row
+    /// instead sits 136 m to the side AND 43 m behind the pavement edge with nothing behind the
+    /// edge at all. Snapped, it became a lineup point on the grass, the nearest graph node to it
+    /// became the Z1 hold-short node 83 m off the centerline, so the ROUTE DESTINATION was the hold
+    /// itself: no entry stub survived past it, and after Continue the lineup tone cut a 30°
+    /// intercept across the grass instead of following Z1 onto the runway. With no pavement behind
+    /// the edge the point moves forward to the pavement edge — never further — which can only
+    /// remove ground that is not runway, never runway the pilot selected.</para>
+    ///
+    /// <para>"Pavement behind the edge" = any non-parking graph node (holding-point projections
+    /// excluded) within the runway corridor (half-width + 5 m) more than
+    /// <see cref="LINEUP_BEHIND_EDGE_TOLERANCE_M"/> behind the edge and no further back than the
+    /// 500 m FindRunwayLineupEntryNode allows an entrance to sit. A node, not an edge span: a
+    /// starter extension's nodes may all lie further back than the lineup point itself.</para>
+    /// </summary>
+    public (double Lat, double Lon) DepartureLineupPoint(IEnumerable<StartPosition>? startRows, Runway rwy)
+    {
+        var st = startRows != null
+            ? PickFullLengthStart(startRows, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon)
+            : null;
+        if (st == null) return (rwy.StartLat, rwy.StartLon);
+
+        var (lat, lon) = SnapStartToRunwayCenterline(
+            st.Latitude, st.Longitude, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+
+        var (perp, along, _, _) = ProjectOntoCenterline(
+            lat, lon, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+        if (along >= -LINEUP_BEHIND_EDGE_TOLERANCE_M) return (lat, lon);
+        // A row the snap refused (too far off the line) is not describing a spot on this
+        // runway's line; leave it exactly as today.
+        if (perp > 1.0) return (lat, lon);
+
+        double maxPerp = (rwy.Width > 0 ? rwy.Width : 150.0) * 0.3048 / 2.0 + 5.0;
+        foreach (var node in Nodes.Values)
+        {
+            if (node.Type == TaxiNodeType.Parking) continue;
+            if (IsHoldingPointProjectionNode(node.NodeId)) continue;
+            var (np, na, _, _) = ProjectOntoCenterline(
+                node.Latitude, node.Longitude, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+            if (np <= maxPerp && na < -LINEUP_BEHIND_EDGE_TOLERANCE_M && na >= -500.0) return (lat, lon);
+        }
+        return (rwy.StartLat, rwy.StartLon);
+    }
+
+    /// <summary>
+    /// How far outboard of a pavement end a <c>start</c> row may sit before it is treated as bad
+    /// data rather than a displaced threshold or a starter extension.
+    ///
+    /// <para>MEASURED over 812 start rows at 300 fs2024 airports: exactly THREE sit outboard at
+    /// all — 29.5 m (URWW 05), 471.2 m (KSAW 01) and 799.9 m (LIMC 17L) — and only the first is
+    /// legitimate. 100 m separates it from both bogus ones with wide margins in each direction,
+    /// which is the only reason this number can be a constant rather than a judgement.</para>
+    ///
+    /// <para>⚠ That is one fs2024 database and 300 of its airports. An FS2020 (BGL-built) database
+    /// was NOT measured, and neither was any airport whose runway record stops at the threshold
+    /// markings while the sim's start row sits on a real starter extension or stopway further out
+    /// — a row like that is pulled onto the pavement end and the lineup point moves with it. Every
+    /// relocation is therefore logged (runway, metres) so such a case is diagnosable from
+    /// debug.log rather than indistinguishable from bad scenery.</para>
+    /// </summary>
+    public const double MaxOutboardStartRowMetres = 100.0;
+
+    /// <summary>
+    /// Pulls a <c>start</c>-table row that sits far OUTBOARD of the runway's own pavement back
+    /// along the axis onto the nearer pavement end, keeping its lateral offset. A no-op (to the
+    /// metre) for every row inside the pavement, and for one outboard by less than
+    /// <see cref="MaxOutboardStartRowMetres"/>.
+    ///
+    /// <para>PR #238 deferred finding §4. <see cref="RunwayShape"/> widens a pavement-based extent
+    /// to ENVELOPE the centreline's start rows, because a displaced threshold legitimately puts a
+    /// lineup point outside the pavement ends (OMDB 12R: 761 m, with K5/K6/K7/M8 crossing inside
+    /// it). Nothing bounds that, so a bogus row EXTENDS the runway: at LIMC the 17L row sits 799.9 m
+    /// beyond the threshold and the resulting band claims three graph nodes on TAXIWAY AB —
+    /// <c>DescribeLocation</c> answers "Runway 17L" on a taxiway, <c>TryGetRunwayAtPosition</c>
+    /// seeds takeoff assist there, <c>RunwayUnder</c> silently skips a start hold, and
+    /// <c>IsOnAnyRunway</c> bars those nodes from ever being a hold stop.</para>
+    ///
+    /// <para>The repair belongs HERE, where the row enters the graph, and not in the frame that
+    /// consumes it: runway-destination lineup anchors on the <c>start</c> table (a standing
+    /// invariant), and at LIMC 17L the lineup target IS that bogus row, so capping the extent could
+    /// make the lineup point "not on the runway" and break the reach test for that runway. Pulled
+    /// back, the row becomes the pavement threshold — which is where a 17L departure actually
+    /// begins — and the envelope has nothing pathological left to absorb.</para>
+    ///
+    /// <para>⚠ This is deliberately NOT part of <see cref="SnapStartToRunwayCenterline"/>, whose
+    /// contract is that it only ever repairs the LATERAL error. Widening THAT into an along-track
+    /// relocator is what once projected name-swapped rows onto their named runway, put both of an
+    /// airport's rows at midfield, failed the 200 m separation test and COST AYCH the centreline it
+    /// had. A name-swapped row sits AT the other end, i.e. INSIDE the pavement, so it is not
+    /// outboard and this method never touches it.</para>
+    /// </summary>
+    /// <summary>
+    /// True when the row sits outboard of its runway's pavement and taxi pavement runs out ALONG that
+    /// runway's own axis (inside half-width + 5 m, each segment within 20° of the axis) to within 60 m
+    /// of it — a starter extension, whose start row is a real departure point
+    /// (<see cref="PullOutboardStartRowOntoPavement"/> must leave it alone; EGKK 26L, 406 m behind its
+    /// runway_end, measured by VirtualPilot: its lineups left the pavement once the row was pulled).
+    /// A taxiway merely CROSSING the extended centreline (LIMC 17L's AB, the case the pull exists for)
+    /// is never axis-aligned, so it never counts. Parking lead-ins (type P) never count.
+    /// </summary>
+    internal static bool StarterExtensionReachesRow(IReadOnlyList<TaxiPath> paths, Runway rwy, double rowLat, double rowLon)
+    {
+        double totalLen = FastDistanceMeters(rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+        if (totalLen < 1.0 || paths == null) return false;
+        var (_, rowAlong, _, _) = ProjectOntoCenterline(rowLat, rowLon, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+        bool behind = rowAlong < 0.0;
+        double rowOut = behind ? -rowAlong : rowAlong - totalLen;
+        if (rowOut <= 0.0) return false;
+        double corridor = (rwy.Width > 0 ? rwy.Width : 150.0) * 0.3048 / 2.0 + 5.0;
+        double tan20 = Math.Tan(20.0 * Math.PI / 180.0);
+        double reached = 0.0;
+        foreach (var p in paths)
+        {
+            if (string.Equals(p.Type, "P", StringComparison.OrdinalIgnoreCase)) continue;
+            var (perpA, alongA, _, _) = ProjectOntoCenterline(p.StartLat, p.StartLon, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+            var (perpB, alongB, _, _) = ProjectOntoCenterline(p.EndLat, p.EndLon, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon);
+            if (perpA > corridor || perpB > corridor) continue;
+            double outA = behind ? -alongA : alongA - totalLen;
+            double outB = behind ? -alongB : alongB - totalLen;
+            if (outA < -10.0 && outB < -10.0) continue;
+            double dAlong = Math.Abs(alongB - alongA);
+            if (dAlong < 5.0 || Math.Abs(perpB - perpA) > tan20 * dAlong) continue;
+            reached = Math.Max(reached, Math.Max(outA, outB));
+        }
+        return reached >= rowOut - 60.0;
+    }
+
+    public static (double Lat, double Lon) PullOutboardStartRowOntoPavement(
+        double startLat, double startLon,
+        double thrLat, double thrLon, double farLat, double farLon,
+        string? runwayName = null)
+    {
+        double totalLen = FastDistanceMeters(thrLat, thrLon, farLat, farLon);
+        if (totalLen < 1.0) return (startLat, startLon);
+
+        var (_, along, projLat, projLon) = ProjectOntoCenterline(startLat, startLon, thrLat, thrLon, farLat, farLon);
+        double outboard = along < 0.0 ? -along : along - totalLen;
+        if (outboard <= MaxOutboardStartRowMetres) return (startLat, startLon);
+
+        // Slide ALONG the axis onto the nearer pavement end, keeping the lateral offset: the row's
+        // foot on the axis moves to the end (t clamped to 0 or 1), and the row keeps its own
+        // displacement from that foot. A row the lateral repair declined to touch (further out than
+        // its own ceiling) must not be quietly relocated onto the line by this one. No projection
+        // math of its own — this area already had four copies (see RunwayShape.For).
+        double t = along < 0.0 ? 0.0 : 1.0;
+        double endLat = thrLat + t * (farLat - thrLat), endLon = thrLon + t * (farLon - thrLon);
+        var pulled = (Lat: endLat + (startLat - projLat), Lon: endLon + (startLon - projLon));
+        MSFSBlindAssist.Utils.Logging.Log.Info("taxi_graph",
+            $"Start row {(runwayName ?? "?")} sat {outboard:F1} m outboard of its pavement end; " +
+            $"pulled onto the end (lineup anchor moved {outboard:F1} m along the runway).");
+        return pulled;
+    }
+
+    /// <summary>
+    /// Splits a runway designator into its number and side letter — "26L" → (26, "L"),
+    /// "08" → (8, ""), "9C" → (9, "C"). Returns null for anything that isn't a
+    /// 1-2 digit number optionally followed by a single L/R/C (helipads "H1", water
+    /// starts, blank names). Case-insensitive; surrounding whitespace is ignored.
+    /// </summary>
+    internal static (int Number, string Side)? ParseRunwayDesignator(string? name)
+    {
+        string s = name?.Trim() ?? "";
+        if (s.Length == 0) return null;
+
+        int digits = 0;
+        while (digits < s.Length && char.IsAsciiDigit(s[digits])) digits++;
+        if (digits == 0 || digits > 2) return null;
+        if (!int.TryParse(s.Substring(0, digits), out int number)) return null;
+        if (number < 1 || number > 36) return null;
+
+        string side = s.Substring(digits).ToUpperInvariant();
+        if (side.Length > 1) return null;
+        if (side.Length == 1 && side != "L" && side != "R" && side != "C") return null;
+        return (number, side);
+    }
+
+    /// <summary>
+    /// The designator of the opposite end — "26L" → "08R", "08" → "26", "18C" → "36C".
+    /// Null when the name doesn't parse as a runway designator. The number wraps in the
+    /// 1-36 space (26 + 18 = 44 → 8) and L/R swap because the two ends see the parallel
+    /// pair from opposite directions; C and side-less designators are unchanged.
+    /// Zero-padded to two digits, matching how navdata writes them.
+    /// </summary>
+    internal static string? ReciprocalRunwayName(string? name)
+    {
+        var parsed = ParseRunwayDesignator(name);
+        if (parsed == null) return null;
+        var (number, side) = parsed.Value;
+
+        int opposite = number + 18;
+        if (opposite > 36) opposite -= 36;
+
+        string oppositeSide = side switch { "L" => "R", "R" => "L", _ => side };
+        return $"{opposite:00}{oppositeSide}";
+    }
+
+    /// <summary>
+    /// True when a label is a runway designator or a pair of them — "26L", "08L/26R",
+    /// "36C-18C" (EHAM maps its runway hold lines dash-separated). OSM tags a
+    /// runway-crossing holding position with the crossed runway's name, so this
+    /// separates those from genuine taxiway holding-point designators (A2, N4, VIKAS).
+    /// </summary>
+    internal static bool IsRunwayDesignatorLabel(string? label)
+    {
+        string s = label?.Trim() ?? "";
+        if (s.Length == 0) return false;
+
+        foreach (var part in s.Split(SeparatorChars, StringSplitOptions.RemoveEmptyEntries))
+            if (ParseRunwayDesignator(part) == null) return false;
+        return true;
+    }
+
+    private static readonly char[] SeparatorChars = { '/', '-' };
+
+    /// <summary>
+    /// True for an OSM hold-line label that describes a KIND of hold rather than naming a
+    /// holding point: made only of hold-type words ("ILS", "GP HOLD LINE", "CAT III"), optionally
+    /// with a runway designator among them ("28C APCH" — KORD's holds for the taxiways crossing an
+    /// approach path — "RWY 27 CAT II"). A designator beside anything else ("B 12") is a spaced
+    /// taxiway ref and is kept; a label that is nothing but designators is IsRunwayDesignatorLabel's. Offered as a departure entry, "28R APCH" became a
+    /// "partway" entry to runway 04R and stopped the pilot ON its pavement (VirtualPilot
+    /// 2026-09-18); nothing ATC clears you to depart from is labelled like that.
+    /// </summary>
+    internal static bool IsDescriptiveHoldLabel(string? label)
+    {
+        var words = (label ?? "").Trim().ToUpperInvariant()
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return false;
+        // Every word a hold-type word, or a runway designator among them ("28C APCH") — but a
+        // designator beside anything else ("B 12") is a spaced taxiway ref and stays.
+        return words.All(w => HoldKindWords.Contains(w) || (words.Length > 1 && IsRunwayDesignatorLabel(w)))
+            && !words.All(w => IsRunwayDesignatorLabel(w));
+    }
+
+    private static readonly HashSet<string> HoldKindWords = new(StringComparer.Ordinal)
+    {
+        "ILS", "GP", "GS", "LOC", "HOLD", "HOLDING", "LINE", "POINT", "POSITION", "CAT", "I", "II", "III",
+        "APCH", "APPR", "APPROACH", "RWY", "RUNWAY", "CRITICAL", "AREA",
+    };
+
+    /// <summary>
+    /// The nominal heading a designator implies, in degrees — "26L" → 260. Zero when the
+    /// name doesn't parse, which callers treat as "no opinion" rather than "due north"
+    /// (they only ever use this against a tolerance alongside a name match).
+    /// </summary>
+    internal static double RunwayDesignatorHeading(string? name)
+    {
+        var parsed = ParseRunwayDesignator(name);
+        return parsed == null ? 0.0 : parsed.Value.Number * 10.0;
     }
 
     /// <summary>
@@ -1549,6 +4960,902 @@ public class TaxiGraph
     #endregion
 
     #region Landing Exit Planning
+
+    private static void DeriveExitEdgeGeometry(TaxiEdge best, double rwyHeadingTrue,
+        out string taxiwayName, out double exitBearingTrue, out double exitAngle)
+    {
+        // Same ceiling as GetLandingExits' local NORMAL_MAX_DEG (110°): an angle above
+        // it classifies as "End". Kept in step with that constant.
+        const double NORMAL_MAX_DEG = 110.0;
+        taxiwayName = best.TaxiwayName;
+        // Store 360.0 for due-north edges so 0.0 stays unambiguous as "not found".
+        exitBearingTrue = best.BearingDegrees == 0.0 ? 360.0 : best.BearingDegrees;
+        // Raw relative angle in 0..180 (absolute value of normalized delta).
+        double rel = Math.Abs(NormalizeAngle(best.BearingDegrees - rwyHeadingTrue));
+
+        // Is the edge pointing "backward" relative to the landing direction?
+        // rel > 90 means more than a right angle off the landing heading —
+        // i.e., the taxiway peels off toward the approach end rather than
+        // toward the departure end.
+        bool peelsBackward = rel > 90.0;
+
+        // Fold to 0..90 so "exitAngle" is magnitude of turn from runway axis.
+        exitAngle = peelsBackward ? 180.0 - rel : rel;
+
+        // Backward-peel nodes are almost always end-of-runway turnoffs
+        // (handled by the endRatio>0.85 check below). But if a backward
+        // peel appears mid-runway, we should NOT classify it as
+        // "High-speed" — exiting through it requires turning around,
+        // which is not a high-speed RET. Forcing exitAngle to an
+        // obtuse-looking value (>=100) pushes classification to "End"
+        // below regardless of the along-runway position.
+        //
+        // Threshold 70 (raw rel > 110°), not the old 50 (raw rel > 130°): the fold
+        // erases the raw angle, so a turnoff peeling backward at raw 111-130° used
+        // to read as a 50-69° "Normal" exit — it passed the retarget scans' ≤ 90°
+        // suitability filter and could be selected mid-rollout as a friendly exit
+        // that actually needs a >110° turn. 110° is NORMAL_MAX_DEG, the same line
+        // classification itself draws: anything genuinely beyond it is End-style.
+        // Raw 91-110° still folds (a 91-110° turn IS within the Normal band, just
+        // stated up to 20° shallow — the classification is right even where the
+        // number is conservative). Re-typing can only make guidance LESS
+        // aggressive (End exits get no early handoff and the most conservative
+        // tone), the safe direction.
+        if (peelsBackward && exitAngle < 70.0)
+        {
+            // Geometry says shallow-forward but direction is backward —
+            // treat as end-style exit, not a high-speed/normal. Forcing the
+            // angle above NORMAL_MAX_DEG pushes classification to
+            // "End" below regardless of along-runway position.
+            exitAngle = NORMAL_MAX_DEG + 20.0;
+        }
+    }
+
+    /// <summary>
+    /// Keeps an exit's NAME and ExitBearingTrue on the same side of the runway as the
+    /// node the handoff will actually route to — but ONLY at a turnoff that genuinely
+    /// CROSSES the runway.
+    ///
+    /// At a crossing the junction node carries a named edge on each bank, and the two
+    /// banks usually carry DIFFERENT names (HESH 04L: "F" to the left, "J" to the right,
+    /// one shared centreline node; also E/K and G/H on the same runway). Both edges fold
+    /// to the same off-axis angle, so the best-edge tie-break — "prefer the edge that
+    /// turns most off-axis" — is decided by whichever bank is a few hundredths of a
+    /// degree wider. That is a coin flip, and it is independent of the corridor walk that
+    /// produces ApronNodeId, so the two can disagree: live 2026-08-26 the exit was
+    /// announced as "taxiway J" with ExitBearingTrue 132.6° (the RIGHT bank) while
+    /// ApronNodeId was 232, 91 m to the LEFT on F. Everything that steers used the left
+    /// node; everything that SPOKE used the right name.
+    ///
+    /// That is not a cosmetic mismatch. ExitBearingTrue feeds
+    /// <c>ResolveExitTurnDirection</c> (the spoken "Turn LEFT/RIGHT now"), the Normal-exit
+    /// tone after the turn-now callout, <c>TryEarlyExitHandoff</c>'s pan floor and the
+    /// post-handoff <c>alignedWithExitPH</c> commit test — so a wrong bank is a confident
+    /// instruction to turn the wrong way across an active runway, which is far worse for
+    /// a blind pilot than no instruction at all.
+    ///
+    /// EVERY gate below is load-bearing, and the measurement says so: gated only on
+    /// "the apron bearing disagrees with the best edge" this moved 2,008 exits at 1,176
+    /// airports and re-typed 755 of them, because ApronNodeId is the far end of a walk of
+    /// up to 600 m and on a CURVED single-sided exit it legitimately sits at a bearing
+    /// whose lateral sign differs from the exit's first edge (4D0 09: 55.7° → 264.6°,
+    /// Normal → End, on a taxiway with only one bank). Requiring a real crossing — a
+    /// junction ON the pavement, with a named off-axis edge on BOTH banks, and an apron
+    /// node clear of the pavement — is what separates the coin flip from the curve.
+    /// Deciding the bank from the apron node's own OFFSET rather than from the bearing to
+    /// it matters for the same reason: a curve's endpoint bearing is not its side.
+    /// </summary>
+    private void ReconcileExitSideWithHandoff(
+        TaxiNode node, int handoffNodeId, double rwyHeadingTrue,
+        double rwyStartLat, double rwyStartLon, double cosH, double sinH,
+        double junctionLateralM, double halfWidthM,
+        ref string taxiwayName, ref double exitBearingTrue, ref double exitAngle)
+    {
+        if (handoffNodeId <= 0 || handoffNodeId == node.NodeId) return;
+        if (exitBearingTrue == 0.0) return;
+        if (halfWidthM <= 0.0) return;
+
+        // (1) The junction must sit ON the runway pavement — with the SAME +15 m
+        //     corridor slack GetLandingExits uses to admit the node as an exit at all
+        //     (hold-short nodes are painted a few metres inside/outside the edge
+        //     stripe). A crossing's shared node normally sits near the centreline
+        //     (HESH's are within 4 m), but some sceneries model it just OFF the
+        //     pavement edge: CYYZ's D3/H/N/R/S/T crossing nodes sit 38-42 m off-centre
+        //     against a 30.5 m half-width, so the bare half-width gate skipped the
+        //     reconcile and left ExitBearingTrue on the edge pointing back ACROSS the
+        //     runway — the spoken side (from ApronNodeId, correct) then contradicted
+        //     the post-turn-now tone (from ExitBearingTrue, wrong bank), which is the
+        //     exact confident-wrong-way failure this reconcile exists to prevent.
+        //     A stub that meets the runway edge-on still cannot slip through: gate (2)
+        //     below demands a named off-axis edge on BOTH banks, which a one-sided
+        //     stub does not have. Re-measured whole-DB with tools/LandingExitSideSweep
+        //     + tools/ExitConsistencySweep 2026-08-26 before widening (per this
+        //     method's contract — see the sweep-delta note in the PR/commit).
+        if (Math.Abs(junctionLateralM) > halfWidthM + EXIT_CORRIDOR_SLACK_M) return;
+
+        if (!Nodes.TryGetValue(handoffNodeId, out var handoffNode)) return;
+        if (!Adjacency.TryGetValue(node.NodeId, out var edges)) return;
+
+        // (2) A named off-axis edge on BOTH banks — i.e. the turnoff really does cross.
+        //     SIDE_MIN_LATERAL keeps a near-parallel edge, whose lateral component is
+        //     noise, from being read as a bank at all, so a shallow RET can never be
+        //     "reconciled" onto the other side by float dust.
+        if (!JunctionHasNamedEdgeOnBothBanks(edges, rwyHeadingTrue)) return;
+
+        // (3) The bank the route vacates to, from the apron node's OWN offset from the
+        //     runway axis. It must be clear of the pavement for that offset to mean
+        //     anything.
+        const double MPD = 111132.0;
+        double apronLateralM = NodeLateralM(handoffNode, rwyStartLat, rwyStartLon, cosH, sinH);
+        if (Math.Abs(apronLateralM) <= halfWidthM) return;
+        int apronSide = Math.Sign(apronLateralM);
+
+        double currentBrg = exitBearingTrue == 360.0 ? 0.0 : exitBearingTrue;
+        double currentLat = EdgeLateralComponent(currentBrg, rwyHeadingTrue);
+        if (Math.Abs(currentLat) < SIDE_MIN_LATERAL) return;
+        if (Math.Sign(currentLat) == apronSide) return;      // already agree — no-op
+
+        // Re-pick among the edges on the apron's bank, closest in bearing to the
+        // junction → apron-node direction (at a crossing that node is normally the far
+        // end of the very edge wanted, so this resolves to it exactly).
+        double dNh = (handoffNode.Latitude - node.Latitude) * MPD;
+        double dEh = (handoffNode.Longitude - node.Longitude) * MPD
+                     * Math.Cos((node.Latitude + handoffNode.Latitude) * 0.5 * Math.PI / 180.0);
+        double handoffBrg = Math.Atan2(dEh, dNh) * 180.0 / Math.PI;
+        if (handoffBrg < 0) handoffBrg += 360.0;
+
+        TaxiEdge? repick = null;
+        double repickDelta = double.MaxValue;
+        foreach (var e in edges)
+        {
+            if (!IsNamedOffRunwayEdge(e)) continue;
+            double lat = EdgeLateralComponent(e.BearingDegrees, rwyHeadingTrue);
+            if (Math.Abs(lat) < SIDE_MIN_LATERAL) continue;
+            if (Math.Sign(lat) != apronSide) continue;
+            double delta = Math.Abs(NormalizeAngle(e.BearingDegrees - handoffBrg));
+            if (delta < repickDelta) { repickDelta = delta; repick = e; }
+        }
+        if (repick == null) return;
+
+        DeriveExitEdgeGeometry(repick, rwyHeadingTrue,
+            out taxiwayName, out exitBearingTrue, out exitAngle);
+    }
+
+    /// <summary>
+    /// Puts the corridor walk back on the bank THIS exit's own pavement leaves by, when
+    /// the all-branch walk came back on the other one.
+    ///
+    /// <see cref="ExitPathLeavesCorridor"/> is seeded from every named edge at the
+    /// junction, so where two taxiways leave the runway at one point — one to each side —
+    /// it returns whichever branch clears the corridor in fewer hops. YPPH 21 is the
+    /// measured case: node 849 carries "C9" at 180.0° (13.9° LEFT of a 193.9° runway) and
+    /// "A9" at 197.1° (3.2°, along the runway, toward the node A9's own exit is built
+    /// from). The walk went down A9 and returned a node 49 m RIGHT of the centreline, so
+    /// C9 — the exit the pilot picks by that name — got A9's apron node, A9's vacate
+    /// destination, A9's bearing (225.4°) and "Right" for a turnoff that goes left.
+    ///
+    /// <see cref="ReconcileExitSideWithHandoff"/> cannot catch this: it requires a named
+    /// off-axis edge on BOTH banks, and A9's 3.2° stub is below
+    /// <see cref="SIDE_MIN_LATERAL"/>, so the junction does not read as a crossing at all.
+    /// And by the time it runs, the bearing has already been moved onto the wrong bank by
+    /// the shallow-angle apron override, so the two agree and it no-ops.
+    ///
+    /// FOUR gates, and the measurement is why every one of them is there. Gated on the
+    /// bank disagreement ALONE this moved 6,115 exit records whole-DB and re-typed ~400
+    /// of them between End / Normal / High-speed — the same failure mode, and the same
+    /// order of magnitude, as the ungated reconcile the contract above warns about
+    /// (2,008 moved, 755 re-typed). ExitType gates TryEarlyExitHandoff, so a re-type is
+    /// a change in how aggressively a blind pilot is steered. Gated as written it moves
+    /// 160 exits at 138 airports, changes no NAME, no ANGLE and no TYPE anywhere, removes
+    /// no exit, and every internal-consistency count in tools/ExitConsistencySweep either
+    /// improves or holds (SIDE_VS_APRON 5759 -> 2927, WORD_VS_TONE 2753 -> 2706,
+    /// DEST_BEHIND 4586 -> 4577, ON_PAVEMENT and DEST_OTHER_RWY unchanged at 1475/1129).
+    /// Re-measure with tools/LandingExitSideSweep + tools/ExitConsistencySweep, diffed
+    /// OCCURRENCE-KEYED, before touching any gate.
+    ///   (1) this exit's own edge must name a bank at all (SIDE_MIN_LATERAL). A
+    ///       near-parallel stub has nothing to disagree with HERE, and is handed to
+    ///       RewalkOnAxisStubOnOwnPavement, which answers the same question from the
+    ///       pavement carrying this exit's NAME instead of from the edge bearing. That
+    ///       is the only path out of this gate, so every exit whose edge DOES name a
+    ///       bank stays on the four gates below, unchanged;
+    ///   (2) the walked node must be CLEAR of the pavement and on the OTHER bank, judged
+    ///       by the node's own lateral OFFSET, never the bearing to it (a curve's endpoint
+    ///       bearing is not its side — the reconcile's gate 3, same rule, same reason);
+    ///   (3) NOT at a genuine crossing — where a named off-axis edge exists on each bank
+    ///       ReconcileExitSideWithHandoff already owns the disagreement and settles it the
+    ///       other way round, bending the NAME to the walk. Two rules pulling opposite ways
+    ///       on one population is worse than either alone; this covers only the gap the
+    ///       reconcile cannot see, which is exactly where YPPH 21 falls (A9's 3.2° link is
+    ///       below the noise floor, so its junction never reads as a crossing);
+    ///   (4) the walk must have escaped down a DIFFERENT, NAMED taxiway. An unnamed first
+    ///       step is a connector on this exit's own pavement — which is what the walk
+    ///       follows unnamed edges FOR — and a same-named first step is this exit already.
+    /// And the re-walk must itself land clear of the pavement on the exit's own bank, or
+    /// the original answer stands: it can only ever return a node the walk itself found.
+    /// </summary>
+    /// <returns>The corrected corridor-exit node, or -1 to keep the walk's own answer.</returns>
+    private int RewalkCorridorOnExitBank(
+        TaxiNode node, TaxiEdge best, int walkedNodeId, double rwyHeadingTrue,
+        double rwyStartLat, double rwyStartLon, double cosH, double sinH,
+        double halfWidthM, double lateralToleranceM)
+    {
+        if (walkedNodeId <= 0 || best == null || halfWidthM <= 0.0) return -1;
+        if (string.IsNullOrEmpty(best.TaxiwayName)) return -1;
+        if (best.ToNodeId == node.NodeId) return -1;
+        if (!Adjacency.TryGetValue(node.NodeId, out var edges)) return -1;
+
+        // The four gates below answer from the EDGE's bearing, and where they decline —
+        // for any of their reasons — the exit's OWN NAMED PAVEMENT is asked instead.
+        // Both orderings were measured; this one leaves every exit the four gates
+        // currently correct exactly as it is, because they run first and win.
+        int onEdgeBank = RewalkOnEdgeNamedBank(
+            node, best, walkedNodeId, rwyHeadingTrue, rwyStartLat, rwyStartLon,
+            cosH, sinH, halfWidthM, lateralToleranceM, edges);
+        if (onEdgeBank > 0) return onEdgeBank;
+
+        return RewalkOnOwnNamedPavement(
+            node, best, walkedNodeId, rwyHeadingTrue, rwyStartLat, rwyStartLon,
+            cosH, sinH, halfWidthM, lateralToleranceM, edges);
+    }
+
+    /// <summary>The four edge-bearing gates of <see cref="RewalkCorridorOnExitBank"/>,
+    /// unchanged. Kept as its own method so the own-pavement fallback beside it cannot
+    /// alter what they decide.</summary>
+    private int RewalkOnEdgeNamedBank(
+        TaxiNode node, TaxiEdge best, int walkedNodeId, double rwyHeadingTrue,
+        double rwyStartLat, double rwyStartLon, double cosH, double sinH,
+        double halfWidthM, double lateralToleranceM, List<TaxiEdge> edges)
+    {
+        // (1) This exit's own edge has to name a bank at all.
+        double bestLat = EdgeLateralComponent(best.BearingDegrees, rwyHeadingTrue);
+        if (Math.Abs(bestLat) < SIDE_MIN_LATERAL) return -1;
+        int bestSide = Math.Sign(bestLat);
+
+        // (2) The walked node must be CLEAR of the pavement (a node still on the runway
+        //     has no meaningful side — the reconcile's gate 3, same reason) and on the
+        //     OTHER bank. Comparing the node's own lateral OFFSET, never the bearing to
+        //     it: a curve's endpoint bearing is not its side.
+        if (!Nodes.TryGetValue(walkedNodeId, out var walked)) return -1;
+        double walkedLateralM = NodeLateralM(walked, rwyStartLat, rwyStartLon, cosH, sinH);
+        if (Math.Abs(walkedLateralM) <= halfWidthM) return -1;
+        if (Math.Sign(walkedLateralM) == bestSide) return -1;
+
+        // (3) Leave the genuine CROSSING alone. Where a named off-axis edge exists on each
+        //     bank, ReconcileExitSideWithHandoff already owns the disagreement and settles
+        //     it the other way round — it bends the NAME and bearing to the walk. Two rules
+        //     pulling in opposite directions on one population would be worse than either;
+        //     this one exists only for the gap the reconcile cannot see.
+        if (JunctionHasNamedEdgeOnBothBanks(edges, rwyHeadingTrue)) return -1;
+
+        // (4) The walk must have left down a DIFFERENT, NAMED taxiway — i.e. it escaped
+        //     along somebody else's pavement, which is the whole defect. YPPH 21: the walk
+        //     out of C9's junction stepped onto "A9", the 3.2° link to the node A9's own
+        //     exit is built from, and followed A9 clear of the runway on the far bank.
+        //     An unnamed first step is a connector on this exit's own pavement (that is
+        //     what the walk follows unnamed edges FOR), and is left alone.
+        ExitPathLeavesCorridor(node.NodeId, rwyStartLat, rwyStartLon, cosH, sinH,
+            lateralToleranceM, rwyHeadingTrue, -1, out _, out var chain);
+        if (chain == null || chain.Count < 2) return -1;
+        int firstStep = chain[1].nodeId;
+        string firstStepName = "";
+        foreach (var e in edges)
+            if (e.ToNodeId == firstStep) { firstStepName = e.TaxiwayName ?? ""; break; }
+        if (string.IsNullOrEmpty(firstStepName)) return -1;
+        if (string.Equals(firstStepName, best.TaxiwayName, StringComparison.OrdinalIgnoreCase))
+            return -1;
+
+        // Re-walk down this exit's own branch. `visited` already holds the junction, so
+        // the walk structurally cannot double back onto the other taxiway.
+        int rewalked = ExitPathLeavesCorridor(
+            node.NodeId, rwyStartLat, rwyStartLon, cosH, sinH, lateralToleranceM,
+            double.NaN, best.ToNodeId, out _, out _);
+        if (rewalked <= 0 || !Nodes.TryGetValue(rewalked, out var rw)) return -1;
+
+        double rwLateralM = NodeLateralM(rw, rwyStartLat, rwyStartLon, cosH, sinH);
+        if (Math.Abs(rwLateralM) <= halfWidthM) return -1;
+        return Math.Sign(rwLateralM) == bestSide ? rewalked : -1;
+    }
+
+    /// <summary>
+    /// The same correction as <see cref="RewalkCorridorOnExitBank"/>, for the exit whose
+    /// own junction edge runs ALONG the runway and so names no bank — the one shape that
+    /// method's gate (1) returns on, and which is therefore uncorrected today.
+    ///
+    /// <para>EGLL 27L "S5W" is the measured case. The junction (node 5729) carries ONE
+    /// edge: a 9.5 m stub at 267.4° against a 269.7° runway — 2.3° off axis, a quarter of
+    /// the <see cref="SIDE_MIN_LATERAL"/> floor, so the edge bearing cannot say which bank
+    /// S5W is on. The all-branch walk goes 31 m down S5W's own link to a node still only
+    /// 31 m off the centreline, cannot clear the ~40 m corridor in further small hops,
+    /// backtracks and takes neighbouring N5E's single 113 m leg to a node 109 m on the
+    /// OTHER bank. So S5W — 72 edges of pavement south of the runway and none north — got
+    /// N5E's apron node, and with it (the first edge being shallow, the apron override
+    /// fires) N5E's bearing, 351.8°: a pilot who picks the south turnoff is panned RIGHT,
+    /// across an active runway. Whole-DB there are 591 exits at 309 airports whose route
+    /// ends on pavement carrying no edge of their own name; 322 of those are this shape.</para>
+    ///
+    /// <para>Gate (4) of the caller cannot be reused here and is deliberately not: it asks
+    /// whether the walk's FIRST step left down a different taxiway, which at YPPH 21 it
+    /// did (C9's junction straight onto A9). At EGLL the walk's first six steps are all
+    /// S5W's own pavement and it only jumps to N5E on its LAST leg, so a first-step test
+    /// refuses. The authority used instead is the one <see cref="ResolveExitSide"/> already
+    /// falls back to when a bearing's lateral component is noise — where the pavement
+    /// CARRYING THIS NAME actually lies — which needs no first/last-step reasoning at all.
+    /// Because this runs only where the caller already returned -1, an exit whose junction
+    /// edge does name a bank is untouched, and nothing the existing four gates decide can
+    /// move.</para>
+    ///
+    /// <para>Its own gates, all required:
+    ///   (a) the exit must HAVE a name — an unnamed stub has no pavement to follow;
+    ///   (b) the all-branch walked node must be clear of the pavement (a node still on the
+    ///       runway has no side) and must carry NO edge of this exit's name — if the walk
+    ///       ended on our own taxiway it is not on somebody else's, whatever its bank;
+    ///   (c) following only this name from the exit's own edge must reach a node clear of
+    ///       the pavement on exactly ONE bank. Reaching both means the taxiway genuinely
+    ///       crosses the runway under one name, which is the reconcile's territory, not
+    ///       this one's — refuse rather than pick;
+    ///   (d) that bank must be the OPPOSITE of the walked node's, judged by each node's own
+    ///       lateral OFFSET and never by a bearing to it (a curve's endpoint bearing is not
+    ///       its side) — otherwise there is no disagreement to correct.</para>
+    /// </summary>
+    /// <returns>The node this exit's own pavement reaches clear of the runway, or -1.</returns>
+    private int RewalkOnOwnNamedPavement(
+        TaxiNode node, TaxiEdge best, int walkedNodeId, double rwyHeadingTrue,
+        double rwyStartLat, double rwyStartLon, double cosH, double sinH,
+        double halfWidthM, double lateralToleranceM, List<TaxiEdge> edges)
+    {
+        // (a)
+        string name = best.TaxiwayName;
+        if (string.IsNullOrEmpty(name)) return -1;
+
+        // (b) The walk's answer must be clear of the pavement, and must be pavement this
+        //     exit does not own. An apron node carrying an edge of this name IS this
+        //     exit's taxiway, whichever bank it is on, and is left alone.
+        if (!Nodes.TryGetValue(walkedNodeId, out var walked)) return -1;
+        double walkedLateralM = NodeLateralM(walked, rwyStartLat, rwyStartLon, cosH, sinH);
+        if (Math.Abs(walkedLateralM) <= halfWidthM) return -1;
+        if (Adjacency.TryGetValue(walkedNodeId, out var walkedEdges))
+            foreach (var we in walkedEdges)
+                if (string.Equals(we.TaxiwayName, name, StringComparison.OrdinalIgnoreCase))
+                    return -1;
+
+        // (c) Not at a genuine crossing — the reconcile's territory, exactly as gate (3)
+        //     of the edge-bearing rule beside this one. But only where the reconcile CAN
+        //     act: it declines whenever the exit's own bearing is below SIDE_MIN_LATERAL
+        //     (its gate against float-dust sides), and then neither rule touched the exit.
+        //     KDFW 36R "F4": a shallow RET to the right (11.6° first edge, X-Plane paint
+        //     24° right, F4's own pavement right only) leaving from the node where WM
+        //     crosses the runway — so the all-branch walk escaped down WM to the LEFT and
+        //     the pilot who picked F4 was routed onto WM (tools/AmdbExitSweep, 2026-09-23).
+        if (JunctionHasNamedEdgeOnBothBanks(edges, rwyHeadingTrue)
+            && Math.Abs(EdgeLateralComponent(best.BearingDegrees, rwyHeadingTrue)) >= SIDE_MIN_LATERAL)
+            return -1;
+
+        // (d) Follow ONLY this name, out of this exit's own edge. The node it returns is
+        //     clear of the CORRIDOR (lateralToleranceM), not merely of the pavement —
+        //     the same bar ExitPathLeavesCorridor uses, so this answer is the same KIND
+        //     of node as the one it replaces. Measured: at halfWidthM the walk stopped on
+        //     nodes barely off the edge and almost abeam the junction, and since the
+        //     shallow-angle override recomputes ExitBearingTrue as junction -> apron, 70
+        //     Normal exits gained a tone target within 15° of runway heading
+        //     (ExitConsistencySweep TONE_STRAIGHT 2075 -> 2145) and 21 lost a usable turn
+        //     direction altogether (TONETGT_RWYHOLD 24 -> 45). Both are the cue going
+        //     quiet on a real turn, which is the failure this whole area exists to stop.
+        int ownNode = FollowOwnNamedPavement(
+            node, best.ToNodeId, name, rwyHeadingTrue,
+            rwyStartLat, rwyStartLon, cosH, sinH, lateralToleranceM, out int ownSide);
+        if (ownNode <= 0 || ownSide == 0) return -1;
+
+        // (e)
+        return ownSide == Math.Sign(walkedLateralM) ? -1 : ownNode;
+    }
+
+    /// <summary>
+    /// Breadth-first from <paramref name="fromNodeId"/> across edges carrying
+    /// <paramref name="name"/> ONLY, returning the first node found clear of the runway
+    /// pavement. <paramref name="side"/> is its bank (+1/-1), or 0 when the name reaches
+    /// clear pavement on BOTH banks — a taxiway that genuinely crosses the runway under
+    /// one name, where no single bank is the answer and the caller must do nothing.
+    ///
+    /// <para>Unnamed connectors are NOT followed. The corridor walk follows them because
+    /// it is looking for a way off the runway by any pavement; this walk is asking a
+    /// narrower question — where the pavement bearing THIS NAME goes — and an unnamed
+    /// edge cannot answer it. Bounded by node count so a name shared right across a large
+    /// airfield cannot turn a per-exit test into a graph traversal.</para>
+    /// </summary>
+    private int FollowOwnNamedPavement(
+        TaxiNode junction, int fromNodeId, string name, double rwyHeadingTrue,
+        double rwyStartLat, double rwyStartLon, double cosH, double sinH,
+        double clearToleranceM, out int side)
+    {
+        side = 0;
+        const int MAX_NODES = 120;
+
+        var visited = new HashSet<int> { junction.NodeId };
+        var queue = new Queue<int>();
+        if (!Nodes.ContainsKey(fromNodeId)) return -1;
+        visited.Add(fromNodeId);
+        queue.Enqueue(fromNodeId);
+
+        int usableNode = -1;
+        int firstClearNode = -1;
+        int seen = 0;
+        while (queue.Count > 0 && seen < MAX_NODES)
+        {
+            int cur = queue.Dequeue();
+            seen++;
+            if (Nodes.TryGetValue(cur, out var n))
+            {
+                double lat = NodeLateralM(n, rwyStartLat, rwyStartLon, cosH, sinH);
+                if (Math.Abs(lat) > clearToleranceM)
+                {
+                    int s = Math.Sign(lat);
+                    if (side == 0) side = s;
+                    else if (s != side) { side = 0; return -1; }   // both banks — ambiguous
+                    if (firstClearNode <= 0) firstClearNode = cur;
+
+                    // The node must also give the rollout a turn direction to SPEAK and a
+                    // tone to pull on: junction -> node has to be at least
+                    // EXIT_TURN_DIRECTION_MIN_DEG (10°, TaxiGuidanceManager's own floor)
+                    // off the runway axis. Taking the first clear node regardless put 4
+                    // exits on a bearing inside that floor, where ResolveTurnToneTarget
+                    // has nothing left and falls back to runway heading — the tone saying
+                    // "straight" through a real turnoff (ExitConsistencySweep
+                    // TONETGT_RWYHOLD 24 -> 28). A correct bank is not worth a dead cue,
+                    // so the walk keeps going and, finding none, declines the whole
+                    // correction rather than leaving a silent tone behind it.
+                    if (usableNode <= 0)
+                    {
+                        double brg = NavigationCalculator.CalculateBearing(
+                            junction.Latitude, junction.Longitude, n.Latitude, n.Longitude);
+                        if (Math.Abs(NormalizeAngle(brg - rwyHeadingTrue)) >= EXIT_TURN_DIRECTION_MIN_DEG)
+                            usableNode = cur;
+                    }
+                    continue;   // clear of the runway; nothing past it is this test's business
+                }
+            }
+            if (!Adjacency.TryGetValue(cur, out var edges)) continue;
+            foreach (var e in edges)
+            {
+                if (!string.Equals(e.TaxiwayName, name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!visited.Add(e.ToNodeId)) continue;
+                queue.Enqueue(e.ToNodeId);
+            }
+        }
+        // No node gives a speakable direction, but this name reaches clear pavement on ONE
+        // bank — and the caller only asks when the all-branch walk ended on the OTHER bank,
+        // so declining leaves the route across the runway on a neighbouring taxiway.
+        // KLAX 25L "A7" (own pavement clears only 327 m out at 8.6°) was listed "High-speed,
+        // right" and routed onto H3 to the right while it leaves LEFT; KPHX 07L "F9" is drawn
+        // down the centreline for ~300 m before curving right, and its route went LEFT
+        // (tools/AmdbExitSweep, 2026-09-23). Take the first clear node: the route then follows
+        // the exit's own pavement, and the tone — holding runway heading along the straight
+        // stretch, route guidance once the turn begins — follows the geometry. That costs 4
+        // exits their spoken direction word (ExitConsistencySweep TONETGT_RWYHOLD 24 -> 28),
+        // each of which had been pulling toward the wrong bank; the owner ruled tones that
+        // follow the geometry outrank that count. The dead-cue measurement above is a
+        // different case — taking the first clear node when a USABLE one existed further on.
+        if (usableNode <= 0 && side != 0 && firstClearNode > 0) return firstClearNode;
+        if (usableNode <= 0) side = 0;
+        return usableNode;
+    }
+
+    /// <summary>The floor below which a turn direction is not spoken and the steering tone
+    /// has no target — <c>TaxiGuidanceManager.EXIT_TURN_DIRECTION_MIN_DEG</c>, repeated
+    /// here because that class is not referenced from the graph. Keep the two in step.</summary>
+    private const double EXIT_TURN_DIRECTION_MIN_DEG = 10.0;
+
+    /// <summary>
+    /// Which side of the runway the exit leaves by, for the list label the pilot reads.
+    ///
+    /// Normally the exit bearing's own lateral component, exactly as before. But when that
+    /// component is below <see cref="SIDE_MIN_LATERAL"/> the bearing runs along the runway
+    /// and its sign is float dust, not a side — YPPH 21 "P" is a right-angle turnoff to the
+    /// LEFT whose first modelled segment is a 9.8 m stub 3.2° to the right of the runway
+    /// axis, and it was labelled "right". A pilot choosing an exit from that list cannot
+    /// check it against anything.
+    ///
+    /// The fallback is the apron node's own lateral OFFSET — the same authority
+    /// <see cref="ReconcileExitSideWithHandoff"/> decides a bank by, and the same node
+    /// <c>ResolveExitTurnDirection</c> takes the SPOKEN turn direction from, so the label
+    /// and the word agree. With no usable node the side is left EMPTY: the label simply
+    /// drops it, which is honest, where a guess is not.
+    /// </summary>
+    private string ResolveExitSide(
+        double exitBearingTrue, double rwyHeadingTrue, int handoffNodeId,
+        double rwyStartLat, double rwyStartLon, double cosH, double sinH, double halfWidthM,
+        TaxiNode junction, string taxiwayName, double clearToleranceM)
+    {
+        if (exitBearingTrue == 0.0) return "";
+
+        double brg = exitBearingTrue == 360.0 ? 0.0 : exitBearingTrue;
+        double lat = EdgeLateralComponent(brg, rwyHeadingTrue);
+        if (Math.Abs(lat) >= SIDE_MIN_LATERAL)
+        {
+            string bearingSide = lat >= 0.0 ? "Right" : "Left";
+            // A bearing clear of the noise floor can still come from a STUB. Many sceneries
+            // put a 2-8 m segment at the junction whose direction is node placement, not
+            // the turnoff: KORL 25 "A6" is a 2.1 m stub 67° LEFT of the runway while the
+            // taxiway leaves to the RIGHT (apron 63 m right); CYTZ 26 "E" (8.0 m) and
+            // KDAY 24R "E" (6.8 m) are the mirror image. The list said the wrong side while
+            // the spoken "Turn … now" — which ResolveExitTurnDirection takes from the apron
+            // node — said the right one.
+            //
+            // So the bearing is overruled, for this label only, when BOTH independent
+            // opinions agree against it: the apron node is clear of the pavement on the
+            // other bank, AND the pavement carrying this exit's own name reaches only that
+            // bank. Measured 2026-09-23 (tools/AmdbExitSweep, 1,854 airports): 1,368 exits
+            // had bearing and apron on opposite banks; in 1,123 of them the named pavement
+            // reached only the apron's bank (1 reached only the bearing's), and where the
+            // X-Plane Gateway's painted lead-off lines give an independent verdict on
+            // those, they side with the apron 253 times out of 281. A taxiway that crosses
+            // the runway under one name reaches both banks and is left alone.
+            //
+            // ExitBearingTrue is deliberately NOT changed: it feeds ExitType, the angle and
+            // the rollout's alignment tests, and ResolveTurnToneTarget already refuses it
+            // when its side disagrees with the spoken word.
+            if (handoffNodeId > 0 && halfWidthM > 0.0 && Nodes.TryGetValue(handoffNodeId, out var apron))
+            {
+                double apronLateralM = NodeLateralM(apron, rwyStartLat, rwyStartLon, cosH, sinH);
+                int apronSign = Math.Sign(apronLateralM);
+                if (Math.Abs(apronLateralM) > halfWidthM && apronSign != Math.Sign(lat)
+                    && OwnNamedPavementBank(junction, taxiwayName,
+                           rwyStartLat, rwyStartLon, cosH, sinH, clearToleranceM) == apronSign)
+                    return apronSign > 0 ? "Right" : "Left";
+            }
+            return bearingSide;
+        }
+
+        if (handoffNodeId > 0 && halfWidthM > 0.0 && Nodes.TryGetValue(handoffNodeId, out var hn))
+        {
+            double apronLateralM = NodeLateralM(hn, rwyStartLat, rwyStartLon, cosH, sinH);
+            if (Math.Abs(apronLateralM) > halfWidthM)
+                return apronLateralM >= 0.0 ? "Right" : "Left";
+        }
+        return "";
+    }
+
+    /// <summary>
+    /// The bank (+1 right / -1 left of the landing direction) that the pavement carrying
+    /// <paramref name="name"/> reaches clear of the runway corridor, walking ONLY edges of
+    /// that name out of <paramref name="junction"/> — every one of them, not a chosen first
+    /// edge. 0 when it reaches both banks (a taxiway crossing the runway under one name),
+    /// never clears the corridor, or the exit is unnamed. Unnamed connectors are not
+    /// followed, and the walk is bounded so a name spanning an airfield stays cheap.
+    /// </summary>
+    private int OwnNamedPavementBank(TaxiNode junction, string name,
+        double rwyStartLat, double rwyStartLon, double cosH, double sinH, double clearToleranceM)
+    {
+        if (string.IsNullOrEmpty(name)) return 0;
+        const int MAX_NODES = 120;
+        bool left = false, right = false;
+        var visited = new HashSet<int> { junction.NodeId };
+        var queue = new Queue<int>();
+        queue.Enqueue(junction.NodeId);
+        int seen = 0;
+        while (queue.Count > 0 && seen++ < MAX_NODES)
+        {
+            int cur = queue.Dequeue();
+            if (cur != junction.NodeId && Nodes.TryGetValue(cur, out var n))
+            {
+                double lat = NodeLateralM(n, rwyStartLat, rwyStartLon, cosH, sinH);
+                if (Math.Abs(lat) > clearToleranceM)
+                {
+                    if (lat > 0) right = true; else left = true;
+                    continue;   // clear of the runway; what lies past it is not this test's business
+                }
+            }
+            if (!Adjacency.TryGetValue(cur, out var edges)) continue;
+            foreach (var e in edges)
+                if (string.Equals(e.TaxiwayName, name, StringComparison.OrdinalIgnoreCase)
+                    && visited.Add(e.ToNodeId))
+                    queue.Enqueue(e.ToNodeId);
+        }
+        return left == right ? 0 : right ? 1 : -1;
+    }
+
+    /// <summary>
+    /// The turnoff really does CROSS the runway: a named off-axis edge on each bank, both
+    /// clear of the <see cref="SIDE_MIN_LATERAL"/> noise floor. Gate (2) of
+    /// <see cref="ReconcileExitSideWithHandoff"/>, and the test
+    /// <see cref="RewalkCorridorOnExitBank"/> uses to stay OUT of the reconcile's territory.
+    /// </summary>
+    private static bool JunctionHasNamedEdgeOnBothBanks(List<TaxiEdge> edges, double rwyHeadingTrue)
+    {
+        bool hasLeft = false, hasRight = false;
+        foreach (var e in edges)
+        {
+            if (!IsNamedOffRunwayEdge(e)) continue;
+            double lat = EdgeLateralComponent(e.BearingDegrees, rwyHeadingTrue);
+            if (lat <= -SIDE_MIN_LATERAL) hasLeft = true;
+            else if (lat >= SIDE_MIN_LATERAL) hasRight = true;
+        }
+        return hasLeft && hasRight;
+    }
+
+    /// <summary>Edge is a named taxiway continuation, not the runway centreline itself.</summary>
+    private static bool IsNamedOffRunwayEdge(TaxiEdge e)
+        => !string.Equals(e.PathType, "R", StringComparison.OrdinalIgnoreCase)
+           && !string.IsNullOrEmpty(e.TaxiwayName);
+
+    /// <summary>
+    /// Signed lateral movement of a bearing relative to the runway axis:
+    /// + = toward the right of the landing direction, - = toward the left.
+    /// </summary>
+    private static double EdgeLateralComponent(double bearingTrue, double rwyHeadingTrue)
+        => Math.Sin(NormalizeAngle(bearingTrue - rwyHeadingTrue) * Math.PI / 180.0);
+
+    /// <summary>
+    /// Below this the lateral component of a bearing is NOISE, not a side: ~11.5° off the
+    /// runway axis. One value for every "which bank is this on?" question — the crossing
+    /// test and re-pick in <see cref="ReconcileExitSideWithHandoff"/>, the exit-bank check
+    /// on the corridor walk, and <see cref="ResolveExitSide"/> — because a bearing that is
+    /// too shallow to name a bank in one of them is too shallow in all of them.
+    /// </summary>
+    private const double SIDE_MIN_LATERAL = 0.20;
+
+    /// <summary>Signed lateral offset of a node from the runway axis, in metres
+    /// (+ = right of the landing direction).</summary>
+    private static double NodeLateralM(TaxiNode n, double rwyStartLat, double rwyStartLon,
+                                       double cosH, double sinH)
+    {
+        const double MPD = 111132.0;
+        double latR = (rwyStartLat + n.Latitude) * 0.5 * Math.PI / 180.0;
+        double dN = (n.Latitude - rwyStartLat) * MPD;
+        double dE = (n.Longitude - rwyStartLon) * MPD * Math.Cos(latR);
+        return dE * cosH - dN * sinH;
+    }
+
+    /// <summary>
+    /// Slack beyond the runway half-width used when deciding whether a node counts
+    /// as sitting at the runway (exit-junction admission in GetLandingExits, and the
+    /// on-pavement gate of ReconcileExitSideWithHandoff). Hold-short / crossing nodes
+    /// are routinely modelled a few metres either side of the edge stripe; the two
+    /// users must share ONE value or a node can be admitted as a crossing exit yet
+    /// skipped by the crossing-side reconcile (CYYZ D3 at 39 m vs 30.5 m half-width).
+    /// </summary>
+    private const double EXIT_CORRIDOR_SLACK_M = 15.0;
+
+    /// <summary>
+    /// Below this an exit-edge bearing runs essentially ALONG the runway axis, so the
+    /// edge is not a turnoff by any measure and its folded off-axis angle is modelling
+    /// noise rather than geometry. Deliberately far below <see cref="SIDE_MIN_LATERAL"/>
+    /// (~11.5°) and an order of magnitude below the shallowest real RET in the DB
+    /// (EIDW 28 S5 at 21°, EDDM B4 at 25°, LEMD L2 at 14°), so a genuine rapid exit can
+    /// never be judged by this rule.
+    /// </summary>
+    private const double EXIT_EDGE_AXIS_NOISE_DEG = 1.0;
+
+    /// <summary>
+    /// The floor an exit's <see cref="LandingExit.ExitBearingTrue"/> must clear, off the
+    /// runway axis, for the post-turn-now steering tone to mean anything: below it the
+    /// tone reports "on profile" through a turn the pilot has not started (the LOWS 15
+    /// failure). Matches the TONE_STRAIGHT threshold tools/ExitConsistencySweep audits
+    /// against, and is deliberately ABOVE EXIT_TURN_DIRECTION_MIN_DEG (10 deg, which only
+    /// has to be enough to say a side out loud) because a tone is a continuous cue and
+    /// needs more room than a word.
+    /// </summary>
+    private const double EXIT_STEERING_MIN_DEG = 15.0;
+
+
+    /// <summary>
+    /// The folds of two candidate exit edges are equal within float tolerance — the
+    /// adjacency list's forward and reverse copies of the SAME segment, and at a
+    /// crossing one named edge per bank. This is the original reason the pick has a
+    /// direction tie-break at all, and it applies unconditionally.
+    /// </summary>
+    private static bool ExitEdgeFoldsAreEqual(double offA, double offB)
+        => Math.Abs(offA - offB) <= 0.01;
+
+    #endregion
+
+    #region Landing Exit Planning
+
+    // Shared by every landing-exit producer - GetLandingExits' main and fallback passes,
+    // FindDownfieldExits and the branch refinement (TaxiGraph.ExitRefinement.cs) - so planned,
+    // rescued and refined exits share one list under ONE rule: these consts, applied by ClassifyExit.
+    //
+    // Cutoffs: usable exits lie past the jet touchdown zone and before the runway end.
+    // MIN_DIST_FT is a conservative floor (still captures very-early RETs at some
+    // airports and "reject take-off" spots; also avoids false positives from
+    // threshold hold-short lines). END_BUFFER_FT is a small margin against nodes
+    // literally on the runway-end markings; the geometric corridor + named-edge
+    // filters are the real protection, so 50 ft is enough (200 ft was excluding
+    // legitimate end-of-runway vacate exits like S7 at EIDW 28L).
+    private const double MIN_DIST_FT = 500.0;
+    private const double END_BUFFER_FT = 50.0;
+    private const double TOUCHDOWN_AIM_FT = 1000.0;  // typical jet aim point past landing threshold
+
+    // Classification thresholds (angle between exit edge and runway axis).
+    private const double HIGH_SPEED_MAX_DEG = 50.0;   // RET geometry (≤50° off runway axis)
+    private const double NORMAL_MAX_DEG     = RolloutExitGate.TurnaroundAboveDeg;  // beyond this → End
+    private const double END_RATIO          = 0.85;   // last 15% of runway → always End
+
+    /// <summary>
+    /// Last-resort scan for a way off <paramref name="rwy"/> ahead of the aircraft, used by
+    /// the landing rollout when the planned exit has been missed and
+    /// <see cref="GetLandingExits"/>' list holds nothing further down the runway.
+    ///
+    /// <para><b>Why this is not GetLandingExits with a filter.</b> That list is built for the
+    /// planner DIALOG and is deliberately lossy: it keeps one entry per taxiway name, and a
+    /// name's later turnoff stays out wherever another listed exit stands within
+    /// EXIT_COVERAGE_GAP_FT of it. This scan brings such a turnoff back when that exit has
+    /// another name; beside one of its own name RolloutExitGate.MergeRescueExits drops it too.
+    /// It was lossier when this scan was written: the moment ONE node in the
+    /// runway corridor carried a hold-short marker with a forward exit, it stopped considering
+    /// unmarked junctions for the WHOLE runway (`hasHoldShortOnRunway`), so a single marked
+    /// crossing taxiway near the threshold hid every RET behind it - rapid exits are routinely
+    /// modelled without a hold-short bar, because they are one-way turnoffs. Hold-short mode
+    /// now adds the turnoffs its markers never drew (KJFK 13L), but what remains is still no
+    /// answer to "is there any way off this runway ahead of me?", which is asked at 90 kt and
+    /// whose fallback is a 180-degree backtrack on an active runway (CYYZ 23, 2026-08-23: the
+    /// rollout declared the missed exit the last one with 5,400 ft of pavement and three
+    /// further turnoffs ahead).</para>
+    ///
+    /// <para>So this asks the graph directly: every corridor node beyond
+    /// <paramref name="afterDistanceFromThresholdFeet"/> whose named edges demonstrably leave
+    /// the runway strip, stopping short of the pavement end - forward exits only, since a
+    /// backtrack is what this exists to avoid. A candidate whose branch is measured is judged by
+    /// that whole branch (<see cref="ExitBranch"/>): a turnaround (a branch that leaves the runway
+    /// pavement turning more than <see cref="RolloutExitGate.TurnaroundAboveDeg"/>, 110 degrees) is
+    /// dropped unless its forward sibling exists and the node where that sibling leaves the centreline
+    /// lies ahead of <paramref name="afterDistanceFromThresholdFeet"/>, and a forward exit keeps the
+    /// candidate's own node with its branch's angle (capped at 90 degrees), type and bearing. Only an
+    /// UNMEASURED branch keeps the old first-edge rule (a turn past 90 degrees is dropped).
+    /// Hold-short markers are ignored in BOTH directions - a marked node is as eligible as an
+    /// unmarked one.</para>
+    ///
+    /// <para>Nodes of one curved RET arc collapse onto the arc entry point: a candidate is
+    /// dropped when a nearer kept candidate shares its taxiway name within
+    /// EXIT_COVERAGE_GAP_FT. Genuinely separate turnoffs sharing a name - the KBNA shape -
+    /// survive, exactly as the coverage fill in <see cref="GetLandingExits"/> intends.</para>
+    ///
+    /// <para>Returned nearest-first. Runs once, at the overshoot decision - never per frame.</para>
+    /// </summary>
+    public List<LandingExit> FindDownfieldExits(Runway rwy, double afterDistanceFromThresholdFeet)
+    {
+        var found = new List<LandingExit>();
+        if (rwy == null || rwy.Length <= 0) return found;
+
+        // Same frame, tolerances and classification thresholds as GetLandingExits - a rescue
+        // candidate must describe the same geometry a planned one would. The cutoffs and
+        // thresholds are the class-scope consts both share (ClassifyExit applies them).
+        const double MIN_FALLBACK_EXIT_ANGLE_DEG = MinFallbackExitAngleDeg;
+        const double METERS_PER_DEG_LAT = 111132.0;
+        const double COVERAGE_GAP_FT    = RolloutExitGate.EarlyVacateMaxPassedFeet;
+
+        double rwyHeadingTrue = rwy.Heading;
+        double cosH = Math.Cos(rwyHeadingTrue * Math.PI / 180.0);
+        double sinH = Math.Sin(rwyHeadingTrue * Math.PI / 180.0);
+        double halfWidthFt = rwy.Width > 0 ? rwy.Width * 0.5 : 75.0;
+        double lateralToleranceM = RunwayAxis.For(rwy).CorridorLateralMetres;
+        double lengthM = rwy.Length * 0.3048;
+        double maxDistFt = rwy.Length - END_BUFFER_FT;
+        double landingThresholdOffsetFt = rwy.ThresholdOffset;
+        var axis = RunwayAxis.For(rwy);
+
+        foreach (var node in Nodes.Values)
+        {
+            if (node.Type == TaxiNodeType.Parking) continue;
+            if (!Adjacency.TryGetValue(node.NodeId, out var edges)) continue;
+
+            double latRad = (rwy.StartLat + node.Latitude) * 0.5 * Math.PI / 180.0;
+            double metersPerDegLon = METERS_PER_DEG_LAT * Math.Cos(latRad);
+            double dN = (node.Latitude - rwy.StartLat) * METERS_PER_DEG_LAT;
+            double dE = (node.Longitude - rwy.StartLon) * metersPerDegLon;
+            double alongM   = dE * sinH + dN * cosH;
+            double lateralM = dE * cosH - dN * sinH;
+
+            if (Math.Abs(lateralM) > lateralToleranceM) continue;
+            if (alongM < 0 || alongM > lengthM + 50.0) continue;
+
+            double alongFt = alongM / 0.3048;
+            if (alongFt > maxDistFt) continue;
+            double distFromThresholdFt = alongFt - landingThresholdOffsetFt;
+            if (distFromThresholdFt <= afterDistanceFromThresholdFeet) continue;
+
+            // Does anything named actually leave the runway strip from here? An edge turning
+            // meaningfully off the axis answers yes at once; otherwise follow the named path
+            // (a smooth RET whose every segment reads near-parallel) and see whether it
+            // clears the corridor. A parallel holding taxiway outside the corridor never does;
+            // one inside it reaches its next connector, so a node on it is refused first
+            // (IsRescueCandidateSite).
+            bool hasOffAxisNamedEdge = false;
+            double steepestEdgeOffAxis = 0.0;
+            foreach (var ed in edges)
+            {
+                double rel = Math.Abs(NormalizeAngle(ed.BearingDegrees - rwyHeadingTrue));
+                double off = rel > 90.0 ? 180.0 - rel : rel;
+                steepestEdgeOffAxis = Math.Max(steepestEdgeOffAxis, off);
+                if (!string.IsNullOrEmpty(ed.TaxiwayName) && off >= MIN_FALLBACK_EXIT_ANGLE_DEG)
+                    hasOffAxisNamedEdge = true;
+            }
+            bool beyondPavement = Math.Abs(lateralM) > axis.HalfWidthMetres;
+            bool leadsOntoRunway = !beyondPavement || ExitBranch.LeadsOntoRunway(this, axis, node.NodeId);
+            if (!IsRescueCandidateSite(Math.Abs(lateralM), axis.HalfWidthMetres, steepestEdgeOffAxis,
+                    leadsOntoRunway)) continue;
+            int apronNodeId = ExitPathLeavesCorridor(
+                node.NodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM);
+            if (!hasOffAxisNamedEdge && apronNodeId < 0) continue;
+
+            // Best exit edge: the ONE rule every producer uses, so a rescue candidate is
+            // announced to the pilot the way a planned one would be.
+            TaxiEdge? best = BestExitEdge(edges, rwyHeadingTrue, lateralM);
+            if (best == null) continue;
+
+            double relBest = Math.Abs(NormalizeAngle(best.BearingDegrees - rwyHeadingTrue));
+            double exitAngle = relBest;
+
+            string exitType = ClassifyExit(exitAngle, alongFt, rwy.Length);
+
+            double exitBearingTrue = best.BearingDegrees == 0.0 ? 360.0 : best.BearingDegrees;
+
+            // Shallow first-edge stub: this scan deliberately admits smooth-curve RETs whose
+            // every segment reads near-parallel (the ExitPathLeavesCorridor branch above), and
+            // for those the first edge's bearing is barely off the runway axis - EDDB 24L M3
+            // starts at 6.9 degrees, LGAV 03R D8/D9 at 7.6. The rollout's exit-bearing tone
+            // mode and the post-exit pan floor both steer on ExitBearingTrue, so publishing the
+            // stub bearing pans the pilot straight down the runway at the moment they must turn
+            // and makes ExitSide a coin flip. Use the node->apron bearing instead when it is
+            // wider - the same override, guards and threshold GetLandingExits applies.
+            if (exitAngle < MIN_FALLBACK_EXIT_ANGLE_DEG
+                && apronNodeId > 0
+                && Nodes.TryGetValue(apronNodeId, out var apronTaxiNode))
+            {
+                double latRb = (node.Latitude + apronTaxiNode.Latitude) * 0.5 * Math.PI / 180.0;
+                double mPLb = METERS_PER_DEG_LAT * Math.Cos(latRb);
+                double dNb = (apronTaxiNode.Latitude - node.Latitude) * METERS_PER_DEG_LAT;
+                double dEb = (apronTaxiNode.Longitude - node.Longitude) * mPLb;
+                double apronBrg = Math.Atan2(dEb, dNb) * 180.0 / Math.PI;
+                if (apronBrg < 0) apronBrg += 360.0;
+                double apronAngle = Math.Abs(NormalizeAngle(apronBrg - rwyHeadingTrue));
+                double currentAngleFwd = Math.Abs(NormalizeAngle(
+                    (exitBearingTrue == 360.0 ? 0.0 : exitBearingTrue) - rwyHeadingTrue));
+                if (apronAngle <= NORMAL_MAX_DEG && apronAngle > currentAngleFwd)
+                    exitBearingTrue = apronBrg == 0.0 ? 360.0 : apronBrg;
+            }
+
+            var candidateExit = new LandingExit
+            {
+                NodeId = node.NodeId,
+                ApronNodeId = apronNodeId > 0 ? apronNodeId : node.NodeId,
+                Latitude = node.Latitude,
+                Longitude = node.Longitude,
+                DistanceFromThresholdFeet = distFromThresholdFt,
+                DistanceFromTouchdownFeet = distFromThresholdFt - TOUCHDOWN_AIM_FT,
+                TaxiwayName = best.TaxiwayName,
+                ExitAngleDegrees = exitAngle,
+                ExitBearingTrue = exitBearingTrue,
+                ExitType = exitType,
+                ExitSide = ExitSideFor(exitBearingTrue, rwyHeadingTrue)
+            };
+            // Branch-measured like the planner list; turnarounds are dropped (this scan never offered
+            // them) unless their forward sibling exists. An unmeasured branch keeps the scan's old rule:
+            // a first edge peeling back past 90 degrees is the backtrack this scan exists to avoid.
+            var refinedExit = RefineForRescue(candidateExit, best.ToNodeId, rwy, axis,
+                afterDistanceFromThresholdFeet, relBest);
+            if (refinedExit != null) found.Add(refinedExit);
+        }
+
+        found.Sort((a, b) => a.DistanceFromThresholdFeet.CompareTo(b.DistanceFromThresholdFeet));
+
+        // Collapse the interior nodes of one RET arc onto its entry point, without merging two
+        // turnoffs that merely share a name (KBNA). Same coverage rule, same constant.
+        var kept = new List<LandingExit>(found.Count);
+        foreach (var e in found)
+        {
+            bool duplicate = false;
+            for (int i = kept.Count - 1; i >= 0; i--)
+            {
+                if (e.DistanceFromThresholdFeet - kept[i].DistanceFromThresholdFeet > COVERAGE_GAP_FT)
+                    break; // sorted - nothing earlier can be inside the window either
+                if (string.Equals(kept[i].TaxiwayName, e.TaxiwayName, StringComparison.OrdinalIgnoreCase))
+                { duplicate = true; break; }
+            }
+            if (!duplicate) kept.Add(e);
+        }
+        return kept;
+    }
+
 
     /// <summary>
     /// Finds usable runway exit taxiways for the given landing runway. Projects every
@@ -1579,9 +5886,159 @@ public class TaxiGraph
         // lacks width (Width==0), fall back to 75 ft (23 m half-width → 60 ft total
         // which covers most Code C/D taxiway-runway intersections).
         double halfWidthFt = rwy.Width > 0 ? rwy.Width * 0.5 : 75.0;
-        double lateralToleranceM = (halfWidthFt * 0.3048) + 15.0;
+        double lateralToleranceM = RunwayAxis.For(rwy).CorridorLateralMetres;
 
         double lengthM = rwy.Length * 0.3048;
+        // The branch-measurement frame (ExitBranch): same projection and half-width rule as this method.
+        var axis = RunwayAxis.For(rwy);
+
+        // A "High-speed" verdict must agree with the turn the exit's route actually asks for. The
+        // corridor walk is the SAME walk that yields ApronNodeId, i.e. the route the handoff steers;
+        // where it turns further than a rapid exit can (> HIGH_SPEED_MAX_DEG), the exit is demoted to
+        // the angle of that turn. Run AFTER the branch measurement (RefineForPlanner), which measures
+        // only along the exit's own name and so can read a rapid exit where the route leaves by
+        // another taxiway: KDFW 17C M6 read 20° High-speed while its vacate route turns 90° onto EL,
+        // so the tone eased the pilot onto a "gentle right" and then demanded a right angle — off the
+        // pavement in VirtualPilot (main 19 m, unchecked port 34 m, 0 with this). Only ever DEMOTES,
+        // and only an exit still standing at its own junction: the safe direction (no early handoff,
+        // no rapid-exit callout, the spoken turn cue restored). Same rule the local build measured as
+        // KDTW 22L Y3 / LPFR 28 F (first edge 1-23°, real turn 59-90°).
+        //
+        // The yardstick is the route the handoff steers (junction → ApronNodeId), never the all-branch
+        // corridor walk, which can wander onto a crossing taxiway (KMIA 08R M7, a genuine 22° RET whose
+        // junction M6 crosses at 90°: the walk read 90° and would have demoted it).
+        //
+        // Two outcomes, in this order:
+        //   (1) the exit's OWN taxiway clears the runway as a rapid exit (ExitBranch, name-filtered, measured,
+        //       turn to clear <= HIGH_SPEED_MAX_DEG): the route is the one that is wrong, not the label — the
+        //       vacate point moves onto that taxiway (KMIA 08R M7, a 22° RET whose junction M6 crosses at 90°:
+        //       the corridor walk had sent its route up M6's arm);
+        //   (2) otherwise the label is: demoted to the turn the route actually makes (KDFW 17C "M6" at the EL
+        //       junction, or a short spur that never clears the runway).
+        double ChordOffAxisDeg(int fromNodeId, int toNodeId)
+        {
+            if (!Nodes.TryGetValue(fromNodeId, out var a) || !Nodes.TryGetValue(toNodeId, out var b)) return double.NaN;
+            const double MPD = 111132.0;
+            double latR = (a.Latitude + b.Latitude) * 0.5 * Math.PI / 180.0;
+            double dN = (b.Latitude - a.Latitude) * MPD;
+            double dE = (b.Longitude - a.Longitude) * MPD * Math.Cos(latR);
+            return Math.Abs(NormalizeAngle(Math.Atan2(dE, dN) * 180.0 / Math.PI - rwyHeadingTrue));
+        }
+        // Sharpest turn, off the landing heading, along the route the handoff steers: junction →
+        // ApronNodeId by shortest path, legs of 5 m or more. NaN when there is no route.
+        double RouteMaxOffAxisDeg(int fromNodeId, int toNodeId)
+        {
+            var route = new TaxiRouter(this).FindShortestPath(fromNodeId, toNodeId);
+            if (route == null || route.Segments.Count == 0) return double.NaN;
+            double max = 0.0;
+            foreach (var seg in route.Segments)
+                if (seg.DistanceMeters >= 5.0)
+                    max = Math.Max(max, Math.Abs(NormalizeAngle(seg.BearingDegrees - rwyHeadingTrue)));
+            return max;
+        }
+        void CorroborateHighSpeed(LandingExit e, int junctionNodeId)
+        {
+            if (e.ExitType != "High-speed" || e.NodeId != junctionNodeId) return;
+            if (e.ApronNodeId <= 0 || e.ApronNodeId == junctionNodeId) return;
+
+            // (1) The route leaves the exit's own taxiway while that taxiway is itself a rapid exit:
+            //     route along it instead.
+            double chordDeg = ChordOffAxisDeg(junctionNodeId, e.ApronNodeId);
+            if (!double.IsNaN(chordDeg) && chordDeg > HIGH_SPEED_MAX_DEG && !string.IsNullOrEmpty(e.TaxiwayName))
+            {
+                var own = ExitBranch.Analyze(this, axis, junctionNodeId, null, e.TaxiwayName);
+                int ownClear = own.CorridorNodeId > 0 ? own.CorridorNodeId : own.ClearNodeId;
+                if (own.IsMeasured && own.TurnToClearDeg <= HIGH_SPEED_MAX_DEG && ownClear > 0
+                    && ChordOffAxisDeg(junctionNodeId, ownClear) is double ownChord
+                    && !double.IsNaN(ownChord) && ownChord <= HIGH_SPEED_MAX_DEG)
+                    e.ApronNodeId = ownClear;
+            }
+
+            // (2) The route the handoff will steer turns further than a rapid exit can before it is
+            //     clear (KPIT 32 R1: a 70° turn onto Q within 100 m; KDFW 17C "M6" via EL): the exit is
+            //     the Normal turn of that route. Never above 110° (a turn-back is not this rule's call).
+            double routeDeg = RouteMaxOffAxisDeg(junctionNodeId, e.ApronNodeId);
+            if (double.IsNaN(routeDeg) || routeDeg <= HIGH_SPEED_MAX_DEG || routeDeg > 110.0) return;
+            e.ExitAngleDegrees = routeDeg;
+            e.ExitType = "Normal";
+        }
+
+        // Where does the pavement ACTUALLY leave the runway? Some sceneries draw a
+        // taxiway along the runway centreline, so the node where that name starts is not
+        // where the pilot turns. Only asked of a junction with no edge that turns off by
+        // itself (the ones that needed the corridor walk to count as exits at all).
+        //
+        // Motivating defect (live 2026-09-13, LROP 08R): taxiway D is drawn on the 08R
+        // centreline from 7806 ft, and again from 8481 to 11203 ft.
+        //   - First D (node 384, 7793 ft): the path ran 45 m straight down the runway
+        //     before curving off, so "Turn left now" and the hard-left turn tone came
+        //     ~300 ft early; the handoff route (correctly) said straight on, the aircraft
+        //     rolled past the junction, and the rollout declared a miss.
+        //   - Second D (node 343, 9260 ft): a centreline node whose walk ran 245 m BACK
+        //     down the runway into 26L's rapid exit. The miss retargeted to it, the tone
+        //     swung to the reciprocal and the pilot backtracked on the runway.
+        //
+        // Returns the along-runway shift (m) from the junction to the last node of the
+        // on-centreline run the exit path starts with (every node within
+        // ON_AXIS_LATERAL_M of the centreline, every edge within ON_AXIS_EDGE_MAX_DEG of
+        // the axis — the edge test keeps a genuine curved RET, 5°+ per edge, out):
+        //   0   no run worth acting on — the exit is unchanged;
+        //   > 0 the turn is further on → LandingExit.TurnPointOffsetFeet, NORMAL exits
+        //       only (rollout cue timing only; the exit's node/position/type are NOT
+        //       touched, because relocating the exit re-typed 461 and changed 2,661
+        //       runway directions). High-speed and End exits keep 0: their rollout tone
+        //       aims AT the junction, so moving only their distance cues would make the
+        //       tone and the callouts disagree. KDTW 22L Y3 is the same shape as LROP D
+        //       (a 104 m centreline stub) and gets 342 ft;
+        //   < 0 the only way off is a long backtrack → the caller drops the candidate.
+        //
+        // ON_AXIS_MIN_BACKTRACK_M is measured, not guessed (whole fs2020 DB, 21,887
+        // airports): 150 m changes 28 runway directions at 26 airports, every one checked
+        // a phantom of this kind (LROP 08R D, ZSPD 35R A3, VABB 09 B, KMCI 09 G ...);
+        // 60 m changes 1,194 at 774, because sceneries routinely jog a crossing
+        // taxiway 20-70 m along the centreline between its two sides (KDTW, KLAX,
+        // EGLL), and those are not phantoms. Re-run tools/LandingExitSideSweep
+        // before/after if touching any of the three constants.
+        const double ON_AXIS_LATERAL_M = 3.0;
+        const double ON_AXIS_EDGE_MAX_DEG = 4.0;
+        const double ON_AXIS_MIN_RUN_M = 20.0;
+        const double ON_AXIS_MIN_BACKTRACK_M = 150.0;
+        double OnAxisDepartureShiftM(int junctionNodeId)
+        {
+            if (!Nodes.TryGetValue(junctionNodeId, out var junction)) return 0.0;
+            int corridorExit = ExitPathLeavesCorridor(
+                junctionNodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM,
+                rwyHeadingTrue, out _, out var chain);
+            if (corridorExit <= 0 || chain == null || chain.Count < 3) return 0.0;
+
+            (double along, double lateral) Project(TaxiNode n)
+            {
+                const double MPD = 111132.0;
+                double latR = (rwy.StartLat + n.Latitude) * 0.5 * Math.PI / 180.0;
+                double dN = (n.Latitude - rwy.StartLat) * MPD;
+                double dE = (n.Longitude - rwy.StartLon) * MPD * Math.Cos(latR);
+                return (dE * sinH + dN * cosH, dE * cosH - dN * sinH);
+            }
+
+            var (junctionAlong, junctionLateral) = Project(junction);
+            if (Math.Abs(junctionLateral) > ON_AXIS_LATERAL_M) return 0.0;
+
+            double lastAlong = junctionAlong;
+            for (int i = 1; i < chain.Count; i++)
+            {
+                if (!Nodes.TryGetValue(chain[i].nodeId, out var n)) break;
+                double rel = Math.Abs(NormalizeAngle(chain[i].bearingIn - rwyHeadingTrue));
+                double off = rel > 90.0 ? 180.0 - rel : rel;
+                var (a, l) = Project(n);
+                if (off > ON_AXIS_EDGE_MAX_DEG || Math.Abs(l) > ON_AXIS_LATERAL_M) break;
+                lastAlong = a;
+            }
+
+            double shift = lastAlong - junctionAlong;
+            if (shift >= ON_AXIS_MIN_RUN_M) return shift;
+            if (shift <= -ON_AXIS_MIN_BACKTRACK_M) return shift;
+            return 0.0;
+        }
 
         // Displaced threshold handling. rwy.ThresholdOffset is the distance (feet)
         // from the physical runway end (rwy.StartLat/Lon) to the painted landing
@@ -1595,25 +6052,29 @@ public class TaxiGraph
         // navdatareader DB have non-zero offset; this matters at every major hub.
         double landingThresholdOffsetFt = rwy.ThresholdOffset;
 
-        // Cutoffs: usable exits lie past the jet touchdown zone and before the runway end.
-        // MIN_DIST_FT is a conservative floor (still captures very-early RETs at some
-        // airports and "reject take-off" spots; also avoids false positives from
-        // threshold hold-short lines). END_BUFFER_FT is a small margin against nodes
-        // literally on the runway-end markings; the geometric corridor + named-edge
-        // filters are the real protection, so 50 ft is enough (200 ft was excluding
-        // legitimate end-of-runway vacate exits like S7 at EIDW 28L).
-        const double MIN_DIST_FT = 500.0;
-        const double END_BUFFER_FT = 50.0;
-        const double TOUCHDOWN_AIM_FT = 1000.0;  // typical jet aim point past landing threshold
-
-        // Classification thresholds (angle between exit edge and runway axis).
-        const double HIGH_SPEED_MAX_DEG = 50.0;   // RET geometry (≤50° off runway axis)
-        const double NORMAL_MAX_DEG     = 110.0;  // beyond this → End
-        const double END_RATIO          = 0.85;   // last 15% of runway → always End
+        // Cutoffs (MIN_DIST_FT, END_BUFFER_FT, TOUCHDOWN_AIM_FT) and classification thresholds
+        // (HIGH_SPEED_MAX_DEG, NORMAL_MAX_DEG, END_RATIO - applied by ClassifyExit) are the
+        // class-scope consts at the top of this region, shared with FindDownfieldExits and the
+        // branch refinement.
 
         // Dedup window: exits within this along-runway distance that share a
         // taxiway name are collapsed to a single entry.
         const double DEDUP_WINDOW_FT = 50.0;
+
+        // Coverage window for the gap fill (the final block below). An exit dropped by one of
+        // the name dedups is re-admitted only when no surviving exit lies within this
+        // distance of it — i.e. only where it is the sole option for that stretch of runway.
+        //
+        // Measured, not guessed. Sweeping 266 runway directions across 39 airports, every
+        // row a gap fill would add outside KBNA sits within 1309 ft of an exit already in
+        // the list (median 672, p95 968) — those are the far ends of RET arcs, the same
+        // physical turnoff the pilot already has. KBNA's genuinely missing turnoffs start at
+        // 1481 ft. 1400 ft sits in that gap: it adds nothing at any of the other 38 airports
+        // and recovers KBNA's lost exits.
+        // Shared with the early-vacate matcher, which answers the same question from the
+        // other direction ("is this exit close enough behind me to be the one I turned at?").
+        // A local const initialised from the gate's, so the two cannot drift.
+        const double EXIT_COVERAGE_GAP_FT = RolloutExitGate.EarlyVacateMaxPassedFeet;
 
         double maxDistFt = rwy.Length - END_BUFFER_FT;
         if (maxDistFt < MIN_DIST_FT) return exits;
@@ -1635,7 +6096,7 @@ public class TaxiGraph
         // runway (≥ MIN_FALLBACK_EXIT_ANGLE_DEG). That excludes parallel taxiway
         // nodes (which lie close to the axis but only have edges parallel to it)
         // while still picking up real intersections.
-        const double MIN_FALLBACK_EXIT_ANGLE_DEG = 20.0;
+        const double MIN_FALLBACK_EXIT_ANGLE_DEG = MinFallbackExitAngleDeg;
 
         bool hasHoldShortOnRunway = false;
         foreach (var n in Nodes.Values)
@@ -1660,23 +6121,56 @@ public class TaxiGraph
             // hasHoldShortOnRunway=true, blocking the Normal-node fallback from finding
             // the real 10L exits (N1/N2/N3), leaving only that backward RET.
             if (!Adjacency.TryGetValue(n.NodeId, out var hsEdges)) continue;
-            bool hasForwardExit = false;
+            bool hasNamedEdge = false;
             foreach (var he in hsEdges)
+                if (!string.IsNullOrEmpty(he.TaxiwayName)) { hasNamedEdge = true; break; }
+            if (!hasNamedEdge) continue;
+
+            // Branch-measured (ExitBranch): a hold-short node counts only when its OWN branch leaves
+            // the runway FORWARD for this landing direction (is not a turnaround). An unmeasured
+            // branch keeps the old per-edge test, so thin navdata behaves exactly as before.
+            // Deliberately NOT honoured here: a backward branch's forward sibling (the Y-exit
+            // substitution RefineExitByBranch makes). Counting it switched runways whose only
+            // hold-short marker sat on a backward arm into hold-short mode and hid every unmarked
+            // exit (worldwide sweep, 2026-09-26: CYVR 26L 12 exits -> 1, EDDK 24 8 -> 3, KDCA 15
+            // 6 -> 1). The sibling is still offered - the geometric pass finds it.
+            var hsBranch = ExitBranch.Analyze(this, axis, n.NodeId);
+            bool hasForwardExit;
+            if (hsBranch.IsMeasured)
             {
-                if (string.IsNullOrEmpty(he.TaxiwayName)) continue;
-                double relAngle = Math.Abs(NormalizeAngle(he.BearingDegrees - rwyHeadingTrue));
-                bool peelsBack = relAngle > 90.0;
-                double ea = peelsBack ? 180.0 - relAngle : relAngle;
-                if (peelsBack && ea < 50.0) ea = NORMAL_MAX_DEG + 20.0;
-                if (ea <= NORMAL_MAX_DEG) { hasForwardExit = true; break; }
+                hasForwardExit = !hsBranch.IsTurnaround;
+            }
+            else
+            {
+                hasForwardExit = false;
+                foreach (var he in hsEdges)
+                {
+                    if (string.IsNullOrEmpty(he.TaxiwayName)) continue;
+                    double relAngle = Math.Abs(NormalizeAngle(he.BearingDegrees - rwyHeadingTrue));
+                    bool peelsBack = relAngle > 90.0;
+                    double ea = peelsBack ? 180.0 - relAngle : relAngle;
+                    if (peelsBack && ea < 50.0) ea = RolloutExitGate.TurnaroundExitAngleDeg;
+                    if (ea <= NORMAL_MAX_DEG) { hasForwardExit = true; break; }
+                }
             }
             if (hasForwardExit) { hasHoldShortOnRunway = true; break; }
         }
+
+        // Each main-pass exit's type as the PRODUCER classified it, before RefineExitByBranch - the
+        // type the hold-short-only-ends test below (hsOnlyEnds) reads. Refinement must never change
+        // whether that test sends the runway to the geometric second pass: a lone hold-short exit the
+        // producer read as End and the branch measurement retypes Normal used to switch the pass
+        // off and hide every unmarked exit (worldwide sweep, 2026-09-26: KPWK 34 7 exits -> 1,
+        // EIDW 28R 5 -> 1). Keyed by reference: the refined exit is sometimes a new instance.
+        var producerExitTypes = new Dictionary<LandingExit, string>(ReferenceEqualityComparer.Instance);
 
         foreach (var node in Nodes.Values)
         {
             bool isHoldShortNode = node.Type == TaxiNodeType.HoldShort || node.Type == TaxiNodeType.ILSHoldShort;
             bool isImplicitExitNode = false;
+            // True when this junction only counted as an exit because the corridor walk
+            // left the runway — no edge of its own turns off. See OnAxisDepartureShiftM.
+            bool viaCorridorWalk = false;
             // For fallback implicit exits: node ID of the first point outside the corridor.
             // Set by ExitPathLeavesCorridor; used as ApronNodeId for tone re-routing.
             int implicitApronNodeId = -1;
@@ -1685,7 +6179,9 @@ public class TaxiGraph
                 // Fallback gate: only consider Normal nodes when THIS runway has
                 // no explicit hold-short nodes at all. Otherwise the HS/IHS data
                 // is authoritative and we shouldn't muddy the list with implicit
-                // junctions (which tend to dedupe awkwardly).
+                // junctions (which tend to dedupe awkwardly) - the turnoffs the
+                // markers never drew are ADDED after the list's dedups instead
+                // (see "for the turnoffs they never drew" below).
                 if (hasHoldShortOnRunway) continue;
                 if (node.Type != TaxiNodeType.Normal) continue;
                 if (!Adjacency.TryGetValue(node.NodeId, out var ee)) continue;
@@ -1716,11 +6212,24 @@ public class TaxiGraph
                     implicitApronNodeId = ExitPathLeavesCorridor(node.NodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM);
                     if (implicitApronNodeId < 0) continue;
                     hasOffAxisNamedEdge = true;
+                    viaCorridorWalk = true;
                 }
                 if (!hasOffAxisNamedEdge) continue;
                 isImplicitExitNode = true;
             }
             if (!isHoldShortNode && !isImplicitExitNode) continue;
+
+            // Where the pavement really leaves the runway (see OnAxisDepartureShiftM).
+            // Behind the junction: not a turnoff from here, drop it. Ahead: record it
+            // as the turn point; the exit itself (and so every list/dedup/type
+            // decision) stays exactly as it was.
+            double turnPointOffsetM = 0.0;
+            if (viaCorridorWalk)
+            {
+                double shiftM = OnAxisDepartureShiftM(node.NodeId);
+                if (shiftM < 0.0) continue;
+                turnPointOffsetM = shiftM;
+            }
 
             // Convert node offset from threshold into local meters (equirectangular).
             const double METERS_PER_DEG_LAT = 111132.0;
@@ -1754,99 +6263,17 @@ public class TaxiGraph
             string taxiwayName = "";
             double exitAngle = 90.0; // default to perpendicular if nothing better found
             double exitBearingTrue = 0.0; // true bearing of best exit edge; 0 = not found
+            int? bestToNodeId = null;
+            // Hoisted: the edge this exit is derived from is also what the corridor-walk
+            // bank checks further down compare against (RewalkCorridorOnExitBank).
+            TaxiEdge? best = null;
             if (Adjacency.TryGetValue(node.NodeId, out var edges))
             {
-                TaxiEdge? best = null;
-                foreach (var e in edges)
-                {
-                    // Skip runway-type edges (the edge that lies on the runway centerline).
-                    bool onRunway = string.Equals(e.PathType, "R", StringComparison.OrdinalIgnoreCase);
-                    if (onRunway) continue;
-                    if (string.IsNullOrEmpty(e.TaxiwayName)) continue;
-
-                    if (best == null)
-                    {
-                        best = e;
-                        continue;
-                    }
-
-                    // Prefer connector-style names (letter+digit) over bare main names.
-                    // Same ranking spirit as hold-short naming (Feature #7).
-                    bool bestHasDigit = HasLetterAndDigit(best.TaxiwayName);
-                    bool curHasDigit  = HasLetterAndDigit(e.TaxiwayName);
-                    if (curHasDigit && !bestHasDigit)
-                    {
-                        best = e;
-                    }
-                    else if (curHasDigit == bestHasDigit)
-                    {
-                        // Same name priority — prefer the edge that turns most off-axis
-                        // from the runway. Adjacency-list ordering is not guaranteed, so
-                        // without this tie-break a parallel-running named edge can be
-                        // chosen over the actual perpendicular exit edge, producing an
-                        // exit angle of ~0° for exits like EGCC AF/AG on 23R.
-                        double bestRel = Math.Abs(NormalizeAngle(best.BearingDegrees - rwyHeadingTrue));
-                        double bestOff = bestRel > 90.0 ? 180.0 - bestRel : bestRel;
-                        double curRel  = Math.Abs(NormalizeAngle(e.BearingDegrees - rwyHeadingTrue));
-                        double curOff  = curRel > 90.0 ? 180.0 - curRel : curRel;
-                        if (curOff > bestOff + 0.01)
-                        {
-                            best = e;
-                        }
-                        else if (Math.Abs(curOff - bestOff) <= 0.01)
-                        {
-                            // Equal off-axis angle (within float tolerance): the adjacency
-                            // list contains both the forward exit edge and the reverse edge
-                            // of the same taxiway segment. Both fold to the same `off`, so
-                            // first-encountered was winning non-deterministically.
-                            // Wrong edge → wrong ExitBearingTrue → FindExitExtensionNode
-                            // routes backward → permanent max-pan tone for any exit angle.
-                            //
-                            // Primary tiebreak — lateral direction.
-                            //   Use the junction node's signed lateral offset from the
-                            //   runway centreline (lateralM: + = right, - = left, already
-                            //   computed above). The correct exit edge moves the aircraft
-                            //   further off-runway on the SAME side as the junction; the
-                            //   reverse edge heads toward the opposite apron or back across
-                            //   the runway. lateralComponent = sin(NormalizeAngle(bearing −
-                            //   rwyHeading)) gives the signed lateral movement of an edge.
-                            //   This criterion is geometrically correct for ALL exit angles:
-                            //     7°  exit: correct edge lat≈+0.12, reverse lat≈-0.12
-                            //     90° exit: correct edge lat=±1.00, reverse lat=∓1.00
-                            //     100° exit: correct edge lat≈±0.98, reverse lat≈∓0.98
-                            //   (hemisphere alone would mis-pick the reverse edge for
-                            //   obtuse exits 90°–180° where the correct edge is in the
-                            //   "backward" hemisphere by the rel≤90 criterion.)
-                            //
-                            // Fallback tiebreak — hemisphere.
-                            //   Applied only when the junction is within 1 m of the
-                            //   centreline and lateral direction can't discriminate.
-                            //   Forward-hemisphere edges (rel ≤ 90°) beat backward edges;
-                            //   correct for acute exits, ambiguous for obtuse exits on the
-                            //   centreline (an inherently rare degenerate case).
-                            if (Math.Abs(lateralM) > 1.0)
-                            {
-                                double bestLatComp = Math.Sin(NormalizeAngle(best.BearingDegrees - rwyHeadingTrue) * Math.PI / 180.0);
-                                double curLatComp  = Math.Sin(NormalizeAngle(e.BearingDegrees   - rwyHeadingTrue) * Math.PI / 180.0);
-                                bool curMatchesSide  = Math.Sign(curLatComp)  == Math.Sign(lateralM);
-                                bool bestMatchesSide = Math.Sign(bestLatComp) == Math.Sign(lateralM);
-                                if (curMatchesSide && !bestMatchesSide)
-                                    best = e;
-                            }
-                            else
-                            {
-                                // Junction near centreline: fall back to hemisphere.
-                                bool bestForward = bestRel <= 90.0;
-                                bool curForward  = curRel  <= 90.0;
-                                if (curForward && !bestForward)
-                                    best = e;
-                            }
-                        }
-                    }
-                }
+                best = BestExitEdge(edges, rwyHeadingTrue, lateralM);
 
                 if (best != null)
                 {
+                    bestToNodeId = best.ToNodeId;
                     taxiwayName = best.TaxiwayName;
                     // Store 360.0 for due-north edges so 0.0 stays unambiguous as "not found".
                     exitBearingTrue = best.BearingDegrees == 0.0 ? 360.0 : best.BearingDegrees;
@@ -1863,7 +6290,7 @@ public class TaxiGraph
                     exitAngle = peelsBackward ? 180.0 - rel : rel;
 
                     // Backward-peel nodes are almost always end-of-runway turnoffs
-                    // (handled by the endRatio>0.85 check below). But if a backward
+                    // (handled by ClassifyExit's END_RATIO check below). But if a backward
                     // peel appears mid-runway, we should NOT classify it as
                     // "High-speed" — exiting through it requires turning around,
                     // which is not a high-speed RET. Forcing exitAngle to an
@@ -1875,7 +6302,7 @@ public class TaxiGraph
                         // treat as end-style exit, not a high-speed. Forcing the
                         // angle above NORMAL_MAX_DEG pushes classification to
                         // "End" below regardless of along-runway position.
-                        exitAngle = NORMAL_MAX_DEG + 20.0;
+                        exitAngle = RolloutExitGate.TurnaroundExitAngleDeg;
                     }
                 }
             }
@@ -1903,6 +6330,20 @@ public class TaxiGraph
             // the next block (also < 20°). EIDW S5 and other hold-short shallow exits
             // are unaffected — they use the parallel HS-style branch (`isHoldShortNode`
             // gate). EGNX 27/M (90° normal) is above 20°, also unaffected.
+            // The corridor walk above was seeded from EVERY named edge here, so where
+            // two taxiways leave the runway at one point — one to each bank — it can
+            // come back on the other exit's pavement. Put it on this exit's own bank
+            // before anything reads it: implicitApronNodeId feeds the shallow-angle
+            // bearing override below AND becomes ApronNodeId, i.e. the route.
+            if (best != null && implicitApronNodeId > 0)
+            {
+                int onOwnBank = RewalkCorridorOnExitBank(
+                    node, best, implicitApronNodeId, rwyHeadingTrue,
+                    rwy.StartLat, rwy.StartLon, cosH, sinH,
+                    halfWidthFt * 0.3048, lateralToleranceM);
+                if (onOwnBank > 0) implicitApronNodeId = onOwnBank;
+            }
+
             if (!isHoldShortNode && exitAngle < 20.0
                 && implicitApronNodeId > 0
                 && Nodes.TryGetValue(implicitApronNodeId, out var apronTaxiNode))
@@ -1941,6 +6382,17 @@ public class TaxiGraph
             if (isHoldShortNode && exitAngle < 20.0)
             {
                 int bfsResult = ExitPathLeavesCorridor(node.NodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM);
+                // Same exit-bank correction as the two implicit sites: this walk is
+                // all-branch too, and its node becomes the handoff node. Self-gating, so it
+                // is a no-op wherever the hold-short node has pavement on one bank only.
+                if (best != null && bfsResult > 0)
+                {
+                    int onOwnBankHs = RewalkCorridorOnExitBank(
+                        node, best, bfsResult, rwyHeadingTrue,
+                        rwy.StartLat, rwy.StartLon, cosH, sinH,
+                        halfWidthFt * 0.3048, lateralToleranceM);
+                    if (onOwnBankHs > 0) bfsResult = onOwnBankHs;
+                }
                 if (bfsResult > 0 && Nodes.TryGetValue(bfsResult, out var hsApronNode))
                 {
                     hsApronNodeId = bfsResult;
@@ -1962,31 +6414,74 @@ public class TaxiGraph
                 }
             }
 
+            // Handoff destination must be a node genuinely CLEAR of the runway.
+            // implicitApronNodeId is only computed in the shallow-angle branch above
+            // (the one that runs ExitPathLeavesCorridor when the first named edge is
+            // < MIN_FALLBACK_EXIT_ANGLE_DEG off the runway axis). For an implicit exit
+            // whose first stub already turns off at ≥ 20° — e.g. LPFR taxiway F, whose
+            // stub leaves the centreline at ~23° — that branch is skipped, so
+            // implicitApronNodeId stays -1. With no ApronNodeId the LandingRollout →
+            // Taxiing handoff falls back to FindExitExtensionNode, which returns the
+            // FIRST adjacent node; on a taxiway modelled from the runway centreline
+            // outward that node can still sit inside the runway half-width (LPFR F's
+            // node ~12 m off a 22.6 m half-width). The route then "arrives" (Stop) with
+            // the aircraft still on the runway — the pilot never gets guided fully off
+            // (LPFR 28→F: Alt+Y reported "runway 10", ATC "not vacated"). Compute the
+            // corridor-exit node here for every implicit exit so ApronNodeId always
+            // points off the pavement. Kept SEPARATE from implicitApronNodeId so the
+            // ExitBearingTrue overrides above see the exact value they always have.
+            int implicitApronForHandoff = implicitApronNodeId;
+            if (!isHoldShortNode && implicitApronForHandoff <= 0)
+            {
+                implicitApronForHandoff = ExitPathLeavesCorridor(
+                    node.NodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM);
+                // Freshly walked here, so it has not been through the bank check above —
+                // and THIS is the node that becomes ApronNodeId. A no-op when the walk
+                // already came back on the exit's own bank, which is the normal case.
+                if (best != null && implicitApronForHandoff > 0)
+                {
+                    int onOwnBank = RewalkCorridorOnExitBank(
+                        node, best, implicitApronForHandoff, rwyHeadingTrue,
+                        rwy.StartLat, rwy.StartLon, cosH, sinH,
+                        halfWidthFt * 0.3048, lateralToleranceM);
+                    if (onOwnBank > 0) implicitApronForHandoff = onOwnBank;
+                }
+            }
+
+            // The node the handoff route will terminate at — must match the ApronNodeId
+            // assigned below, or the reconcile would align the name to a node the route
+            // does not use.
+            int handoffNodeId = isHoldShortNode
+                ? (hsApronNodeId > 0 ? hsApronNodeId : node.NodeId)
+                : implicitApronForHandoff;
+
+            // At a turnoff that CROSSES the runway the two sides carry different names,
+            // and the best-edge tie-break above picks between them on a fraction of a
+            // degree. Put the NAME and ExitBearingTrue back on the side the route is
+            // actually going to — see ReconcileExitSideWithHandoff. No-op unless the
+            // two genuinely point to opposite sides of the runway. Runs BEFORE the branch
+            // refinement, so the branch is measured on the bank the route actually takes.
+            ReconcileExitSideWithHandoff(node, handoffNodeId, rwyHeadingTrue,
+                rwy.StartLat, rwy.StartLon, cosH, sinH,
+                lateralM, halfWidthFt * 0.3048,
+                ref taxiwayName, ref exitBearingTrue, ref exitAngle);
+
             // End-of-runway classification: if the exit is within the last 15% of the
             // runway, label it "End" regardless of angle — exiting there means rolling
-            // out the full length.
-            double endRatio = alongFt / rwy.Length;
-            string exitType;
-            if (endRatio > END_RATIO)
-                exitType = "End";
-            else if (exitAngle <= HIGH_SPEED_MAX_DEG)
-                exitType = "High-speed";
-            else if (exitAngle <= NORMAL_MAX_DEG)
-                exitType = "Normal";
-            else
-                exitType = "End";
+            // out the full length. ClassifyExit is the one rule every producer shares.
+            string exitType = ClassifyExit(exitAngle, alongFt, rwy.Length);
 
-            exits.Add(new LandingExit
+            var candidateExit = new LandingExit
             {
                 NodeId = node.NodeId,
                 // HS/IHS exits: normally the hold-short bar is at the junction (apron side).
                 // Exception: shallow HS exits on curved RETs — BFS found a corridor-exit node
                 // further along the curve (hsApronNodeId > 0). That node is used instead so
                 // the Taxiing-handoff re-route drives A* through the actual curve geometry.
-                // Fallback Normal exits: BFS result stored in implicitApronNodeId.
-                ApronNodeId = isHoldShortNode
-                    ? (hsApronNodeId > 0 ? hsApronNodeId : node.NodeId)
-                    : implicitApronNodeId,
+                // Fallback Normal exits: corridor-exit node (implicitApronForHandoff),
+                // computed for EVERY implicit exit — not just the shallow-angle ones —
+                // so the handoff destination is always clear of the runway pavement.
+                ApronNodeId = handoffNodeId,
                 Latitude = node.Latitude,
                 Longitude = node.Longitude,
                 DistanceFromThresholdFeet = distFromLandingThresholdFt,
@@ -1995,42 +6490,77 @@ public class TaxiGraph
                 ExitAngleDegrees = exitAngle,
                 ExitBearingTrue = exitBearingTrue,
                 ExitType = exitType,
-                ExitSide = exitBearingTrue != 0.0
-                    ? (NormalizeAngle((exitBearingTrue == 360.0 ? 0.0 : exitBearingTrue) - rwyHeadingTrue) >= 0 ? "Right" : "Left")
-                    : ""
-            });
+                ExitSide = ExitSideFor(exitBearingTrue, rwyHeadingTrue)
+            };
+            string producerExitType = candidateExit.ExitType;
+            var refinedExit = RefineForPlanner(candidateExit, bestToNodeId, rwy, axis);
+            CorroborateHighSpeed(refinedExit, node.NodeId);
+            // A taxiway drawn along the centreline before it turns off (OnAxisDepartureShiftM):
+            // the turn point lies that far past this node. Normal exits only, and only while
+            // the exit still stands at this node (the refinement can move a turnaround to its
+            // forward sibling, whose own node is where it turns).
+            if (turnPointOffsetM > 0.0 && refinedExit.NodeId == node.NodeId && refinedExit.ExitType == "Normal")
+                refinedExit.TurnPointOffsetFeet = turnPointOffsetM / 0.3048;
+            // The side the LIST says. The branch bearing is right for the turn, but a bearing whose
+            // lateral component is noise, or one taken from a short junction stub, names the wrong
+            // bank when the exit's own route and pavement say otherwise (ResolveExitSide: YPPH 21 P,
+            // KORL 25 A6). Label only — ExitBearingTrue is left as the branch measured it.
+            if (refinedExit.NodeId == node.NodeId)
+                refinedExit.ExitSide = ResolveExitSide(refinedExit.ExitBearingTrue, rwyHeadingTrue,
+                    refinedExit.ApronNodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, halfWidthFt * 0.3048,
+                    node, refinedExit.TaxiwayName, lateralToleranceM);
+            exits.Add(refinedExit);
+            producerExitTypes[refinedExit] = producerExitType;
         }
 
         // Deduplicate exits that share the same taxiway name and are within 50 ft of
         // each other along the runway (happens when both sides of a taxiway intersection
         // produce a hold-short node). Keep the one with the smaller angle (better RET
-        // candidate) or, if equal, the one closer to the threshold.
+        // candidate) or, if equal, the one closer to the threshold - except that an exit read
+        // forward only from its own node never replaces one read forward from its junction
+        // (ReplacesInDedupWindow; WSAT 18: C's right arm, re-read at 69.9°, displaced its left arm).
         exits.Sort((a, b) =>
         {
             int c = a.DistanceFromThresholdFeet.CompareTo(b.DistanceFromThresholdFeet);
             return c;
         });
 
-        var deduped = new List<LandingExit>(exits.Count);
-        foreach (var e in exits)
+        var deduped = DedupWithinWindow(exits);
+
+        // The 50 ft window over a distance-sorted list - one rule for the main pass, the hsOnlyEnds merge and the
+        // turnoffs hold-short mode adds (EXIT-19).
+        static List<LandingExit> DedupWithinWindow(List<LandingExit> sorted)
         {
-            bool merged = false;
-            for (int i = deduped.Count - 1; i >= 0; i--)
+            var kept = new List<LandingExit>(sorted.Count);
+            foreach (var e in sorted)
             {
-                var d = deduped[i];
-                if (Math.Abs(d.DistanceFromThresholdFeet - e.DistanceFromThresholdFeet) > DEDUP_WINDOW_FT)
-                    break; // list is sorted; no further candidates within DEDUP_WINDOW_FT
-                if (string.Equals(d.TaxiwayName, e.TaxiwayName, StringComparison.OrdinalIgnoreCase))
+                bool merged = false;
+                for (int i = kept.Count - 1; i >= 0; i--)
                 {
-                    // Keep the one with smaller exit angle.
-                    if (e.ExitAngleDegrees < d.ExitAngleDegrees)
-                        deduped[i] = e;
-                    merged = true;
-                    break;
+                    var d = kept[i];
+                    if (Math.Abs(d.DistanceFromThresholdFeet - e.DistanceFromThresholdFeet) > DEDUP_WINDOW_FT)
+                        break; // list is sorted; no further candidates within DEDUP_WINDOW_FT
+                    if (string.Equals(d.TaxiwayName, e.TaxiwayName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Keep the one with smaller exit angle.
+                        if (ReplacesInDedupWindow(e, d))
+                            kept[i] = e;
+                        merged = true;
+                        break;
+                    }
                 }
+                if (!merged) kept.Add(e);
             }
-            if (!merged) deduped.Add(e);
+            return kept;
         }
+
+        // Candidate pool for the coverage gap fill at the very end. Snapshotted HERE, before
+        // the two name dedups below, because those are where a genuinely separate turnoff
+        // sharing a name gets thrown away — at KBNA 20L the High-speed dedup immediately
+        // below is what removes the forward RETs at 4497 and 6155 ft, leaving the gap fill
+        // nothing but backward-peeling End nodes to work with. The 50 ft window dedup above
+        // has already run, so co-located duplicates never enter the pool.
+        var gapFillPool = new List<LandingExit>(deduped);
 
         // High-speed RET dedup: a curved RET whose navdata has multiple HS/IHS nodes
         // along its arc (common in third-party scenery) generates one High-speed entry
@@ -2038,18 +6568,22 @@ public class TaxiGraph
         // The threshold-nearest node is the RET entry point; interior curve nodes are not
         // meaningful separate choices. Normal and End exits keep the 50 ft window only —
         // a Normal taxiway crossing the runway at 90° twice is a legitimate pair.
+        // An exit read forward only from its own node takes a name here only when no exit read forward from
+        // its junction does (LandingExit.ForwardOnlyFromItsNode).
         {
             var hsSeenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var hsKept = new HashSet<LandingExit>(ReferenceEqualityComparer.Instance);
+            foreach (bool gapFillers in new[] { false, true })
+                foreach (var e in deduped)
+                {
+                    if (e.ExitType != "High-speed" || string.IsNullOrEmpty(e.TaxiwayName)) continue;
+                    if (e.ForwardOnlyFromItsNode != gapFillers) continue;
+                    if (hsSeenNames.Add(e.TaxiwayName)) hsKept.Add(e);
+                }
             var hsDedupedList = new List<LandingExit>(deduped.Count);
             foreach (var e in deduped)
-            {
-                if (e.ExitType != "High-speed" || string.IsNullOrEmpty(e.TaxiwayName))
-                {
+                if (e.ExitType != "High-speed" || string.IsNullOrEmpty(e.TaxiwayName) || hsKept.Contains(e))
                     hsDedupedList.Add(e);
-                    continue;
-                }
-                if (hsSeenNames.Add(e.TaxiwayName)) hsDedupedList.Add(e);
-            }
             deduped = hsDedupedList;
         }
 
@@ -2067,41 +6601,42 @@ public class TaxiGraph
         // the only HS node in range, but its exit angle is backward/End for 10L landings.
         // In that case we run a second pass collecting Normal-node fallback exits, merge them
         // with the HS End exits, and return the combined deduplicated list.
+        // Judged on each exit's PRODUCER type (producerExitTypes, recorded above), never its refined
+        // one: the branch refinement must not change whether the second pass runs. The list it reads is
+        // the REFINED one, though, de-duplicated by refined angle and type, so the refinement still picks
+        // WHICH exits are judged - and that is deliberate. Judged on the producer's own list instead (the
+        // pre-refinement decision), 16 runway directions go back to hold-short mode and lose 54 exits
+        // (KDTW 09L 11 -> 2, KPIA 31 6 -> 1, KLNK 14 5 -> 1) while none gains one (whole-database sweep,
+        // 2026-09-26). Do not "fix" it without a sweep showing the pilot gains.
         bool hsOnlyEnds = hasHoldShortOnRunway && deduped.Count > 0
-            && deduped.TrueForAll(e => e.ExitType == "End");
+            && deduped.TrueForAll(e =>
+                (producerExitTypes.TryGetValue(e, out var producerType) ? producerType : e.ExitType) == "End");
 
         // HS nodes exist in corridor but every one failed the distance filter
         // (too close to threshold or beyond END_BUFFER). Treat the same as
         // hsOnlyEnds — run the Normal-node fallback to find usable exits.
         bool hsYieldedNothing = hasHoldShortOnRunway && deduped.Count == 0;
 
-        if (!hasHoldShortOnRunway || hsOnlyEnds || hsYieldedNothing)
+        // Whether this runway is taking the Normal-node fallback at all. Also decides
+        // whether the strict per-name dedup at the very end applies — see there.
+        bool onFallbackPath = !hasHoldShortOnRunway || hsOnlyEnds || hsYieldedNothing;
+
+        // A runway in hold-short mode still gets the Normal-node pass: merged in when its markers gave
+        // nothing usable (hsOnlyEnds, hsYieldedNothing), otherwise for the turnoffs they never drew (below).
+        if (hasHoldShortOnRunway)
         {
-            if (hsOnlyEnds || hsYieldedNothing)
+            // Every Normal junction that turns off the runway - the main loop's fallback, as a runway
+            // without markers gets it.
+            List<LandingExit> GeometricExits()
             {
-                var fallbackExits = new List<LandingExit>();
+                var found = new List<LandingExit>();
                 foreach (var node in Nodes.Values)
                 {
                     if (node.Type != TaxiNodeType.Normal) continue;
                     if (!Adjacency.TryGetValue(node.NodeId, out var ee)) continue;
 
-                    bool hasOffAxis = false;
-                    int apronNode = -1;
-                    foreach (var ed in ee)
-                    {
-                        if (string.IsNullOrEmpty(ed.TaxiwayName)) continue;
-                        double rel = Math.Abs(NormalizeAngle(ed.BearingDegrees - rwyHeadingTrue));
-                        double off = rel > 90.0 ? 180.0 - rel : rel;
-                        if (off >= MIN_FALLBACK_EXIT_ANGLE_DEG) { hasOffAxis = true; break; }
-                    }
-                    if (!hasOffAxis)
-                    {
-                        apronNode = ExitPathLeavesCorridor(node.NodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM);
-                        if (apronNode < 0) continue;
-                        hasOffAxis = true;
-                    }
-                    if (!hasOffAxis) continue;
-
+                    // On this runway, before anything walks: this pass runs on every hold-short-mode runway, and
+                    // the corridor walk below would otherwise run from every parallel-taxiway node at the airport.
                     const double MPD2 = 111132.0;
                     double latR2 = (rwy.StartLat + node.Latitude) * 0.5 * Math.PI / 180.0;
                     double mPL2 = MPD2 * Math.Cos(latR2);
@@ -2114,30 +6649,41 @@ public class TaxiGraph
                     double dft2 = aFt2 - landingThresholdOffsetFt;
                     if (dft2 < MIN_DIST_FT || aFt2 > maxDistFt) continue;
 
+                    bool hasOffAxis = false;
+                    int apronNode = -1;
+                    foreach (var ed in ee)
+                    {
+                        if (string.IsNullOrEmpty(ed.TaxiwayName)) continue;
+                        double rel = Math.Abs(NormalizeAngle(ed.BearingDegrees - rwyHeadingTrue));
+                        double off = rel > 90.0 ? 180.0 - rel : rel;
+                        if (off >= MIN_FALLBACK_EXIT_ANGLE_DEG) { hasOffAxis = true; break; }
+                    }
+                    bool viaCorridorWalk2 = false;
+                    if (!hasOffAxis)
+                    {
+                        apronNode = ExitPathLeavesCorridor(node.NodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM);
+                        if (apronNode < 0) continue;
+                        hasOffAxis = true;
+                        viaCorridorWalk2 = true;
+                    }
+                    if (!hasOffAxis) continue;
+
+                    // Same turn-point rule as the main loop — see OnAxisDepartureShiftM.
+                    double turnPointOffsetM2 = 0.0;
+                    if (viaCorridorWalk2)
+                    {
+                        double shiftM2 = OnAxisDepartureShiftM(node.NodeId);
+                        if (shiftM2 < 0.0) continue;
+                        turnPointOffsetM2 = shiftM2;
+                    }
+
                     string txName2 = "";
                     double angle2 = 90.0;
-                    TaxiEdge? best2 = null;
+                    // The ONE best-edge rule. This pass once kept its own copy with no tie-break,
+                    // so a straight crossing's two rows (folding to the same angle) went to whichever
+                    // navdata listed first, and the backward one measured as a turnaround.
+                    TaxiEdge? best2 = BestExitEdge(ee, rwyHeadingTrue, lM2);
                     double best2Brg = 0.0; // 0 = not found; due-north stored as 360
-                    foreach (var e in ee)
-                    {
-                        if (string.Equals(e.PathType, "R", StringComparison.OrdinalIgnoreCase)
-                            || string.IsNullOrEmpty(e.TaxiwayName)) continue;
-                        if (best2 == null) { best2 = e; continue; }
-                        bool b2hd = HasLetterAndDigit(best2.TaxiwayName);
-                        bool ehd  = HasLetterAndDigit(e.TaxiwayName);
-                        if (ehd && !b2hd)
-                        {
-                            best2 = e;
-                        }
-                        else if (ehd == b2hd)
-                        {
-                            double b2r = Math.Abs(NormalizeAngle(best2.BearingDegrees - rwyHeadingTrue));
-                            double b2o = b2r > 90.0 ? 180.0 - b2r : b2r;
-                            double er  = Math.Abs(NormalizeAngle(e.BearingDegrees - rwyHeadingTrue));
-                            double eo  = er > 90.0 ? 180.0 - er : er;
-                            if (eo > b2o) best2 = e;
-                        }
-                    }
                     if (best2 != null)
                     {
                         txName2 = best2.TaxiwayName;
@@ -2145,11 +6691,36 @@ public class TaxiGraph
                         double rel2 = Math.Abs(NormalizeAngle(best2.BearingDegrees - rwyHeadingTrue));
                         bool pb2 = rel2 > 90.0;
                         angle2 = pb2 ? 180.0 - rel2 : rel2;
-                        if (pb2 && angle2 < 50.0) angle2 = NORMAL_MAX_DEG + 20.0;
+                        if (pb2 && angle2 < 50.0) angle2 = RolloutExitGate.TurnaroundExitAngleDeg;
                     }
-                    // Same targeted apron-bearing override: only for near-parallel first
-                    // edges (< 5°) and only when the apron is in the forward direction.
-                    if (angle2 < 5.0 && apronNode > 0
+                    // ApronNodeId for EVERY exit, not only the shallow no-off-axis ones —
+                    // the LPFR parity fix the main loop already has
+                    // (implicitApronForHandoff): with no ApronNodeId the handoff falls
+                    // back to FindExitExtensionNode's first adjacent node, which can
+                    // still sit inside the runway width, and the spoken turn direction
+                    // loses its aircraft-independent junction→apron source — at exactly
+                    // the marker-rich airports this block builds.
+                    if (apronNode <= 0)
+                        apronNode = ExitPathLeavesCorridor(
+                            node.NodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, lateralToleranceM);
+
+                    // Same exit-bank correction as the main loop. This block builds nearly
+                    // every exit at a marker-rich airport, so fixing one site alone fixes
+                    // nothing (the KDTW lesson) — and here too apronNode feeds both the
+                    // shallow-angle bearing override below and ApronNodeId itself.
+                    if (best2 != null && apronNode > 0)
+                    {
+                        int onOwnBank2 = RewalkCorridorOnExitBank(
+                            node, best2, apronNode, rwyHeadingTrue,
+                            rwy.StartLat, rwy.StartLon, cosH, sinH,
+                            halfWidthFt * 0.3048, lateralToleranceM);
+                        if (onOwnBank2 > 0) apronNode = onOwnBank2;
+                    }
+
+                    // Same targeted apron-bearing override as the main loop: < 20°, with BOTH
+                    // guards the invariant requires together: forward direction only AND
+                    // only-widen (apronAngle > currentAngleFwd).
+                    if (angle2 < 20.0 && apronNode > 0
                         && Nodes.TryGetValue(apronNode, out var apronTaxiNode2))
                     {
                         const double MPD_BRG2 = 111132.0;
@@ -2159,17 +6730,25 @@ public class TaxiGraph
                         double dEc = (apronTaxiNode2.Longitude - node.Longitude) * mPLc;
                         double apronBrg2 = Math.Atan2(dEc, dNc) * 180.0 / Math.PI;
                         if (apronBrg2 < 0) apronBrg2 += 360.0;
-                        if (Math.Abs(NormalizeAngle(apronBrg2 - rwyHeadingTrue)) <= NORMAL_MAX_DEG)
+                        double apronAngle2 = Math.Abs(NormalizeAngle(apronBrg2 - rwyHeadingTrue));
+                        double currentAngleFwd2 = best2Brg != 0.0
+                            ? Math.Abs(NormalizeAngle((best2Brg == 360.0 ? 0.0 : best2Brg) - rwyHeadingTrue))
+                            : -1.0;
+                        if (apronAngle2 <= NORMAL_MAX_DEG && apronAngle2 > currentAngleFwd2)
                             best2Brg = apronBrg2 == 0.0 ? 360.0 : apronBrg2;
                     }
 
-                    double er2 = aFt2 / rwy.Length;
-                    string et2 = er2 > END_RATIO ? "End"
-                        : angle2 <= HIGH_SPEED_MAX_DEG ? "High-speed"
-                        : angle2 <= NORMAL_MAX_DEG ? "Normal"
-                        : "End";
+                    // Same crossing-bank reconcile as the main loop: where a turnoff CROSSES
+                    // the runway, put the NAME and bearing on the bank the handoff actually
+                    // routes to, before the branch is measured.
+                    ReconcileExitSideWithHandoff(node, apronNode, rwyHeadingTrue,
+                        rwy.StartLat, rwy.StartLon, cosH, sinH,
+                        lM2, halfWidthFt * 0.3048,
+                        ref txName2, ref best2Brg, ref angle2);
 
-                    fallbackExits.Add(new LandingExit
+                    string et2 = ClassifyExit(angle2, aFt2, rwy.Length);
+
+                    var candidateFallback = new LandingExit
                     {
                         NodeId = node.NodeId,
                         ApronNodeId = apronNode,
@@ -2181,49 +6760,228 @@ public class TaxiGraph
                         ExitAngleDegrees = angle2,
                         ExitBearingTrue = best2Brg,
                         ExitType = et2,
-                        ExitSide = best2Brg != 0.0
-                            ? (NormalizeAngle((best2Brg == 360.0 ? 0.0 : best2Brg) - rwyHeadingTrue) >= 0 ? "Right" : "Left")
-                            : ""
-                    });
+                        ExitSide = ExitSideFor(best2Brg, rwyHeadingTrue)
+                    };
+                    var refinedFallback = RefineForPlanner(candidateFallback, best2?.ToNodeId, rwy, axis);
+                    CorroborateHighSpeed(refinedFallback, node.NodeId);
+                    if (turnPointOffsetM2 > 0.0 && refinedFallback.NodeId == node.NodeId && refinedFallback.ExitType == "Normal")
+                        refinedFallback.TurnPointOffsetFeet = turnPointOffsetM2 / 0.3048;
+                    // Same list-side resolution as the main loop.
+                    if (refinedFallback.NodeId == node.NodeId)
+                        refinedFallback.ExitSide = ResolveExitSide(refinedFallback.ExitBearingTrue, rwyHeadingTrue,
+                            refinedFallback.ApronNodeId, rwy.StartLat, rwy.StartLon, cosH, sinH, halfWidthFt * 0.3048,
+                            node, refinedFallback.TaxiwayName, lateralToleranceM);
+                    found.Add(refinedFallback);
                 }
+                return found;
+            }
 
+            var fallbackExits = GeometricExits();
+            // The 50 ft window over the geometric exits alone. OrderBy is a stable sort, so `fallbackExits` keeps
+            // the order the hsOnlyEnds merge below has always sorted from.
+            var fallbackWindowed = DedupWithinWindow(fallbackExits.OrderBy(e => e.DistanceFromThresholdFeet).ToList());
+            bool mergeFallback = hsOnlyEnds || hsYieldedNothing;
+            if (mergeFallback)
+            {
                 if (fallbackExits.Count > 0)
                 {
                     var merged = new List<LandingExit>(deduped.Count + fallbackExits.Count);
                     merged.AddRange(deduped);
                     merged.AddRange(fallbackExits);
                     merged.Sort((a, b) => a.DistanceFromThresholdFeet.CompareTo(b.DistanceFromThresholdFeet));
-                    deduped = new List<LandingExit>(merged.Count);
-                    foreach (var e in merged)
-                    {
-                        bool wasMerged = false;
-                        for (int i = deduped.Count - 1; i >= 0; i--)
-                        {
-                            var d = deduped[i];
-                            if (Math.Abs(d.DistanceFromThresholdFeet - e.DistanceFromThresholdFeet) > DEDUP_WINDOW_FT) break;
-                            if (string.Equals(d.TaxiwayName, e.TaxiwayName, StringComparison.OrdinalIgnoreCase))
-                            {
-                                if (e.ExitAngleDegrees < d.ExitAngleDegrees) deduped[i] = e;
-                                wasMerged = true; break;
-                            }
-                        }
-                        if (!wasMerged) deduped.Add(e);
-                    }
+                    deduped = DedupWithinWindow(merged);
+                }
+            }
+            else
+            {
+                // The markers gave a usable exit, so their list stands exactly as built - but a turnoff they
+                // never drew is still a way off the runway. KJFK 13L: the strip's one hold-short node, on V,
+                // turns off forward for 13L, so the planner offered V alone, while 31R (which reads that node
+                // as a turnaround and never enters hold-short mode) offered thirteen exits on the same pavement.
+                //
+                // The marked list is settled first, its own coverage gap fill included, so it is exactly the list
+                // the markers gave before: nothing added below covers one of its exits away or stands in for one.
+                //
+                // The geometric exits go through the rules the same pass gets on a runway without markers - the
+                // 50 ft window, one exit per name with forward exits first, then the coverage gap fill - and are
+                // ADDED, never merged. A windowed geometric exit is already listed when an exit of its own taxiway
+                // name stands within EXIT_COVERAGE_GAP_FT: the marked node and the centreline junction of one
+                // crossing sit apart along the runway (13L V: 352 ft, on opposite banks), a curved rapid exit's arc
+                // nodes further still - except that a turnaround, or an exit read forward only from its own node,
+                // never stands for a forward exit of its name (the gap fill's own rule, below), and an unnamed exit
+                // never stands for another (as in every name pass here). Merging them instead (as hsOnlyEnds does,
+                // strict per-name pass and all) moved 393 exits and dropped 89 across the fs2024 database.
+                if (FillCoverageGaps(deduped, gapFillPool))
+                    deduped.Sort((a, b) => a.DistanceFromThresholdFeet.CompareTo(b.DistanceFromThresholdFeet));
+                var unmarked = fallbackWindowed.FindAll(e => !deduped.Exists(d =>
+                    !string.IsNullOrEmpty(e.TaxiwayName)
+                    && string.Equals(d.TaxiwayName, e.TaxiwayName, StringComparison.OrdinalIgnoreCase)
+                    && Math.Abs(d.DistanceFromThresholdFeet - e.DistanceFromThresholdFeet) <= EXIT_COVERAGE_GAP_FT
+                    && !(FillsAGapOnly(d) && !FillsAGapOnly(e))));
+                var unmarkedKept = KeepOnePerNameForwardFirst(unmarked);
+                if (unmarkedKept.Count > 0)
+                {
+                    deduped.AddRange(unmarked.Where(unmarkedKept.Contains));
+                    deduped.Sort((a, b) => a.DistanceFromThresholdFeet.CompareTo(b.DistanceFromThresholdFeet));
                 }
             }
 
-            // Name dedup: keep only first (threshold-nearest) occurrence per taxiway name.
-            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var dedupedFallback = new List<LandingExit>(deduped.Count);
-            foreach (var e in deduped)
-            {
-                if (string.IsNullOrEmpty(e.TaxiwayName)) { dedupedFallback.Add(e); continue; }
-                if (seenNames.Add(e.TaxiwayName)) dedupedFallback.Add(e);
-            }
-            return dedupedFallback;
+            // These arrived after the pool snapshot above, so add them or a runway WITH hold-short markers could
+            // never gap-fill from its Normal-junction exits: KBNA 13 (11031 ft of runway whose last listed exit was
+            // at 4988 ft), or a second turnoff of the one name a scenery gives a whole side. The added turnoffs
+            // come windowed, as a runway without markers snapshots its pool after the 50 ft window, so an arm that
+            // lost the window never comes back through the fill. The merge keeps the unwindowed exits it has
+            // always offered: windowing them too changed 7 runway directions' existing lists in fs2024 and 10 in
+            // fs2020 (KFSD 03 and ZKCH 10 lost their end exit). Duplicates against already-kept entries are
+            // harmless - the coverage test measures zero distance to itself.
+            gapFillPool.AddRange(mergeFallback ? fallbackExits : fallbackWindowed);
+            gapFillPool.Sort((a, b) => a.DistanceFromThresholdFeet.CompareTo(b.DistanceFromThresholdFeet));
         }
 
-        return deduped;
+        // Name dedup on the FALLBACK PATH ONLY, then a COVERAGE GAP FILL in every path.
+        // `deduped` is sorted by distance from the threshold at this point (every branch
+        // that builds it sorts).
+        //
+        // The strict pass is scoped to `onFallbackPath` because that is the scope it has
+        // always had. A runway with usable hold-short markers keeps both junctions of a
+        // same-named taxiway that meets it twice — the case the High-speed dedup comment
+        // above calls "a legitimate pair" (EGLL 09R: S5W at 5659 and 6605 ft, N5E at 5860
+        // and 6771). Running the pass there instead drops the FARTHER junction, and the
+        // coverage fill cannot restore it: it re-admits only exits with no survivor within
+        // EXIT_COVERAGE_GAP_FT, and those pairs sit 900-950 ft apart. RetargetLandingExit's
+        // downfield rescan would then skip past a real turnoff to a farther one.
+        //
+        // This used to keep only the FIRST occurrence of each taxiway name, unconditionally.
+        // That is right when a scenery names its connectors individually (one turnoff = one
+        // name, and the repeats are extra nodes along one RET arc), and it is what stops a
+        // curved RET modelled as eight nodes becoming eight list entries. But it silently
+        // assumes "one name = one turnoff", and some sceneries give an entire side of a
+        // runway a single name.
+        //
+        // Motivating defect (reported 2026-08-08): KBNA 20L offered ONE exit. That scenery
+        // has just eight taxiway names at the whole airport (A-H, 1486 of 2437 segments
+        // unnamed, zero numbered connectors), and every segment touching 02R/20L is named
+        // "G". The runway's five real turnoffs — measured at ~1813, 3719, 4497, 6155 and
+        // 7812 ft — therefore collapsed to one, and the survivor was the threshold-nearest
+        // node, which is a backward-peeling arc (angle forced to RolloutExitGate.TurnaroundExitAngleDeg) at
+        // 1467 ft: a 130-degree turn 1500 ft down a 7991 ft runway. 02R is the mirror image.
+        // Airports whose connectors carry distinct names (KBOS, EGLL, KJFK, EIDW ...) never
+        // showed the bug because their name dedup only ever collapsed arcs.
+        //
+        // The strict pass below is therefore KEPT EXACTLY AS IT WAS, and a second pass only
+        // fills GAPS: an exit either name dedup dropped is re-admitted when — and only when —
+        // no surviving exit lies within EXIT_COVERAGE_GAP_FT of it, so it is the sole option
+        // for that stretch of runway. A dropped exit that merely duplicates coverage the
+        // pilot already has stays dropped, which is what keeps well-named airports untouched.
+        //
+        // Why COVERAGE and not "split same-name runs by distance": splitting runs was tried
+        // first and is far too broad — measured across 266 runway directions in 39 airports
+        // it changed 145 of them and added 212 rows, because a link taxiway commonly meets a
+        // runway at two junctions a few hundred feet apart (EGLL 09R: S5W at 5659 and 6605
+        // ft, N5E at 5860 and 6771, S4E at 7707 and 8140). Those are real junctions but not
+        // turnoffs the pilot was missing, and a list with three duplicated names is worse
+        // than the list they have today. Coverage is the property that separates the two
+        // populations cleanly — see EXIT_COVERAGE_GAP_FT for the measurement.
+        //
+        // Deliberately NOT done here: swapping a run's representative for a later
+        // forward-peeling one. It reads like an improvement (it would replace KBNA's
+        // backward 130-degree entries with the forward High-speed nodes behind them) but it
+        // re-typed 118 exits from End to High-speed across the same sweep, and ExitType
+        // drives TryEarlyExitHandoff, which fires for High-speed exits ONLY and has its own
+        // hard-won invariant (the EGNX miss). Adding rows is safe; re-typing existing ones
+        // in bulk is not.
+        //
+        // A TURNAROUND (an exit turning more than RolloutExitGate.MaxUsableExitTurnDeg - a recorded
+        // 130-degree backward arm) never takes a name's place INSTEAD OF a forward exit of that name,
+        // and never counts as coverage FOR one: a name's forward exits are considered before its
+        // turnarounds. Worldwide sweep, 2026-09-26: ULWB 33 and YCAB 30 lost their only forward exit
+        // to their own Y's recorded turnaround, nearer to the threshold by a few dozen feet. Every
+        // other rule here is unchanged, and the list keeps its nearest-first order.
+        //
+        // An exit read forward only from its own node (LandingExit.ForwardOnlyFromItsNode) is treated the same
+        // way: it fills a gap, never takes a name's place from, or covers, an exit read forward from its
+        // junction (KLIT 22R: D's crossing near the threshold displaced the D rapid exit 4,600 ft on).
+        static bool IsTurnaroundExit(LandingExit x) => x.ExitAngleDegrees > RolloutExitGate.MaxUsableExitTurnDeg;
+        static bool FillsAGapOnly(LandingExit x) => IsTurnaroundExit(x) || x.ForwardOnlyFromItsNode;
+        // One exit per name, a name's forward exits considered before its gap fillers; unnamed exits all stay. The
+        // strict pass here and the turnoffs hold-short mode adds (EXIT-19) share it.
+        static HashSet<LandingExit> KeepOnePerNameForwardFirst(List<LandingExit> list)
+        {
+            var keptByName = new HashSet<LandingExit>(ReferenceEqualityComparer.Instance);
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (bool gapFillers in new[] { false, true })
+            {
+                foreach (var e in list)
+                {
+                    if (FillsAGapOnly(e) != gapFillers) continue;
+                    if (string.IsNullOrEmpty(e.TaxiwayName) || seenNames.Add(e.TaxiwayName)) keptByName.Add(e);
+                }
+            }
+            return keptByName;
+        }
+        var dedupedFinal = new List<LandingExit>(deduped.Count);
+        if (onFallbackPath)
+        {
+            var keptByName = KeepOnePerNameForwardFirst(deduped);
+            foreach (var e in deduped)
+                if (keptByName.Contains(e)) dedupedFinal.Add(e);
+        }
+        else
+        {
+            dedupedFinal.AddRange(deduped);
+        }
+
+        // Coverage gap fill. `gapFillPool` is distance-sorted (it was snapshotted from a
+        // sorted list), so candidates are offered threshold-first and one that is admitted
+        // becomes coverage for the next — an arc of many nodes still contributes at most one
+        // entry per EXIT_COVERAGE_GAP_FT. Reference identity is the right "already kept"
+        // test: every LandingExit instance flows through the pipeline by reference, never
+        // copied. Appends to `kept`; true when it added any.
+        static bool FillCoverageGaps(List<LandingExit> kept, List<LandingExit> pool)
+        {
+            bool addedAny = false;
+            foreach (var e in pool)
+            {
+                bool covered = false;
+                foreach (var k in kept)
+                {
+                    if (ReferenceEquals(k, e)) { covered = true; break; }
+                    if (Math.Abs(k.DistanceFromThresholdFeet - e.DistanceFromThresholdFeet) > EXIT_COVERAGE_GAP_FT)
+                        continue;
+                    // A turnaround, or an exit read forward only from its own node, is never coverage for an
+                    // exit read forward from its junction of its own name (see above).
+                    if (FillsAGapOnly(k) && !FillsAGapOnly(e)
+                        && !string.IsNullOrEmpty(e.TaxiwayName)
+                        && string.Equals(k.TaxiwayName, e.TaxiwayName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    covered = true; break;
+                }
+                if (covered) continue;
+                kept.Add(e);
+                addedAny = true;
+            }
+            return addedAny;
+        }
+        bool addedAny = FillCoverageGaps(dedupedFinal, gapFillPool);
+
+        // Callers (LandingExitPlanner's downfield scan, the planner form's default
+        // selection, RetargetLandingExit) all rely on nearest-first ordering.
+        if (addedAny)
+            dedupedFinal.Sort((a, b) => a.DistanceFromThresholdFeet.CompareTo(b.DistanceFromThresholdFeet));
+
+        return dedupedFinal;
+    }
+
+
+    // The 50 ft window's choice between two exits of one name: the smaller angle, except that an exit read
+    // forward only from its own node never replaces one read forward from its junction
+    // (LandingExit.ForwardOnlyFromItsNode) - a turnaround it may still replace.
+    private static bool ReplacesInDedupWindow(LandingExit e, LandingExit kept)
+    {
+        bool bothForward = e.ExitAngleDegrees <= RolloutExitGate.MaxUsableExitTurnDeg
+            && kept.ExitAngleDegrees <= RolloutExitGate.MaxUsableExitTurnDeg;
+        if (bothForward && e.ForwardOnlyFromItsNode != kept.ForwardOnlyFromItsNode) return !e.ForwardOnlyFromItsNode;
+        return e.ExitAngleDegrees < kept.ExitAngleDegrees;
     }
 
     private static bool HasLetterAndDigit(string s)
@@ -2237,6 +6995,43 @@ public class TaxiGraph
         }
         return false;
     }
+
+    /// <summary>
+    /// The steepest a taxiway's edges may run to the runway axis for it to be a taxiway running ALONG the
+    /// runway. The parallels the rescue scan offered as exits run within 3.1 degrees of the axis (S36 15 0.2,
+    /// YGAW 13 0.2-0.5, NC12 0.2-2.5, 83FL 30 3.1: the whole-database sweep, 2026-09-26).
+    /// </summary>
+    internal const double ParallelTaxiwayMaxDeg = 5.0;
+
+    /// <summary>
+    /// How far an edge must turn off the runway axis to leave the runway strip rather than run along it: the
+    /// exit producers' fallback threshold (a named edge this steep is a way off), and the angle within which
+    /// <see cref="ExitBranch.RunsAlongRunway"/> calls an edge part of a line along the runway.
+    /// </summary>
+    internal const double MinFallbackExitAngleDeg = 20.0;
+
+    /// <summary>
+    /// Can <c>FindDownfieldExits</c> offer a node as an exit? Always when it lies on the runway's pavement
+    /// (<paramref name="halfWidthMetres"/>). Beyond the pavement only at a way off the runway - a rapid exit's
+    /// arc, a connector's hold line, a taxiway stopped short of the runway edge, a fork - and never ON a
+    /// taxiway running beside the runway, which the corridor walk follows to its next connector and so calls
+    /// an exit: turn-now would point the pilot across the grass at it. Two shapes are such a taxiway:
+    /// <list type="bullet">
+    /// <item>every edge within <see cref="ParallelTaxiwayMaxDeg"/> of the axis
+    /// (<paramref name="steepestEdgeOffAxisDeg"/>) - a straight parallel, or its end (S36 15: parallel A 20.9 m
+    /// out on a 40 ft runway, offered as a 0.2-degree "high-speed exit");</item>
+    /// <item>a taxiway that does not lead onto the runway (<paramref name="leadsOntoRunway"/>,
+    /// <see cref="ExitBranch.LeadsOntoRunway"/>): its own pavement stops short of the runway's, and walked
+    /// inward it stops on a line running along the runway -
+    /// a parallel that bends more than 5 degrees (NC12 26, A 20.0 m out: 2.5 one way, 6.7 the other), or one a
+    /// loop to the apron leaves steeply (SC41 33, B 27.7 m out, the loop at 48 degrees, and the loop's own
+    /// nodes). A rapid exit's arc runs along the runway too, but walked inward it gets onto it, and stays.</item>
+    /// </list>
+    /// </summary>
+    internal static bool IsRescueCandidateSite(double absLateralMetres, double halfWidthMetres,
+        double steepestEdgeOffAxisDeg, bool leadsOntoRunway)
+        => absLateralMetres <= halfWidthMetres
+           || (steepestEdgeOffAxisDeg > ParallelTaxiwayMaxDeg && leadsOntoRunway);
 
     // BFS from startNodeId. Returns the node ID of the first reachable node that lies
     // outside the runway lateral corridor (|lateral| > lateralToleranceM) within
@@ -2260,9 +7055,80 @@ public class TaxiGraph
         double rwyStartLat, double rwyStartLon,
         double cosH, double sinH,
         double lateralToleranceM)
+        => ExitPathLeavesCorridor(startNodeId, rwyStartLat, rwyStartLon, cosH, sinH,
+            lateralToleranceM, double.NaN, out _);
+
+
+    /// <summary>
+    /// As above, but also reports how far off the runway axis the walked path actually
+    /// turns (<paramref name="maxOffAxisDeg"/>, folded to 0-90) before it clears the
+    /// corridor — the measurement <see cref="GetLandingExits"/> uses to check a
+    /// "High-speed" verdict that came from the junction's FIRST edge alone.
+    /// Pass <c>double.NaN</c> for <paramref name="rwyHeadingTrue"/> to skip the angle
+    /// work; <paramref name="maxOffAxisDeg"/> is then -1.
+    ///
+    /// The node this returns is IDENTICAL to the parameterless overload's — the walk
+    /// order, the queue and every exit condition are untouched; only per-edge bookkeeping
+    /// was added, so all existing callers (ApronNodeId, the implicit-exit gate) are
+    /// unaffected.
+    /// </summary>
+    private int ExitPathLeavesCorridor(
+        int startNodeId,
+        double rwyStartLat, double rwyStartLon,
+        double cosH, double sinH,
+        double lateralToleranceM,
+        double rwyHeadingTrue,
+        out double maxOffAxisDeg)
+        => ExitPathLeavesCorridor(startNodeId, rwyStartLat, rwyStartLon, cosH, sinH,
+            lateralToleranceM, rwyHeadingTrue, out maxOffAxisDeg, out _);
+
+    /// <summary>
+    /// As above, and also hands back the chain the walk took, junction first, as
+    /// (node, bearing of the edge INTO that node) — the junction itself carries NaN.
+    /// Null when the walk never leaves the corridor or no heading was supplied.
+    /// Same walk, same returned node.
+    /// </summary>
+    private int ExitPathLeavesCorridor(
+        int startNodeId,
+        double rwyStartLat, double rwyStartLon,
+        double cosH, double sinH,
+        double lateralToleranceM,
+        double rwyHeadingTrue,
+        out double maxOffAxisDeg,
+        out List<(int nodeId, double bearingIn)>? chain)
+        => ExitPathLeavesCorridor(startNodeId, rwyStartLat, rwyStartLon, cosH, sinH,
+            lateralToleranceM, rwyHeadingTrue, -1, out maxOffAxisDeg, out chain);
+
+    /// <summary>
+    /// As above, but with <paramref name="seedNodeId"/> the walk starts down ONE named
+    /// branch instead of every named edge at the junction. Everything else — the queue,
+    /// the order, the budget, the exit test — is identical, and <c>visited</c> already
+    /// holds the junction, so the walk structurally cannot double back through it onto
+    /// another branch.
+    ///
+    /// This exists for the junction where two DIFFERENT taxiways leave the runway at one
+    /// point, one on each bank (YPPH 21: A9 to the right and C9 to the left off nodes a
+    /// single edge apart). Seeded from every edge, the walk returns whichever branch
+    /// clears the corridor in fewer hops — a coin flip that then decides ApronNodeId, the
+    /// shallow-angle bearing override, and through them the route, the spoken side and
+    /// the tone. Pass -1 for the original all-branch behaviour.
+    /// </summary>
+    private int ExitPathLeavesCorridor(
+        int startNodeId,
+        double rwyStartLat, double rwyStartLon,
+        double cosH, double sinH,
+        double lateralToleranceM,
+        double rwyHeadingTrue,
+        int seedNodeId,
+        out double maxOffAxisDeg,
+        out List<(int nodeId, double bearingIn)>? chain)
     {
-        const double MAX_RET_SEARCH_M = 600.0;
+        const double MAX_RET_SEARCH_M = ExitBranch.OutwardMaxMetres;
         const double METERS_PER_DEG_LAT = 111132.0;
+
+        maxOffAxisDeg = -1.0;
+        chain = null;
+        bool wantAngle = !double.IsNaN(rwyHeadingTrue);
 
         if (!Adjacency.TryGetValue(startNodeId, out var initEdges)) return -1;
 
@@ -2275,11 +7141,25 @@ public class TaxiGraph
         var visited = new HashSet<int> { startNodeId };
         var queue = new Queue<(int nodeId, double dist)>();
 
-        // Seed from named edges only.
+        // Predecessor edge per node, so the chain the walk actually took can be
+        // re-traced once it leaves the corridor. First writer wins, mirroring the
+        // `visited` dedup — the queue and its ordering are unchanged.
+        var cameFrom = wantAngle ? new Dictionary<int, (int from, double bearing)>() : null;
+        void Remember(int from, TaxiEdge e)
+        {
+            if (cameFrom != null && !cameFrom.ContainsKey(e.ToNodeId))
+                cameFrom[e.ToNodeId] = (from, e.BearingDegrees);
+        }
+
+        // Seed from named edges only — or, when a seed was named, from that branch alone.
         foreach (var e in initEdges)
         {
+            if (seedNodeId > 0 && e.ToNodeId != seedNodeId) continue;
             if (!string.IsNullOrEmpty(e.TaxiwayName))
+            {
                 queue.Enqueue((e.ToNodeId, e.DistanceMeters));
+                Remember(startNodeId, e);
+            }
         }
 
         while (queue.Count > 0)
@@ -2296,19 +7176,49 @@ public class TaxiGraph
             double dE = (node.Longitude - rwyStartLon) * mPerLon;
             double lateralM = Math.Abs(dE * cosH - dN * sinH);
 
-            if (lateralM > lateralToleranceM) return nodeId;
+            if (lateralM > lateralToleranceM)
+            {
+                if (cameFrom != null)
+                {
+                    // Widest off-axis bearing on the chain from the junction to here.
+                    // Folded to 0-90 so a segment running back down the runway counts
+                    // as parallel, exactly like the first-edge angle it is compared to.
+                    double widest = 0.0;
+                    int cur = nodeId;
+                    var guard = new HashSet<int>();
+                    var reversed = new List<(int nodeId, double bearingIn)>();
+                    while (cameFrom.TryGetValue(cur, out var step) && guard.Add(cur))
+                    {
+                        double rel = Math.Abs(NormalizeAngle(step.bearing - rwyHeadingTrue));
+                        double off = rel > 90.0 ? 180.0 - rel : rel;
+                        if (off > widest) widest = off;
+                        reversed.Add((cur, step.bearing));
+                        cur = step.from;
+                    }
+                    maxOffAxisDeg = widest;
+                    reversed.Add((cur, double.NaN));
+                    reversed.Reverse();
+                    chain = reversed;
+                }
+                return nodeId;
+            }
 
             if (dist >= MAX_RET_SEARCH_M) continue;
 
             if (!Adjacency.TryGetValue(nodeId, out var edges)) continue;
             foreach (var e in edges)
             {
+                // A fabricated stand bridge is never part of a landing-exit corridor.
+                if (IsStandBridge(e)) continue;
                 // Follow all edges (named and unnamed) so unnamed connector segments
                 // between the named portions of a RET don't break the chain.
                 if (visited.Contains(e.ToNodeId)) continue;
                 double newDist = dist + e.DistanceMeters;
                 if (newDist <= MAX_RET_SEARCH_M)
+                {
                     queue.Enqueue((e.ToNodeId, newDist));
+                    Remember(nodeId, e);
+                }
             }
         }
         return -1;

@@ -1,4 +1,4 @@
-namespace MSFSBlindAssist
+﻿namespace MSFSBlindAssist
 {
     partial class MainForm
     {
@@ -6,14 +6,10 @@ namespace MSFSBlindAssist
         private System.Windows.Forms.MenuStrip menuStrip = null!;
         private System.Windows.Forms.ToolStripMenuItem fileMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem databaseSettingsMenuItem = null!;
-        private System.Windows.Forms.ToolStripMenuItem announcementSettingsMenuItem = null!;
-        private System.Windows.Forms.ToolStripMenuItem geoNamesSettingsMenuItem = null!;
-        private System.Windows.Forms.ToolStripMenuItem simbriefSettingsMenuItem = null!;
-        private System.Windows.Forms.ToolStripMenuItem geminiSettingsMenuItem = null!;
-        private System.Windows.Forms.ToolStripMenuItem handFlyOptionsMenuItem = null!;
-        private System.Windows.Forms.ToolStripMenuItem taxiGuidanceOptionsMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem settingsMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem fmcSettingsMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem hotkeyListMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem simPerformanceMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem suspendHotkeysMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem updateApplicationMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem aboutMenuItem = null!;
@@ -21,9 +17,19 @@ namespace MSFSBlindAssist
         private System.Windows.Forms.ToolStripMenuItem flyByWireA320MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem fenixA320MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem pmdg777MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem firstOfficerMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem flyByWireA380MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem pmdg737MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem horizonSim787MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem headwindA330MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem ifly737MaxMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem tfdiMd11MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem bbs757MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem extrasMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem volantaMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem helpMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem userGuideMenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem projectWebsiteMenuItem = null!;
         private System.Windows.Forms.ListBox sectionsListBox = null!;
         private System.Windows.Forms.ListBox panelsListBox = null!;
         private System.Windows.Forms.Panel controlsContainer = null!;
@@ -43,14 +49,10 @@ namespace MSFSBlindAssist
             this.menuStrip = new System.Windows.Forms.MenuStrip();
             this.fileMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.databaseSettingsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.announcementSettingsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.geoNamesSettingsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.simbriefSettingsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.geminiSettingsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.handFlyOptionsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.taxiGuidanceOptionsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.settingsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.fmcSettingsMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.hotkeyListMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.simPerformanceMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.suspendHotkeysMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.updateApplicationMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.aboutMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -58,9 +60,19 @@ namespace MSFSBlindAssist
             this.flyByWireA320MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.fenixA320MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pmdg777MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.firstOfficerMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.flyByWireA380MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pmdg737MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.horizonSim787MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.headwindA330MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.ifly737MaxMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.tfdiMd11MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.bbs757MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.extrasMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.volantaMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.helpMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.userGuideMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.projectWebsiteMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.sectionsListBox = new System.Windows.Forms.ListBox();
             this.panelsListBox = new System.Windows.Forms.ListBox();
             this.controlsContainer = new System.Windows.Forms.Panel();
@@ -74,7 +86,9 @@ namespace MSFSBlindAssist
             this.menuStrip.AccessibleDescription = "Main application menu";
             this.menuStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.fileMenuItem,
-            this.aircraftMenuItem});
+            this.aircraftMenuItem,
+            this.extrasMenuItem,
+            this.helpMenuItem});
             this.menuStrip.Location = new System.Drawing.Point(0, 0);
             this.menuStrip.Name = "menuStrip";
             this.menuStrip.Size = new System.Drawing.Size(870, 28);
@@ -86,83 +100,34 @@ namespace MSFSBlindAssist
             this.fileMenuItem.AccessibleName = "File menu";
             this.fileMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.databaseSettingsMenuItem,
-            this.announcementSettingsMenuItem,
-            this.geoNamesSettingsMenuItem,
-            this.simbriefSettingsMenuItem,
-            this.geminiSettingsMenuItem,
-            this.handFlyOptionsMenuItem,
-            this.taxiGuidanceOptionsMenuItem,
+            this.settingsMenuItem,
+            this.firstOfficerMenuItem,
             this.fmcSettingsMenuItem,
             this.hotkeyListMenuItem,
+            this.simPerformanceMenuItem,
             this.suspendHotkeysMenuItem,
-            this.updateApplicationMenuItem,
-            this.aboutMenuItem});
+            this.updateApplicationMenuItem});
             this.fileMenuItem.Name = "fileMenuItem";
             this.fileMenuItem.Size = new System.Drawing.Size(46, 24);
             this.fileMenuItem.Text = "&File";
             //
             // databaseSettingsMenuItem
             //
-            this.databaseSettingsMenuItem.AccessibleName = "Database Settings";
+            this.databaseSettingsMenuItem.AccessibleName = "Nav Database";
             this.databaseSettingsMenuItem.AccessibleDescription = "Configure database provider and paths for FS2020 and FS2024";
             this.databaseSettingsMenuItem.Name = "databaseSettingsMenuItem";
             this.databaseSettingsMenuItem.Size = new System.Drawing.Size(220, 26);
-            this.databaseSettingsMenuItem.Text = "&Database Settings";
+            this.databaseSettingsMenuItem.Text = "&Nav Database…";
             this.databaseSettingsMenuItem.Click += new System.EventHandler(this.DatabaseSettingsMenuItem_Click);
             //
-            // announcementSettingsMenuItem
+            // settingsMenuItem
             //
-            this.announcementSettingsMenuItem.AccessibleName = "Announcement Settings";
-            this.announcementSettingsMenuItem.AccessibleDescription = "Configure how aircraft state announcements are delivered";
-            this.announcementSettingsMenuItem.Name = "announcementSettingsMenuItem";
-            this.announcementSettingsMenuItem.Size = new System.Drawing.Size(220, 26);
-            this.announcementSettingsMenuItem.Text = "&Announcement Settings";
-            this.announcementSettingsMenuItem.Click += new System.EventHandler(this.AnnouncementSettingsMenuItem_Click);
-            //
-            // geoNamesSettingsMenuItem
-            //
-            this.geoNamesSettingsMenuItem.AccessibleName = "GeoNames Settings";
-            this.geoNamesSettingsMenuItem.AccessibleDescription = "Configure GeoNames API key and location information settings";
-            this.geoNamesSettingsMenuItem.Name = "geoNamesSettingsMenuItem";
-            this.geoNamesSettingsMenuItem.Size = new System.Drawing.Size(220, 26);
-            this.geoNamesSettingsMenuItem.Text = "Define &GeoNames API Key";
-            this.geoNamesSettingsMenuItem.Click += new System.EventHandler(this.GeoNamesSettingsMenuItem_Click);
-            //
-            // simbriefSettingsMenuItem
-            //
-            this.simbriefSettingsMenuItem.AccessibleName = "SimBrief Settings";
-            this.simbriefSettingsMenuItem.AccessibleDescription = "Configure SimBrief username for flight plan integration";
-            this.simbriefSettingsMenuItem.Name = "simbriefSettingsMenuItem";
-            this.simbriefSettingsMenuItem.Size = new System.Drawing.Size(220, 26);
-            this.simbriefSettingsMenuItem.Text = "Define &SimBrief Username";
-            this.simbriefSettingsMenuItem.Click += new System.EventHandler(this.SimBriefSettingsMenuItem_Click);
-            //
-            // geminiSettingsMenuItem
-            //
-            this.geminiSettingsMenuItem.AccessibleName = "Gemini Settings";
-            this.geminiSettingsMenuItem.AccessibleDescription = "Configure Google Gemini settings";
-            this.geminiSettingsMenuItem.Name = "geminiSettingsMenuItem";
-            this.geminiSettingsMenuItem.Size = new System.Drawing.Size(280, 26);
-            this.geminiSettingsMenuItem.Text = "Ge&mini Settings";
-            this.geminiSettingsMenuItem.Click += new System.EventHandler(this.GeminiSettingsMenuItem_Click);
-            //
-            // handFlyOptionsMenuItem
-            //
-            this.handFlyOptionsMenuItem.AccessibleName = "Hand Fly Options";
-            this.handFlyOptionsMenuItem.AccessibleDescription = "Configure hand fly mode audio tones and announcement settings";
-            this.handFlyOptionsMenuItem.Name = "handFlyOptionsMenuItem";
-            this.handFlyOptionsMenuItem.Size = new System.Drawing.Size(280, 26);
-            this.handFlyOptionsMenuItem.Text = "&Hand Fly Options";
-            this.handFlyOptionsMenuItem.Click += new System.EventHandler(this.HandFlyOptionsMenuItem_Click);
-            //
-            // taxiGuidanceOptionsMenuItem
-            //
-            this.taxiGuidanceOptionsMenuItem.AccessibleName = "Taxi Guidance Options";
-            this.taxiGuidanceOptionsMenuItem.AccessibleDescription = "Configure taxi guidance steering tone settings";
-            this.taxiGuidanceOptionsMenuItem.Name = "taxiGuidanceOptionsMenuItem";
-            this.taxiGuidanceOptionsMenuItem.Size = new System.Drawing.Size(280, 26);
-            this.taxiGuidanceOptionsMenuItem.Text = "&Taxi Guidance Options";
-            this.taxiGuidanceOptionsMenuItem.Click += new System.EventHandler(this.TaxiGuidanceOptionsMenuItem_Click);
+            this.settingsMenuItem.AccessibleName = "Settings";
+            this.settingsMenuItem.AccessibleDescription = "Open the unified Settings dialog";
+            this.settingsMenuItem.Name = "settingsMenuItem";
+            this.settingsMenuItem.Size = new System.Drawing.Size(220, 26);
+            this.settingsMenuItem.Text = "&Settings…";
+            this.settingsMenuItem.Click += new System.EventHandler(this.SettingsMenuItem_Click);
             //
             // fmcSettingsMenuItem
             //
@@ -186,6 +151,15 @@ namespace MSFSBlindAssist
             this.hotkeyListMenuItem.Size = new System.Drawing.Size(220, 26);
             this.hotkeyListMenuItem.Text = "&Hotkey List";
             this.hotkeyListMenuItem.Click += new System.EventHandler(this.HotkeyListMenuItem_Click);
+            //
+            // simPerformanceMenuItem
+            //
+            this.simPerformanceMenuItem.AccessibleName = "Sim Performance";
+            this.simPerformanceMenuItem.AccessibleDescription = "Show the simulator's frame rate and its CPU, memory and GPU usage, like the in-sim developer FPS display";
+            this.simPerformanceMenuItem.Name = "simPerformanceMenuItem";
+            this.simPerformanceMenuItem.Size = new System.Drawing.Size(220, 26);
+            this.simPerformanceMenuItem.Text = "Sim &Performance";
+            this.simPerformanceMenuItem.Click += new System.EventHandler(this.SimPerformanceMenuItem_Click);
             //
             // suspendHotkeysMenuItem
             //
@@ -215,6 +189,18 @@ namespace MSFSBlindAssist
             this.aboutMenuItem.Text = "&About";
             this.aboutMenuItem.Click += new System.EventHandler(this.AboutMenuItem_Click);
             //
+            // firstOfficerMenuItem
+            //
+            // Shown only for an aircraft with a First Officer; MainForm.UpdateAircraftSpecificMenuItems()
+            // sets Visible and the AccessibleName ("Fenix A320 First Officer" ...) from
+            // FirstOfficerWindows.NameFor on every aircraft change (FO-24).
+            this.firstOfficerMenuItem.AccessibleName = "First Officer";
+            this.firstOfficerMenuItem.AccessibleDescription = "Open the First Officer checklists and flows window";
+            this.firstOfficerMenuItem.Name = "firstOfficerMenuItem";
+            this.firstOfficerMenuItem.Size = new System.Drawing.Size(280, 26);
+            this.firstOfficerMenuItem.Text = "&First Officer";
+            this.firstOfficerMenuItem.Click += new System.EventHandler(this.FirstOfficerMenuItem_Click);
+            //
             // aircraftMenuItem
             //
             this.aircraftMenuItem.AccessibleName = "Aircraft menu";
@@ -222,10 +208,14 @@ namespace MSFSBlindAssist
             this.aircraftMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.flyByWireA320MenuItem,
             this.flyByWireA380MenuItem,
+            this.headwindA330MenuItem,
             this.fenixA320MenuItem,
             this.pmdg737MenuItem,
             this.pmdg777MenuItem,
-            this.horizonSim787MenuItem});
+            this.horizonSim787MenuItem,
+            this.ifly737MaxMenuItem,
+            this.tfdiMd11MenuItem,
+            this.bbs757MenuItem});
             this.aircraftMenuItem.Name = "aircraftMenuItem";
             this.aircraftMenuItem.Size = new System.Drawing.Size(75, 24);
             this.aircraftMenuItem.Text = "&Aircraft";
@@ -289,6 +279,95 @@ namespace MSFSBlindAssist
             this.horizonSim787MenuItem.Text = "HorizonSim Boeing &787-9";
             this.horizonSim787MenuItem.Checked = false;
             this.horizonSim787MenuItem.Click += new System.EventHandler(this.HorizonSim787MenuItem_Click);
+            //
+            // headwindA330MenuItem
+            //
+            this.headwindA330MenuItem.AccessibleName = "Headwind Airbus A330-900neo";
+            this.headwindA330MenuItem.AccessibleDescription = "Switch to Headwind Airbus A330-900neo";
+            this.headwindA330MenuItem.Name = "headwindA330MenuItem";
+            this.headwindA330MenuItem.Size = new System.Drawing.Size(240, 26);
+            this.headwindA330MenuItem.Text = "&Headwind Airbus A330-900neo";
+            this.headwindA330MenuItem.Checked = false;
+            this.headwindA330MenuItem.Click += new System.EventHandler(this.HeadwindA330MenuItem_Click);
+            //
+            // ifly737MaxMenuItem
+            //
+            this.ifly737MaxMenuItem.AccessibleName = "iFly Boeing 737 MAX8";
+            this.ifly737MaxMenuItem.AccessibleDescription = "Switch to the iFly Boeing 737 MAX8";
+            this.ifly737MaxMenuItem.Name = "ifly737MaxMenuItem";
+            this.ifly737MaxMenuItem.Size = new System.Drawing.Size(240, 26);
+            this.ifly737MaxMenuItem.Text = "&iFly Boeing 737 MAX8";
+            this.ifly737MaxMenuItem.Checked = false;
+            this.ifly737MaxMenuItem.Click += new System.EventHandler(this.IFly737MAXMenuItem_Click);
+            // 
+            // tfdiMd11MenuItem
+            // 
+            this.tfdiMd11MenuItem.AccessibleName = "TFDi Design MD-11";
+            this.tfdiMd11MenuItem.AccessibleDescription = "Switch to the TFDi Design MD-11";
+            this.tfdiMd11MenuItem.Name = "tfdiMd11MenuItem";
+            this.tfdiMd11MenuItem.Size = new System.Drawing.Size(240, 26);
+            this.tfdiMd11MenuItem.Text = "TFDi Design &MD-11";
+            this.tfdiMd11MenuItem.Checked = false;
+            this.tfdiMd11MenuItem.Click += new System.EventHandler(this.TFDiMD11MenuItem_Click);
+            //
+            // bbs757MenuItem
+            //
+            this.bbs757MenuItem.AccessibleName = "BlueBird 757-200";
+            this.bbs757MenuItem.AccessibleDescription = "Switch to the BlueBird 757-200";
+            this.bbs757MenuItem.Name = "bbs757MenuItem";
+            this.bbs757MenuItem.Size = new System.Drawing.Size(240, 26);
+            this.bbs757MenuItem.Text = "&BlueBird 757-200";
+            this.bbs757MenuItem.Checked = false;
+            this.bbs757MenuItem.Click += new System.EventHandler(this.BBS757MenuItem_Click);
+            //
+            // extrasMenuItem
+            //
+            this.extrasMenuItem.AccessibleName = "Extras menu";
+            this.extrasMenuItem.AccessibleDescription = "Tools that work alongside the simulator";
+            this.extrasMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.volantaMenuItem});
+            this.extrasMenuItem.Name = "extrasMenuItem";
+            this.extrasMenuItem.Size = new System.Drawing.Size(65, 24);
+            this.extrasMenuItem.Text = "E&xtras";
+            //
+            // volantaMenuItem
+            //
+            this.volantaMenuItem.AccessibleName = "Volanta";
+            this.volantaMenuItem.AccessibleDescription = "Volanta's live map as text: Volanta users and network pilots around you, your friends, and online ATC";
+            this.volantaMenuItem.Name = "volantaMenuItem";
+            this.volantaMenuItem.Size = new System.Drawing.Size(220, 26);
+            this.volantaMenuItem.Text = "&Volanta…";
+            this.volantaMenuItem.Click += new System.EventHandler(this.VolantaMenuItem_Click);
+            //
+            // helpMenuItem
+            //
+            this.helpMenuItem.AccessibleName = "Help menu";
+            this.helpMenuItem.AccessibleDescription = "The user guide, the project website and the application version";
+            this.helpMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.userGuideMenuItem,
+            this.projectWebsiteMenuItem,
+            this.aboutMenuItem});
+            this.helpMenuItem.Name = "helpMenuItem";
+            this.helpMenuItem.Size = new System.Drawing.Size(55, 24);
+            this.helpMenuItem.Text = "&Help";
+            //
+            // userGuideMenuItem
+            //
+            this.userGuideMenuItem.AccessibleName = "User Guide";
+            this.userGuideMenuItem.AccessibleDescription = "Open the user guide in your web browser";
+            this.userGuideMenuItem.Name = "userGuideMenuItem";
+            this.userGuideMenuItem.Size = new System.Drawing.Size(220, 26);
+            this.userGuideMenuItem.Text = "User &Guide";
+            this.userGuideMenuItem.Click += new System.EventHandler(this.UserGuideMenuItem_Click);
+            //
+            // projectWebsiteMenuItem
+            //
+            this.projectWebsiteMenuItem.AccessibleName = "Project Website";
+            this.projectWebsiteMenuItem.AccessibleDescription = "Open msfsblindassist.com in your web browser";
+            this.projectWebsiteMenuItem.Name = "projectWebsiteMenuItem";
+            this.projectWebsiteMenuItem.Size = new System.Drawing.Size(220, 26);
+            this.projectWebsiteMenuItem.Text = "Project &Website";
+            this.projectWebsiteMenuItem.Click += new System.EventHandler(this.ProjectWebsiteMenuItem_Click);
             //
             // sectionsListBox
             // 

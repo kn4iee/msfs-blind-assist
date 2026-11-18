@@ -20,8 +20,6 @@ public class FBWA320HeadingWindow : FBWA320FCUWindowBase
         var label = new Label { Text = "Heading (0-360):", Location = new Point(20, 25), Size = new Size(140, 20), AccessibleName = "Heading Label" };
         headingTextBox = new TextBox { Location = new Point(195, 22), Size = new Size(75, 25), TabIndex = 0, AccessibleName = "Heading value", AccessibleDescription = "Enter 0 to 360 degrees" };
         headingTextBox.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.Handled = true; e.SuppressKeyPress = true; HandleSet(); } };
-        var setButton = new Button { Text = "Set", Location = new Point(280, 20), Size = new Size(80, 30), TabIndex = 1, AccessibleName = "Set Heading" };
-        setButton.Click += (s, e) => HandleSet();
         var pushButton = new Button { Text = "Heading Push (managed)", Location = new Point(20, 65), Size = new Size(165, 35), TabIndex = 2, AccessibleName = "Heading Push" };
         pushButton.Click += (s, e) => aircraft.FireFCUButton("A32NX.FCU_HDG_PUSH", simConnect, announcer, readback: false);
         var pullButton = new Button { Text = "Heading Pull (selected)", Location = new Point(195, 65), Size = new Size(165, 35), TabIndex = 3, AccessibleName = "Heading Pull" };
@@ -31,11 +29,14 @@ public class FBWA320HeadingWindow : FBWA320FCUWindowBase
         var closeButton = new Button { Text = "Close", Location = new Point(130, 155), Size = new Size(140, 35), TabIndex = 5, DialogResult = DialogResult.OK, AccessibleName = "Close" };
         closeButton.Click += (s, e) => Close();
 
-        Controls.AddRange(new Control[] { label, headingTextBox, setButton, pushButton, pullButton, trkButton, closeButton });
-        AcceptButton = setButton;
+        Controls.AddRange(new Control[] { label, headingTextBox, pushButton, pullButton, trkButton, closeButton });
         CancelButton = closeButton;
 
-        // Reflect the live HDG·V/S vs TRK·FPA mode in the toggle button label.
+        // Reflect the live HDG·V/S vs TRK·FPA mode in the toggle button label. A32NX_TRK_FPA_MODE_ACTIVE
+        // itself stays OnRequest (streaming it as announced spoke every panel TRK/FPA press twice), but
+        // FBW mirrors the same value into A32NX_FCU_AFS_DISPLAY_TRK_FPA_MODE, which the hardware-dial
+        // announcer already streams in the batch and consumes silently — so the window just reads that
+        // cache on a timer instead of polling the sim itself.
         _modeTimer = new System.Windows.Forms.Timer { Interval = 500 };
         _modeTimer.Tick += (s, e) => UpdateTrkLabel();
     }
@@ -45,7 +46,7 @@ public class FBWA320HeadingWindow : FBWA320FCUWindowBase
 
     private void UpdateTrkLabel()
     {
-        bool isTrk = (simConnect.GetCachedVariableValue("A32NX_TRK_FPA_MODE_ACTIVE") ?? 0) > 0.5;
+        bool isTrk = (simConnect.GetCachedVariableValue("A32NX_FCU_AFS_DISPLAY_TRK_FPA_MODE") ?? 0) > 0.5;
         string text = isTrk
             ? "TRK·FPA / HDG·V/S toggle — now TRK·FPA (press for HDG·V/S)"
             : "HDG·V/S / TRK·FPA toggle — now HDG·V/S (press for TRK·FPA)";
@@ -61,9 +62,9 @@ public class FBWA320HeadingWindow : FBWA320FCUWindowBase
     private void HandleSet()
     {
         string input = headingTextBox.Text.Trim();
-        if (!double.TryParse(input, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out double v)) { announcer.AnnounceImmediate("Invalid number format"); headingTextBox.SelectAll(); return; }
-        if (v < 0 || v > 360) { announcer.AnnounceImmediate("Heading must be between 0 and 360 degrees"); headingTextBox.SelectAll(); return; }
-        aircraft.SetFCUHeadingValue((int)Math.Round(v) % 360, simConnect, announcer);
+        if (!Utils.NumberParsing.TryParseTyped(input, out double v)) { announcer.AnnounceImmediate("Invalid number format"); headingTextBox.SelectAll(); return; }
+        if (!FcuValueEntry.TryHeading(v, out int heading, out string? error)) { announcer.AnnounceImmediate(error!); headingTextBox.SelectAll(); return; }
+        aircraft.SetFCUHeadingValue(heading, simConnect, announcer);
         headingTextBox.SelectAll();
     }
 }

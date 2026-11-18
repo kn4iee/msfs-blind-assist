@@ -20,22 +20,19 @@ public class FBWA380HeadingWindow : FBWA380FCUWindowBase
         var label = new Label { Text = "Heading (0-360):", Location = new Point(20, 25), Size = new Size(140, 20), AccessibleName = "Heading Label" };
         headingTextBox = new TextBox { Location = new Point(195, 22), Size = new Size(75, 25), TabIndex = 0, AccessibleName = "Heading value", AccessibleDescription = "Enter 0 to 360 degrees" };
         headingTextBox.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { e.Handled = true; e.SuppressKeyPress = true; HandleSet(); } };
-        var setButton = new Button { Text = "Set", Location = new Point(280, 20), Size = new Size(80, 30), TabIndex = 1, AccessibleName = "Set Heading" };
-        setButton.Click += (s, e) => HandleSet();
         var pushButton = new Button { Text = "Heading Push (managed)", Location = new Point(20, 65), Size = new Size(165, 35), TabIndex = 2, AccessibleName = "Heading Push" };
-        pushButton.Click += (s, e) => aircraft.FireFCUButton("A32NX.FCU_TO_AP_HDG_PUSH", simConnect, announcer, readback: false);
+        pushButton.Click += (s, e) => aircraft.FireFCUButton("A32NX.FCU_HDG_PUSH", simConnect, announcer, readback: false);
         var pullButton = new Button { Text = "Heading Pull (selected)", Location = new Point(195, 65), Size = new Size(165, 35), TabIndex = 3, AccessibleName = "Heading Pull" };
-        pullButton.Click += (s, e) => aircraft.FireFCUButton("A32NX.FCU_TO_AP_HDG_PULL", simConnect, announcer, readback: false);
+        pullButton.Click += (s, e) => aircraft.FireFCUButton("A32NX.FCU_HDG_PULL", simConnect, announcer, readback: false);
         trkButton = new Button { Text = "HDG·V/S / TRK·FPA toggle", Location = new Point(20, 110), Size = new Size(340, 35), TabIndex = 4, AccessibleName = "Track FPA toggle" };
-        // The A380X has NO working toggle EVENT for HDG-V/S <-> TRK-FPA (the dotted/K
-        // event is inert; see FlyByWireA380Definition HandleUIVariableSet). The mode is
-        // driven by the L:var directly — so flip it here, mirroring the settable combo.
+        // Since FBW #10855 the L:var is an FCU-shim OUTPUT, so the mode can only be moved
+        // the cockpit button's way — see FlyByWireA380Definition.SetTrkFpaMode, which fires
+        // A32NX.FCU_TRK_FPA_TOGGLE_PUSH here too, mirroring the settable combo.
         trkButton.Click += (s, e) => ToggleTrkFpa();
         var closeButton = new Button { Text = "Close", Location = new Point(130, 155), Size = new Size(140, 35), TabIndex = 5, DialogResult = DialogResult.OK, AccessibleName = "Close" };
         closeButton.Click += (s, e) => Close();
 
-        Controls.AddRange(new Control[] { label, headingTextBox, setButton, pushButton, pullButton, trkButton, closeButton });
-        AcceptButton = setButton;
+        Controls.AddRange(new Control[] { label, headingTextBox, pushButton, pullButton, trkButton, closeButton });
         CancelButton = closeButton;
 
         // Keep the toggle button's label showing the live mode (HDG·V/S vs TRK·FPA).
@@ -48,9 +45,15 @@ public class FBWA380HeadingWindow : FBWA380FCUWindowBase
 
     private void ToggleTrkFpa()
     {
-        bool isTrk = (simConnect.GetCachedVariableValue("A32NX_TRK_FPA_MODE_ACTIVE") ?? 0) > 0.5;
+        // The commanded view, not the raw cache: the cache is fed only by the var's own once-a-second
+        // subscription, so a quick second press read the pre-first-press mode and re-announced the same target.
+        bool isTrk = (aircraft.TrkFpaModeCommandedOrCached(simConnect) ?? 0) > 0.5;
         int next = isTrk ? 0 : 1;
-        simConnect.ExecuteCalculatorCode($"{next} (>L:A32NX_TRK_FPA_MODE_ACTIVE)");
+        // Through the def, not a raw SendEvent here: SetTrkFpaMode fires the cockpit's toggle
+        // event AND arms the FCU value-change echo window, so the "TRK FPA" confirmation below
+        // is not immediately followed by the re-synced V/S and FPA vars announcing their values
+        // on top of it.
+        aircraft.SetTrkFpaMode(next == 1, simConnect);
         announcer.Announce(next == 1 ? "TRK FPA" : "HDG V/S");
         simConnect.RequestVariable("A32NX_TRK_FPA_MODE_ACTIVE", forceUpdate: true);
         UpdateTrkLabel();
@@ -58,7 +61,7 @@ public class FBWA380HeadingWindow : FBWA380FCUWindowBase
 
     private void UpdateTrkLabel()
     {
-        bool isTrk = (simConnect.GetCachedVariableValue("A32NX_TRK_FPA_MODE_ACTIVE") ?? 0) > 0.5;
+        bool isTrk = (aircraft.TrkFpaModeCommandedOrCached(simConnect) ?? 0) > 0.5;
         string text = isTrk
             ? "TRK·FPA / HDG·V/S toggle — now TRK·FPA (press for HDG·V/S)"
             : "HDG·V/S / TRK·FPA toggle — now HDG·V/S (press for TRK·FPA)";
@@ -74,7 +77,7 @@ public class FBWA380HeadingWindow : FBWA380FCUWindowBase
     private void HandleSet()
     {
         string input = headingTextBox.Text.Trim();
-        if (!double.TryParse(input, System.Globalization.NumberStyles.Float | System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out double v)) { announcer.AnnounceImmediate("Invalid number format"); headingTextBox.SelectAll(); return; }
+        if (!Utils.NumberParsing.TryParseTyped(input, out double v)) { announcer.AnnounceImmediate("Invalid number format"); headingTextBox.SelectAll(); return; }
         if (v < 0 || v > 360) { announcer.AnnounceImmediate("Heading must be between 0 and 360 degrees"); headingTextBox.SelectAll(); return; }
         aircraft.SetFCUHeadingValue((int)Math.Round(v) % 360, simConnect, announcer);
         headingTextBox.SelectAll();

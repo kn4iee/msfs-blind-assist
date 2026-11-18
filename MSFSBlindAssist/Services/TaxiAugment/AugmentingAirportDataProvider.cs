@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Database;
 using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services.TaxiAugment;
 
@@ -26,7 +27,7 @@ namespace MSFSBlindAssist.Services.TaxiAugment;
 /// base provider — this class is transparent to all existing consumers.
 /// </para>
 /// </summary>
-public sealed class AugmentingAirportDataProvider : IAirportDataProvider
+public sealed class AugmentingAirportDataProvider : IAirportDataProvider, IAirportFacilitiesProvider
 {
     // ── Construction ────────────────────────────────────────────────────────
     private readonly IAirportDataProvider _base;
@@ -118,6 +119,10 @@ public sealed class AugmentingAirportDataProvider : IAirportDataProvider
     public HashSet<string> GetAllAirportICAOs()                                   => _base.GetAllAirportICAOs();
     public List<string> GetNearbyAirportICAOs(double lat, double lon, double nm)  => _base.GetNearbyAirportICAOs(lat, lon, nm);
     public List<StartPosition> GetRunwayStarts(string icao)                       => _base.GetRunwayStarts(icao);
+    public AirportFacilities? GetAirportFacilities(string icao)
+        => (_base as IAirportFacilitiesProvider)?.GetAirportFacilities(icao);
+    public IReadOnlyList<AirportCandidate> GetNearbyAirportCandidates(double lat, double lon, double nm)
+        => (_base as IAirportFacilitiesProvider)?.GetNearbyAirportCandidates(lat, lon, nm) ?? Array.Empty<AirportCandidate>();
 
     /// <summary>
     /// Returns parking spots for the airport, filling in EMPTY navdata gate/stand names from the
@@ -163,6 +168,62 @@ public sealed class AugmentingAirportDataProvider : IAirportDataProvider
             spot.Aliases = GateAliasResolver.ResolveAliases(spot, online);
     }
 
+    /// <summary>
+    /// Named painted holding points (OSM aeroway=holding_position refs, e.g. LSZH "A2") from the
+    /// cached online sources for this airport. NAME + position only — the Taxi planner uses them
+    /// to label and select a runway ENTRY; hold-short placement stays authoritative from navdata.
+    /// Rides the per-ICAO cache GetTaxiPaths populates; never triggers its own fetch. Empty when
+    /// disabled or uncached. Points are returned raw (no per-runway filtering) — the caller
+    /// associates them with a runway geometrically (TaxiGraph.ResolveHoldingPointEntries).
+    /// </summary>
+    public List<(string Name, double Lat, double Lon)> GetHoldingPoints(string icao)
+    {
+        var result = new List<(string Name, double Lat, double Lon)>();
+        if (!Enabled) return result;
+        if (!_cache.TryLoad(icao, out var sources) || sources == null) return result;
+
+        foreach (var src in sources)
+            foreach (var (name, hLat, hLon, _) in src.HoldingPoints)
+                if (!string.IsNullOrWhiteSpace(name))
+                    result.Add((name.Trim(), hLat, hLon));
+        return result;
+    }
+
+    /// <summary>
+    /// Returns the NAMED holding points (OSM <c>aeroway=holding_position</c> nodes with a
+    /// designator — VIKAS, N2E, A11…) for this airport from the cached online sources, as raw
+    /// online coordinates INCLUDING the holding_position:type kind tag. Rides the same per-ICAO
+    /// cache GetTaxiPaths populates; never triggers its own fetch. Empty when disabled or
+    /// uncached. Callers must resolve each point onto navdata graph geometry
+    /// (<c>Navigation.NamedHoldingPointResolver</c>) before routing to it — the online
+    /// coordinate itself is never a route target (anti-grass rule).
+    /// </summary>
+    public List<(string Name, double Lat, double Lon, string Kind)> GetNamedHoldingPoints(string icao)
+    {
+        var result = new List<(string, double, double, string)>();
+        if (!Enabled) return result;
+        if (!_cache.TryLoad(icao, out var sources) || sources == null) return result;
+        foreach (var src in sources)
+            result.AddRange(src.HoldingPoints);
+        return result;
+    }
+
+    /// <summary>
+    /// Named holding points read off X-Plane's red signs for this airport (apt.dat only), from the
+    /// same per-ICAO cache; never triggers its own fetch. Deliberately a SEPARATE getter from
+    /// <see cref="GetNamedHoldingPoints"/>: a sign's position is approximate, so only the
+    /// Progressive Taxi hold-at list consumes these, and only for names no painted line carries.
+    /// </summary>
+    public List<SignHoldingPoint> GetSignHoldingPoints(string icao)
+    {
+        var result = new List<SignHoldingPoint>();
+        if (!Enabled) return result;
+        if (!_cache.TryLoad(icao, out var sources) || sources == null) return result;
+        foreach (var src in sources)
+            result.AddRange(src.SignHoldingPoints);
+        return result;
+    }
+
     // ── The enriching member ────────────────────────────────────────────────
     /// <summary>
     /// Returns taxi paths for the given airport, enriching unnamed segments with
@@ -206,11 +267,39 @@ public sealed class AugmentingAirportDataProvider : IAirportDataProvider
     /// </summary>
     public async Task PrefetchAsync(string icao, bool force = false)
     {
+        // An online request like any other: with online taxi data switched off there is nothing to
+        // fetch. Every caller (Shift+D, ILS/visual guidance, the taxi form, the landing-exit planner,
+        // the flight plan) once reached OSM and X-Plane Gateway regardless.
+        if (!Enabled) return;
         if (!force && _cache.TryLoad(icao, out _))
             return;           // cache is fresh, nothing to do
 
         // Share the in-flight fetch (if any) instead of starting a duplicate — see FetchSharedAsync.
         await FetchSharedAsync(icao).ConfigureAwait(false);
+    }
+
+    // ── Route-briefing read of the online data ───────────────────────────────
+    /// <summary>
+    /// The cached online taxi data for an airport (every source that answered), for the route
+    /// BRIEFING's planning-only graph and nothing else. Read-only: nothing here merges geometry
+    /// into the navdata path, and TaxiDataMerger's rule ("navdata is AUTHORITATIVE; online-only
+    /// geometry is IGNORED — we only steer on navdata pavement") is untouched. Awaits the shared
+    /// fetch when nothing is cached; returns null when augmentation is disabled, when the fetch
+    /// does not complete before <paramref name="ct"/> is cancelled, or when it returned nothing.
+    /// </summary>
+    public async Task<IReadOnlyList<AirportTaxiData>?> GetOnlineTaxiDataAsync(string icao, CancellationToken ct)
+    {
+        if (!Enabled || string.IsNullOrWhiteSpace(icao)) return null;
+        if (_cache.TryLoad(icao, out var cached) && cached != null) return cached;
+        try
+        {
+            await PrefetchAsync(icao).WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        return _cache.TryLoad(icao, out var fetched) && fetched != null ? fetched : null;
     }
 
     // ── Merge implementation ─────────────────────────────────────────────────
@@ -259,6 +348,11 @@ public sealed class AugmentingAirportDataProvider : IAirportDataProvider
                 !string.IsNullOrWhiteSpace(per[i].Name))
             {
                 nav[i].Name = per[i].Name!;
+                // Remember that this name is not navdata's. TaxiGraph's case-variant fold
+                // reads it so an online spelling can never outvote a navdata one and
+                // rename the whole taxiway - the merge refuses to overwrite a named
+                // segment, and this is what stops that being undone a layer up.
+                nav[i].NameFromOnlineSource = true;
             }
 
             if (per[i].Aliases.Count > 0)
@@ -308,18 +402,18 @@ public sealed class AugmentingAirportDataProvider : IAirportDataProvider
     /// implementation re-fetched the navdata and re-ran the full O(n×m) overlay just for this log
     /// line). Never throws — a logging failure must not surface to callers.
     /// </summary>
+    private static readonly LogChannel _log = Log.Channel("taxi-augment");
+
     private static void WriteTelemetryLog(string icao, CoverageReport cov)
     {
         try
         {
-            string line = $"{System.DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}  {icao}  " +
+            string line = $"{icao}  " +
                           $"navNamed={cov.NavNamedTaxiways} navUnnamed={cov.NavUnnamedSegments} " +
                           $"+osm={cov.NamesAdoptedFromOsm} +aptdat={cov.NamesAdoptedFromAptDat} " +
-                          $"aliases={cov.AliasesAdded} disagree={cov.OsmAptDatDisagreements}" +
-                          System.Environment.NewLine;
+                          $"aliases={cov.AliasesAdded} disagree={cov.OsmAptDatDisagreements}";
 
-            System.IO.File.AppendAllText(
-                MSFSBlindAssist.Utils.AppLogs.PathFor("taxi-augment.log"), line);
+            _log.Info(line);
         }
         catch
         {

@@ -4,6 +4,7 @@ Application Navigation:
   Ctrl+1     Focus Sections List
   Ctrl+2     Focus Panels List
   Ctrl+3     Focus Status Display field of the current panel (refreshes it if empty)
+  F5         Refresh the current panel's Status Display now (it also updates itself live)
 
 Tip: Press the same bracket key again to cancel a mode you activated by accident.
 
@@ -42,6 +43,13 @@ Weight:
 
 Flaps:
   L          Read Flap Position
+
+Flap Maneuver Speeds (calculated for your current weight):
+  Shift+1    Flaps up maneuver speed
+  Shift+2    Flaps 1 maneuver speed
+  Shift+3    Flaps 5 maneuver speed
+  Shift+4    Flaps 15 maneuver speed
+  Shift+5    Flaps 20 maneuver speed
 
 Landing Gear:
   Shift+G    Read Gear Position
@@ -99,6 +107,10 @@ Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
   Y          Taxi Status (current taxiway, next turn, distance to destination)
   Ctrl+Y     Repeat Current Taxi Instruction
   Alt+Y      Where Am I (announces current taxiway, gate, or runway at nearest airport)
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter tunes the selected frequency into COM 1 standby
+                and Shift+Enter tunes it straight into COM 1 active; COM 1 is read back to confirm.
   (Open the form with Input mode > Shift+Y)
 
 Waypoint Tracking (use Fix Track window or EFB route viewer to add):
@@ -108,16 +120,32 @@ Waypoint Tracking (use Fix Track window or EFB route viewer to add):
   4          Track Slot 4
   5          Track Slot 5
 
-AI Display Reading (requires Gemini API key in File > Gemini Settings):
-  Alt+P      Read PFD (use Ctrl+2 cockpit view first)
-  Alt+N      Read Navigation Display (use Ctrl+2 cockpit view first)
-  Alt+I      Read ISFD backup instruments (use Ctrl+2 cockpit view first)
-  Alt+E      Read EICAS display (use Ctrl+2 cockpit view first)
+AI Display Reading (requires an AI API key — Gemini or Claude — in File > Settings > AI tab):
+  Alt+P      Read PFD
+  Alt+N      Read Navigation Display
+  Alt+I      Read ISFD backup instruments
+  Alt+E      Read upper EICAS display
+  Alt+S      Read lower display (secondary engine data, a synoptic page, or
+             the navigation display, whichever it is set to)
   Alt+D      Describe outside scene
+
+  You no longer need to select a cockpit view first: the app moves the
+  simulator camera to the display it is reading and puts your own view back
+  afterwards — including a saved custom camera such as a cabin or wing view.
+  The camera is away for well under a second, and your view is back before the
+  AI is even asked.
+  The app checks that your view really came back rather than assuming it. If
+  it could not get you back it says "Could not return to your previous view"
+  instead of leaving you somewhere you did not choose, and the next display
+  read you take will try again to return you there.
+  From an outside or drone view it says "Switch to a cockpit view first" and
+  does nothing.
 
 Traffic and Weather:
   R          Announce Tracked TCAS Traffic
   Ctrl+R     Open TCAS Traffic Window
+  Shift+O    Open Volanta window (Volanta users and network pilots around you,
+             your Volanta friends and online ATC; also Extras > Volanta)
   Shift+R    Open Weather Radar Window (auto-detects ActiveSky and silently
              uses richer data — surface wind+gust, ceiling, QNH, turbulence,
              METAR-decoded precipitation — when running. Falls back to MSFS
@@ -133,7 +161,7 @@ Displays and Windows:
   Shift+L    Location Info
   Shift+M    Show METAR Report (VATSIM, plus ActiveSky METAR if AS detected)
   Shift+B    SimBrief Briefing
-  Shift+C    Show Checklist
+  Shift+C    First Officer window (checklists and flows)
 
 INPUT MODE - PMDG EFB Tablet:
   Shift+T    PMDG EFB Tablet - Captain tablet
@@ -175,6 +203,16 @@ Ground Services:
              the window. If multiple GSX services are active, use the Active
              services combo to choose which service drives tooltip announcements.
 
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
 INPUT MODE - Press [ to activate
 
 Teleport:
@@ -202,6 +240,14 @@ Taxi Guidance:
 
 Ground Services:
   Alt+G      Open Access GSX window (accessible GSX Ground Services Pro menu)
+
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
 
 General:
   Escape     Exit active hotkey mode

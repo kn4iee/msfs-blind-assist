@@ -1,0 +1,204 @@
+// Characterization tests for the designator and label helpers of
+// MSFSBlindAssist.Navigation.RouteRunwayCrossings: normalization/padding, the W (water-runway)
+// suffix, reciprocals, label parsing, the crossing-label composition policy, the destination
+// countdown-rail rule and prefix stripping. Hold placement is pinned in RunwayHoldPlacementTests,
+// the spoken clause in RunwayEventDescriptionTests, classification in RunwayRouteClassifierTests.
+//
+// This is characterization, not spec verification: if a literal ever disagrees with actual output,
+// the test must be corrected to match real output, not the other way around.
+
+using MSFSBlindAssist.Database.Models;
+using MSFSBlindAssist.Navigation;
+
+namespace MSFSBlindAssist.Tests;
+
+public class RouteRunwayCrossingsTests
+{
+    // --- NormalizeDesignator ---------------------------------------------------
+
+    [Theory]
+    [InlineData("9", "09")]
+    [InlineData("9l", "09L")]
+    [InlineData("28R", "28R")]
+    [InlineData("NE", "NE")]
+    public void NormalizeDesignator_pads_and_uppercases(string input, string expected)
+    {
+        Assert.Equal(expected, RouteRunwayCrossings.NormalizeDesignator(input));
+    }
+
+    // --- Reciprocal --------------------------------------------------------
+
+    [Theory]
+    [InlineData("18W", "36W")]
+    [InlineData("36W", "18W")]
+    [InlineData("9", "27")]
+    [InlineData("10L", "28R")]
+    [InlineData("28R", "10L")]
+    public void Reciprocal_adds_18_and_swaps_LR_suffix(string input, string expected)
+    {
+        Assert.Equal(expected, RouteRunwayCrossings.Reciprocal(input));
+    }
+
+    // --- ExtractRunwayDesignator ---------------------------------------------
+
+    [Fact]
+    public void ExtractRunwayDesignator_normalizes_an_unpadded_label()
+    {
+        Assert.Equal("09", RouteRunwayCrossings.ExtractRunwayDesignator("runway 9 at Q"));
+    }
+
+    [Fact]
+    public void ExtractRunwayDesignator_returns_null_for_a_non_runway_label()
+    {
+        Assert.Null(RouteRunwayCrossings.ExtractRunwayDesignator("end of taxiway B"));
+        Assert.Null(RouteRunwayCrossings.ExtractRunwayDesignator("A5"));
+        Assert.Null(RouteRunwayCrossings.ExtractRunwayDesignator(null));
+    }
+
+    // --- ComposeCrossingLabel ---------------------------------------------
+
+    [Fact]
+    public void ComposeCrossingLabel_empty_label_becomes_runway_designator()
+    {
+        Assert.Equal("runway 10L", RouteRunwayCrossings.ComposeCrossingLabel(null, "10L"));
+    }
+
+    [Fact]
+    public void ComposeCrossingLabel_upgrades_a_bare_holding_point_name()
+    {
+        Assert.Equal("runway 10L at A5", RouteRunwayCrossings.ComposeCrossingLabel("A5", "10L"));
+    }
+
+    [Fact]
+    public void ComposeCrossingLabel_preserves_a_user_end_of_taxiway_hold()
+    {
+        Assert.Null(RouteRunwayCrossings.ComposeCrossingLabel("end of taxiway B", "10L"));
+    }
+
+    [Fact]
+    public void ComposeCrossingLabel_preserves_a_label_naming_the_reciprocal_pavement()
+    {
+        Assert.Null(RouteRunwayCrossings.ComposeCrossingLabel("runway 10R", "28L"));
+    }
+
+    [Fact]
+    public void ComposeCrossingLabel_preserves_a_correct_DB_name()
+    {
+        Assert.Null(RouteRunwayCrossings.ComposeCrossingLabel("runway 28L at Q", "28L"));
+    }
+
+    [Fact]
+    public void ComposeCrossingLabel_corrects_a_DB_name_for_a_different_pavement()
+    {
+        Assert.Equal("runway 28L", RouteRunwayCrossings.ComposeCrossingLabel("runway 28R at Q", "28L"));
+    }
+
+    // --- ShouldExcludeFinalHold ---------------------------------------------------------
+    //
+    // A runway destination's final hold-short is TruncateToHoldShort's countdown rail, not a hold
+    // point to count; a gate route's final hold-short is real.
+
+    private static List<TaxiRouteSegment> Route(int count)
+    {
+        var list = new List<TaxiRouteSegment>();
+        for (int i = 0; i < count; i++)
+            list.Add(new TaxiRouteSegment
+            {
+                FromNode = new TaxiNode { NodeId = 1, Latitude = i * 0.001 },
+                ToNode = new TaxiNode { NodeId = 2, Latitude = i * 0.001 + 0.001 },
+                DistanceMeters = 100.0,
+            });
+        return list;
+    }
+
+    [Fact]
+    public void ShouldExcludeFinalHold_ExcludesARunwayRoutesOwnTaggedFinalSegment()
+    {
+        var segs = Route(3);
+        segs[^1].IsHoldShortPoint = true;
+        Assert.True(RouteRunwayCrossings.ShouldExcludeFinalHold(segs, isRunwayDestination: true));
+    }
+
+    [Fact]
+    public void ShouldExcludeFinalHold_KeepsAGateRoutesTaggedFinalSegment()
+    {
+        var segs = Route(3);
+        segs[^1].IsHoldShortPoint = true;
+        Assert.False(RouteRunwayCrossings.ShouldExcludeFinalHold(segs, isRunwayDestination: false));
+    }
+
+    [Fact]
+    public void ShouldExcludeFinalHold_IsFalseWhenTheFinalSegmentCarriesNoHold()
+        => Assert.False(RouteRunwayCrossings.ShouldExcludeFinalHold(Route(3), isRunwayDestination: true));
+
+    [Fact]
+    public void ShouldExcludeFinalHold_IsFalseForAnEmptyRoute()
+        => Assert.False(RouteRunwayCrossings.ShouldExcludeFinalHold(
+            Array.Empty<TaxiRouteSegment>(), isRunwayDestination: true));
+
+    // --- StripRunwayPrefix -------------------------------------------------------
+
+    [Theory]
+    [InlineData("Runway 33L", "33L")]
+    [InlineData("runway 09", "09")]
+    [InlineData("RUNWAY 4R", "4R")]
+    [InlineData("A9 - Gate Medium", "A9 - Gate Medium")]
+    [InlineData("  Runway 22L  ", "22L")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    public void StripRunwayPrefix_drops_only_the_spoken_prefix(string? input, string expected)
+    {
+        Assert.Equal(expected, RouteRunwayCrossings.StripRunwayPrefix(input));
+    }
+
+    [Fact]
+    public void ExtractRunwayDesignator_reads_the_threshold_fallback_label_shape()
+    {
+        // Build names a hold node from the nearest CENTERLINE when one is within 150 m
+        // ("runway 27R at A1") and otherwise from the nearest runway START within 500 m, which
+        // puts the designator last ("A2, Runway 27R"). Both shapes must parse: a set-back CAT III
+        // hold only ever gets the second one — EGLL's A2 sits 186 m from the 27R centreline and
+        // A3 158 m — and TaxiGuidanceManager.ProgressiveHoldRunway reads this label to decide
+        // which runway to watch, and whether a "hold at holding point A2" leg is a departure.
+        Assert.Equal("27R", RouteRunwayCrossings.ExtractRunwayDesignator("A2, Runway 27R"));
+        Assert.Equal(new[] { "27R" }, RouteRunwayCrossings.ExtractRunwayDesignators("A2, Runway 27R"));
+    }
+
+    // --- HoldNodeDesignators ---------------------------------------------------
+    //
+    // TruncateToHoldShort decides whether a scenery hold node can be the DESTINATION's hold
+    // from the runway its label names ([HLD-13]: "naming this runway or none"). A pilot's own
+    // pick writes its label over the scenery's on that segment ("holding point B3", "taxiway
+    // W", "end of taxiway L"), and a named holding point resolves ONTO the scenery's hold node
+    // by design. Read from the label alone, runway 11's hold line then "names no runway" and
+    // could be taken for runway 16's.
+
+    [Fact]
+    public void HoldNodeDesignators_reads_the_scenery_name_when_a_pick_label_names_no_runway()
+    {
+        Assert.Equal(new[] { "11" },
+            RouteRunwayCrossings.HoldNodeDesignators("holding point B3", "runway 11 at B3"));
+        Assert.Equal(new[] { "11" },
+            RouteRunwayCrossings.HoldNodeDesignators("end of taxiway L", "B3, Runway 11"));
+    }
+
+    [Fact]
+    public void HoldNodeDesignators_keeps_the_segment_label_when_it_names_a_runway()
+    {
+        // The pilot's runway pick, or the scenery's own label: unchanged from before.
+        Assert.Equal(new[] { "16" },
+            RouteRunwayCrossings.HoldNodeDesignators("runway 16", "runway 34 at A1"));
+        Assert.Equal(new[] { "11" },
+            RouteRunwayCrossings.HoldNodeDesignators("runway 11 at B3", "runway 11 at B3"));
+    }
+
+    [Theory]
+    [InlineData("holding point L2", null)]
+    [InlineData("holding point L2", "")]
+    [InlineData(null, null)]
+    [InlineData("", "L2")]
+    public void HoldNodeDesignators_is_empty_when_neither_names_a_runway(string? label, string? scenery)
+    {
+        Assert.Empty(RouteRunwayCrossings.HoldNodeDesignators(label, scenery));
+    }
+}

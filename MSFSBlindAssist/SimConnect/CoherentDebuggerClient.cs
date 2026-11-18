@@ -2,12 +2,11 @@ using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.SimConnect
 {
-    // EFBStateUpdateEventArgs lives in EFBBridgeServer.cs (the HTTP bridge is retained on this
-    // branch because HS787 still uses it; PR #106 only moves the PMDG EFB to the Coherent
-    // transport). The Coherent clients + IMcduBridge below reference that same type (same namespace).
+    // The legacy HTTP bridge (EFBBridgeServer) was removed 2026-07; all Coherent transports connect directly via this client.
 
     /// <summary>
     /// The surface the FBW A380X MCDU window depends on. The no-injection
@@ -16,6 +15,10 @@ namespace MSFSBlindAssist.SimConnect
     /// </summary>
     public interface IMcduBridge
     {
+        /// <summary>State push: the verdict of a command whose outcome the page may not show
+        /// (Data["command"], Data["result"]); the window decides what, if anything, to say.</summary>
+        const string StateTypeCommandResult = "fbwa380_mcdu_command_result";
+
         event EventHandler<EFBStateUpdateEventArgs>? StateUpdated;
         bool IsBridgeConnected { get; }
         void EnqueueCommand(string command, Dictionary<string, string>? payload = null);
@@ -37,8 +40,9 @@ namespace MSFSBlindAssist.SimConnect
     ///
     /// Implements IMcduBridge so FBWA380MCDUForm can consume it exactly like
     /// the old EFBBridgeServer: it raises the same fbwa380_mcdu_screen /
-    /// fbwa380_mcdu_elements / fbwa380_mcdu_connected state pushes and accepts
-    /// the same command vocabulary, translating each into an agent call.
+    /// fbwa380_mcdu_elements / fbwa380_mcdu_connected state pushes (plus
+    /// IMcduBridge.StateTypeCommandResult) and accepts the same command
+    /// vocabulary, translating each into an agent call.
     /// </summary>
     public sealed class CoherentDebuggerClient : IMcduBridge, IDisposable
     {
@@ -52,6 +56,10 @@ namespace MSFSBlindAssist.SimConnect
 
         public event EventHandler<EFBStateUpdateEventArgs>? StateUpdated;
         public event Action<string>? Error;
+
+        /// <summary>A command whose verdict is pushed back (<see cref="IMcduBridge.StateTypeCommandResult"/>):
+        /// a field entry, or a page jump the MFD may refuse (a disabled page item).</summary>
+        internal static bool ReportsResult(string command) => command is "send_to_field" or "navigate_by_id";
 
         private readonly SynchronizationContext? _syncContext;
         private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(4) };
@@ -90,7 +98,7 @@ namespace MSFSBlindAssist.SimConnect
                 // fail loudly in Debug and log in Release rather than half-support it.
                 if (_cts.IsCancellationRequested)
                 {
-                    System.Diagnostics.Debug.WriteLine(
+                    Log.Debug("SimConnect", 
                         "CoherentDebuggerClient.Start() called after Stop() — not supported; create a new instance.");
                     System.Diagnostics.Debug.Assert(false,
                         "CoherentDebuggerClient: Start() after Stop() is a no-op. Dispose and create a new client instead.");
@@ -138,12 +146,22 @@ namespace MSFSBlindAssist.SimConnect
         public void EnqueueCommand(string command, Dictionary<string, string>? payload = null)
         {
             // Translate the form's command vocabulary into an agent call and
-            // fire it (fire-and-forget; the next poll reflects the result).
+            // fire it (fire-and-forget; the next poll reflects the result). The verdict
+            // of a field entry or a page jump is pushed back: the poll cannot show a
+            // refusal, since a fixed-value list that ignores typed text, or a disabled
+            // page item, changes nothing on the page.
             string? expr = BuildCommandExpression(command, payload);
             if (expr == null) return;
+            bool reportsResult = ReportsResult(command);
             _ = Task.Run(async () =>
             {
-                try { await EvalAsync(expr); }
+                try
+                {
+                    string result = await EvalAsync(expr);
+                    if (reportsResult && result.Length > 0)
+                        Raise(IMcduBridge.StateTypeCommandResult,
+                            new Dictionary<string, string> { ["command"] = command, ["result"] = result });
+                }
                 catch { /* a dropped command self-heals on the next poll */ }
             });
         }
@@ -238,7 +256,7 @@ namespace MSFSBlindAssist.SimConnect
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"CoherentDebuggerClient loop: {ex.Message}");
+                    Log.Debug("SimConnect", $"CoherentDebuggerClient loop: {ex.Message}");
                     _connected = false;
                     _agentInstalled = false;
                     try { _ws?.Abort(); } catch { }
@@ -331,7 +349,7 @@ namespace MSFSBlindAssist.SimConnect
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"ResolveMfdPageId: {ex.Message}");
+                Log.Debug("SimConnect", $"ResolveMfdPageId: {ex.Message}");
             }
             return null;
         }
@@ -496,7 +514,7 @@ namespace MSFSBlindAssist.SimConnect
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"CoherentDebuggerClient receive: {ex.Message}");
+                Log.Debug("SimConnect", $"CoherentDebuggerClient receive: {ex.Message}");
             }
             finally
             {

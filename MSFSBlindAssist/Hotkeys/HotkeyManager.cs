@@ -1,3 +1,4 @@
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Hotkeys;
 
@@ -54,6 +55,9 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_LANDING_PEAK_G = 9241;   // Ctrl+Shift+G (last landing g-force) — output mode
         private const int HOTKEY_SHOW_RMP = 9242;         // Ctrl+Shift+R (A380 Radio Management Panel) — input mode
         private const int HOTKEY_SHOW_DCDU = 9251;        // Ctrl+Shift+D (A32NX DCDU / CPDLC window) — input mode
+        private const int HOTKEY_VATSIM_MUTE = 9252;      // Alt+V (Toggle VATSIM announcements) — output mode
+        private const int HOTKEY_VOLANTA = 9253;          // Shift+O (Volanta live map window) — output mode
+        private const int HOTKEY_SHOW_AIRCRAFT_WINDOWS = 9254; // Ctrl+Shift+F (the aircraft's own window list: Fenix windows) — input mode
         private const int HOTKEY_ND_WAYPOINT = 9243;      // Ctrl+W (FBW ND TO-waypoint: name/distance/bearing) — output mode
 
         // FCU push/pull hotkey IDs
@@ -79,7 +83,7 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_SPEED_VFE = 9049;
         private const int HOTKEY_SPEED_VLS = 9050;
         private const int HOTKEY_SPEED_VS = 9051;
-        private const int HOTKEY_CHECKLIST = 9052;
+        private const int HOTKEY_FIRST_OFFICER = 9052;   // Shift+C (First Officer window)
         private const int HOTKEY_CHECKLIST_ECL = 9213;   // Ctrl+Shift+C (A380 live ECL)
         private const int HOTKEY_FUEL_QUANTITY = 9053;
         private const int HOTKEY_WAYPOINT_INFO = 9055;
@@ -90,7 +94,7 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_NAV_RADIOS_SET = 9212;   // Input mode: Ctrl+N (Set NAV radios)
         private const int HOTKEY_TAKEOFF_ASSIST = 9058;
         private const int HOTKEY_TOGGLE_ECAM_MONITORING = 9059;
-        private const int HOTKEY_HAND_FLY_MODE = 9075;
+        private const int HOTKEY_HAND_FLY_MODE = 9110;
         private const int HOTKEY_VISUAL_GUIDANCE = 9076;
         private const int HOTKEY_MACH_SPEED = 9060;
         private const int HOTKEY_EFB = 9061;
@@ -105,7 +109,7 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_ALTIMETER = 9096;
         private const int HOTKEY_FCU_SET_BARO = 9097;
         private const int HOTKEY_GROSS_WEIGHT_KG = 9098;
-        private const int HOTKEY_TRACK_FIX = 9076;
+        private const int HOTKEY_TRACK_FIX = 9111;
 
         // Display reading hotkey IDs (Output mode - Alt+1-5, Fenix A320 only)
         private const int HOTKEY_READ_DISPLAY_PFD = 9069;
@@ -160,6 +164,8 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_TAXI_CONTINUE = 9203;      // Input mode: Y (Continue past hold-short)
         private const int HOTKEY_TAXI_STOP = 9204;          // Input mode: Ctrl+Y (Stop guidance)
         private const int HOTKEY_TAXI_WHERE_AM_I = 9205;    // Output mode: Alt+Y (Describe current location)
+        private const int HOTKEY_LOOK_AROUND = 9219;        // Output mode: Alt+L (surroundings readout)
+        private const int HOTKEY_SHOW_SURROUNDINGS = 9220;  // Output mode: Ctrl+Shift+L (surroundings window)
         private const int HOTKEY_LANDING_EXIT = 9206;       // Input mode: Shift+X (Landing Exit Planner)
         private const int HOTKEY_GROUND_TRAFFIC = 9207;     // Output mode: Alt+G (Nearest ground traffic)
         private const int HOTKEY_ACCESS_GSX = 9208;         // Input mode: Alt+G (Open Access GSX window)
@@ -170,6 +176,40 @@ public class HotkeyManager : IDisposable
         // HH:MM:SS when AnnounceTimeWithSeconds is on.
         private const int HOTKEY_LOCAL_TIME = 9210;
         private const int HOTKEY_ZULU_TIME = 9211;
+
+        // SayIntentions hotkey IDs
+        private const int HOTKEY_SI_LAST_TRANSMISSION = 9216;
+        private const int HOTKEY_SI_ASSIGNED_STATUS = 9217;
+        private const int HOTKEY_SI_BUILD_TAXI_ROUTE = 9218;
+
+        /// <summary>Ctrl+Shift+Y as its registration constants PLUS the human-readable
+        /// chord the hotkey guides print. ONE definition on purpose:
+        /// HotkeyGuideSayIntentionsChordTests asserts every guide against this string,
+        /// so the guides, the test and the registration cannot drift — the chord used
+        /// to exist as three independent spellings (guide prose, test const, raw
+        /// MOD_CONTROL|MOD_SHIFT,0x59 call).</summary>
+        internal const uint SI_BUILD_TAXI_ROUTE_MODIFIERS = MOD_CONTROL | MOD_SHIFT;
+        internal const uint SI_BUILD_TAXI_ROUTE_KEY = 0x59; // Y
+        internal const string SayIntentionsBuildTaxiRouteChordText = "Ctrl+Shift+Y";
+
+        // Alt+L and Ctrl+Shift+L follow the same pattern as SayIntentionsBuildTaxiRouteChordText
+        // above: registration constants plus the human-readable chord, so the registration and
+        // the guide text can never drift apart.
+        internal const uint LOOK_AROUND_MODIFIERS = MOD_ALT;
+        internal const uint LOOK_AROUND_KEY = 0x4C; // L
+        // Consumed by the guide test — see HotkeyGuideSurroundingsChordTests.
+        internal const string LookAroundChordText = "Alt+L";
+
+        internal const uint SHOW_SURROUNDINGS_MODIFIERS = MOD_CONTROL | MOD_SHIFT;
+        internal const uint SHOW_SURROUNDINGS_KEY = 0x4C; // L
+        // Consumed by the guide test — see HotkeyGuideSurroundingsChordTests.
+        internal const string SurroundingsWindowChordText = "Ctrl+Shift+L";
+
+        // Shift+O (output), the Volanta window: the same pattern again.
+        internal const uint VOLANTA_MODIFIERS = MOD_SHIFT;
+        internal const uint VOLANTA_KEY = 0x4F; // O
+        // Consumed by the guide test — see HotkeyGuideVolantaChordTests.
+        internal const string VolantaChordText = "Shift+O";
 
         private IntPtr windowHandle;
         private bool visualGuidanceHotkeysActive = false;
@@ -221,7 +261,7 @@ public class HotkeyManager : IDisposable
 
             if (!registered || !inputRegistered)
             {
-                System.Diagnostics.Debug.WriteLine("Failed to register hotkeys");
+                Log.Debug("Hotkeys", "Failed to register hotkeys");
             }
         }
 
@@ -367,8 +407,8 @@ public class HotkeyManager : IDisposable
                         case HOTKEY_SPEED_VS:
                             TriggerHotkey(HotkeyAction.ReadSpeedVS);
                             break;
-                        case HOTKEY_CHECKLIST:
-                            TriggerHotkey(HotkeyAction.ShowChecklist);
+                        case HOTKEY_FIRST_OFFICER:
+                            TriggerHotkey(HotkeyAction.ShowFirstOfficer);
                             break;
                         case HOTKEY_CHECKLIST_ECL:
                             TriggerHotkey(HotkeyAction.ShowChecklistECL);
@@ -402,6 +442,9 @@ public class HotkeyManager : IDisposable
                             break;
                         case HOTKEY_TOGGLE_ECAM_MONITORING:
                             TriggerHotkey(HotkeyAction.ToggleECAMMonitoring);
+                            break;
+                        case HOTKEY_VATSIM_MUTE:
+                            TriggerHotkey(HotkeyAction.ToggleVatsimAnnouncements);
                             break;
                         case HOTKEY_SHOW_OANS:
                             TriggerHotkey(HotkeyAction.ShowOANS);
@@ -476,6 +519,9 @@ public class HotkeyManager : IDisposable
                         case HOTKEY_WEATHER_RADAR:
                             TriggerHotkey(HotkeyAction.ShowWeatherRadar);
                             break;
+                        case HOTKEY_VOLANTA:
+                            TriggerHotkey(HotkeyAction.ShowVolanta);
+                            break;
                         case HOTKEY_OUTSIDE_TEMP:
                             TriggerHotkey(HotkeyAction.ReadOutsideTemperature);
                             break;
@@ -491,11 +537,23 @@ public class HotkeyManager : IDisposable
                         case HOTKEY_TAXI_WHERE_AM_I:
                             TriggerHotkey(HotkeyAction.TaxiWhereAmI);
                             break;
+                        case HOTKEY_LOOK_AROUND:
+                            TriggerHotkey(HotkeyAction.LookAround);
+                            break;
+                        case HOTKEY_SHOW_SURROUNDINGS:
+                            TriggerHotkey(HotkeyAction.ShowSurroundings);
+                            break;
                         case HOTKEY_GROUND_TRAFFIC:
                             TriggerHotkey(HotkeyAction.AnnounceGroundTraffic);
                             break;
                         case HOTKEY_READ_GSX_TOOLTIP:
                             TriggerHotkey(HotkeyAction.ReadGsxTooltip);
+                            break;
+                        case HOTKEY_SI_LAST_TRANSMISSION:
+                            TriggerHotkey(HotkeyAction.SayIntentionsLastTransmission);
+                            break;
+                        case HOTKEY_SI_ASSIGNED_STATUS:
+                            TriggerHotkey(HotkeyAction.SayIntentionsAssignedStatus);
                             break;
                     }
                     DeactivateOutputHotkeyMode();
@@ -592,6 +650,9 @@ public class HotkeyManager : IDisposable
                         case HOTKEY_SHOW_DCDU:
                             TriggerHotkey(HotkeyAction.ShowDCDU);
                             break;
+                        case HOTKEY_SHOW_AIRCRAFT_WINDOWS:
+                            TriggerHotkey(HotkeyAction.ShowAircraftWindows);
+                            break;
                         case HOTKEY_TAXI_FORM:
                             TriggerHotkey(HotkeyAction.TaxiAssistForm);
                             break;
@@ -603,6 +664,9 @@ public class HotkeyManager : IDisposable
                             break;
                         case HOTKEY_LANDING_EXIT:
                             TriggerHotkey(HotkeyAction.LandingExitPlanner);
+                            break;
+                        case HOTKEY_SI_BUILD_TAXI_ROUTE:
+                            TriggerHotkey(HotkeyAction.SayIntentionsBuildTaxiRoute);
                             break;
                         case HOTKEY_ACCESS_GSX:
                             TriggerHotkey(HotkeyAction.ShowAccessGSX);
@@ -618,7 +682,7 @@ public class HotkeyManager : IDisposable
                     // query while hand-flying", and VG implies hand-flying with extra audio.
                     // Registration is reference-counted (see AcquireQuickAccessHotkeys), so
                     // either mode by itself or both active produces the same dispatch path.
-                    System.Diagnostics.Debug.WriteLine($"Quick-access hotkey: Received WM_HOTKEY id={hotkeyId} (handFly={handFlyHotkeysActive}, vg={visualGuidanceHotkeysActive})");
+                    Log.Debug("Hotkeys", $"Quick-access hotkey: Received WM_HOTKEY id={hotkeyId} (handFly={handFlyHotkeysActive}, vg={visualGuidanceHotkeysActive})");
                     switch (hotkeyId)
                     {
                         case HOTKEY_HANDFLY_HEADING:
@@ -651,7 +715,7 @@ public class HotkeyManager : IDisposable
                             TriggerHotkey(HotkeyAction.ReadTargetFPM);
                             break;
                         default:
-                            System.Diagnostics.Debug.WriteLine($"Quick-access hotkey: Unknown hotkey ID {hotkeyId}");
+                            Log.Debug("Hotkeys", $"Quick-access hotkey: Unknown hotkey ID {hotkeyId}");
                             break;
                     }
                     return true;
@@ -706,7 +770,7 @@ public class HotkeyManager : IDisposable
             RegisterHotKey(windowHandle, HOTKEY_SPEED_VLS, MOD_SHIFT, 0x34);     // Shift+4 (Minimum Selectable Speed)
             RegisterHotKey(windowHandle, HOTKEY_SPEED_VS, MOD_SHIFT, 0x35);      // Shift+5 (Stall Speed)
             RegisterHotKey(windowHandle, HOTKEY_SPEED_VFE, MOD_SHIFT, 0x36);     // Shift+6 (V FE Speed)
-            RegisterHotKey(windowHandle, HOTKEY_CHECKLIST, MOD_SHIFT, 0x43);     // Shift+C (static text checklist)
+            RegisterHotKey(windowHandle, HOTKEY_FIRST_OFFICER, MOD_SHIFT, 0x43); // Shift+C (First Officer window)
             RegisterHotKey(windowHandle, HOTKEY_CHECKLIST_ECL, MOD_CONTROL | MOD_SHIFT, 0x43); // Ctrl+Shift+C (A380 live ECL)
             RegisterHotKey(windowHandle, HOTKEY_FUEL_QUANTITY, MOD_NONE, 0x46);  // F (Fuel Quantity)
             RegisterHotKey(windowHandle, HOTKEY_FLAPS, MOD_NONE, 0x4C);          // L (Flaps)
@@ -718,6 +782,7 @@ public class HotkeyManager : IDisposable
             RegisterHotKey(windowHandle, HOTKEY_TOGGLE_TRIM, MOD_SHIFT, 0x54);   // Shift+T (Toggle Trim Announcements)
             RegisterHotKey(windowHandle, HOTKEY_TAKEOFF_ASSIST, MOD_CONTROL, 0x54); // Ctrl+T (Takeoff Assist)
             RegisterHotKey(windowHandle, HOTKEY_TOGGLE_ECAM_MONITORING, MOD_CONTROL, 0x45); // Ctrl+E (Toggle ECAM Monitoring)
+            RegisterHotKey(windowHandle, HOTKEY_VATSIM_MUTE, MOD_ALT, 0x56); // Alt+V (Toggle VATSIM announcements)
             RegisterHotKey(windowHandle, HOTKEY_SHOW_OANS, MOD_CONTROL | MOD_SHIFT, 0x42);  // Ctrl+Shift+B (A380 OANS / BTV)
             RegisterHotKey(windowHandle, HOTKEY_MONITOR_MANAGER, MOD_CONTROL, 0x4D); // Ctrl+M (Monitor Manager - per-aircraft)
             RegisterHotKey(windowHandle, HOTKEY_HAND_FLY_MODE, MOD_CONTROL, 0x48); // Ctrl+H (Hand Fly Mode)
@@ -741,6 +806,7 @@ public class HotkeyManager : IDisposable
             RegisterHotKey(windowHandle, HOTKEY_TCAS_ANNOUNCE, MOD_NONE, 0x52);            // R (Announce Tracked TCAS Traffic)
             RegisterHotKey(windowHandle, HOTKEY_TCAS_WINDOW, MOD_CONTROL, 0x52);           // Ctrl+R (TCAS Traffic Window)
             RegisterHotKey(windowHandle, HOTKEY_WEATHER_RADAR, MOD_SHIFT, 0x52);           // Shift+R (Weather Radar Window)
+            RegisterHotKey(windowHandle, HOTKEY_VOLANTA, VOLANTA_MODIFIERS, VOLANTA_KEY);  // Shift+O (Volanta window)
             RegisterHotKey(windowHandle, HOTKEY_OUTSIDE_TEMP, MOD_NONE, 0x4F);             // O (Outside Temperature)
             RegisterHotKey(windowHandle, HOTKEY_SQUAWK_CODE, MOD_NONE, 0x58);             // X (Squawk Code)
 
@@ -760,8 +826,14 @@ public class HotkeyManager : IDisposable
             // chord was held by the (now-retired) STATUS Display hotkey; it stays on Alt+Y so
             // existing users' muscle memory and all guides remain valid.
             RegisterHotKey(windowHandle, HOTKEY_TAXI_WHERE_AM_I, MOD_ALT, 0x59);          // Alt+Y (Where Am I)
+            RegisterHotKey(windowHandle, HOTKEY_LOOK_AROUND, LOOK_AROUND_MODIFIERS, LOOK_AROUND_KEY);                    // Alt+L (Look around)
+            RegisterHotKey(windowHandle, HOTKEY_SHOW_SURROUNDINGS, SHOW_SURROUNDINGS_MODIFIERS, SHOW_SURROUNDINGS_KEY); // Ctrl+Shift+L (Surroundings window)
             RegisterHotKey(windowHandle, HOTKEY_GROUND_TRAFFIC, MOD_ALT, 0x47);           // Alt+G (Nearest ground traffic)
             RegisterHotKey(windowHandle, HOTKEY_READ_GSX_TOOLTIP, MOD_CONTROL, 0x47);     // Ctrl+G (Read latest GSX tooltip)
+
+            // SayIntentions readouts (Output mode)
+            RegisterHotKey(windowHandle, HOTKEY_SI_LAST_TRANSMISSION, MOD_CONTROL, 0x53);                // Ctrl+S (Last SI transmission)
+            RegisterHotKey(windowHandle, HOTKEY_SI_ASSIGNED_STATUS, MOD_CONTROL | MOD_SHIFT, 0x53);      // Ctrl+Shift+S (SI assigned gate/runway)
 
             // Auto-timeout disabled - hotkey mode stays active until used or escape pressed
 
@@ -813,7 +885,7 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_SPEED_VLS);
             UnregisterHotKey(windowHandle, HOTKEY_SPEED_VS);
             UnregisterHotKey(windowHandle, HOTKEY_SPEED_VFE);
-            UnregisterHotKey(windowHandle, HOTKEY_CHECKLIST);
+            UnregisterHotKey(windowHandle, HOTKEY_FIRST_OFFICER);
             UnregisterHotKey(windowHandle, HOTKEY_CHECKLIST_ECL);
             UnregisterHotKey(windowHandle, HOTKEY_FUEL_QUANTITY);
             UnregisterHotKey(windowHandle, HOTKEY_FLAPS);
@@ -825,6 +897,7 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_TOGGLE_TRIM);
             UnregisterHotKey(windowHandle, HOTKEY_TAKEOFF_ASSIST);
             UnregisterHotKey(windowHandle, HOTKEY_TOGGLE_ECAM_MONITORING);
+            UnregisterHotKey(windowHandle, HOTKEY_VATSIM_MUTE);
             UnregisterHotKey(windowHandle, HOTKEY_SHOW_OANS);
             UnregisterHotKey(windowHandle, HOTKEY_MONITOR_MANAGER);
             UnregisterHotKey(windowHandle, HOTKEY_HAND_FLY_MODE);
@@ -848,6 +921,7 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_TCAS_ANNOUNCE);
             UnregisterHotKey(windowHandle, HOTKEY_TCAS_WINDOW);
             UnregisterHotKey(windowHandle, HOTKEY_WEATHER_RADAR);
+            UnregisterHotKey(windowHandle, HOTKEY_VOLANTA);
             UnregisterHotKey(windowHandle, HOTKEY_OUTSIDE_TEMP);
             UnregisterHotKey(windowHandle, HOTKEY_SQUAWK_CODE);
 
@@ -859,8 +933,12 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_STATUS);
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_REPEAT);
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_WHERE_AM_I);
+            UnregisterHotKey(windowHandle, HOTKEY_LOOK_AROUND);
+            UnregisterHotKey(windowHandle, HOTKEY_SHOW_SURROUNDINGS);
             UnregisterHotKey(windowHandle, HOTKEY_GROUND_TRAFFIC);
             UnregisterHotKey(windowHandle, HOTKEY_READ_GSX_TOOLTIP);
+            UnregisterHotKey(windowHandle, HOTKEY_SI_LAST_TRANSMISSION);
+            UnregisterHotKey(windowHandle, HOTKEY_SI_ASSIGNED_STATUS);
 
             OutputHotkeyModeChanged?.Invoke(this, new HotkeyModeEventArgs(wasCancelled ? HotkeyModeStatus.Cancelled : HotkeyModeStatus.Deactivated));
         }
@@ -903,12 +981,18 @@ public class HotkeyManager : IDisposable
             RegisterHotKey(windowHandle, HOTKEY_PMDG_EFB_FO, MOD_CONTROL | MOD_SHIFT, 0x54); // Ctrl+Shift+T (PMDG EFB First Officer)
             RegisterHotKey(windowHandle, HOTKEY_SHOW_RMP, MOD_CONTROL | MOD_SHIFT, 0x52);  // Ctrl+Shift+R (A380 Radio Management Panel)
             RegisterHotKey(windowHandle, HOTKEY_SHOW_DCDU, MOD_CONTROL | MOD_SHIFT, 0x44); // Ctrl+Shift+D (A32NX DCDU / CPDLC window)
+            RegisterHotKey(windowHandle, HOTKEY_SHOW_AIRCRAFT_WINDOWS, MOD_CONTROL | MOD_SHIFT, 0x46); // Ctrl+Shift+F (Fenix windows list)
 
             // Taxi guidance hotkeys (Input mode)
             RegisterHotKey(windowHandle, HOTKEY_TAXI_FORM, MOD_SHIFT, 0x59);            // Shift+Y (Open Taxi Form)
             RegisterHotKey(windowHandle, HOTKEY_TAXI_CONTINUE, MOD_NONE, 0x59);         // Y (Continue past hold-short)
             RegisterHotKey(windowHandle, HOTKEY_TAXI_STOP, MOD_CONTROL, 0x59);          // Ctrl+Y (Stop guidance)
             RegisterHotKey(windowHandle, HOTKEY_LANDING_EXIT, MOD_SHIFT, 0x58);         // Shift+X (Landing Exit Planner)
+            // Fourth of the Y family, because what it builds is a TAXI ROUTE: Y continues
+            // past a hold-short, Shift+Y opens the taxi form, Ctrl+Y stops guidance. Named
+            // for what it produces rather than for SayIntentions, so a pilot reaching for
+            // it thinks of the route, not the source.
+            RegisterHotKey(windowHandle, HOTKEY_SI_BUILD_TAXI_ROUTE, SI_BUILD_TAXI_ROUTE_MODIFIERS, SI_BUILD_TAXI_ROUTE_KEY); // Ctrl+Shift+Y (Build taxi route from SI)
 
             // Access GSX hotkey (Input mode). Alt+G is free here — output mode
             // Alt+G is taken by Nearest Ground Traffic, but each mode has its
@@ -958,12 +1042,14 @@ public class HotkeyManager : IDisposable
             UnregisterHotKey(windowHandle, HOTKEY_PMDG_EFB_FO);
             UnregisterHotKey(windowHandle, HOTKEY_SHOW_RMP);
             UnregisterHotKey(windowHandle, HOTKEY_SHOW_DCDU);
+            UnregisterHotKey(windowHandle, HOTKEY_SHOW_AIRCRAFT_WINDOWS);
 
             // Taxi guidance hotkeys
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_FORM);
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_CONTINUE);
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_STOP);
             UnregisterHotKey(windowHandle, HOTKEY_LANDING_EXIT);
+            UnregisterHotKey(windowHandle, HOTKEY_SI_BUILD_TAXI_ROUTE);
 
             // Access GSX (Input mode Alt+G).
             UnregisterHotKey(windowHandle, HOTKEY_ACCESS_GSX);
@@ -1022,11 +1108,11 @@ public class HotkeyManager : IDisposable
                     if (!ok)
                     {
                         allOk = false;
-                        System.Diagnostics.Debug.WriteLine($"Quick-access hotkey: failed to register {QuickAccessKeys[i].label} (id={QuickAccessKeys[i].id})");
+                        Log.Debug("Hotkeys", $"Quick-access hotkey: failed to register {QuickAccessKeys[i].label} (id={QuickAccessKeys[i].id})");
                     }
                 }
             }
-            System.Diagnostics.Debug.WriteLine($"Quick-access hotkeys: refCount={quickAccessActiveModeCount}, allOk={allOk}");
+            Log.Debug("Hotkeys", $"Quick-access hotkeys: refCount={quickAccessActiveModeCount}, allOk={allOk}");
             return allOk;
         }
 
@@ -1049,11 +1135,11 @@ public class HotkeyManager : IDisposable
                         quickAccessKeyRegistered[i] = false;
                     }
                 }
-                System.Diagnostics.Debug.WriteLine("Quick-access hotkeys: all keys released (no active modes)");
+                Log.Debug("Hotkeys", "Quick-access hotkeys: all keys released (no active modes)");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"Quick-access hotkeys: refCount={quickAccessActiveModeCount} (other mode still active, keys kept)");
+                Log.Debug("Hotkeys", $"Quick-access hotkeys: refCount={quickAccessActiveModeCount} (other mode still active, keys kept)");
             }
         }
 
@@ -1067,12 +1153,12 @@ public class HotkeyManager : IDisposable
         {
             if (outputHotkeyModeActive || handFlyHotkeysActive)
             {
-                System.Diagnostics.Debug.WriteLine("Hand fly hotkeys: Skipped registration (mode conflict or already active)");
+                Log.Debug("Hotkeys", "Hand fly hotkeys: Skipped registration (mode conflict or already active)");
                 return false;
             }
             bool ok = AcquireQuickAccessHotkeys();
             handFlyHotkeysActive = true;  // mode flag; dispatch reads it to know which actions to fire
-            System.Diagnostics.Debug.WriteLine($"Hand fly hotkeys: registered (allKeysOk={ok})");
+            Log.Debug("Hotkeys", $"Hand fly hotkeys: registered (allKeysOk={ok})");
             return ok;
         }
 
@@ -1084,12 +1170,12 @@ public class HotkeyManager : IDisposable
         {
             if (!handFlyHotkeysActive)
             {
-                System.Diagnostics.Debug.WriteLine("Hand fly hotkeys: Unregister skipped (not active)");
+                Log.Debug("Hotkeys", "Hand fly hotkeys: Unregister skipped (not active)");
                 return;
             }
             handFlyHotkeysActive = false;
             ReleaseQuickAccessHotkeys();
-            System.Diagnostics.Debug.WriteLine("Hand fly hotkeys: Unregistered successfully");
+            Log.Debug("Hotkeys", "Hand fly hotkeys: Unregistered successfully");
         }
 
         /// <summary>
@@ -1102,12 +1188,12 @@ public class HotkeyManager : IDisposable
         {
             if (outputHotkeyModeActive || visualGuidanceHotkeysActive)
             {
-                System.Diagnostics.Debug.WriteLine("Visual guidance hotkeys: Skipped registration (mode conflict or already active)");
+                Log.Debug("Hotkeys", "Visual guidance hotkeys: Skipped registration (mode conflict or already active)");
                 return false;
             }
             bool ok = AcquireQuickAccessHotkeys();
             visualGuidanceHotkeysActive = true;
-            System.Diagnostics.Debug.WriteLine($"Visual guidance hotkeys: registered (allKeysOk={ok})");
+            Log.Debug("Hotkeys", $"Visual guidance hotkeys: registered (allKeysOk={ok})");
             return ok;
         }
 
@@ -1118,13 +1204,13 @@ public class HotkeyManager : IDisposable
         {
             if (!visualGuidanceHotkeysActive)
             {
-                System.Diagnostics.Debug.WriteLine("Visual guidance hotkeys: Unregister skipped (not active)");
+                Log.Debug("Hotkeys", "Visual guidance hotkeys: Unregister skipped (not active)");
                 return;
             }
 
             visualGuidanceHotkeysActive = false;
             ReleaseQuickAccessHotkeys();
-            System.Diagnostics.Debug.WriteLine("Visual guidance hotkeys: Unregistered successfully");
+            Log.Debug("Hotkeys", "Visual guidance hotkeys: Unregistered successfully");
         }
 
         public void Suspend()
@@ -1151,7 +1237,7 @@ public class HotkeyManager : IDisposable
 
             if (!registered || !inputRegistered)
             {
-                System.Diagnostics.Debug.WriteLine("Failed to re-register hotkeys after resume");
+                Log.Debug("Hotkeys", "Failed to re-register hotkeys after resume");
                 return false;
             }
             return true;
@@ -1266,7 +1352,7 @@ public class HotkeyManager : IDisposable
         ReadSpeedVFE,
         ReadSpeedVLS,
         ReadSpeedVS,
-        ShowChecklist,
+        ShowFirstOfficer,
         ShowChecklistECL,
         ReadFuelQuantity,
         ReadFlaps,
@@ -1279,6 +1365,7 @@ public class HotkeyManager : IDisposable
         ReadNDWaypoint,   // Ctrl+W (output) — FBW ND TO-waypoint name/distance/bearing
         ToggleTakeoffAssist,
         ToggleECAMMonitoring,
+        ToggleVatsimAnnouncements,
         MonitorManager,
         ToggleHandFlyMode,
         ToggleVisualGuidance,
@@ -1313,6 +1400,7 @@ public class HotkeyManager : IDisposable
         AnnounceTcasTraffic,
         ShowTcasWindow,
         ShowWeatherRadar,
+        ShowVolanta,   // Shift+O (output) — the Volanta live map window, also Extras > Volanta
         ReadOutsideTemperature,
         ReadSquawkCode,
         TaxiAssistForm,
@@ -1321,8 +1409,14 @@ public class HotkeyManager : IDisposable
         TaxiContinue,
         TaxiStop,
         TaxiWhereAmI,
+        LookAround,
+        ShowSurroundings,
         LandingExitPlanner,
         AnnounceGroundTraffic,
         ShowAccessGSX,
         ReadGsxTooltip,
+        SayIntentionsLastTransmission,
+        SayIntentionsAssignedStatus,
+        SayIntentionsBuildTaxiRoute,
+        ShowAircraftWindows,   // Ctrl+Shift+F (input) — the aircraft's own window list (the Fenix windows)
     }

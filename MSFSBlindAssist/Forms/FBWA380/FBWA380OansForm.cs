@@ -23,8 +23,8 @@ public sealed class FBWA380OansForm : Form
     // Map / BTV
     private ComboBox _btvRunway = null!, _btvExit = null!;
     private Button _armRunway = null!, _armExit = null!, _btvClear = null!;
-    private TextBox _btvReadout = null!;
-    private Label _manualHeader = null!, _runwayLengthLabel = null!, _fmsHint = null!;
+    private DisplayListBox _btvReadout = null!;
+    private Label _manualHeader = null!, _runwayLengthLabel = null!, _manualStopLabel = null!, _fmsHint = null!;
     private TextBox _manualStop = null!;
     private Button _manualStopApply = null!;
 
@@ -34,7 +34,7 @@ public sealed class FBWA380OansForm : Form
     private TextBox _airportInfo = null!;
 
     // Status
-    private TextBox _statusInfo = null!;
+    private DisplayListBox _statusInfo = null!;
 
     private Snap _s = new();
     private bool _subscribed, _firstPush = true;
@@ -53,7 +53,11 @@ public sealed class FBWA380OansForm : Form
         FormBorderStyle = FormBorderStyle.Sizable;
         ShowInTaskbar = false; KeyPreview = true;
 
-        _status = new Label { Location = new Point(12, 10), Size = new Size(604, 36), Text = "OANS: connecting…", AccessibleName = "OANS status" };
+        // No explicit AccessibleName: this Label's Text IS the message ("OANS: connected", the
+        // full Navigraph instruction), and a Label exposes no Value — so a pinned name would be
+        // the only thing a screen reader ever read. ControlAccessibleObject.Name falls back to
+        // Text when AccessibleName is unset, which is always current.
+        _status = new Label { Location = new Point(12, 10), Size = new Size(604, 36), Text = "OANS: connecting…" };
         _tabs = new TabControl { Location = new Point(12, 50), Size = new Size(604, 504), AccessibleName = "OANS tabs" };
         var tpMap = new TabPage("Map and BTV") { AccessibleName = "Map and BTV" };
         var tpArpt = new TabPage("Airport") { AccessibleName = "Airport" };
@@ -74,20 +78,25 @@ public sealed class FBWA380OansForm : Form
         _armRunway.Click += (_, _) => ArmRunway();
         var exitLabel = new Label { Text = "BTV e&xit:", Location = new Point(320, 14), Size = new Size(60, 22) };
         _btvExit = new ComboBox { Location = new Point(382, 11), Size = new Size(90, 24), DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "BTV exit" };
-        _armExit = new Button { Text = "Arm e&xit", Location = new Point(478, 10), Size = new Size(96, 26), AccessibleName = "Arm BTV exit" };
+        // Mnemonic is &e, not the label's &x: sharing X let a repeated Alt+X — a normal
+        // screen-reader re-orientation keystroke — fall through the label onto this button and
+        // arm an exit the pilot never chose. Mirrors the runway pair (label U, button R).
+        _armExit = new Button { Text = "Arm &exit", Location = new Point(478, 10), Size = new Size(96, 26), AccessibleName = "Arm BTV exit" };
         _armExit.Click += (_, _) => ArmExit();
         _btvClear = new Button { Text = "&Clear BTV", Location = new Point(12, 42), Size = new Size(110, 26), AccessibleName = "Clear BTV selection" };
         _btvClear.Click += (_, _) => _client.EnqueueCommand("oans_clear");
 
-        _btvReadout = new TextBox
+        _btvReadout = new DisplayListBox
         {
-            Location = new Point(12, 76), Size = new Size(562, 230), Multiline = true, ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), AccessibleName = "BTV status"
+            Location = new Point(12, 76), Size = new Size(562, 230), AccessibleName = "BTV status"
         };
 
         _manualHeader = new Label { Text = "Manual BTV (no Navigraph maps):", Location = new Point(12, 316), Size = new Size(560, 18), Font = new Font(Font, FontStyle.Bold) };
-        _runwayLengthLabel = new Label { Text = "Runway length: —", Location = new Point(12, 338), Size = new Size(560, 18), AccessibleName = "Runway length" };
-        var msLabel = new Label { Text = "Stop &distance:", Location = new Point(12, 362), Size = new Size(96, 22) };
+        // No explicit AccessibleName — see _status above. UpdateMap writes the whole label
+        // plus its value ("Runway length: 3000 m") into Text, and in the manual BTV tier this
+        // is the only place the runway length appears at all.
+        _runwayLengthLabel = new Label { Text = "Runway length: —", Location = new Point(12, 338), Size = new Size(560, 18) };
+        _manualStopLabel = new Label { Text = "Stop &distance:", Location = new Point(12, 362), Size = new Size(96, 22) };
         _manualStop = new TextBox { Location = new Point(112, 359), Size = new Size(90, 24), AccessibleName = "Manual BTV stop distance" };
         _manualStopApply = new Button { Text = "&Apply", Location = new Point(208, 358), Size = new Size(80, 26), AccessibleName = "Apply manual stop distance" };
         _manualStopApply.Click += (_, _) => ApplyManualStop();
@@ -96,7 +105,7 @@ public sealed class FBWA380OansForm : Form
         tp.Controls.AddRange(new Control[]
         {
             rwyLabel, _btvRunway, _armRunway, exitLabel, _btvExit, _armExit, _btvClear, _btvReadout,
-            _manualHeader, _runwayLengthLabel, msLabel, _manualStop, _manualStopApply, _fmsHint
+            _manualHeader, _runwayLengthLabel, _manualStopLabel, _manualStop, _manualStopApply, _fmsHint
         });
     }
 
@@ -108,9 +117,15 @@ public sealed class FBWA380OansForm : Form
         _displayAirport.Click += (_, _) => DisplayTyped();
 
         var fp = new Label { Text = "Flight-plan airports:", Location = new Point(12, 46), Size = new Size(560, 18) };
-        _btnOrigin = new Button { Text = "Origin", Location = new Point(12, 68), Size = new Size(170, 28), AccessibleName = "Display origin airport", Enabled = false };
-        _btnDest = new Button { Text = "Destination", Location = new Point(192, 68), Size = new Size(180, 28), AccessibleName = "Display destination airport", Enabled = false };
-        _btnAltn = new Button { Text = "Alternate", Location = new Point(382, 68), Size = new Size(180, 28), AccessibleName = "Display alternate airport", Enabled = false };
+        // No explicit AccessibleName on these three — see _status above for the fallback rule.
+        // UpdateArpt writes the ICAO into Text ("Origin EDDF"); a pinned name shadowed it, so a
+        // screen reader said "Display origin airport" and the pilot could not tell WHICH airport
+        // any of the three would load. The verb lives in the description instead, where it is
+        // static and cannot go stale — one const, so the three cannot drift apart either.
+        const string displayAirportDesc = "Display this airport on the OANS map";
+        _btnOrigin = new Button { Text = "Origin", Location = new Point(12, 68), Size = new Size(170, 28), AccessibleDescription = displayAirportDesc, Enabled = false };
+        _btnDest = new Button { Text = "Destination", Location = new Point(192, 68), Size = new Size(180, 28), AccessibleDescription = displayAirportDesc, Enabled = false };
+        _btnAltn = new Button { Text = "Alternate", Location = new Point(382, 68), Size = new Size(180, 28), AccessibleDescription = displayAirportDesc, Enabled = false };
         _btnOrigin.Click += (_, _) => DisplayIcao(_s.FmsOrigin);
         _btnDest.Click += (_, _) => DisplayIcao(_s.FmsDest);
         _btnAltn.Click += (_, _) => DisplayIcao(_s.FmsAltn);
@@ -127,10 +142,9 @@ public sealed class FBWA380OansForm : Form
     private void BuildStatusTab(TabPage tp)
     {
         var infoLabel = new Label { Text = "Database &status:", Location = new Point(12, 14), Size = new Size(200, 18) };
-        _statusInfo = new TextBox
+        _statusInfo = new DisplayListBox
         {
-            Location = new Point(12, 34), Size = new Size(562, 400), Multiline = true, ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 10), AccessibleName = "Database status"
+            Location = new Point(12, 34), Size = new Size(562, 400), AccessibleName = "Database status"
         };
         tp.Controls.AddRange(new Control[] { infoLabel, _statusInfo });
     }
@@ -199,12 +213,15 @@ public sealed class FBWA380OansForm : Form
         _btvExit.Enabled = armed && _btvExit.Items.Count > 0;
         _armExit.Enabled = armed && _btvExit.Items.Count > 0;
         _btvClear.Enabled = armed;
-        DisplayText.SetPreserveCaret(_btvReadout, BtvReadoutBlock());
+        _btvReadout.SetText(BtvReadoutBlock());
 
-        // Manual tier visible only without Navigraph maps.
+        // Manual tier visible only without Navigraph maps — the WHOLE tier: hiding the header
+        // while merely disabling the input row orphaned an enabled "Stop distance:" label and
+        // two "unavailable" controls with the one line that explained them gone.
         bool manual = !_s.Available;
         _manualHeader.Visible = manual; _runwayLengthLabel.Visible = manual;
-        _manualStop.Enabled = manual; _manualStopApply.Enabled = manual; _fmsHint.Visible = manual;
+        _manualStopLabel.Visible = manual; _manualStop.Visible = manual; _manualStopApply.Visible = manual;
+        _fmsHint.Visible = manual;
         _runwayLengthLabel.Text = _s.RunwayLengthM != null ? $"Runway length: {Dist(_s.RunwayLengthM.Value)}" : "Runway length: —";
     }
 
@@ -226,7 +243,7 @@ public sealed class FBWA380OansForm : Form
         sb.AppendLine(_s.Available ? "Airport database: loaded" : "Airport database: NOT loaded (no Navigraph)");
         if (!string.IsNullOrEmpty(_s.Airac)) sb.AppendLine($"AIRAC cycle: {_s.Airac}");
         if (_s.Failed) sb.AppendLine("OANS: FAILED");
-        DisplayText.SetPreserveCaret(_statusInfo, sb.ToString().TrimEnd());
+        _statusInfo.SetText(sb.ToString().TrimEnd());
     }
 
     private string Dist(int metres) => _s.Metric ? $"{metres} m" : $"{(int)Math.Round(metres * 3.280839895)} ft";
