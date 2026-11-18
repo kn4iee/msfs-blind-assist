@@ -363,14 +363,17 @@ test('with focus following, a pressed control rebuilt under a new label keeps fo
   assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('COMPUTE DONE'), 'focus left the pressed control');
 });
 
-test('without focus following, a page change only announces and a rebuilt control lets focus go', async (t) => {
+// Since #328 every EFB keeps the focus on a focused control rebuilt in its place (the shared focus rescue, pinned by
+// 'a focused button rebuilt by a label change keeps the focus in its place'), following or not; what following still
+// adds is the page title taking the focus.
+test('without focus following, a page change only announces; a rebuilt control keeps focus through the shared rescue', async (t) => {
   const s = loadShell(t);
   s.render('Dashboard', [btn(1, 'Ground'), btn(2, 'Arm')]);
   await s.spoken();
   const arm = s.buttonByLabel('Arm');
   arm.focus(); arm.click();
   s.render('Dashboard', [btn(1, 'Ground'), btn(2, 'Armed now')]);
-  assert.notStrictEqual(s.window.document.activeElement, s.buttonByLabel('Armed now'));
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('Armed now'));
   const ground = s.buttonByLabel('Ground');
   ground.focus(); ground.click();
   s.render('Ground', [btn(3, 'Doors')]);
@@ -378,14 +381,15 @@ test('without focus following, a page change only announces and a rebuilt contro
   assert.strictEqual(await s.spoken(), 'EFB page: Ground');
 });
 
-const alertItem = (idx, text) => ({ idx, kind: 'alert', controlType: '', text, clickable: false, level: 0, live: 'assertive', disabled: false });
+// A dialog's card as the A350 OIS posts it (no key). main's flyPad notice tests below keep the name alertItem.
+const dialogItem = (idx, text) => ({ idx, kind: 'alert', controlType: '', text, clickable: false, level: 0, live: 'assertive', disabled: false });
 
 test('with focus following, a dialog takes focus on its first button and gives it back to its opener when it closes', (t) => {
   const s = loadShell(t);
   follow(s, 'FLT OPS MENU', [btn(1, 'FLT OPS PLAN'), btn(2, 'TURNAROUND')]);
   const turn = s.buttonByLabel('TURNAROUND');
   turn.focus(); turn.click();
-  follow(s, 'FLT OPS MENU', [alertItem(3, 'TURNAROUND START: Are you sure?'), btn(4, 'CANCEL'), btn(5, 'START'),
+  follow(s, 'FLT OPS MENU', [dialogItem(3, 'TURNAROUND START: Are you sure?'), btn(4, 'CANCEL'), btn(5, 'START'),
     btn(1, 'FLT OPS PLAN'), btn(2, 'TURNAROUND')]);
   const cancel = s.buttonByLabel('CANCEL');
   assert.strictEqual(s.window.document.activeElement, cancel, 'focus did not go to the dialog');
@@ -412,8 +416,86 @@ test('with focus following, a dialog that appears by itself leaves focus where i
   follow(s, 'LOADSHEET', [btn(1, 'SET FUEL'), btn(2, 'SET ZFW')]);
   const zfw = s.buttonByLabel('SET ZFW');
   zfw.focus();   // reading, no press
-  follow(s, 'LOADSHEET', [alertItem(3, 'REFUEL: complete'), btn(4, 'OK'), btn(1, 'SET FUEL'), btn(2, 'SET ZFW')]);
+  follow(s, 'LOADSHEET', [dialogItem(3, 'REFUEL: complete'), btn(4, 'OK'), btn(1, 'SET FUEL'), btn(2, 'SET ZFW')]);
   assert.strictEqual(s.window.document.activeElement, zfw);
+});
+
+// The flyPad's error notices: the pilot presses an error's Dismiss button and the next scrape no
+// longer lists it. Removing the focused node would drop focus to <body> and the screen reader
+// somewhere arbitrary; the shell moves it to the control that followed it, else the page heading.
+const alertItem = (text, key) => ({ idx: 0, kind: 'alert', controlType: '', text, clickable: false, level: 0, live: 'assertive', disabled: false, key });
+test('dismissing a focused notice moves focus to the next control, or the page heading', (t) => {
+  const s = loadShell(t);
+  const notice = [alertItem('Error: OFP airport is invalid', 'notice:1'), btn(100001, 'Dismiss: OFP airport is invalid', { key: 'notice-dismiss:1' })];
+  s.render('Performance', notice.concat([btn(7, 'Calculate')]));
+  s.buttonByLabel('Dismiss').focus();
+  s.render('Performance', [btn(7, 'Calculate')]);
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('Calculate'));
+
+  s.render('Performance', notice);
+  s.buttonByLabel('Dismiss').focus();
+  s.render('Performance', []);
+  assert.strictEqual(s.window.document.activeElement.id, 'pgttl');
+});
+
+// A focused unkeyed button whose label changes is rebuilt as a new node in the same place: focus
+// goes to that rebuilt button, never to the control after it (Enter would then press the wrong one).
+test('a focused button rebuilt by a label change keeps the focus in its place', (t) => {
+  const s = loadShell(t);
+  s.render('Ground', [btn(1, 'Back'), btn(2, 'GPU Connect'), btn(3, 'Next')]);
+  s.buttonByLabel('GPU Connect').focus();
+  s.render('Ground', [btn(1, 'Back'), btn(2, 'GPU Disconnect'), btn(3, 'Next')]);
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('GPU Disconnect'));
+});
+
+// A notice at the top of the page going (a warning expiring, an error cleared by a retry) must not
+// move the controls below it: a node moved by insertBefore loses the focus.
+test('a notice going from above keeps the focus on the control the pilot is on', (t) => {
+  const s = loadShell(t);
+  const notice = [alertItem('Warning: Aircraft needs to be powered to load presets', 'notice:2')];
+  s.render('Performance', notice.concat([btn(6, 'Clear'), btn(7, 'Calculate')]));
+  const calc = s.buttonByLabel('Calculate');
+  calc.focus();
+  s.render('Performance', [btn(6, 'Clear'), btn(7, 'Calculate')]);
+  assert.strictEqual(s.window.document.activeElement, calc);
+});
+
+// The removed control was the last one on the page: focus stays near it, on the control before it,
+// never back at the top of the document.
+test('a focused last control going moves the focus to the control before it', (t) => {
+  const s = loadShell(t);
+  s.render('Ground', [btn(1, 'Back'), btn(2, 'Catering'), btn(3, 'Fuel Truck')]);
+  s.buttonByLabel('Fuel Truck').focus();
+  s.render('Ground', [btn(1, 'Back'), btn(2, 'Catering')]);
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('Catering'));
+});
+
+// With no control before it that stays, a notice listed at the top in the same render is not the
+// focused control's place: the control rebuilt there (same agent idx) keeps the focus, and a control
+// that simply went hands it to the next one, never to the new notice's Dismiss button.
+test('with nothing before it, a rebuilt first control keeps the focus over a new notice above it', (t) => {
+  const s = loadShell(t);
+  const notice = [alertItem('Error: Could not fetch airport', 'notice:3'), btn(100003, 'Dismiss: Could not fetch airport', { key: 'notice-dismiss:3' })];
+  s.render('Ground', [btn(2, 'GPU Connect'), btn(3, 'Next')]);
+  s.buttonByLabel('GPU Connect').focus();
+  s.render('Ground', notice.concat([btn(2, 'GPU Disconnect'), btn(3, 'Next')]));
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('GPU Disconnect'));
+
+  s.render('Ground', [btn(5, 'Fuel Truck'), btn(6, 'Next')]);
+  s.buttonByLabel('Fuel Truck').focus();
+  s.render('Ground', notice.concat([btn(5, 'Next')]));    // the agent re-stamps Next as idx 5
+  assert.strictEqual(s.window.document.activeElement, s.buttonByLabel('Next'));
+});
+
+// A control that stays but is moved by a re-sort loses the focus to insertBefore: it gets it back.
+test('a focused control moved by a re-sort keeps the focus', (t) => {
+  const s = loadShell(t);
+  s.render('Ground', [btn(1, 'Catering'), btn(2, 'Baggage'), btn(3, 'Fuel Truck')]);
+  const fuel = s.buttonByLabel('Fuel Truck');
+  fuel.focus();
+  s.render('Ground', [btn(1, 'Fuel Truck'), btn(2, 'Catering'), btn(3, 'Baggage')]);
+  assert.strictEqual(s.buttonByLabel('Fuel Truck'), fuel, 'the node was rebuilt, not moved');
+  assert.strictEqual(s.window.document.activeElement, fuel);
 });
 
 // ---- opt-in Enter-only edit box (item key commit = 'enter') ----
