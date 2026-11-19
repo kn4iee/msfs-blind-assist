@@ -1,10 +1,10 @@
 # iniBuilds A330 (MSFS 2024)
 
 The A330-200 that ships INSIDE Microsoft Flight Simulator 2024, built by iniBuilds (streamed,
-encrypted package `fs24-microsoft-aircraft-a330`, title "A330-200 (RR)"). Aircraft code
-`INI_A330`, `Aircraft/IniA330Definition*.cs` + `Aircraft/A330/` + `Forms/IniA330/`. Its autoflight
-is iniBuilds' shared Airbus code (`INI_*` L:vars and mode numbers); its cockpit switches are FS2024
-input events. Not to be confused with the Headwind A330-900neo (`HeadwindA330Definition`), a
+encrypted package `fs24-microsoft-aircraft-a330`, titles "A330-200 (RR)" and "A330-200 (GE)").
+Aircraft code `INI_A330`, `Aircraft/IniA330Definition*.cs` + `Aircraft/A330/` + `Forms/IniA330/`.
+Its autoflight and systems report through iniBuilds' own `INI_*` L:vars; its cockpit switches are
+FS2024 input events. Not to be confused with the Headwind A330-900neo (`HeadwindA330Definition`), a
 different aircraft built on the FlyByWire A32NX.
 
 ## Mechanisms (each measured live, 2026-10-16)
@@ -32,9 +32,11 @@ different aircraft built on the FlyByWire A32NX.
   `INI_FCU_ALTITUDE_PULL/PUSH_COMMAND`, `INI_AP1/AP2_BUTTON`, `INI_LOCALIZER_BUTTON`,
   `INI_APPROACH_BUTTON`, `INI_FCU_HDG_VS_COMMAND` (TRK/FPA). V/S pull = SetInputEvent
   `AIRLINER_MCU_VS_PULL` 1 then 0. SPD/MACH and METRIC are input events.
-* **Flight modes:** iniBuilds mode numbers in the `INI_*` FMA L:vars, A330 words (`A330Fma`). An
-  unknown number is spoken as "vertical mode N", never guessed; every change is logged raw to
-  `fma.log` so the words can be checked after a flight.
+* **Flight modes:** the mode numbers in the `INI_*` FMA L:vars, spoken with A330 words (`A330Fma`).
+  Six numbers are measured on this aircraft (on the ground, listed in `A330Fma`); every other number
+  in its tables is not yet seen on the A330 and needs a flight. An unknown number is spoken as
+  "vertical mode N", never guessed; every change is logged raw to `fma.log` so the words can be
+  checked after a flight.
 * **FCU dialogs** (Ctrl+H/S/A/V) carry every button beside that knob on the real FCU, each showing
   its live state: heading — pull, push, LOC, HDG-V/S / TRK-FPA; speed — pull, push, SPD/MACH, A/THR;
   altitude — pull, push, ALT, knob steps (100/1000 ft), metric, AP 1, AP 2; V/S — pull, push,
@@ -66,8 +68,11 @@ different aircraft built on the FlyByWire A32NX.
   DECIMAL, SPACE, PLUS (the +/- key), CLR.
 * **EFB:** Coherent HTML page "iniEfbA330", `Resources/coherent-a330-efb-agent.js` +
   `CoherentPmdgEfbClient.ForIniA330()`. Side-bar buttons, door state from the
-  `door-open`/`door-transit` class or the tile's gradient, ground equipment from `INI_GPU_AVAIL`,
-  `INI_CHOCKS_ENABLED`, `INI_COVERS_ENABLED` (the aircraft's OWN chocks and covers, not MSFS 2024's).
+  `door-open`/`door-transit` class or the tile's gradient, the GPU from `INI_GPU_AVAIL`. The Chocks,
+  Engine Covers and Pitot Covers buttons read what the EFB's own code reads: in MSFS 2024
+  (`L:IS2024` = 1) the SIMULATOR's chocks and covers, `COVER ON:0`, `:1` and `:2` (see below);
+  otherwise the aircraft's own `INI_CHOCKS_ENABLED` / `INI_COVERS_ENABLED`, which read 0 in 2024
+  even with all three on. The two cover buttons share one element id, so the label tells them apart.
   Live-verified scrape + click (Ground tab) and the Payload page. `A.FIELDS` must have ONE key per
   element id — an object literal keeps the last duplicate, and a stray second `zfw` entry renamed the
   cargo slider "Zero fuel weight". Units come from the page's unit box (kg or lb), never from the
@@ -76,12 +81,37 @@ different aircraft built on the FlyByWire A32NX.
   the UI thread: a single type+index write sent from the pop-out's pool thread was reported sent and
   left the camera on the MCDU close-up (live 2026-10-17), which silences the cockpit ambience.
 * **Camera views (0-based):** ECAM 3, PFD/ND 6, EFB 4/5, captain MCDU 12, F/O MCDU 13, pedestal 22.
+* **MSFS 2024 chocks and covers** (measured 2026-11-19, A330-200 (GE) loaded cold and dark): the
+  simulator's own wheel chocks, engine covers and pitot covers (`COVER ON:0`, `:1`, `:2`) were all on
+  at the start. With the engine covers on, an engine 2 start (APU bleed, IGN START, master ON) held N2
+  at 0 % for 60 s with the starter engaged; with them off, the same start lit at about 12 s and reached
+  `ENGINE_2_AVAIL` at N2 58.6 %. The EFB's Ground page shows these three, but its buttons do not
+  remove them: in 2024 they send a one-number `K:COVER_SET:n` (recorded from the page on a real
+  mouse press of Chocks: `K:COVER_SET:0` = 0), which the simulator ignores, so a sighted pilot
+  cannot remove them from this tablet either. What works: writing the state itself from the EFB's
+  page (`A:COVER ON:n` = 0 or 1, all three, both ways); `K:COVER_SET` with no index and the target
+  state (the chocks only: MSFS 2024's own Ground Services app sends exactly this); and over the
+  calculator `<state> <index> (>K:2:COVER_SET)` (`0 0` chocks off, `1 0` on, `0 1` / `1 1` the engine
+  covers). `TRIGGER_KEY_EVENT` is not bound in the EFB's page.
+* **BA's own chock and cover presses — TEMPORARY ([INI-9]):** while the agent's `A.COVER_REMOVAL` is
+  true, pressing Chocks, Engine Covers or Pitot Covers in BA's A330 EFB window writes that cover's
+  `A:COVER ON:n` itself (`A.coverPress`, ground only) instead of clicking the EFB's own dead button,
+  and the row reads back its new state; the EFB's own "Chocks Removed" / "Covers Set" notices also
+  show. Live-tested 2026-11-19 through the agent's press path: all three off and back on. Once BA's
+  simulator tablet removes chocks and covers for every aircraft, switch it off: the three rows then
+  read as status lines (`static`, not clickable), never as buttons that do nothing.
+* **Altimeter STD** (measured 2026-11-19 on the ground, powered, captain's knob): the baro knob's
+  input event pressed BY VALUE (`AIRLINER_CPT_BARO_SET_PULL` set 1 then 0) turns `XMLVAR_Baro1_Mode`
+  0 → 3 (STD), the PUSH the same way 3 → 0 (QNH); the event's `_Push`/`_Release` action does
+  nothing. The Standard button tries the value press first, then the action and the
+  `INI_*_ALTIMETER_*_COMMAND` L:vars as fallbacks, and logs which one worked.
 * **First Officer (Shift+C):** `FirstOfficer/IniAirbus/` (profile, flows, checklists and the key
   table `IniAirbusKeys`); it writes only through this definition's `HandleUIVariableSet`, starts and
   shuts down the engines itself (masters and mode selector, since 2026-10-28) and leaves the ADIRS,
-  flaps, spoilers, parking brake and altimeter STD to the Captain. The engine masters are toggles on
-  `AIRLINER_ENGn_CUTOFF` read from `INI_MIXTURE_RATIOn_HANDLE`, pressed only when the read differs:
-  NOT verified in the sim.
+  flaps, spoilers, parking brake and altimeter STD to the Captain. The engine masters' input event
+  `AIRLINER_ENGn_CUTOFF` takes the position by value (measured 2026-11-19: Set 1 ON, Set 0 OFF on
+  `INI_MIXTURE_RATIOn_HANDLE`, a repeat leaves it), and the start selector's 2 / 1 is IGN START /
+  NORM; a master is still pressed only when the read differs.
 
 ## Panel layout
 
@@ -102,7 +132,10 @@ by the definition itself (`OWN_PANELS` in the generator); everything else comes 
 * Parking brake direction (`AIRLINER_PARKINGBRAKE` input 0 = set), landing-light position words,
   dome/wiper labels, several `B:` reads.
 * MCDU OVERFLY (needs a flight plan).
-* Engine masters (see First Officer above).
+* The First Officer's engine start and shutdown flows end to end (their writes are measured on the
+  ground, see First Officer above).
+* Altimeter STD in a climb or descent, and the first officer's knob (measured on the captain's, on
+  the ground).
 
 ## Probe side effect left in the aircraft
 * Probing left RMP 1's NAV backup ON (`INI_RMP1_ILS_STATE`/`VOR_STATE` = 1) and it would not

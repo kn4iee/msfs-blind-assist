@@ -20,8 +20,10 @@ namespace MSFSBlindAssist.FirstOfficer.IniAirbus;
 /// Officer only reads them back).
 ///
 /// ENGINE MASTERS AND MODE SELECTOR (2026-10-28): the First Officer starts and shuts down the engines.
-/// These writes are NOT VERIFIED IN THE SIM (the aircraft was not loaded): the masters are presses of
-/// their input event made only when INI_MIXTURE_RATIOn_HANDLE differs (tools/a330-gen). Every master
+/// Measured 2026-11-19 on the ground: the masters' input event takes the position by value (1 ON, 0 OFF
+/// on INI_MIXTURE_RATIOn_HANDLE), the selector's 2 / 1 is IGN START / NORM, and an engine 2 start on APU
+/// bleed with these writes reached ENGINE_2_AVAIL (tools/a330-gen). A master is still pressed only when
+/// INI_MIXTURE_RATIOn_HANDLE differs. The First Officer's own start flow is not yet flown. Every master
 /// and selector write is read back, and one that does not take stops the flow.
 /// </summary>
 public sealed class IniAirbusKeys
@@ -160,7 +162,7 @@ public sealed class IniAirbusKeys
     public static readonly IniAirbusKeys A330 = new()
     {
         Title = "First Officer — iniBuilds A330",
-        // NOT VERIFIED IN THE SIM (see the class summary)
+        // measured on the ground 2026-11-19; the First Officer's start flow not yet flown (see the class summary)
         EngineMasters = Of("ENG1_MASTER", "ENG2_MASTER"),
         EngineModeSelector = "A330_ENG_MODE",
         EngineAvail = new[] { Eng1Avail, Eng2Avail },

@@ -7,11 +7,13 @@ namespace MSFSBlindAssist.Aircraft.A330;
 /// TRACK_FPA_STATE, the ALT knob pull set pitch mode 2 with ALT (6) armed, V/S pull set pitch mode 8,
 /// the ALT push set pitch mode 29.
 ///
-/// The mode NUMBERS follow iniBuilds' shared Airbus autoflight code; the WORDS are the A330's FMA
-/// vocabulary (OP CLB, CLB/DES, TRACK/FPA in TRK-FPA). The A330 package is encrypted, so the table
-/// cannot be read from the aircraft: a value it does not know is spoken as its number ("vertical
-/// mode 17") rather than guessed, so a gap is audible and can be filled from fma.log.
-/// Pure — pinned by A330FmaTests.
+/// Those six numbers are the only ones seen on the A330 so far. Every other number in the tables below
+/// is NOT yet seen on this aircraft: it is iniBuilds' numbering of the same <c>INI_*</c> mode L:vars,
+/// carried in unmeasured, and needs a flight to confirm. The WORDS are the A330's FMA vocabulary (OP
+/// CLB, CLB/DES, TRACK/FPA in TRK-FPA). The A330 package is encrypted, so the table cannot be read from
+/// the aircraft: a value it does not know is spoken as its number ("vertical mode 17") rather than
+/// guessed, and every change is logged raw to fma.log, so a gap or a wrong word can be fixed after a
+/// flight. Pure — pinned by A330FmaTests.
 /// </summary>
 internal static class A330Fma
 {

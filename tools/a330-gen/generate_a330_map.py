@@ -1,9 +1,10 @@
 """Generates MSFSBlindAssist/Resources/a330_control_map.json — the iniBuilds A330 (MSFS 2024) panels.
 
-The aircraft is a streamed, ENCRYPTED package, so nothing here is read from its files. Every control is one of the aircraft's own FS2024
-input events (SimConnect EnumerateInputEvents, 649 of them), and every read-back and position below
-was MEASURED live on 2026-10-16 by the differential probe (input/probe-*.txt): set the input event,
-snapshot all 1,936 INI_* L:vars the panel-state file names, record what moved, put it back.
+The aircraft is a streamed, ENCRYPTED package, so nothing here is read from its files. Every control
+is one of the aircraft's own FS2024 input events (SimConnect EnumerateInputEvents, 649 of them), and
+every read-back and position below was MEASURED live on 2026-10-16 by a differential probe: set the
+input event, snapshot all 1,936 INI_* L:vars the panel-state file names, record what moved, put it
+back. The results are written into this file; the probe's raw output is not kept.
 
 Conventions the probe found (do not "correct" them by intuition):
   * a push-button's INPUT is the opposite of its L:var: input 0 = pushed in (on/auto, light off) and
@@ -18,8 +19,9 @@ Conventions the probe found (do not "correct" them by intuition):
 Deliberately NOT probed (dangerous to toggle with engines running) and taken from their current
 values + the HubHop preset set instead: engine masters, engine start selector, ADIRS, IR/ADR, fire
 handles and agents, IDG, RAT, gear lever, parking brake. Their positions follow the conventions above.
-The engine masters (2026-10-28) are toggles read on INI_MIXTURE_RATIOn_HANDLE, from iniBuilds' readable
-cockpit code of the same generation — NOT verified on the A330 in the sim (see the master lines below).
+Measured since, on the ground (2026-11-19): the engine masters' Set takes the position BY VALUE (1 ON,
+0 OFF, read on INI_MIXTURE_RATIOn_HANDLE) and the start selector's Set 2 / 1 is IGN START / NORM; an
+engine 2 start with APU bleed reached ENGINE_2_AVAIL at N2 58.6 % (see the master lines below).
 
 Run:  python tools/a330-gen/generate_a330_map.py
 """
@@ -198,9 +200,9 @@ select("APU_MASTER", O, "APU", "APU master", "APU_MASTER", "INI_APU_MASTER_SWITC
        lamps=[{"read": "INI_APU_MASTER_SWITCH_FAULT", "legend": "fault"}])
 # APU START is the aircraft's own start command, written directly: measured 2026-10-28, the input
 # event's _Push/_Release reached nothing (pressed twice with the master ON and the flap open, the APU
-# never started), while `1 (>L:INI_APU_START_BUTTON_CMD)` — the aircraft's own start command — started
-# it at once (the WASM consumes the command and latches INI_APU_START_BUTTON). The START legend is
-# that latch, never the command, which reads 0 again within a frame.
+# never started), while writing the command `1 (>L:INI_APU_START_BUTTON_CMD)` started it at once (the
+# WASM consumes the command and latches INI_APU_START_BUTTON; again 2026-11-19: AVAIL about 63 s
+# later). The START legend is that latch, never the command, which reads 0 again within a frame.
 add("APU_START", O, "APU", "APU start", "button", "APU_START", mode="rpn",
     rpn="1 (>L:INI_APU_START_BUTTON_CMD)",
     lamps=[{"read": "INI_APU_START_BUTTON", "legend": "start"}, {"read": "INI_APU_AVAILABLE", "legend": "available"}])
@@ -364,16 +366,15 @@ for key, label, ev in [("CPT_MCDU_BRT", "Captain MCDU", "CPT_MCDU_BRT"), ("FO_MC
 
 # ---------------------------------------------------------------- Pedestal
 for n in (1, 2):
-    # NOT VERIFIED IN THE SIM (2026-10-28, added for the First Officer's engine start). In iniBuilds'
-    # readable cockpit code of the same generation the master's AIRLINER_ENGn_CUTOFF Set TOGGLES
-    # INI_MIXTURE_RATIOn_HANDLE whatever its value ("(L:...) ! (>L:...)"), so a plain set by value could
-    # switch a running engine OFF. So: a toggle that presses only when INI_MIXTURE_RATIOn_HANDLE (1 = ON)
-    # differs from the pick, passing the pick as the Set's value — right whether the A330's Set toggles
-    # or sets by value.
+    # Added 2026-10-28 for the First Officer's engine start. Measured 2026-11-19 on the ground, both
+    # engines: the master's AIRLINER_ENGn_CUTOFF Set takes the position BY VALUE (Set 1 = ON, Set 0 =
+    # OFF on INI_MIXTURE_RATIOn_HANDLE, and a repeated Set leaves it where it is), and engine 2 started
+    # with it. The write still presses only when INI_MIXTURE_RATIOn_HANDLE (1 = ON) differs from the
+    # pick, passing the pick as the Set's value: a master already in place is never touched.
     add(f"ENG{n}_MASTER", P, "Engine Masters", f"Engine {n} master", "select", f"ENG{n}_CUTOFF",
         f"INI_MIXTURE_RATIO{n}_HANDLE", direct("Off", "On"), mode="toggle",
         rpn=f"{{value}} (>B:AIRLINER_ENG{n}_CUTOFF_Set)",
-        notes="not verified in the sim: pressed only when the read differs, in case the Set toggles")
+        notes="the Set takes the position by value (measured 2026-11-19); pressed only when the read differs")
 
 EC = "ECAM"
 for ev, label in [("ECAM_ENG", "ENG"), ("ECAM_BLEED", "BLEED"), ("ECAM_PRESS", "PRESS"), ("ECAM_ELAC", "EL/AC"), ("ECAM_ELDC", "EL/DC"),

@@ -277,8 +277,9 @@ internal sealed class A330CduScreenReader
         }
     }
 
-    // Size classes, stated as fractions of the large font's letter height (measured on the iniBuilds
-    // CDU font at 14.5 / 12.5 / 11.3 native px against a 15.67 large letter).
+    // Size classes, stated as fractions of the large font's letter height: the same cut-offs as the
+    // trainer's size_class (tools/a330-cdu-ocr/ocr2.py). Not measured on this MCDU's font sizes, and
+    // nothing reads the class yet (A330CduChar.Size is information only).
     private A330CduSize SizeOf(double nativeCap) =>
         nativeCap >= 0.925 * BaseCap ? A330CduSize.Large : nativeCap >= 0.798 * BaseCap ? A330CduSize.Medium
         : nativeCap >= 0.721 * BaseCap ? A330CduSize.SmallCaps : A330CduSize.Small;

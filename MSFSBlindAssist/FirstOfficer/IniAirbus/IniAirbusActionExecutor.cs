@@ -138,7 +138,7 @@ public sealed class IniAirbusActionExecutor : IFoActionExecutor
     /// <summary>
     /// Why a write must not be sent, or null when it may. Pure: the definition's route, whether the
     /// key is registered, the calculator path, the input events this aircraft has and the key's cached
-    /// state are passed in (IniAirbusFoExecutorTests).
+    /// state are passed in (IniAirbusFoEvaluatorTests.A_write_that_cannot_land_is_refused).
     /// </summary>
     internal static string? Refusal(string key, bool registered,
         (bool Calc, string? InputEvent, bool Toggle, int HoldMs)? route,

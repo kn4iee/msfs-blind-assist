@@ -111,23 +111,13 @@ def feat(g, r):
             "size": size_class(cap)}
 
 
-SYNTH_PENALTY = 0.06  # rendered-font templates only win where no real sample is closer
+SYNTH_PENALTY = 0.06  # the glyph file's per-template penalty; 0 for every real sample
 
 
 def synthetic_templates():
-    """Templates rendered from the aircraft's own CDU fonts (cached): fill characters/sizes never seen."""
-    return []   # the A330's MCDU fonts are inside its encrypted package: real samples only
-    import pickle
-    p = os.path.join(HERE, "big", "synth.pkl")
-    if os.path.exists(p):
-        return pickle.load(open(p, "rb"))
-    from synth import render_set, FONTS
-    out = []
-    for fontname, bold, caps in (("INI_CDUA-Regular.ttf", 1, (47, 39, 31)), ("INI_CDUB-Regular.ttf", 0, (36, 31, 26))):
-        for cap in caps:
-            out += render_set(os.path.join(FONTS, fontname), cap, bold=bold)
-    pickle.dump(out, open(p, "wb"))
-    return out
+    """None: the A330's MCDU fonts are inside its encrypted package, so every template is a real
+    sample from a labelled capture. Kept so the matcher and the exporter keep their one code path."""
+    return []
 
 
 class Matcher:

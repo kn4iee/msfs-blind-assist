@@ -20,7 +20,8 @@ using S = IniAirbusStateEvaluator;
 /// own ENGINE_n_AVAIL held, with N2 steady, for 3 s (Stop on a 180 s timeout, the master left ON for the
 /// Captain to judge) — before the next; then the selector NORM. Shutdown cuts the masters only on the
 /// ground, with the parking brake read SET and the APU or ground power on the buses. The master and
-/// selector writes are NOT VERIFIED IN THE SIM (IniAirbusKeys).
+/// selector writes are measured on the ground (2026-11-19: an engine 2 start with them reached AVAIL);
+/// this flow itself is not yet flown (IniAirbusKeys).
 ///
 /// WHAT THE FIRST OFFICER DOES NOT DO HERE, and why (each is a Captain reminder, never a write):
 /// <list type="bullet">

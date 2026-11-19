@@ -14,9 +14,9 @@ Each section is the complete text of one rule. Its one-line form, under the same
 
 - The MCDU exports no text an external app can read, so it is READ FROM PIXELS by a trained fixed-font matcher (`A330CduScreenReader`) with its `CduPopoutProfile` (instrument views, aspect, window size) and `CduLayout` (grid, letter height, ink threshold). The pop-out finds the screen as DARK GLASS (a text-colour search fails on the mostly white/grey MCDU MENU page), waits for the camera to settle, and brings the sim forward with a four-step foreground chain ending in WScript `AppActivate`, because an FS2024 window refuses the plain `SetForegroundWindow` from a background process. The ink threshold is 40, because the MCDU draws unavailable options in GREY that peaks near 77. `CduLayout.BaseCap` must equal the trainer's `BASE_CAP` (a test pins it): 18.5 against 18.3 scaled every glyph 1 % off its templates and misread letters. Retrain with `tools/a330-cdu-ocr`; never patch the glyph `.bin` file. → [ini-a330.md](../ini-a330.md)
 
-## INI-5 (retired: the A321LR subclass and its virtual hooks are not part of this branch)
+## INI-5 (retired: it guarded code that never shipped)
 
-## INI-6 (retired: an A321LR-only rule; the A321LR is not part of this branch)
+## INI-6 (retired: it guarded code that never shipped)
 
 ## INI-7
 
@@ -25,3 +25,9 @@ Each section is the complete text of one rule. Its one-line form, under the same
 ## INI-8
 
 - Never confuse the iniBuilds A330 (`IniA330Definition`, FS2024 built-in, input events + pixel-read MCDU) with the Headwind A330-900neo (HeadwindA330Definition, a FlyByWire A32NX-based aircraft with the A32NX's L:vars and MCDU) — different aircraft, different transport. → [ini-a330.md](../ini-a330.md)
+
+## INI-9
+
+- In MSFS 2024 (`L:IS2024` = 1) the EFB's Chocks, Engine Covers and Pitot Covers buttons stand for the simulator's own chocks and covers (`A:COVER ON:0`, `:1`, `:2`), but pressing them does nothing, for a sighted pilot too: their code sends `K:COVER_SET:n` with the target state, and the simulator ignores that form (measured 2026-11-19: a real mouse press reached the Chocks button, its code sent `K:COVER_SET:0` = 0, and the chocks stayed on). Writing the state itself, `A:COVER ON:n` = 0 or 1 from the EFB's page, takes both ways for all three (measured the same day through the agent's own press path). So while the agent's `A.COVER_REMOVAL` is true, `A.coverPress` works a press of those three buttons itself, on the ground only (`A:SIM ON GROUND`, so a stray press in flight cannot put covers on), and the row's new state is read back through `announceChange`.
+- It is TEMPORARY, by the owner's decision (2026-11-19): BA's simulator-tablet feature will remove chocks and covers for every aircraft. When it does, set `A.COVER_REMOVAL` to false (or delete it with `A.coverPress`). The three rows then become `static` status lines ("Chocks: placed"), never buttons, because a screen reader must not offer a button that does nothing; the GPU stays a button. Both modes were checked live: switched off, the scrape shows the three rows as `static`, not clickable.
+- Never "fix" the press by clicking the EFB's own button as well: if iniBuilds repairs their command, both would flip the same cover. → [ini-a330.md](../ini-a330.md)

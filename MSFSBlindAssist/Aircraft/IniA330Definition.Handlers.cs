@@ -595,19 +595,21 @@ public partial class IniA330Definition
     }
 
     /// <summary>The ways the aircraft might take a baro knob pull (STD) or push (QNH), tried in order
-    /// until the mode reads back changed. None is measured yet, so the walk is closed-loop and logs which
-    /// one worked: its own input events first (Airbus: pull = STD, push = QNH), then the iniBuilds L:var
-    /// commands.</summary>
+    /// until the mode reads back changed; the walk is closed-loop and logs which one worked. Measured
+    /// 2026-11-19 on the ground, powered (captain's knob): the input event pressed BY VALUE works (PULL
+    /// set 1 then 0 turned XMLVAR_Baro1_Mode 0 → 3, STD; PUSH the same way 3 → 0, QNH), so it goes first.
+    /// The event's own _Push/_Release action did nothing; it and the L:var commands stay as
+    /// fallbacks.</summary>
     private IEnumerable<(string name, Action<SimConnectManager> press)> BaroPresses(bool toStd)
     {
         string knob = toStd ? "PULL" : "PUSH";
-        yield return ($"input {knob} action", s => { PushEvent(s, $"AIRLINER_CPT_BARO_SET_{knob}"); PushEvent(s, $"AIRLINER_FO_BARO_SET_{knob}"); });
         yield return ($"input {knob} value", s => { PressByValue(s, $"AIRLINER_CPT_BARO_SET_{knob}"); PressByValue(s, $"AIRLINER_FO_BARO_SET_{knob}"); });
+        yield return ($"input {knob} action", s => { PushEvent(s, $"AIRLINER_CPT_BARO_SET_{knob}"); PushEvent(s, $"AIRLINER_FO_BARO_SET_{knob}"); });
         foreach (var p in AltimeterCommandPresses(toStd)) yield return p;
     }
 
-    /// <summary>iniBuilds' altimeter command L:vars. Which flag does which is not proven, so both are
-    /// offered, the likely one first.</summary>
+    /// <summary>iniBuilds' altimeter command L:vars, a fallback (not measured). Which flag does which is
+    /// not proven, so both are offered, the likely one first.</summary>
     private IEnumerable<(string name, Action<SimConnectManager> press)> AltimeterCommandPresses(bool toStd)
     {
         foreach (var flag in toStd ? new[] { "STD", "PULL" } : new[] { "PULL", "STD" })
@@ -880,7 +882,8 @@ public partial class IniA330Definition
         return toTod ? $"{d:0} miles to top of descent{time}" : $"Destination {d:0} miles{time}";
     }
 
-    /// <summary>The cockpit's baro mode: 2 and 3 are STD (XMLVAR_Baro1_Mode, measured 2026-10-17).</summary>
+    /// <summary>The cockpit's baro mode (XMLVAR_Baro1_Mode): 2 or more is STD. Measured: 3 in STD (2026-10-17
+    /// at FL220, and 2026-11-19 after a knob pull on the ground), 0 in QNH.</summary>
     internal static bool IsStdMode(double? mode) => mode is double m && m >= 1.5;
 
     internal static string DescribeAltimeter(double? millibars, double? mode)

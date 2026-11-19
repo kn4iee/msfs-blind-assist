@@ -64,13 +64,25 @@
   // Attach/Remove buttons: the EFB renders the ACTION ("Attach GPU" / "Remove GPU"); the reader
   // speaks the STATE that action implies ("GPU: not attached").
   // Ground equipment: the button names the ACTION ("Toggle GPU"); the reader speaks the STATE from the
-  // aircraft's own L:vars (read with SimVar in the page — the EFB's own JS reads the same ones).
+  // variables the EFB's own JS reads (with SimVar in the page). The chocks and covers have two sources,
+  // as in the EFB's code: in MSFS 2024 (L:IS2024 = 1) its Chocks, Engine Covers and Pitot Covers buttons
+  // are the SIMULATOR's chocks and covers, A:COVER ON:0 / 1 / 2 (measured 2026-11-19: with all three on,
+  // L:INI_CHOCKS_ENABLED and L:INI_COVERS_ENABLED read 0); otherwise the aircraft's own L:vars. The two
+  // cover buttons share one element id, so the label tells them apart.
   A.EQUIP_STATE = {
     groundEquip_GPU: { name: 'GPU', lvar: 'L:INI_GPU_AVAIL', on: 'connected', off: 'not connected' },
-    groundEquip_CHOCKS: { name: 'Chocks', lvar: 'L:INI_CHOCKS_ENABLED', on: 'placed', off: 'not placed' },
-    groundEquip_COVERS: { name: 'Covers', lvar: 'L:INI_COVERS_ENABLED', on: 'on', off: 'off' }
+    groundEquip_CHOCKS: { name: 'Chocks', lvar: 'L:INI_CHOCKS_ENABLED', cover: 0, on: 'placed', off: 'not placed' },
+    groundEquip_COVERS: { name: 'Covers', lvar: 'L:INI_COVERS_ENABLED', cover: 1, pitotCover: 2, on: 'on', off: 'off' }
   };
   A.EQUIP = {};
+
+  // TEMPORARY: BA's own chock and cover presses (INI-9). In MSFS 2024 the EFB's Chocks, Engine Covers and
+  // Pitot Covers buttons do nothing: they send K:COVER_SET:n, which the simulator ignores (measured
+  // 2026-11-19 with a real mouse press). While this is true, a press of one of them here, on the ground,
+  // writes that cover's state itself (A:COVER ON:n, measured to take both ways). Switch it off once BA's
+  // own simulator tablet removes chocks and covers for every aircraft: the three rows then read as plain
+  // status lines, so a screen reader never offers a button that does nothing.
+  A.COVER_REMOVAL = true;
 
   // Perf-page cycle toggles (input type=button whose VALUE is the setting; a press steps it).
   A.TOGGLES = {
@@ -486,18 +498,60 @@
       els.push(A.button(el, A.DOORS[el.id] + ': ' + A.doorState(el), { key: 'door:' + el.id, announceChange: true }));
     });
 
-  A.equipState = function (id) {
+  A.is2024 = function () {
+    try { return SimVar.GetSimVarValue('L:IS2024', 'number') > 0.5; } catch (e) { return false; }
+  };
+  // The simulator cover an equipment button stands for in MSFS 2024 (0 chocks, 1 engine, 2 pitot), or -1:
+  // the GPU, or outside MSFS 2024, where the buttons are the aircraft's own L:vars.
+  A.coverIndex = function (s, label) {
+    if (!s || s.cover == null || !A.is2024()) return -1;
+    return /pitot/i.test(label || '') && s.pitotCover != null ? s.pitotCover : s.cover;
+  };
+  // The variable an equipment button's state is read from (see A.EQUIP_STATE).
+  A.equipVar = function (s, label) {
+    var index = A.coverIndex(s, label);
+    return index < 0 ? { name: s.lvar, unit: 'number' } : { name: 'A:COVER ON:' + index, unit: 'bool' };
+  };
+  A.onGround = function () {
+    try { return SimVar.GetSimVarValue('A:SIM ON GROUND', 'bool') > 0.5; } catch (e) { return false; }
+  };
+  // True when BA itself works this chock/cover button (A.COVER_REMOVAL, MSFS 2024, on the ground).
+  A.coverPressable = function (el) {
+    var s = A.EQUIP_STATE[el.id];
+    return A.COVER_REMOVAL && A.coverIndex(s, A.txt(el)) >= 0 && A.onGround();
+  };
+  // A press of a chock/cover button BA works: flip that cover. True when it handled the press.
+  A.coverPress = function (el) {
+    if (!A.coverPressable(el)) return false;
+    var index = A.coverIndex(A.EQUIP_STATE[el.id], A.txt(el));
+    var on = SimVar.GetSimVarValue('A:COVER ON:' + index, 'bool') > 0.5;
+    SimVar.SetSimVarValue('A:COVER ON:' + index, 'bool', on ? 0 : 1);
+    return true;
+  };
+  A.equipState = function (id, label) {
     var s = A.EQUIP_STATE[id];
-    try { return SimVar.GetSimVarValue(s.lvar, 'number') > 0.5 ? s.on : s.off; } catch (e) { return ''; }
+    try {
+      var v = A.equipVar(s, label);
+      return SimVar.GetSimVarValue(v.name, v.unit) > 0.5 ? s.on : s.off;
+    } catch (e) { return ''; }
   };
   A.block('a330equip',
     function (el) { return el.tagName === 'BUTTON' && !!A.EQUIP_STATE[el.id]; },
     function (el, els) {
       if (A.isHidden(el)) return;
-      var s = A.EQUIP_STATE[el.id], st = A.equipState(el.id);
+      var s = A.EQUIP_STATE[el.id];
       var label = A.txt(el) || s.name;
       if (/cover/i.test(label)) label = label.replace(/^\s+|\s+$/g, '');
-      els.push(A.button(el, st ? (s.name === 'Covers' ? label : s.name) + ': ' + st : label, { key: 'equip:' + el.id + ':' + label, announceChange: true }));
+      var st = A.equipState(el.id, label);
+      var text = st ? (s.name === 'Covers' ? label : s.name) + ': ' + st : label;
+      var key = 'equip:' + el.id + ':' + label;
+      // In MSFS 2024 the EFB's own chock/cover buttons do nothing, so unless BA works the press itself
+      // (A.coverPressable) the row is a status line, never a button that does nothing.
+      if (A.coverIndex(s, label) >= 0 && !A.coverPressable(el)) {
+        els.push(A.el(el, { kind: 'static', text: text, key: key }));
+        return;
+      }
+      els.push(A.button(el, text, { key: key, announceChange: true }));
     });
 
   // Dashboard tile: a clickable DIV with rel="<page>".
@@ -934,6 +988,7 @@
     if (el.disabled || A.hasClass(el, 'disabled')) return false;   // greyed out: refuse, never claim a press
     if (A.isChoiceGroup(el)) return false;                          // a dropdown is set, not pressed
     try {
+      if (A.coverPress(el)) { A._dirty = true; return true; }   // the EFB's own chock/cover press does nothing
       if (A.PANEL_STATES[el.id]) A._pendingPanel = A.PANEL_STATES[el.id];
       A.click(el);
       A._dirty = true;

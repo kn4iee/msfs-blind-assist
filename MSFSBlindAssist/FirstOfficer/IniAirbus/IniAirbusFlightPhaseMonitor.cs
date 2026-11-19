@@ -6,7 +6,8 @@ namespace MSFSBlindAssist.FirstOfficer.IniAirbus;
 /// The iniBuilds A330 phase monitor: the 10,000 ft landing lights (climbing through 10,300 ft the
 /// landing lights and the nose light go OFF; descending through 9,700 ft both come back on), the
 /// seat-belt automation (SeatbeltAutomation, through the executor's SetSeatbeltSign), and the
-/// transition altimeters as REMINDERS ONLY: the A330's STD presses are untested (docs/ini-a330.md), so the First Officer never presses them and every crossing is
+/// transition altimeters as REMINDERS ONLY: the A330's STD press is measured only on the ground, on
+/// the captain's knob, and never in a climb or descent (docs/ini-a330.md), so the First Officer never presses it and every crossing is
 /// spoken (TransitionAltimeters.ReminderInstead with the write path treated as off), whatever the "set
 /// altimeters automatically" setting says. Crossing calls are queued (Announce), as on the other
 /// monitors.
@@ -36,8 +37,8 @@ public sealed class IniAirbusFlightPhaseMonitor : IFoPhaseMonitor
     /// <summary>Stored for the interface; it never lets the First Officer press STD (see the summary).</summary>
     public bool AutoAltimetersEnabled { get; set; } = true;
 
-    /// <summary>False: this aircraft's altimeter STD presses are not verified, so every crossing is a
-    /// reminder.</summary>
+    /// <summary>False: this aircraft's altimeter STD press is not verified in flight, so every crossing
+    /// is a reminder.</summary>
     internal const bool AltimeterWritesVerified = false;
 
     public FoSeatbeltMode AutoSeatbeltMode

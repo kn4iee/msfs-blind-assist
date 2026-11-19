@@ -727,7 +727,7 @@ The iniBuilds A330-200 is the A330 that comes with Microsoft Flight Simulator 20
 
 <div class="callout note" role="note" markdown="1">
 
-**Note:** Support for this aircraft is new and has not yet been flown through every phase of flight. The flight mode words, the autopilot, autothrust, LOC and APPR buttons in the air, the parking brake direction, the MCDU overfly key, the altimeter window's Standard button and the engine masters have not been checked in flight yet. Report anything that reads wrong.
+**Note:** Support for this aircraft is new and has not yet been flown through every phase of flight. The flight mode words, the autopilot, autothrust, LOC and APPR buttons in the air, the parking brake direction, the MCDU overfly key, the altimeter window's Standard button and the First Officer's engine start have not been checked in flight yet. Report anything that reads wrong.
 
 </div>
 
@@ -778,7 +778,7 @@ Text the MCDU draws in grey, an option that is not available yet, is read with "
 
 ### EFB {#efb-ini-a330}
 
-Input Shift+T opens the tablet in a window called **A330 EFB**. Its Pages list is the tablet's side bar: Dashboard, OFP, Ground (doors, GPU, the aircraft's chocks and covers, jetway, catering, luggage, pushback), Payload, Panel State, Take Off (performance) and Options. Doors and ground equipment say their state.
+Input Shift+T opens the tablet in a window called **A330 EFB**. Its Pages list is the tablet's side bar: Dashboard, OFP, Ground (doors, GPU, wheel chocks, engine covers, pitot covers, jetway, catering, luggage, pushback), Payload, Panel State, Take Off (performance) and Options. Doors and ground equipment say their state. On the ground, pressing **Chocks**, **Engine Covers** or **Pitot Covers** takes them off or puts them back, and BA reads the new state, for example *"Chocks: not placed"*. The tablet itself cannot do this in MSFS 2024, so BA does it for you.
 
 ### Aircraft-specific hotkeys and callouts {#aircraft-specific-hotkeys-and-callouts-ini-a330}
 
@@ -797,6 +797,7 @@ BA announces flight mode changes (thrust, vertical, lateral, armed modes and lan
 
 ### Things to know {#things-to-know-ini-a330}
 
+- **MSFS 2024 can start this aircraft with wheel chocks, engine covers and pitot covers on.** With the engine covers on, the engines do not start: N2 stays at zero while the starter runs. Before you start the engines, open the EFB (Input Shift+T), go to Ground and press **Chocks**, **Engine Covers** and **Pitot Covers** until each says off or not placed.
 - **The first MCDU open moves your camera for a moment.** BA puts it back afterwards. If the camera ever stays on the MCDU, press your own view key.
 - **Unknown flight modes are read as a number**, for example *"vertical mode 17"*, rather than guessed. Report the number and what the aircraft was doing.
 

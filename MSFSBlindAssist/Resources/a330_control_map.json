@@ -4788,7 +4788,7 @@
     }
    ],
    "rpn": "{value} (>B:AIRLINER_ENG1_CUTOFF_Set)",
-   "notes": "not verified in the sim: pressed only when the read differs, in case the Set toggles"
+   "notes": "the Set takes the position by value (measured 2026-11-19); pressed only when the read differs"
   },
   {
    "key": "A330_ENG2_MASTER",
@@ -4812,7 +4812,7 @@
     }
    ],
    "rpn": "{value} (>B:AIRLINER_ENG2_CUTOFF_Set)",
-   "notes": "not verified in the sim: pressed only when the read differs, in case the Set toggles"
+   "notes": "the Set takes the position by value (measured 2026-11-19); pressed only when the read differs"
   },
   {
    "key": "A330_ECAM_ENG",

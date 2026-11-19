@@ -13,10 +13,10 @@ namespace MSFSBlindAssist.Aircraft.A330;
 /// badly; a fixed-font matcher trained on the aircraft's own rendering reads them exactly.
 ///
 /// Templates are normalised glyph canvases (letter height scaled to one size, so all of the CDU's
-/// font sizes share them) plus four geometry features. Real samples come from labelled captures;
-/// a smaller set rendered from the aircraft's own font files (INI_CDUA/INI_CDUB) carries a
-/// distance penalty so it only decides for characters never seen on screen in that size.
-/// The library is produced by the training tooling and verified by A330CduScreenReaderTests (tests/IniA330DefinitionTests.cs).
+/// font sizes share them) plus four geometry features, every one cut from a labelled capture of this
+/// MCDU (the fonts are inside the encrypted aircraft package, so none is rendered from a font file;
+/// each template's distance penalty, kept in the file format, is 0). The library is produced by
+/// tools/a330-cdu-ocr and verified by A330CduScreenReaderTests (tests/IniA330DefinitionTests.cs).
 /// </summary>
 internal sealed class A330CduGlyphLibrary
 {
