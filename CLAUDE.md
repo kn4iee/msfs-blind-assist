@@ -13,7 +13,7 @@ dotnet build MSFSBlindAssist.sln -c Debug
 dotnet build MSFSBlindAssist.sln -c Release
 ```
 
-The app runs from `MSFSBlindAssist\bin\x64\{Debug|Release}\net10.0-windows\`. Prerequisites: the MSFS_SDK environment variable and the .NET 10 SDK. The solution builds nine projects, `tools/PMDGDispatchTester`, `tools/ChangelogBuilder`, `tools/GuideBuilder`, `tools/LayoutBundle`, the vPilot plugin and `MSFSBlindAssist.DisplayLayouts` among them; the other 17 `tools/*` projects (`tools/CDUTest`, the probes, the sweeps, `tools/VirtualPilot` and `tools/A350Probe`) build on their own. Output paths, the projects and the probes in full: [docs/development.md](docs/development.md#build-output-and-traps).
+The app runs from `MSFSBlindAssist\bin\x64\{Debug|Release}\net10.0-windows\`. Prerequisites: the MSFS_SDK environment variable and the .NET 10 SDK. The solution builds nine projects, the vPilot plugin and `MSFSBlindAssist.DisplayLayouts` among them; [CORE-4] says which `tools/*` projects build on their own. Output paths, the projects and the probes in full: [docs/development.md](docs/development.md#build-output-and-traps).
 
 - [CORE-1] Always build the `.sln` or pass `-p:Platform=x64`; never the bare `.csproj`, which defaults to AnyCPU and writes to `bin\Debug\…`, so the x64 exe the app runs from never updates. Full: docs/invariants/core.md#core-1
 - [CORE-2] Keep `RuntimeIdentifier=win-x64` (else the build ships every platform's SQLite binaries) and `AppendRuntimeIdentifierToOutputPath=false` (else it writes to a `win-x64\` folder the app, release.yml and PostBuild never use) in the csproj. `dotnet publish` writes `win-x64\publish\`; other `win-x64\` build output predates 2026-08-25: stale. Full: docs/invariants/core.md#core-2
@@ -156,7 +156,7 @@ Each area's rules load automatically when Claude reads its code; their full text
 | [inibuilds-a350.md](docs/inibuilds-a350.md) | iniBuilds A350: its displays read by running its own draw code on a memory copy, the MFD/ND mouse route, the ECAM, the OIS, the addresses to re-derive per version | inibuilds-a350 |
 | [md11.md](docs/md11.md) | TFDi MD-11: CEVENT transport, control state, layout, the control-map generator | md11, md11-controls |
 | [b757.md](docs/b757.md) | BlueBird 757-200: generated control map, calculator writes, CDU over the Comm Bus, the tablet and displays read from WASM memory | b757, b757-controls, b757-radios, b757-readouts, b757-cdu, b757-first-officer, b757-ehsi, b757-adi |
-| [first-officer.md](docs/first-officer.md) | The screen-reader First Officer: flows, checklists, auto managers, per-aircraft profiles (PMDG 777/737, iFly 737, Fenix, FBW A32NX/A380, Headwind A330, MD-11, BlueBird 757, iniBuilds A350) | first-officer, first-officer-automation, first-officer-boeing, first-officer-airbus |
+| [first-officer.md](docs/first-officer.md) | The screen-reader First Officer: flows, checklists, auto managers, the per-aircraft profiles (listed in its first line) | first-officer, first-officer-automation, first-officer-boeing, first-officer-airbus |
 | [gemini.md](docs/gemini.md) | AI providers (Gemini or Claude): display reads, scene and route description, route briefing | ai-display, route-briefing |
 | [location-data.md](docs/location-data.md) | Output C and Location Info (Shift+L): the offline GeoNames + Natural Earth download, its database and lookups | location-data |
 | [user-guide.md](docs/user-guide.md) | The pilot's user guide in `guide/`: writing it, how the website and the Help menu publish it, the one-page build, the PR line (CORE-19) | user-guide |
