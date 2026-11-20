@@ -8,7 +8,7 @@ namespace MSFSBlindAssist.Aircraft.A330;
 /// (<c>a330-cdu-glyphs.bin</c>, embedded).
 ///
 /// WHY A TEMPLATE LIBRARY — the iniBuilds A330 MCDU publishes no text an external app can read: nothing
-/// on the CommBus, and the FMGS is a WASM NanoVG gauge with no DOM (see docs/ini-a330.md). The only
+/// on the CommBus, and the FMGS is a WASM gauge with no DOM (see docs/ini-a330.md). The only
 /// source is the pixels of the popped-out MCDU window. Generic OCR (Windows.Media.Ocr) reads those
 /// badly; a fixed-font matcher trained on the aircraft's own rendering reads them exactly.
 ///

@@ -208,9 +208,10 @@ whole MCDU preflight with a route (KATL to KMCO, typed by hand), every lower ECA
   or the Coherent debugger with MSFSBA closed (one inspector connection a view, [DBG-9]).
 
 **The display reader.**
-- The reader is a program built from the private reference. Nothing in this repository reads the
-  simulator's memory for the A330, and no public text (code, comments, tests, docs, commit messages, the
-  pull request) says how the reader works: it speaks of "the display reader" and "frames".
+- The reader is a program built from the private reference. Nothing in this repository reads the A330's
+  displays itself: the app only receives frames from the reader. No public text (code, comments, tests,
+  docs, commit messages, the pull request) says how the reader works: it speaks of "the display reader" and
+  "frames".
 - The app talks to it only through `IA330Displays` (plan 02). A fixture is a frame in that contract's
   form: drawn text, positions, fonts, colours, and nothing else.
 - The aircraft's package is never decrypted. What a pilot types (a SimBrief ID, a logon code, a route) is

@@ -14,7 +14,7 @@
 
 - Spec section 4 and the index's "Shared conventions" apply.
 - Owned files: `Aircraft/A330/Display/**` (new), `Aircraft/IniA330Definition.Displays.cs` (new), `MainForm.IniBuilds.Displays.cs` (new), `Forms/IniA330/A330DisplayWindow.cs` (new), tests `tests/MSFSBlindAssist.Tests/A330/A330Reader*Tests.cs`, `A330Display*Tests.cs`, `A330ColoursTests.cs`, `A330ReplayDisplays.cs` (the test project's replay source), fixtures `tests/MSFSBlindAssist.Tests/A330/Fixtures/p02_*.json`; `docs/ini-a330.md` "Displays" (new section); `docs/a330/evidence/02-reader-client.md` (new).
-- **Nothing in this repository reads the simulator's memory for the A330, and no public text says how the reader works.** Code, comments, tests, docs and commit messages speak only of "the display reader" and "frames".
+- **Nothing in this repository reads the A330's displays itself, and no public text says how the reader works.** The app only receives frames from the reader program. Code, comments, tests, docs and commit messages speak only of "the display reader" and "frames".
 - The protocol below is the contract with the reader program. A change to a line both sides read is agreed with the reader plan's claimant first, and `A330ReaderProtocol.Version` goes up.
 - A fixture is a frame in the protocol's form: drawn text, positions, fonts, colours. Nothing else.
 - Nothing on the client's reading thread touches SimConnect, a control or the announcer (SIM-5, SIM-20, A380C-6): consumers marshal.
@@ -210,7 +210,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
 ## Handoff to plan 12
 
 - **Pilot-facing:** the notice and the status wording, for the guide's "Things to know". Nothing else by itself.
-- **Rule proposals:** INI-10: nothing in this repository reads the A330's memory; display text comes only from the reader program through `A330ReaderClient`, and public text never says how the reader works. INI-11: only a frame with `Complete` true is shown or spoken (`IA330Displays.Latest`); `Newest` is for pairing single texts and for saying "reading", never for a page. INI-12: a fixture is a frame in the protocol's form and nothing else.
+- **Rule proposals:** INI-10: nothing in this repository reads the A330's displays itself; display text comes only from the reader program through `A330ReaderClient`, and public text never says how the reader works. INI-11: only a frame with `Complete` true is shown or spoken (`IA330Displays.Latest`); `Newest` is for pairing single texts and for saying "reading", never for a page. INI-12: a fixture is a frame in the protocol's form and nothing else.
 - **Frozen files:** the release and preview workflows build the reader program and place it beside the app (plan 12's Task 2); `docs/updates.md` if it lists what a release carries.
 
 ## Execution record

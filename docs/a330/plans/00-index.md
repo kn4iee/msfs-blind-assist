@@ -136,8 +136,11 @@ once that plan lands ("A → B").
 5. After the rebase, on the combined code: build and the suite green (this run is the only check that the
    plans work together); `git diff --name-only <remote>/feat/inibuilds-a330-fs2024...HEAD` lists only files
    you own.
-6. `git push <remote> HEAD:feat/inibuilds-a330-fs2024`. If it is rejected, go back to step 4. Never
-   force-push the branch. Update your execution record in the same push; when the plan is done, fill in
+6. Before the push, check what goes out: with access to the private reference, run its push check on the
+   commits you are about to push and reword every hit; without access, re-read your diff and your commit
+   messages against spec section 4, "The display reader". A push is public the moment it lands and cannot
+   be taken back. Then `git push <remote> HEAD:feat/inibuilds-a330-fs2024`. If it is rejected, go back to
+   step 4. Never force-push the branch. Update your execution record in the same push; when the plan is done, fill in
    its "Handoff to plan 12" and set **Status** to landed (or waiting on owner, naming what waits).
 7. Steps for the sim need MSFS 2024 with the A330. Leave them unticked if you lack it, and list them under
    "Waiting on the owner".
@@ -189,8 +192,8 @@ reviewer after each); plans 11 and 12 are live work, worked with superpowers:exe
   with its code. Spec section 4 holds the team's rules.
 - Every A330 write goes through the definition's existing write paths (`SetInputEvent`, `PushEvent`,
   `PressByValue`, `Write` with its sequence prefix; invariant fixed-point numbers, VAR-5; [INI-1]); never
-  a write into the sim's memory. Nothing in this repository reads the sim's memory for the A330: only the
-  reader program does, and it only reads.
+  a write of any other kind. Nothing in this repository reads the A330's displays itself: the app only
+  receives frames from the reader program, which never changes anything in the sim.
 - A display window's press of a cockpit control is the panel's own press
   (`IniA330Definition.PressFromWindow`, plan 01), never a write of its own.
 - What is spoken is the value read back; a direct interaction is confirmed once, with what the screen
