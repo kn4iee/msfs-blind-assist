@@ -62,10 +62,14 @@ different aircraft built on the FlyByWire A32NX.
   the ditto `"` — before them "(T/C)" read "1T/C1" and a repeated speed read "." — retrain there,
   never patch the .bin. `A330CduScreenReaderTests` reads those three committed captures end to end.
 * **MCDU keys:** write 1 to `INI_MCDU1_<KEY>`. Verified: DIR PROG PERF INIT DATA FPLAN RADNAV
-  AIRPORT MENU FUEL SEC ATC PREV NEXT, letters, digits. Slew keys verified in flight 2026-10-17 and
-  named BACKWARDS: `UARROW` moves on down the F-PLN, `DOWN` back toward the top (the window's
-  Alt+Up sends DOWN, Alt+Down sends UARROW). From the iniBuilds A320 naming, unverified: OVERFLY,
-  DECIMAL, SPACE, PLUS (the +/- key), CLR.
+  AIRPORT MENU FUEL SEC ATC PREV NEXT, letters, digits. Slew keys verified in flight 2026-10-17:
+  `UARROW` moves on to later rows (down the F-PLN, a screen down a list), `DOWN` back toward the top.
+  The window sends them key for key, as the FlyByWire A320 and Fenix windows do: Page Up and Alt+Up
+  send UARROW, Page Down and Alt+Down send DOWN (the owner's ruling, 2026-11-20; until then this window
+  had the two swapped). Measured 2026-11-20 on the ground: DECIMAL, SLASH and SPACE type their character;
+  PLUS is the +/- key (first press a minus, second press turns it into a plus); CLR deletes a character,
+  or a queued message first; OVERFLY marks and unmarks a waypoint. AIRPORT is not a page: it moves the
+  flight plan to the destination, then the alternate, then back to the origin.
 * **EFB:** Coherent HTML page "iniEfbA330", `Resources/coherent-a330-efb-agent.js` +
   `CoherentPmdgEfbClient.ForIniA330()`. Side-bar buttons, door state from the
   `door-open`/`door-transit` class or the tile's gradient, the GPU from `INI_GPU_AVAIL`. The Chocks,

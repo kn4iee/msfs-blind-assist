@@ -42,7 +42,7 @@ internal sealed record CduFormProfile(
             ("FUEL PRED", "FUEL", "Alt+U"), ("SEC F-PLN", "SEC", "Alt+X"), ("ATC COMM", "ATC", "Alt+T"),
             ("MCDU &MENU", "MENU", "Alt+M"), ("AIRPORT", "AIRPORT", "Alt+O"), ("OVFY", "OVERFLY", "Alt+V"),
             ("Previous page", "PREV", "Alt+Left"), ("Next page", "NEXT", "Alt+Right"),
-            ("Slew up", "DOWN", "Page Up"), ("Slew down", "UARROW", "Page Down"), ("CLR", "CLR", "Backspace"),
+            ("Slew up", "UARROW", "Page Up"), ("Slew down", "DOWN", "Page Down"), ("CLR", "CLR", "Backspace"),
         },
         new Dictionary<Keys, string>
         {
@@ -50,9 +50,12 @@ internal sealed record CduFormProfile(
             [Keys.F] = "FPLAN", [Keys.R] = "RADNAV", [Keys.U] = "FUEL", [Keys.X] = "SEC",
             [Keys.T] = "ATC", [Keys.M] = "MENU", [Keys.O] = "AIRPORT", [Keys.V] = "OVERFLY",
         },
-        // The slew keys are named the other way round from what they do (measured live 2026-10-17 on
-        // the F-PLN page: UARROW moves on down the plan, DOWN back toward the top).
-        SlewUp: "DOWN", SlewDown: "UARROW", NextPage: "NEXT", PrevPage: "PREV", ReadColour: true,
+        // Key for key, as the FlyByWire A320 and Fenix windows: Page Up and Alt+Up press the MCDU's
+        // up-arrow key, Page Down and Alt+Down its down-arrow key (the owner's ruling, 2026-11-20; this
+        // window had them swapped). What the keys do is the aircraft's: UARROW moves on to later rows
+        // (measured live 2026-10-17 on the F-PLN page and 2026-11-20 on the arrival lists), DOWN back
+        // toward the top.
+        SlewUp: "UARROW", SlewDown: "DOWN", NextPage: "NEXT", PrevPage: "PREV", ReadColour: true,
         KeyForChar: A330KeyForChar);
 
     internal static string? A330KeyForChar(char c) => c switch
