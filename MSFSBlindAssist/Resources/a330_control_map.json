@@ -2469,19 +2469,7 @@
    "kind": "status",
    "event": null,
    "mode": "set",
-   "read": "INI_LANDING_ELEVATION",
-   "positions": [
-    {
-     "value": 0,
-     "input": 0,
-     "label": "Off"
-    },
-    {
-     "value": 1,
-     "input": 1,
-     "label": "Lit"
-    }
-   ]
+   "read": "INI_LANDING_ELEVATION"
   },
   {
    "key": "A330_DITCHING_COVER",

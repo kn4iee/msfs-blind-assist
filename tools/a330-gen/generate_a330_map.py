@@ -93,7 +93,8 @@ def guard(key, sec, panel, label, event):
 
 
 def status(key, sec, panel, label, read, positions=None):
-    add(key, sec, panel, label, "status", read=read, positions=positions or [(0, 0, "Off"), (1, 1, "Lit")])
+    # `is None`, not truthiness: an explicit [] means "no positions" (a silent read-out row), not the lamp default
+    add(key, sec, panel, label, "status", read=read, positions=[(0, 0, "Off"), (1, 1, "Lit")] if positions is None else positions)
 
 
 O, G, M, P = "Overhead", "Glareshield", "Main Instrument Panel", "Pedestal"

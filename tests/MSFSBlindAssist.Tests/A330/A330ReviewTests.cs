@@ -465,3 +465,16 @@ public class A330VariableReviewTests
         Assert.Equal(UpdateFrequency.Continuous, def.UpdateFrequency);
     }
 }
+
+/// <summary>The landing elevation read-out is a silent display row: no lamp positions, so no spoken change and no Ctrl+M row.</summary>
+public class A330LandingElevationReadOutTests
+{
+    [Fact]
+    public void Landing_elevation_read_out_is_not_announced_and_has_no_ctrl_m_row()
+    {
+        var v = new IniA330Definition().GetVariables()["A330_LDG_ELEV_FT"];
+        Assert.False(v.IsAnnounced);
+        Assert.True(v.ExcludeFromMonitorManager);
+        Assert.Empty(v.ValueDescriptions);
+    }
+}
