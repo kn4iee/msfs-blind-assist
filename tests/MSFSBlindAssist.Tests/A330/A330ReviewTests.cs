@@ -1,4 +1,5 @@
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Forms;
 using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Tests;
@@ -59,6 +60,26 @@ public class A330ReviewTests
         var sim = new SimConnectManager(IntPtr.Zero);
         var std = Assert.Single(def.BaroToggles(sim, null!));
         Assert.True(std.SuppressStateAnnounce?.Invoke() == true);
+    }
+
+    [Fact]
+    public void Knob_buttons_with_a_constant_state_do_not_read_back_but_stateful_ones_do()
+    {
+        var def = new IniA330Definition();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var all = def.HeadingToggles(sim, null!).Concat(def.SpeedToggles(sim, null!))
+            .Concat(def.AltitudeToggles(sim, null!)).Concat(def.VsToggles(sim, null!)).ToList();
+        string Plain(ToggleButtonDef t) => t.Label.Replace("&", "");
+        var silent = all.Where(t => t.SuppressStateAnnounce?.Invoke() == true).Select(Plain).OrderBy(s => s).ToList();
+        var expectedSilent = new[]
+        {
+            "Heading pull (selected)", "Heading push (NAV)",
+            "Altitude pull (open climb or descent)", "Altitude push (managed)", "ALT (hold the current altitude)",
+            "V/S pull (engage)", "V/S push (level off)",
+        }.OrderBy(s => s).ToList();
+        Assert.Equal(expectedSilent, silent);
+        // every other button keeps its read-back, so a button with a real state is never silenced
+        Assert.Equal(all.Count - expectedSilent.Count, all.Count(t => t.SuppressStateAnnounce is null));
     }
 
     [Fact]

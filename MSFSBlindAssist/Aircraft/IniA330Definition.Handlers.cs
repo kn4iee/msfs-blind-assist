@@ -799,16 +799,52 @@ public partial class IniA330Definition
             if (CanCalc(sim, announcer, "TRK-FPA")) Pulse(sim, "INI_FCU_HDG_VS_COMMAND");
         });
 
+    // The knob push/pull buttons whose state is a constant, or whose result the flight-mode call-out
+    // speaks, turn the dialog's interrupting 1.2 s read-back off: it repeated the label NVDA had just
+    // read and cut the call-out off. Buttons with a state the screen reader cannot say keep it.
+
+    internal List<ToggleButtonDef> HeadingToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
+    {
+        new("Heading &pull (selected)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_HDG_PULL")) { SuppressStateAnnounce = () => true },
+        new("Heading pu&sh (NAV)", () => CurrentFma().Lateral == "NAV" ? "Active" : "Push", () => PressAutopilot(sim, announcer, "A330_HDG_PUSH")) { SuppressStateAnnounce = () => true },
+        new("&LOC", LocState, () => PressAutopilot(sim, announcer, "A330_LOC")),
+        TrkFpaToggle(sim, announcer),
+    };
+
+    internal List<ToggleButtonDef> SpeedToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
+    {
+        new("&Selected (pull)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PULL")),
+        new("&Managed (push)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PUSH")),
+        new("SPD/MA&CH", () => Fv("A330_M_MACH") == 1 ? "Mach" : "Knots",
+            () => SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", Fv("A330_M_MACH") == 1 ? 0 : 1)),
+        new("A/&THR", () => On(sim, "A330_ATHR_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_ATHR")),
+    };
+
+    internal List<ToggleButtonDef> AltitudeToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
+    {
+        new("Altitude p&ull (open climb or descent)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_ALT_PULL")) { SuppressStateAnnounce = () => true },
+        new("Altitude pu&sh (managed)", () => "Push", () => PressAutopilot(sim, announcer, "A330_ALT_PUSH")) { SuppressStateAnnounce = () => true },
+        new("&ALT (hold the current altitude)", () => CurrentFma().Vertical == "ALT" ? "Active" : "Press", () => PressAutopilot(sim, announcer, AltButtonKey)) { SuppressStateAnnounce = () => true },
+        new("&Knob steps (100 or 1000 feet)", () => (sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5 ? "100 feet" : "1000 feet",
+            () => SetInputEvent(sim, announcer, "Altitude knob steps", "AIRLINER_MCU_ALTSELECT", AltStepInput(!((sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5)))),
+        new("M&etric altitude", () => On(sim, "A330_METRIC") ? "On" : "Off",
+            () => SetInputEvent(sim, announcer, "Metric altitude", "AIRLINER_METRIC", On(sim, "A330_METRIC") ? 0 : 1)),
+        new("AP &1", () => On(sim, "A330_AP1_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP1")),
+        new("AP &2", () => On(sim, "A330_AP2_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP2")),
+    };
+
+    internal List<ToggleButtonDef> VsToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
+    {
+        new("V/S p&ull (engage)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_VS_PULL")) { SuppressStateAnnounce = () => true },
+        new("V/S pu&sh (level off)", () => "Push", () => PressAutopilot(sim, announcer, "A330_VS_PUSH")) { SuppressStateAnnounce = () => true },
+        TrkFpaToggle(sim, announcer),
+        new("A&PPR", ApprState, () => PressAutopilot(sim, announcer, "A330_APPR")),
+    };
+
     private void ShowHeadingDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
     {
         bool trk = Fv("A330_M_TRKFPA") == 1;
-        var toggles = new List<ToggleButtonDef>
-        {
-            new("Heading &pull (selected)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_HDG_PULL")),
-            new("Heading pu&sh (NAV)", () => CurrentFma().Lateral == "NAV" ? "Active" : "Push", () => PressAutopilot(sim, announcer, "A330_HDG_PUSH")),
-            new("&LOC", LocState, () => PressAutopilot(sim, announcer, "A330_LOC")),
-            TrkFpaToggle(sim, announcer),
-        };
+        var toggles = HeadingToggles(sim, announcer);
         var dlg = new ValueInputForm(trk ? "FCU Track" : "FCU Heading", trk ? "track" : "heading", "0-359", announcer,
             input => TryParseHeading(input, out _) ? (true, "") : (false, "Enter a heading between 0 and 359"),
             toggles,
@@ -824,14 +860,7 @@ public partial class IniA330Definition
 
     private void ShowSpeedDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
     {
-        var toggles = new List<ToggleButtonDef>
-        {
-            new("&Selected (pull)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PULL")),
-            new("&Managed (push)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PUSH")),
-            new("SPD/MA&CH", () => Fv("A330_M_MACH") == 1 ? "Mach" : "Knots",
-                () => SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", Fv("A330_M_MACH") == 1 ? 0 : 1)),
-            new("A/&THR", () => On(sim, "A330_ATHR_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_ATHR")),
-        };
+        var toggles = SpeedToggles(sim, announcer);
         var dlg = new ValueInputForm("FCU Speed", "speed", "Knots: 100-399 / Mach: 0.10-0.89", announcer,
             input => TryParseSpeed(input, out _)
                 ? (true, "") : (false, "Enter knots (100-399) or Mach (0.10-0.89)"),
@@ -865,18 +894,7 @@ public partial class IniA330Definition
 
     private void ShowAltitudeDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
     {
-        var toggles = new List<ToggleButtonDef>
-        {
-            new("Altitude p&ull (open climb or descent)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_ALT_PULL")),
-            new("Altitude pu&sh (managed)", () => "Push", () => PressAutopilot(sim, announcer, "A330_ALT_PUSH")),
-            new("M&etric altitude", () => On(sim, "A330_METRIC") ? "On" : "Off",
-                () => SetInputEvent(sim, announcer, "Metric altitude", "AIRLINER_METRIC", On(sim, "A330_METRIC") ? 0 : 1)),
-            new("AP &1", () => On(sim, "A330_AP1_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP1")),
-            new("AP &2", () => On(sim, "A330_AP2_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP2")),
-        };
-        toggles.Insert(2, new("&Knob steps (100 or 1000 feet)", () => (sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5 ? "100 feet" : "1000 feet",
-            () => SetInputEvent(sim, announcer, "Altitude knob steps", "AIRLINER_MCU_ALTSELECT", AltStepInput(!((sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5)))));
-        toggles.Insert(2, new("&ALT (hold the current altitude)", () => CurrentFma().Vertical == "ALT" ? "Active" : "Press", () => PressAutopilot(sim, announcer, AltButtonKey)));
+        var toggles = AltitudeToggles(sim, announcer);
         var dlg = new ValueInputForm("FCU Altitude", "altitude", "100-49000 feet", announcer,
             input => TryParseAltitude(input, out _) ? (true, "") : (false, "Enter an altitude between 100 and 49000 feet"),
             toggles,
@@ -892,13 +910,7 @@ public partial class IniA330Definition
     private void ShowVsDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
     {
         bool fpa = Fv("A330_M_TRKFPA") == 1;
-        var toggles = new List<ToggleButtonDef>
-        {
-            new("V/S p&ull (engage)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_VS_PULL")),
-            new("V/S pu&sh (level off)", () => "Push", () => PressAutopilot(sim, announcer, "A330_VS_PUSH")),
-            TrkFpaToggle(sim, announcer),
-            new("A&PPR", ApprState, () => PressAutopilot(sim, announcer, "A330_APPR")),
-        };
+        var toggles = VsToggles(sim, announcer);
         var dlg = new ValueInputForm(fpa ? "FCU Flight Path Angle" : "FCU Vertical Speed", fpa ? "flight path angle" : "vertical speed",
             fpa ? "-9.9 to 9.9 degrees" : "-6000 to 6000 feet per minute", announcer,
             input => TryParseVs(input, fpa, out _) ? (true, "") : (false, fpa ? "Enter -9.9 to 9.9" : "Enter -6000 to 6000"),
