@@ -297,11 +297,12 @@ public static class IniAirbusChecklistDefinitions
             Reminder("SD_PARKBRAKE_CAPT", "SHUTDOWN", "Parking brake: SET"),
             Auto("SD_PARKBRAKE", "SHUTDOWN", "Parking brake: SET (confirmed)", IniAirbusKeys.ParkingBrake, v => v > 0.5, null),
             Auto("SD_APUBLEED_ON", "SHUTDOWN", "APU bleed: ON", k.ApuBleed, v => v > 0.5, (e, _) => e.Set(k.ApuBleed, 1)),
-            // a master tick cuts fuel only on the ground with the parking brake read SET
+            // a master tick cuts fuel only on the ground with the parking brake read SET and the APU or
+            // external power on the buses (the flow's SD_POWER_SOURCE wait); an unread power state holds
             PerEngine(n => LeaveAlone(Auto($"SD_ENG{n}_OFF", "SHUTDOWN", $"Engine {n} master: OFF", k.Master(n), v => v < 0.5,
                     (e, _) => e.Set(k.Master(n), 0)),
-                s => NotOnGround(s) || !s.IsOn(IniAirbusKeys.ParkingBrake),
-                $"Engine {n} master left on: not on the ground with the parking brake set.")),
+                s => NotOnGround(s) || !s.IsOn(IniAirbusKeys.ParkingBrake) || !s.IsOn(S.ApuOrExtPower),
+                $"Engine {n} master left on: not on the ground with the parking brake set and the APU or external power on.")),
             Auto("SD_ENGINES_OFF", "SHUTDOWN", "Engines: stopped", S.EnginesOff, v => v > 0.5, null),
             Auto("SD_XPDR_STBY", "SHUTDOWN", "Transponder: STANDBY", k.XpdrMode, v => v < 0.5, (e, _) => e.Set(k.XpdrMode, 0)),
             Auto("SD_TCAS_STBY", "SHUTDOWN", "TCAS: STANDBY", k.TcasMode, v => v < 0.5, (e, _) => e.Set(k.TcasMode, 0)),

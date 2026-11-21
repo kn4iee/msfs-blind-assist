@@ -456,6 +456,30 @@ public class IniAirbusFoTests
         Assert.True(ext.LeaveAloneWhen!(unread));
     }
 
+    [Theory]
+    [InlineData(1, false, 0.0, 0.0, true)]               // brake set, on the ground, no APU or external power: holds
+    [InlineData(2, false, 0.0, 0.0, true)]
+    [InlineData(1, true, double.NaN, double.NaN, true)]   // the power state unread: holds
+    [InlineData(2, true, double.NaN, double.NaN, true)]
+    [InlineData(1, true, 1.0, 0.0, false)]                // APU available: cuts the master
+    [InlineData(2, true, 0.0, 1.0, false)]                // external power on: cuts the master
+    public void The_engine_master_tick_holds_unless_the_APU_or_external_power_is_on_the_buses(
+        int engine, bool powerRead, double apuAvail, double extPowerOn, bool expectedHeld)
+    {
+        var item = IniAirbusChecklistDefinitions.Build(Keys).Single(g => g.Id == "SHUTDOWN")
+            .Items.Single(i => i.Id == $"SD_ENG{engine}_OFF");
+        var readings = new List<(string, double)> { ("SIM_ON_GROUND", 1.0), (IniAirbusKeys.ParkingBrake, 1.0) };
+        if (powerRead)
+        {
+            readings.Add((Keys.ApuAvailLamp, apuAvail));
+            foreach (var e in Keys.ExtPower) readings.Add((e, extPowerOn));
+        }
+        var s = new S(Keys);
+        s.SetSimConnect(SeededSimConnectCache.With(readings.ToArray()));
+        Assert.Equal(expectedHeld, item.LeaveAloneWhen!(s));
+        if (expectedHeld) Assert.Contains("power", item.LeaveAloneText!, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void Toggling_autobrake_max_is_never_pressed_over_an_unread_level()
     {
