@@ -4,6 +4,7 @@ using MSFSBlindAssist.Aircraft.A330;
 using MSFSBlindAssist.Forms;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils;
 using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
@@ -658,15 +659,13 @@ public partial class IniA330Definition
                 () => ToggleStandard(sim, announcer)),
         };
         var dlg = new ValueInputForm("Altimeter Setting", "altimeter", "hPa (900-1100) or inHg (26.00-32.00)", announcer,
-            input => double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)
-                     && ((v >= 900 && v <= 1100) || (v >= 26 && v <= 32))
+            input => TryParseBaro(input, out _)
                 ? (true, "") : (false, "Enter hPa (900-1100) or inHg (26.00-32.00)"),
             toggles,
             input =>
             {
-                if (!double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)) return;
+                if (!TryParseBaro(input, out double hpa)) return;
                 if (!CanCalc(sim, announcer, "Altimeter")) return;
-                double hpa = v >= 900 ? v : v * 33.8639;
                 string mb16 = Num(Math.Round(hpa * 16));
                 // captain, first officer and standby: index first, then millibars x 16
                 for (int i = 1; i <= 3; i++) Write(sim, $"{i} {mb16} (>K:2:KOHLSMAN_SET)");
@@ -729,6 +728,44 @@ public partial class IniA330Definition
         });
     }
 
+    // The typed-value rules of the FCU dialogs, apart from the forms so a test can reach them.
+
+    /// <summary>Altimeter: hPa (900-1100) or inHg (26-32); hpa is always in hectopascals.</summary>
+    internal static bool TryParseBaro(string? input, out double hpa)
+    {
+        hpa = 0;
+        if (!NumberParsing.TryParseTyped(input, out double v)) return false;
+        if (!((v >= 900 && v <= 1100) || (v >= 26 && v <= 32))) return false;
+        hpa = v >= 900 ? v : v * 33.8639;
+        return true;
+    }
+
+    /// <summary>Speed: knots (100-399) or Mach (0.1-0.89).</summary>
+    internal static bool TryParseSpeed(string? input, out double v)
+        => NumberParsing.TryParseTyped(input, out v) && ((v >= 100 && v <= 399) || (v >= 0.1 && v < 0.9));
+
+    /// <summary>Heading or track, whole degrees 0-360.</summary>
+    internal static bool TryParseHeading(string? input, out int h)
+    {
+        h = 0;
+        if (!NumberParsing.TryParseTyped(input, out double v) || v != Math.Floor(v) || v < 0 || v > 360) return false;
+        h = (int)v;
+        return true;
+    }
+
+    /// <summary>Altitude, whole feet 100-49000.</summary>
+    internal static bool TryParseAltitude(string? input, out int a)
+    {
+        a = 0;
+        if (!NumberParsing.TryParseTyped(input, out double v) || v != Math.Floor(v) || v < 100 || v > 49000) return false;
+        a = (int)v;
+        return true;
+    }
+
+    /// <summary>Vertical speed (+-6000 feet per minute) or, with fpa, flight path angle (+-9.9 degrees).</summary>
+    internal static bool TryParseVs(string? input, bool fpa, out double v)
+        => NumberParsing.TryParseTyped(input, out v) && (fpa ? Math.Abs(v) <= 9.9 : Math.Abs(v) <= 6000);
+
     private static bool On(SimConnectManager sim, string key) => (sim.GetCachedVariableValue(key) ?? 0) > 0.5;
 
     internal const string AltButtonKey = "A330_ALT_BTN";
@@ -766,11 +803,11 @@ public partial class IniA330Definition
             TrkFpaToggle(sim, announcer),
         };
         var dlg = new ValueInputForm(trk ? "FCU Track" : "FCU Heading", trk ? "track" : "heading", "0-359", announcer,
-            input => int.TryParse(input, out int v) && v is >= 0 and <= 360 ? (true, "") : (false, "Enter a heading between 0 and 359"),
+            input => TryParseHeading(input, out _) ? (true, "") : (false, "Enter a heading between 0 and 359"),
             toggles,
             input =>
             {
-                if (int.TryParse(input, out int h))
+                if (TryParseHeading(input, out int h))
                     SetAndConfirm(sim, announcer, trk ? "INI_TRK_DIAL" : "INI_HEADING_DIAL", trk ? "A330_FCU_TRK" : "A330_FCU_HDG",
                         h % 360, v => $"{(trk ? "track" : "heading")} {((int)Math.Round(v) % 360 + 360) % 360:000}");
             });
@@ -789,12 +826,12 @@ public partial class IniA330Definition
             new("A/&THR", () => On(sim, "A330_ATHR_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_ATHR")),
         };
         var dlg = new ValueInputForm("FCU Speed", "speed", "Knots: 100-399 / Mach: 0.10-0.89", announcer,
-            input => double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out double v) && ((v >= 100 && v <= 399) || (v >= 0.1 && v < 0.9))
+            input => TryParseSpeed(input, out _)
                 ? (true, "") : (false, "Enter knots (100-399) or Mach (0.10-0.89)"),
             toggles,
             input =>
             {
-                if (!double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)) return;
+                if (!TryParseSpeed(input, out double v)) return;
                 if (SpeedManaged()) announcer.AnnounceImmediate("Speed is managed; pull the speed knob to fly this speed.");
                 bool wantMach = v < 1, isMach = Fv("A330_M_MACH") == 1;
                 if (wantMach != isMach)
@@ -834,11 +871,11 @@ public partial class IniA330Definition
             () => SetInputEvent(sim, announcer, "Altitude knob steps", "AIRLINER_MCU_ALTSELECT", AltStepInput(!((sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5)))));
         toggles.Insert(2, new("&ALT (hold the current altitude)", () => CurrentFma().Vertical == "ALT" ? "Active" : "Press", () => PressAutopilot(sim, announcer, AltButtonKey)));
         var dlg = new ValueInputForm("FCU Altitude", "altitude", "100-49000 feet", announcer,
-            input => int.TryParse(input, out int v) && v is >= 100 and <= 49000 ? (true, "") : (false, "Enter an altitude between 100 and 49000 feet"),
+            input => TryParseAltitude(input, out _) ? (true, "") : (false, "Enter an altitude between 100 and 49000 feet"),
             toggles,
             input =>
             {
-                if (int.TryParse(input, out int a))
+                if (TryParseAltitude(input, out int a))
                     SetAndConfirm(sim, announcer, "INI_ALTITUDE_DIAL", "A330_FCU_ALT", Math.Round(a / 100.0) * 100, v => $"altitude {v:0} feet");
             });
         dlg.ShowCancelButton = false;
@@ -857,12 +894,11 @@ public partial class IniA330Definition
         };
         var dlg = new ValueInputForm(fpa ? "FCU Flight Path Angle" : "FCU Vertical Speed", fpa ? "flight path angle" : "vertical speed",
             fpa ? "-9.9 to 9.9 degrees" : "-6000 to 6000 feet per minute", announcer,
-            input => double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)
-                     && (fpa ? Math.Abs(v) <= 9.9 : Math.Abs(v) <= 6000) ? (true, "") : (false, fpa ? "Enter -9.9 to 9.9" : "Enter -6000 to 6000"),
+            input => TryParseVs(input, fpa, out _) ? (true, "") : (false, fpa ? "Enter -9.9 to 9.9" : "Enter -6000 to 6000"),
             toggles,
             input =>
             {
-                if (!double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)) return;
+                if (!TryParseVs(input, fpa, out double v)) return;
                 if (fpa) SetAndConfirm(sim, announcer, "INI_FPA_DIAL", "A330_FCU_FPA", Math.Round(v, 1), x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), 0.06);
                 else SetAndConfirm(sim, announcer, "INI_VVI_DIAL", "A330_FCU_VS", Math.Round(v / 100.0) * 100, x => $"vertical speed {x:0} feet per minute", 60);
             });
