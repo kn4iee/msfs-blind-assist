@@ -25,8 +25,7 @@
 The reader's approach changed (spec D14): the E/WD and the lower ECAM read whole as before, but frames
 carry no colour until spec M14 is solved. Until then no row says a colour word, and the announcers compare
 alerts by text alone (tests `With_no_colour_no_colour_word_is_said`, `Alerts_compare_by_text_when_there_is_no_colour`);
-the colour rules above apply as soon as frames carry colours, with no other change. The aircraft has two
-E/WD objects and draws one of them, not always the same; which one is the reader's concern, not this plan's.
+the colour rules above apply as soon as frames carry colours, with no other change.
 
 ## Measured on 2026-11-20
 
