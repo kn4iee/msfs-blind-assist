@@ -211,10 +211,17 @@ public partial class IniA330Definition
         _takeoffCallouts.Reset();
     }
 
-    internal static string TakeoffMuteKey(string callout) => callout switch
-    {
-        "V1" => TakeoffV1Key, "Rotate" => TakeoffVrKey, "V2" => TakeoffV2Key, _ => "",
-    };
+    /// <summary>The feed, the speeds and their Ctrl+M rule ([TKO-5]): each call is muted by its speed's row.</summary>
+    internal static readonly TakeoffCalloutKeys TakeoffKeys = new(TakeoffIasKey, TakeoffV1Key, TakeoffVrKey, TakeoffV2Key);
+
+    /// <inheritdoc />
+    public override string? TakeoffCalloutFeedKey => TakeoffIasKey;
+    /// <inheritdoc />
+    public override bool TakeoffCalloutFeedNeeded => _takeoffCallouts.NeedsSamples(_calloutOnGround);
+
+    /// <summary>The airspeed feed speaks V1, Rotate and V2, whose Ctrl+M rows are the V-speeds', so it is
+    /// kept out of MainForm's mute wrap and checks each call's row itself.</summary>
+    public override bool IsMuteWrapExempt(string varName) => varName == TakeoffIasKey;
 
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
@@ -223,7 +230,7 @@ public partial class IniA330Definition
             case TakeoffIasKey:
                 var crossed = _takeoffCallouts.ProcessSample(value, _calloutOnGround);
                 if (crossed.Count > 0 && !announcer.Suppressed
-                    && TakeoffVSpeedCallouts.Compose(crossed, c => TakeoffMuteKey(c) is { Length: > 0 } k && DisabledMonitorSet.Contains(k)) is string sentence)
+                    && TakeoffVSpeedCallouts.Compose(crossed, c => TakeoffKeys.IsMuted(c, DisabledMonitorSet)) is string sentence)
                     announcer.AnnounceImmediate(sentence);
                 return true;
             case "SIM_ON_GROUND":
