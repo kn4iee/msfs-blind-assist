@@ -198,4 +198,61 @@ Kept in this file only, so no other plan's push ever touches it.
 
 ### Review findings
 
-(Task 1 fills this in: file:line, what fails, the input that shows it, severity, owning plan, verified or not.)
+Task 1, 2026-11-21: three independent reviewers (shared SimConnect code; the definition; the First Officer,
+EFB and MCDU) read `git diff 7825d724f 53a20303c` (the merge base with main to the branch tip: four code
+commits, 79 files) with CLAUDE.md and the rule files, never this plan. "Verified" = the reviewer traced the
+path in the code; "sim" = only the simulator can show the effect. Critical and Important rows marked "Task 2"
+are fixed there, test first; the others are handed to the plan named.
+
+| # | Sev | Where | What fails (input) | Owner | Verified |
+|---|---|---|---|---|---|
+| B1 | Critical | `IniA330Definition.Handlers.cs:503,508` | Ctrl+P: "&Speed pull" and "Altitude pu&sh" share Alt+S; from the opening focus Alt+S pulls the speed knob | 05; Task 2 | yes |
+| A1 | Important | `SimConnectManager.InputEventReads.cs:73-82` | the A330 loaded in the sim under another profile, then picked from the Aircraft menu: the old catalogue is kept, every input-event control says "unavailable" | 12 (frozen file); Task 2 | yes |
+| A2 | Important | `SimConnectManager.Dispatch.cs:51`, `Setup.cs:909-923` | the catalogue re-read at AircraftLoaded may come before the cockpit exists; nothing retries | 04 (its live sweep shows it), file 12 | no; sim |
+| A3, B10 | Important | `IniA330Definition.Handlers.cs:213-227`, `Variables.cs:352-357` | [TKO-5]: hand-kept mute keys; the per-frame airspeed feed is never paused, for the whole flight | 10; Task 2 | yes |
+| A4, B4 | Important | `IniA330Definition.Variables.cs:216-223` | "Speedbrake lever" Ctrl+M row mutes nothing ([VAR-9]) | 04; Task 2 | yes |
+| B2 | Important | `IniA330Definition.Handlers.cs:661,667,792,797,860,865` | [CORE-17]: FPA "-0,5" on a comma PC writes -5.0; Mach "0,82" and inHg "29,92" refused | 05; Task 2 | yes |
+| B3 | Important | `IniA330Definition.Variables.cs:65,181,182,195,232` | [VAR-7]: four pairs of batched variables share a name; the collision test never runs on the A330 | 04/09; Task 2 | yes (drift: sim) |
+| B5 | Important | `tools/a330-gen/generate_a330_map.py:96,235` | `status(..., [])` gets Off/Lit: "Landing elevation selected (feet)" is spoken on every change, "Off"/"Lit" at 0/1 ft | 04; Task 2 | yes |
+| B6 | Important | `IniA330Definition.Handlers.cs:657-658` | Ctrl+B Standard: the dialog's 1.2 s read-back and the button's own verdict both speak, each cutting the other off ([CORE-7]) | 05; Task 2 | yes |
+| B7 | Important | `IniA330Definition.Handlers.cs:763-766,785-789,826-835,853-856` | FCU dialog knob buttons repeat their label 1.2 s later ("Heading pull (selected) Pull") and cut off the flight-mode call-out | 05; Task 2 | yes (overlap: sim) |
+| B8 | Important | `IniA330Definition.Handlers.cs:760,774,850,858-867` | Heading and V/S dialogs fix HDG-V/S or TRK-FPA at open; after their own TRK/FPA press a typed value goes to the wrong dial and is reported set | 05; Task 2 | yes |
+| B9 | Important | `IniA330Definition.Handlers.cs:240,249` | flaps, speedbrake, sliders and guards never refresh while their panel is open; a stale combo cannot re-pick the shown item | 04; Task 2 | yes |
+| B11 | Important | `tests/.../IniA330DefinitionTests.cs:119-123` | no comma-decimal culture test for anything the A330 speaks (altimeter, Mach, FPA, trim, distance, fuel) | 05/10; Task 2 | yes |
+| C1 | Important | `IniAirbusChecklistDefinitions.cs:300-304` | a hand tick of "Engine n master: OFF" cuts the engine with no APU or external power; the flow and the other Airbus profiles refuse | 06; Task 2 | yes |
+| C2 | Important | `IniA330CduForm.cs:154`, `A330CduPopout.cs:96-157` | the MCDU pop-out keeps moving the cursor and taking the foreground for up to 30 s after Esc or a switch | 03 (removes the pop-out) | yes; sim |
+| C3 | Important | `A330CduPopout.cs` | a minimized pop-out stops the MCDU for the session; reopening the window does not help | 03 (removes the pop-out) | no |
+| C4 | Important | `coherent-a330-efb-agent.js:436,440` | a disabled or read-only password field is read aloud with its value: the read-only check runs before the mask | 07; Task 2 | yes (field state: sim) |
+| C5 | Important | `coherent-a330-efb-agent.js` | a chock or cover press is confirmed twice (the page's notice and the row's new label) ([CORE-7]) | 12 (removes the press) | yes; sim |
+| A5 | Minor | `SimConnectManager.DataRequests.cs:307-312` | a forced read of an InputEvent variable never re-fires an unchanged value | 12 | yes |
+| A6 | Minor | `SimConnectManager.InputEventReads.cs:22,56,114` | no guard against more than 190 reads in flight | 12 | yes |
+| A7 | Minor | `SimConnectManager.cs:1288-1298` | `ForgetInputEventReads` runs only when a MobiFlight module object exists | 12 | yes |
+| A8, B14 | Minor | `IniA330Definition.Handlers.cs:192,272-282` | the FMA settle timer and read-back tasks are not stopped on a switch or at exit | 09 (its close hook); Task 5 adds OnSwitchedAway | yes |
+| A9 | Minor | `Forms/IniA330/A330MonitorManagerForm.cs:21-27` | the mute list is captured once, against the base form's re-read contract | 01 Task 5 (rewrites that constructor) | yes |
+| A10 | Minor | `tests/.../DefAnnounceMuteSetsTests.cs:17-51` | no test of the INI_A330 mute mapping or the A330's mute paths | 10 | yes |
+| A11 | Minor | `.claude/rules/simconnect-data.md:29,45`, `Services/DefAnnounceMuteSets.cs:24-25` | INI-3 sits under a "Mirrored from" header; SIM-6 omits 701-890; a comment names the wrong mute mechanism | 12 | yes |
+| B12 | Minor | `IniA330Definition.Handlers.cs:258-268` | the FMA says "OP DES" in an open climb until the first hotkey or display panel (`_sim` null) | 09 | yes |
+| B13 | Minor | `Aircraft/A330/A330Fma.cs:114` | landing capability drops out during LOC and G/S tracking, then is called again at LAND | 09 | yes |
+| B15 | Minor | `IniA330Definition.Handlers.cs:148-152` | `SetAutobrake` presses a level that is already armed (which disarms it) | 04 | yes |
+| B16 | Minor | `IniA330Definition.Handlers.cs:798-816` | the Speed dialog's warnings are cut off by its own verdict | 05 | yes |
+| B17 | Minor | `IniA330Definition.Handlers.cs:720-722` | `SetAndConfirm` sends its write from a pool thread | 05 | yes |
+| B18 | Minor | `IniA330Definition.Handlers.cs:621` | Standard is refused without MobiFlight, though its first press is an input event | 05 | yes |
+| B19 | Minor | `IniA330Definition.Handlers.cs:126-128` | momentary panel buttons with no readable state give no confirmation (proposal) | 04 | yes |
+| B20 | Minor | `HotkeyGuides/iniBuilds_A330_Hotkeys.txt:107-141` | the hotkey guide leaves out Ctrl+B | 12 | yes |
+| B21 | Minor | `IniA330Definition.Handlers.cs:687,777,818,844,869` | the FCU and Baro value dialogs are not tracked windows | 05 | yes |
+| B22 | Minor | `IniA330Definition.Handlers.cs:726` | the heading read-back is compared on a line, not around the compass (359 vs 0) | 05 | yes |
+| B23 | Minor | `IniA330Definition.Variables.cs:101` | the First Officer cannot silence the definition's refusals, though the comment says it does | 06 | yes |
+| B24 | Minor | `IniA330Definition.Variables.cs:299` | wording: "APU start start light" | 04 | yes |
+| C6 | Minor | `IniAirbusActionExecutor.cs:94-101` | an ECAM page key is pressed while the shown page is unread | 06 | yes |
+| C7 | Minor | `IniA330Definition.Variables.cs:111-112` | the autobrake toggles, but its First Officer write route says it does not | 06 | yes |
+| C8 | Minor | `IniA330Definition.Handlers.cs:26-32` | a held T.O CONFIG press is never released at app exit | 06 | yes |
+| C9 | Minor | `IniA330Definition.Handlers.cs:120` | toggle-mode controls write the read value, not `InputFor` ([INI-1]) | 04 | yes |
+| C10 | Minor | `tests/.../TransitionAltimetersTests.cs:86-94` | the A330 exception does not pin `AltimeterWritesVerified == false` | 12 (shared test) | yes |
+| C11 | Minor | `A330CduPopout.cs:106,168` | the camera stays on the MCDU close-up when the first camera read fails | 03 | yes |
+| C12 | Minor | `A330CduPopout.cs:355-359` | the pop-out is never closed | 03 | yes; sim |
+| C13 | Minor | `IniA330CduForm.cs:273-301,359-369` | MCDU keys can still be typed after the window is disposed | 03 | yes |
+| C14 | Minor | `coherent-a330-efb-agent.js:519-530` | the cover press checks only "on ground", not engines or movement | 12 (removes the press) | yes |
+| C15 | Minor | `coherent-a330-efb-agent.js:869-871,962,985-997` | a press can go to a different element right after a re-stamp | 07 | yes |
+
+The reviewers' full reports, with each finding's sequence and suggested fix, were kept beside the work and
+summarised here.
