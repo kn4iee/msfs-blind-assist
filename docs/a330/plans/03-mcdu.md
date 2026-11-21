@@ -15,7 +15,7 @@
 - Spec section 4 and the index's "Shared conventions" apply. [INI-7]: never write `INI_MCDU1_CLR_KEY`.
 - Owned files: `Aircraft/IniA330Definition.Mcdu.cs`, `Aircraft/A330/Mcdu/**` (new), `Aircraft/A330/A330CalloutRows.Mcdu.cs`, `Forms/IniA330/IniA330CduForm.cs`, `CduFormProfile.cs`; to delete: `Aircraft/A330/A330CduScreenReader.cs`, `A330CduPopout.cs`, `A330CduGlyphLibrary.cs`, `A330CduFrame.cs`, `CduLayout.cs`, `Resources/a330-cdu-glyphs.bin` and its one csproj line, `tools/a330-cdu-ocr/**`, `tests/MSFSBlindAssist.Tests/A330/A330CduScreenReaderTests.cs`; tests `tests/MSFSBlindAssist.Tests/A330/A330Mcdu*Tests.cs`; fixtures `p03_*.json`; `docs/ini-a330.md` "MCDU"; `docs/a330/evidence/03-mcdu.md` (new).
 - The window shows a page only from a complete frame (`IA330Displays.Latest`). While there is none it keeps the last page for at most three refreshes, then shows the status row. It never shows half a page.
-- What the window's lines look like, its keys and its typing pace do not change in this plan except where a task says so: a pilot who knew the window finds it the same, only faster and without the camera moving. The one change in looks is the braille rule of "Measured on 2026-11-20": a row keeps its 24 columns, as the app's other Airbus MCDU windows do.
+- What the window's lines look like, its keys and its typing pace do not change in this plan except where a task says so (Task 4b changes seven page keys to the Fenix's, spec D16): a pilot who knew the window finds it the same, only faster and without the camera moving. The one change in looks is the braille rule of "Measured on 2026-11-20": a row keeps its 24 columns, as the app's other Airbus MCDU windows do.
 - The pixel reader is deleted only in Task 7, after the owner's check of Task 6. Until then both sources are in the tree and the form uses the new one.
 - There is no AI read of the MCDU (spec D3): when the reader cannot read, the window shows why and BA speaks a message.
 - Colours and hidden list rows follow plan 02's rule (spec M14, M15): build and test on the 2026-11-20 fixtures; at run time no colour means nothing is marked "(unavailable)", and `HiddenRowsLeftOut` false means no page rows and no FMS message are shown or spoken, only "List rows not read yet"; the window ships once M15 is solved or the owner rules otherwise.
@@ -168,6 +168,8 @@ Tests to add to Task 3: `A_right_hand_field_keeps_its_column_on_every_row`,
 
 ## Review Focus
 
+- A page key that silently does something else: a button label's `&` letter takes Alt+letter in WinForms, so a label left as `&PERF` would steal PROG's new Alt+P. Task 4b's test checks every label's letter against its shortcut, and that no two keys share one.
+
 - A row whose two texts overlap a column (a label drawn over a value) must not lose a character: the later-drawn text wins the cell, and the test page has such a row (Task 1).
 - A centred label sits between two columns (measured 2026-11-20: 33 of 2,040 texts start 0.35 to 0.5 of a cell off a column, among them "AVAILABLE RUNWAYS", "VIA", "UTC", "HOLD AT", "INOP PAGE" and the REPORT page's times; one text, the "1/7" of P/N XLOAD, sits half a row off). Such a text takes the nearer cell: it is never a reason to refuse the page. The screen is refused only when a text starts outside the 14 by 24 area, which is what a moved geometry (another variant, another gauge size) gives (Task 1).
 - An amber box row read as letters ("oooooooo"): every special character has its name before any page is shown (Task 2).
@@ -252,6 +254,28 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 03` (`Pla
 - [ ] **Step 2 [sim] (M4):** Through the window, with the owner's go-ahead: OVERFLY on a flight-plan waypoint, DECIMAL, SPACE, PLUS/MINUS, SLASH, and CLR three ways (a character, a queued message, an empty scratchpad). Record what each did. Fix a wrong key name in `CduFormProfile` test-first.
 - [ ] **Step 3:** Whether the reader's typed line holds a displayed message or only typed text (type one character with a message queued, read both): record it; the typed-text confirmation of Step 1 follows what was measured.
 
+### Task 4b: The page keys as the Fenix's (parity, spec D16)
+
+The owner asked on 2026-11-21 for the A330 window's keys to be brought up to parity with the Fenix's. The FlyByWire A320 window already matches the Fenix on purpose ("so the muscle memory transfers"), and the FlyByWire A380 window uses Alt+E for PERF too; the A330 is the one that differs. Seven page keys change; every other key already matches (Alt+D DIR, Alt+I INIT, Alt+F F-PLN, Alt+R RAD NAV, Alt+U FUEL PRED, Alt+M MCDU MENU, Alt+Left and Alt+Right to page, Page Up and Page Down or Alt+Up and Alt+Down to slew, Ctrl+1 to 6 and Alt+1 to 6 or F1 to F12 for the line keys, Alt+S the scratchpad, Alt+Home the display, Backspace CLR).
+
+| MCDU key | Today | After (the Fenix's) |
+| --- | --- | --- |
+| PERF | Alt+P | Alt+E |
+| PROG | Alt+G | Alt+P |
+| DATA | Alt+A | Alt+T |
+| AIRPORT | Alt+O | Alt+A |
+| OVFY | Alt+V | Alt+O |
+| ATC COMM | Alt+T | Alt+K |
+| SEC F-PLN | Alt+X | Alt+Shift+F |
+
+**Files:** Modify `Forms/IniA330/CduFormProfile.cs` (`PageKeys` labels and tips, `AltKeys`), `Forms/IniA330/IniA330CduForm.cs` (Alt+Shift+F); test `tests/MSFSBlindAssist.Tests/A330/A330McduKeysTests.cs` (new).
+
+**Interfaces:**
+- Consumes: `FenixMCDUForm`'s and `FlyByWireMCDUForm`'s page buttons, as the yardstick only (no shared code is introduced).
+- Produces: `CduFormProfile.A330`'s `PageKeys` and `AltKeys` with the table's shortcuts; button labels whose `&` letter is the shortcut's letter (WinForms takes Alt+letter from a button's `&`, so `&PERF` would take PROG's Alt+P): `P&ERF`, `&PROG`, `DA&TA`, `&AIRPORT`, `&OVFY`; ATC COMM and SEC F-PLN carry no `&` (Alt+K through `AltKeys`, Alt+Shift+F in the form's key handler, as the Fenix and FlyByWire windows do).
+
+- [ ] **Steps 1-5:** tests: `The_page_keys_match_the_Fenix_MCDU_window` (a theory over all thirteen page keys and their shortcuts), `No_two_page_keys_share_a_shortcut`, `Every_labels_letter_is_its_shortcuts_letter`, `Alt_Shift_F_presses_SEC_F_PLN`, `The_tips_name_the_new_shortcuts`; implement; commit `feat(a330): the MCDU window's page keys match the Fenix's` (`Plan: 03`).
+
 ### Task 5: FMS messages, spoken with the window closed
 
 **Files:** Create `Aircraft/A330/Mcdu/A330McduMessages.cs`; modify `Aircraft/A330/A330CalloutRows.Mcdu.cs`, `Aircraft/IniA330Definition.Mcdu.cs`; test `A330McduMessagesTests.cs`.
@@ -281,10 +305,11 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 03` (`Pla
 2. Type a flight number and a FROM/TO pair: each character is confirmed as it lands; a wrong entry's message is spoken.
 3. Close the window, cause a message (enter an invalid value before closing, or wait for one): it is spoken once.
 4. Ctrl+Shift+R: the first officer's MCDU, on its own page.
+5. The page keys as on the Fenix: Alt+E PERF, Alt+P PROG, Alt+T DATA, Alt+A AIRPORT (a jump), Alt+O OVFY, Alt+K ATC COMM, Alt+Shift+F SEC F-PLN.
 
 ## Handoff to plan 12
 
-- **Pilot-facing:** the MCDU window needs no pop-out, works from any view, reads both sides; FMS messages are spoken; the "FMS messages" Ctrl+M row. Guide: the A330's MCDU section and "Things to know" (the pop-out text goes). Hotkey guide: Ctrl+Shift+L/R. Changelog `improvement`.
+- **Pilot-facing:** the MCDU window needs no pop-out, works from any view, reads both sides; FMS messages are spoken; the "FMS messages" Ctrl+M row; the page keys now match the Fenix and FlyByWire A320 windows (Task 4b's table: a pilot who used the A330 window before has seven keys to relearn, which the changelog says). Guide: the A330's MCDU section and "Things to know" (the pop-out text goes; the key list). Hotkey guide: Ctrl+Shift+L/R and the MCDU key list (today's `HotkeyGuides/iniBuilds_A330_Hotkeys.txt` lists the old keys). Changelog `improvement`.
 - **Rule proposals:** [INI-4] retired ("the pixel reader it guarded was replaced"); INI-13: the MCDU window shows a page only from a complete frame and places a text by its first character's cell, refusing a frame whose text starts off the grid; when the reader cannot read it speaks the status once and never falls back to an AI read.
 - **Frozen files:** the csproj line (done here by exception); `docs/development.md` and CLAUDE.md's tool count (`tools/a330-cdu-ocr/harness` is gone); the rule file's `tools/a330-cdu-ocr/**` glob.
 

@@ -189,7 +189,7 @@ whole MCDU preflight with a route (KATL to KMCO, typed by hand), every lower ECA
 | R3 | The A330 is in every test that sweeps all aircraft, and passes them. | 01 |
 | R4 | The app starts the display reader beside itself and gives any window or announcer a display's drawn text: characters, position, font, colour (once the reader gives it: M14), and whether the frame is complete. An incomplete frame is never shown or spoken as a page. Once the reader is running, every display's change reaches the app in under 3 seconds (D15). | 02 (the reader program itself: the private reference) |
 | R5 | When the reader cannot read (it is not installed, the simulator version is not recognised, no access), BA says so once, in the pilot's words, and every window shows why. | 02 |
-| R6 | The MCDU window shows the page from the reader, both sides, in the app's Airbus MCDU format; no pop-out, camera change or focus change. The pixel reader, its glyph file and its training tool are removed. When the reader cannot read, the window says so and BA speaks a message: no AI read of the MCDU. | 03 |
+| R6 | The MCDU window shows the page from the reader, both sides, in the app's Airbus MCDU format; no pop-out, camera change or focus change. The pixel reader, its glyph file and its training tool are removed. When the reader cannot read, the window says so and BA speaks a message: no AI read of the MCDU. Its page keys match the Fenix's (D16). | 03 |
 | R7 | The scratchpad is confirmed from the MCDU's own text as it is typed; an FMS message is spoken with the window closed. | 03 |
 | R8 | Every input event the simulator lists for the aircraft is either a panel control or listed as left out, with the reason; a test fails on an unaccounted one. | 04 |
 | R9 | Every control's name and position names come from the aircraft's own strings, and each position's pairing with its value is proven live or listed as unproven. No invented control, panel or position. | 04 |
@@ -322,6 +322,10 @@ source in the plan's evidence file.
   tools, etc private"); the app side stays in this repository.
 - D15. Every display refreshes in under 3 seconds once the reader is running: "refresh rates need to be
   fast across all displays" (owner, 2026-11-21).
+- D16. The MCDU window's page keys match the Fenix's, as the FlyByWire A320 window's already do (owner,
+  2026-11-21, asking for parity, with Alt+E for PERF as the example): PERF Alt+E, PROG Alt+P, DATA Alt+T,
+  AIRPORT Alt+A, OVFY Alt+O, ATC COMM Alt+K, SEC F-PLN Alt+Shift+F; the rest already matched. Plan 03,
+  Task 4b.
 **Questions for the owner** (answer in this table; a plan proceeds on the decision above until then):
 
 | # | Question | Answer |
