@@ -20,6 +20,14 @@
 - The window's keys press the ECAM panel's controls through `PressFromWindow` (plan 01) by their keys in plan 04's map, and show each key's state from `DescribeControl`.
 - Colour words follow `A330Colours.Name` (plan 02); which rows say their colour follows spec D8's table, which follows the Fenix's windows: on the E/WD every message line (warning, caution, memo, action line) says its colour after its words, and an engine block value only when it is not its normal one; on the lower ECAM a value says a colour only when the page draws it in other than its normal one, and titles, labels and units never. The normal colours are measured from the fixtures (green values, white labels, cyan units), never assumed.
 
+## Changed on 2026-11-21
+
+The reader's approach changed (spec D14): the E/WD and the lower ECAM read whole as before, but frames
+carry no colour until spec M14 is solved. Until then no row says a colour word, and the announcers compare
+alerts by text alone (tests `With_no_colour_no_colour_word_is_said`, `Alerts_compare_by_text_when_there_is_no_colour`);
+the colour rules above apply as soon as frames carry colours, with no other change. The aircraft has two
+E/WD objects and draws one of them, not always the same; which one is the reader's concern, not this plan's.
+
 ## Measured on 2026-11-20
 
 **Task 1 and Task 5's captures exist** (with the private reference; the fixtures are taken from them).

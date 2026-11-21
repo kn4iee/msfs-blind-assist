@@ -43,21 +43,28 @@ whole MCDU preflight with a route (KATL to KMCO, typed by hand), every lower ECA
   program, the display reader, built from the team's private reference and placed beside the app. The
   app receives from it each display's drawn text (every character, its position, font and colour) and
   whether the frame is complete. How it reads is not in this repository.
+- **On 2026-11-21 the reader's approach changed** (owner approved: D14). The first approach read the
+  quiet displays but never a whole PFD, nor an ND once the owner's route was on it. The current one reads
+  every display whole. It needs a while to prepare once a simulator session (72 s in the proof, which the
+  built reader must cut: M1); after that each display refreshes far inside the 3 seconds of D15.
 
-| Display | Result of the proof (a slow script, one processor core) |
-| --- | --- |
-| MCDU, both sides | Whole page, exact, both fonts, colours. 52 pages of a full preflight read complete, each within 0.5 to 3 s; the busiest (the ARRIVAL list, 804 characters) in 1.5 s. Works with the simulator in an outside view, paused, and with the MCDU dimmed to zero: no pop-out, camera or focus. |
-| E/WD | Complete in 2 to 9 s: engine fields, fuel on board, memos, and on batteries only four cautions with their action lines. |
-| Lower ECAM | Every page its key gives (ENG, BLEED, PRESS, EL/AC, EL/DC, HYD, APU, COND, DOOR, WHEEL, F/CTL, FUEL) complete in 1.5 to 6 s. |
-| ISIS | Complete, with its flags during alignment. |
-| ND | Complete in 1 s with the IRS aligned and no route, and complete with the owner's uplinked route at 10 NM (16 items). At 20 and 80 NM with many more waypoints on the map it was NOT complete in the proof (at best 7 of 13 items in 10 s): plan 09's second go or no-go, by range. |
-| PFD | Readable, but only with the proof run eight times side by side: 30 of its 31 items within 2.5 s, 37 of 38 with both flight directors on (one alone: 24 of 30 in 20 s). With the flight director on, the armed modes ALT and NAV were read as text. Plan 09's go or no-go stands until the built reader is measured. |
-| DCDU | Nothing drawn while empty: not measured. |
-| FCU, radios, clock, DME, transponder, rudder trim, battery | Not readable this way: redrawn only when they change. Their values are variables. |
-| Any display, aircraft cold and dark | Nothing is drawn: the reader has nothing to give, and says so. |
+| Display | 2026-11-20, the first approach (dropped) | 2026-11-21, the current approach (a proof) |
+| --- | --- | --- |
+| MCDU, both sides | Whole page, exact, both fonts, colours. 52 pages of a full preflight, each within 0.5 to 3 s. Works with the simulator in an outside view, paused, and with the MCDU dimmed to zero: no pop-out, camera or focus. | The whole page; a page change (PROG, then back to F-PLN) followed within half a second |
+| E/WD | Complete in 2 to 9 s: engine fields, fuel on board, memos, and on batteries only four cautions with their action lines. | Whole, memos included |
+| Lower ECAM | Every page its key gives (ENG, BLEED, PRESS, EL/AC, EL/DC, HYD, APU, COND, DOOR, WHEEL, F/CTL, FUEL) complete in 1.5 to 6 s. | Whole |
+| ISIS | Complete, with its flags during alignment. | Whole |
+| ND | Complete without a route, and with the route at 10 NM (16 items); NOT complete at 20 and 80 NM, nor at all once the owner's route showed on 2026-11-21 | Whole with the route: KATL 09L, the waypoints, the top lines, the cross-track figure, the distance |
+| PFD | Never complete: one to three of its 38 items missing every time | Whole: the mode band (SRS, ALT, NAV, 1, FD, 2, A/THR), the altitude tape, QNH 1018, the speeds |
+| DCDU | Nothing drawn while empty: not measured. | Not measured |
+| FCU, radios, clock, DME, transponder, rudder trim, battery | Not readable this way: redrawn only when they change. Their values are variables. | Not tried; their values are variables |
+| Any display, aircraft cold and dark | Nothing is drawn: the reader has nothing to give, and says so. | The same |
+| Colours | With every text | Not found yet (M14): until then a frame carries no colour |
+| List rows the display hides | Left out | Not told apart yet (M15) |
 
-- The reader gives what is ON THE SCREEN. The aircraft draws a whole list (all ten runways, every SID)
-  and shows a window of it; the frame holds the rows in the window only, as a sighted pilot sees them.
+- The reader is to give what is ON THE SCREEN. The aircraft draws a whole list (all ten runways, every
+  SID) and shows a window of it; the frame should hold the rows in the window only, as a sighted pilot sees
+  them. The first approach did; the current one does not yet (M15), and plan 03's list pages wait for it.
 - The reader also gives the MCDU's scratchpad text at once, apart from the page.
 - The page shown is `L:INI_FMC_PAGE1` / `_PAGE2` (1-based: 2 INIT, 22 MCDU MENU).
 - A CLR press with FMS messages queued clears a message, not a scratchpad character.
@@ -165,6 +172,8 @@ whole MCDU preflight with a route (KATL to KMCO, typed by hand), every lower ECA
   other number's word is a guess from another aircraft, and an unknown number is said as a number.
 - Measured 2026-11-20: the PFD draws its flight modes as text. At the gate with the captain's flight
   director on, the armed row read ALT and NAV in cyan; with it off there is no mode text.
+- Measured 2026-11-21, after the take-off data was entered: the whole band read SRS, ALT, NAV, 1, FD, 2
+  and A/THR. The words are read from the band as drawn (D7); no table of numbers to words is built.
 - The aircraft publishes its flight phase: `INI_flight_phase` (lower case), `INI_EWD_FLIGHT_PHASE` and
   `INI_ECAM_PHASE` all read 1 at the gate on external power. Their values through a flight are not
   measured.
@@ -176,7 +185,7 @@ whole MCDU preflight with a route (KATL to KMCO, typed by hand), every lower ECA
 | R1 | The branch's two commits get an independent review; its real findings are fixed. | 01 |
 | R2 | Later plans add to the definition without two plans editing one file (seams, a file split by owner, tests split by owner). | 01 |
 | R3 | The A330 is in every test that sweeps all aircraft, and passes them. | 01 |
-| R4 | The app starts the display reader beside itself and gives any window or announcer a display's drawn text: characters, position, font, colour, and whether the frame is complete. An incomplete frame is never shown or spoken as a page. | 02 (the reader program itself: the private reference) |
+| R4 | The app starts the display reader beside itself and gives any window or announcer a display's drawn text: characters, position, font, colour, and whether the frame is complete. An incomplete frame is never shown or spoken as a page. Once the reader is running, every display's change reaches the app in under 3 seconds (D15). | 02 (the reader program itself: the private reference) |
 | R5 | When the reader cannot read (it is not installed, the simulator version is not recognised, no access), BA says so once, in the pilot's words, and every window shows why. | 02 |
 | R6 | The MCDU window shows the page from the reader, both sides, in the app's Airbus MCDU format; no pop-out, camera change or focus change. The pixel reader, its glyph file and its training tool are removed. When the reader cannot read, the window says so and BA speaks a message: no AI read of the MCDU. | 03 |
 | R7 | The scratchpad is confirmed from the MCDU's own text as it is typed; an FMS message is spoken with the window closed. | 03 |
@@ -189,7 +198,7 @@ whole MCDU preflight with a route (KATL to KMCO, typed by hand), every lower ECA
 | R14 | Every EFB page meets the EFB checklist (section 4), has captured fixtures and tests, and its connection closes on an aircraft switch. | 07 |
 | R15 | Output Alt+E and Alt+S open live E/WD and lower ECAM windows with the ECAM keys; warnings, cautions and memos are called out, each kind on its own Ctrl+M row. | 08 |
 | R16 | Output Alt+N, Alt+I and Ctrl+Shift+D open live ND, ISIS and DCDU windows with their controls; ND messages and DCDU uplinks are called out. | 09 |
-| R17 | The FMA's words are the PFD's own: each mode number's word is taken from what the PFD drew while that number was set. Alt+P opens a PFD window if the PFD proves readable; if not, the plan says so and the AI read stays. | 09 |
+| R17 | The FMA's words are the PFD's own, read from its mode band as drawn; no table of mode numbers to words is built from flights (D7). Alt+P opens a live PFD window. | 09 |
 | R18 | The missing hotkeys and definition members of section 2.6 exist; everything spoken has a comma-decimal test. | 10 |
 | R19 | One flight, gate to gate, with the First Officer, proves what only a flight can (section 6). | 11 |
 | R20 | The temporary chocks and covers press is removed before the pull request; the three rows become status lines. | 12 |
@@ -265,8 +274,12 @@ source in the plan's evidence file.
 - D13. The controls' names and position names and the aircraft's variable names are held in this
   repository, as for the other aircraft (owner, 2026-11-20). The simulator's checklist text and anything
   about how the displays are read stay private (D2).
-- D7. The FMA stays spoken from the mode L:vars, which change at once; the reader supplies and checks the
-  words (R17). (Claude.)
+- D7. The FMA's words are read from the PFD's mode band as drawn. No table of mode numbers to words is
+  built from flights: "This sounds like we're doing more training, I thought we wanted to avoid this!"
+  (owner, 2026-11-21, on a proposal to pair numbers with words). The mode L:vars, which change at once,
+  only ask the reader for a fresh PFD frame, so a call-out speaks the band's new words as soon as the PFD
+  shows them; until the reader gives a PFD frame (it is starting, or not installed), the call-outs keep
+  today's words from the numbers, a table that is not extended. (The timing is Claude's proposal.)
 - D8. Which display says a colour follows the Fenix's windows, display by display (owner, 2026-11-20:
   "some displays don't need them ... You can use the fenix as a reference"). A colour is said only where
   it is the meaning; it is never guessed, and always the word for what the display drew.
@@ -297,6 +310,13 @@ source in the plan's evidence file.
   keys, the lower ECAM window the page keys, the ND window the EFIS panel's mode, range, option keys and
   needle selectors, and likewise the PFD, ISIS and DCDU windows. A window's press is the panel's own
   press, never a write of its own, and each button shows the control's state.
+- D14. Every display is read by the reader's current approach (section 2.1), whole; the first approach
+  is dropped with no fallback (owner, 2026-11-21). While the reader prepares at the start of a simulator
+  session the windows say the displays are starting (plan 02); when it cannot read, R5 and D3 apply. The
+  reader, its tools and notes stay private, as the A350's do (owner, 2026-11-21: "keep sensitive info,
+  tools, etc private"); the app side stays in this repository.
+- D15. Every display refreshes in under 3 seconds once the reader is running: "refresh rates need to be
+  fast across all displays" (owner, 2026-11-21).
 **Questions for the owner** (answer in this table; a plan proceeds on the decision above until then):
 
 | # | Question | Answer |
@@ -306,12 +326,13 @@ source in the plan's evidence file.
 
 ## 6. Measurements
 
-Measured on 2026-11-20 in one ground session (cold and dark to a programmed MCDU; the evidence and the
-captured frames are with the team's private reference). "Open" is what is still to measure.
+Measured on 2026-11-20 in one ground session (cold and dark to a programmed MCDU) and on 2026-11-21 in a
+second (the owner's preflight with the route, engines started); the evidence and the captured frames are
+with the team's private reference. "Open" is what is still to measure.
 
 | # | What | Plan | Measured 2026-11-20 | Open |
 | --- | --- | --- | --- | --- |
-| M1 | The reader's time to a complete page on each display (INIT, F-PLN with a route, a long list), its processor load, and the cost to the simulator's frame time | the reader's plan (private); 02 sets the refresh defaults from it | With the slow proof: MCDU pages 0.5 to 3 s (the 804-character ARRIVAL list 1.5 s), E/WD 2 to 9 s, lower ECAM pages 1.5 to 6 s | The built reader's times, its processor load, the simulator's frame time |
+| M1 | The reader's time from a change on a display to its frame at the app, on each display; its preparation time at the start of a session; its processor load; the cost to the simulator's frame time | the reader's plan (private); 02 sets the refresh defaults from it | First approach: MCDU pages 0.5 to 3 s, E/WD 2 to 9 s, lower ECAM 1.5 to 6 s. Current approach (2026-11-21, a proof): a frame read in milliseconds once prepared; the MCDU followed a page change within half a second; preparing took 72 s | The built reader's preparation time (to be cut well below the proof's), each display's time to the app (under 3 s, D15), its load, the simulator's frame time |
 | M2 | The reader with the simulator paused, in the menus, during a flight load, after an aircraft change, with the MCDU dimmed to zero and with the aircraft unpowered | the reader's plan (private); 02 Task 6 | Paused: reads as usual. MCDU dimmed to zero: reads as usual. Cold and dark: nothing is drawn, so nothing is read | The menus, a flight load, an aircraft change |
 | M3 | Every special character the MCDU fonts draw and its meaning | 03 | Done: the table is in plan 03 | |
 | M4 | MCDU keys never verified: OVERFLY, DECIMAL, SPACE, PLUS/MINUS, CLR on a message and on the scratchpad | 03 | Done, all work: the results are in plan 03 | |
@@ -319,8 +340,10 @@ captured frames are with the team's private reference). "Open" is what is still 
 | M6 | The order of every procedure in the simulator's checklist window | 04, 06 | Done: 38 procedures, 669 items, captured in order from MSFS 2024's own tablet (kept private) | Turning it into `procedure_order.json` (the app's control keys in that order) |
 | M7 | A/THR, AP 1 and 2, LOC, APPR presses in the air; Standard in a climb and on the first officer's knob | 05, 11 | Standard on the first officer's knob, on the ground: works by value as the captain's | The presses in the air; Standard in a climb |
 | M8 | The engine start and shutdown flows; the ADIRS, flap, spoiler and parking brake writes | 06, 11 | Parking brake: input 0 = set, 1 = released. ADIRS mode by value: 1 = NAV, all three aligned | The flows; flaps and spoilers |
-| M9 | Whether the PFD can be read: how often the reader gives a complete PFD frame within 2 s | 09 | The proof run eight times side by side read 30 of 31 items within 2.5 s; one alone 24 of 30 in 20 s. The flight modes are text | The built reader's figure: the go or no-go stands |
-| M10 | Each FMA mode number against the words the PFD draws, through a whole flight | 09, 11 | At the gate, flight director on: ALT and NAV armed, in cyan | The flight |
-| M11 | The DCDU with a real uplink; the ND with a route, in each mode | 09, 11 | The ND with a route read complete at 10 NM (16 items) and was NOT complete at 20 and 80 NM (at best 7 of 13 items in 10 s, eight side by side); without a route it is complete in 1 s | Why the ND with a route is hard, with the built reader: a second go or no-go in plan 09. The DCDU |
+| M9 | Whether the PFD can be read whole | 09 | Done 2026-11-21 with the current approach: the whole PFD, the mode band included. (The first approach never read it whole.) | In flight, on the built reader |
+| M10 | The PFD's mode band read through a whole flight, against the flight mode call-outs heard | 09, 11 | At the gate: ALT and NAV armed in cyan (2026-11-20); SRS, ALT, NAV, 1, FD, 2, A/THR (2026-11-21) | The flight |
+| M11 | The DCDU with a real uplink; the ND with a route, in each mode and range | 09, 11 | Done on the ground 2026-11-21 with the current approach: the ND with the route read whole. (The first approach did not, beyond 10 NM.) | Each mode and range, and in flight, on the built reader. The DCDU |
 | M12 | The visual-guidance glideslope and flare biases, measured apart on an approach; the taxi turn lead on a taxi | 10, 11 | | All of it |
 | M13 | Whether the aircraft publishes its flight phase, and its values through a flight | 10, 11 | Yes: `INI_flight_phase`, `INI_EWD_FLIGHT_PHASE`, `INI_ECAM_PHASE`, each 1 at the gate | Their values through a flight |
+| M14 | The colours with the current approach (D8 needs them on the E/WD, the lower ECAM, the PFD's mode band and the ND) | the reader's plan (private); 08, 09 | Not found yet (2026-11-21) | All of it; until found a frame carries no colour and no colour word is said |
+| M15 | Leaving out the list rows a display hides (the MCDU's lists) with the current approach | the reader's plan (private); 03 | Not yet (2026-11-21) | All of it; plan 03's list pages wait for it |

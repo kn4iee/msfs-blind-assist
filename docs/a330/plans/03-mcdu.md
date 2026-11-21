@@ -47,8 +47,14 @@ the F-PLN one waypoint a press and a DEPARTURES or ARRIVAL list four rows a pres
 
 **What the pages do.**
 
-- Lists are windows: the frame holds only the rows on the screen (four runways, four SIDs, three
-  approaches, five F-PLN legs). Nothing has to be hidden by the app.
+- Lists are windows: the screen shows only some rows (four runways, four SIDs, three approaches, five
+  F-PLN legs). With the reader's first approach the frame held only those. With its current one (spec
+  D14) a frame can also hold the rows the MCDU hides, drawn over the RETURN and scratchpad lines, until
+  spec M15 is solved in the reader. Until then a list page's tests use fixtures that hold the screen's rows
+  only, and the window shows a list page's rows only when the frame says hidden rows are left out
+  (`A330Frame.ClipApplied`, plan 02); else it
+  says "List rows not read yet" in the status row and shows the page's other rows (Claude's proposal: a
+  list row the pilot cannot see must never be read as one they can).
 - A title can be several texts in two fonts and colours ("DEPARTURES" large, "FROM" small, "KATL" green;
   "HOLD", "AT", "RIGGZ"): the screen model joins them by column, as Task 1 does.
 - The scratchpad line shows only the newest FMS message. "ENTRY OUT OF RANGE" was queued behind four

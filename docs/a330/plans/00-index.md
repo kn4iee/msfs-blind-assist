@@ -40,7 +40,7 @@ no access; a task that needs the reader program running says so.
 | 06 | `06-first-officer.md`: the First Officer at parity with the other Airbus profiles, in the simulator's own procedure order, every write seen to take effect | early | 01; its Task 5 after plan 04's Task 6 |
 | 07 | `07-efb.md`: every EFB page against the EFB checklist, fixtures and tests, the connection closed on a switch (the chocks and covers press left alone) | early | 01 |
 | 08 | `08-ecam.md`: the E/WD and lower ECAM windows, with the ECAM keys in them, and their call-outs | later | 02; its sim tasks need the reader program |
-| 09 | `09-pfd-nd-displays.md`: the FMA's words from the PFD, the PFD window if it proves readable, the ND, ISIS and DCDU windows, with their controls in them, and their call-outs | later | 02; its sim tasks need the reader program |
+| 09 | `09-pfd-nd-displays.md`: the FMA's words read from the PFD, the PFD window, the ND, ISIS and DCDU windows, with their controls in them, and their call-outs | later | 02; its sim tasks need the reader program |
 | 10 | `10-readouts-parity.md`: the missing hotkeys and definition members, the comma-decimal tests | later | 01; its display-fed read-outs after 08 and 09 |
 | 11 | `11-flight.md`: one flight gate to gate with the First Officer; the measurements only a flight gives | audit | 03-10 |
 | 12 | `12-integration.md`: handoffs, the release carrying the reader program, the chocks and covers press removed, rules, docs, guide, hotkey guide, changelog, the pull request, delete `docs/a330/` | last | all |

@@ -42,7 +42,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 11` (`Pla
 - [ ] **Step 1:** Taxi with taxi guidance: note where a turn came early or late (the taxi turn lead, for plan 10).
 - [ ] **Step 2:** Take-off: V1, Rotate, V2 spoken; each flight mode change spoken in the PFD's words. After lift-off, from the autopilot window (Ctrl+P): AP 1, then A/THR if it is not active (M7).
 - [ ] **Step 3:** Passing the transition altitude: Standard from Ctrl+B on the captain's side, then the first officer's (M7). A heading and an altitude change on the FCU through Ctrl+H and Ctrl+A, and one on hardware or a sim key: the knob call-out.
-- [ ] **Record:** `fma.log` (M10); what each press read back; the First Officer's After Takeoff flow.
+- [ ] **Record:** the PFD band's words against the flight mode call-outs heard, and `fma.log` (M10); what each press read back; the First Officer's After Takeoff flow.
 
 ### Task 3 [owner] [in flight]: Cruise and descent
 

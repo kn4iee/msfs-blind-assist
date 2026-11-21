@@ -20,6 +20,25 @@
 - Nothing on the client's reading thread touches SimConnect, a control or the announcer (SIM-5, SIM-20, A380C-6): consumers marshal.
 - The reader's own log lines (its standard error) go to a named log through `Log.Channel("a330-displays")` (CORE-14, CORE-15).
 
+## Changed on 2026-11-21
+
+The reader's approach changed (spec section 2.1, D14, D15). What it means for this plan:
+
+- **Every display reads whole**, the PFD and the ND with a route included; a window no longer needs the
+  "last complete frame and how old it is" fallback below, though it keeps it for a reader that is late.
+- **The reader prepares once a simulator session** (72 s in the proof; the built reader must cut it, M1).
+  The state is `Starting` all that time: a passing state, never spoken, shown in the windows as "A330
+  displays starting". A reader restarted with the simulator still running does not prepare again.
+- **Refresh:** the app asks 250 ms while a window shows a display and 1000 ms in the background; R4's
+  3 seconds is the reader's promise once `Running`.
+- **Colour is optional** in the contract (`A330Text.Colour` null; the `colour` key left out on the wire)
+  until the reader gives colours (M14). `A330Colours.Name` is never called with none; tests
+  `A_text_with_no_colour_has_no_colour_word`, `A_frame_line_without_colour_parses`.
+- **A frame can hold list rows the display hides** until M15 (the bullet "A frame holds what is on the
+  screen" below is the first approach's). The frame says so: `A330Frame.ClipApplied` false
+  (`"clipApplied":false` on the wire). Plan 03 handles its lists until then; nothing else is affected.
+  Test `A_frame_line_with_clipApplied_false_parses_to_false`.
+
 ## Measured on 2026-11-20
 
 One ground session, cold and dark to a programmed MCDU, with the proof the reader is built from (spec
@@ -65,11 +84,14 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
   public readonly record struct A330Rgb(float R, float G, float B);
   /// One text as the display drew it. X is where its first character starts, Baseline its text line, in the display's own pixels;
   /// CharX is each character's start; Order is its place in the display's drawing order.
-  public sealed record A330Text(int Order, float X, float Baseline, string Text, string Font, float Size, A330Rgb Colour, IReadOnlyList<float> CharX);
+  /// Colour is null while the reader gives none (spec M14: not found yet with its current approach); a consumer then says no colour word.
+  public sealed record A330Text(int Order, float X, float Baseline, string Text, string Font, float Size, A330Rgb? Colour, IReadOnlyList<float> CharX);
   /// One frame of one display. Complete: the reader vouches that no text the display drew is missing.
   /// Drawn is false when the aircraft is not drawing this display at all: the cockpit unpowered, or a display that is only
   /// drawn when something on it changes. Such a frame has no texts and is not complete; it is a state, not a failure.
-  public sealed record A330Frame(A330Gauge Gauge, IReadOnlyList<A330Text> Texts, bool Complete, int Missing, long ReadTicks, bool Drawn = true);
+  /// ClipApplied is true when the reader vouches that rows the display hides (a list drawn whole and clipped) are left out;
+  /// false until spec M15 is solved, sent as "clipApplied":false (left out on the wire when true).
+  public sealed record A330Frame(A330Gauge Gauge, IReadOnlyList<A330Text> Texts, bool Complete, int Missing, long ReadTicks, bool Drawn = true, bool ClipApplied = true);
 
   /// A drawn colour's word, by hue: "white", "grey", "red", "amber", "yellow", "green", "cyan", "blue" or "magenta".
   /// Seen on the aircraft: MCDU amber (0.98, 0.76, 0.29), cyan (0.31, 0.82, 1.00), greyed prompt (0.30, 0.30, 0.30); ECAM amber (1.00, 0.55, 0.00),
