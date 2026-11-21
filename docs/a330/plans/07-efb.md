@@ -30,7 +30,7 @@
 - MSFS 2024's own tablet is now in main (#321) and opens from the Extras menu for every aircraft. It
   does not remove chocks or covers, so the A330's temporary press stays until plan 12 Task 3.
 
-Later the same day, with the owner's SimBrief identifier typed into the Options box through the reader
+Later the same day, with the owner's SimBrief identifier typed into the Options box through the EFB agent
 (Task 4, the plan download, walked once; a long-haul plan in POUNDS):
 
 - **The Dashboard's "Import from SimBrief" then loads the OFP**; the OFP page shows it as one block of

@@ -201,6 +201,11 @@ reviewer after each); plans 11 and 12 are live work, worked with superpowers:exe
   non-interrupting announce.
 - A display read is spoken or shown only from a COMPLETE frame (plan 02's `A330Frame.Complete`), and a
   call-out only once two complete frames in a row agree.
+- Colours and hidden list rows (spec M14, M15): the reader does not give them yet. Build and test on the
+  2026-11-20 fixtures, which stand for what the reader will give; at run time a frame with no colour gets
+  no colour word and drives no call-out that needs a colour, and a frame whose `HiddenRowsLeftOut` is false
+  shows and speaks nothing that could be a hidden row; the window says what it waits for. Plan 02 holds
+  the rule; plan 12 checks both before the pull request.
 - Every new call-out has its Ctrl+M row: a variable's through `ExcludeFromMonitorManager` false; a display
   call-out's in its area's `A330CalloutRows.<Area>` list (plan 01's seam). Each announcing plan has a test
   that a muted row says nothing.

@@ -32,8 +32,12 @@ uplinked, the IRS aligned and the take-off data entered:
   same ND read none of its items once the route showed.
 - **Colours** are not in the frames yet (spec M14). The band's colour words and the ND's amber and red
   wait for them; nothing else here does.
-- So Task 1 measures the built reader instead of deciding, and the two go or no-go decisions below are
-  closed: the PFD window lists the PFD's text, and Task 4's window promises the route's items.
+- So Task 1 measures the built reader instead of deciding, and the go or no-go decisions of 2026-11-20
+  are closed: the PFD window lists the PFD's text, and Task 4's window promises the route's items.
+- Hidden rows (spec M15) may matter here too: the tapes show a window of each scale, and with the current
+  approach the frame may hold scale numbers outside it. The page models take a tape's current value from
+  its box and never list the scale, and while `HiddenRowsLeftOut` is false the PFD and ISIS windows list
+  no scale numbers (plan 02's rule).
 
 ## Measured on 2026-11-20
 
@@ -42,7 +46,8 @@ uplinked, the IRS aligned and the take-off data entered:
 - **The flight modes are text** (Task 2 Step 1, started): at the gate with the captain's flight director
   on, the armed row read ALT and NAV in cyan, with `1`, the FD symbol and `-` at the right; with it off
   the band is empty. The speed tape drew V1 in cyan and V2 in magenta.
-- The PFD shows only a window of each tape: the frame holds the numbers on the screen.
+- The PFD shows only a window of each tape: with the first approach the frame held the numbers on the
+  screen only (with the current one, see 2026-11-21 above).
 - **Self test:** SELF TEST IN PROGRESS / MAX 40 SECONDS, as text, on the PFD and the ND. Before the IRS
   align the PFD draws no text at all and the ND reads HDG and MAP NOT AVAIL in red.
 - **Task 4, the ND:** with the IRS aligned and no route, complete in 1 s (KATL, the nearest navaid, the
@@ -66,13 +71,14 @@ on, IRS aligned during the session):
   airspeed top left, the wind as "---/---", the next leg top right, KATL and 09L by the runway, the
   cross-track figure "0.2L", a navaid in cyan, the next waypoint, GPS PRIMARY at the bottom.
 - **Text outside the display.** The ND drew a waypoint behind the aircraft (LIDAS) at a position below
-  the bottom edge of the display, with no clip set. The frame carries it; Task 4's map list drops any
+  the bottom edge of the display. The frame carries it; Task 4's map list drops any
   item whose position lies outside the display's own area (its size is a named constant of `A330NdLayout`, from
   the fixtures), or it would name waypoints a sighted pilot cannot see.
 - The degree sign on the ND is the font's `!`; the FD symbol on the PFD is the letters `fd` in its font:
   each display's special characters get a table of their own, as the MCDU's have (plan 03).
 - **ISIS:** complete, including its flags and the count-down while it aligns ("INIT 53S").
-- **DCDUs:** nothing drawn while empty, and the two cannot be told apart yet (Task 7).
+- **DCDUs:** nothing drawn while empty, and the two cannot be told apart yet (the reader's plan does it;
+  Task 7 needs it).
 
 ## Review Focus
 
@@ -166,11 +172,11 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 09` (`Pla
 
 ### Task 8: The developer doc
 
-- [ ] **Step 1:** "Flight modes" rewritten (the words are read from the PFD's band; the numbers only ask for a fresh frame and give today's words while no PFD frame comes; no table is extended from flights); a section a display for the ND, ISIS and DCDU (areas, scale, what is not read).
+- [ ] **Step 1:** "Flight modes" rewritten (the words are read from the PFD's band; the numbers only ask for a fresh frame and give today's words while no PFD frame comes; no table is extended from flights), and the "Unverified" bullet "FMA words for each mode number" removed; a section a display for the ND, ISIS and DCDU (areas, scale, what is not read).
 
 ## In-sim checks (owner)
 
-1. In flight (plan 11): every flight mode change is spoken in the words on the PFD; none is spoken as a number by the end of the flight.
+1. In flight (plan 11): every flight mode change is spoken in the words on the PFD. A mode spoken as a number while the reader was running is a defect of this plan (a late frame), listed for a fix, never a word to add to a table.
 2. Output Alt+N with a route: the next waypoint and three map items read where you expect them; change mode and range from the window.
 3. Output Alt+I on the ground: speed, altitude and the altimeter setting.
 

@@ -27,8 +27,8 @@
   captain's flight director on with a flight plan and V2 entered, speed dashed 1 and dot 1, heading
   dashed 1 and dot 1, altitude dot 0, V/S dashed 1. Still to measure, in the air: each one after a pull
   and a push of its knob, and the altitude dot in a managed climb.
-- The FCU's own display is drawn only when something on it changes, so the display reader does not give
-  it: the windows stay on the variables.
+- The FCU's own display is not read by the display reader (spec section 2.1): the windows stay on the
+  variables.
 - **Task 6, the first officer's knob (M7, on the ground): done.** `AIRLINER_FO_BARO_SET_PULL` set 1 then
   0 gave `XMLVAR_Baro2_Mode` 3 (Standard); `AIRLINER_FO_BARO_SET_PUSH` the same way gave 0 (QNH). The
   third altimeter has `XMLVAR_Baro3_Mode`. Standard in a climb stays with plan 11.

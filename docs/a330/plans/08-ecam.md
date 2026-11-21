@@ -17,15 +17,15 @@
 - A row carries the display's own text. A number is named only by a label the display draws for it or by the per-page table; a text whose meaning is not established is listed as drawn, with where it is ("Lower left: XX, amber"), never guessed and never dropped.
 - Needles, arcs, flow lines and symbols are graphics the reader does not see. A value shown only as graphics is said from a variable if the aircraft has one, and otherwise the page's list says "not read: shown as a symbol" for it once.
 - Rows and call-outs come only from complete frames; a call-out only when two complete frames in a row agree.
+- Colours follow plan 02's rule (spec M14): build and test on the 2026-11-20 fixtures, which carry colours. At run time, a frame with no colour gets no colour word, and the E/WD's alert call-outs, which tell a warning, a caution and a memo apart by colour, stay silent; the windows list their rows and say "Colours not read yet". The colour-based call-outs ship once M14 is solved or the owner rules otherwise.
 - The window's keys press the ECAM panel's controls through `PressFromWindow` (plan 01) by their keys in plan 04's map, and show each key's state from `DescribeControl`.
 - Colour words follow `A330Colours.Name` (plan 02); which rows say their colour follows spec D8's table, which follows the Fenix's windows: on the E/WD every message line (warning, caution, memo, action line) says its colour after its words, and an engine block value only when it is not its normal one; on the lower ECAM a value says a colour only when the page draws it in other than its normal one, and titles, labels and units never. The normal colours are measured from the fixtures (green values, white labels, cyan units), never assumed.
 
 ## Changed on 2026-11-21
 
 The reader's approach changed (spec D14): the E/WD and the lower ECAM read whole as before, but frames
-carry no colour until spec M14 is solved. Until then no row says a colour word, and the announcers compare
-alerts by text alone (tests `With_no_colour_no_colour_word_is_said`, `Alerts_compare_by_text_when_there_is_no_colour`);
-the colour rules above apply as soon as frames carry colours, with no other change.
+carry no colour until spec M14 is solved. The Global Constraints say what that means; Task 2 adds the
+tests `With_no_colour_no_colour_word_is_said` and `With_no_colour_no_alert_is_called_out`.
 
 ## Measured on 2026-11-20
 
@@ -92,7 +92,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 08` (`Pla
   ```
   Texts on one baseline (within half a line pitch) in one message area and one colour, in x order, are one line, joined with single spaces.
 
-- [ ] **Steps 1-5:** tests on Task 1's fixtures: `The_ground_fixture_has_three_green_memos_on_the_right_or_left_as_measured`, `A_caution_line_is_amber_and_in_the_left_area`, `A_warning_line_is_red`, `Fuel_on_board_and_its_unit_are_read`, `An_engine_field_showing_XX_is_kept_as_XX`, `Texts_of_one_line_are_joined_in_x_order`, `An_incomplete_frame_gives_no_page`; implement; commit `feat(a330): the E/WD's page model`.
+- [ ] **Steps 1-5:** tests on Task 1's fixtures: `The_ground_fixture_has_three_green_memos_on_the_right_or_left_as_measured`, `A_caution_line_is_amber_and_in_the_left_area`, `A_warning_line_is_red`, `With_no_colour_no_colour_word_is_said`, `With_no_colour_no_alert_is_called_out`, `Fuel_on_board_and_its_unit_are_read`, `An_engine_field_showing_XX_is_kept_as_XX`, `Texts_of_one_line_are_joined_in_x_order`, `An_incomplete_frame_gives_no_page`; implement; commit `feat(a330): the E/WD's page model`.
 
 ### Task 3: The E/WD window
 
@@ -102,7 +102,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 08` (`Pla
 - Consumes: `A330DisplayWindow`, `A330KeyRow` (plan 02); `HandleEcamHotkey`, `CloseEcamWindows` (plan 01).
 - Produces: `internal static class A330EwdText { public static IReadOnlyList<string> Rows(A330EwdPage page); }`. Rows, top to bottom: one a labelled engine row ("N1: 21.0, 21.0"; "EGT: XX amber, XX amber" where a value's colour is not the normal one), the unlabelled texts as drawn, "FOB: 54080 KG", then "Left: PARK BRK, green" a line of the left area and "Right: ..." likewise, or "Left: none", "Right: none".
 
-- [ ] **Steps 1-5:** tests: `The_ground_fixtures_rows_read_as_the_display` (the whole expected listing), `A_normal_coloured_value_says_no_colour_and_another_does`, `Rows_are_the_same_under_de_DE`, `Alt_E_opens_the_window_while_the_reader_runs`, `Alt_E_falls_back_to_the_AI_read_silently_when_it_does_not` (spec D3: the `ReadDisplayUpperECAM` AI read plan 01 moved here), `The_window_carries_the_ECAM_keys` (T.O CONFIG, CLR, RCL, STS, EMER CANC and ALL, by their keys in the map's ECAM panel), `Escape_returns_to_the_window_before`; implement `A330EwdWindow : A330DisplayWindow` (title "A330 E/WD", list "E/WD display", refresh 1000 ms); commit `feat(a330): the E/WD window`.
+- [ ] **Steps 1-5:** tests: `The_ground_fixtures_rows_read_as_the_display` (the whole expected listing), `A_normal_coloured_value_says_no_colour_and_another_does`, `Rows_are_the_same_under_de_DE`, `Alt_E_opens_the_window_while_the_reader_runs`, `Alt_E_falls_back_to_the_AI_read_silently_when_it_does_not` (spec D3: the `ReadDisplayUpperECAM` AI read plan 01 moved here), `The_window_carries_the_ECAM_keys` (T.O CONFIG, CLR, RCL, STS, EMER CANC and ALL, by their keys in the map's ECAM panel), `Escape_returns_to_the_window_before`; implement `A330EwdWindow : A330DisplayWindow` (title "A330 E/WD", list "E/WD display", refresh 250 ms while shown); commit `feat(a330): the E/WD window`.
 
 ### Task 4: Warnings, cautions and memos called out
 
@@ -137,7 +137,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 08` (`Pla
 
 - [ ] **Step 1:** Capture every page on the ground (press each ECAM page key through the simconnect MCP with the owner's go-ahead; the reader program's `capture Sd`; read `INI_ECAM_ACTIVE_PAGE` with it), DOOR/OXY with a door open and closed, STATUS with and without an inoperative system, and the pages that differ with engines running from plan 06's Task 6 or plan 11. In the evidence file, a page at a time: every text, its place, and what it is, with how that was established (a label on the display, a value changed by a known control, a variable that reads the same).
 - [ ] **Steps 1-5 per page:** the page's fixture and its whole expected listing as a test (`A330SdTextTests`, one theory row a page); the label table's entries for that page, each proven by the fixture; under de-DE. Commit a page at a time: `feat(a330): the lower ECAM's <page> page`.
-- [ ] **Step 2:** `A330SdWindow : A330DisplayWindow` (title "A330 system display", list "System display", refresh 1000 ms); its keys: one a system page (by the map's ECAM panel keys), STS, ALL, CLR and RCL; Alt+S opens it, or falls back to the AI read as Task 3's. Tests: `The_window_follows_the_page_shown`, `A_page_key_press_changes_the_list_without_a_word`, `A_frame_of_the_page_before_is_not_listed_under_the_new_title`.
+- [ ] **Step 2:** `A330SdWindow : A330DisplayWindow` (title "A330 system display", list "System display", refresh 250 ms while shown); its keys: one a system page (by the map's ECAM panel keys), STS, ALL, CLR and RCL; Alt+S opens it, or falls back to the AI read as Task 3's. Tests: `The_window_follows_the_page_shown`, `A_page_key_press_changes_the_list_without_a_word`, `A_frame_of_the_page_before_is_not_listed_under_the_new_title`.
 
 ### Task 6: The developer doc
 

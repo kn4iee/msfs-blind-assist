@@ -20,7 +20,7 @@
 ## Review Focus
 
 - A measurement written from memory after the flight: each is copied from a log line or a reader command's line with its time.
-- A flight mode spoken as a number at the end of the flight: every such number is listed with the PFD's text at that time, for plan 09.
+- A flight mode spoken as a number while the reader was running: each is listed with the PFD's band at that time, as a defect for plan 09 (a late frame), never as a word to add (spec D7).
 - A First Officer step that said done while the cockpit disagreed: listed with the step and the control's read, for plan 06.
 
 ---
@@ -57,7 +57,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 11` (`Pla
 - [ ] **Step 1:** An ILS approach: LOC, then APPR, from the autopilot window (M7); each capture spoken from the flight modes; the approach capability line.
 - [ ] **Step 2:** If the weather allows a hand-flown final with visual guidance: the tones against the PAPI or the glideslope at 500, 300 and 100 feet, and the flare cue's height (the two biases, for plan 10, measured apart).
 - [ ] **Step 3:** Landing: the gear confirmation, the ground spoilers armed, the rollout and exit guidance, After Landing, taxi in, Parking, Shutdown and Securing with the First Officer.
-- [ ] **Record:** every flight mode still spoken as a number, with the PFD's text; the First Officer's reports; the biases and the turn lead.
+- [ ] **Record:** every flight mode spoken as a number while the reader ran, with the PFD's band at that time (a defect for plan 09); the First Officer's reports; the biases and the turn lead.
 
 ### Task 5: The evidence and the handoffs
 

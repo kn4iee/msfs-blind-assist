@@ -8,7 +8,7 @@
 
 **Tech Stack:** C# 13 / .NET 10 Windows Forms, xUnit; `System.Diagnostics.Process`; the app's `KillOnCloseJob`.
 
-**Spec:** `docs/a330/spec.md` sections 2.1, 3 (R4, R5), 4 ("The display reader"), 5 (D1 to D3). The reader program's own plan is in the private reference.
+**Spec:** `docs/a330/spec.md` sections 2.1, 3 (R4, R5), 4 ("The display reader"), 5 (D1 to D3, D14, D15), 6 (M14, M15). The reader program's own plan is in the private reference.
 
 ## Global Constraints
 
@@ -17,6 +17,7 @@
 - **Nothing in this repository reads the A330's displays itself, and no public text says how the reader works.** The app only receives frames from the reader program. Code, comments, tests, docs and commit messages speak only of "the display reader" and "frames".
 - The protocol below is the contract with the reader program. A change to a line both sides read is agreed with the reader plan's claimant first, and `A330ReaderProtocol.Version` goes up.
 - A fixture is a frame in the protocol's form: drawn text, positions, fonts, colours. Nothing else.
+- **Colours and hidden list rows (spec M14, M15).** The reader does not give them yet. The 2026-11-20 captures (colours given, hidden rows left out) stand for what it will give once both are solved: plans 03, 08 and 09 build and test on those fixtures, and the current reader's captures replace them when they exist. At run time a frame with no colour gets no colour word and drives no call-out that needs a colour; a frame whose hidden rows are not left out (`HiddenRowsLeftOut` false) shows and speaks nothing that could be a hidden row. A window says what it is waiting for ("Colours not read yet", "List rows not read yet") in its status row. Shipping: plan 12 checks M14 and M15, or the owner's ruling to ship without.
 - Nothing on the client's reading thread touches SimConnect, a control or the announcer (SIM-5, SIM-20, A380C-6): consumers marshal.
 - The reader's own log lines (its standard error) go to a named log through `Log.Channel("a330-displays")` (CORE-14, CORE-15).
 
@@ -24,38 +25,45 @@
 
 The reader's approach changed (spec section 2.1, D14, D15). What it means for this plan:
 
-- **Every display reads whole**, the PFD and the ND with a route included; a window no longer needs the
-  "last complete frame and how old it is" fallback below, though it keeps it for a reader that is late.
-- **The reader prepares once a simulator session** (72 s in the proof; the built reader must cut it, M1).
-  The state is `Starting` all that time: a passing state, never spoken, shown in the windows as "A330
-  displays starting". A reader restarted with the simulator still running does not prepare again.
-- **Refresh:** the app asks 250 ms while a window shows a display and 1000 ms in the background; R4's
-  3 seconds is the reader's promise once `Running`.
+- **Every display reads whole**, the PFD and the ND with a route included; no window needs a fallback
+  for a display that cannot be read whole.
+- **The first time in each simulator session the reader takes a while to start** (72 s in the proof; the
+  built reader must cut it, M1). The state is `Starting` all that time: a passing state, never spoken,
+  shown in the windows as "A330 displays starting". Opening BA again with the simulator still running
+  does not wait again.
+- **Every refresh brings a frame.** The reader sends each wanted display's frame every refresh, changed
+  or not, so `Latest` stays current on a steady page and two frames in a row can agree. A wanted display
+  the reader has not found yet sends no frame: its window says "Reading the <display>" in its status row,
+  and after 30 s "The display reader cannot read the <display>" (Task 5 tests
+  `A_display_with_no_frame_says_reading`, `After_30_seconds_with_no_frame_the_window_says_it_cannot_read_it`).
+- **Refresh:** the app asks 250 ms while a window shows a display and 1000 ms in the background. R4's
+  3 seconds (D15): a call-out needs two agreeing frames, so in the background a change is spoken within
+  about 2 s plus the reader's own time.
 - **Colour is optional** in the contract (`A330Text.Colour` null; the `colour` key left out on the wire)
   until the reader gives colours (M14). `A330Colours.Name` is never called with none; tests
-  `A_text_with_no_colour_has_no_colour_word`, `A_frame_line_without_colour_parses`.
-- **A frame can hold list rows the display hides** until M15 (the bullet "A frame holds what is on the
-  screen" below is the first approach's). The frame says so: `A330Frame.ClipApplied` false
-  (`"clipApplied":false` on the wire). Plan 03 handles its lists until then; nothing else is affected.
-  Test `A_frame_line_with_clipApplied_false_parses_to_false`.
+  `A_text_with_no_colour_has_no_colour_word` (in `A330ColoursTests`), `A_frame_line_without_colour_parses`
+  (in `A330ReaderProtocolTests`).
+- **A frame says whether hidden list rows were left out:** `A330Frame.HiddenRowsLeftOut`, false unless
+  the frame line carries `"hiddenRowsLeftOut":true`, which the reader sends only once M15 is solved. Test
+  `A_frame_line_without_hiddenRowsLeftOut_reads_false` (in `A330ReaderProtocolTests`). The bullets of
+  2026-11-20 below are the first approach's.
 
 ## Measured on 2026-11-20
 
-One ground session, cold and dark to a programmed MCDU, with the proof the reader is built from (spec
-section 6). What it means for this plan:
+One ground session, cold and dark to a programmed MCDU, with the first approach's proof (spec section 6).
+What it meant for this plan, where 2026-11-21 above does not replace it:
 
 - **A display the aircraft is not drawing gives a frame with `Drawn` false** (Task 1's record and Task 2's
-  line carry it since this date). Cold and dark, no display draws anything; the FCU, radios and DCDUs draw
-  only when something on them changes. The window says "<display> is off"; the notice never calls it a
+  line carry it since this date). Cold and dark, no display shows anything. The window says "<display>
+  is off"; the notice never calls it a
   failure.
-- **A frame holds what is on the screen.** The aircraft draws a whole list and shows a window of it; the
-  rows outside the window never reach the app. A consumer never has to hide anything.
+- **(First approach.) A frame held what is on the screen.** The aircraft draws a whole list and shows a
+  window of it; with the first approach the rows outside the window never reached the app. With the
+  current one they can, until M15 (above).
 - **Paused, and with a display dimmed to zero, frames keep coming** unchanged. Nothing in the client may
   stop asking because the simulator is paused or a brightness reads 0.
-- **Times with the slow proof**, for the refresh defaults until M1 is measured on the built reader: an
-  MCDU page 0.5 to 3 s, the E/WD 2 to 9 s, a lower ECAM page 1.5 to 6 s. The PFD and the ND with a route
-  are the two displays that may not come complete: a window on them shows the last complete frame and
-  says how old it is.
+- **(First approach.) Times with the slow proof:** an MCDU page 0.5 to 3 s, the E/WD 2 to 9 s, a lower
+  ECAM page 1.5 to 6 s. Not the refresh defaults any more (2026-11-21 above).
 
 ## Review Focus
 
@@ -87,11 +95,12 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
   /// Colour is null while the reader gives none (spec M14: not found yet with its current approach); a consumer then says no colour word.
   public sealed record A330Text(int Order, float X, float Baseline, string Text, string Font, float Size, A330Rgb? Colour, IReadOnlyList<float> CharX);
   /// One frame of one display. Complete: the reader vouches that no text the display drew is missing.
-  /// Drawn is false when the aircraft is not drawing this display at all: the cockpit unpowered, or a display that is only
-  /// drawn when something on it changes. Such a frame has no texts and is not complete; it is a state, not a failure.
-  /// ClipApplied is true when the reader vouches that rows the display hides (a list drawn whole and clipped) are left out;
-  /// false until spec M15 is solved, sent as "clipApplied":false (left out on the wire when true).
-  public sealed record A330Frame(A330Gauge Gauge, IReadOnlyList<A330Text> Texts, bool Complete, int Missing, long ReadTicks, bool Drawn = true, bool ClipApplied = true);
+  /// Missing: how many characters the frame lacks (0 when complete).
+  /// Drawn is false when the display shows nothing (the cockpit unpowered). Such a frame has no texts and is not complete;
+  /// it is a state, not a failure.
+  /// HiddenRowsLeftOut is true only when the reader vouches that rows the display does not show (the rest of a list) are left
+  /// out; false until spec M15 is solved. On the wire "hiddenRowsLeftOut":true, absent meaning false.
+  public sealed record A330Frame(A330Gauge Gauge, IReadOnlyList<A330Text> Texts, bool Complete, int Missing, long ReadTicks, bool Drawn = true, bool HiddenRowsLeftOut = false);
 
   /// A drawn colour's word, by hue: "white", "grey", "red", "amber", "yellow", "green", "cyan", "blue" or "magenta".
   /// Seen on the aircraft: MCDU amber (0.98, 0.76, 0.29), cyan (0.31, 0.82, 1.00), greyed prompt (0.30, 0.30, 0.30); ECAM amber (1.00, 0.55, 0.00),
@@ -200,7 +209,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
   internal sealed record A330KeyRow(string VarKey, double? PressValue = null);   // a button (PressValue) or a choice list (null: the control's positions)
   internal abstract class A330DisplayWindow : Form
   {
-      protected A330DisplayWindow(string title, string listName, IniA330Definition aircraft, SimConnectManager sim, ScreenReaderAnnouncer announcer, A330Gauge gauge, int refreshMs = 1000);
+      protected A330DisplayWindow(string title, string listName, IniA330Definition aircraft, SimConnectManager sim, ScreenReaderAnnouncer announcer, A330Gauge gauge, int refreshMs = 250);
       protected abstract IReadOnlyList<string> Rows(A330Frame frame);        // the list's lines, top of the display first
       protected virtual IReadOnlyList<A330KeyRow> Keys => [];                // the cockpit controls under the list (spec D9)
   }
@@ -226,7 +235,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
 
 ## In-sim checks (owner)
 
-1. Start BA with the A330 loaded: no notice is spoken, and the MCDU window (plan 03) reads within a second.
+1. Start BA with the A330 loaded: no notice is spoken, and the MCDU window (plan 03) reads within a second once "A330 displays starting" has gone (the first time in a simulator session the reader starts first).
 2. Close BA: the simulator carries on, and no reader program is left running.
 
 ## Handoff to plan 12

@@ -18,11 +18,12 @@
 - What the window's lines look like, its keys and its typing pace do not change in this plan except where a task says so: a pilot who knew the window finds it the same, only faster and without the camera moving. The one change in looks is the braille rule of "Measured on 2026-11-20": a row keeps its 24 columns, as the app's other Airbus MCDU windows do.
 - The pixel reader is deleted only in Task 7, after the owner's check of Task 6. Until then both sources are in the tree and the form uses the new one.
 - There is no AI read of the MCDU (spec D3): when the reader cannot read, the window shows why and BA speaks a message.
+- Colours and hidden list rows follow plan 02's rule (spec M14, M15): build and test on the 2026-11-20 fixtures; at run time no colour means nothing is marked "(unavailable)", and `HiddenRowsLeftOut` false means no page rows and no FMS message are shown or spoken, only "List rows not read yet"; the window ships once M15 is solved or the owner rules otherwise.
 
 ## Measured on 2026-11-20
 
 A whole preflight was typed on the captain's MCDU (KATL 26L VRSTY3 NOKIE, ALYNA4, ILS 17L KMCO, alternate
-KTPA) and 88 MCDU frames were captured complete, each within 0.5 to 3 s. **Task 2 Step 1 (M3) and Task 4
+KTPA) and 88 MCDU frames were captured complete with the reader's first approach, each within 0.5 to 3 s. **Task 2 Step 1 (M3) and Task 4
 Step 2 (M4) are done by this; the owner's steps remain.** The captured frames are with the private
 reference; the fixtures this plan names are taken from them.
 
@@ -49,12 +50,13 @@ the F-PLN one waypoint a press and a DEPARTURES or ARRIVAL list four rows a pres
 
 - Lists are windows: the screen shows only some rows (four runways, four SIDs, three approaches, five
   F-PLN legs). With the reader's first approach the frame held only those. With its current one (spec
-  D14) a frame can also hold the rows the MCDU hides, drawn over the RETURN and scratchpad lines, until
-  spec M15 is solved in the reader. Until then a list page's tests use fixtures that hold the screen's rows
-  only, and the window shows a list page's rows only when the frame says hidden rows are left out
-  (`A330Frame.ClipApplied`, plan 02); else it
-  says "List rows not read yet" in the status row and shows the page's other rows (Claude's proposal: a
-  list row the pilot cannot see must never be read as one they can).
+  D14) a frame can also hold the rows the MCDU does not show, drawn over the RETURN and scratchpad lines,
+  until spec M15 is solved in the reader. A row the pilot cannot see must never be read as one they can,
+  so: this plan builds and tests on the 2026-11-20 fixtures, which hold the screen's rows only (plan 02's
+  rule for M14 and M15); at run time, while a frame's `HiddenRowsLeftOut` is false, the window shows no
+  page rows and no FMS message (a hidden row could sit on the scratchpad line), only its status row
+  "List rows not read yet"; and the MCDU window ships only once M15 is solved, or the owner rules
+  otherwise (plan 12). (Claude's proposal.)
 - A title can be several texts in two fonts and colours ("DEPARTURES" large, "FROM" small, "KATL" green;
   "HOLD", "AT", "RIGGZ"): the screen model joins them by column, as Task 1 does.
 - The scratchpad line shows only the newest FMS message. "ENTRY OUT OF RANGE" was queued behind four
@@ -169,7 +171,7 @@ Tests to add to Task 3: `A_right_hand_field_keeps_its_column_on_every_row`,
 - A row whose two texts overlap a column (a label drawn over a value) must not lose a character: the later-drawn text wins the cell, and the test page has such a row (Task 1).
 - A centred label sits between two columns (measured 2026-11-20: 33 of 2,040 texts start 0.35 to 0.5 of a cell off a column, among them "AVAILABLE RUNWAYS", "VIA", "UTC", "HOLD AT", "INOP PAGE" and the REPORT page's times; one text, the "1/7" of P/N XLOAD, sits half a row off). Such a text takes the nearer cell: it is never a reason to refuse the page. The screen is refused only when a text starts outside the 14 by 24 area, which is what a moved geometry (another variant, another gauge size) gives (Task 1).
 - An amber box row read as letters ("oooooooo"): every special character has its name before any page is shown (Task 2).
-- A message on the scratchpad line mistaken for typed text: the typed text is the MCDU object's own string; the row is what is displayed (Task 4).
+- A message on the scratchpad line mistaken for typed text: the typed text is the MCDU's own typed line, which the reader sends apart from the page; the row is what is displayed (Task 4).
 - CLR pressed to delete a character while a message is queued clears the message instead: Backspace says what was cleared (Task 5).
 - Comma-decimal cultures: every line the window builds is the aircraft's own characters, never a number formatted by the app (Task 3 test under de-DE).
 
@@ -195,7 +197,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 03` (`Pla
       public const float Left = 22f, ColumnPitch = 16.87f, Top = 43f, RowPitch = 25.85f;
       public const string LargeFont = "FMGSfont_A", SmallFont = "FMGSfont_B";
   }
-  internal readonly record struct A330McduCell(char Character, bool Small, A330Rgb Colour);
+  internal readonly record struct A330McduCell(char Character, bool Small, A330Rgb? Colour);   // null while the reader gives no colour (M14)
   internal sealed class A330McduScreen
   {
       /// Null when the frame is not complete or not drawn, or a text's first character rounds to a cell outside the 14 rows and 24 columns.
@@ -234,7 +236,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 03` (`Pla
       public const int ScratchpadRow = 13;
   }
   ```
-  The form's existing line builder (title, each label row indented without a number, each data row "n: value", "Scratchpad: ...") stays and takes these lines. Colour (spec D4): no colour word is spoken or shown. A greyed prompt keeps "(unavailable)": a cell is grey when its red, green and blue are equal and below 0.5 (the MCDU MENU's unselectable prompts measured 0.30). A data row made only of boxes reads as the app's box characters. The small font carries no words: labels are already told apart by their row.
+  The form's existing line builder (title, each label row indented without a number, each data row "n: value", "Scratchpad: ...") stays and takes these lines. Colour (spec D4): no colour word is spoken or shown. A greyed prompt keeps "(unavailable)": a cell is grey when its red, green and blue are equal and below 0.5 (the MCDU MENU's unselectable prompts measured 0.30). With no colour (M14) nothing is marked "(unavailable)" and the status row says "Colours not read yet" (test `Without_colours_no_prompt_is_marked_unavailable`). A data row made only of boxes reads as the app's box characters. The small font carries no words: labels are already told apart by their row.
 
 - [ ] **Steps 1-5:** tests on the three fixtures: `INIT_reads_as_title_labels_numbered_data_and_scratchpad` (the whole expected listing in the test), `MCDU_MENU_marks_the_greyed_prompts_unavailable`, `A_row_with_left_and_right_fields_keeps_both`, `An_empty_scratchpad_reads_empty`, `No_line_carries_a_colour_word`, `The_listing_is_the_same_under_de_DE`; implement; commit `feat(a330): the MCDU window's lines from the screen`.
 
@@ -248,7 +250,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 03` (`Pla
 
 - [ ] **Step 1:** Steps 1-5: tests `The_form_wants_its_gauge_while_visible_and_releases_it_when_hidden`, `A_new_complete_frame_updates_the_list_in_place`, `No_complete_frame_for_three_refreshes_shows_the_status_row`, `Opening_the_window_while_the_reader_cannot_read_speaks_its_status_once` (spec D3: "A330 MCDU unavailable: " and the reason, from `A330ReaderStatus`; never an AI read), `The_status_is_spoken_again_only_when_the_reason_changes`, `When_the_reader_starts_reading_again_the_window_says_MCDU_ready_once`, `Keys_are_still_sent_while_the_page_cannot_be_read_and_a_typed_key_is_said_as_not_confirmed`, `The_title_is_announced_when_it_changes_and_the_selection_returns_to_line_1`, `Typed_text_is_confirmed_from_the_MCDUs_own_scratchpad` (after each key the form waits for `McduScratchpad` to end with the key's character, up to 600 ms, then says the scratchpad; a key that never lands is said as missed), `Ctrl_Shift_R_and_Ctrl_Shift_L_switch_sides` (the app's `SideShortcut` convention); implement: the 250 ms poll becomes `Want(gauge, this, 250)` plus a 250 ms UI timer reading `Latest`; the pop-out, the camera reads and writes and the foreground calls are no longer called from the form.
 - [ ] **Step 2 [sim] (M4):** Through the window, with the owner's go-ahead: OVERFLY on a flight-plan waypoint, DECIMAL, SPACE, PLUS/MINUS, SLASH, and CLR three ways (a character, a queued message, an empty scratchpad). Record what each did. Fix a wrong key name in `CduFormProfile` test-first.
-- [ ] **Step 3:** Whether the MCDU object's scratchpad string holds a displayed message or only typed text (type one character with a message queued, read both): record it; the typed-text confirmation of Step 1 follows what was measured.
+- [ ] **Step 3:** Whether the reader's typed line holds a displayed message or only typed text (type one character with a message queued, read both): record it; the typed-text confirmation of Step 1 follows what was measured.
 
 ### Task 5: FMS messages, spoken with the window closed
 
@@ -257,7 +259,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 03` (`Pla
 **Interfaces:**
 - Produces: `A330CalloutRows.Mcdu` = one row, key `A330_CALLOUT_FMS_MESSAGE`, label "FMS messages". `internal sealed class A330McduMessages { public string? Next(A330McduScreen screen, string? typedScratchpad); }` (pure: the message to speak, or null).
 
-- [ ] **Steps 1-5:** tests: `A_new_message_on_the_scratchpad_row_is_spoken_once` ("MCDU message: INITIALIZE WEIGHT/CG"), `Typed_text_is_never_a_message` (the row equals the object's scratchpad), `The_first_reading_after_start_is_silent`, `A_message_that_returns_after_being_cleared_is_spoken_again`, `A_muted_row_says_nothing`, `Backspace_on_a_queued_message_says_message_cleared` (the form, CORE-7: once); implement: while the A330 is active and the row is not muted the definition wants `McduCaptain` at the slow refresh plan 02's M1 set for a background watch, speaks through the non-interrupting announce, and stops watching when muted or switched away; commit `feat(a330): FMS messages with the window closed`.
+- [ ] **Steps 1-5:** tests: `A_new_message_on_the_scratchpad_row_is_spoken_once` ("MCDU message: INITIALIZE WEIGHT/CG"), `Typed_text_is_never_a_message` (the row equals the reader's typed line), `No_message_is_taken_while_hidden_rows_are_not_left_out`, `The_first_reading_after_start_is_silent`, `A_message_that_returns_after_being_cleared_is_spoken_again`, `A_muted_row_says_nothing`, `Backspace_on_a_queued_message_says_message_cleared` (the form, CORE-7: once); implement: while the A330 is active and the row is not muted the definition wants `McduCaptain` at the slow refresh plan 02's M1 set for a background watch, speaks through the non-interrupting announce, and stops watching when muted or switched away; commit `feat(a330): FMS messages with the window closed`.
 
 ### Task 6 [sim] [owner]: The window against the cockpit
 
@@ -274,7 +276,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 03` (`Pla
 
 ## In-sim checks (owner)
 
-1. Shift+M with no pop-out open: the page is read within a second; the camera and the simulator's window do not move.
+1. Shift+M with no pop-out open: the page is read within a second (after "A330 displays starting", the first time in a simulator session); the camera and the simulator's window do not move.
 2. Type a flight number and a FROM/TO pair: each character is confirmed as it lands; a wrong entry's message is spoken.
 3. Close the window, cause a message (enter an invalid value before closing, or wait for one): it is spoken once.
 4. Ctrl+Shift+R: the first officer's MCDU, on its own page.
