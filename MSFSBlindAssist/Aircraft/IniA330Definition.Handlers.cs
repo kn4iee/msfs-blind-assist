@@ -649,15 +649,22 @@ public partial class IniA330Definition
         });
     }
 
+    internal List<ToggleButtonDef> BaroToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
+    {
+        new("&Standard", () => IsStdMode(sim.GetCachedVariableValue("A330_BARO_MODE_FRESH")) ? "STD" : "QNH",
+            () => ToggleStandard(sim, announcer))
+        {
+            // ToggleStandard speaks its own closed-loop verdict (and a refusal): the dialog's 1.2 s
+            // "<label> <state>" would repeat it and cut the real one off
+            SuppressStateAnnounce = () => true,
+        },
+    };
+
     private void ShowBaroDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
     {
         _ = sim.ReadFreshAsync("A330_BARO_MODE_FRESH", 1000);   // so the Standard button opens with the live state
         string log = ShortName.ToLowerInvariant();
-        var toggles = new List<ToggleButtonDef>
-        {
-            new("&Standard", () => IsStdMode(sim.GetCachedVariableValue("A330_BARO_MODE_FRESH")) ? "STD" : "QNH",
-                () => ToggleStandard(sim, announcer)),
-        };
+        var toggles = BaroToggles(sim, announcer);
         var dlg = new ValueInputForm("Altimeter Setting", "altimeter", "hPa (900-1100) or inHg (26.00-32.00)", announcer,
             input => TryParseBaro(input, out _)
                 ? (true, "") : (false, "Enter hPa (900-1100) or inHg (26.00-32.00)"),

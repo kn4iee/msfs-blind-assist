@@ -53,6 +53,15 @@ public class A330ReviewTests
     }
 
     [Fact]
+    public void Standard_button_leaves_its_verdict_to_ToggleStandard()
+    {
+        var def = new IniA330Definition();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var std = Assert.Single(def.BaroToggles(sim, null!));
+        Assert.True(std.SuppressStateAnnounce?.Invoke() == true);
+    }
+
+    [Fact]
     public void Ambiguous_or_out_of_range_input_is_refused()
     {
         Assert.False(IniA330Definition.TryParseVs("-10", true, out _));
