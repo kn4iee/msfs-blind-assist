@@ -83,6 +83,35 @@ public class A330ReviewTests
     }
 
     [Fact]
+    public void Vs_dialog_checks_and_writes_for_the_mode_at_commit_time()
+    {
+        bool fpa = false;   // the dialog opened in HDG-V/S
+        Func<bool> isFpa = () => fpa;
+        Assert.True(IniA330Definition.VsValidator("-1500", isFpa).isValid);
+        var vs = IniA330Definition.VsSet("-1500", isFpa);
+        Assert.Equal(("INI_VVI_DIAL", "A330_FCU_VS", -1500.0), (vs!.Lvar, vs.CacheKey, vs.Target));
+
+        fpa = true;         // the pilot pressed TRK/FPA in the dialog
+        Assert.False(IniA330Definition.VsValidator("-1500", isFpa).isValid);
+        Assert.True(IniA330Definition.VsValidator("-3", isFpa).isValid);
+        var angle = IniA330Definition.VsSet("-3", isFpa);
+        Assert.Equal(("INI_FPA_DIAL", "A330_FCU_FPA", -3.0), (angle!.Lvar, angle.CacheKey, angle.Target));
+        Assert.Null(IniA330Definition.VsSet("-1500", isFpa));
+    }
+
+    [Fact]
+    public void Heading_dialog_writes_the_dial_of_the_mode_at_commit_time()
+    {
+        bool trk = false;
+        Func<bool> isTrk = () => trk;
+        Assert.Equal("INI_HEADING_DIAL", IniA330Definition.HeadingSet("270", isTrk)!.Lvar);
+        trk = true;
+        var set = IniA330Definition.HeadingSet("270", isTrk)!;
+        Assert.Equal(("INI_TRK_DIAL", "A330_FCU_TRK", 270.0, true), (set.Lvar, set.CacheKey, set.Target, set.Alt));
+        Assert.Equal(0, IniA330Definition.HeadingSet("360", isTrk)!.Target);
+    }
+
+    [Fact]
     public void Ambiguous_or_out_of_range_input_is_refused()
     {
         Assert.False(IniA330Definition.TryParseVs("-10", true, out _));

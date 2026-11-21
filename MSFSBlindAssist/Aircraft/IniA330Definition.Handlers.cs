@@ -773,6 +773,33 @@ public partial class IniA330Definition
     internal static bool TryParseVs(string? input, bool fpa, out double v)
         => NumberParsing.TryParseTyped(input, out v) && (fpa ? Math.Abs(v) <= 9.9 : Math.Abs(v) <= 6000);
 
+    /// <summary>One dial write a dialog's commit decided on. Alt is TRK (heading dialog) or FPA (V/S dialog).</summary>
+    internal sealed record FcuDialSet(string Lvar, string CacheKey, double Target, double Tolerance, bool Alt);
+
+    /// <summary>The heading dialog's write: the track dial when isTrk() says the aircraft is in TRK-FPA, read now.</summary>
+    internal static FcuDialSet? HeadingSet(string? input, Func<bool> isTrk)
+    {
+        if (!TryParseHeading(input, out int h)) return null;
+        bool trk = isTrk();
+        return new(trk ? "INI_TRK_DIAL" : "INI_HEADING_DIAL", trk ? "A330_FCU_TRK" : "A330_FCU_HDG", h % 360, 0.6, trk);
+    }
+
+    /// <summary>The V/S dialog's check, in whichever of V/S and FPA isFpa() says the aircraft is in, read now.</summary>
+    internal static (bool isValid, string message) VsValidator(string? input, Func<bool> isFpa)
+    {
+        bool fpa = isFpa();
+        return TryParseVs(input, fpa, out _) ? (true, "") : (false, fpa ? "Enter -9.9 to 9.9" : "Enter -6000 to 6000");
+    }
+
+    /// <summary>The V/S dialog's write: the FPA dial or the V/S dial by isFpa(), read now.</summary>
+    internal static FcuDialSet? VsSet(string? input, Func<bool> isFpa)
+    {
+        bool fpa = isFpa();
+        if (!TryParseVs(input, fpa, out double v)) return null;
+        return fpa ? new("INI_FPA_DIAL", "A330_FCU_FPA", Math.Round(v, 1), 0.06, true)
+                   : new("INI_VVI_DIAL", "A330_FCU_VS", Math.Round(v / 100.0) * 100, 60, false);
+    }
+
     private static bool On(SimConnectManager sim, string key) => (sim.GetCachedVariableValue(key) ?? 0) > 0.5;
 
     internal const string AltButtonKey = "A330_ALT_BTN";
@@ -850,9 +877,10 @@ public partial class IniA330Definition
             toggles,
             input =>
             {
-                if (TryParseHeading(input, out int h))
-                    SetAndConfirm(sim, announcer, trk ? "INI_TRK_DIAL" : "INI_HEADING_DIAL", trk ? "A330_FCU_TRK" : "A330_FCU_HDG",
-                        h % 360, v => $"{(trk ? "track" : "heading")} {((int)Math.Round(v) % 360 + 360) % 360:000}");
+                // HDG or TRK as the aircraft is NOW (the TRK/FPA button in this dialog changes it)
+                if (HeadingSet(input, () => Fv("A330_M_TRKFPA") == 1) is not { } set) return;
+                string word = set.Alt ? "track" : "heading";
+                SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, v => $"{word} {((int)Math.Round(v) % 360 + 360) % 360:000}", set.Tolerance);
             });
         dlg.ShowCancelButton = false;
         dlg.Show(parent);
@@ -913,13 +941,15 @@ public partial class IniA330Definition
         var toggles = VsToggles(sim, announcer);
         var dlg = new ValueInputForm(fpa ? "FCU Flight Path Angle" : "FCU Vertical Speed", fpa ? "flight path angle" : "vertical speed",
             fpa ? "-9.9 to 9.9 degrees" : "-6000 to 6000 feet per minute", announcer,
-            input => TryParseVs(input, fpa, out _) ? (true, "") : (false, fpa ? "Enter -9.9 to 9.9" : "Enter -6000 to 6000"),
+            // the title and range are as the dialog opened; the mode the value is checked and written for
+            // is the aircraft's own at that moment, since the TRK/FPA button in this dialog changes it
+            input => VsValidator(input, () => Fv("A330_M_TRKFPA") == 1),
             toggles,
             input =>
             {
-                if (!TryParseVs(input, fpa, out double v)) return;
-                if (fpa) SetAndConfirm(sim, announcer, "INI_FPA_DIAL", "A330_FCU_FPA", Math.Round(v, 1), x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), 0.06);
-                else SetAndConfirm(sim, announcer, "INI_VVI_DIAL", "A330_FCU_VS", Math.Round(v / 100.0) * 100, x => $"vertical speed {x:0} feet per minute", 60);
+                if (VsSet(input, () => Fv("A330_M_TRKFPA") == 1) is not { } set) return;
+                if (set.Alt) SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), set.Tolerance);
+                else SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => $"vertical speed {x:0} feet per minute", set.Tolerance);
             });
         dlg.ShowCancelButton = false;
         dlg.Show(parent);
