@@ -396,6 +396,15 @@ public partial class IniA330Definition
             Name = "MSFSBA_BRIDGE_PROBE", DisplayName = "Bridge Probe", Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
         };
 
+        // each owner adds its variables, in this order; the base variables below fill only what is absent
+        AddPanelVariables(vars);   // plan 04
+        AddFcuVariables(vars);   // plan 05
+        AddFlightDisplayVariables(vars);   // plan 09
+        AddEcamVariables(vars);   // plan 08
+        AddMcduVariables(vars);   // plan 03
+        AddReadoutVariables(vars);   // plan 10
+        AddFirstOfficerVariables(vars);   // plan 06
+
         foreach (var kv in GetBaseVariables())
             if (!vars.ContainsKey(kv.Key)) vars[kv.Key] = kv.Value;
         return vars;

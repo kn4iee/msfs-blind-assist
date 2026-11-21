@@ -57,12 +57,20 @@ public partial class IniA330Definition
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
         double? cur = simConnect.GetCachedVariableValue(varKey);
+        bool handled = false;
+        // hooks run in this order and stop at the first that handles the key
+        HandleFcuSet(varKey, value, varDef, simConnect, announcer, ref handled);   // plan 05
+        if (handled) return true;
         var button = AutopilotButtons.FirstOrDefault(b => b.key == varKey);
         if (button.key != null)
         {
             PressAutopilot(simConnect, announcer, varKey);
             return true;
         }
+        HandleEcamSet(varKey, value, varDef, simConnect, announcer, ref handled);   // plan 08
+        if (handled) return true;
+        HandleFlightDisplaySet(varKey, value, varDef, simConnect, announcer, ref handled);   // plan 09
+        if (handled) return true;
         switch (varKey)
         {
             case "A330_SPD_MACH" or "A330_METRIC" or "A330_ALT_STEP" when cur is double same && Math.Abs(same - value) < 0.5:
@@ -105,6 +113,8 @@ public partial class IniA330Definition
                 return true;
         }
 
+        HandlePanelSet(varKey, value, varDef, simConnect, announcer, ref handled);   // plan 04: the map's catch-all
+        if (handled) return true;
         if (!_controlsByKey.TryGetValue(varKey, out var c)) return false;
         // an "rpn" control writes its own calculator code; every other mode drives an input event
         if (c.Mode != "rpn" && string.IsNullOrEmpty(c.Event) && string.IsNullOrEmpty(c.Rpn)) return false;
@@ -201,6 +211,13 @@ public partial class IniA330Definition
         _lastFlapIndex = -1;
         _fmaAnnounced = null;
         _takeoffCallouts.Reset();
+        ResetPanelBaselines(false);   // plan 04
+        ResetFlightDisplayBaselines(false);   // plan 09
+        ResetReadoutBaselines(false);   // plan 10
+        ResetFcuBaselines(false);   // plan 05
+        ResetEcamBaselines(false);   // plan 08
+        ResetMcduBaselines(false);   // plan 03
+        ResetReader(false);   // plan 02
     }
 
     public override void OnSimContextReset()
@@ -209,6 +226,26 @@ public partial class IniA330Definition
         _fmaAnnounced = null;
         _fmaValues.Clear();
         _takeoffCallouts.Reset();
+        ResetPanelBaselines(true);   // plan 04
+        ResetFlightDisplayBaselines(true);   // plan 09
+        ResetReadoutBaselines(true);   // plan 10
+        ResetFcuBaselines(true);   // plan 05
+        ResetEcamBaselines(true);   // plan 08
+        ResetMcduBaselines(true);   // plan 03
+        ResetReader(true);   // plan 02
+    }
+
+    /// <summary>The aircraft was switched away from: each owner closes what it opened (the hooks run in
+    /// this order, then the base class).</summary>
+    public override void OnSwitchedAway()
+    {
+        CloseMcduWindows();   // plan 03
+        CloseEfb();   // plan 07
+        CloseEcamWindows();   // plan 08
+        CloseFlightDisplayWindows();   // plan 09
+        CloseFcuWindows();   // plan 05
+        StopReader();   // plan 02
+        base.OnSwitchedAway();
     }
 
     /// <summary>The feed, the speeds and their Ctrl+M rule ([TKO-5]): each call is muted by its speed's row.</summary>
@@ -225,6 +262,21 @@ public partial class IniA330Definition
 
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
+        // hooks run in this order and stop at the first that handles the variable; SIM_ON_GROUND below
+        // still falls through to the silent keys and the base class
+        bool handled = false;
+        ProcessReadoutUpdate(varName, value, announcer, ref handled);   // plan 10
+        if (handled) return true;
+        ProcessPanelUpdate(varName, value, announcer, ref handled);   // plan 04
+        if (handled) return true;
+        ProcessFlightDisplayUpdate(varName, value, announcer, ref handled);   // plan 09
+        if (handled) return true;
+        ProcessFcuUpdate(varName, value, announcer, ref handled);   // plan 05
+        if (handled) return true;
+        ProcessEcamUpdate(varName, value, announcer, ref handled);   // plan 08
+        if (handled) return true;
+        ProcessMcduUpdate(varName, value, announcer, ref handled);   // plan 03
+        if (handled) return true;
         switch (varName)
         {
             case TakeoffIasKey:
@@ -309,6 +361,14 @@ public partial class IniA330Definition
 
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
+        // hooks run in this order; the first to set text wins
+        string? text = null;
+        FormatFlightDisplay(varKey, value, ref text);   // plan 09
+        if (text == null) FormatFcuDisplay(varKey, value, ref text);   // plan 05
+        if (text == null) FormatPanelDisplay(varKey, value, ref text);   // plan 04
+        if (text == null) FormatReadoutDisplay(varKey, value, ref text);   // plan 10
+        if (text == null) FormatEcamDisplay(varKey, value, ref text);   // plan 08
+        if (text != null) { displayText = text; return true; }
         var f = CurrentFma();
         bool fpa = Fv("A330_M_TRKFPA") == 1;
         switch (varKey)
@@ -373,6 +433,20 @@ public partial class IniA330Definition
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
         _sim = simConnect;
+        // hooks run in this order and stop at the first that handles the action
+        bool handled = false;
+        HandleReadoutHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);   // plan 10
+        if (handled) return true;
+        HandleFcuHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);   // plan 05
+        if (handled) return true;
+        HandleFlightDisplayHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);   // plan 09
+        if (handled) return true;
+        HandleEcamHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);   // plan 08
+        if (handled) return true;
+        HandleMcduHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);   // plan 03
+        if (handled) return true;
+        HandleEfbHotkey(action, simConnect, announcer, parentForm, hotkeyManager, ref handled);   // plan 07
+        if (handled) return true;
         double Cur(string key) => simConnect.GetCachedVariableValue(key) ?? 0;
         var fma = CurrentFma();
         string Suffix(string mode) => mode.Length > 0 ? $", {mode}" : "";
