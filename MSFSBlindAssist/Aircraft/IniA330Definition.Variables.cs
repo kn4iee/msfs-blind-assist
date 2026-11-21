@@ -232,6 +232,13 @@ public partial class IniA330Definition
         Silent("A330_GEAR_POS", "GEAR CENTER POSITION", "Nose gear", "percent", SimVarType.SimVar);
         Silent("A330_TRIM", "ELEVATOR TRIM POSITION", "Stabilizer trim", "degrees", SimVarType.SimVar);
 
+        // Four names are read by a second key (the Speed window units and HDG-V/S or TRK-FPA controls, the
+        // base class's altitude and trim). Two Continuous batched keys with one Name shift every later
+        // struct slot in the batch ([VAR-7]), so each silent cache copy takes its own once-a-second
+        // subscription instead: the same sample rate, so nothing a pilot hears or sees changes.
+        foreach (var key in new[] { "A330_M_MACH", "A330_M_TRKFPA", "A330_ALTITUDE", "A330_TRIM" })
+            vars[key].ExcludeFromBatch = true;
+
         // ---------------- Fuel caches ----------------
         foreach (var (key, lvar, name) in FuelVars) Silent(key, lvar, name);
         Silent("A330_FUEL_CENTER", "FUEL TANK CENTER QUANTITY", "Centre tank", "gallons", SimVarType.SimVar);

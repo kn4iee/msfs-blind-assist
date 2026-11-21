@@ -249,4 +249,32 @@ public class A330VariableReviewTests
         var rows = MonitorRowBuilder.Build(new IniA330Definition().GetVariables()).Select(r => r.Key).ToList();
         Assert.DoesNotContain("A330_SPDBRK", rows);
     }
+
+    [Fact]
+    public void Batched_vars_do_not_share_an_underlying_name()
+    {
+        // The check VarNameCollisionTests makes on every aircraft in ComboLabelCollapseTests.AllAircraft
+        // ([VAR-7]); the A330 joins that list in a later task.
+        var offenders = new IniA330Definition().GetVariables()
+            .Where(kv => kv.Value.Type != SimVarType.Event
+                         && kv.Value.UpdateFrequency == UpdateFrequency.Continuous
+                         && !kv.Value.ExcludeFromBatch)
+            .GroupBy(kv => kv.Value.Name)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key + " (" + string.Join(", ", g.Select(kv => kv.Key)) + ")")
+            .ToList();
+        Assert.True(offenders.Count == 0, "Continuous batched vars sharing one Name: " + string.Join("; ", offenders));
+    }
+
+    [Theory]
+    [InlineData("A330_SPD_MACH")]
+    [InlineData("A330_TRK_FPA")]
+    [InlineData("INDICATED_ALTITUDE")]
+    [InlineData("MON_ElevatorTrim")]
+    public void The_copy_that_the_pilot_hears_stays_on_the_batch(string key)
+    {
+        var def = new IniA330Definition().GetVariables()[key];
+        Assert.False(def.ExcludeFromBatch);
+        Assert.Equal(UpdateFrequency.Continuous, def.UpdateFrequency);
+    }
 }
