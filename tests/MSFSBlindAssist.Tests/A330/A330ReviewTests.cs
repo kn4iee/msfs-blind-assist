@@ -238,3 +238,15 @@ public class A330TakeoffCalloutTests : IDisposable
         Assert.DoesNotContain(IniA330Definition.TakeoffIasKey, rows);
     }
 }
+
+/// <summary>The A330's variables: Ctrl+M rows that do something, no batch name collisions, panel refresh.</summary>
+public class A330VariableReviewTests
+{
+    [Fact]
+    public void The_speedbrake_lever_cache_has_no_ctrl_m_row()
+    {
+        // ProcessSimVarUpdate consumes it silently: a row would be a checkbox that mutes nothing ([VAR-9]).
+        var rows = MonitorRowBuilder.Build(new IniA330Definition().GetVariables()).Select(r => r.Key).ToList();
+        Assert.DoesNotContain("A330_SPDBRK", rows);
+    }
+}

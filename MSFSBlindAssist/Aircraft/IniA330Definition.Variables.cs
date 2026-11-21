@@ -219,6 +219,7 @@ public partial class IniA330Definition
             UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
             ValueDescriptions = new Dictionary<double, string> { [0] = "Retracted", [0.5] = "Half", [1] = "Full" },
             ValueToDescriptionKey = v => v < 0.25 ? 0 : v < 0.75 ? 0.5 : 1,
+            ExcludeFromMonitorManager = true,   // consumed silently (the panel combo's read-back): no Ctrl+M row [VAR-9]
         });
         _silentKeys.Add("A330_SPDBRK");
         Watched("A330_SPLR_ARM", "SPOILERS ARMED", "Ground spoilers", new() { [0] = "Disarmed", [1] = "Armed" }, units: "Bool", type: SimVarType.SimVar);
