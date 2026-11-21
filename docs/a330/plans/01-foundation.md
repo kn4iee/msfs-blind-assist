@@ -184,10 +184,10 @@ What moves where, each as the implementation of its hook (the existing `case` bo
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** kn4iee
+- **Worked by:** kn4iee with Claude (superpowers:subagent-driven-development)
+- **Started:** 2026-11-21, from 53a20303c
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
