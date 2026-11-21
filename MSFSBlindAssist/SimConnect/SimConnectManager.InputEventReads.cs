@@ -71,15 +71,40 @@ public partial class SimConnectManager
         if (_uiGate.PostIfOffThread(() => RefreshInputEventReads(reenumerate))) return;
         if (!IsConnected || simConnect == null) return;
         bool wantsReads = CurrentAircraft?.GetVariables().Values.Any(d => d.Type == SimVarType.InputEvent) == true;
-        if (reenumerate || inputEventHashes.Count == 0)
+        switch (DecideInputEventRefresh(inputEventHashes.Count == 0, _inputEventCatalogueStale, wantsReads, reenumerate))
         {
-            // Only an aircraft that reads input events needs the catalogue rebuilt on a load; others
-            // keep today's single enumeration at connect.
-            if (wantsReads || inputEventHashes.Count == 0) RequestEnumerateInputEvents();
-            return;
+            case InputEventRefreshAction.Enumerate:
+                RequestEnumerateInputEvents();
+                break;
+            case InputEventRefreshAction.ResubscribeFromCache:
+                UnsubscribeInputEventReads();
+                SubscribeInputEventReads();
+                break;
+            case InputEventRefreshAction.DropSubscriptions:
+                UnsubscribeInputEventReads();
+                break;
         }
-        UnsubscribeInputEventReads();
-        if (wantsReads) SubscribeInputEventReads();
+    }
+
+    /// <summary>True when the held input-event catalogue was taken before the latest aircraft load
+    /// (an AircraftLoaded came and no enumeration followed). Cleared by every enumeration request.</summary>
+    private bool _inputEventCatalogueStale;
+
+    public enum InputEventRefreshAction { Nothing, Enumerate, ResubscribeFromCache, DropSubscriptions }
+
+    /// <summary>
+    /// What <see cref="RefreshInputEventReads"/> does: enumerate again, re-subscribe from the held
+    /// catalogue, only drop the subscriptions (an aircraft with no input-event reads), or nothing.
+    /// A catalogue older than the latest aircraft load is never subscribed from when the aircraft
+    /// wants reads (an Aircraft-menu switch after an in-sim load under a profile with no reads).
+    /// </summary>
+    internal static InputEventRefreshAction DecideInputEventRefresh(
+        bool catalogueEmpty, bool catalogueStale, bool wantsReads, bool reenumerate)
+    {
+        if (reenumerate || catalogueEmpty)
+            return wantsReads || catalogueEmpty ? InputEventRefreshAction.Enumerate : InputEventRefreshAction.Nothing;
+        if (!wantsReads) return InputEventRefreshAction.DropSubscriptions;
+        return catalogueStale ? InputEventRefreshAction.Enumerate : InputEventRefreshAction.ResubscribeFromCache;
     }
 
     /// <summary>Forgets every subscription without talking to SimConnect (the connection is gone).</summary>

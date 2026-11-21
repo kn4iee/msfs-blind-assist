@@ -913,6 +913,7 @@ public partial class SimConnectManager
         {
             UnsubscribeInputEventReads();
             inputEventHashes.Clear();
+            _inputEventCatalogueStale = false;
             simConnect.EnumerateInputEvents(DATA_REQUESTS.REQUEST_ENUMERATE_INPUT_EVENTS);
             Log.Debug("SimConnect", "Requested InputEvent enumeration");
         }
