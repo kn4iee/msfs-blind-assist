@@ -432,16 +432,16 @@
       return A.el(el, rf);
     }
 
-    // A disabled or read-only box is a read-out, never an edit field.
-    if (el.disabled || el.readOnly || el.hasAttribute('readonly')) return A.readout(el);
-
     var name = A.fieldName(el), unit = A.unit(el);
     if (unit) name += ' (' + unit + ')';
     if (ty === 'password') {
-      // Never put a logon code on screen or in a log: say whether one is stored.
+      // Never put a logon code on screen or in a log: say whether one is stored. Tested before the
+      // disabled/read-only read-out below, so a password field never exposes its value in any state.
       return A.el(el, { controlType: 'text', text: name + (el.value ? ', set' : ', not set'), value: '',
                         key: 'field:' + (id || name) });
     }
+    // A disabled or read-only box is a read-out, never an edit field.
+    if (el.disabled || el.readOnly || el.hasAttribute('readonly')) return A.readout(el);
     return A.el(el, { controlType: 'text', text: name, value: String(el.value == null ? '' : el.value) });
   };
 
