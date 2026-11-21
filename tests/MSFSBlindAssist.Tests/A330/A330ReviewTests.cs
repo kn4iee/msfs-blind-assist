@@ -239,6 +239,128 @@ public class A330TakeoffCalloutTests : IDisposable
     }
 }
 
+/// <summary>Every number the A330 speaks or shows from its definition reads the same on a comma-decimal PC
+/// (CI runs under en-US, so a test that sets no culture cannot catch a regression).</summary>
+public class A330CultureTests
+{
+    public static TheoryData<string> Cultures() => new() { "sv-SE", "de-DE", "en-US" };
+
+    private static (IniA330Definition def, SimConnectManager sim) Shown(params (string Key, double Value)[] cache)
+    {
+        var sim = Tests.FirstOfficer.SeededSimConnectCache.With(cache);
+        var def = new IniA330Definition();
+        def.GetVariables();
+        def.OnDisplayPanelShown("test", sim);   // hands the definition its cache, as MainForm does
+        return (def, sim);
+    }
+
+    private static string Display(IniA330Definition def, string key, double value)
+    {
+        Assert.True(def.TryGetDisplayOverride(key, value, out var text));
+        return text;
+    }
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_altimeter_reads_hectopascals_and_inches_on_every_culture(string culture) =>
+        _ = TestCulture.Run(culture, () =>
+        {
+            Assert.Equal("Altimeter 1013 hectopascals, 29.92 inches", IniA330Definition.DescribeAltimeter(1013.2, 0));
+            Assert.Equal("Altimeter 1020 hectopascals, 30.12 inches", IniA330Definition.DescribeAltimeter(1020, 1));
+            Assert.Equal("Altimeter standard", IniA330Definition.DescribeAltimeter(1013.2, 3));
+            Assert.Equal("Altimeter not available", IniA330Definition.DescribeAltimeter(null, 0));
+            return 0;
+        });
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_trim_reads_a_decimal_point_on_every_culture(string culture) =>
+        _ = TestCulture.Run(culture, () =>
+        {
+            Assert.Equal("1.7 up", IniA330Definition.FormatTrim(1.7));
+            Assert.Equal("0.4 down", IniA330Definition.FormatTrim(-0.4));
+            Assert.Equal("0.0", IniA330Definition.FormatTrim(0.01));
+            var (def, _) = Shown();
+            Assert.Equal("2.5 down", Display(def, "A330_TRIM", -2.5));
+            return 0;
+        });
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void Distances_to_go_read_whole_miles_and_minutes_on_every_culture(string culture) =>
+        _ = TestCulture.Run(culture, () =>
+        {
+            Assert.Equal("Destination 123 miles, 16 minutes", IniA330Definition.DescribeFmsDistance(123.4, 450, false));
+            Assert.Equal("1235 miles to top of descent, 2 hours 45 minutes", IniA330Definition.DescribeFmsDistance(1234.5, 450, true));
+            Assert.Equal("Destination 99 miles", IniA330Definition.DescribeFmsDistance(99.4, 0, false));
+            return 0;
+        });
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_fuel_summary_has_no_group_or_decimal_separator_on_every_culture(string culture) =>
+        _ = TestCulture.Run(culture, () =>
+        {
+            var sim = Tests.FirstOfficer.SeededSimConnectCache.With(
+                ("A330_IS_METRIC", 1), ("A330_FUEL_LO", 12345.6), ("A330_FUEL_LI", 20000.4), ("A330_FUEL_TOTAL_LB", 100000));
+            var def = new IniA330Definition();
+            Assert.Equal("Fuel 45359 kilograms. left outer 12346 kilograms, left inner 20000 kilograms", def.FuelSummary(sim));
+            var lb = Tests.FirstOfficer.SeededSimConnectCache.With(("A330_IS_METRIC", 0), ("A330_FUEL_LO", 12345.6), ("A330_FUEL_TOTAL_LB", 100000));
+            Assert.Equal("Fuel 100000 pounds. left outer 27217 pounds", def.FuelSummary(lb));
+            return 0;
+        });
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_speed_window_reads_mach_with_a_decimal_point_on_every_culture(string culture) =>
+        _ = TestCulture.Run(culture, () =>
+        {
+            var (mach, _) = Shown(("A330_M_MACH", 1));
+            Assert.Equal("Mach 0.82", Display(mach, "A330_FCU_SPD", 0.82));
+            var (knots, _) = Shown(("A330_M_MACH", 0));
+            Assert.Equal("250 knots", Display(knots, "A330_FCU_SPD", 250.4));
+            var (managed, _) = Shown(("A330_M_SPD_MANAGED", 1));
+            Assert.Equal("Managed", Display(managed, "A330_FCU_SPD", 250));
+            return 0;
+        });
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_vertical_window_reads_flight_path_angle_with_a_decimal_point_on_every_culture(string culture) =>
+        _ = TestCulture.Run(culture, () =>
+        {
+            var (fpa, _) = Shown(("A330_M_TRKFPA", 1), ("A330_FCU_FPA", -2.5));
+            Assert.Equal("flight path angle -2.5 degrees", Display(fpa, "A330_FCU_VS", 0));
+            var (vs, _) = Shown(("A330_M_TRKFPA", 0));
+            string text = Display(vs, "A330_FCU_VS", 1500);
+            Assert.Equal("1500 feet per minute", text);
+            // sv-SE writes its own minus sign (U+2212) for a whole negative number: a sign a screen reader
+            // says as "minus", not a separator, so only the digits and the absence of a group mark are pinned
+            Assert.Equal("-1500 feet per minute", Display(vs, "A330_FCU_VS", -1500).Replace('−', '-'));
+            return 0;
+        });
+
+    [Theory]
+    [MemberData(nameof(Cultures))]
+    public void The_hotkey_readouts_read_mach_and_flight_path_angle_on_every_culture(string culture) =>
+        _ = TestCulture.Run(culture, () =>
+        {
+            string Read(Hotkeys.HotkeyAction action, params (string, double)[] cache)
+            {
+                var sim = Tests.FirstOfficer.SeededSimConnectCache.With(cache);
+                var speech = new SpeechCapture();
+                Assert.True(new IniA330Definition().HandleHotkeyAction(action, sim, speech, null!, null!));
+                return Assert.Single(speech.Interrupts);
+            }
+            Assert.StartsWith("FCU Mach 0.78", Read(Hotkeys.HotkeyAction.ReadSpeed, ("A330_M_MACH", 1), ("A330_FCU_SPD", 0.78)));
+            Assert.StartsWith("FCU flight path angle -3.0 degrees",
+                Read(Hotkeys.HotkeyAction.ReadFCUVerticalSpeedFPA, ("A330_M_TRKFPA", 1), ("A330_FCU_FPA", -3)));
+            Assert.StartsWith("FCU flight path angle 0.5 degrees",
+                Read(Hotkeys.HotkeyAction.ReadFCUVerticalSpeedFPA, ("A330_M_TRKFPA", 1), ("A330_FCU_FPA", 0.5)));
+            return 0;
+        });
+}
+
 /// <summary>The A330's variables: Ctrl+M rows that do something, no batch name collisions, panel refresh.</summary>
 public class A330VariableReviewTests
 {
