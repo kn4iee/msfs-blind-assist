@@ -232,7 +232,7 @@ whole MCDU preflight with a route (KATL to KMCO, typed by hand), every lower ECA
 order come only from the aircraft's own strings, what the simulator shows (its checklist window, its
 tooltips), and what was measured live. The private reference reads the aircraft's strings and hands this
 repository two small data files: the controls' names and position names, and the order of BA's own
-controls and flow steps. The simulator's checklist text itself stays private. Never from another aircraft, another
+controls and flow steps; the simulator's checklist text may be held here too (D13). Never from another aircraft, another
 add-on or memory of the real aeroplane. A real-aeroplane fact used to explain an order is cited with its
 source in the plan's evidence file.
 
@@ -274,8 +274,9 @@ source in the plan's evidence file.
   read in flight; if one of them cannot be had, plan 06 records which and the setting stays hidden for
   this aircraft.
 - D13. The controls' names and position names and the aircraft's variable names are held in this
-  repository, as for the other aircraft (owner, 2026-11-20). The simulator's checklist text and anything
-  about how the displays are read stay private (D2).
+  repository, as for the other aircraft (owner, 2026-11-20). So may the simulator's checklist text (its
+  procedures' titles and items): "it's not sensitive info I don't think, just checklists" (owner,
+  2026-11-21). Anything about how the displays are read stays private (D2).
 - D7. The FMA's words are read from the PFD's mode band as drawn. No table of mode numbers to words is
   built from flights: "This sounds like we're doing more training, I thought we wanted to avoid this!"
   (owner, 2026-11-21, on a proposal to pair numbers with words). The mode L:vars, which change at once,

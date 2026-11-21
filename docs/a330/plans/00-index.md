@@ -220,8 +220,8 @@ reviewer after each); plans 11 and 12 are live work, worked with superpowers:exe
   glob in a rule file (`ClaudeContextBudgetTests`), which is plan 12's: ask it first.
 - Names and order come only from the sources spec section 4 allows. Public text (code, comments, docs,
   commit messages) never names the private reference's location, never says how the display reader works,
-  and never names a contributor as an example of a mistake or another add-on as the source of a name. It
-  never quotes the simulator's checklist text: a procedure's item is cited by its place in the order.
+  and never names a contributor as an example of a mistake or another add-on as the source of a name. The
+  simulator's checklist text may be quoted (spec D13, owner 2026-11-21).
 
 ## Evidence
 
