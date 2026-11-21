@@ -312,7 +312,7 @@ public partial class IniA330Definition
             case "A330_FMA_CAP": displayText = Or(f.Capability); return true;
             case "A330_FMA_AP": displayText = ApStatus(); return true;
             case "A330_FCU_SPD":
-                displayText = SpeedManaged() ? "Managed" : Fv("A330_M_MACH") == 1 ? $"Mach {value:0.00}" : $"{value:0} knots";
+                displayText = SpeedManaged() ? "Managed" : Fv("A330_M_MACH") == 1 ? FormattableString.Invariant($"Mach {value:0.00}") : $"{value:0} knots";
                 return true;
             case "A330_FCU_HDG":
             {
@@ -322,7 +322,7 @@ public partial class IniA330Definition
             }
             case "A330_FCU_ALT": displayText = $"{value:0} feet"; return true;
             case "A330_FCU_VS":
-                displayText = fpa ? $"flight path angle {(_sim?.GetCachedVariableValue("A330_FCU_FPA") ?? 0):0.0} degrees" : $"{value:0} feet per minute";
+                displayText = fpa ? FormattableString.Invariant($"flight path angle {(_sim?.GetCachedVariableValue("A330_FCU_FPA") ?? 0):0.0} degrees") : $"{value:0} feet per minute";
                 return true;
             case "A330_FLAP_ANGLE": case "A330_SLAT_ANGLE": displayText = $"{value:0} degrees"; return true;
             case "A330_GEAR_POS": displayText = $"{value:0} percent down"; return true;
@@ -385,7 +385,7 @@ public partial class IniA330Definition
                     announcer.AnnounceImmediate($"Speed managed{(m > 0 ? $", target {m:0} knots" : "")}{Suffix(fma.Thrust)}");
                 }
                 else if (Fv("A330_M_MACH") == 1)
-                    announcer.AnnounceImmediate($"FCU Mach {Cur("A330_FCU_SPD"):0.00}{Suffix(fma.Thrust)}");
+                    announcer.AnnounceImmediate(FormattableString.Invariant($"FCU Mach {Cur("A330_FCU_SPD"):0.00}{Suffix(fma.Thrust)}"));
                 else
                     announcer.AnnounceImmediate($"FCU speed {Cur("A330_FCU_SPD"):0} knots{Suffix(fma.Thrust)}");
                 return true;
@@ -395,7 +395,7 @@ public partial class IniA330Definition
             case HotkeyAction.ReadFCUVerticalSpeedFPA:
             {
                 bool fpa = Fv("A330_M_TRKFPA") == 1;
-                string window = fpa ? $"flight path angle {Cur("A330_FCU_FPA"):0.0} degrees" : $"vertical speed {Cur("A330_FCU_VS"):0} feet per minute";
+                string window = fpa ? FormattableString.Invariant($"flight path angle {Cur("A330_FCU_FPA"):0.0} degrees") : $"vertical speed {Cur("A330_FCU_VS"):0} feet per minute";
                 announcer.AnnounceImmediate($"FCU {window}{Suffix(fma.Vertical)}");
                 return true;
             }
@@ -808,12 +808,12 @@ public partial class IniA330Definition
                     {
                         await Task.Delay(600);
                         SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", "A330_FCU_SPD", wantMach ? Math.Round(v, 2) : Math.Round(v),
-                            s => wantMach ? $"Mach {s:0.00}" : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
+                            s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
                     }
                 }
                 else
                     SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", "A330_FCU_SPD", wantMach ? Math.Round(v, 2) : Math.Round(v),
-                        s => wantMach ? $"Mach {s:0.00}" : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
+                        s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
             });
         dlg.ShowCancelButton = false;
         dlg.Show(parent);
@@ -863,7 +863,7 @@ public partial class IniA330Definition
             input =>
             {
                 if (!double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out double v)) return;
-                if (fpa) SetAndConfirm(sim, announcer, "INI_FPA_DIAL", "A330_FCU_FPA", Math.Round(v, 1), x => $"flight path angle {x:0.0} degrees", 0.06);
+                if (fpa) SetAndConfirm(sim, announcer, "INI_FPA_DIAL", "A330_FCU_FPA", Math.Round(v, 1), x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), 0.06);
                 else SetAndConfirm(sim, announcer, "INI_VVI_DIAL", "A330_FCU_VS", Math.Round(v / 100.0) * 100, x => $"vertical speed {x:0} feet per minute", 60);
             });
         dlg.ShowCancelButton = false;
