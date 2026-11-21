@@ -266,6 +266,71 @@ public class A330VariableReviewTests
         Assert.True(offenders.Count == 0, "Continuous batched vars sharing one Name: " + string.Join("; ", offenders));
     }
 
+    [Fact]
+    public void The_flap_combo_follows_its_detents_only()
+    {
+        var flaps = new IniA330Definition().GetVariables()["A330_FLAPS"];
+        for (int i = 0; i < IniA330Definition.FlapDetents.Length; i++) Assert.True(flaps.RefreshesControlWhenDefHandled(i));
+        Assert.False(flaps.RefreshesControlWhenDefHandled(-1));
+        Assert.False(flaps.RefreshesControlWhenDefHandled(IniA330Definition.FlapDetents.Length));
+        Assert.False(flaps.RefreshesControlWhenDefHandled(1.5));
+        Assert.False(flaps.RefreshesControlWhenDefHandled(double.NaN));
+    }
+
+    [Fact]
+    public void The_speedbrake_combo_follows_resting_positions_never_the_values_a_lever_sweeps_through()
+    {
+        var brk = new IniA330Definition().GetVariables()["A330_SPDBRK"];
+        Assert.True(brk.RefreshesControlWhenDefHandled(0));
+        Assert.True(brk.RefreshesControlWhenDefHandled(0.5));
+        Assert.True(brk.RefreshesControlWhenDefHandled(1));
+        Assert.True(brk.RefreshesControlWhenDefHandled(0.995));      // the sim's own rounding at a stop
+        foreach (double mid in new[] { 0.1, 0.25, 0.3, 0.7, 0.8, 0.9 })
+            Assert.False(brk.RefreshesControlWhenDefHandled(mid), $"{mid} is travel, not a position");
+        Assert.False(brk.RefreshesControlWhenDefHandled(double.NaN));
+    }
+
+    [Fact]
+    public void Guards_follow_the_values_they_name_and_sliders_follow_any_reading()
+    {
+        var vars = new IniA330Definition().GetVariables();
+        var guards = vars.Where(kv => kv.Value.DisplayName.EndsWith(" guard", StringComparison.Ordinal)
+                                      && kv.Value.ValueDescriptions.Count > 0).ToList();
+        Assert.NotEmpty(guards);
+        foreach (var (key, g) in guards)
+        {
+            foreach (double v in g.ValueDescriptions.Keys) Assert.True(g.RefreshesControlWhenDefHandled(v), $"{key} at {v}");
+            Assert.False(g.RefreshesControlWhenDefHandled(double.NaN), key);
+            Assert.False(g.RefreshesControlWhenDefHandled(987654), key);
+        }
+        var sliders = vars.Where(kv => kv.Value.RenderAsSlider).ToList();
+        Assert.NotEmpty(sliders);
+        foreach (var (key, s) in sliders)
+        {
+            Assert.True(s.RefreshesControlWhenDefHandled(s.SliderMin), key);
+            Assert.True(s.RefreshesControlWhenDefHandled((s.SliderMin + s.SliderMax) / 2), key);
+            Assert.False(s.RefreshesControlWhenDefHandled(double.NaN), key);
+        }
+    }
+
+    [Fact]
+    public void Every_panel_control_the_definition_handles_refreshes_while_its_panel_is_open()
+    {
+        // ProcessSimVarUpdate returning true skips MainForm's control refresh; without the predicate an
+        // open combo or slider keeps the position it was built with (VAR-6, MainForm's def-handled branch).
+        var def = new IniA330Definition();
+        var vars = def.GetVariables();
+        var stale = new List<string>();
+        foreach (var key in def.GetPanelControls().SelectMany(p => p.Value).Distinct())
+        {
+            if (!vars.TryGetValue(key, out var v) || v.RenderAsButton || v.UpdateFrequency != UpdateFrequency.Continuous) continue;
+            double probe = v.RenderAsSlider ? v.SliderMin : v.ValueDescriptions.Keys.Cast<double?>().FirstOrDefault() ?? 0;
+            bool handled = new IniA330Definition().ProcessSimVarUpdate(key, probe, new SpeechCapture());
+            if (handled && !v.RefreshesControlWhenDefHandled(probe)) stale.Add(key);
+        }
+        Assert.True(stale.Count == 0, "handled by the definition, never refreshed in an open panel: " + string.Join(", ", stale));
+    }
+
     [Theory]
     [InlineData("A330_SPD_MACH")]
     [InlineData("A330_TRK_FPA")]

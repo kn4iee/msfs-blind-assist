@@ -131,6 +131,15 @@ public partial class IniA330Definition
             ? c.Positions?.FirstOrDefault(p => p.Label == label)?.Value : null;
     }
 
+    /// <summary>A flap lever reading that is one of its detents (the handle index is whole).</summary>
+    internal static bool IsFlapDetent(double v) =>
+        !double.IsNaN(v) && Math.Abs(v - Math.Round(v)) < 0.01 && Math.Round(v) >= 0 && Math.Round(v) < FlapDetents.Length;
+
+    /// <summary>A speedbrake lever at one of the positions its combo names (retracted, half, full), never
+    /// between them where it is travelling ([VAR-6]).</summary>
+    internal static bool IsSpeedbrakeAtRest(double v) =>
+        !double.IsNaN(v) && (Math.Abs(v) < 0.02 || Math.Abs(v - 0.5) < 0.02 || Math.Abs(v - 1) < 0.02);
+
     internal const string TakeoffIasKey = "A330_TO_IAS", TakeoffV1Key = "A330_TO_V1", TakeoffVrKey = "A330_TO_VR", TakeoffV2Key = "A330_TO_V2";
 
     protected override Dictionary<string, SimVarDefinition> BuildVariables()
@@ -313,6 +322,22 @@ public partial class IniA330Definition
                     ValueToDescriptionKey = v => v > 0.5 ? 1 : 0,
                 });
                 _mapDisplayRows.Add((c.Panel, lk));
+            }
+        }
+
+        // ProcessSimVarUpdate consumes these (it returns true), which skips MainForm's control refresh, so an
+        // open panel kept the position it was built with. Each control below follows a change made elsewhere
+        // through RefreshControlWhenDefHandled: its write fires on a user commit alone, so a refresh sends nothing.
+        vars["A330_FLAPS"].RefreshControlWhenDefHandled = IsFlapDetent;
+        vars["A330_SPDBRK"].RefreshControlWhenDefHandled = IsSpeedbrakeAtRest;
+        foreach (var def in vars.Values)
+        {
+            if (def.RenderAsSlider)
+                def.RefreshControlWhenDefHandled = v => !double.IsNaN(v);
+            else if (def.DisplayName.EndsWith(" guard", StringComparison.Ordinal) && def.ValueDescriptions.Count > 0)
+            {
+                var d = def;
+                d.RefreshControlWhenDefHandled = v => !double.IsNaN(v) && d.ValueDescriptions.ContainsKey(d.DescriptionKeyFor(v));
             }
         }
 
