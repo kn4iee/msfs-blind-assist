@@ -8,6 +8,7 @@ paths:
   - "MSFSBlindAssist/Resources/coherent-a330-efb-agent.js"
   - "MSFSBlindAssist/Resources/a330_control_map.json"
   - "tests/MSFSBlindAssist.Tests/**/*IniA3*.cs"
+  - "tests/MSFSBlindAssist.Tests/A330/**"
   - "tools/a330-gen/**"
   - "tools/a330-cdu-ocr/**"
 ---

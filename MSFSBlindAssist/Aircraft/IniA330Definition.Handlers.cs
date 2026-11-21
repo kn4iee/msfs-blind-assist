@@ -490,7 +490,7 @@ public partial class IniA330Definition
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
     }
 
-    private IEnumerable<Forms.IniA330.IniA330AutopilotWindow.Row> AutopilotRows(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    internal IEnumerable<Forms.IniA330.IniA330AutopilotWindow.Row> AutopilotRows(SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         bool On(string key) => (sim.GetCachedVariableValue(key) ?? 0) > 0.5;
         Forms.IniA330.IniA330AutopilotWindow.Row R(string label, Func<string> state, string key)
@@ -505,7 +505,7 @@ public partial class IniA330Definition
         yield return R("&Heading pull (selected)", () => CurrentFma().Lateral, "A330_HDG_PULL");
         yield return R("Heading push (&NAV)", () => "", "A330_HDG_PUSH");
         yield return R("Altitude p&ull (open climb or descent)", () => CurrentFma().Vertical, "A330_ALT_PULL");
-        yield return R("Altitude pu&sh (managed)", () => "", "A330_ALT_PUSH");
+        yield return R("&Altitude push (managed)", () => "", "A330_ALT_PUSH");
         yield return R("&V/S pull", () => "", "A330_VS_PULL");
         yield return R("V/S push (level off)", () => "", "A330_VS_PUSH");
         yield return R("A&LT (hold this altitude)", () => "", AltButtonKey);
