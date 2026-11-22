@@ -1,7 +1,9 @@
 namespace MSFSBlindAssist.Aircraft.A330;
 
 /// <summary>Variable keys more than one plan reads; a key lives here only when two plans need it.
-/// A key literal that two of the definition's area files both spell belongs here (a test guards it).</summary>
+/// A key literal that two of the definition's area files both spell belongs here (a test guards it).
+/// This file takes append-only additions: the plan that creates a key's second use adds a new const here
+/// (never a changed or removed one, which would edit another plan's key).</summary>
 internal static class A330SharedKeys
 {
     internal const string Altitude = "A330_ALTITUDE";

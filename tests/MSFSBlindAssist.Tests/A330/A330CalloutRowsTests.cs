@@ -121,6 +121,6 @@ public class A330CalloutRowsTests : IDisposable
             }
         }
         var shared = seen.Where(kv => kv.Value.Count > 1).Select(kv => $"{kv.Key} ({string.Join(", ", kv.Value)})").ToList();
-        Assert.True(shared.Count == 0, "keys two area files both spell (move them to A330SharedKeys): " + string.Join("; ", shared));
+        Assert.True(shared.Count == 0, "keys two area files both spell (add each as a new const to A330SharedKeys, which takes append-only additions from the plan that creates a key's second use; never change an existing const): " + string.Join("; ", shared));
     }
 }
