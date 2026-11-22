@@ -10,8 +10,10 @@ public class A330DisplaysLifecycleTests
     private sealed class FakeTransport : IA330ReaderTransport
     {
         public readonly List<string> Written = new();
+#pragma warning disable CS0067 // required by IA330ReaderTransport; these lifecycle tests never need the reader to answer or exit
         public event Action<string>? LineReceived;
         public event Action? Exited;
+#pragma warning restore CS0067
         public void WriteLine(string line) => Written.Add(line);
         public void Dispose() { }
     }

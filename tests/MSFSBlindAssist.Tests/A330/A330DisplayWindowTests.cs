@@ -96,8 +96,14 @@ public class A330DisplayWindowTests
         /// <summary>When set, the rows instead of each text trimmed.</summary>
         public Func<A330Frame, IReadOnlyList<string>>? Compose;
 
+        /// <summary>When set, the window's own rows while no complete frame has come (null: the base's status row).</summary>
+        public Func<string, IReadOnlyList<string>?>? WithoutFrame;
+
         protected override IReadOnlyList<string> Rows(A330Frame frame) =>
             Compose?.Invoke(frame) ?? frame.Texts.Select(t => t.Text.Trim()).ToList();
+
+        protected override IReadOnlyList<string>? RowsWithoutFrame(string statusRow) =>
+            WithoutFrame is null ? base.RowsWithoutFrame(statusRow) : WithoutFrame(statusRow);
 
         protected override IReadOnlyList<A330KeyRow> KeyRows => _keys;
         protected override bool NeedsColours => _colours;
@@ -211,6 +217,52 @@ public class A330DisplayWindowTests
         for (int i = 0; i < before.Length; i++)
             if (i != 2) Assert.Same(before[i], list.Items[i]);   // only the changed row was rewritten
         Assert.Equal(4, list.SelectedIndex);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void The_selected_row_survives_a_gap_in_frames()
+    {
+        var replay = A330ReplayDisplays.FromFixtures("p02_mcdu_init.json");
+        using var rig = new Rig(replay);
+        var w = rig.Window();
+        w.Show();
+        var list = w.List();
+        var frame = replay.Latest(A330Gauge.McduCaptain)!;
+        list.SelectedIndex = 5;
+
+        // The frames stop for a while: one status row, over more than one refresh.
+        replay.Forget(A330Gauge.McduCaptain);
+        w.RefreshNow();
+        Assert.Equal(new[] { "Reading the captain's MCDU" }, w.Items());
+        rig.Clock += 1_000;
+        w.RefreshNow();
+
+        // They come back: the pilot is on the row they were on, not the top.
+        replay.Show(frame);
+        w.RefreshNow();
+        Assert.Equal(frame.Texts.Count, list.Items.Count);
+        Assert.Equal(5, list.SelectedIndex);
+
+        // A reader restart, and fewer rows when it reads again: the last row.
+        list.SelectedIndex = 12;
+        replay.Forget(A330Gauge.McduCaptain);
+        replay.SetState(A330ReaderState.Starting);
+        w.RefreshNow();
+        Assert.Equal(new[] { "A330 displays starting" }, w.Items());
+        replay.SetState(A330ReaderState.Running);
+        w.RefreshNow();
+        Assert.Equal(new[] { "Reading the captain's MCDU" }, w.Items());
+        replay.Show(frame with { Texts = frame.Texts.Take(4).ToList() });
+        w.RefreshNow();
+        Assert.Equal(4, list.Items.Count);
+        Assert.Equal(3, list.SelectedIndex);
+
+        // Only across the gap: the pilot moves, and a normal refresh keeps them where they are.
+        list.SelectedIndex = 1;
+        replay.Show(frame);
+        w.RefreshNow();
+        Assert.Equal(1, list.SelectedIndex);
         Assert.Empty(rig.Speech.All);
     }
 
@@ -503,6 +555,78 @@ public class A330DisplayWindowTests
         rig.Displays.Show(NotDrawn(gauge, rig.Clock));
         w.RefreshNow();
         Assert.Equal(new[] { off }, w.Items());
+    }
+
+    [Fact]
+    public void A_window_may_list_its_own_rows_while_no_frame_has_come()
+    {
+        using var rig = new Rig();
+        var w = rig.Window(colours: true, listRows: true);
+        var given = new List<string>();
+        w.WithoutFrame = status =>
+        {
+            given.Add(status);
+            return ["Speed 250", "MCDU not read yet"];
+        };
+        string[] own = ["Speed 250", "MCDU not read yet"];
+
+        // Reading: the window's own rows, and no waiting row (those are only over a complete frame's rows).
+        w.Show();
+        Assert.Equal(own, w.Items());
+        Assert.Equal("Reading the captain's MCDU", given[^1]);
+
+        // Each status row the base would show is handed to it.
+        rig.Displays.SetState(A330ReaderState.Starting);
+        w.RefreshNow();
+        Assert.Equal("A330 displays starting", given[^1]);
+        rig.Displays.SetState(A330ReaderState.Running);
+        rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain, rig.Clock));
+        w.RefreshNow();
+        Assert.Equal("Captain's MCDU is off", given[^1]);
+        rig.Displays.Forget(A330Gauge.McduCaptain);
+        rig.Clock += 30_000;
+        w.RefreshNow();
+        Assert.Equal("The display reader cannot read the captain's MCDU", given[^1]);
+        Assert.Equal(own, w.Items());
+
+        // A complete frame: its rows, and the hook is not asked.
+        int asked = given.Count;
+        var frame = Mcdu();
+        rig.Displays.Show(frame);
+        w.RefreshNow();
+        Assert.Equal(new[] { "List rows not read yet" }.Concat(frame.Texts.Select(t => t.Text.Trim())), w.Items());
+        Assert.Equal(asked, given.Count);
+
+        // A hook that throws keeps the rows shown.
+        rig.Displays.Forget(A330Gauge.McduCaptain);
+        var shown = w.Items();
+        w.WithoutFrame = _ => throw new InvalidOperationException("injected");
+        Assert.Null(Record.Exception(w.RefreshNow));
+        Assert.Equal(shown, w.Items());
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_window_whose_hook_gives_null_shows_the_status_row()
+    {
+        using var rig = new Rig();
+        var w = rig.Window(A330Gauge.Ewd);
+        var given = new List<string>();
+        w.WithoutFrame = status =>
+        {
+            given.Add(status);
+            return null;
+        };
+
+        w.Show();
+        Assert.Equal(new[] { "Reading the E/WD" }, w.Items());
+        Assert.Equal("Reading the E/WD", given[^1]);
+
+        rig.Displays.SetState(A330ReaderState.NotInstalled);
+        w.RefreshNow();
+        Assert.Equal(new[] { A330ReaderStatus.Text(A330ReaderState.NotInstalled) }, w.Items());
+        Assert.Equal(A330ReaderStatus.Text(A330ReaderState.NotInstalled), given[^1]);
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]

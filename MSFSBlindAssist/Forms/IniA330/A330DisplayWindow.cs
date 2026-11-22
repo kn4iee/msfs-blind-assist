@@ -31,8 +31,15 @@ internal sealed record A330KeyRow(string VarKey, double? PressValue = null);
 /// (4) else one row, "Reading the &lt;display&gt;", and once <see cref="CannotReadAfterMs"/> have passed with no
 /// complete frame, "The display reader cannot read the &lt;display&gt;". That count runs from when the window began
 /// wanting the display or from when the reader became Running, whichever is later; a complete frame or a fresh
-/// not-drawn one starts it again. The first refresh with rows selects row 0, so the reader has a current row. A
-/// <see cref="Rows"/> that throws, or gives a null row, keeps the rows shown (logged once).</para>
+/// not-drawn one starts it again.
+/// In (2) to (4), when <see cref="RowsWithoutFrame"/> gives rows for that status row, the list shows those rows instead
+/// of it; the waiting rows of (1) are only ever over a complete frame's rows.
+/// The first refresh with rows selects row 0, so the reader has a current row. When a complete frame's rows give way to
+/// the single status row (the frames stopped for more than three refreshes, the reader restarted) and frame rows come
+/// back, the pilot is on the row they were on before the gap, by index (the last row when there are fewer now), not
+/// row 0; a window's own rows without a frame are reconciled in place like any others, and end that keeping. A
+/// <see cref="Rows"/> or <see cref="RowsWithoutFrame"/> that throws, or gives a null row, keeps the rows shown (logged
+/// once each).</para>
 /// <para>The display. While the window is shown it wants its display (<see cref="IA330Displays.Want"/>, with itself
 /// as the owner and <c>refreshMs</c>); hidden, closed or disposed, it releases it, once. It polls on its UI timer and
 /// subscribes to no event of the displays, so nothing here marshals from another thread.</para>
@@ -48,10 +55,11 @@ internal sealed record A330KeyRow(string VarKey, double? PressValue = null);
 /// so nothing is spoken on open, refresh, F5 or close ([CORE-7]). A press's read-back is the definition's own.</para>
 /// <para>Keys. F5 refreshes now (once per press); Escape closes the window, unless it is closing a choice list's open
 /// list, and the window that had the foreground before <see cref="ShowForm"/> gets it back.</para>
-/// <para>For a derived window. <see cref="Rows"/>, <see cref="KeyRows"/>, <see cref="NeedsColours"/> and
-/// <see cref="NeedsHiddenRowsLeftOut"/> are read only after the constructors have run (<see cref="KeyRows"/> once, as
-/// the window first loads or refreshes), so they may answer from the derived window's own fields. A derived window takes
-/// its own keys by overriding <see cref="ProcessCmdKey"/> and calling the base for the rest.</para>
+/// <para>For a derived window. <see cref="Rows"/>, <see cref="RowsWithoutFrame"/>, <see cref="KeyRows"/>,
+/// <see cref="NeedsColours"/> and <see cref="NeedsHiddenRowsLeftOut"/> are read only after the constructors have run
+/// (<see cref="KeyRows"/> once, as the window first loads or refreshes), so they may answer from the derived window's own
+/// fields. A derived window takes its own keys by overriding <see cref="ProcessCmdKey"/> and calling the base for the
+/// rest.</para>
 /// </remarks>
 internal abstract class A330DisplayWindow : Form
 {
@@ -78,7 +86,13 @@ internal abstract class A330DisplayWindow : Form
     private bool _wanting;
     private long? _countFrom;
     private bool _rowsFailureLogged;
+    private bool _rowsWithoutFrameFailureLogged;
+    private RowKind _shown;
+    private int? _rowBeforeGap;   // the pilot's row when a complete frame's rows gave way to the status row
     private IntPtr _previousWindow;
+
+    /// <summary>What the list shows: a complete frame's rows, the window's own rows without a frame, or the status row.</summary>
+    private enum RowKind { Nothing, Frame, Own, Status }
 
     /// <param name="title">The window's title.</param>
     /// <param name="listName">The list's name and accessible name.</param>
@@ -144,8 +158,19 @@ internal abstract class A330DisplayWindow : Form
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Func<long> NowMs { get; set; } = () => Environment.TickCount64;
 
-    /// <summary>The list's lines from a complete frame, the top of the display first. UI thread, at every refresh.</summary>
+    /// <summary>The list's lines from a complete frame, the top of the display first. UI thread, at every refresh. While
+    /// the frame's <see cref="A330Frame.HiddenRowsLeftOut"/> is false they must leave out anything that could be a hidden
+    /// row (spec M15): the base leaves out nothing, it only adds "List rows not read yet" for a window that
+    /// <see cref="NeedsHiddenRowsLeftOut"/>.</summary>
     protected abstract IReadOnlyList<string> Rows(A330Frame frame);
+
+    /// <summary>The rows to list while there is no complete frame, or null (the default) for the base's single status
+    /// row. Called at each refresh with no complete frame (UI thread), with the status row the base would show: the
+    /// state's words, "&lt;Display&gt; is off", "Reading the &lt;display&gt;" or "The display reader cannot read the
+    /// &lt;display&gt;". Rows given here are listed as they are: the waiting rows ("Colours not read yet", "List rows
+    /// not read yet") are only over a complete frame's. For a window with something to show without its display (a
+    /// PFD window listing values it reads from variables, and its own "PFD not read yet").</summary>
+    protected virtual IReadOnlyList<string>? RowsWithoutFrame(string statusRow) => null;
 
     /// <summary>The cockpit controls under the list (spec D9), in order: one button or choice list each. Read once.</summary>
     protected virtual IReadOnlyList<A330KeyRow> KeyRows => [];
@@ -153,7 +178,10 @@ internal abstract class A330DisplayWindow : Form
     /// <summary>True for a window whose rows need the frame's colours: until the reader gives them it says so (spec M14).</summary>
     protected virtual bool NeedsColours => false;
 
-    /// <summary>True for a window whose rows need the hidden list rows left out: until the reader does it says so (spec M15).</summary>
+    /// <summary>True for a window whose rows need the hidden list rows left out: until the reader does it, the base adds
+    /// "List rows not read yet" above the rows (spec M15). That row is all the base does: the window's own
+    /// <see cref="Rows"/> must leave out anything that could be a hidden row while the frame's
+    /// <see cref="A330Frame.HiddenRowsLeftOut"/> is false.</summary>
     protected virtual bool NeedsHiddenRowsLeftOut => false;
 
     /// <summary>Shows the window, or brings the open one forward, with focus on the list: the pilot's own open, and the
@@ -180,19 +208,31 @@ internal abstract class A330DisplayWindow : Form
     {
         if (IsDisposed || Disposing) return;
         EnsureKeys();
-        if (CurrentRows() is { } rows)
+        var (rows, kind) = CurrentRows();
+        if (rows is not null)
         {
+            // A gap in the frames: their rows give way to the status row, and the pilot's row is kept for when they come
+            // back. The window's own rows without a frame are the pilot's place from then on.
+            if (kind == RowKind.Status && _shown == RowKind.Frame && RowList.SelectedIndex >= 0) _rowBeforeGap = RowList.SelectedIndex;
+            else if (kind == RowKind.Own) _rowBeforeGap = null;
+
             RowList.SetLines(rows);
+            if (kind == RowKind.Frame && _rowBeforeGap is int before && RowList.Items.Count > 0)
+            {
+                _rowBeforeGap = null;
+                int row = Math.Min(before, RowList.Items.Count - 1);
+                if (RowList.SelectedIndex != row) RowList.SelectedIndex = row;
+            }
             if (RowList.SelectedIndex < 0 && RowList.Items.Count > 0) RowList.SelectedIndex = 0;
+            _shown = kind;
         }
         foreach (var follow in _keyFollowers) follow(resyncChoices);
     }
 
-    /// <summary>The rows to show now, or null to keep the rows shown.</summary>
-    private IReadOnlyList<string>? CurrentRows()
+    /// <summary>The rows to show now and what they are, or null rows to keep the rows shown.</summary>
+    private (IReadOnlyList<string>? Rows, RowKind Kind) CurrentRows()
     {
         long now = NowMs();
-        string name = A330GaugeNames.Name(Gauge);
 
         if (_displays.Latest(Gauge) is { Complete: true } frame)
         {
@@ -210,23 +250,47 @@ internal abstract class A330DisplayWindow : Form
                     _rowsFailureLogged = true;
                     Log.Warn("a330", $"{Text}: the rows of a frame failed, the rows shown stay ({ex.GetType().Name}: {ex.Message})");
                 }
-                return null;
+                return (null, RowKind.Frame);
             }
 
             bool colours = NeedsColours && !frame.Texts.Any(t => t.Colour is not null);
             bool listRows = NeedsHiddenRowsLeftOut && !frame.HiddenRowsLeftOut;
-            if (!colours && !listRows) return rows;
+            if (!colours && !listRows) return (rows, RowKind.Frame);
             var shown = new List<string>(rows.Count + 2);
             if (colours) shown.Add(ColoursNotReadRow);
             if (listRows) shown.Add(ListRowsNotReadRow);
             shown.AddRange(rows);
-            return shown;
+            return (shown, RowKind.Frame);
         }
 
+        string status = StatusRow(now);
+        IReadOnlyList<string>? own;
+        try
+        {
+            own = RowsWithoutFrame(status);
+            if (own is not null && own.Any(r => r is null)) throw new InvalidOperationException("a row is null");
+        }
+        catch (Exception ex)
+        {
+            if (!_rowsWithoutFrameFailureLogged)
+            {
+                _rowsWithoutFrameFailureLogged = true;
+                Log.Warn("a330", $"{Text}: the rows without a frame failed, the rows shown stay ({ex.GetType().Name}: {ex.Message})");
+            }
+            return (null, RowKind.Own);
+        }
+        if (own is null) return ([status], RowKind.Status);
+        return (own, RowKind.Own);
+    }
+
+    /// <summary>The one row the base shows while there is no complete frame; it also keeps the "cannot read" count.</summary>
+    private string StatusRow(long now)
+    {
+        string name = A330GaugeNames.Name(Gauge);
         if (_displays.State != A330ReaderState.Running)
         {
             _countFrom = null;   // the count runs from when the reader is Running again
-            return [_displays.StatusText];
+            return _displays.StatusText;
         }
 
         // Only a fresh one: the client keeps the newest frame after the display is let go, so an old "not drawn" (the
@@ -234,13 +298,13 @@ internal abstract class A330DisplayWindow : Form
         if (_displays.Newest(Gauge) is { Drawn: false } off && now - off.ReadTicks <= 3L * _refreshMs)
         {
             _countFrom = now;
-            return [char.ToUpperInvariant(name[0]) + name[1..] + " is off"];
+            return char.ToUpperInvariant(name[0]) + name[1..] + " is off";
         }
 
         _countFrom ??= now;
         return now - _countFrom.Value >= CannotReadAfterMs
-            ? ["The display reader cannot read the " + name]
-            : ["Reading the " + name];
+            ? "The display reader cannot read the " + name
+            : "Reading the " + name;
     }
 
     // ---- the keys under the list ----

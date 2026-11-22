@@ -75,7 +75,7 @@ internal sealed class A330ReplayDisplays : IA330Displays
     {
         _newest[frame.Gauge] = frame;
         if (!frame.Complete) return;
-        bool changed = !_latest.TryGetValue(frame.Gauge, out var before) || !SameTexts(before.Texts, frame.Texts);
+        bool changed = !_latest.TryGetValue(frame.Gauge, out var before) || !A330ReaderClient.SameTexts(before.Texts, frame.Texts);
         _latest[frame.Gauge] = frame;
         if (changed) FrameChanged?.Invoke(frame.Gauge);
     }
@@ -98,19 +98,5 @@ internal sealed class A330ReplayDisplays : IA330Displays
     {
         if (firstOfficer) _padFirstOfficer = text;
         else _padCaptain = text;
-    }
-
-    // The client's own comparison: a frame differs when any text differs in anything it carries.
-    private static bool SameTexts(IReadOnlyList<A330Text> a, IReadOnlyList<A330Text> b)
-    {
-        if (a.Count != b.Count) return false;
-        for (int i = 0; i < a.Count; i++)
-        {
-            var x = a[i];
-            var y = b[i];
-            if (x.Order != y.Order || x.Text != y.Text || x.X != y.X || x.Baseline != y.Baseline || x.Font != y.Font
-                || x.Size != y.Size || x.Colour != y.Colour || !x.CharX.SequenceEqual(y.CharX)) return false;
-        }
-        return true;
     }
 }

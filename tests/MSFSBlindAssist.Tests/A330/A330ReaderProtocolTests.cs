@@ -62,6 +62,34 @@ public class A330ReaderProtocolTests
     }
 
     [Fact]
+    public void A_not_drawn_frame_is_never_complete()
+    {
+        // Whatever its complete and texts say, a frame of a display that draws nothing has no texts and is not complete;
+        // its texts are not read.
+        const string text = "{\"order\":1,\"x\":1,\"baseline\":2,\"text\":\"A\",\"font\":\"F\",\"size\":10,\"charX\":[1]}";
+        foreach (string texts in new[] { "[" + text + "]", "[5]" })
+        {
+            string frame = "{\"gauge\":\"Ewd\",\"drawn\":false,\"complete\":true,\"missing\":0,\"texts\":" + texts + "}";
+            var line = A330ReaderProtocol.Parse("{\"frame\":" + frame + "}", 7)!.Frame!;
+            var parsed = A330ReaderProtocol.ParseFrame(frame, 7)!;
+            foreach (var f in new[] { line, parsed })
+            {
+                Assert.Equal(A330Gauge.Ewd, f.Gauge);
+                Assert.False(f.Drawn);
+                Assert.False(f.Complete);
+                Assert.Empty(f.Texts);
+                Assert.Equal(7, f.ReadTicks);
+            }
+        }
+
+        // Drawn, the same frame is complete with its text.
+        var drawn = A330ReaderProtocol.ParseFrame(
+            "{\"gauge\":\"Ewd\",\"drawn\":true,\"complete\":true,\"missing\":0,\"texts\":[" + text + "]}", 7)!;
+        Assert.True(drawn.Complete);
+        Assert.Single(drawn.Texts);
+    }
+
+    [Fact]
     public void A_frame_line_without_colour_parses()
     {
         var line = A330ReaderProtocol.Parse(

@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft.A330.Display;
@@ -15,7 +17,6 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
     private const int TickIntervalMs = 250;
     private const int StopDisposeDelayMs = 1_000;
     private const int DefaultRefreshMs = 1_000;
-    private const int MaxLoggedLineLength = 200;
 
     private readonly Func<IA330ReaderTransport?> _start;
     private readonly Func<long> _nowTicks;
@@ -124,7 +125,8 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
         catch (Exception ex) { Log.Channel("a330-displays").Error("the display reader's timer failed: " + ex.Message); }
     }
 
-    /// Checks the hello deadline and a due restart against the clock.
+    /// Checks the hello deadline and a due restart against the clock. A program that has not answered hello in time
+    /// is let go (quit, then disposed) and counts as an exit of it: restarted, or Failed at the fourth (<see cref="ProgramEnded"/>).
     internal void Tick()
     {
         var post = new List<Action>();
@@ -136,9 +138,8 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
             if (_transport != null && !_helloReceived && now >= _helloDeadline)
             {
                 drop = _transport;
-                _transport = null;
                 drop.WriteLine(A330ReaderProtocol.Quit());
-                SetState(A330ReaderState.Failed, post);
+                ProgramEnded(now, post);
             }
             else if (_transport == null && _restartAt >= 0 && now >= _restartAt && !IsTerminal(_state))
             {
@@ -267,8 +268,7 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
                     if (!_droppedLogged)
                     {
                         _droppedLogged = true;
-                        string cut = line.Length > MaxLoggedLineLength ? line[..MaxLoggedLineLength] + "..." : line;
-                        Log.Channel("a330-displays").Warn("a line from the display reader was dropped (later ones are not logged): " + cut);
+                        Log.Channel("a330-displays").Warn("a line from the display reader was dropped (later ones are not logged): " + DroppedLineNote(line));
                     }
                     return;
                 }
@@ -284,6 +284,8 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
                     }
                     else _helloReceived = true;
                 }
+                // Until the hello, nothing else is taken: a valid line, only early, so neither used nor logged as dropped.
+                else if (!_helloReceived) return;
                 else if (parsed.State is A330ReaderState state) SetState(state, post);
                 else if (parsed.Frame is A330Frame frame) StoreFrame(frame, post);
                 else if (parsed.Scratchpad is { } pad)
@@ -302,6 +304,29 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
         Flush(post);
     }
 
+    /// What the log says of a line the protocol refused: its length and, for a JSON object, its first property's name,
+    /// never its content (a scratchpad or frame line can hold what the pilot typed, which is never logged).
+    internal static string DroppedLineNote(string line)
+    {
+        line ??= "";
+        string what;
+        try
+        {
+            var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(line));
+            if (!reader.Read()) what = "not JSON";
+            else if (reader.TokenType != JsonTokenType.StartObject) what = "not an object";
+            else if (!reader.Read()) what = "not JSON";
+            else if (reader.TokenType == JsonTokenType.PropertyName) what = "first property \"" + reader.GetString() + "\"";
+            else if (reader.TokenType == JsonTokenType.EndObject) what = "an empty object";
+            else what = "not JSON";
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            what = "not JSON";
+        }
+        return line.Length + " characters, " + what;
+    }
+
     /// Call under the lock.
     private void StoreFrame(A330Frame frame, List<Action> post)
     {
@@ -316,7 +341,9 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
         }
     }
 
-    private static bool SameTexts(IReadOnlyList<A330Text> a, IReadOnlyList<A330Text> b)
+    /// True when two frames' texts are the same in everything they carry: what decides FrameChanged (the replay source
+    /// in the tests uses it too).
+    internal static bool SameTexts(IReadOnlyList<A330Text> a, IReadOnlyList<A330Text> b)
     {
         if (a.Count != b.Count) return false;
         for (int i = 0; i < a.Count; i++)
@@ -339,21 +366,7 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
             lock (_gate)
             {
                 if (!ReferenceEquals(source, _transport) || !_started) return;
-                _transport = null;
-                ForgetFrames();
-                long now = _nowTicks();
-                _exits.RemoveAll(e => now - e > RestartWindowMs);
-                _exits.Add(now);
-                if (_exits.Count >= MaxExitsInWindow)
-                {
-                    SetState(A330ReaderState.Failed, post);
-                    _restartAt = -1;
-                }
-                else
-                {
-                    SetState(A330ReaderState.Starting, post);
-                    _restartAt = now + RestartDelayMs;
-                }
+                ProgramEnded(_nowTicks(), post);
             }
         }
         catch (Exception ex)
@@ -363,6 +376,26 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
         }
         DisposeLater(source, 0);
         Flush(post);
+    }
+
+    /// The program is gone (it exited, or it missed its hello): every frame is forgotten, and it is started again after
+    /// 5 s, unless this is the fourth such end within five minutes, which is Failed. Call under the lock.
+    private void ProgramEnded(long now, List<Action> post)
+    {
+        _transport = null;
+        ForgetFrames();
+        _exits.RemoveAll(e => now - e > RestartWindowMs);
+        _exits.Add(now);
+        if (_exits.Count >= MaxExitsInWindow)
+        {
+            SetState(A330ReaderState.Failed, post);
+            _restartAt = -1;
+        }
+        else
+        {
+            SetState(A330ReaderState.Starting, post);
+            _restartAt = now + RestartDelayMs;
+        }
     }
 
     // ---- helpers ----

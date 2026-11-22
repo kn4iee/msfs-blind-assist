@@ -9,6 +9,9 @@ public interface IA330Displays
     A330Frame? Latest(A330Gauge gauge);                        // the newest COMPLETE frame no older than three refreshes; else null
     A330Frame? Newest(A330Gauge gauge);                        // the newest frame, complete or not
     string? McduScratchpad(bool firstOfficer);                 // the MCDU's scratchpad text as the reader gives it; null when it gives none
-    event Action<A330Gauge>? FrameChanged;                     // on the client's thread: a complete frame differs from the last complete one
-    event Action<A330ReaderState>? StateChanged;               // on the client's thread
+    // The two events are raised on any thread (the reader's output thread, a pool thread, or the caller's own for Start
+    // and Stop), and two of them can arrive out of order: a handler marshals to the UI thread and reads State or
+    // Latest there, rather than trusting the argument alone.
+    event Action<A330Gauge>? FrameChanged;                     // a complete frame differs from the last complete one
+    event Action<A330ReaderState>? StateChanged;               // the state changed
 }

@@ -119,18 +119,89 @@ public class A330ReaderClientTests
     }
 
     [Fact]
-    public void No_hello_in_five_seconds_is_Failed()
+    public void No_hello_in_five_seconds_restarts_the_program()
     {
         var rig = new Rig().Started();
+        rig.Client.Want(A330Gauge.Sd, new object(), 250);
+        var first = rig.Current;
         rig.Clock = 4_999;
         rig.Client.Tick();
         Assert.Equal(A330ReaderState.Starting, rig.Client.State);
+        Assert.False(first.Disposed);
+
+        // The missed hello counts as an exit of that program: quit, disposed, Starting.
         rig.Clock = 5_000;
         rig.Client.Tick();
-        Assert.Equal(A330ReaderState.Failed, rig.Client.State);
-        rig.Clock = 600_000;
+        Assert.Equal(A330ReaderState.Starting, rig.Client.State);
+        Assert.Equal("{\"quit\":true}", first.Written[^1]);
+        Assert.True(first.Disposed);
+        Assert.Equal(1, rig.Starts);
+
+        // A new program 5 s later, sent hello and every wanted display.
+        rig.Clock = 9_999;
         rig.Client.Tick();
         Assert.Equal(1, rig.Starts);
+        rig.Clock = 10_000;
+        rig.Client.Tick();
+        Assert.Equal(2, rig.Starts);
+        Assert.NotSame(first, rig.Current);
+        Assert.Equal(new[] { "{\"hello\":1}", "{\"want\":\"Sd\",\"refreshMs\":250}" }, rig.Current.Written);
+
+        // It answers in time and runs; the old program's lines change nothing.
+        rig.Hello();
+        rig.Current.Raise("{\"state\":\"Running\"}");
+        first.Raise("{\"state\":\"AircraftNotFound\"}");
+        first.Exit();
+        Assert.Equal(A330ReaderState.Running, rig.Client.State);
+        rig.Clock = 60_000;
+        rig.Client.Tick();
+        Assert.Equal(A330ReaderState.Running, rig.Client.State);
+        Assert.Equal(2, rig.Starts);
+    }
+
+    [Fact]
+    public void Four_missed_hellos_in_five_minutes_are_Failed()
+    {
+        var rig = new Rig().Started();
+        for (int i = 0; i < 3; i++)
+        {
+            rig.Clock += 5_000;
+            rig.Client.Tick();                        // no hello: that program is let go
+            Assert.Equal(A330ReaderState.Starting, rig.Client.State);
+            Assert.True(rig.Current.Disposed);
+            rig.Clock += 5_000;
+            rig.Client.Tick();                        // the restart
+            Assert.Equal(i + 2, rig.Starts);
+        }
+        var last = rig.Current;
+        rig.Clock += 5_000;
+        rig.Client.Tick();
+        Assert.Equal(A330ReaderState.Failed, rig.Client.State);
+        Assert.Equal("{\"quit\":true}", last.Written[^1]);
+        Assert.True(last.Disposed);
+        rig.Clock += 600_000;
+        rig.Client.Tick();
+        Assert.Equal(4, rig.Starts);
+
+        // Missed hellos and exits count together: a missed hello, an exit, a missed hello, then an exit is the fourth.
+        var mixed = new Rig().Started();
+        mixed.Clock = 5_000;
+        mixed.Client.Tick();                          // a missed hello
+        mixed.Clock = 10_000;
+        mixed.Client.Tick();
+        mixed.Hello();
+        mixed.Current.Exit();                         // an exit
+        mixed.Clock = 15_000;
+        mixed.Client.Tick();
+        mixed.Clock = 20_000;
+        mixed.Client.Tick();                          // a missed hello
+        Assert.Equal(A330ReaderState.Starting, mixed.Client.State);
+        mixed.Clock = 25_000;
+        mixed.Client.Tick();
+        mixed.Hello();
+        mixed.Current.Exit();                         // the fourth
+        Assert.Equal(A330ReaderState.Failed, mixed.Client.State);
+        Assert.Equal(4, mixed.Starts);
     }
 
     [Fact]
@@ -409,8 +480,13 @@ public class A330ReaderClientTests
         Assert.Equal(A330ReaderState.Stopped, missing.Client.State);
 
         var failed = new Rig().Started();
-        failed.Clock = 5_000;
-        failed.Client.Tick();
+        for (int i = 0; i < 4; i++)
+        {
+            failed.Clock += 5_000;
+            failed.Client.Tick();                     // a missed hello
+            failed.Clock += 5_000;
+            failed.Client.Tick();                     // the restart, until Failed
+        }
         Assert.Equal(A330ReaderState.Failed, failed.Client.State);
         failed.Client.Stop();
         Assert.Equal(A330ReaderState.Stopped, failed.Client.State);
@@ -465,6 +541,58 @@ public class A330ReaderClientTests
         Assert.Equal(2, raised);
         Assert.Equal("TWO", rig.Client.Latest(A330Gauge.Sd)!.Texts[0].Text);
         Assert.Equal(A330ReaderState.Running, rig.Client.State);
+    }
+
+    [Fact]
+    public void Lines_before_the_hello_are_ignored()
+    {
+        var rig = new Rig().Started();
+        rig.Client.Want(A330Gauge.Sd, new object(), 250);
+        int raised = 0;
+        var states = new List<A330ReaderState>();
+        rig.Client.FrameChanged += _ => raised++;
+        rig.Client.StateChanged += states.Add;
+        string[] lines =
+        {
+            "{\"state\":\"Running\"}",
+            FrameLine("Sd", true, "X"),
+            "{\"scratchpad\":{\"gauge\":\"McduCaptain\",\"text\":\"CHECK\"}}",
+        };
+
+        foreach (var line in lines) rig.Current.Raise(line);
+        Assert.Equal(A330ReaderState.Starting, rig.Client.State);
+        Assert.Null(rig.Client.Newest(A330Gauge.Sd));
+        Assert.Null(rig.Client.Latest(A330Gauge.Sd));
+        Assert.Null(rig.Client.McduScratchpad(false));
+        Assert.Equal(0, raised);
+        Assert.Empty(states);
+
+        rig.Hello();
+        foreach (var line in lines) rig.Current.Raise(line);
+        Assert.Equal(A330ReaderState.Running, rig.Client.State);
+        Assert.Equal("X", rig.Client.Latest(A330Gauge.Sd)!.Texts[0].Text);
+        Assert.Equal("CHECK", rig.Client.McduScratchpad(false));
+        Assert.Equal(1, raised);
+        Assert.Equal(new[] { A330ReaderState.Running }, states);
+    }
+
+    [Theory]
+    [InlineData("{\"scratchpad\":{\"gauge\":\"Nope\",\"text\":\"KBOS KJFK\"}}", "first property \"scratchpad\"")]
+    [InlineData("{\"scratchpad\":{\"gauge\":\"McduCaptain\",\"text\":\"KBOS KJFK", "first property \"scratchpad\"")]
+    [InlineData("{\"frame\":{\"gauge\":\"Nope\",\"complete\":true,\"missing\":0,\"texts\":[{\"text\":\"KBOS KJFK\"}]}}", "first property \"frame\"")]
+    [InlineData("{\"frame\":", "first property \"frame\"")]
+    [InlineData("{}", "an empty object")]
+    [InlineData("[\"KBOS KJFK\"]", "not an object")]
+    [InlineData("\"KBOS KJFK\"", "not an object")]
+    [InlineData("KBOS KJFK", "not JSON")]
+    [InlineData("", "not JSON")]
+    public void A_dropped_line_is_logged_by_its_length_and_first_property_only(string line, string what)
+    {
+        string note = A330ReaderClient.DroppedLineNote(line);
+        Assert.Equal(line.Length + " characters, " + what, note);
+        Assert.DoesNotContain("KBOS", note);
+        Assert.DoesNotContain("gauge", note);
+        Assert.DoesNotContain("text", note);
     }
 
     [Fact]

@@ -135,6 +135,10 @@ internal static class A330ReaderProtocol
             hidden = h.GetBoolean();
         }
 
+        // A display that draws nothing: no texts and not complete, whatever the line's complete and texts say (its texts
+        // are not read).
+        if (!drawn) return new A330Frame(gauge.Value, [], Complete: false, miss, nowTicks, Drawn: false, hidden);
+
         var list = new List<A330Text>();
         foreach (var te in texts.EnumerateArray())
         {
