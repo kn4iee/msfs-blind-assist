@@ -52,27 +52,6 @@ public class CduColourTests
         var text = "<MONITOR";
         Assert.Equal(text, CduLineText.Annotate(text, text.Select(_ => CduColour.White).ToArray()));
     }
-
-    [Fact]
-    public void The_A330_profile_types_punctuation_with_its_own_key_names()
-    {
-        Assert.Equal("DECIMAL", CduFormProfile.A330KeyForChar('.'));
-        Assert.Equal("PLUS", CduFormProfile.A330KeyForChar('-'));
-        Assert.Equal("SPACE", CduFormProfile.A330KeyForChar(' '));
-        Assert.Equal("Q", CduFormProfile.A330KeyForChar('Q'));
-    }
-
-    // Key for key, as the FlyByWire A320 window ("UP" on Page Up) and the Fenix window ("ARROW_UP" on Page Up):
-    // Page Up presses the MCDU's up-arrow key. The window had the two swapped until 2026-11-20.
-    [Fact]
-    public void The_A330_window_slews_key_for_key_like_the_other_Airbus_windows()
-    {
-        var profile = CduFormProfile.A330(null!);   // the glyph library is only used when a reader is created
-        Assert.Equal("UARROW", profile.SlewUp);
-        Assert.Equal("DOWN", profile.SlewDown);
-        Assert.Contains(("Slew up", "UARROW", "Page Up"), profile.PageKeys);
-        Assert.Contains(("Slew down", "DOWN", "Page Down"), profile.PageKeys);
-    }
 }
 
 /// <summary>

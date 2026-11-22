@@ -1,6 +1,11 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using MSFSBlindAssist.Accessibility;
-using MSFSBlindAssist.Aircraft.A330;
+using MSFSBlindAssist.Aircraft.A330.Display;
+using MSFSBlindAssist.Aircraft.A330.Mcdu;
+using MSFSBlindAssist.Forms.FenixA320;
+using MSFSBlindAssist.Forms.MD11;
+using MSFSBlindAssist.Services;
 using MSFSBlindAssist.Settings;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
@@ -8,71 +13,111 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Forms.IniA330;
 
 /// <summary>
-/// Accessible MCDU for the iniBuilds A330 pixel-read MCDU (<see cref="CduFormProfile"/>).
-/// The aircraft exports no MCDU text, so the screen is READ FROM PIXELS: the MCDU is popped out
-/// (forced on open — see A330CduPopout), captured with PrintWindow every 250 ms while this window is
-/// visible, and read by the trained fixed-font matcher (A330CduScreenReader). Keys are the aircraft's own
-/// <c>INI_MCDU1_&lt;KEY&gt;</c> press flags: write 1, the WASM consumes it and resets it to 0 (writing
-/// 0 straight after kills the press, measured). Every write is sequence-prefixed so a repeated
-/// key is never coalesced by the MobiFlight channel.
-///
-/// Same layout and keys as the other Airbus CDU windows: title, label/data pairs prefixed with
-/// the line number, scratchpad last; Ctrl/Alt+1..6 (or F1..F12) line keys, Alt+letter pages,
-/// Alt+S scratchpad, Backspace CLR. Typed text is paced at 150 ms a key and confirmed by
-/// reading the scratchpad back — what is spoken is what the CDU shows.
+/// The accessible MCDU window of the iniBuilds A330, either side (<see cref="CduFormProfile"/>).
 /// </summary>
+/// <remarks>
+/// <para>The page. While the window is shown it wants its side's MCDU from the display reader
+/// (<see cref="IA330Displays.Want"/>, every 250 ms) and, on a 250 ms UI timer, lists the latest complete frame
+/// (<see cref="IA330Displays.Latest"/>) as its listing (<see cref="CduLineText.Listing"/>: the title, each label
+/// row, each data row "n: value", "Scratchpad: ..."), reconciled in place so the pilot keeps their row. With no
+/// complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or one
+/// that does not leave hidden rows out (spec M15), the list is one status row instead (<see cref="A330McduStatus"/>:
+/// the display windows' own words, or "List rows not read yet"). The status box above the list says the same, or over a
+/// page the display's name ("Captain's MCDU"), or "Colours not read yet" while the frame has no colour (spec M14), when
+/// no prompt is marked unavailable. It never shows half a page.</para>
+/// <para>What it says ([CORE-7]: once, only what the screen reader cannot say, through the non-interrupting announce).
+/// Opening the window while the reader cannot read the MCDU: "A330 MCDU unavailable: &lt;reason&gt;", again only when
+/// the reason changes, and "MCDU ready" with the first page after it (spec D3; never an AI read). A new title, unless
+/// moving the focused list to it makes the screen reader read it (", temporary flight plan" when it carries TMPY). After
+/// a line key with a page shown, what the pressed line now holds or "No change" (<see cref="A330McduLineKeyWatch"/>).
+/// The page's scratchpad line, read back when it changes without the pilot typing (two stable refreshes,
+/// <see cref="CduScratchpadAnnouncer"/>). A typed entry, confirmed from the MCDU's own typed line
+/// (<see cref="IA330Displays.McduScratchpad"/>, never the page's scratchpad line): each key is sent only once the one
+/// before has shown, at least 150 ms apart, and waited for up to 600 ms; then the typed line is said, or
+/// "Missed &lt;KEY&gt;. Scratchpad: ..." and the rest of the entry is not sent. With no typed line from the reader the
+/// keys go at 150 ms a key and the window says "Typed ..., not confirmed".</para>
+/// <para>Keys. The aircraft's own <c>INI_MCDU1_&lt;KEY&gt;</c> (captain) or <c>INI_MCDU2_&lt;KEY&gt;</c> (first officer)
+/// press flags: write 1, the aircraft consumes it and resets it to 0 (writing 0 straight after kills the press,
+/// measured). Every write is sequence-prefixed so a repeated key is never coalesced by the MobiFlight channel. Keys are
+/// sent whether or not a page can be read. Same layout and keys as the other Airbus CDU windows: Ctrl/Alt+1..6 (or
+/// F1..F12) line keys, Alt+letter pages, Page Up/Down slew, Alt+Left/Right page, Alt+S scratchpad, Alt+Home the screen,
+/// Backspace CLR, Escape closes (hides) the window and gives the foreground back.</para>
+/// <para>Sides, as the Fenix window: a Left/Right selector after the status box, and Ctrl+Shift+L / Ctrl+Shift+R. A
+/// switch lets the old side's display go, wants the new one, switches the key prefix, starts the title and scratchpad
+/// read-backs afresh (the new side's first page is not a title change) and, off the selector, says "Left MCDU" or
+/// "Right MCDU"; the shortcut to the side already shown says it again.</para>
+/// <para>Everything runs on the UI thread: the key writes, and the waits, which are awaited there
+/// ([SIM-20]). The window polls; it subscribes to no event of the displays.</para>
+/// </remarks>
 public sealed class IniA330CduForm : Form
 {
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     private static readonly LogChannel _log = Log.Channel("a330_mcdu");
-    private const int KeyGapMs = 150;
 
+    private const int RefreshMs = 250;
+    private const int KeyGapMs = 150;          // today's typing pace
+    private const int KeyShowsWithinMs = 600;  // how long a typed key may take to show on the typed line
+    private const int KeyPollMs = 25;
+    private const int TypedEchoMs = 3 * RefreshMs;   // the page's frames show the typed line within three refreshes
+
+    private readonly IA330Displays _displays;
     private readonly SimConnectManager _sim;
     private readonly ScreenReaderAnnouncer _announcer;
-    private readonly A330CduPopout _popout;
-    private readonly A330CduScreenReader _reader;
-    private readonly CduFormProfile _profile;
-    private string _device => _profile.Device;
-    private readonly HashSet<string> _loggedUncertain = new();
+    private CduFormProfile _profile;
+
+    private readonly A330McduStatus _status = new(RefreshMs);
+    private readonly A330McduAvailability _availability = new();
     private readonly CduScratchpadAnnouncer _scratch = new("Scratchpad cleared", stablePolls: 2);
-    private readonly System.Windows.Forms.Timer _poll = new() { Interval = 250 };
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = RefreshMs };
     private readonly SemaphoreSlim _keyGate = new(1, 1);
 
-    private readonly Label _status = new() { AutoSize = true, Text = "MCDU" };
-    private readonly ListBox _display = new() { IntegralHeight = false, Font = new Font("Consolas", 11f) };
-    private readonly TextBox _scratchpad = new() { AccessibleName = "Scratchpad entry" };
+    private readonly TextBox _statusBox = new()
+    {
+        Name = "Status", ReadOnly = true, TabStop = true, Width = 420, AccessibleName = "A330 MCDU status",
+    };
+    private readonly ComboBox _side = new()
+    {
+        Name = "Side", DropDownStyle = ComboBoxStyle.DropDownList, Width = 100, AccessibleName = "MCDU side",
+    };
+    private readonly ListBox _display = new() { Name = "Screen", IntegralHeight = false, Font = new Font("Consolas", 11f) };
+    private readonly TextBox _scratchpad = new() { Name = "Scratchpad", AccessibleName = "Scratchpad entry" };
 
     private IntPtr _previousWindow;
-    private bool _reading, _ensuring, _disposed;
+    private bool _wanting, _disposed, _typing, _offGridLogged;
+    private A330Gauge _wantedGauge;
+    private IReadOnlyList<A330McduLine>? _shownPage;   // the page listed now; null while the status row is
     private string _lastTitle = "";
-    private string[] _rows = new string[A330CduScreenReader.Rows];
+    private int? _rowBeforeGap;                        // the pilot's row when a page gave way to the status row
+    private A330McduLineKeyWatch? _lineWatch;
+    private long? _reseedScratchAt;                    // after a confirmed entry: when the scratchpad read-back starts afresh
+    private long? _lastKeyMs;
     private int _seq;
-    private DateTime _lastFrameUtc = DateTime.MinValue;
 
-    private readonly string _keyPrefix;
-    private readonly string _name;
-
-    /// <summary>A CDU window for any iniBuilds pixel-read CDU (the A330's MCDU has its own keys,
-    /// grid, glyphs and pop-out — <see cref="CduFormProfile"/>).</summary>
-    internal IniA330CduForm(SimConnectManager sim, ScreenReaderAnnouncer announcer, CduFormProfile profile)
+    /// <param name="displays">The A330's displays (the definition's <c>Displays</c>).</param>
+    /// <param name="sim">For the key writes.</param>
+    /// <param name="announcer">For what the window says.</param>
+    /// <param name="profile">The side the window opens on, and its keys.</param>
+    internal IniA330CduForm(IA330Displays displays, SimConnectManager sim, ScreenReaderAnnouncer announcer, CduFormProfile profile)
     {
+        ArgumentNullException.ThrowIfNull(displays);
+        ArgumentNullException.ThrowIfNull(sim);
+        ArgumentNullException.ThrowIfNull(announcer);
+        ArgumentNullException.ThrowIfNull(profile);
+        _displays = displays;
         _sim = sim;
         _announcer = announcer;
         _profile = profile;
-        _name = profile.Name;
-        _keyPrefix = profile.KeyPrefix;
-        _popout = new A330CduPopout(profile.Popout);
-        _reader = profile.CreateReader();
-        string name = profile.Name;
-        Text = $"{name} {_device}";
-        AccessibleName = $"{name} {_device}";
+        _wantedGauge = profile.Gauge;
+        SendPressFlag = WritePressFlag;
+
+        SetTitle();
         KeyPreview = true;
         Width = 760; Height = 640;
         StartPosition = FormStartPosition.CenterScreen;
         BuildLayout();
-        _poll.Tick += (_, _) => _ = PollAsync();
+        _timer.Tick += (_, _) => { if (Visible) RefreshNow(); };
         KeyDown += Form_KeyDown;
         _scratchpad.KeyDown += Scratchpad_KeyDown;
         FormClosing += (_, e) =>
@@ -86,9 +131,43 @@ public sealed class IniA330CduForm : Form
         };
     }
 
+    // ---- test seams ----
+
+    /// <summary>The clock, milliseconds of <see cref="Environment.TickCount64"/>; a test moves it.</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal Func<long> NowMs { get; set; } = () => Environment.TickCount64;
+
+    /// <summary>The waits between keys and for a key to show; awaited on the UI thread. A test runs them at once.</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal Func<int, Task> Delay { get; set; } = ms => Task.Delay(ms);
+
+    /// <summary>Writes one press flag (the whole L:var name, "INI_MCDU1_INIT"); false when it could not be sent. A test records them.</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal Func<string, bool> SendPressFlag { get; set; }
+
+    /// <summary>True: shown without taking the focus (the tests never take the focus of whoever is at the computer).</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal bool ShowInactive { get; set; }
+
+    protected override bool ShowWithoutActivation => ShowInactive;
+
+    // ---- layout ----
+
     private void BuildLayout()
     {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, WrapContents = true };
+        var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, TabIndex = 0 };
+        _statusBox.TabIndex = 0;
+        // No mnemonic: every Alt+letter belongs to a page key.
+        var sideLabel = new Label { Text = "Side:", AutoSize = true, UseMnemonic = false, Margin = new Padding(12, 6, 0, 0), TabIndex = 1 };
+        _side.TabIndex = 2;
+        _side.Items.AddRange(new object[] { "Left", "Right" });
+        _side.SelectedIndex = _profile.FirstOfficer ? 1 : 0;
+        _side.SelectedIndexChanged += (_, _) => OnSideSelected();
+        top.Controls.Add(_statusBox);
+        top.Controls.Add(sideLabel);
+        top.Controls.Add(_side);
+
+        var panel = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, WrapContents = true, TabIndex = 3 };
         foreach (var (label, key, tip) in _profile.PageKeys)
         {
             var b = new Button { Text = label, AutoSize = true, AccessibleDescription = tip };
@@ -96,123 +175,220 @@ public sealed class IniA330CduForm : Form
             b.Click += (_, _) => { if (k == "CLR") Clear(); else Press(k); };
             panel.Controls.Add(b);
         }
-        var scratchRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true };
+        var scratchRow = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, TabIndex = 2 };
         scratchRow.Controls.Add(new Label { Text = "&Scratchpad:", AutoSize = true });
         _scratchpad.Width = 400;
         scratchRow.Controls.Add(_scratchpad);
         _display.Dock = DockStyle.Fill;
-        _display.AccessibleName = $"{_device} screen";
-        _status.Dock = DockStyle.Top;
+        _display.AccessibleName = $"{_profile.Device} screen";
+        _display.TabIndex = 1;
         Controls.Add(_display);
         Controls.Add(scratchRow);
         Controls.Add(panel);
-        Controls.Add(_status);
+        Controls.Add(top);
     }
 
+    private string SideName => _profile.FirstOfficer ? "Right" : "Left";
+
+    private void SetTitle()
+    {
+        Text = $"{_profile.Name} {_profile.Device} ({SideName})";
+        AccessibleName = Text;
+    }
+
+    // ---- showing and hiding ----
+
+    /// <summary>Shows the window, or brings the open one forward, with focus on the screen.</summary>
     public void ShowForm()
     {
-        _previousWindow = GetForegroundWindow();
-        bool wasVisible = Visible;
+        if (!Visible) _previousWindow = GetForegroundWindow();
+        if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
         Show();
         BringToFront();
         Activate();
+        // The key opens this while the simulator has the foreground, where Activate alone can leave the window behind it.
+        TopMost = true;
+        TopMost = false;
         _display.Focus();
-        if (!wasVisible)
-        {
-            _scratch.Reset();
-            _lastTitle = "";
-            _poll.Start();
-        }
-        _ = EnsurePopoutAsync();
     }
 
-    private async Task EnsurePopoutAsync()
+    protected override void OnVisibleChanged(EventArgs e)
     {
-        if (_ensuring || _popout.Find() != IntPtr.Zero) return;
-        _ensuring = true;
-        SetStatus($"Opening the {_device} pop-out from the simulator...");
-        try
+        base.OnVisibleChanged(e);
+        if (IsDisposed || Disposing) return;
+        if (Visible) StartWanting();
+        else StopWanting();
+    }
+
+    private void StartWanting()
+    {
+        if (!_wanting)
         {
-            // The pop-out runs on a pool thread, but SimConnect calls belong on the UI thread: the camera
-            // read and write are sent back here (an off-thread restore left the camera on the MCDU).
-            var ui = SynchronizationContext.Current;
-            Task<(int, int)?> ReadCamera()
-            {
-                var done = new TaskCompletionSource<(int, int)?>(TaskCreationOptions.RunContinuationsAsynchronously);
-                async void Read()
-                {
-                    try { done.TrySetResult(await _sim.ReadCameraViewAsync(1500) is { } r ? (r.ViewType, r.ViewIndex) : null); }
-                    catch (Exception ex) { done.TrySetException(ex); }
-                }
-                if (ui != null) ui.Post(_ => Read(), null); else Read();
-                return done.Task;
-            }
-            void SetCamera(int t, int i)
-            {
-                if (ui != null) ui.Send(_ => _sim.SetCameraView(t, i), null); else _sim.SetCameraView(t, i);
-            }
-            string? err = await Task.Run(() => _popout.EnsureAsync(false, ReadCamera, SetCamera));
-            if (IsDisposed) return;
-            // the pop-out procedure took the foreground; give it back to this window
-            Activate();
-            _display.Focus();
-            if (err != null) { SetStatus(err); _announcer.AnnounceImmediate(err); }
-            else SetStatus($"{_device} connected");
+            _wanting = true;
+            _wantedGauge = _profile.Gauge;
+            _displays.Want(_wantedGauge, this, RefreshMs);
         }
-        catch (Exception ex)
+        _status.Restart(NowMs());
+        _availability.Opened();
+        StartReadBacksAfresh();
+        RefreshNow();
+        _timer.Start();
+    }
+
+    private void StopWanting()
+    {
+        _timer.Stop();
+        _lineWatch = null;
+        if (!_wanting) return;
+        _wanting = false;
+        _displays.Release(_wantedGauge, this);
+    }
+
+    /// <summary>A new open or a new side: its first page is not a title change, and its scratchpad line is read silently first.</summary>
+    private void StartReadBacksAfresh()
+    {
+        _scratch.Reset();
+        _lastTitle = "";
+        _lineWatch = null;
+        _rowBeforeGap = null;
+        _reseedScratchAt = null;
+    }
+
+    // ---- sides ----
+
+    private void OnSideSelected()
+    {
+        bool firstOfficer = _side.SelectedIndex == 1;
+        if (firstOfficer == _profile.FirstOfficer) return;
+        _profile = _profile.ForSide(firstOfficer);
+        SetTitle();
+        if (_wanting)
         {
-            _log.Error($"pop-out failed: {ex}");
-            SetStatus($"Could not open the {_device} pop-out.");
+            _displays.Release(_wantedGauge, this);
+            _wantedGauge = _profile.Gauge;
+            _displays.Want(_wantedGauge, this, RefreshMs);
         }
-        finally { _ensuring = false; }
+        _status.Restart(NowMs());
+        StartReadBacksAfresh();
+        // Off the selector, say which MCDU this is; on it the screen reader has just read the new item ([CORE-7]).
+        if (!_side.Focused) _announcer.Announce($"{SideName} {_profile.Device}");
+        if (Visible) RefreshNow();
+    }
+
+    // ---- the page ----
+
+    /// <summary>Reads the side's display and shows it (the timer). UI thread. After the window is disposed it does nothing.</summary>
+    internal void RefreshNow()
+    {
+        if (IsDisposed || Disposing) return;
+        long now = NowMs();
+        var gauge = _profile.Gauge;
+        var frame = _displays.Latest(gauge);
+        var screen = frame is { Complete: true } ? A330McduScreen.From(frame) : null;
+        if (frame is { Complete: true } && screen is null && !_offGridLogged)
+        {
+            _offGridLogged = true;
+            _log.Warn($"{A330GaugeNames.Name(gauge)}: a complete frame with a text off the MCDU's grid; the status row is shown");
+        }
+
+        if (frame is not null && screen is { HiddenRowsLeftOut: true })
+        {
+            _status.Restart(now);
+            var page = A330McduLines.From(screen);
+            SetStatus(A330McduStatus.PageRow(gauge, frame.Texts.Any(t => t.Colour is not null)));
+            ShowPage(page);
+            Speak(_availability.Next(null, pageShown: true));
+            FeedScratchpad(page, now);
+            FollowLineKey(page, now);
+            return;
+        }
+
+        string row;
+        string? reason = null;
+        if (screen is not null)
+        {
+            // Read, but rows the MCDU does not show may be in it (spec M15): no page rows, and nothing said of them.
+            _status.Restart(now);
+            row = A330McduStatus.ListRowsNotReadRow;
+        }
+        else (row, reason) = _status.Row(_displays.State, _displays.StatusText, _displays.Newest(gauge), gauge, now);
+        SetStatus(row);
+        ShowStatusRow(row);
+        Speak(_availability.Next(reason, pageShown: false));
+        if (_lineWatch?.Expired(now) == true) _lineWatch = null;
     }
 
     private void SetStatus(string s)
     {
-        if (_status.Text != s) _status.Text = s;
+        if (_statusBox.Text != s) _statusBox.Text = s;
     }
 
-    private async Task PollAsync()
+    private void ShowPage(IReadOnlyList<A330McduLine> page)
     {
-        if (_reading || _ensuring || !Visible) return;
-        _reading = true;
-        try
+        var listing = CduLineText.Listing(page);
+        bool afterGap = _shownPage is null;
+        int saved = _display.SelectedIndex;
+        DisplayList.UpdateInPlace(_display, listing);
+        _shownPage = page;
+
+        string title = listing[0];
+        int target;
+        if (title.Length > 0 && title != _lastTitle)
         {
-            var lines = await Task.Run(() =>
-            {
-                var frame = _popout.Capture();
-                return frame == null ? null : _reader.Read(frame.Lum, frame.Width, frame.Height, _profile.ReadColour ? frame.Rgb : null);
-            });
-            if (IsDisposed) return;
-            if (lines == null)
-            {
-                SetStatus($"{_device} pop-out not found. Close and reopen this window to pop it out again.");
-                return;
-            }
-            _lastFrameUtc = DateTime.UtcNow;
-            foreach (var l in lines)
-                foreach (var c in l.Chars.Where(c => c.Uncertain))
-                {
-                    // once per distinct line: the screen is re-read ~4 times a second and an unchanged
-                    // line logged the same warning every poll, burying everything else in the channel
-                    string what = $"'{c.Text}' row {l.Row}: '{l.Text.Trim()}'";
-                    if (_loggedUncertain.Add(what))
-                        _log.Warn($"uncertain glyph '{c.Text}' d={c.Distance:0.000} row {l.Row}: '{l.Text.Trim()}'");
-                }
-            if (_loggedUncertain.Count > 500) _loggedUncertain.Clear();
-            var rows = lines.Select(l => _profile.ReadColour ? CduLineText.WithColour(l) : Tidy(l.Text)).ToArray();
-            bool anyText = rows.Any(r => r.Length > 0);
-            SetStatus(anyText ? $"{_device} connected" : $"{_device} connected - the screen is blank (aircraft unpowered?)");
-            Render(rows);
-            var said = _scratch.OnPoll(rows[A330CduScreenReader.Rows - 1], DateTime.UtcNow);
-            if (said != null) _announcer.Announce(said);
+            // Moving the focused list to the title row makes the screen reader read it; announce only when that will
+            // not happen (focus elsewhere, or already on row 0), never both.
+            bool selectionSpeaks = _display.Focused && saved != 0 && _display.Items.Count > 0;
+            if (_lastTitle.Length > 0 && !selectionSpeaks)
+                Speak(title.Contains("TMPY", StringComparison.Ordinal) ? title + ", temporary flight plan" : title);
+            _lastTitle = title;
+            target = 0;
         }
-        catch (Exception ex)
-        {
-            _log.Error($"poll failed: {ex.Message}");
-        }
-        finally { _reading = false; }
+        else target = afterGap && _rowBeforeGap is int before ? before : Math.Max(saved, 0);
+        _rowBeforeGap = null;
+        if (_display.Items.Count == 0) return;
+        target = Math.Min(target, _display.Items.Count - 1);
+        if (_display.SelectedIndex != target) _display.SelectedIndex = target;
     }
+
+    private void ShowStatusRow(string row)
+    {
+        if (_shownPage is not null && _display.SelectedIndex >= 0) _rowBeforeGap = _display.SelectedIndex;
+        _shownPage = null;
+        DisplayList.UpdateInPlace(_display, [row]);
+        if (_display.SelectedIndex != 0) _display.SelectedIndex = 0;
+    }
+
+    /// <summary>The page's scratchpad line read back when it changes without the pilot typing; held while an entry is
+    /// typed, and after a confirmed one started afresh once the page's frames have caught up, so what was just said is
+    /// not said again.</summary>
+    private void FeedScratchpad(IReadOnlyList<A330McduLine> page, long now)
+    {
+        if (_typing) return;
+        if (_reseedScratchAt is long at)
+        {
+            if (now < at) return;
+            _reseedScratchAt = null;
+            _scratch.Reset();
+        }
+        string row = page[A330McduLines.ScratchpadRow].Text.Trim();
+        Speak(_scratch.OnPoll(row, Utc(now)));
+    }
+
+    private void FollowLineKey(IReadOnlyList<A330McduLine> page, long now)
+    {
+        if (_lineWatch is null) return;
+        var (over, say) = _lineWatch.OnPage(page, now);
+        if (over) _lineWatch = null;
+        Speak(say);
+    }
+
+    /// <summary>A refresh's sentence, said only while the window is shown.</summary>
+    private void Speak(string? text)
+    {
+        if (text is not null && _wanting && !IsDisposed) _announcer.Announce(text);
+    }
+
+    private static DateTime Utc(long ms) => new(Math.Max(0, ms) * TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
 
     /// <summary>Collapses the wide layout gaps between a line's left and right fields to a
     /// readable separator, keeping single word spaces.</summary>
@@ -222,86 +398,174 @@ public sealed class IniA330CduForm : Form
         return System.Text.RegularExpressions.Regex.Replace(t, " {3,}", "   ");
     }
 
-    private void Render(string[] rows)
-    {
-        if (rows.SequenceEqual(_rows)) return;
-        _rows = rows;
-        var lines = new List<string> { rows[0] };
-        for (int pair = 0; pair < 6; pair++)
-        {
-            string label = rows[1 + pair * 2], data = rows[2 + pair * 2];
-            if (label.Length > 0) lines.Add("   " + label);
-            lines.Add(data.Length > 0 ? $"{pair + 1}: {data}" : $"{pair + 1}:");
-        }
-        lines.Add(rows[13]);
-        int saved = _display.SelectedIndex;
-        DisplayList.UpdateInPlace(_display, lines);
-        string title = rows[0];
-        if (title.Length > 0 && title != _lastTitle)
-        {
-            // Moving the focused list to the title row makes the screen reader read it; announce only
-            // when that will not happen (focus elsewhere, or already on row 0), never both.
-            bool selectionSpeaks = _display.Focused && saved != 0 && _display.Items.Count > 0;
-            if (_lastTitle.Length > 0 && !selectionSpeaks) _announcer.Announce(title);
-            _lastTitle = title;
-            if (_display.Items.Count > 0) _display.SelectedIndex = 0;
-        }
-        else if (saved >= 0 && saved < _display.Items.Count)
-            _display.SelectedIndex = saved;
-    }
-
     // ---------------- keys ----------------
 
-    private bool Write(string key)
+    private bool WritePressFlag(string flag)
     {
         if (!_sim.CalcWriteCanLand)
         {
-            // keys are sent from a pool thread; the announcer speaks only from the UI thread
-            string msg = $"{_device} keys unavailable: the MobiFlight module is not responding.";
-            try
-            {
-                if (InvokeRequired) BeginInvoke(() => _announcer.AnnounceImmediate(msg));
-                else _announcer.AnnounceImmediate(msg);
-            }
-            catch (InvalidOperationException) { }
+            _announcer.AnnounceImmediate($"{_profile.Device} keys unavailable: the MobiFlight module is not responding.");
             return false;
         }
-        _sim.ExecuteCalculatorCode($"{Interlocked.Increment(ref _seq)} 0 * 1 (>L:{_keyPrefix}{key})");
+        _sim.ExecuteCalculatorCode($"{Interlocked.Increment(ref _seq)} 0 * 1 (>L:{flag})");
         return true;
     }
 
-    private void Press(string key)
+    private bool Send(CduFormProfile profile, string key)
     {
-        _ = Task.Run(async () =>
+        if (!SendPressFlag(profile.KeyPrefix + key)) return false;
+        _lastKeyMs = NowMs();
+        return true;
+    }
+
+    /// <summary>Waits until <see cref="KeyGapMs"/> have passed since the last key.</summary>
+    private async Task PaceAsync()
+    {
+        if (_lastKeyMs is not long last) return;
+        long wait = KeyGapMs - (NowMs() - last);
+        if (wait > 0) await Delay((int)wait);
+    }
+
+    private static int? LineOf(string key) =>
+        key.Length == 5 && key.StartsWith("LSK", StringComparison.Ordinal) && key[3] is >= '1' and <= '6' && key[4] is 'L' or 'R'
+            ? key[3] - '0'
+            : null;
+
+    private void Press(string key) => _ = PressAsync(key);
+
+    private async Task PressAsync(string key)
+    {
+        var profile = _profile;   // the side the key was pressed on
+        try
         {
             await _keyGate.WaitAsync();
-            try { Write(key); await Task.Delay(KeyGapMs); }
+            try
+            {
+                if (IsDisposed) return;
+                await PaceAsync();
+                if (IsDisposed || !Send(profile, key)) return;
+                if (LineOf(key) is int line && _shownPage is { } page && ReferenceEquals(profile, _profile))
+                    _lineWatch = new A330McduLineKeyWatch(line, page, NowMs());
+            }
             finally { _keyGate.Release(); }
-        });
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"key {key} failed: {ex.Message}");
+        }
     }
 
     private void Clear()
     {
-        _scratch.SuppressUntil = DateTime.UtcNow.AddMilliseconds(400);
+        _scratch.SuppressUntil = Utc(NowMs() + 400);
         Press("CLR");
     }
 
-    private async Task TypeAsync(string text)
+    /// <summary>Types <paramref name="text"/> on the MCDU of the side shown, confirmed from its typed line when the
+    /// reader gives one. UI thread.</summary>
+    internal async Task TypeAsync(string text)
     {
-        var keys = text.ToUpperInvariant().Select(_profile.KeyForChar).Where(k => k != null).ToList();
-        if (keys.Count == 0) return;
-        _scratch.SuppressUntil = DateTime.UtcNow.AddMilliseconds(keys.Count * KeyGapMs + 600);
-        await _keyGate.WaitAsync();
+        var profile = _profile;
         try
         {
-            foreach (var k in keys) { if (!Write(k!)) break; await Task.Delay(KeyGapMs); }
+            await _keyGate.WaitAsync();
+            _typing = true;
+            try
+            {
+                string? pad = _displays.McduScratchpad(profile.FirstOfficer);
+                var keys = profile.KeysToType(text, pad ?? "");
+                if (keys.Count == 0) return;
+                if (pad is null) await TypeUnconfirmedAsync(profile, keys);
+                else await TypeConfirmedAsync(profile, keys);
+            }
+            finally
+            {
+                _typing = false;
+                _keyGate.Release();
+            }
         }
-        finally { _keyGate.Release(); }
-        // the scratchpad read-back (CduScratchpadAnnouncer) speaks what the CDU now shows
+        catch (Exception ex)
+        {
+            _log.Error($"typing failed: {ex.Message}");
+        }
     }
+
+    /// <summary>No typed line from the reader: every key at today's pace, then the page's own read-back.</summary>
+    private async Task TypeUnconfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys)
+    {
+        foreach (var k in keys)
+        {
+            await PaceAsync();
+            if (IsDisposed || !Send(profile, k.Key)) return;
+        }
+        _scratch.SuppressUntil = Utc(NowMs() + TypedEchoMs);
+        _announcer.Announce($"Typed {keys[^1].Expected}, not confirmed");
+    }
+
+    /// <summary>Each key once the one before has shown on the typed line; a key that does not show stops the entry.</summary>
+    private async Task TypeConfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys)
+    {
+        string? shown = null;
+        foreach (var k in keys)
+        {
+            await PaceAsync();
+            if (IsDisposed || !Send(profile, k.Key)) return;
+            (bool landed, shown) = await ShowsAsync(profile.FirstOfficer, k.Expected, NowMs());
+            if (IsDisposed) return;
+            if (!landed)
+            {
+                _reseedScratchAt = NowMs() + TypedEchoMs;
+                _announcer.Announce($"Missed {k.Key}. {PadWords(shown)}");
+                return;
+            }
+        }
+        _reseedScratchAt = NowMs() + TypedEchoMs;
+        _announcer.Announce(shown!);
+    }
+
+    /// <summary>Polls the typed line until it is <paramref name="expected"/>, for up to <see cref="KeyShowsWithinMs"/>.</summary>
+    private async Task<(bool Landed, string? Pad)> ShowsAsync(bool firstOfficer, string expected, long sentAt)
+    {
+        while (true)
+        {
+            string? pad = _displays.McduScratchpad(firstOfficer);
+            if (pad == expected) return (true, pad);
+            if (NowMs() - sentAt >= KeyShowsWithinMs || IsDisposed) return (false, pad);
+            await Delay(KeyPollMs);
+        }
+    }
+
+    private static string PadWords(string? pad) => pad switch
+    {
+        null => "Scratchpad not read",
+        "" => "Scratchpad empty",
+        _ => "Scratchpad: " + pad,
+    };
+
+    /// <summary>A key as the message loop hands it to the window (its key handler); for the tests.</summary>
+    internal void HandleKey(KeyEventArgs e) => Form_KeyDown(this, e);
 
     private void Form_KeyDown(object? sender, KeyEventArgs e)
     {
+        // Ctrl+Shift+L / Ctrl+Shift+R: switch side from anywhere in the window, the selector included (the Fenix's
+        // convention). Setting the selector runs its change handler, which says the side; the side already shown fires
+        // no change, so it is confirmed here (off the selector only): silence would sound like a dropped key.
+        if (FenixMCDUForm.SideShortcut.For(e.KeyCode, e.Control, e.Shift, e.Alt) is int side)
+        {
+            int index = side == FenixMcduSides.Right ? 1 : 0;
+            if (index == _side.SelectedIndex)
+            {
+                if (!_side.Focused) _announcer.Announce($"{SideName} {_profile.Device}");
+            }
+            else _side.SelectedIndex = index;
+            Handled(e);
+            return;
+        }
+
+        // The selector keeps its own keyboard interface (Alt+Up/Down and F4 open its list, a letter picks an item).
+        if (ActiveControl == _side && Md11McduForm.KeyRouting.ComboBoxNeedsKey(e.KeyCode, e.Alt, e.Control, e.Shift, _side.DroppedDown))
+            return;
+
         bool alt = SettingsManager.Current.MCDUUseAlternateLSKKeys;
         string? key = null;
         if (alt)
@@ -350,10 +614,10 @@ public sealed class IniA330CduForm : Form
         }
     }
 
-    protected override void OnVisibleChanged(EventArgs e)
+    protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        base.OnVisibleChanged(e);
-        if (!Visible) _poll.Stop();
+        StopWanting();
+        base.OnFormClosed(e);
     }
 
     protected override void Dispose(bool disposing)
@@ -361,9 +625,8 @@ public sealed class IniA330CduForm : Form
         if (disposing && !_disposed)
         {
             _disposed = true;
-            _poll.Stop();
-            _poll.Dispose();
-            _keyGate.Dispose();
+            StopWanting();
+            _timer.Dispose();
         }
         base.Dispose(disposing);
     }
