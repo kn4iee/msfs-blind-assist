@@ -18,9 +18,10 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// <remarks>
 /// <para>The page. While the window is shown it wants its side's MCDU from the display reader
 /// (<see cref="IA330Displays.Want"/>, every 250 ms) and, on a 250 ms UI timer, lists the latest complete frame
-/// (<see cref="IA330Displays.Latest"/>) as its listing (<see cref="CduLineText.Listing"/>: the title, each label
-/// row, each data row "n: value", "Scratchpad: ..."), reconciled in place so the pilot keeps their row. With no
-/// complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or one
+/// (<see cref="IA330Displays.Latest"/>) as its listing (<see cref="CduLineText.Listing"/>: "Title: ..." with the page
+/// counter where the page draws one, each label row, each data row "n: value", a nameless F-PLN waypoint "unnamed",
+/// "Scratchpad: ...", as the Fenix and FlyByWire windows list a page), reconciled in place so the pilot keeps their
+/// row. With no complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or one
 /// that does not leave hidden rows out (spec M15), the list is one status row instead (<see cref="A330McduStatus"/>:
 /// the display windows' own words, or "List rows not read yet" for any complete frame that does not leave them out, on
 /// the grid or off it, as a list page whose hidden rows sit below the screen is). The status box above the list says
@@ -30,8 +31,11 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// Opening the window while the reader cannot read the MCDU: "A330 MCDU unavailable: &lt;reason&gt;", again only when
 /// the reason changes, and "MCDU ready" with the first page after it (spec D3; never an AI read). A new title, unless
 /// moving the focused list to it makes the screen reader read it; one that carries TMPY adds ", temporary flight plan",
-/// or, when the screen reader reads the title, the window says "Temporary flight plan" alone. After a line key with a
-/// page shown, what the pressed line now holds or "No change" (<see cref="A330McduLineKeyWatch"/>). The page's
+/// or, when the screen reader reads the title, the window says "Temporary flight plan" alone; the title is said
+/// without the list's "Title: ". After a line key with a page shown, what the pressed line now holds, or "No change"
+/// when nothing on the page changed within 1.5 s, or nothing when only other rows changed
+/// (<see cref="A330McduLineKeyWatch"/>). After AIRPORT with a page shown, the first waypoint of the F-PLN it moved to,
+/// once (<see cref="A330McduAirportWatch"/>). The page's
 /// scratchpad line, read back when it changes (two stable refreshes, <see cref="CduScratchpadAnnouncer"/>), without the
 /// F-PLN's slew arrows at its end (on the screen and listed, but no text on the scratchpad). A typed entry, confirmed
 /// from the MCDU's own typed line (<see cref="IA330Displays.McduScratchpad"/>), read from 150 ms after the key before
@@ -55,8 +59,9 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// Backspace CLR, Escape closes (hides) the window and gives the foreground back.</para>
 /// <para>Sides, as the Fenix window: a Left/Right selector after the status box, and Ctrl+Shift+L / Ctrl+Shift+R. A
 /// switch lets the old side's display go, wants the new one, switches the key prefix, starts the title and scratchpad
-/// read-backs afresh (the new side's first page is not a title change) and, off the selector, says "Left MCDU" or
-/// "Right MCDU"; the shortcut to the side already shown says it again.</para>
+/// read-backs afresh and, off the selector, says "Left MCDU" or "Right MCDU"; then, as the Fenix window does, the new
+/// side's page title (through the title path above) and its scratchpad line when it holds something, once. The
+/// shortcut to the side already shown says the side again. Opening the window says no title.</para>
 /// <para>Everything runs on the UI thread: the key writes, and the waits, which are awaited there
 /// ([SIM-20]). The window polls; it subscribes to no event of the displays.</para>
 /// </remarks>
@@ -103,6 +108,8 @@ public sealed class IniA330CduForm : Form
     private string _lastTitle = "";
     private int? _rowBeforeGap;                        // the pilot's row when a page gave way to the status row
     private A330McduLineKeyWatch? _lineWatch;
+    private A330McduAirportWatch? _airportWatch;
+    private bool _titleAfterSwitch;                    // a side switch: the new side's first title is said
     private string? _alreadySaid;                      // the typed line the window last said for an entry, until the next key
     private (string Message, long Until)? _clearing;   // CLR pressed on a message: said once its line no longer holds it
     private int _entryGeneration;                      // moves on when the window hides or switches side: an entry stops
@@ -258,18 +265,22 @@ public sealed class IniA330CduForm : Form
     {
         _timer.Stop();
         _lineWatch = null;
+        _airportWatch = null;
         _entryGeneration++;   // an entry in progress stops: hidden, closed or disposed
         if (!_wanting) return;
         _wanting = false;
         _displays.Release(_wantedGauge, this);
     }
 
-    /// <summary>A new open or a new side: its first page is not a title change, and its scratchpad line is read silently first.</summary>
+    /// <summary>A new open: its first page is not a title change, and its scratchpad line is read silently first (a
+    /// side switch then says both, <see cref="OnSideSelected"/>).</summary>
     private void StartReadBacksAfresh()
     {
         _scratch.Reset();
         _lastTitle = "";
+        _titleAfterSwitch = false;
         _lineWatch = null;
+        _airportWatch = null;
         _rowBeforeGap = null;
         _alreadySaid = null;
         _clearing = null;
@@ -292,7 +303,12 @@ public sealed class IniA330CduForm : Form
         }
         _status.Restart(NowMs());
         StartReadBacksAfresh();
-        // Off the selector, say which MCDU this is; on it the screen reader has just read the new item ([CORE-7]).
+        // The Fenix window's side switch: the new side's page title is said, through the title path as any new title,
+        // and its scratchpad line when it holds something: read back from an empty starting point, so a message waiting
+        // on that side is said once its line reads the same twice, and an empty line says nothing.
+        _titleAfterSwitch = true;
+        _scratch.OnPoll("", Utc(NowMs()));
+        // Off the selector, say which MCDU this is first; on it the screen reader has just read the new item ([CORE-7]).
         if (!_side.Focused) _announcer.Announce($"{SideName} {_profile.Device}");
         if (Visible) RefreshNow();
     }
@@ -322,6 +338,7 @@ public sealed class IniA330CduForm : Form
             Speak(_availability.Next(null, pageShown: true));
             FeedScratchpad(page, now);
             FollowLineKey(page, now);
+            FollowAirportKey(page, now);
             return;
         }
 
@@ -340,6 +357,7 @@ public sealed class IniA330CduForm : Form
         ShowStatusRow(row);
         Speak(_availability.Next(reason, pageShown: false));
         if (_lineWatch?.Expired(now) == true) _lineWatch = null;
+        if (_airportWatch?.Expired(now) == true) _airportWatch = null;
         if (_clearing is { } c && now > c.Until) _clearing = null;
     }
 
@@ -356,21 +374,23 @@ public sealed class IniA330CduForm : Form
         DisplayList.UpdateInPlace(_display, listing);
         _shownPage = page;
 
-        string title = listing[0];
+        string title = CduLineText.Title(page);   // as said: without the list's "Title: "
         int target;
         if (title.Length > 0 && title != _lastTitle)
         {
             // Moving the focused list to the title row makes the screen reader read it; announce only when that will
             // not happen (focus elsewhere, or already on row 0), never both. A temporary flight plan is said either way,
             // so a pilot knows INSERT is waiting: after the title, or alone when the screen reader reads the title.
+            // The first page of an open is not a title change; the first of a side switch is.
             bool selectionSpeaks = ScreenHasFocus() && saved != 0 && _display.Items.Count > 0;
             bool temporary = title.Contains("TMPY", StringComparison.Ordinal);
-            if (_lastTitle.Length > 0)
+            if (_lastTitle.Length > 0 || _titleAfterSwitch)
             {
                 if (!selectionSpeaks) Speak(temporary ? title + ", temporary flight plan" : title);
                 else if (temporary) Speak("Temporary flight plan");
             }
             _lastTitle = title;
+            _titleAfterSwitch = false;
             target = 0;
         }
         else target = afterGap && _rowBeforeGap is int before ? before : Math.Max(saved, 0);
@@ -436,6 +456,14 @@ public sealed class IniA330CduForm : Form
         if (_lineWatch is null) return;
         var (over, say) = _lineWatch.OnPage(page, now);
         if (over) _lineWatch = null;
+        Speak(say);
+    }
+
+    private void FollowAirportKey(IReadOnlyList<A330McduLine> page, long now)
+    {
+        if (_airportWatch is null) return;
+        var (over, say) = _airportWatch.OnPage(page, now);
+        if (over) _airportWatch = null;
         Speak(say);
     }
 
@@ -507,6 +535,8 @@ public sealed class IniA330CduForm : Form
                 if (IsDisposed || !Send(profile, key)) return;
                 if (LineOf(key) is int line && _shownPage is { } page && ReferenceEquals(profile, _profile))
                     _lineWatch = new A330McduLineKeyWatch(line, page, NowMs());
+                if (key == profile.AirportKey && _shownPage is { } shown && ReferenceEquals(profile, _profile))
+                    _airportWatch = new A330McduAirportWatch(shown, NowMs());
             }
             finally { _keyGate.Release(); }
         }

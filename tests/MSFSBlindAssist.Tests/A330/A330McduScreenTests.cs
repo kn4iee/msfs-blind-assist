@@ -82,12 +82,29 @@ public class A330McduScreenTests
         Assert.Equal("   AVAILABLE RUNWAYS", screen.Text(3));
     }
 
+    /// <summary>A text whose baseline sits <paramref name="row"/> rows down (a fraction: half a row off and the like).</summary>
+    private static A330Text At(int order, int col, double row, string text) =>
+        T(order, X(col), (float)(A330McduGeometry.Top + row * A330McduGeometry.RowPitch), text);
+
     [Fact]
-    public void A_text_half_a_row_off_takes_the_nearer_row()
+    public void A_page_counter_half_a_row_under_the_title_goes_on_the_title_row()
     {
+        // P/N XLOAD draws its "1/7" 0.54 of a row under the title: on the title line, at its own column, as the other
+        // MCDU windows show a page counter.
         var screen = A330McduScreen.From(Fixture("p03_xload.json"))!;
-        Assert.Equal("                     1/7", screen.Text(1));
-        Assert.Equal("       P/N XLOAD", screen.Text(0));
+        Assert.Equal("       P/N XLOAD     1/7", screen.Text(0));
+        Assert.Equal("", screen.Text(1));
+
+        // Every other text keeps the nearest row: a word half a row off, a counter 0.76 of a row down, a counter whose
+        // cells on the title row are taken.
+        var title = At(1, 7, 0, "P/N XLOAD");
+        Assert.Equal("                     ABC", A330McduScreen.From(Frame(title, At(2, 21, 0.54, "ABC")))!.Text(1));
+        Assert.Equal("                     1/7", A330McduScreen.From(Frame(title, At(2, 21, 0.76, "1/7")))!.Text(1));
+        var wide = At(1, 0, 0, "      P/N XLOAD STATUS X");
+        var taken = A330McduScreen.From(Frame(wide, At(2, 21, 0.54, "1/7")))!;
+        Assert.Equal("      P/N XLOAD STATUS X", taken.Text(0));
+        Assert.Equal("                     1/7", taken.Text(1));
+        Assert.Equal("       P/N XLOAD   12/14", A330McduScreen.From(Frame(title, At(2, 19, 0.7, "12/14")))!.Text(0));
         Assert.Equal(0, A330McduGeometry.Nearest(0.5));
         Assert.Equal(1, A330McduGeometry.Nearest(0.51));
     }

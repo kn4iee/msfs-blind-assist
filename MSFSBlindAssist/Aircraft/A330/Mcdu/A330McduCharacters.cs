@@ -9,6 +9,7 @@ namespace MSFSBlindAssist.Aircraft.A330.Mcdu;
 /// </summary>
 internal static class A330McduCharacters
 {
+    /// The code that draws an entry box; the box shows as "-", as the Fenix MCDU window shows its boxes (on a braille display).
     private const char BoxCode = 'o';
 
     /// What the window shows for the overfly mark (the code <c>c</c>): the Fenix MCDU window's triangle.

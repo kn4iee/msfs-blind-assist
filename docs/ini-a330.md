@@ -51,9 +51,11 @@ different aircraft built on the FlyByWire A32NX.
   25.85, nearest cell); a text starting off that grid refuses the page. Special codes show as one cell each
   (`A330McduCharacters`: box `-`, degree, arrows, overfly mark); a row keeps its 24 columns for braille; a greyed
   prompt reads "(unavailable)" (or "(inop)" where only that fits before the next field), and with no colours
-  nothing is marked. Typing waits for the MCDU's own typed line (600 ms a key at most, 150 ms pace); an FMS message
-  on the captain's scratchpad line is spoken with the window closed, the message alone as the A32NX speaks one
-  (Ctrl+M row "FMS messages"). While a frame does not leave the hidden list rows out (today's display reader does
+  nothing is marked. As in the Fenix and FlyByWire windows the first line reads `Title: ` and the title, with a page
+  counter drawn half a row under the title (P/N XLOAD's `1/7`) on it; after AIRPORT the window says the first
+  waypoint of the F-PLN it moved to, and an F-PLN waypoint row with no name reads `unnamed`. Typing waits for the
+  MCDU's own typed line (600 ms a key at most, 150 ms pace); an FMS message on the captain's scratchpad line is
+  spoken with the window closed, the message alone as the A32NX speaks one (Ctrl+M row "FMS messages"). While a frame does not leave the hidden list rows out (today's display reader does
   not yet), the window lists only "List rows not read yet" and no message is taken from the scratchpad line. There
   is no AI read of the MCDU. The pixel reader (`A330CduScreenReader`, `A330CduPopout`, `CduLayout`, the glyph file,
   `tools/a330-cdu-ocr`) is still in the tree, unused by the window, until the owner has checked the new window; it

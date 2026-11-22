@@ -33,7 +33,7 @@ public class A330McduLinesTests
 
     private static readonly string[] IniListing =
     {
-        "INIT        \U00002190\U00002192",
+        "Title: INIT        \U00002190\U00002192",
         "    CO RTE          FROM/TO",
         "1: ----------     ----/----",
         "   ALTN/CO RTE",
@@ -82,6 +82,11 @@ public class A330McduLinesTests
         var listing = CduLineText.Listing(A330McduLines.From(screen));
         Assert.Equal("Scratchpad:", listing[^1]);
         Assert.Equal("1:", listing[1]);
+        Assert.Equal("Title: A", listing[0]);   // the Fenix and FlyByWire windows' prefix
+
+        // An empty title row reads "Title:", as an empty scratchpad reads "Scratchpad:".
+        var untitled = A330McduScreen.From(new A330Frame(A330Gauge.McduCaptain, new[] { T(1, 0, 2, "A", null) }, true, 0, 0))!;
+        Assert.Equal("Title:", CduLineText.Listing(A330McduLines.From(untitled))[0]);
     }
 
     [Fact]
@@ -168,7 +173,12 @@ public class A330McduLinesTests
     public void No_row_with_its_prefix_passes_40_cells()
     {
         var all = new List<string>();
-        foreach (var name in Fixtures) all.AddRange(CduLineText.Listing(Lines(name)).Skip(1).Where(l => l.Length > 3 && !l.StartsWith("Scratchpad")));
+        foreach (var name in Fixtures)
+        {
+            var listing = CduLineText.Listing(Lines(name));
+            Assert.StartsWith("Title: ", listing[0]);   // the title line with its prefix counts too
+            all.AddRange(listing.Where(l => l.Length > 3 && !l.StartsWith("Scratchpad")));
+        }
         foreach (var line in new[]
         {
             Row((0, "<FM1", null), (15, "NAV B/UP>", 0.3f)),
@@ -193,5 +203,42 @@ public class A330McduLinesTests
         var listing = CduLineText.Listing(A330McduLines.From(A330McduScreen.From(plain)!));
         Assert.DoesNotContain(listing, l => l.Contains("(unavailable)") || l.Contains("(inop)"));
         Assert.Contains("3: <AIDS", listing);
+    }
+
+    /// <summary>An in-memory page titled <paramref name="title"/> (at column 1, as the F-PLN draws " FROM").</summary>
+    private static IReadOnlyList<A330McduLine> PageTitled(string title) => A330McduLines.From(A330McduScreen.From(new A330Frame(
+        A330Gauge.McduCaptain, new[]
+        {
+            T(1, 1, 0, title, null),
+            T(2, 8, 2, "0005  250/ 10000", null),     // line 1: no name, its time, speed and altitude
+            T(3, 0, 4, "RIGGZ", null), T(4, 8, 4, "0004", null),   // line 2: named
+            T(5, 7, 6, "X", null),                    // line 3: a character at column 7 only
+            T(6, 8, 3, "BRG292", null),               // a label row
+            T(7, 8, 12, "394", null),                 // line 6, the destination row
+        }, true, 0, 0))!);
+
+    [Fact]
+    public void A_flight_plan_row_with_no_name_reads_unnamed()
+    {
+        var fpln = PageTitled("FROM");
+        Assert.Equal("unnamed 0005  250/ 10000", fpln[2].Text);
+        Assert.Equal(8, fpln[2].Text.IndexOf("0005", StringComparison.Ordinal));   // no column moves
+        Assert.Contains("1: unnamed 0005  250/ 10000", CduLineText.Listing(fpln));
+        Assert.Equal("RIGGZ   0004", fpln[4].Text);
+        Assert.Equal("       X", fpln[6].Text);       // nothing from column 8 on: not a waypoint row
+        Assert.Equal("", fpln[8].Text);               // an empty row stays empty
+        Assert.Equal("        BRG292", fpln[3].Text); // a label row is never a waypoint
+        Assert.Equal("        394", fpln[12].Text);   // the destination row is not one of the five
+        Assert.Equal("unnamed 0005  250/ 10000", PageTitled("FROM TMPY")[2].Text);
+
+        // Another page's row with an empty start is the page's own.
+        Assert.Equal("        0005  250/ 10000", PageTitled("INIT")[2].Text);
+
+        // A captured F-PLN with its first waypoint's name taken away.
+        var frame = Fixture("p03_fpln1.json");
+        var nameless = frame with { Texts = frame.Texts.Where(t => t.Text != "KATL26L").ToList() };
+        var lines = A330McduLines.From(A330McduScreen.From(nameless)!);
+        Assert.Equal("unnamed ----  ---/ -----", lines[2].Text);
+        Assert.Equal(A330McduLines.From(A330McduScreen.From(frame)!)[2].Text.Length, lines[2].Text.Length);
     }
 }

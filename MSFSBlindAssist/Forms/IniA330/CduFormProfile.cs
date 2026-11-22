@@ -30,6 +30,10 @@ internal sealed record CduFormProfile(
     /// <summary>What the cockpit calls the unit, used in the window title and every status message.</summary>
     public string Device { get; init; } = "MCDU";
 
+    /// <summary>The key that moves the flight plan to its next airport (destination, alternate, origin); after it the
+    /// window says the flight plan's first waypoint (<see cref="MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduAirportWatch"/>).</summary>
+    public string AirportKey { get; init; } = "AIRPORT";
+
     /// <summary>
     /// The A330 MCDU of one side: the captain's (<c>INI_MCDU1_</c>, <see cref="A330Gauge.McduCaptain"/>) or the first
     /// officer's (<c>INI_MCDU2_</c>, <see cref="A330Gauge.McduFirstOfficer"/>); both sides have the same keys. Key
@@ -181,10 +185,18 @@ internal static class CduLineText
         return new string(chars).TrimEnd();
     }
 
-    /// <summary>The window's list from the 14 lines: title, each label row (indented, no number), each data row "n: value", then the scratchpad.</summary>
+    /// <summary>What the list's first line starts with, as in the Fenix and FlyByWire MCDU windows.</summary>
+    public const string TitlePrefix = "Title: ";
+
+    /// <summary>The page's title as the window says it: row 0 as listed, trimmed at both ends, its gaps kept, without
+    /// the list's <see cref="TitlePrefix"/>.</summary>
+    public static string Title(IReadOnlyList<MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine> lines) => ForWindow(lines[0]).Trim();
+
+    /// <summary>The window's list from the 14 lines: "Title: " and the title, each label row (indented, no number),
+    /// each data row "n: value", then the scratchpad.</summary>
     public static IReadOnlyList<string> Listing(IReadOnlyList<MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine> lines)
     {
-        var result = new List<string> { ForWindow(lines[0]).Trim() };
+        var result = new List<string> { (TitlePrefix + Title(lines)).TrimEnd() };
         for (int k = 1; k <= 6; k++)
         {
             string label = ForWindow(lines[2 * k - 1]);

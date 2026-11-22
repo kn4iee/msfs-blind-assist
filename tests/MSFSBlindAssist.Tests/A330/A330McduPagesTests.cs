@@ -19,7 +19,7 @@ public class A330McduPagesTests
     {
         yield return new object[] { "p03_initb.json", new[]
         {
-            "INIT FUEL PREDICTION \u2190\u2192",
+            "Title: INIT FUEL PREDICTION \u2190\u2192",
             "   TAXI           ZFW/ZFWCG",
             "1: 0.6          125.0/27.0",
             "   TRIP /TIME         BLOCK",
@@ -36,7 +36,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_data1.json", new[]
         {
-            "DATA INDEX   1/2 \u2190\u2192",
+            "Title: DATA INDEX   1/2 \u2190\u2192",
             "    POSITION",
             "1: <MONITOR",
             "    IRS",
@@ -52,7 +52,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_data2.json", new[]
         {
-            "DATA INDEX   2/2 \u2190\u2192",
+            "Title: DATA INDEX   2/2 \u2190\u2192",
             "                    STORED",
             "1: <WAYPOINTS    WAYPOINTS>",
             "                    STORED",
@@ -67,7 +67,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_status.json", new[]
         {
-            "A330-200",
+            "Title: A330-200",
             "    ENG",
             "1: CF6-80AE3",
             "    ACTIVE NAV DATA BASE",
@@ -83,7 +83,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_fpln1.json", new[]
         {
-            "FROM          MSF773 \u2190\u2192",
+            "Title: FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: KATL26L ----  ---/ -----",
             "    VRSTY3 BRG292    1NM",
@@ -100,7 +100,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_fpln2.json", new[]
         {
-            "FROM          MSF773 \u2190\u2192",
+            "Title: FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: RIVTT   ----  250/ -----",
             "    VRSTY3          40NM",
@@ -116,7 +116,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_fpln3.json", new[]
         {
-            "FROM          MSF773 \u2190\u2192",
+            "Title: FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: BANYA   ----  210/  7000",
             "    ALYNA4           0NM",
@@ -132,7 +132,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_latrev.json", new[]
         {
-            "LAT REV FROM RIGGZ",
+            "Title: LAT REV FROM RIGGZ",
             "      33\u00B034.6N/084\u00B041.8W",
             "1:                FIX INFO>",
             "2: <OFFSET",
@@ -146,7 +146,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_sids.json", new[]
         {
-            "DEPARTURES FROM KATL \u2190\u2192",
+            "Title: DEPARTURES FROM KATL \u2190\u2192",
             "    RWY      SID     TRANS",
             "1: 26L      -----     -----",
             "   SIDS   AVAILABLE   TRANS",
@@ -159,7 +159,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_perfto.json", new[]
         {
-            "TAKE OFF RWY 26L",
+            "Title: TAKE OFF RWY 26L",
             "    V1  FLP RETR        RWY",
             "1: 141    F=147         26L",
             "    VR  SLT RETR T.O SHIFT",
@@ -176,7 +176,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_prog.json", new[]
         {
-            "TO MSF773",
+            "Title: TO MSF773",
             "    CRZ      OPT    REC MAX",
             "1:  FL330   FL402    FL415",
             "2: <REPORT",
@@ -191,7 +191,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_radnav.json", new[]
         {
-            "RADIO NAV",
+            "Title: RADIO NAV",
             "   VOR1/FREQ      VOR2/FREQ",
             "1:  GSU/116.90  GSU/116.90",
             "   CRS                  CRS",
@@ -207,7 +207,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_fuelpred.json", new[]
         {
-            "FUEL PRED",
+            "Title: FUEL PRED",
             "    AT        UTC      EFOB",
             "1: KMCO      1716      51.2",
             "2: KTPA      1902      47.5",
@@ -223,7 +223,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_init.json", new[]
         {
-            "INIT        \u2190\u2192",
+            "Title: INIT        \u2190\u2192",
             "    CO RTE          FROM/TO",
             "1: ----------     ----/----",
             "   ALTN/CO RTE",
@@ -239,7 +239,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_menu.json", new[]
         {
-            "MCDU MENU",
+            "Title: MCDU MENU",
             "                    SELECT (unavailable)",
             "1: <FM1           NAV B/UP>(unavailable)",
             "2: <ATSU",
@@ -251,7 +251,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_fpln.json", new[]
         {
-            "FROM          MSF773 \u2190\u2192",
+            "Title: FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: (LIM)   0003  250/ 10000",
             "    VRSTY3           4NM",
@@ -268,7 +268,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_departures.json", new[]
         {
-            "DEPARTURES FROM KATL \u2190\u2192",
+            "Title: DEPARTURES FROM KATL \u2190\u2192",
             "    RWY      SID     TRANS",
             "1: ---      -----     -----",
             "      AVAILABLE RUNWAYS",
@@ -285,8 +285,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_xload.json", new[]
         {
-            "P/N XLOAD",
-            "                        1/7",
+            "Title: P/N XLOAD     1/7",   // the page counter half a row under the title, on the title line
             "1: FMS1 UPDATE",
             "                P/N STATUS",
             "2:                   PRINT*",

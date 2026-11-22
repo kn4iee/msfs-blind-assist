@@ -18,5 +18,8 @@ internal static class A330McduGeometry
 
     public static int ColumnOf(float x) => Nearest((x - Left) / (double)ColumnPitch);
 
-    public static int RowOf(float baseline) => Nearest((baseline - Top) / (double)RowPitch);
+    public static int RowOf(float baseline) => Nearest(RowPosition(baseline));
+
+    /// How many rows down a baseline sits, as a fraction (0 is the title row's baseline).
+    public static double RowPosition(float baseline) => (baseline - Top) / (double)RowPitch;
 }
