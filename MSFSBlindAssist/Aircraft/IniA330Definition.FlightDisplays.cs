@@ -30,6 +30,7 @@ public partial class IniA330Definition
     private ScreenReaderAnnouncer? _fmaAnnouncer;
     private readonly Dictionary<string, double> _fmaValues = new();
 
+    // Used outside this file too: Fcu (plan 05) and Readouts (plan 10) call Fv and CurrentFma; keep their signatures.
     // After a context reset (_fmaValues cleared) a flight load re-delivers only CHANGED vars, so an
     // unchanged one falls back to the cache rather than reading 0 until it next moves.
     private int Fv(string key) => _fmaValues.TryGetValue(key, out var v) ? (int)Math.Round(v)

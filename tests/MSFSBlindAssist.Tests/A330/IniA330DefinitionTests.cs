@@ -88,7 +88,7 @@ public class A330VariableReviewTests
     public void Batched_vars_do_not_share_an_underlying_name()
     {
         // The check VarNameCollisionTests makes on every aircraft in ComboLabelCollapseTests.AllAircraft
-        // ([VAR-7]); the A330 joins that list in a later task.
+        // ([VAR-7]), which the A330 is on. Kept so the A330's own failure names it; the count must not drop.
         var offenders = new IniA330Definition().GetVariables()
             .Where(kv => kv.Value.Type != SimVarType.Event
                          && kv.Value.UpdateFrequency == UpdateFrequency.Continuous

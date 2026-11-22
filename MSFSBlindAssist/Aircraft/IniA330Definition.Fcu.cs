@@ -63,6 +63,7 @@ public partial class IniA330Definition
         }
     }
 
+    // Also used by Readouts (plan 10).
     private bool SpeedManaged() => (_sim?.GetCachedVariableValue(A330SharedKeys.MSpdManaged) ?? 0) > 0.5;
 
     private string ApStatus()

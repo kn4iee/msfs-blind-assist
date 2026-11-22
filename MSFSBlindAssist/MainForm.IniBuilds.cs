@@ -10,7 +10,7 @@ public partial class MainForm
         SwitchAircraft(new IniA330Definition());
     }
 
-    /// <summary>Starts the A330's display readers unless it is not the A330 (plan 02 implements it in
-    /// MainForm.IniBuilds.Displays.cs; a no-op until then).</summary>
+    /// <summary>Starts the A330's display readers; a no-op unless the current aircraft is the A330 (plan 02 implements it in
+    /// MainForm.IniBuilds.Displays.cs; nothing happens until then).</summary>
     partial void StartIniA330Displays();
 }

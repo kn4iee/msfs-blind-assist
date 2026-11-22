@@ -26,6 +26,7 @@ public partial class IniA330Definition
     };
 
     /// <summary>The A330's flap lever (FS flight model: 4 handle positions after UP; 1+F is automatic).</summary>
+    // Also used by Readouts (plan 10).
     internal static readonly string[] FlapDetents = { "Flaps up", "Flaps 1", "Flaps 2", "Flaps 3", "Flaps full" };
 
     /// <summary>What INI_AUTOBRAKE_LEVEL reads for each autobrake setting (0 off, 1 LO, 2 MED, 3 MAX).

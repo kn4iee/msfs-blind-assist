@@ -65,7 +65,8 @@ public partial class IniA330Definition
     }
 
     /// <summary>A display window's press of a panel control: the panel's own write and nothing else. False
-    /// when the key is no control.</summary>
+    /// when the key is no control, or when its write is unhandled (every non-status map control has an event
+    /// or an rpn, so that does not occur today).</summary>
     internal bool PressFromWindow(string varKey, double value, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         if (!IsPanelControl(varKey) || !GetVariables().TryGetValue(varKey, out var def)) return false;
