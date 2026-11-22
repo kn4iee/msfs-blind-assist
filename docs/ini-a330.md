@@ -130,6 +130,46 @@ Brake, Engine Masters, ECAM, Weather Radar, Transponder and TCAS, Captain Radio 
 Audio). The FCU, Flight Modes, Landing Gear, Flaps and Speedbrake and Parking Brake panels are filled
 by the definition itself (`OWN_PANELS` in the generator); everything else comes from the map.
 
+## Displays
+
+The cockpit displays' text comes from the display reader, a separate program (`A330DisplayReader.exe`)
+placed beside the app and built from the team's private reference. Nothing in this repository reads the
+displays itself; the app only receives frames (`Aircraft/A330/Display/`, measured in
+`docs/a330/evidence/02-reader-client.md` while that folder exists).
+
+* **Lifetime.** `MainForm.IniBuilds.Displays.cs` starts it with the A330 (`StartDisplays`); a switch away
+  and the app's exit stop it (`StopReader`); a flight load or a dropped connection sends it `reset`
+  (`ResetReader(true)`). It runs without a window in a kill-on-close job, so it ends with the app even
+  on a crash, and each app instance has its own. If it exits by itself the client starts it again after
+  5 s, at most three times in five minutes, then reports `Failed`.
+* **Protocol** (`A330ReaderProtocol`, version 1): one JSON object a line on its standard input and
+  output. The app sends `hello`, `want` (a display and a refresh), `release`, `reset` and `quit`; the
+  reader sends its `hello` with its version (another version is `OutOfDate`), its state, frames and the
+  MCDU's scratchpad. A line the app cannot parse is dropped. The reader's standard error goes to
+  `a330-displays.log`.
+* **What consumers see** (`IniA330Definition.Displays`, an `IA330Displays`): a frame is a display's drawn
+  texts with positions, fonts and, once the reader gives them, colours (spec M14), marked complete or not,
+  drawn or not, and whether hidden list rows were left out (spec M15). `Latest` is the newest complete
+  frame no older than three refreshes; only it is shown or spoken. `Newest` is any frame, for "reading"
+  and "is off". Each owner `Want`s a display with a refresh (250 ms while a window shows it, 1000 ms in
+  the background) and `Release`s it; the reader is asked for the smallest. The reader reports `Running`
+  only once a display is wanted and found, so with nothing wanted the state stays `Starting`.
+* **States in the pilot's words** (`A330ReaderStatus`): "A330 displays starting" and "waiting for the
+  aircraft" pass and are never spoken; "unavailable: the display reader is not installed", "no access to
+  the simulator", "this simulator version is not recognised yet", "the display reader is out of date" and
+  "the display reader stopped" last. A lasting one is spoken once, 30 s after the aircraft became active
+  at the earliest, with "The MCDU window cannot read its screen." (`A330ReaderNotice`, through the
+  non-interrupting announce); "A330 displays ready" follows once if it then reads.
+* **The display window** (`Forms/IniA330/A330DisplayWindow.cs`), the base of every display window: the
+  list of `Rows(Latest)`, kept in place every refresh; without a complete frame one status row (the state's
+  words, "<Display> is off", "Reading the <display>", and after 30 s "The display reader cannot read the
+  <display>"); "Colours not read yet" and "List rows not read yet" above the rows for a window that needs
+  them; the cockpit controls under the list (`A330KeyRow`: a button or a list of positions, labelled with
+  the control's state, pressed through `PressFromWindow`). F5 refreshes, Escape closes; the window never
+  speaks.
+* **Tests** build on captured frames (`tests/MSFSBlindAssist.Tests/A330/Fixtures/p02_*.json`, each a
+  frame in the protocol's form and nothing else) through the replay source `A330ReplayDisplays`.
+
 ## Unverified (needs a flight)
 * FMA words for each mode number (`fma.log` has the raw values).
 * A/THR, AP1/AP2, LOC and APPR pulses do nothing on the ground — expected, but unproven in the air.
