@@ -317,7 +317,7 @@ The owner asked on 2026-11-21 for the A330 window's keys to be brought up to par
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** claimed
+- **Status:** in progress (Tasks 1 and 2 pushed)
 - **Claimed by:** kn4iee
 - **Worked by:** kn4iee, with Claude (subagent-driven development)
 - **Started:** 2026-11-22, from d191e9684 (the branch tip, plan 02 landed)
