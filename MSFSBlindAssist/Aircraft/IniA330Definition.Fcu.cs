@@ -81,21 +81,23 @@ public partial class IniA330Definition
         bool On(string key) => (sim.GetCachedVariableValue(key) ?? 0) > 0.5;
         Forms.IniA330.IniA330AutopilotWindow.Row R(string label, Func<string> state, string key)
             => new(label, state, () => PressAutopilot(sim, announcer, key));
-        yield return R("Autopilot &1", () => On("A330_AP1_ON") ? "engaged" : "off", "A330_AP1");
-        yield return R("Autopilot &2", () => On("A330_AP2_ON") ? "engaged" : "off", "A330_AP2");
-        yield return R("A/&THR", () => On("A330_ATHR_ON") ? "on" : "off", "A330_ATHR");
-        yield return R("L&OC", () => CurrentFma().Lateral.StartsWith("LOC") ? "active" : "", "A330_LOC");
-        yield return R("A&PPR", () => "", "A330_APPR");
-        yield return R("&Speed pull (selected)", () => SpeedManaged() ? "managed now" : "selected now", "A330_SPD_PULL");
-        yield return R("Speed push (&managed)", () => "", "A330_SPD_PUSH");
-        yield return R("&Heading pull (selected)", () => CurrentFma().Lateral, "A330_HDG_PULL");
-        yield return R("Heading push (&NAV)", () => "", "A330_HDG_PUSH");
-        yield return R("Altitude p&ull (open climb or descent)", () => CurrentFma().Vertical, "A330_ALT_PULL");
-        yield return R("&Altitude push (managed)", () => "", "A330_ALT_PUSH");
-        yield return R("&V/S pull", () => "", "A330_VS_PULL");
-        yield return R("V/S push (level off)", () => "", "A330_VS_PUSH");
-        yield return R("A&LT (hold this altitude)", () => "", AltButtonKey);
-        yield return new("&Read flight modes", () => "", () => announcer.AnnounceImmediate(CurrentFma().Summary()));
+        // The Fenix window's buttons first, in its order (the A330 has no EXPED or disconnect buttons),
+        // then the A330's own knob keys; no Alt access keys, as on the Fenix.
+        yield return R("AP1", () => On("A330_AP1_ON") ? "engaged" : "off", "A330_AP1");
+        yield return R("AP2", () => On("A330_AP2_ON") ? "engaged" : "off", "A330_AP2");
+        yield return R("ATHR", () => On("A330_ATHR_ON") ? "on" : "off", "A330_ATHR");
+        yield return R("APPR", () => "", "A330_APPR");
+        yield return R("LOC", () => CurrentFma().Lateral.StartsWith("LOC") ? "active" : "", "A330_LOC");
+        yield return R("Speed Push", () => "", "A330_SPD_PUSH");
+        yield return R("Speed Pull", () => SpeedManaged() ? "managed now" : "selected now", "A330_SPD_PULL");
+        yield return R("Heading Push", () => "", "A330_HDG_PUSH");
+        yield return R("Heading Pull", () => CurrentFma().Lateral, "A330_HDG_PULL");
+        yield return R("Altitude Push", () => "", "A330_ALT_PUSH");
+        yield return R("Altitude Pull", () => CurrentFma().Vertical, "A330_ALT_PULL");
+        yield return R("V/S Push", () => "", "A330_VS_PUSH");
+        yield return R("V/S Pull", () => "", "A330_VS_PULL");
+        yield return R("ALT", () => "", AltButtonKey);
+        yield return new("Read flight modes", () => "", () => announcer.AnnounceImmediate(CurrentFma().Summary()));
     }
 
     // =====================================================================
@@ -179,7 +181,7 @@ public partial class IniA330Definition
 
     internal List<ToggleButtonDef> BaroToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
     {
-        new("&Standard", () => IsStdMode(sim.GetCachedVariableValue("A330_BARO_MODE_FRESH")) ? "STD" : "QNH",
+        new("Standard",() => IsStdMode(sim.GetCachedVariableValue("A330_BARO_MODE_FRESH")) ? "STD" : "QNH",
             () => ToggleStandard(sim, announcer))
         {
             // ToggleStandard speaks its own closed-loop verdict (and a refusal): the dialog's 1.2 s
@@ -328,7 +330,7 @@ public partial class IniA330Definition
     /// <summary>The HDG-V/S / TRK-FPA key: a toggle on the aircraft, so one press flips it. The dialog
     /// it sits in was opened in one mode; the button shows the live one.</summary>
     private ToggleButtonDef TrkFpaToggle(SimConnectManager sim, ScreenReaderAnnouncer announcer) =>
-        new("&TRK/FPA", () => Fv(A330SharedKeys.MTrkfpa) == 1 ? "TRK FPA" : "HDG V/S", () =>
+        new("HDG/VS TRK/FPA", () => Fv(A330SharedKeys.MTrkfpa) == 1 ? "TRK FPA" : "HDG V/S", () =>
         {
             if (CanCalc(sim, announcer, "TRK-FPA")) Pulse(sim, "INI_FCU_HDG_VS_COMMAND");
         });
@@ -339,40 +341,40 @@ public partial class IniA330Definition
 
     internal List<ToggleButtonDef> HeadingToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
     {
-        new("Heading &pull (selected)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_HDG_PULL")) { SuppressStateAnnounce = () => true },
-        new("Heading pu&sh (NAV)", () => CurrentFma().Lateral == "NAV" ? "Active" : "Push", () => PressAutopilot(sim, announcer, "A330_HDG_PUSH")) { SuppressStateAnnounce = () => true },
-        new("&LOC", LocState, () => PressAutopilot(sim, announcer, "A330_LOC")),
+        new("Heading Push", () => CurrentFma().Lateral == "NAV" ? "Active" : "", () => PressAutopilot(sim, announcer, "A330_HDG_PUSH")) { SuppressStateAnnounce = () => true },
+        new("Heading Pull", () => "", () => PressAutopilot(sim, announcer, "A330_HDG_PULL")) { SuppressStateAnnounce = () => true },
         TrkFpaToggle(sim, announcer),
+        new("LOC", LocState, () => PressAutopilot(sim, announcer, "A330_LOC")),
     };
 
     internal List<ToggleButtonDef> SpeedToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
     {
-        new("&Selected (pull)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PULL")),
-        new("&Managed (push)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PUSH")),
-        new("SPD/MA&CH", () => Fv(A330SharedKeys.MMach) == 1 ? "Mach" : "Knots",
+        new("Speed Push", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PUSH")),
+        new("Speed Pull", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PULL")),
+        new("SPD/MACH", () => Fv(A330SharedKeys.MMach) == 1 ? "Mach" : "Knots",
             () => SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", Fv(A330SharedKeys.MMach) == 1 ? 0 : 1)),
-        new("A/&THR", () => On(sim, "A330_ATHR_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_ATHR")),
+        new("ATHR", () => On(sim, "A330_ATHR_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_ATHR")),
     };
 
     internal List<ToggleButtonDef> AltitudeToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
     {
-        new("Altitude p&ull (open climb or descent)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_ALT_PULL")) { SuppressStateAnnounce = () => true },
-        new("Altitude pu&sh (managed)", () => "Push", () => PressAutopilot(sim, announcer, "A330_ALT_PUSH")) { SuppressStateAnnounce = () => true },
-        new("&ALT (hold the current altitude)", () => CurrentFma().Vertical == "ALT" ? "Active" : "Press", () => PressAutopilot(sim, announcer, AltButtonKey)) { SuppressStateAnnounce = () => true },
-        new("&Knob steps (100 or 1000 feet)", () => (sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5 ? "100 feet" : "1000 feet",
+        new("Altitude Push", () => "", () => PressAutopilot(sim, announcer, "A330_ALT_PUSH")) { SuppressStateAnnounce = () => true },
+        new("Altitude Pull", () => "", () => PressAutopilot(sim, announcer, "A330_ALT_PULL")) { SuppressStateAnnounce = () => true },
+        new("ALT", () => CurrentFma().Vertical == "ALT" ? "Active" : "", () => PressAutopilot(sim, announcer, AltButtonKey)) { SuppressStateAnnounce = () => true },
+        new("Knob steps (100 or 1000 feet)", () => (sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5 ? "100 feet" : "1000 feet",
             () => SetInputEvent(sim, announcer, "Altitude knob steps", "AIRLINER_MCU_ALTSELECT", AltStepInput(!((sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5)))),
-        new("M&etric altitude", () => On(sim, "A330_METRIC") ? "On" : "Off",
+        new("Metric altitude",() => On(sim, "A330_METRIC") ? "On" : "Off",
             () => SetInputEvent(sim, announcer, "Metric altitude", "AIRLINER_METRIC", On(sim, "A330_METRIC") ? 0 : 1)),
-        new("AP &1", () => On(sim, "A330_AP1_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP1")),
-        new("AP &2", () => On(sim, "A330_AP2_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP2")),
+        new("AP1", () => On(sim, "A330_AP1_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP1")),
+        new("AP2",() => On(sim, "A330_AP2_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP2")),
     };
 
     internal List<ToggleButtonDef> VsToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
     {
-        new("V/S p&ull (engage)", () => "Pull", () => PressAutopilot(sim, announcer, "A330_VS_PULL")) { SuppressStateAnnounce = () => true },
-        new("V/S pu&sh (level off)", () => "Push", () => PressAutopilot(sim, announcer, "A330_VS_PUSH")) { SuppressStateAnnounce = () => true },
+        new("V/S Push", () => "", () => PressAutopilot(sim, announcer, "A330_VS_PUSH")) { SuppressStateAnnounce = () => true },
+        new("V/S Pull", () => "", () => PressAutopilot(sim, announcer, "A330_VS_PULL")) { SuppressStateAnnounce = () => true },
         TrkFpaToggle(sim, announcer),
-        new("A&PPR", ApprState, () => PressAutopilot(sim, announcer, "A330_APPR")),
+        new("APPR",ApprState, () => PressAutopilot(sim, announcer, "A330_APPR")),
     };
 
     private void ShowHeadingDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
@@ -389,7 +391,7 @@ public partial class IniA330Definition
                 string word = set.Alt ? "track" : "heading";
                 SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, v => $"{word} {((int)Math.Round(v) % 360 + 360) % 360:000}", set.Tolerance);
             });
-        dlg.ShowCancelButton = false;
+        dlg.ShowCancelButton = true;   // closes and sends nothing (a value is sent only by Enter in the box)
         dlg.Show(parent);
     }
 
@@ -423,7 +425,7 @@ public partial class IniA330Definition
                     SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", A330SharedKeys.FcuSpd, wantMach ? Math.Round(v, 2) : Math.Round(v),
                         s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
             });
-        dlg.ShowCancelButton = false;
+        dlg.ShowCancelButton = true;
         dlg.Show(parent);
     }
 
@@ -438,7 +440,7 @@ public partial class IniA330Definition
                 if (TryParseAltitude(input, out int a))
                     SetAndConfirm(sim, announcer, "INI_ALTITUDE_DIAL", A330SharedKeys.FcuAlt, Math.Round(a / 100.0) * 100, v => $"altitude {v:0} feet");
             });
-        dlg.ShowCancelButton = false;
+        dlg.ShowCancelButton = true;
         dlg.Show(parent);
     }
 
@@ -458,7 +460,7 @@ public partial class IniA330Definition
                 if (set.Alt) SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), set.Tolerance);
                 else SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => $"vertical speed {x:0} feet per minute", set.Tolerance);
             });
-        dlg.ShowCancelButton = false;
+        dlg.ShowCancelButton = true;
         dlg.Show(parent);
     }
 

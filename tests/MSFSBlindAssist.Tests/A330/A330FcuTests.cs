@@ -12,17 +12,75 @@ namespace MSFSBlindAssist.Tests;
 public class A330FcuTests
 {
     [Fact]
-    public void Autopilot_window_rows_have_distinct_access_keys()
+    public void No_A330_FCU_window_label_carries_an_access_key()
     {
         var def = new IniA330Definition();
         var sim = new SimConnectManager(IntPtr.Zero);
-        var keys = def.AutopilotRows(sim, null!)
-            .Select(r => r.Label)
-            .Where(l => l.Contains('&'))
-            .Select(l => char.ToUpperInvariant(l[l.IndexOf('&') + 1]))
-            .ToList();
-        var dups = keys.GroupBy(k => k).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
-        Assert.True(dups.Count == 0, "shared access keys: " + string.Join(", ", dups));
+        var labels = def.AutopilotRows(sim, null!).Select(r => r.Label)
+            .Concat(def.HeadingToggles(sim, null!).Select(t => t.Label))
+            .Concat(def.SpeedToggles(sim, null!).Select(t => t.Label))
+            .Concat(def.AltitudeToggles(sim, null!).Select(t => t.Label))
+            .Concat(def.VsToggles(sim, null!).Select(t => t.Label))
+            .Concat(def.BaroToggles(sim, null!).Select(t => t.Label))
+            .Where(l => l.Contains('&')).ToList();
+        Assert.True(labels.Count == 0, "labels with an Alt key: " + string.Join(", ", labels));
+    }
+
+    [Fact]
+    public void The_value_windows_list_the_Fenix_buttons_first_then_the_A330_extras()
+    {
+        var def = new IniA330Definition();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        Assert.Equal(new[] { "Heading Push", "Heading Pull", "HDG/VS TRK/FPA", "LOC" },
+            def.HeadingToggles(sim, null!).Select(t => t.Label));
+        Assert.Equal(new[] { "Speed Push", "Speed Pull", "SPD/MACH", "ATHR" },
+            def.SpeedToggles(sim, null!).Select(t => t.Label));
+        Assert.Equal(new[] { "Altitude Push", "Altitude Pull", "ALT", "Knob steps (100 or 1000 feet)", "Metric altitude", "AP1", "AP2" },
+            def.AltitudeToggles(sim, null!).Select(t => t.Label));
+        Assert.Equal(new[] { "V/S Push", "V/S Pull", "HDG/VS TRK/FPA", "APPR" },
+            def.VsToggles(sim, null!).Select(t => t.Label));
+    }
+
+    [Fact]
+    public void The_Ctrl_P_rows_start_with_the_Fenix_buttons_then_the_A330_extras()
+    {
+        var def = new IniA330Definition();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        Assert.Equal(new[]
+        {
+            "AP1", "AP2", "ATHR", "APPR", "LOC",
+            "Speed Push", "Speed Pull", "Heading Push", "Heading Pull", "Altitude Push", "Altitude Pull",
+            "V/S Push", "V/S Pull", "ALT", "Read flight modes",
+        }, def.AutopilotRows(sim, null!).Select(r => r.Label));
+    }
+
+    [Fact]
+    public void A_button_with_only_a_constant_state_shows_its_name_alone()
+    {
+        var def = new IniA330Definition();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        var all = def.HeadingToggles(sim, null!).Concat(def.SpeedToggles(sim, null!))
+            .Concat(def.AltitudeToggles(sim, null!)).Concat(def.VsToggles(sim, null!)).ToList();
+        foreach (var name in new[] { "Heading Pull", "Altitude Push", "Altitude Pull", "ALT", "V/S Push", "V/S Pull" })
+            Assert.Equal("", all.Single(t => t.Label == name).GetCurrentState());
+        // Heading Push has no state unless NAV is the lateral mode; with nothing read it has none
+        Assert.Equal("", all.Single(t => t.Label == "Heading Push").GetCurrentState());
+        // real states stay
+        Assert.Equal("Off", all.Single(t => t.Label == "AP1").GetCurrentState());
+        Assert.Equal("Off", all.Single(t => t.Label == "ATHR").GetCurrentState());
+        Assert.Equal("Knots", all.Single(t => t.Label == "SPD/MACH").GetCurrentState());
+        Assert.Equal("Selected", all.Single(t => t.Label == "Speed Pull").GetCurrentState());
+        Assert.Equal("Selected", all.Single(t => t.Label == "Speed Push").GetCurrentState());
+    }
+
+    [Fact]
+    public void The_four_value_windows_show_the_closing_button_and_it_sends_nothing()
+    {
+        string src = File.ReadAllText(Path.Combine(ClaudeContextBudgetTests.RepoRoot(),
+            "MSFSBlindAssist", "Aircraft", "IniA330Definition.Fcu.cs"));
+        // heading, speed, altitude and V/S show it; only the altimeter dialog keeps it hidden
+        Assert.Equal(4, System.Text.RegularExpressions.Regex.Matches(src, @"ShowCancelButton = true").Count);
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(src, @"ShowCancelButton = false").Count);
     }
 
     [Theory]
@@ -73,13 +131,12 @@ public class A330FcuTests
         var sim = new SimConnectManager(IntPtr.Zero);
         var all = def.HeadingToggles(sim, null!).Concat(def.SpeedToggles(sim, null!))
             .Concat(def.AltitudeToggles(sim, null!)).Concat(def.VsToggles(sim, null!)).ToList();
-        string Plain(ToggleButtonDef t) => t.Label.Replace("&", "");
-        var silent = all.Where(t => t.SuppressStateAnnounce?.Invoke() == true).Select(Plain).OrderBy(s => s).ToList();
+        var silent = all.Where(t => t.SuppressStateAnnounce?.Invoke() == true).Select(t => t.Label).OrderBy(s => s).ToList();
         var expectedSilent = new[]
         {
-            "Heading pull (selected)", "Heading push (NAV)",
-            "Altitude pull (open climb or descent)", "Altitude push (managed)", "ALT (hold the current altitude)",
-            "V/S pull (engage)", "V/S push (level off)",
+            "Heading Pull", "Heading Push",
+            "Altitude Pull", "Altitude Push", "ALT",
+            "V/S Pull", "V/S Push",
         }.OrderBy(s => s).ToList();
         Assert.Equal(expectedSilent, silent);
         // every other button keeps its read-back, so a button with a real state is never silenced
