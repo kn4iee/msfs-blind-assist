@@ -53,6 +53,7 @@ public class TakeoffCalloutFeedTests
         Assert.Equal(A320TakeoffCallouts.IasKey, new FlyByWireA320Definition().TakeoffCalloutFeedKey);
         Assert.Equal(A320TakeoffCallouts.IasKey, new HeadwindA330Definition().TakeoffCalloutFeedKey);   // inherited
         Assert.Equal(FenixTakeoffCallouts.IasKey, new FenixA320Definition().TakeoffCalloutFeedKey);
+        Assert.Equal(IniA330Definition.TakeoffIasKey, new IniA330Definition().TakeoffCalloutFeedKey);
     }
 
     [Fact]
