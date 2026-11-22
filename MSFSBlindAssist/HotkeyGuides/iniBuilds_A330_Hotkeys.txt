@@ -108,18 +108,18 @@ INPUT MODE - Press left bracket to activate
 
 FCU - typing a value (the window is set directly and read back, so you hear the
 value the FCU is really showing):
-  Ctrl+H     Set FCU Heading or Track. Dialog buttons: Heading Push, Heading
-             Pull, HDG/VS TRK/FPA and LOC.
+  Ctrl+H     Set FCU Heading or Track (0-360). Buttons: Heading Push, Heading
+             Pull and HDG/VS TRK/FPA.
   Ctrl+S     Set FCU Speed - knots 100-399 or Mach 0.10-0.89; the units are
-             switched for you. Dialog buttons: Speed Push, Speed Pull, SPD/MACH
-             and ATHR.
-  Ctrl+A     Set FCU Altitude. Dialog buttons: Altitude Push, Altitude Pull,
-             ALT, knob steps (100 or 1000 feet), metric altitude, AP1 and AP2.
-  Ctrl+V     Set Vertical Speed or Flight Path Angle. Dialog buttons: V/S Push,
-             V/S Pull, HDG/VS TRK/FPA and APPR.
-  Each dialog also has a Cancel button that closes it and sends nothing.
-  A button that has a state says it (On/Off, Active/Armed, the mode shown);
-  the push and pull buttons just carry their name.
+             switched for you. Buttons: Speed Push, Speed Pull and SPD/MACH.
+  Ctrl+A     Set FCU Altitude (100-49000). Buttons: Altitude Push, Altitude
+             Pull and Metric altitude.
+  Ctrl+V     Set Vertical Speed (-6000 to 6000) or Flight Path Angle (-9.9 to
+             9.9). Buttons: V/S Push and V/S Pull.
+  Type the value and press Enter: it is set and the window stays open with
+  the value selected; Escape or Close closes it. The buttons carry only their
+  names; what a press did is said by the FCU call-outs. The autopilot and
+  autothrust buttons are in Ctrl+P.
 
 FCU - knob pushes and pulls:
   Ctrl+1     Pull the heading knob (selected heading)

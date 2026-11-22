@@ -290,16 +290,11 @@ public partial class IniA330Definition
     /// <summary>The heading dialog's write: the track dial when isTrk() says the aircraft is in TRK-FPA, read now.</summary>
     internal static FcuDialSet? HeadingSet(string? input, Func<bool> isTrk)
     {
-        if (!TryParseHeading(input, out int h)) return null;
+        // as the Fenix's window: 0-360, a fraction rounds to the nearest degree
+        if (!NumberParsing.TryParseTyped(input, out double typed) || typed < 0 || typed > 360) return null;
+        int h = (int)Math.Round(typed, MidpointRounding.AwayFromZero);
         bool trk = isTrk();
         return new(trk ? "INI_TRK_DIAL" : "INI_HEADING_DIAL", trk ? A330SharedKeys.FcuTrk : A330SharedKeys.FcuHdg, h % 360, 0.6, trk);
-    }
-
-    /// <summary>The V/S dialog's check, in whichever of V/S and FPA isFpa() says the aircraft is in, read now.</summary>
-    internal static (bool isValid, string message) VsValidator(string? input, Func<bool> isFpa)
-    {
-        bool fpa = isFpa();
-        return TryParseVs(input, fpa, out _) ? (true, "") : (false, fpa ? "Enter -9.9 to 9.9" : "Enter -6000 to 6000");
     }
 
     /// <summary>The V/S dialog's write: the FPA dial or the V/S dial by isFpa(), read now.</summary>
@@ -313,155 +308,140 @@ public partial class IniA330Definition
 
     internal const string AltButtonKey = "A330_ALT_BTN";
 
-    /// <summary>LOC / APPR show what the FMA says they did — active, armed, or off.</summary>
-    private string LocState()
+    // ---- The four FCU value windows: the Fenix A320's windows in the Fenix's words, built from a spec
+    // ---- (A330FcuWindowSpec) the window class and the tests both read. Buttons carry no state text and
+    // ---- say nothing after a press; the aircraft's own call-outs speak the result.
+
+    private A330FcuButton Press(SimConnectManager sim, ScreenReaderAnnouncer announcer, string label, string description, string key)
+        => new(label, description, () => PressAutopilot(sim, announcer, key));
+
+    /// <summary>Heading or track: the label and messages follow the mode the window opened in (openedTrk);
+    /// the check and the dial written follow the mode at commit time (modeNow), as the HDG-V/S / TRK-FPA
+    /// key in the window changes it.</summary>
+    internal A330FcuWindowSpec HeadingWindowSpec(SimConnectManager sim, ScreenReaderAnnouncer announcer, bool openedTrk, Func<bool>? modeNow = null)
     {
-        var f = CurrentFma();
-        return f.Lateral == "LOC" || f.Lateral.StartsWith("LOC ") ? "Active" : f.Armed.Contains("LOC") ? "Armed" : "Off";
-    }
-
-    private string ApprState()
-    {
-        var f = CurrentFma();
-        if (f.Vertical is "LAND" or "G S" or "G S star") return "Active";
-        return f.Armed.Contains("G S") ? "Armed" : "Off";
-    }
-
-    /// <summary>The HDG-V/S / TRK-FPA key: a toggle on the aircraft, so one press flips it. The dialog
-    /// it sits in was opened in one mode; the button shows the live one.</summary>
-    private ToggleButtonDef TrkFpaToggle(SimConnectManager sim, ScreenReaderAnnouncer announcer) =>
-        new("HDG/VS TRK/FPA", () => Fv(A330SharedKeys.MTrkfpa) == 1 ? "TRK FPA" : "HDG V/S", () =>
-        {
-            if (CanCalc(sim, announcer, "TRK-FPA")) Pulse(sim, "INI_FCU_HDG_VS_COMMAND");
-        });
-
-    // The knob push/pull buttons whose state is a constant, or whose result the flight-mode call-out
-    // speaks, turn the dialog's interrupting 1.2 s read-back off: it repeated the label NVDA had just
-    // read and cut the call-out off. Buttons with a state the screen reader cannot say keep it.
-
-    internal List<ToggleButtonDef> HeadingToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
-    {
-        new("Heading Push", () => CurrentFma().Lateral == "NAV" ? "Active" : "", () => PressAutopilot(sim, announcer, "A330_HDG_PUSH")) { SuppressStateAnnounce = () => true },
-        new("Heading Pull", () => "", () => PressAutopilot(sim, announcer, "A330_HDG_PULL")) { SuppressStateAnnounce = () => true },
-        TrkFpaToggle(sim, announcer),
-        new("LOC", LocState, () => PressAutopilot(sim, announcer, "A330_LOC")),
-    };
-
-    internal List<ToggleButtonDef> SpeedToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
-    {
-        new("Speed Push", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PUSH")),
-        new("Speed Pull", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PULL")),
-        new("SPD/MACH", () => Fv(A330SharedKeys.MMach) == 1 ? "Mach" : "Knots",
-            () => SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", Fv(A330SharedKeys.MMach) == 1 ? 0 : 1)),
-        new("ATHR", () => On(sim, "A330_ATHR_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_ATHR")),
-    };
-
-    internal List<ToggleButtonDef> AltitudeToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
-    {
-        new("Altitude Push", () => "", () => PressAutopilot(sim, announcer, "A330_ALT_PUSH")) { SuppressStateAnnounce = () => true },
-        new("Altitude Pull", () => "", () => PressAutopilot(sim, announcer, "A330_ALT_PULL")) { SuppressStateAnnounce = () => true },
-        new("ALT (hold the current altitude)", () => CurrentFma().Vertical == "ALT" ? "Active" : "", () => PressAutopilot(sim, announcer, AltButtonKey)) { SuppressStateAnnounce = () => true },
-        new("Knob steps (100 or 1000 feet)", () => (sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5 ? "100 feet" : "1000 feet",
-            () => SetInputEvent(sim, announcer, "Altitude knob steps", "AIRLINER_MCU_ALTSELECT", AltStepInput(!((sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5)))),
-        new("Metric altitude",() => On(sim, "A330_METRIC") ? "On" : "Off",
-            () => SetInputEvent(sim, announcer, "Metric altitude", "AIRLINER_METRIC", On(sim, "A330_METRIC") ? 0 : 1)),
-        new("AP1", () => On(sim, "A330_AP1_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP1")),
-        new("AP2",() => On(sim, "A330_AP2_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_AP2")),
-    };
-
-    internal List<ToggleButtonDef> VsToggles(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
-    {
-        new("V/S Push", () => "", () => PressAutopilot(sim, announcer, "A330_VS_PUSH")) { SuppressStateAnnounce = () => true },
-        new("V/S Pull", () => "", () => PressAutopilot(sim, announcer, "A330_VS_PULL")) { SuppressStateAnnounce = () => true },
-        TrkFpaToggle(sim, announcer),
-        new("APPR",ApprState, () => PressAutopilot(sim, announcer, "A330_APPR")),
-    };
-
-    private void ShowHeadingDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
-    {
-        bool trk = Fv(A330SharedKeys.MTrkfpa) == 1;
-        var toggles = HeadingToggles(sim, announcer);
-        var dlg = new ValueInputForm(trk ? "FCU Track" : "FCU Heading", trk ? "track" : "heading", "0-359", announcer,
-            input => TryParseHeading(input, out _) ? (true, "") : (false, "Enter a heading between 0 and 359"),
-            toggles,
-            input =>
+        Func<bool> isTrk = modeNow ?? (() => Fv(A330SharedKeys.MTrkfpa) == 1);
+        string word = openedTrk ? "Track" : "Heading";
+        return new(
+            "Set FCU heading",
+            $"{word} (0-360):",
+            $"{word} value",
+            $"Enter {word.ToLowerInvariant()} value between 0 and 360 degrees",
+            new[]
             {
-                // HDG or TRK as the aircraft is NOW (the TRK/FPA button in this dialog changes it)
-                if (HeadingSet(input, () => Fv(A330SharedKeys.MTrkfpa) == 1) is not { } set) return;
-                string word = set.Alt ? "track" : "heading";
-                SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, v => $"{word} {((int)Math.Round(v) % 360 + 360) % 360:000}", set.Tolerance);
-            });
-        dlg.ShowCancelButton = true;   // closes and sends nothing (a value is sent only by Enter in the box)
-        dlg.Show(parent);
-    }
-
-    private void ShowSpeedDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
-    {
-        var toggles = SpeedToggles(sim, announcer);
-        var dlg = new ValueInputForm("FCU Speed", "speed", "Knots: 100-399 / Mach: 0.10-0.89", announcer,
-            input => TryParseSpeed(input, out _)
-                ? (true, "") : (false, "Enter knots (100-399) or Mach (0.10-0.89)"),
-            toggles,
-            input =>
-            {
-                if (!TryParseSpeed(input, out double v)) return;
-                if (SpeedManaged()) announcer.AnnounceImmediate("Speed is managed; pull the speed knob to fly this speed.");
-                bool wantMach = v < 1, isMach = Fv(A330SharedKeys.MMach) == 1;
-                if (wantMach != isMach)
+                Press(sim, announcer, "Heading Push", "Push FCU heading knob", "A330_HDG_PUSH"),
+                Press(sim, announcer, "Heading Pull", "Pull FCU heading knob", "A330_HDG_PULL"),
+                new A330FcuButton("HDG/VS TRK/FPA", "Toggle HDG/VS and TRK/FPA mode", () =>
                 {
-                    // one window holds both (measured: SPD/MACH turned 100 into 0.151) — swap units first
-                    SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", wantMach ? 1 : 0);
-                    // awaited on the dialog's (UI) context: SetAndConfirm captures that context to
-                    // speak its verdict, and from a pool thread it captured none and said nothing
-                    _ = SetAfterSwap();
-                    async Task SetAfterSwap()
+                    if (CanCalc(sim, announcer, "TRK-FPA")) Pulse(sim, "INI_FCU_HDG_VS_COMMAND");
+                }),
+            },
+            typed =>
+            {
+                string now = isTrk() ? "track" : "heading";
+                return A330FcuWindowSpec.Check(typed, "a", now,
+                    v => v < 0 || v > 360 ? $"{char.ToUpperInvariant(now[0])}{now[1..]} must be between 0 and 360 degrees" : null,
+                    _ => () =>
                     {
-                        await Task.Delay(600);
-                        SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", A330SharedKeys.FcuSpd, wantMach ? Math.Round(v, 2) : Math.Round(v),
-                            s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
-                    }
-                }
-                else
-                    SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", A330SharedKeys.FcuSpd, wantMach ? Math.Round(v, 2) : Math.Round(v),
-                        s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
+                        // HDG or TRK as the aircraft is NOW
+                        if (HeadingSet(typed, isTrk) is not { } set) return;
+                        string w = set.Alt ? "track" : "heading";
+                        SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, v => $"{w} {((int)Math.Round(v) % 360 + 360) % 360:000}", set.Tolerance);
+                    });
             });
-        dlg.ShowCancelButton = true;
-        dlg.Show(parent);
     }
 
-    private void ShowAltitudeDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
-    {
-        var toggles = AltitudeToggles(sim, announcer);
-        var dlg = new ValueInputForm("FCU Altitude", "altitude", "100-49000 feet", announcer,
-            input => TryParseAltitude(input, out _) ? (true, "") : (false, "Enter an altitude between 100 and 49000 feet"),
-            toggles,
-            input =>
+    internal A330FcuWindowSpec SpeedWindowSpec(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+        => new(
+            "Set FCU Speed",
+            "Speed (100-399 / 0.10-0.89):",
+            "Speed value",
+            "Enter speed value: 100-399 knots or 0.10-0.89 Mach",
+            new[]
             {
-                if (TryParseAltitude(input, out int a))
-                    SetAndConfirm(sim, announcer, "INI_ALTITUDE_DIAL", A330SharedKeys.FcuAlt, Math.Round(a / 100.0) * 100, v => $"altitude {v:0} feet");
-            });
-        dlg.ShowCancelButton = true;
-        dlg.Show(parent);
+                Press(sim, announcer, "Speed Push", "Push FCU speed knob", "A330_SPD_PUSH"),
+                Press(sim, announcer, "Speed Pull", "Pull FCU speed knob", "A330_SPD_PULL"),
+                new A330FcuButton("SPD/MACH", "Toggle speed and mach mode",
+                    () => SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", Fv(A330SharedKeys.MMach) == 1 ? 0 : 1)),
+            },
+            typed => A330FcuWindowSpec.Check(typed, "a", "speed",
+                v => (v >= 100 && v <= 399) || (v >= 0.10 && v <= 0.89) ? null : "Speed must be 100-399 knots or 0.10-0.89 Mach",
+                v => () => SetSpeed(sim, announcer, v)));
+
+    private void SetSpeed(SimConnectManager sim, ScreenReaderAnnouncer announcer, double v)
+    {
+        if (SpeedManaged()) announcer.AnnounceImmediate("Speed is managed; pull the speed knob to fly this speed.");
+        bool wantMach = v < 1, isMach = Fv(A330SharedKeys.MMach) == 1;
+        void Set() => SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", A330SharedKeys.FcuSpd, wantMach ? Math.Round(v, 2) : Math.Round(v),
+            s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
+        if (wantMach != isMach)
+        {
+            // one window holds both (measured: SPD/MACH turned 100 into 0.151) — swap units first
+            SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", wantMach ? 1 : 0);
+            // awaited on the window's (UI) context: SetAndConfirm captures that context to speak its
+            // verdict, and from a pool thread it captured none and said nothing
+            _ = SetAfterSwap();
+            async Task SetAfterSwap()
+            {
+                await Task.Delay(600);
+                Set();
+            }
+        }
+        else Set();
     }
 
-    private void ShowVsDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
-    {
-        bool fpa = Fv(A330SharedKeys.MTrkfpa) == 1;
-        var toggles = VsToggles(sim, announcer);
-        var dlg = new ValueInputForm(fpa ? "FCU Flight Path Angle" : "FCU Vertical Speed", fpa ? "flight path angle" : "vertical speed",
-            fpa ? "-9.9 to 9.9 degrees" : "-6000 to 6000 feet per minute", announcer,
-            // the title and range are as the dialog opened; the mode the value is checked and written for
-            // is the aircraft's own at that moment, since the TRK/FPA button in this dialog changes it
-            input => VsValidator(input, () => Fv(A330SharedKeys.MTrkfpa) == 1),
-            toggles,
-            input =>
+    internal A330FcuWindowSpec AltitudeWindowSpec(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+        => new(
+            "Set FCU altitude",
+            "Altitude (100-49000):",
+            "Altitude value",
+            "Enter altitude value between 100 and 49000 feet",
+            new[]
             {
-                if (VsSet(input, () => Fv(A330SharedKeys.MTrkfpa) == 1) is not { } set) return;
-                if (set.Alt) SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), set.Tolerance);
-                else SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => $"vertical speed {x:0} feet per minute", set.Tolerance);
+                Press(sim, announcer, "Altitude Push", "Push FCU altitude knob", "A330_ALT_PUSH"),
+                Press(sim, announcer, "Altitude Pull", "Pull FCU altitude knob", "A330_ALT_PULL"),
+                // the A330's one extra (the A320 has no metric altitude key): no state text; the call-out says the result
+                new A330FcuButton("Metric altitude", "Toggle metric altitude",
+                    () => SetInputEvent(sim, announcer, "Metric altitude", "AIRLINER_METRIC", On(sim, "A330_METRIC") ? 0 : 1)),
+            },
+            typed => A330FcuWindowSpec.Check(typed, "an", "altitude",
+                v => v < 100 || v > 49000 ? "Altitude must be between 100 and 49000 feet" : null,
+                v => () => SetAndConfirm(sim, announcer, "INI_ALTITUDE_DIAL", A330SharedKeys.FcuAlt, Math.Round(v / 100.0) * 100, x => $"altitude {x:0} feet")));
+
+    /// <summary>V/S or FPA: the label follows the mode the window opened in (openedFpa); the check, the
+    /// messages and the dial written follow the mode at commit time (modeNow).</summary>
+    internal A330FcuWindowSpec VsWindowSpec(SimConnectManager sim, ScreenReaderAnnouncer announcer, bool openedFpa, Func<bool>? modeNow = null)
+    {
+        Func<bool> isFpa = modeNow ?? (() => Fv(A330SharedKeys.MTrkfpa) == 1);
+        return new(
+            "Set FCU vertical speed",
+            openedFpa ? "FPA (-9.9 to 9.9):" : "V/S (-6000 to 6000):",
+            openedFpa ? "FPA value" : "Vertical speed value",
+            openedFpa ? "Enter flight path angle value between -9.9 and 9.9 degrees" : "Enter vertical speed value between -6000 and 6000 feet per minute",
+            new[]
+            {
+                Press(sim, announcer, "V/S Push", "Push FCU vertical speed knob", "A330_VS_PUSH"),
+                Press(sim, announcer, "V/S Pull", "Pull FCU vertical speed knob", "A330_VS_PULL"),
+            },
+            typed =>
+            {
+                bool fpa = isFpa();
+                return A330FcuWindowSpec.Check(typed, "a", fpa ? "flight path angle" : "vertical speed",
+                    v => fpa ? (Math.Abs(v) > 9.9 ? "Flight path angle must be between -9.9 and 9.9 degrees" : null)
+                             : (Math.Abs(v) > 6000 ? "Vertical speed must be between -6000 and 6000 feet per minute" : null),
+                    _ => () =>
+                    {
+                        if (VsSet(typed, isFpa) is not { } set) return;
+                        if (set.Alt) SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), set.Tolerance);
+                        else SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => $"vertical speed {x:0} feet per minute", set.Tolerance);
+                    });
             });
-        dlg.ShowCancelButton = true;
-        dlg.Show(parent);
+    }
+
+    private void ShowFcuWindow<T>(Func<T> factory, Action? exitInput) where T : Forms.IniA330.IniA330FcuValueWindow
+    {
+        exitInput?.Invoke();
+        ShowTrackedWindow(factory, w => w.ShowForm());
     }
 
     /// <summary>The cockpit's baro mode (XMLVAR_Baro1_Mode): 2 or more is STD. Measured: 3 in STD (2026-10-17
@@ -567,10 +547,19 @@ public partial class IniA330Definition
         {
             case HotkeyAction.ReadAltimeter: ReadAltimeter(sim, announcer); handled = true; return;
             // ---- dialogs ----
-            case HotkeyAction.FCUSetHeading: ShowHeadingDialog(sim, announcer, parentForm); handled = true; return;
-            case HotkeyAction.FCUSetSpeed: ShowSpeedDialog(sim, announcer, parentForm); handled = true; return;
-            case HotkeyAction.FCUSetAltitude: ShowAltitudeDialog(sim, announcer, parentForm); handled = true; return;
-            case HotkeyAction.FCUSetVS: ShowVsDialog(sim, announcer, parentForm); handled = true; return;
+            // the four value windows are the Fenix's windows (see HeadingWindowSpec and its siblings)
+            case HotkeyAction.FCUSetHeading:
+                ShowFcuWindow(() => new Forms.IniA330.IniA330FcuHeadingWindow(HeadingWindowSpec(sim, announcer, Fv(A330SharedKeys.MTrkfpa) == 1), announcer), hotkeys.ExitInputHotkeyMode);
+                handled = true; return;
+            case HotkeyAction.FCUSetSpeed:
+                ShowFcuWindow(() => new Forms.IniA330.IniA330FcuSpeedWindow(SpeedWindowSpec(sim, announcer), announcer), hotkeys.ExitInputHotkeyMode);
+                handled = true; return;
+            case HotkeyAction.FCUSetAltitude:
+                ShowFcuWindow(() => new Forms.IniA330.IniA330FcuAltitudeWindow(AltitudeWindowSpec(sim, announcer), announcer), hotkeys.ExitInputHotkeyMode);
+                handled = true; return;
+            case HotkeyAction.FCUSetVS:
+                ShowFcuWindow(() => new Forms.IniA330.IniA330FcuVsWindow(VsWindowSpec(sim, announcer, Fv(A330SharedKeys.MTrkfpa) == 1), announcer), hotkeys.ExitInputHotkeyMode);
+                handled = true; return;
             case HotkeyAction.FCUSetBaro: ShowBaroDialog(sim, announcer, parentForm); handled = true; return;
             case HotkeyAction.FCUSetAutopilot:
                 hotkeys.ExitInputHotkeyMode();
