@@ -47,6 +47,28 @@ Each shows as one cell (the braille rule). Wording of each stand-in: the owner's
   by `A330McduScreen.From` (a text starts off the grid), and the scratchpad line cannot be trusted while
   `HiddenRowsLeftOut` is false: the Global Constraints' rule holds for both the window and the FMS message
   call-out. (The page held the owner's route: not captured as a fixture.)
-- The first officer's MCDU: the reader gave no frame for it; not measured further.
 - `INI_FMS1_message_light` 0 and `INI_FMS2_message_light` 0, with no FMS message on either scratchpad line.
-  `INI_FMC_PAGE1` 4. What the lamps read with a message queued: not measured yet (Task 5 Step 2).
+  `INI_FMC_PAGE1` 4.
+
+### The first officer's MCDU, typed line and a refused entry (Task 4 Step 3, Task 5 Step 2)
+
+Keys through the simulator's calculator path (each with its own prefix), on the first officer's MCDU only, the app's
+own protocol to the display reader (the typed line and the frames, as `A330ReaderClient` receives them):
+
+| Step | Row 13 of the frame | Typed line |
+| --- | --- | --- |
+| On INIT, still (as found) | no frame yet: the window would show "Reading the first officer's MCDU" until the page changed | `""` |
+| DATA (DATA INDEX 1) | (empty); complete frames from then on | `""` |
+| X | `X` | `"X"` |
+| SPACE | `X` | `"X "`: a trailing space is kept, so a SPACE is confirmed like any other key |
+| LSK4R (an empty line) | (empty) | `""`: the entry was dropped with no message |
+| INIT, X, LSK5L (COST INDEX) | `FORMAT ERROR` | `""`: the typed line never holds a displayed message |
+| Y, with FORMAT ERROR shown | `Y` | `"Y"`: typing replaces a white message |
+| CLR | (empty) | `""` (the first CLR sent did not arrive; the second did) |
+
+- `INI_FMS2_message_light` stayed 0 while FORMAT ERROR showed: a white message does not light it. An amber FMS
+  message was not tried. So the lamp sentence of Task 5 Step 2 speaks at most for amber messages, not measured yet.
+- Both pages the reader gave for the first officer's MCDU (DATA INDEX 1, INIT) place every text inside the grid with
+  no two texts on one cell: the same geometry as the captain's.
+- Put back as found: the first officer's MCDU on INIT, its cost index unchanged (120), the scratchpad empty. The
+  frames of the INIT page hold the owner's route: none was kept as a fixture.
