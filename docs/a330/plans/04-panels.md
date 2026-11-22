@@ -51,6 +51,51 @@
   "pushed in reads 1" convention), and 43 controls whose read is their own input event. Predictive
   windshear is one of the 79; packs 1 and 2 and hot air 1 and 2, which toggle (plan 06's block), are
   among the 23.
+- Read in flight the same day, not a proof: `INI_TCAS_STBY_STATE` 1, `INI_TCAS_MODE_PEDESTAL` 2,
+  `TRANSPONDER STATE:1` 4, `INI_WX_SYS_SWITCH` 0. These are what the First Officer's own writes would
+  leave, so they cannot settle the transponder and TCAS question below by themselves. The captain's ND,
+  read complete by the reader program at the same time, showed neither TA ONLY nor TCAS STBY, and the
+  E/WD showed no TCAS memo: that agrees with today's names (TCAS at TA/RA) and would not if the two were
+  crossed (TCAS would then be at TA ONLY), but only once this aircraft's ND has been seen drawing TA ONLY
+  with TCAS at TA. A lead for Task 4, not a verdict.
+
+## Found by a code review on 2026-11-22 (read in code, not run in the sim)
+
+Each is a task below; each claim is checked against the code before its fix.
+
+- **A refused write is reported as done.** `HandlePanelSet` sets `handled = true` on every branch, also
+  when `CanCalc` refuses and when `SetInputEvent` returns false (`IniA330Definition.Panels.cs`, the
+  switch on `c.Mode`), so MainForm keeps the pilot's pick in the combo and never reads the control back;
+  `PressFromWindow` returns true for it too. Task 4a.
+- **A pick is never read back.** A write the aircraft ignores (a closed guard, no power, a toggle) leaves
+  the row showing the wrong position, silently. The 757's set path reads first, writes only when it
+  differs, reads back and corrects its row (`BBS757Definition.Interaction.cs`). Task 4a.
+- **The toggle mode presses on an unknown state** ("an unknown state counts as differing, so a cold cache
+  still actuates"): right for the engine masters, which take their position by value, wrong for a true
+  toggle such as the packs. Task 4a.
+- **Momentary keys say nothing and show nothing.** `GetButtonStateMapping` returns nothing and the map's
+  buttons carry no state variable, though the ECAM page keys (`INI_ECAM_ACTIVE_PAGE`), the radio panel's
+  keys (`INI_SELECTED_RADIO_CPT`), APU START, the agents and the IDG have a readable result. Task 4a.
+- **Guards are separate combos.** 27 guards (`guard()` in the generator) have no link to the switch they
+  cover, and the curation schema has no field for one, so the planner's guard test has nothing to plan
+  from. Whether the aircraft refuses a guarded switch with its guard closed is unmeasured. Tasks 2 and 4.
+- **Sliders speak 0 to 100 %** whatever the control's range: tilt runs 0 to 30, so the row's "15 = level"
+  is 50 on the slider; the temperature and landing elevation sliders say no °C or feet (the A32NX says
+  both); the map's `step` is unused. Task 4a.
+- **Names that look wrong** (aviation logic or the variables' own names; for the sweep to settle): the
+  transponder and TCAS selectors may be crossed (the event `TCAS_MODE` is labelled "Transponder mode" and
+  reads `INI_TCAS_STBY_STATE`; `TCAS_STBY` is labelled "TCAS mode"), and the First Officer's Line-up
+  "TCAS: TA/RA" writes 2 to the second; the EFIS DMC selector (Normal at 0, a captain's event offering
+  "First officer on 3"); the clock's elapsed-time Reset (spring-loaded on Airbus clocks); the fuel pumps
+  (left pump 1 reads OUTER, right pump 1 reads INNER); the cabin pressure MODE SEL (its read stays 0); the
+  radio panel's selected radio (no entry for AM or the NAV backup keys); the altimeter unit (read is its
+  own event, and the First Officer speaks inHg or hPa from it). Task 4 Step 4.
+- **Controls no input-event count can find:** what the A32NX and Headwind A330 panels drive through stock
+  events (transponder code entry, COM tuning on the radio panel, rudder trim and its reset), and by
+  aviation logic EMER ELEC PWR, the cabin pressure manual V/S, FAC 1 and 2, GPWS LDG FLAP 3, the first
+  officer's master warning and caution, rain repellent, the lighting knobs, the CVR test. Tasks 1 and 6.
+- **Stock COM tuning is unmeasured here:** `StockComTuningRefusal` is null, so the surroundings window
+  tunes the A330's COM 1 with stock events; it reads the result back, so a dead write is heard. Task 5.
 
 ## Review Focus
 
@@ -77,7 +122,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 04` (`Pla
 
 - [ ] **Step 1:** The names file: someone with access runs the private reference's export and commits its output here unchanged. Steps 1-5 for its shape: `test_control_names_holds_only_titles_and_position_names` (no other key; every value a string of at most 60 characters), `test_every_control_has_a_title`; commit `feat(a330-gen): the aircraft's own control names`.
 - [ ] **Step 2:** The simulator's list: with the A330 loaded, start a Debug build of MSFSBA once (the owner's go-ahead: it opens the app), select the A330, and copy the A330's block from `%APPDATA%\MSFSBlindAssist\logs\input_events.txt` to `tools/a330-gen/data/input_events.tsv` (name, tab, hash; a first line with the date and the simulator's version). Commit it.
-- [ ] **Step 3:** In the evidence file, one table: every catalogued event, the aircraft's title for it (or "no name"), and whether today's map has it. Then the same by group, with counts. This is the list Task 5 works through.
+- [ ] **Step 3:** In the evidence file, one table: every catalogued event, the aircraft's title for it (or "no name"), and whether today's map has it. Then the same by group, with counts. Then the A32NX's and the Headwind A330's panel rows with no A330 match, by panel (a control the aircraft drives through stock events never shows in an input-event count: transponder code, COM tuning, rudder trim). This is the list Task 5 works through.
 
 ### Task 2: The generator on data, with nothing unaccounted for
 
@@ -91,7 +136,9 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 04` (`Pla
                   "mode": "set", "read": "INI_IRS1_STATE",
                   "positions": [ { "value": 0, "input": 0, "name": "0", "proven": true }, ... ],
                   "proof": { "kind": "ewd_memo", "text": "PRED W/S OFF", "when": "1" },
-                  "lamps": [ ... ], "holdMs": 150 } },
+                  "guard": "A330_ENG1_FIRE_COVER", "state": "INI_ECAM_ACTIVE_PAGE",
+                  "unit": { "name": "degrees", "min": -15, "max": 15 },
+                  "lamps": [ ... ], "holdMs": 150, "pressesToCycle": 3 } },
     "name_overrides": { "A330_IR1": { "label": "...", "aircraft_says": "IR1", "why": "..." } },
     "position_overrides": { "A330_IR1": { "1": { "label": "On", "aircraft_says": "PRESS", "why": "the aircraft's string names the action" } } },
     "left_out": { "CPT_MCDU_A": "pressed in the MCDU window through its own key flags", ... },
@@ -99,7 +146,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 04` (`Pla
     "control_order": { "ADIRS": ["A330_IRS1_MODE", ...] }
   }
   ```
-  `"name": "0"` is the key of the aircraft's string for that position; the generator writes the string's text as the label. `keys.txt` is every key the map has ever had, one a line. `proof` names the indication that proves the control's positions (Task 4 Step 0): `kind` is `ewd_memo`, `sd_page` (with `page` and the text the page shows), `lamp` (its variable), or `simvar`; `when` is the position at which the indication shows. `proven` turns true only from a sweep verdict that saw the proof follow the position's name.
+  `"name": "0"` is the key of the aircraft's string for that position; the generator writes the string's text as the label. `keys.txt` is every key the map has ever had, one a line. `proof` names the indication that proves the control's positions (Task 4 Step 0): `kind` is `ewd_memo`, `sd_page` (with `page` and the text the page shows), `lamp` (its variable), or `simvar`; `when` is the position at which the indication shows. `proven` turns true only from a sweep verdict that saw the proof follow the position's name. `guard` names the cover over a switch (the guard's own row stays, just before it); `state` names the variable a button's press changes, or is absent; `unit` gives a continuous control's spoken unit and the aircraft's own range; `pressesToCycle` is how many presses bring a multi-press key (the chronometer) back to where it began.
 
 - [ ] **Step 1:** Move what `generate_a330_map.py` holds as Python calls into `curation.json` (a one-off script, not committed), keeping today's labels as overrides for now, so the regenerated map is byte-identical to the committed one. Tests: `test_the_map_regenerates_identically_from_curation`, `test_every_catalogued_event_is_a_control_or_left_out_with_a_reason`, `test_a_left_out_event_that_is_also_a_control_is_refused`, `test_no_key_ever_disappears` (against `keys.txt`), `test_a_control_naming_an_event_the_catalogue_lacks_is_refused`. The second test fails now: fill `left_out` only for the events the definition presses itself (the FCU, the brakes, the baro knobs) and the MCDU keys, and put every other event in a `not_yet_offered` list, which the test accepts only while this plan is open (Task 5 empties and removes it). Commit `refactor(a330-gen): the map from a curation file; every event accounted for`.
 - [ ] **Step 2:** Names from the aircraft: the generator takes each control's label from its title in `control_names.json` and each position's label from its position name there, applying the naming rule Task 3 sets, unless an override says otherwise. Tests: `test_a_label_is_the_aircrafts_title`, `test_an_override_without_the_aircrafts_string_and_a_reason_is_refused`, `test_an_action_word_is_never_a_position_name` ("PRESS", "PUSH", "PULL", "TURN" need an override), `test_an_unproven_pairing_is_listed`. Regenerate; list every label that changed (old, new) in the evidence file. Commit `feat(a330-gen): names and positions from the aircraft's own strings`.
@@ -124,11 +171,25 @@ The one inversion already measured (2026-11-22, this plan's block). It needs no 
 
 - [ ] **Step 0 (no sim): the proof table.** In the evidence file, for every control: the indication that proves its positions (the review focus's "proof"), from the A330's E/WD memo list and lower ECAM pages, for example predictive windshear → PRED W/S OFF memo; seat belts and no smoking → their memos; strobe → STROBE LT OFF; packs, bleeds and crossbleed → the BLEED page; fuel pumps and crossfeed → the FUEL page; hydraulic pumps → the HYD page; generators, batteries and bus ties → the ELEC pages; probe heat and anti-ice → their memos; TCAS and transponder → the ND or the memo; lights with no memo → the simulator's light state (`LIGHT STATES`, `LIGHT LANDING:n` and the like). A control with no proof is listed for the owner as "read is its own variable". Write each proof into the curation file.
 - [ ] **Step 1:** Steps 1-5 for the planner (pure): for each control not denied, the positions to visit in order and the return to the position it started in; a button is planned as one press only where it reports a state; the lower ECAM page a control's proof needs is selected before it. Tests: `A_selector_visits_every_other_position_and_returns`, `A_denied_control_is_skipped_with_its_reason`, `A_guard_is_opened_only_to_reach_its_switch_and_closed_again`, `A_button_with_no_state_is_skipped`, `A_proof_on_a_lower_ecam_page_selects_the_page_first`.
-- [ ] **Step 2:** The runner: through `IniA330Definition`'s own write path, 400 ms apart; after each write it reads the control's read and its proof until both settle or 5 s pass, and records the time each took; restore, and write `sweep-<date>.tsv` (key, label, position, sent, read back, settle ms, proof before, proof after, verdict). Verdicts: `proven` (the proof followed the position's name), `inverted` (the proof followed the other name), `read-only` (the read moved, there is no proof), `dead` (nothing moved), `lagged` (settled only after 1.5 s: still a pass, its time goes to plan 06). `--dry-run` prints the plan only.
+- [ ] **Step 2:** The runner: through `IniA330Definition`'s own write path, 400 ms apart; after each write it reads the control's read and its proof until both settle or 5 s pass, and records the time each took; restore, and write `sweep-<date>.tsv` (key, label, position, sent, read back, settle ms, proof before, proof after, verdict). Verdicts: `proven` (the proof followed the position's name), `inverted` (the proof followed the other name), `read-only` (the read moved, there is no proof), `dead` (nothing moved), `lagged` (settled only after 1.5 s: still a pass, its time goes to plan 06), `toggle` (the same position written twice flips the read back), `not sent` (the write was refused before it left: `CalcPathVerified` false, or a refused input event, never called dead). `--dry-run` prints the plan only.
+- [ ] **Step 2b, the runner's other duties** (each with a planner or runner test): before the first write, a journal of every control's starting value, and `--restore <journal>` after a crash or Ctrl+C; restore by replaying the event's own starting value, never through the pairing being tested (an inverted pairing would "restore" to the wrong side), read it back and stop the sweep if it did not hold; each position written twice, to find toggles; a snapshot of the `INI_*` variables before and after each write (Task 5's differential method), so a side effect (RMP 1's NAV backup) is recorded and a variable that follows the control becomes a candidate proof; the electrical, bleed and hydraulic state recorded with each verdict, and a second pass with the APU bleed on for the packs, bleeds and crossbleed; each continuous control at its minimum, middle and maximum against the aircraft's own value where it has one (`INI_LANDING_ELEVATION`, `INI_WXR_GAIN`); a multi-press key restored by its `pressesToCycle`.
 - [ ] **Step 3:** `denylist.txt`, each line with its reason: the engine masters and start selector, the fire handles, agents and tests, the IDG disconnects, the RAT, the gear lever and gravity extension, the flap and speedbrake levers, the parking brake, the ADIRS selectors (a realignment), the batteries and external power (the cockpit goes dark), the APU, passenger oxygen, the evacuation command, the emergency lights, ditching, cargo and cabin doors, anything that calls the cabin or ground crew.
-- [ ] **Step 4 [owner present]:** Run the sweep on the ground, engines off, external power on. Then the denied controls by hand, one at a time, with the owner's go-ahead for each, at least: the parking brake's direction, the ADIRS selectors (measured 2026-11-19: input 1 on each put all three in NAV), the landing and nose light position words, the dome light and wipers. Record every verdict in the evidence file. A proof the ground does not show (a memo only shown in flight) goes to plan 11's flight by its key, and stays unproven until then.
+- [ ] **Step 4 [owner present]:** Run the sweep on the ground, engines off, external power on. Then the denied controls by hand, one at a time, with the owner's go-ahead for each, at least: the parking brake's direction, the ADIRS selectors (measured 2026-11-19: input 1 on each put all three in NAV), the landing and nose light position words, the dome light and wipers; every guarded control with its guard closed (does the aircraft refuse it? if not, Task 4a's refusal); and each name the review found doubtful, by its proof: the transponder and TCAS selectors (the ND's TA ONLY, the E/WD's TCAS STBY memo, `TRANSPONDER STATE:1`), the weather radar system selector (the ND's radar picture), the EFIS DMC selector, the clock's elapsed-time reset, the fuel pumps (the FUEL page), the cabin pressure MODE SEL (the PRESS page), the radio panel's selected radio, the altimeter unit (the PFD's baro unit). Record every verdict in the evidence file. A proof the ground does not show (a memo only shown in flight) goes to plan 11's flight by its key, and stays unproven until then.
 - [ ] **Step 5:** Each dead, inverted or mislabeled control fixed in the curation file (a position's `input`, `value` or `proven`; a wrong `read`), one commit a cause: `fix(a330): the <panel> <control>`. A fix that changes what a position's value means is agreed with plan 06's claimant first: the First Officer writes these values (`IniAirbusKeys`). Clear the probe side effect the developer doc lists (RMP 1's NAV backup) or say it cannot be cleared from outside.
 - [ ] **Step 6:** Steps 1-5 for the gate: `test_every_offered_position_is_proven_or_listed` (a position with `proven` false is in the evidence file's unproven list, by key and position) and, in C#, `An_unproven_position_is_marked_in_the_map`, so plan 06 can refuse to write it. Commit.
+
+### Task 4a: What a panel row does with a pick (the review's code findings)
+
+**Files:** `Aircraft/IniA330Definition.Panels.cs`, `Aircraft/A330/A330ControlMap.cs`; tests `A330PanelSetTests.cs`, `A330PanelButtonTests.cs`, `A330PanelSliderTests.cs`. `Aircraft/IniA330Definition.Handlers.cs` is frozen after plan 01: `PressFromWindow`'s false for a refused write is this plan's one named exception there, listed in the handoff. Each fix is checked against the code first; the announcement convention of the index applies to every sentence.
+
+- [ ] **Steps 1-5, a pick is read back:** a selector pick reads the control first and writes only when it differs; after the control's settle time (Task 4's) it reads back and corrects its row: silent when the pick landed, the real position said once when not ([CORE-7]); `HandlePanelSet` returns not handled for a refused write, and `PressFromWindow` false. The 757's set path is the model. Tests `A_refused_write_is_not_handled`, `A_pick_the_aircraft_ignored_resyncs_its_row_and_says_where_it_is`, `A_pick_that_landed_says_nothing`. Commit.
+- [ ] **Steps 1-5, a true toggle never presses blind:** a `toggle` control with no by-value code refuses aloud while its read is unknown ([FO-18]'s rule: unread is unknown, never "differs"); the engine masters, which take their position by value, keep pressing. Tests `A_toggle_with_no_read_is_not_pressed`, `An_engine_master_with_no_read_is_still_set_by_value`. Commit.
+- [ ] **Steps 1-5, a key's press is confirmed once:** a button with a `state` reads it back once after the press and says the new state, as the FlyByWire A32NX's and the A380's button read-back do (`GetButtonStateMapping`); a button with none says "<name> pressed", as the Fenix's press buttons with no light do. Tests `An_ECAM_page_key_reads_back_its_page`, `A_stateless_key_says_pressed`, `A_key_with_a_state_does_not_also_say_pressed`. Commit.
+- [ ] **Steps 1-5, a guarded switch:** where Task 4 found that the aircraft moves a guarded switch with its guard closed, BA refuses the write aloud while the guard reads closed ("<name>: guard closed"). Test `A_guarded_switch_is_refused_while_its_guard_is_closed`. Commit.
+- [ ] **Steps 1-5, sliders in the aircraft's units:** a continuous control with a `unit` is offered and spoken in it (degrees of tilt, °C, feet, as the A32NX speaks its temperature and landing elevation), in steps of its `step`; the label's own numbers agree with the slider ("Tilt 0 = level"). Tests `Tilt_is_said_in_degrees`, `A_slider_moves_by_its_step`, `A_temperature_is_said_in_degrees_C_under_de_DE`. Commit.
+- [ ] **Steps 1-5, the panels' announcements sound like the other Airbus aircraft's** (the index's convention; the announcements review of 2026-11-22): a lamp and a status row say "On" and "Off", never "Lit" (the A330 says "<label> <legend> light: Lit", the Fenix "<name>: On"); the parking brake "On" and "Off" (the A32NX's "Parking Brake: On"); the autobrake LO, MED and MAX, the cockpit's words, which the A32NX says too (the A330 says "Low", "Medium"); the gear "Down" and "Up". A control's own name stays the aircraft's (Task 3). The master warning and master caution keys read back their state (`INI_MASTER_WARNING_ACTIVE`, `INI_MASTER_CAUTION_ACTIVE`, by name: measure them) once after a press, as the key step above does. Tests `A_lamp_says_on_not_lit`, `The_parking_brake_says_on`, `The_autobrake_says_the_cockpits_words`, `Master_warning_reads_back_after_its_press`. Commit.
+- [ ] **Steps 1-5, the speedbrake lever is said:** today it is silent with no Ctrl+M row (`A330_SPDBRK`; plan 01 took the row away because it muted nothing). It is said as the A32NX says it ("Spoilers retracted", "Spoilers 30 percent", "Spoilers full", in its 10 % bands) from `ProcessPanelUpdate`, the first reading silent, through the mute wrap, and its Ctrl+M row "Speedbrake lever" comes back because it now mutes something. Tests `A_band_change_is_said_once`, `The_first_reading_is_silent`, `A_muted_row_says_nothing`. Commit.
+- [ ] **Step 6 [sim], lamp values:** measure what the lamps read (Task 4's sweep): a lamp whose variable reads other than 0 and 1 (a dimmed or flashing lamp) would be said as a number today, because the spoken path compares the raw value; such a lamp gets a value rule so it says "On", "Off" or "Flashing". Test on the measured values.
 
 ### Task 5 [sim]: The controls and panels BA does not offer yet (R8, R9)
 
@@ -136,7 +197,7 @@ The one inversion already measured (2026-11-22, this plan's block). It needs no 
 
 Work the groups of Task 1's table, each the same way: measure what the control writes and where its state reads (the differential method the generator's header describes: set the event, snapshot the `INI_*` L:vars, record what moved, put it back), then add it to the curation file in the cockpit's own panel with the aircraft's own names, or to `left_out` with the reason.
 
-- [ ] **Step 1:** The first officer's radio panel and audio panel, as separate panels after the captain's (spec D5); the third radio and audio panel.
+- [ ] **Step 1:** The first officer's radio panel and audio panel, as separate panels after the captain's (spec D5); the third radio and audio panel. COM tuning and the transponder code as the A32NX's panels offer them; measure the surroundings window's stock COM tuning on this aircraft and set `StockComTuningRefusal` if the aircraft ignores it ([A380C-18]).
 - [ ] **Step 2:** The standby instrument's keys and the two DCDUs' keys (plans 09's windows press them through `PressFromWindow`: tell plan 09's claimant their keys).
 - [ ] **Step 3:** TCAS, the remaining hydraulic and leak-measurement controls, oxygen, emergency and evacuation, gravity gear extension, the cockpit door, the clock's keys, cargo, the maintenance panel, the autobrake buttons (the Landing Gear panel has an autobrake row already: one of the two stays, the other is `left_out`).
 - [ ] **Step 4:** Whatever the table still lists. A knob with a turn and a push, or a volume, that today's kinds cannot express: Steps 1-5 for the new kind on in-memory rows (`A330PanelKindsTests`), in `.Panels.cs` and `A330ControlMap.cs`.
@@ -149,7 +210,7 @@ Work the groups of Task 1's table, each the same way: measure what the control w
 **Interfaces:**
 - Produces `procedure_order.json`: `{ "procedures": [ { "id": "COCKPITPREP", "controls": [ "A330_BAT1", "A330_IRS1_MODE", ... ] }, ... ] }`: the procedures in the order a flight meets them, and for each the keys of BA's controls its items act on, in the items' order, each key once. No item text.
 
-- [ ] **Step 1 (M6, with the private reference):** Someone with access captures the simulator's own procedures in order (the owner opens the simulator's checklist window on the A330; the capture and the items' words stay in the private reference), matches each item to the BA control it acts on, and writes `procedure_order.json` here. An item with no control (a check, a call) is left out; a control whose match is unsure is listed in the evidence file by its key and its place, for the owner. `test_procedure_order_holds_only_control_keys` (every entry is a key in `keys.txt`).
+- [ ] **Step 1 (M6, with the private reference):** Someone with access captures the simulator's own procedures in order (the owner opens the simulator's checklist window on the A330; the capture and the items' words stay in the private reference), matches each item to the BA control it acts on, and writes `procedure_order.json` here. An item with no control (a check, a call) is left out; an item naming a control BA does not offer yet (a squawk, the rudder trim) is listed as "missing control" for Task 5, never dropped as "no control"; a control whose match is unsure is listed in the evidence file by its key and its place, for the owner. `test_procedure_order_holds_only_control_keys` (every entry is a key in `keys.txt`).
 - [ ] **Step 2:** The rule, as the 757's: tier 1, what the normal procedures move on every flight, in the order a procedure first uses it, left and right or 1 and 2 together; tier 2, what is set once in preparation, tests and display options; tier 3, non-normal, emergency and maintenance controls, with a guard just before the switch it covers. Panels inside a section: by where the procedures first act on one of the panel's controls. Sections and panels themselves stay the cockpit's. Write the research into the evidence file: for each panel, each control's tier and the procedure and place that put it there.
 - [ ] **Step 3:** Steps 1-5: `test_every_control_of_a_panel_is_in_its_control_order_once`, `test_a_guard_sits_just_before_its_switch`, `test_tier_one_follows_the_procedures_order` (reads `procedure_order.json` and the curation's tier marks), and in C# `Every_panels_controls_come_out_in_the_curations_order`; fill `control_order` and `panel_order`; regenerate; commit `feat(a330): panels ordered by daily use`.
 - [ ] **Step 4:** Tell plan 06's claimant the order file has landed (the First Officer follows the same order).
@@ -170,7 +231,7 @@ Work the groups of Task 1's table, each the same way: measure what the control w
 
 - **Pilot-facing:** the panels' names are the cockpit's; controls are ordered by daily use; the new panels (list them). Guide: the A330's panels. Changelog `improvement`.
 - **Rule proposals:** [INI-2] reworded for the curation file and the three inputs; INI-14: every catalogued input event is a control or is in `left_out` with a reason, and a name or position name comes from `control_names.json` or carries an override with the aircraft's string and a reason; INI-15: a key never changes or disappears (`keys.txt`).
-- **Frozen files:** none expected; a key that had to change, for plans 05, 06, 08, 09.
+- **Frozen files:** `Aircraft/IniA330Definition.Handlers.cs`, by the named exception of Task 4a (`PressFromWindow` returns false for a refused write); a key that had to change, for plans 05, 06, 08, 09.
 
 ## Execution record
 

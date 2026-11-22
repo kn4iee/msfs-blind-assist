@@ -47,6 +47,25 @@
   `COM STANDBY FREQUENCY:2` read 118.125, `COM ACTIVE FREQUENCY:3` 124.850, `TRANSPONDER CODE:1` 4636.
   Not measured: a tune or swap on the radio panel, and how soon each variable follows it.
 
+## Found by the announcements review on 2026-11-22 (read in code, not run in the sim)
+
+Each is a step in the plan that owns its file; each claim is checked against the code before its fix.
+Owned elsewhere: ECAM warnings and cautions silent without colours (plan 08 Task 4 Step 7); managed and
+selected never said, autopilot words, the V/S minus (plan 05 Task 2 Step 3, Task 4 Steps 2 and 3); the
+flight-mode sentence (plan 09 Task 2 Step 2); the ATC and FMS message lamps (plan 09 Task 7 Step 3, plan 03
+Task 5 Step 2); lamp, parking brake, autobrake and gear words, the speedbrake lever, the press
+confirmations (plan 04 Task 4a). Here:
+
+- **Engine start is never said.** `ENGINE_1_AVAIL` and `ENGINE_2_AVAIL` are read only on request, for the
+  First Officer (measured to go AVAIL at N2 58.6 %, `docs/ini-a330.md`); the A32NX says "Engine 1:
+  Starting" and "Engine 1: On". Task 6.
+- **The glideslope call-out may watch the wrong receiver.** The shared "Glideslope alive" call-out reads
+  NAV 1 (`BaseAircraftDefinition`), while the A330's own radio read-out takes the ILS from NAV 3. Task 6.
+- **The transponder code is never said** (Task 5).
+- **Kinds the review found only on some other aircraft**, for Task 1 Step 3's table to list with the
+  A330's answer: TCAS and GPWS call-outs (the A32NX; the A330 sounds its own), cabin calls (the Fenix),
+  the jet bridge and brakes hot (the A32NX), the flight phase ("Entering climb phase", the A32NX).
+
 ## Review Focus
 
 - A key that says nothing at all on the A330 while it speaks on every other Airbus: the parity test fails on an action neither handled nor listed as not applicable (Task 1).
@@ -94,7 +113,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 10` (`Pla
 
 **Files:** Create `tests/MSFSBlindAssist.Tests/A330/A330CultureTests.cs`.
 
-- [ ] **Steps 1-5:** one theory over every sentence builder the A330 has that formats a number (find them: `git grep -n -E "\\$\"|ToString\\(" MSFSBlindAssist/Aircraft/IniA330Definition*.cs MSFSBlindAssist/Aircraft/A330`): each run under en-US, de-DE and sv-SE with `TestCulture.Run` must give the same text. A builder in another plan's file that fails is fixed by that plan's claimant if the plan is open, else here with a note in the record. Commit `test(a330): spoken text under comma-decimal cultures`.
+- [ ] **Steps 1-5:** one theory over every sentence builder the A330 has that formats a number (find them: `git grep -n -E "\\$\"|ToString\\(" MSFSBlindAssist/Aircraft/IniA330Definition*.cs MSFSBlindAssist/Aircraft/A330`): each run under en-US, de-DE and sv-SE with `TestCulture.Run` must give the same text, a negative number among the cases (sv-SE writes the minus as U+2212: the V/S read-back, plan 05 Task 4 Step 3). A builder in another plan's file that fails is fixed by that plan's claimant if the plan is open, else here with a note in the record. Commit `test(a330): spoken text under comma-decimal cultures`.
 
 ### Task 5: The radios said when they change
 
@@ -104,6 +123,14 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 10` (`Pla
 - [ ] **Steps 1-5:** COM 1 and COM 2, active and standby, announced exactly as the FlyByWire A32NX's are (the index's announcement convention): `Continuous`, a Ctrl+M row each, the first reading seeded silently, said only on a change of more than 0.5 kHz inside the VHF band (118.000 to 137.000), in the A32NX's sentence "COM 1 active 128.025" / "COM 1 standby 128.025", three decimals with the invariant culture ([CORE-21]), the Ctrl+M mute honoured; the radio read-out key reads the same keys. Check [VAR-7] (no second continuous key with the same simulator name in the batch) before registering. Tests: `Tuning_COM_1_standby_is_said_once`, `A_swap_says_the_new_active_and_the_new_standby_once_each`, `The_first_reading_is_silent`, `A_value_outside_the_VHF_band_is_silent`, `A_frequency_is_said_with_a_point_under_de_DE`, `Muting_COM_1_standby_leaves_COM_1_active_spoken`, and `The_sentence_is_the_A32NXs` (the A330's builder and the A32NX's give the same text for the same radio and value). Commit `feat(a330): radio frequency changes are said`.
 - [ ] **Steps 1-5, the rest of the radios as the A32NX and the Fenix say them:** "Transmitting on VHF n" when the transmit selection moves to a radio (the rising edge only, as the A32NX's `COM_TRANSMIT:n`; measure first which variable the A330's audio panel moves: the simulator's `COM TRANSMIT:n` or an `INI_*`); "Squawk 1234" when the transponder code changes (the A380's and the Fenix's sentence; the A330 reads `TRANSPONDER CODE:1`, 4636 on 2026-11-22: say whether it is BCD as on the FlyByWire aircraft or plain); COM 3 as the A32NX says it, or listed in `NotApplicable` if the A330's VHF 3 is data only. Tests named for each, as above. Commit a radio at a time.
 - [ ] **Step 2:** The radio read-out key (`ReadRadios`) says each radio in the same words ("COM 1 active 128.025, standby 128.025"), so the key and the announcement agree; test `The_radio_read_out_uses_the_announcement_words`.
+
+### Task 6: What else the review found unsaid
+
+**Files:** `Aircraft/IniA330Definition.Readouts.cs`; tests `A330ReadoutAnnouncementTests.cs`.
+
+- [ ] **Steps 1-5, engine start:** `ENGINE_1_AVAIL` and `ENGINE_2_AVAIL` become watched rows in `AddReadoutVariables` (it runs before plan 06's hook, which skips a key already present), said in the A32NX's sentence ("Engine 1: On" at AVAIL; "Engine 1: Starting" only if a start variable is measured, else listed in the record), each with its Ctrl+M row, the first reading silent. Tests `Engine_1_available_is_said_once`, `The_first_reading_is_silent`, `A_muted_row_says_nothing`. Commit.
+- [ ] **Step 2 [sim], the glideslope receiver:** on an ILS (plan 11's approach), read `NAV HAS GLIDE SLOPE:1` and `:3`; if only NAV 3 comes alive, the A330's glideslope call-out row reads NAV 3, with a test. (The A380 reads NAV 1 too: name it in the record, never fix it here.)
+- [ ] **Step 3:** The kinds the review found only on some other aircraft go into Task 1 Step 3's table, each with the A330's answer (announced, or `NotApplicable` with the reason).
 
 ## In-sim checks (owner)
 
