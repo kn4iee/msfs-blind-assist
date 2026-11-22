@@ -1,6 +1,5 @@
 using System.Globalization;
 using MSFSBlindAssist.Accessibility;
-using MSFSBlindAssist.Aircraft.A330;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
@@ -258,10 +257,6 @@ public partial class IniA330Definition
             case HotkeyAction.ReadSpeedVLS: ReadSpeed(simConnect, announcer, "A330_VLS", "VLS"); return true;
             case HotkeyAction.ReadSpeedVFE: ReadSpeed(simConnect, announcer, "A330_VMAX", "Maximum speed"); return true;
             // ---- windows ----
-            case HotkeyAction.ShowFenixMCDU:
-                hotkeyManager.ExitInputHotkeyMode();
-                ShowTrackedWindow(() => new Forms.IniA330.IniA330CduForm(simConnect, announcer, CduProfile()), f => f.ShowForm());
-                return true;
             case HotkeyAction.ShowPMDGEFB:
                 hotkeyManager.ExitInputHotkeyMode();
                 ShowEfb(announcer);
@@ -276,8 +271,6 @@ public partial class IniA330Definition
     }
 
     private SimConnect.CoherentPmdgEfbClient? _efbClient;
-
-    private static Forms.IniA330.CduFormProfile CduProfile() => Forms.IniA330.CduFormProfile.A330(A330CduGlyphLibrary.A330);
 
     private void ShowEfb(ScreenReaderAnnouncer announcer)
     {
