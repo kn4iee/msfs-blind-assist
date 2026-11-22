@@ -1,16 +1,11 @@
-using MSFSBlindAssist.Aircraft.A330;
 using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Aircraft;
 
 public partial class IniA330Definition
 {
-    private readonly List<(string panel, string key)> _mapDisplayRows = new();
-    private readonly Dictionary<string, A330ControlMap.Control> _controlsByKey = new();
     /// <summary>Continuous keys never spoken by the generic monitor (knob positions, caches).</summary>
     private readonly HashSet<string> _silentKeys = new();
-
-    // ---------------- the definition's own controls ----------------
 
     /// <summary>FCU buttons: key -> what a press does (an L:var press flag, or an input event).</summary>
     internal static readonly (string key, string label, string? pulse, string? inputEvent)[] AutopilotButtons =
@@ -42,19 +37,6 @@ public partial class IniA330Definition
     internal static readonly string[] FmaDisplayKeys =
         { "A330_FMA_THRUST", "A330_FMA_VERT", "A330_FMA_LAT", "A330_FMA_ARMED", "A330_FMA_CAP", "A330_FMA_AP" };
 
-    internal static readonly (string section, string panel, string key)[] OwnPlacedControls =
-    {
-        ("Pedestal", "Flaps and Speedbrake", "A330_FLAPS"), ("Pedestal", "Flaps and Speedbrake", "A330_SPDBRK"),
-        ("Pedestal", "Flaps and Speedbrake", "A330_SPLR_ARM"), ("Pedestal", "Parking Brake", "A330_PARKBRK"),
-        ("Main Instrument Panel", "Landing Gear", "A330_GEAR"), ("Main Instrument Panel", "Brakes", "A330_AUTOBRAKE"),
-    };
-
-    internal static readonly (string panel, string key)[] OwnPlacedDisplays =
-    {
-        ("Flaps and Speedbrake", "A330_SLAT_ANGLE"), ("Flaps and Speedbrake", "A330_FLAP_ANGLE"),
-        ("Flaps and Speedbrake", "A330_TRIM"), ("Landing Gear", "A330_GEAR_POS"),
-    };
-
     internal const string FmaMonitorKey = "A330_M_PITCH";
 
     // FMA inputs: silent caches composed in ProcessSimVarUpdate
@@ -74,13 +56,6 @@ public partial class IniA330Definition
         ("A330_FUEL_RI", "INI_FUEL_WEIGHT_RIGHT_INNER", "right inner"), ("A330_FUEL_RO", "INI_FUEL_WEIGHT_RIGHT_OUTER", "right outer"),
         ("A330_FUEL_TRIM", "INI_FUEL_WEIGHT_TRIM", "trim tank"),
     };
-
-    /// <summary>The A330's flap lever (FS flight model: 4 handle positions after UP; 1+F is automatic).</summary>
-    internal static readonly string[] FlapDetents = { "Flaps up", "Flaps 1", "Flaps 2", "Flaps 3", "Flaps full" };
-
-    /// <summary>What INI_AUTOBRAKE_LEVEL reads for each autobrake setting (0 off, 1 LO, 2 MED, 3 MAX).
-    /// The panel combo writes the raw value back to <c>SetAutobrake</c>.</summary>
-    internal static readonly Dictionary<double, string> AutobrakeLevels = new() { [0] = "Off", [1] = "Low", [2] = "Medium", [3] = "Max" };
 
     /// <summary>The First Officer's own read-only keys (FirstOfficer/IniAirbus).</summary>
     internal const string FoEng1AvailKey = "A330_FO_ENG1_AVAIL", FoEng2AvailKey = "A330_FO_ENG2_AVAIL",
@@ -131,215 +106,90 @@ public partial class IniA330Definition
             ? c.Positions?.FirstOrDefault(p => p.Label == label)?.Value : null;
     }
 
-    /// <summary>A flap lever reading that is one of its detents (the handle index is whole).</summary>
-    internal static bool IsFlapDetent(double v) =>
-        !double.IsNaN(v) && Math.Abs(v - Math.Round(v)) < 0.01 && Math.Round(v) >= 0 && Math.Round(v) < FlapDetents.Length;
-
-    /// <summary>A speedbrake lever at one of the positions its combo names (retracted, half, full), never
-    /// between them where it is travelling ([VAR-6]).</summary>
-    internal static bool IsSpeedbrakeAtRest(double v) =>
-        !double.IsNaN(v) && (Math.Abs(v) < 0.02 || Math.Abs(v - 0.5) < 0.02 || Math.Abs(v - 1) < 0.02);
-
     internal const string TakeoffIasKey = "A330_TO_IAS", TakeoffV1Key = "A330_TO_V1", TakeoffVrKey = "A330_TO_VR", TakeoffV2Key = "A330_TO_V2";
+
+    /// <summary>The Continuous Type:Name pairs added so far in the current BuildVariables, so a generated
+    /// status row or lamp reading a name another row already watches is skipped ([VAR-7]).</summary>
+    private readonly HashSet<string> _usedNames = new(StringComparer.OrdinalIgnoreCase);
+
+    private void Add(Dictionary<string, SimVarDefinition> vars, string key, SimVarDefinition d)
+    {
+        vars[key] = d;
+        if (d.UpdateFrequency == UpdateFrequency.Continuous) _usedNames.Add(d.Type + ":" + d.Name);
+    }
+
+    private void Button(Dictionary<string, SimVarDefinition> vars, string key, string display) => Add(vars, key, new SimVarDefinition
+    {
+        Name = "MSFSBA_" + key, DisplayName = display, Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
+        RenderAsButton = true, SuppressRestingButtonState = true,
+        ValueDescriptions = new Dictionary<double, string> { [0] = "Idle", [1] = "Press" },
+    });
+
+    private void Watched(Dictionary<string, SimVarDefinition> vars, string key, string name, string display, Dictionary<double, string>? values = null, bool silent = false,
+                 string units = "number", SimVarType type = SimVarType.LVar) => Add(vars, key, new SimVarDefinition
+    {
+        Name = name, DisplayName = display, Type = type, Units = units,
+        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
+        ValueDescriptions = values ?? new Dictionary<double, string>(),
+        ExcludeFromMonitorManager = silent,
+    });
+
+    private void Silent(Dictionary<string, SimVarDefinition> vars, string key, string name, string display, string units = "number", SimVarType type = SimVarType.LVar)
+    {
+        Watched(vars, key, name, display, null, true, units, type);
+        _silentKeys.Add(key);
+    }
+
+    private void Synthetic(Dictionary<string, SimVarDefinition> vars, string key, string display) => Add(vars, key, new SimVarDefinition
+    {
+        Name = $"MSFSBA_{key}", DisplayName = display, Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
+    });
+
+    private void OnRequestVar(Dictionary<string, SimVarDefinition> vars, string key, string name, string display, string units = "number", SimVarType type = SimVarType.LVar)
+        => Add(vars, key, new SimVarDefinition { Name = name, DisplayName = display, Type = type, Units = units, UpdateFrequency = UpdateFrequency.OnRequest });
 
     protected override Dictionary<string, SimVarDefinition> BuildVariables()
     {
         var vars = new Dictionary<string, SimVarDefinition>();
-        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        void Add(string key, SimVarDefinition d)
-        {
-            vars[key] = d;
-            if (d.UpdateFrequency == UpdateFrequency.Continuous) usedNames.Add(d.Type + ":" + d.Name);
-        }
-
-        void Button(string key, string display) => Add(key, new SimVarDefinition
-        {
-            Name = "MSFSBA_" + key, DisplayName = display, Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
-            RenderAsButton = true, SuppressRestingButtonState = true,
-            ValueDescriptions = new Dictionary<double, string> { [0] = "Idle", [1] = "Press" },
-        });
-
-        void Watched(string key, string name, string display, Dictionary<double, string>? values = null, bool silent = false,
-                     string units = "number", SimVarType type = SimVarType.LVar) => Add(key, new SimVarDefinition
-        {
-            Name = name, DisplayName = display, Type = type, Units = units,
-            UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
-            ValueDescriptions = values ?? new Dictionary<double, string>(),
-            ExcludeFromMonitorManager = silent,
-        });
-
-        void Silent(string key, string name, string display, string units = "number", SimVarType type = SimVarType.LVar)
-        {
-            Watched(key, name, display, null, true, units, type);
-            _silentKeys.Add(key);
-        }
-
-        void Synthetic(string key, string display) => Add(key, new SimVarDefinition
-        {
-            Name = $"MSFSBA_{key}", DisplayName = display, Type = SimVarType.LVar, UpdateFrequency = UpdateFrequency.OnRequest,
-        });
-
-        void OnRequest(string key, string name, string display, string units = "number", SimVarType type = SimVarType.LVar)
-            => Add(key, new SimVarDefinition { Name = name, DisplayName = display, Type = type, Units = units, UpdateFrequency = UpdateFrequency.OnRequest });
+        _usedNames.Clear();
 
         var engaged = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" };
 
         // ---------------- Autopilot (FCU) ----------------
-        foreach (var (key, label, _, _) in AutopilotButtons) Button(key, label);
-        Watched("A330_SPD_MACH", "INI_AIRSPEED_IS_MACH", "Speed window units", new() { [0] = "Knots", [1] = "Mach" });
-        Watched("A330_TRK_FPA", "INI_TRACK_FPA_STATE", "HDG-V/S or TRK-FPA", new() { [0] = "HDG V/S", [1] = "TRK FPA" });
+        foreach (var (key, label, _, _) in AutopilotButtons) Button(vars, key, label);
+        Watched(vars, "A330_SPD_MACH", "INI_AIRSPEED_IS_MACH", "Speed window units", new() { [0] = "Knots", [1] = "Mach" });
+        Watched(vars, "A330_TRK_FPA", "INI_TRACK_FPA_STATE", "HDG-V/S or TRK-FPA", new() { [0] = "HDG V/S", [1] = "TRK FPA" });
         // ALT knob step (measured: input 0 reads 1 and the knob steps 100 feet)
-        Watched("A330_ALT_STEP", "INI_ALTITUDE_STATE", "Altitude knob steps", new() { [1] = "100 feet", [0] = "1000 feet" });
-        Watched("A330_METRIC", "INI_FCU_METRIC_STATE", "Metric altitude", new() { [0] = "Off", [1] = "On" });
-        Watched("A330_AP1_ON", "INI_AP1_ON", "Autopilot 1", engaged);
-        Watched("A330_AP2_ON", "INI_AP2_ON", "Autopilot 2", engaged);
-        Watched("A330_ATHR_ON", "INI_AT_ON", "Autothrust", engaged);
-        Silent("A330_FCU_SPD", "INI_AIRSPEED_DIAL", "FCU speed");
-        Silent("A330_FCU_HDG", "INI_HEADING_DIAL", "FCU heading");
-        Silent("A330_FCU_TRK", "INI_TRK_DIAL", "FCU track");
-        Silent("A330_FCU_ALT", "INI_ALTITUDE_DIAL", "FCU altitude");
-        Silent("A330_FCU_VS", "INI_VVI_DIAL", "FCU vertical speed");
-        Silent("A330_FCU_FPA", "INI_FPA_DIAL", "FCU flight path angle");
-        Silent("A330_ALTITUDE", "INDICATED ALTITUDE", "Altitude", "feet", SimVarType.SimVar);
+        Watched(vars, "A330_ALT_STEP", "INI_ALTITUDE_STATE", "Altitude knob steps", new() { [1] = "100 feet", [0] = "1000 feet" });
+        Watched(vars, "A330_METRIC", "INI_FCU_METRIC_STATE", "Metric altitude", new() { [0] = "Off", [1] = "On" });
+        Watched(vars, "A330_AP1_ON", "INI_AP1_ON", "Autopilot 1", engaged);
+        Watched(vars, "A330_AP2_ON", "INI_AP2_ON", "Autopilot 2", engaged);
+        Watched(vars, "A330_ATHR_ON", "INI_AT_ON", "Autothrust", engaged);
+        Silent(vars, "A330_FCU_SPD", "INI_AIRSPEED_DIAL", "FCU speed");
+        Silent(vars, "A330_FCU_HDG", "INI_HEADING_DIAL", "FCU heading");
+        Silent(vars, "A330_FCU_TRK", "INI_TRK_DIAL", "FCU track");
+        Silent(vars, "A330_FCU_ALT", "INI_ALTITUDE_DIAL", "FCU altitude");
+        Silent(vars, "A330_FCU_VS", "INI_VVI_DIAL", "FCU vertical speed");
+        Silent(vars, "A330_FCU_FPA", "INI_FPA_DIAL", "FCU flight path angle");
+        Silent(vars, "A330_ALTITUDE", "INDICATED ALTITUDE", "Altitude", "feet", SimVarType.SimVar);
 
         // ---------------- Flight modes ----------------
-        foreach (var (key, lvar) in FmaInputVars) Silent(key, lvar, key);
+        foreach (var (key, lvar) in FmaInputVars) Silent(vars, key, lvar, key);
         vars[FmaMonitorKey].ExcludeFromMonitorManager = false;   // one Ctrl+M row mutes every flight-mode change
         vars[FmaMonitorKey].DisplayName = "Flight mode changes";
-        Synthetic("A330_FMA_THRUST", "Thrust mode");
-        Synthetic("A330_FMA_VERT", "Vertical mode");
-        Synthetic("A330_FMA_LAT", "Lateral mode");
-        Synthetic("A330_FMA_ARMED", "Armed modes");
-        Synthetic("A330_FMA_CAP", "Landing capability");
-        Synthetic("A330_FMA_AP", "Autopilot and autothrust");
-
-        // ---------------- Flight controls (the definition's own) ----------------
-        Add("A330_FLAPS", new SimVarDefinition
-        {
-            Name = "FLAPS HANDLE INDEX", DisplayName = "Flaps", Type = SimVarType.SimVar, Units = "number",
-            UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
-            ValueDescriptions = Enumerable.Range(0, FlapDetents.Length).ToDictionary(i => (double)i, i => FlapDetents[i]),
-        });
-        _silentKeys.Add("A330_FLAPS");   // detent call-outs come from ProcessSimVarUpdate
-        Add("A330_SPDBRK", new SimVarDefinition
-        {
-            Name = "SPOILERS HANDLE POSITION", DisplayName = "Speedbrake lever", Type = SimVarType.SimVar, Units = "percent over 100",
-            UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
-            ValueDescriptions = new Dictionary<double, string> { [0] = "Retracted", [0.5] = "Half", [1] = "Full" },
-            ValueToDescriptionKey = v => v < 0.25 ? 0 : v < 0.75 ? 0.5 : 1,
-            ExcludeFromMonitorManager = true,   // consumed silently (the panel combo's read-back): no Ctrl+M row [VAR-9]
-        });
-        _silentKeys.Add("A330_SPDBRK");
-        Watched("A330_SPLR_ARM", "SPOILERS ARMED", "Ground spoilers", new() { [0] = "Disarmed", [1] = "Armed" }, units: "Bool", type: SimVarType.SimVar);
-        Watched("A330_GEAR", "INI_GEAR_HANDLE_STATUS", "Landing gear lever", new() { [0] = "Up", [1] = "Down" });
-        Watched("A330_PARKBRK", ParkingBrakeRead.name, "Parking brake", new() { [0] = "Off", [1] = "Set" },
-            units: ParkingBrakeRead.units, type: ParkingBrakeRead.type);
-        Watched("A330_AUTOBRAKE", "INI_AUTOBRAKE_LEVEL", "Autobrake", new(AutobrakeLevels));
-        Silent("A330_FLAP_ANGLE", "TRAILING EDGE FLAPS LEFT ANGLE", "Flap angle", "degrees", SimVarType.SimVar);
-        Silent("A330_SLAT_ANGLE", "LEADING EDGE FLAPS LEFT ANGLE", "Slat angle", "degrees", SimVarType.SimVar);
-        Silent("A330_GEAR_POS", "GEAR CENTER POSITION", "Nose gear", "percent", SimVarType.SimVar);
-        Silent("A330_TRIM", "ELEVATOR TRIM POSITION", "Stabilizer trim", "degrees", SimVarType.SimVar);
-
-        // Four names are read by a second key (the Speed window units and HDG-V/S or TRK-FPA controls, the
-        // base class's altitude and trim). Two Continuous batched keys with one Name shift every later
-        // struct slot in the batch ([VAR-7]), so each silent cache copy takes its own once-a-second
-        // subscription instead: the same sample rate, so nothing a pilot hears or sees changes.
-        foreach (var key in new[] { "A330_M_MACH", "A330_M_TRKFPA", "A330_ALTITUDE", "A330_TRIM" })
-            vars[key].ExcludeFromBatch = true;
+        Synthetic(vars, "A330_FMA_THRUST", "Thrust mode");
+        Synthetic(vars, "A330_FMA_VERT", "Vertical mode");
+        Synthetic(vars, "A330_FMA_LAT", "Lateral mode");
+        Synthetic(vars, "A330_FMA_ARMED", "Armed modes");
+        Synthetic(vars, "A330_FMA_CAP", "Landing capability");
+        Synthetic(vars, "A330_FMA_AP", "Autopilot and autothrust");
 
         // ---------------- Fuel caches ----------------
-        foreach (var (key, lvar, name) in FuelVars) Silent(key, lvar, name);
-        Silent("A330_FUEL_CENTER", "FUEL TANK CENTER QUANTITY", "Centre tank", "gallons", SimVarType.SimVar);
-        Silent("A330_FUEL_TOTAL_LB", "FUEL TOTAL QUANTITY WEIGHT", "Total fuel", "pounds", SimVarType.SimVar);
-        Silent("A330_FUEL_WPG", "FUEL WEIGHT PER GALLON", "Fuel weight per gallon", "pounds", SimVarType.SimVar);
-        Silent("A330_IS_METRIC", "INI_IS_METRIC", "Weight units");
-
-        // ---------------- Generated cockpit controls ----------------
-        foreach (var c in _map.Controls)
-        {
-            if (string.IsNullOrEmpty(c.Key) || vars.ContainsKey(c.Key)) continue;
-            _controlsByKey[c.Key] = c;
-            var read = c.Read is { Length: > 0 } ? A330ControlMap.ParseReadKind(c.Read) : ((A330ControlMap.ReadKind, string, string)?)null;
-            var positions = c.Positions?.GroupBy(p => p.Value).ToDictionary(g => g.Key, g => g.First().Label) ?? new Dictionary<double, string>();
-            SimVarType TypeOf(A330ControlMap.ReadKind k) => k switch
-            {
-                A330ControlMap.ReadKind.SimVar => SimVarType.SimVar,
-                A330ControlMap.ReadKind.InputEvent => SimVarType.InputEvent,
-                _ => SimVarType.LVar,
-            };
-            switch (c.Kind)
-            {
-                case "select" when read is { } r && positions.Count >= 2:
-                    Add(c.Key, new SimVarDefinition
-                    {
-                        Name = r.Item2, DisplayName = c.Label, Type = TypeOf(r.Item1), Units = r.Item3,
-                        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true, ValueDescriptions = positions,
-                        // a guard is operated on the way to its switch: never narrate it
-                        ExcludeFromMonitorManager = c.Label.EndsWith(" guard", StringComparison.Ordinal),
-                    });
-                    if (c.Label.EndsWith(" guard", StringComparison.Ordinal)) _silentKeys.Add(c.Key);
-                    break;
-                case "button":
-                    Button(c.Key, c.Label);
-                    break;
-                case "continuous" when read is { } rc:
-                    Add(c.Key, new SimVarDefinition
-                    {
-                        Name = rc.Item2, DisplayName = c.Label, Type = TypeOf(rc.Item1), Units = rc.Item3,
-                        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true, ExcludeFromMonitorManager = true,
-                        RenderAsSlider = true, SliderMin = c.Min ?? 0, SliderMax = c.Max ?? 100,
-                    });
-                    _silentKeys.Add(c.Key);
-                    break;
-                case "status" when read is { } rs:
-                    if (usedNames.Contains(TypeOf(rs.Item1) + ":" + rs.Item2)) break;
-                    Add(c.Key, new SimVarDefinition
-                    {
-                        Name = rs.Item2, DisplayName = c.Label, Type = TypeOf(rs.Item1), Units = rs.Item3,
-                        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = positions.Count > 0, ValueDescriptions = positions,
-                        ExcludeFromMonitorManager = positions.Count == 0,
-                    });
-                    if (positions.Count == 0) _silentKeys.Add(c.Key);
-                    _mapDisplayRows.Add((c.Panel, c.Key));
-                    break;
-            }
-            if (c.Lamps == null) continue;
-            int n = 0;
-            foreach (var lamp in c.Lamps)
-            {
-                n++;
-                if (string.IsNullOrWhiteSpace(lamp.Read)) continue;
-                var lr = A330ControlMap.ParseReadKind(lamp.Read);
-                if (usedNames.Contains(TypeOf(lr.kind) + ":" + lr.name)) continue;
-                string lk = $"{c.Key}_LAMP{n}";
-                string legend = string.IsNullOrWhiteSpace(lamp.Legend) ? "light" : $"{lamp.Legend} light";
-                Add(lk, new SimVarDefinition
-                {
-                    Name = lr.name, DisplayName = $"{c.Label} {legend}", Type = TypeOf(lr.kind), Units = lr.units,
-                    UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
-                    ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Lit" },
-                    ValueToDescriptionKey = v => v > 0.5 ? 1 : 0,
-                });
-                _mapDisplayRows.Add((c.Panel, lk));
-            }
-        }
-
-        // ProcessSimVarUpdate consumes these (it returns true), which skips MainForm's control refresh, so an
-        // open panel kept the position it was built with. Each control below follows a change made elsewhere
-        // through RefreshControlWhenDefHandled: its write fires on a user commit alone, so a refresh sends nothing.
-        vars["A330_FLAPS"].RefreshControlWhenDefHandled = IsFlapDetent;
-        vars["A330_SPDBRK"].RefreshControlWhenDefHandled = IsSpeedbrakeAtRest;
-        foreach (var def in vars.Values)
-        {
-            if (def.RenderAsSlider)
-                def.RefreshControlWhenDefHandled = v => !double.IsNaN(v);
-            else if (def.DisplayName.EndsWith(" guard", StringComparison.Ordinal) && def.ValueDescriptions.Count > 0)
-            {
-                var d = def;
-                d.RefreshControlWhenDefHandled = v => !double.IsNaN(v) && d.ValueDescriptions.ContainsKey(d.DescriptionKeyFor(v));
-            }
-        }
+        foreach (var (key, lvar, name) in FuelVars) Silent(vars, key, lvar, name);
+        Silent(vars, "A330_FUEL_CENTER", "FUEL TANK CENTER QUANTITY", "Centre tank", "gallons", SimVarType.SimVar);
+        Silent(vars, "A330_FUEL_TOTAL_LB", "FUEL TOTAL QUANTITY WEIGHT", "Total fuel", "pounds", SimVarType.SimVar);
+        Silent(vars, "A330_FUEL_WPG", "FUEL WEIGHT PER GALLON", "Fuel weight per gallon", "pounds", SimVarType.SimVar);
+        Silent(vars, "A330_IS_METRIC", "INI_IS_METRIC", "Weight units");
 
         // ---------------- First Officer reads (OnRequest, silent; polled by the FO window) ----------------
         // Each name is in the aircraft's own panel-state files (data/panelstates/*.ini in the streamed
@@ -347,7 +197,7 @@ public partial class IniA330Definition
         // dark, 1 ready for take-off (the E/WD's green AVAIL); INI_APU_FLAP_PERCENT 0 cold and dark, 1 with
         // the APU running or still spinning down. Read only — the First Officer never writes them.
         foreach (var (key, name, display, units, type) in FoReadVars)
-            if (!vars.ContainsKey(key)) OnRequest(key, name, display, units, type);
+            if (!vars.ContainsKey(key)) OnRequestVar(vars, key, name, display, units, type);
 
         // ---------------- Read-outs (fresh on the key press) ----------------
         foreach (var (key, lvar, display) in new[]
@@ -362,13 +212,13 @@ public partial class IniA330Definition
                      ("A330_MINIMUMS", "INI_MINIMUMS_PILOT", "Captain minimums"), ("A330_MDA", "INI_FMS_MDA", "FMS MDA"),
                      ("A330_ILS_FREQ", "INI_ILS_FREQUENCY", "ILS frequency"),
                  })
-            OnRequest(key, lvar, display);
-        OnRequest("A330_GS_FRESH", "GROUND VELOCITY", "Ground speed", "knots", SimVarType.SimVar);
-        OnRequest("A330_BARO_FRESH", "KOHLSMAN SETTING MB:1", "Captain altimeter setting", "millibars", SimVarType.SimVar);
-        OnRequest("A330_BARO_STD_FRESH", "KOHLSMAN SETTING STD:1", "Captain altimeter standard", "Bool", SimVarType.SimVar);
+            OnRequestVar(vars, key, lvar, display);
+        OnRequestVar(vars, "A330_GS_FRESH", "GROUND VELOCITY", "Ground speed", "knots", SimVarType.SimVar);
+        OnRequestVar(vars, "A330_BARO_FRESH", "KOHLSMAN SETTING MB:1", "Captain altimeter setting", "millibars", SimVarType.SimVar);
+        OnRequestVar(vars, "A330_BARO_STD_FRESH", "KOHLSMAN SETTING STD:1", "Captain altimeter standard", "Bool", SimVarType.SimVar);
         // The cockpit's own baro mode (2/3 = STD). Measured live 2026-10-17 on the
         // A330 at FL220 in STD: this read 3 while KOHLSMAN SETTING STD:1 read 0, so STD comes from here.
-        OnRequest("A330_BARO_MODE_FRESH", "XMLVAR_Baro1_Mode", "Captain altimeter mode");
+        OnRequestVar(vars, "A330_BARO_MODE_FRESH", "XMLVAR_Baro1_Mode", "Captain altimeter mode");
         foreach (var (key, simvar, units) in new[]
                  {
                      ("A330_NAV1_FREQ", "NAV ACTIVE FREQUENCY:1", "MHz"), ("A330_NAV2_FREQ", "NAV ACTIVE FREQUENCY:2", "MHz"),
@@ -376,13 +226,13 @@ public partial class IniA330Definition
                      ("A330_NAV3_GS", "NAV HAS GLIDE SLOPE:3", "Bool"), ("A330_NAV3_DME", "NAV DME:3", "nautical miles"),
                      ("A330_COM1_ACT", "COM ACTIVE FREQUENCY:1", "MHz"), ("A330_COM1_STBY", "COM STANDBY FREQUENCY:1", "MHz"),
                  })
-            OnRequest(key, simvar, key, units, SimVarType.SimVar);
+            OnRequestVar(vars, key, simvar, key, units, SimVarType.SimVar);
 
         // ---------------- Take-off call-outs ----------------
-        Watched(TakeoffV1Key, "INI_V1", "V1 call-out");
-        Watched(TakeoffVrKey, "INI_VR", "Rotate call-out");
-        Watched(TakeoffV2Key, "INI_V2", "V2 call-out");
-        Add(TakeoffIasKey, new SimVarDefinition
+        Watched(vars, TakeoffV1Key, "INI_V1", "V1 call-out");
+        Watched(vars, TakeoffVrKey, "INI_VR", "Rotate call-out");
+        Watched(vars, TakeoffV2Key, "INI_V2", "V2 call-out");
+        Add(vars, TakeoffIasKey, new SimVarDefinition
         {
             Name = "AIRSPEED INDICATED", DisplayName = "Take-off call-out airspeed", Type = SimVarType.SimVar, Units = "knots",
             UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
@@ -404,6 +254,13 @@ public partial class IniA330Definition
         AddMcduVariables(vars);   // plan 03
         AddReadoutVariables(vars);   // plan 10
         AddFirstOfficerVariables(vars);   // plan 06
+
+        // Four names are read by a second key (the Speed window units and HDG-V/S or TRK-FPA controls, the
+        // base class's altitude and trim). Two Continuous batched keys with one Name shift every later
+        // struct slot in the batch ([VAR-7]), so each silent cache copy takes its own once-a-second
+        // subscription instead: the same sample rate, so nothing a pilot hears or sees changes.
+        foreach (var key in new[] { "A330_M_MACH", "A330_M_TRKFPA", "A330_ALTITUDE", "A330_TRIM" })
+            vars[key].ExcludeFromBatch = true;
 
         foreach (var kv in GetBaseVariables())
             if (!vars.ContainsKey(kv.Key)) vars[kv.Key] = kv.Value;

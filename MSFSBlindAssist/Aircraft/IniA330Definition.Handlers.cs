@@ -89,87 +89,10 @@ public partial class IniA330Definition
                 if ((cur is null || Math.Abs(cur.Value - value) > 0.5) && CanCalc(simConnect, announcer, "TRK-FPA"))
                     Pulse(simConnect, "INI_FCU_HDG_VS_COMMAND");
                 return true;
-            case "A330_FLAPS":
-                if (CanCalc(simConnect, announcer, "Flaps"))
-                    Write(simConnect, $"{Num(Math.Round(Math.Clamp(Math.Round(value), 0, FlapDetents.Length - 1) * 16383.0 / (FlapDetents.Length - 1)))} (>K:FLAPS_SET)");
-                return true;
-            case "A330_SPDBRK":
-                if (CanCalc(simConnect, announcer, "Speedbrake"))
-                    Write(simConnect, $"{Num(Math.Round(Math.Clamp(value, 0, 1) * 16383))} (>K:SPOILERS_SET)");
-                return true;
-            case "A330_SPLR_ARM":
-                if (CanCalc(simConnect, announcer, "Ground spoilers"))
-                    Write(simConnect, value > 0.5 ? "(>K:SPOILERS_ARM_ON)" : "(>K:SPOILERS_ARM_OFF)");
-                return true;
-            case "A330_GEAR":
-                if (CanCalc(simConnect, announcer, "Gear"))
-                    Write(simConnect, value > 0.5 ? "(>K:GEAR_DOWN)" : "(>K:GEAR_UP)");
-                return true;
-            case "A330_PARKBRK":
-                SetInputEvent(simConnect, announcer, "Parking brake", "AIRLINER_PARKINGBRAKE", ParkingBrakeInput(value > 0.5));
-                return true;
-            case "A330_AUTOBRAKE":
-                SetAutobrake(simConnect, (int)Math.Round(value), cur);
-                return true;
         }
-
         HandlePanelSet(varKey, value, varDef, simConnect, announcer, ref handled);   // plan 04: the map's catch-all
-        if (handled) return true;
-        if (!_controlsByKey.TryGetValue(varKey, out var c)) return false;
-        // an "rpn" control writes its own calculator code; every other mode drives an input event
-        if (c.Mode != "rpn" && string.IsNullOrEmpty(c.Event) && string.IsNullOrEmpty(c.Rpn)) return false;
-        switch (c.Mode)
-        {
-            case "toggle":
-                // a momentary push-button that reports its state: press once, only when the pick differs
-                // (an unknown state counts as differing, so a cold cache still actuates). The press is the
-                // control's own rpn when it has one, else its input event's _Push.
-                if ((cur is null || Math.Abs(cur.Value - value) > 0.5) && CanCalc(simConnect, announcer, c.Label))
-                {
-                    // {value} = the pick (the engine masters pass it to their input event's Set, right
-                    // whether that Set toggles or sets by value); a press-flag rpn carries none
-                    if (!string.IsNullOrWhiteSpace(c.Rpn)) Write(simConnect, c.Rpn.Replace("{value}", Num(value)));
-                    else PushEvent(simConnect, c.Event!, c.HoldMs ?? DefaultPushMs);
-                }
-                return true;
-            case "push" when string.IsNullOrEmpty(c.Event):
-                return false;
-            case "push":
-                if (CanCalc(simConnect, announcer, c.Label)) PushEvent(simConnect, c.Event, c.HoldMs ?? DefaultPushMs);
-                return true;
-            case "rpn":
-                if (!string.IsNullOrWhiteSpace(c.Rpn) && CanCalc(simConnect, announcer, c.Label))
-                    Write(simConnect, c.Rpn.Replace("{value}", Num(value)));
-                return true;
-            default:
-                if (string.IsNullOrEmpty(c.Event)) return false;
-                double input = c.Kind == "continuous" ? value : A330ControlMap.InputFor(c, value) ?? value;
-                SetInputEvent(simConnect, announcer, c.Label, c.Event, input);
-                return true;
-        }
+        return handled;
     }
-
-    internal static string? AutobrakeEvent(int level) => level switch
-    {
-        1 => "AIRLINER_AUTOBRK_LO", 2 => "AIRLINER_AUTOBRK_MED", 3 => "AIRLINER_AUTOBRK_HI", _ => null,
-    };
-
-    /// <summary>Measured: pressing a level button (by value) arms it; Off = press the ACTIVE level again.
-    /// The level buttons are input events, so no MobiFlight is needed.</summary>
-    private static void SetAutobrake(SimConnectManager sim, int level, double? current)
-    {
-        if (AutobrakeEvent(level) is { } a) { PressByValue(sim, a); return; }
-        if (current is double c && AutobrakeEvent((int)Math.Round(c)) is { } b) PressByValue(sim, b);
-    }
-
-    /// <summary>The parking brake lever's input for set / released: 0 = set (measured: input 0 with
-    /// the brake set, INI status 1).</summary>
-    internal static double ParkingBrakeInput(bool set) => set ? 0 : 1;
-
-    /// <summary>Where the parking brake's state is read (A330_PARKBRK: 1 = set): iniBuilds' own
-    /// INI_PARKING_BRAKE_STATUS.</summary>
-    internal static readonly (string name, string units, SimVarType type) ParkingBrakeRead =
-        ("INI_PARKING_BRAKE_STATUS", "number", SimVarType.LVar);
 
     /// <summary>The ALT knob step selector's input for 100-foot / 1000-foot steps: input 0 = 100 ft
     /// (measured: input 0 reads 1 and the knob steps 100 feet).</summary>
@@ -198,7 +121,6 @@ public partial class IniA330Definition
     // Announcements
     // =====================================================================
 
-    private int _lastFlapIndex = -1;
     private A330FmaText? _fmaAnnounced;
     private System.Windows.Forms.Timer? _fmaTimer;
     private ScreenReaderAnnouncer? _fmaAnnouncer;
@@ -208,7 +130,6 @@ public partial class IniA330Definition
 
     public override void ResetAnnouncementBaselines()
     {
-        _lastFlapIndex = -1;
         _fmaAnnounced = null;
         _takeoffCallouts.Reset();
         ResetPanelBaselines(false);   // plan 04
@@ -222,7 +143,6 @@ public partial class IniA330Definition
 
     public override void OnSimContextReset()
     {
-        _lastFlapIndex = -1;
         _fmaAnnounced = null;
         _fmaValues.Clear();
         _takeoffCallouts.Reset();
@@ -291,14 +211,6 @@ public partial class IniA330Definition
             case TakeoffV1Key: _takeoffCallouts.SetV1(value); return true;
             case TakeoffVrKey: _takeoffCallouts.SetVR(value); return true;
             case TakeoffV2Key: _takeoffCallouts.SetV2(value); return true;
-            case "A330_FLAPS":
-            {
-                int idx = (int)Math.Round(value);
-                if (_lastFlapIndex < 0 || idx == _lastFlapIndex) { _lastFlapIndex = idx; return true; }
-                _lastFlapIndex = idx;
-                if (idx >= 0 && idx < FlapDetents.Length) announcer.Announce(FlapDetents[idx]);
-                return true;
-            }
         }
         if (FmaInputVars.Any(f => f.key == varName))
         {
@@ -392,18 +304,11 @@ public partial class IniA330Definition
             case "A330_FCU_VS":
                 displayText = fpa ? FormattableString.Invariant($"flight path angle {(_sim?.GetCachedVariableValue("A330_FCU_FPA") ?? 0):0.0} degrees") : $"{value:0} feet per minute";
                 return true;
-            case "A330_FLAP_ANGLE": case "A330_SLAT_ANGLE": displayText = $"{value:0} degrees"; return true;
-            case "A330_GEAR_POS": displayText = $"{value:0} percent down"; return true;
-            case "A330_TRIM": displayText = FormatTrim(value); return true;
-            case "A330_LDG_ELEV_FT": displayText = $"{value:0} feet"; return true;
         }
         displayText = "";
         return false;
         static string Or(string s) => s.Length > 0 ? s : "none";
     }
-
-    internal static string FormatTrim(double deg) =>
-        Math.Abs(deg) < 0.05 ? "0.0" : $"{Math.Abs(deg).ToString("0.0", CultureInfo.InvariantCulture)} {(deg > 0 ? "up" : "down")}";
 
     private string ApStatus()
     {
@@ -509,7 +414,6 @@ public partial class IniA330Definition
             case HotkeyAction.ReadSpeedF: ReadSpeed(simConnect, announcer, "A330_F_SPEED", "F speed"); return true;
             case HotkeyAction.ReadSpeedVLS: ReadSpeed(simConnect, announcer, "A330_VLS", "VLS"); return true;
             case HotkeyAction.ReadSpeedVFE: ReadSpeed(simConnect, announcer, "A330_VMAX", "Maximum speed"); return true;
-
             // ---- dialogs ----
             case HotkeyAction.FCUSetHeading: ShowHeadingDialog(simConnect, announcer, parentForm); return true;
             case HotkeyAction.FCUSetSpeed: ShowSpeedDialog(simConnect, announcer, parentForm); return true;
@@ -535,7 +439,6 @@ public partial class IniA330Definition
             case HotkeyAction.FCUAltitudePush: PressAutopilot(simConnect, announcer, "A330_ALT_PUSH"); return true;
             case HotkeyAction.FCUVSPull: PressAutopilot(simConnect, announcer, "A330_VS_PULL"); return true;
             case HotkeyAction.FCUVSPush: PressAutopilot(simConnect, announcer, "A330_VS_PUSH"); return true;
-
             // ---- display reads (AI vision on the aircraft's own instrument camera) ----
             case HotkeyAction.ReadDisplayPFD:
                 ReadDisplay(Services.GeminiService.DisplayType.PFD, "PFD", announcer, parentForm,
@@ -553,7 +456,6 @@ public partial class IniA330Definition
                 ReadDisplay(Services.GeminiService.DisplayType.LowerECAM, "System display", announcer, parentForm,
                     new Services.InstrumentViewRequest(simConnect, EcamView));
                 return true;
-
             // ---- windows ----
             case HotkeyAction.ShowFenixMCDU:
                 hotkeyManager.ExitInputHotkeyMode();
@@ -1059,5 +961,4 @@ public partial class IniA330Definition
         return $"Altimeter {mb.ToString("0", CultureInfo.InvariantCulture)} hectopascals, "
              + $"{(mb / 33.8639).ToString("0.00", CultureInfo.InvariantCulture)} inches";
     }
-
 }
