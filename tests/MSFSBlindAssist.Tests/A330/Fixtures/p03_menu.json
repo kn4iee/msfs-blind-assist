@@ -1,0 +1,16 @@
+{
+  "gauge": "McduCaptain",
+  "complete": true,
+  "missing": 0,
+  "hiddenRowsLeftOut": true,
+  "texts": [
+    {"order": 6, "x": 22.0, "baseline": 43.0, "text": "       MCDU MENU", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0, 209.0, 226.0, 243.0, 260.0, 277.0]},
+    {"order": 11, "x": 310.0, "baseline": 69.0, "text": "SELECT", "font": "FMGSfont_B", "size": 29.5, "colour": [0.3, 0.3, 0.3], "charX": [310.0, 327.0, 344.0, 361.0, 378.0, 395.0]},
+    {"order": 7, "x": 22.0, "baseline": 95.0, "text": "<FM1", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0]},
+    {"order": 12, "x": 275.0, "baseline": 95.0, "text": "NAV B/UP>", "font": "FMGSfont_A", "size": 29.5, "colour": [0.3, 0.3, 0.3], "charX": [275.0, 292.0, 309.0, 326.0, 343.0, 360.0, 377.0, 394.0, 411.0]},
+    {"order": 8, "x": 22.0, "baseline": 147.0, "text": "<ATSU ", "font": "FMGSfont_A", "size": 29.5, "colour": [0.376, 0.804, 0.388], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0]},
+    {"order": 9, "x": 22.0, "baseline": 198.0, "text": "<AIDS", "font": "FMGSfont_A", "size": 29.5, "colour": [0.3, 0.3, 0.3], "charX": [22.0, 39.0, 56.0, 73.0, 90.0]},
+    {"order": 10, "x": 22.0, "baseline": 250.0, "text": "<CFDS", "font": "FMGSfont_A", "size": 29.5, "colour": [0.3, 0.3, 0.3], "charX": [22.0, 39.0, 56.0, 73.0, 90.0]},
+    {"order": 5, "x": 22.0, "baseline": 379.0, "text": "SELECT DESIRED SYSTEM", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0, 209.0, 226.0, 243.0, 260.0, 277.0, 294.0, 311.0, 328.0, 345.0, 362.0]}
+  ]
+}
