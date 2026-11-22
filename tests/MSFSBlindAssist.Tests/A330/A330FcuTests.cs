@@ -84,6 +84,19 @@ public class A330FcuTests
     }
 
     [Theory]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ToggleAutopilot1)]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ToggleAutopilot2)]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ToggleAutothrust)]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ToggleLocalizer)]
+    [InlineData(MSFSBlindAssist.Hotkeys.HotkeyAction.ToggleApproachMode)]
+    public void The_autoflight_toggle_hotkeys_are_not_handled_as_on_the_Fenix(MSFSBlindAssist.Hotkeys.HotkeyAction action)
+    {
+        var def = new IniA330Definition();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        Assert.False(def.HandleHotkeyAction(action, sim, new SpeechCapture(), null!, null!));
+    }
+
+    [Theory]
     [InlineData("sv-SE")]
     [InlineData("de-DE")]
     [InlineData("en-US")]

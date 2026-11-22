@@ -108,16 +108,18 @@ INPUT MODE - Press left bracket to activate
 
 FCU - typing a value (the window is set directly and read back, so you hear the
 value the FCU is really showing):
-  Ctrl+H     Set FCU Heading or Track. Dialog buttons: heading pull, heading
-             push (NAV), LOC and HDG-V/S / TRK-FPA.
+  Ctrl+H     Set FCU Heading or Track. Dialog buttons: Heading Push, Heading
+             Pull, HDG/VS TRK/FPA and LOC.
   Ctrl+S     Set FCU Speed - knots 100-399 or Mach 0.10-0.89; the units are
-             switched for you. Dialog buttons: speed pull, speed push, SPD/MACH
-             and A/THR.
-  Ctrl+A     Set FCU Altitude. Dialog buttons: altitude pull, altitude push,
-             ALT, knob steps (100 or 1000 feet), metric altitude, AP 1 and AP 2.
-  Ctrl+V     Set Vertical Speed or Flight Path Angle. Dialog buttons: V/S pull,
-             V/S push (level off), HDG-V/S / TRK-FPA and APPR.
-  Every button says its live state (On/Off, Active/Armed, the mode shown).
+             switched for you. Dialog buttons: Speed Push, Speed Pull, SPD/MACH
+             and ATHR.
+  Ctrl+A     Set FCU Altitude. Dialog buttons: Altitude Push, Altitude Pull,
+             ALT, knob steps (100 or 1000 feet), metric altitude, AP1 and AP2.
+  Ctrl+V     Set Vertical Speed or Flight Path Angle. Dialog buttons: V/S Push,
+             V/S Pull, HDG/VS TRK/FPA and APPR.
+  Each dialog also has a Cancel button that closes it and sends nothing.
+  A button that has a state says it (On/Off, Active/Armed, the mode shown);
+  the push and pull buttons just carry their name.
 
 FCU - knob pushes and pulls:
   Ctrl+1     Pull the heading knob (selected heading)
@@ -129,14 +131,11 @@ FCU - knob pushes and pulls:
   Ctrl+4     Pull the V/S knob (selected vertical speed)
   Shift+4    Push the V/S knob (level off)
 
-Autoflight toggles:
-  Shift+A    Autopilot 1
-  Ctrl+O     Autopilot 2
-  Ctrl+J     Autothrust (A/THR)
-  Ctrl+L     LOC
-  Shift+P    APPR
-  Ctrl+P     Open the Autopilot window - both autopilots, A/THR, LOC, APPR, all
-             four knobs' push and pull, ALT and a Read Flight Modes button.
+Autoflight:
+  Ctrl+P     Open the Autopilot window - AP1, AP2, ATHR, APPR, LOC, then the
+             push and pull of all four knobs, ALT and a Read flight modes
+             button. There are no separate hotkeys for the autopilots, A/THR,
+             LOC or APPR; press them here.
   Engagement and disengagement are announced by the aircraft's own state, not by
   the key press, so you hear what actually happened.
 

@@ -577,12 +577,9 @@ public partial class IniA330Definition
                 ShowTrackedWindow(() => new Forms.IniA330.IniA330AutopilotWindow(AutopilotRows(sim, announcer), ShortName), w => w.ShowForm());
                 handled = true; return;
 
-            // ---- engage / mode keys (the result is announced by the monitor) ----
-            case HotkeyAction.ToggleAutopilot1: PressAutopilot(sim, announcer, "A330_AP1"); handled = true; return;
-            case HotkeyAction.ToggleAutopilot2: PressAutopilot(sim, announcer, "A330_AP2"); handled = true; return;
-            case HotkeyAction.ToggleAutothrust: PressAutopilot(sim, announcer, "A330_ATHR"); handled = true; return;
-            case HotkeyAction.ToggleLocalizer: PressAutopilot(sim, announcer, "A330_LOC"); handled = true; return;
-            case HotkeyAction.ToggleApproachMode: PressAutopilot(sim, announcer, "A330_APPR"); handled = true; return;
+            // ---- knob push / pull keys (the result is announced by the monitor) ----
+            // The input-mode engage toggles (AP 1, AP 2, A/THR, LOC, APPR) are not handled, as on the Fenix:
+            // those buttons are in the Ctrl+P window and the value windows.
             case HotkeyAction.FCUHeadingPull: PressAutopilot(sim, announcer, "A330_HDG_PULL"); handled = true; return;
             case HotkeyAction.FCUHeadingPush: PressAutopilot(sim, announcer, "A330_HDG_PUSH"); handled = true; return;
             case HotkeyAction.FCUSpeedPull: PressAutopilot(sim, announcer, "A330_SPD_PULL"); handled = true; return;
