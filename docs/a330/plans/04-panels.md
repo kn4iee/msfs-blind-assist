@@ -36,6 +36,22 @@
   by value; the first officer's altimeter knob is pressed by value, as the captain's.
 - Keys that change nothing: the ECAM's C/B key (the page stays), and STS with nothing to report.
 
+## Measured on 2026-11-22 (in flight, climbing through FL190 to FL230)
+
+- **Predictive windshear is inverted in today's map.** `INI_WX_PWS_SWITCH` and its input event
+  `B:AIRLINER_WX_PWS` both read 1 while the E/WD showed the amber memo PRED W/S OFF. After
+  `0 (>B:AIRLINER_WX_PWS_Set)` both read 0 and the memo went. So 0 = AUTO and 1 = OFF; the generator's
+  `direct("Off", "Auto")` pairs them the other way, and the panel row says "Auto" while the switch is off.
+  The 2026-10-16 probe recorded which variable moved; the position names came from the generator's
+  conventions, and a read of the switch's own variable agrees with whatever was written, so nothing caught it.
+- **A read straight after a write can show the old value.** The same L:var still read 1 in a read sent
+  at once after the write and 0 in one a few seconds later (not timed).
+- **How many names rest on a convention** (the generator at 7113f8803; the groups overlap): 79 selectors
+  named through `direct()` (position names in an assumed order), 23 push-buttons through `pb()` (the
+  "pushed in reads 1" convention), and 43 controls whose read is their own input event. Predictive
+  windshear is one of the 79; packs 1 and 2 and hot air 1 and 2, which toggle (plan 06's block), are
+  among the 23.
+
 ## Review Focus
 
 - An input event in the catalogue that is neither a control nor left out: the generator fails, naming it (Task 2 test).
@@ -43,6 +59,8 @@
 - Two rows of one panel with one name after the aircraft's titles are applied (the captain's and first officer's copies): the side comes first in the name, and the all-aircraft sweep of plan 01 still passes (Task 3 test).
 - A regenerated map that drops or renames a key silently: a test compares the key set with the committed list of keys and fails on a removal (Task 2 test).
 - A control whose read is its own input event and that reads back what was written even when the aircraft ignored it ([DBG-5]): the sweep checks a downstream variable where one exists and marks the rest "read is its own event" (Task 4).
+- A swapped pair of position names that reads back exactly as written (predictive windshear, measured 2026-11-22): a read of the control's own variable never proves a name. A pairing is proven only by an indication the control does not write itself, its proof: an E/WD memo, a lower ECAM page, a lamp, or a simulator variable the aircraft drives (Task 4 Step 0). A pairing with no proof stays unproven and is listed for the owner.
+- A verdict taken before the aircraft has caught up (the same switch's L:var lagged its write): the runner waits for the read and the proof to settle, up to a limit, and records the time it took, instead of one read at a fixed delay (Task 4 Step 2).
 
 ---
 
@@ -72,6 +90,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 04` (`Pla
     "controls": { "<EVENT or own key>": { "key": "A330_IRS1_MODE", "section": "Overhead", "panel": "ADIRS", "kind": "select",
                   "mode": "set", "read": "INI_IRS1_STATE",
                   "positions": [ { "value": 0, "input": 0, "name": "0", "proven": true }, ... ],
+                  "proof": { "kind": "ewd_memo", "text": "PRED W/S OFF", "when": "1" },
                   "lamps": [ ... ], "holdMs": 150 } },
     "name_overrides": { "A330_IR1": { "label": "...", "aircraft_says": "IR1", "why": "..." } },
     "position_overrides": { "A330_IR1": { "1": { "label": "On", "aircraft_says": "PRESS", "why": "the aircraft's string names the action" } } },
@@ -80,10 +99,17 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 04` (`Pla
     "control_order": { "ADIRS": ["A330_IRS1_MODE", ...] }
   }
   ```
-  `"name": "0"` is the key of the aircraft's string for that position; the generator writes the string's text as the label. `keys.txt` is every key the map has ever had, one a line.
+  `"name": "0"` is the key of the aircraft's string for that position; the generator writes the string's text as the label. `keys.txt` is every key the map has ever had, one a line. `proof` names the indication that proves the control's positions (Task 4 Step 0): `kind` is `ewd_memo`, `sd_page` (with `page` and the text the page shows), `lamp` (its variable), or `simvar`; `when` is the position at which the indication shows. `proven` turns true only from a sweep verdict that saw the proof follow the position's name.
 
 - [ ] **Step 1:** Move what `generate_a330_map.py` holds as Python calls into `curation.json` (a one-off script, not committed), keeping today's labels as overrides for now, so the regenerated map is byte-identical to the committed one. Tests: `test_the_map_regenerates_identically_from_curation`, `test_every_catalogued_event_is_a_control_or_left_out_with_a_reason`, `test_a_left_out_event_that_is_also_a_control_is_refused`, `test_no_key_ever_disappears` (against `keys.txt`), `test_a_control_naming_an_event_the_catalogue_lacks_is_refused`. The second test fails now: fill `left_out` only for the events the definition presses itself (the FCU, the brakes, the baro knobs) and the MCDU keys, and put every other event in a `not_yet_offered` list, which the test accepts only while this plan is open (Task 5 empties and removes it). Commit `refactor(a330-gen): the map from a curation file; every event accounted for`.
 - [ ] **Step 2:** Names from the aircraft: the generator takes each control's label from its title in `control_names.json` and each position's label from its position name there, applying the naming rule Task 3 sets, unless an override says otherwise. Tests: `test_a_label_is_the_aircrafts_title`, `test_an_override_without_the_aircrafts_string_and_a_reason_is_refused`, `test_an_action_word_is_never_a_position_name` ("PRESS", "PUSH", "PULL", "TURN" need an override), `test_an_unproven_pairing_is_listed`. Regenerate; list every label that changed (old, new) in the evidence file. Commit `feat(a330-gen): names and positions from the aircraft's own strings`.
+
+### Task 2a: Predictive windshear, measured inverted (no sim)
+
+The one inversion already measured (2026-11-22, this plan's block). It needs no sim and may run before Task 1; whichever of plans 04 and 06 is claimed first does it, together with plan 06's Task 1a in the same commit (the First Officer's values are pinned to this map's labels, so one without the other fails the suite), and tells the other plan's claimant. The key `A330_WX_PWS` does not change.
+
+- [ ] **Step 1:** Steps 1-5 with `test_predictive_windshear_reads_0_as_auto` (Python) and, in `A330ControlMapTests`, `Predictive_windshear_position_0_is_auto`: the generator's line becomes `select("WX_PWS", P, WX, "Predictive windshear", "WX_PWS", "INI_WX_PWS_SWITCH", [(0, 0, "Auto"), (1, 1, "Off")])`, its comment citing this plan's 2026-11-22 block; regenerate. Commit `fix(a330): the Weather Radar predictive windshear` with plan 06's Task 1a.
+- [ ] **Step 2:** In the curation file (Task 2), this control carries `"proof": { "kind": "ewd_memo", "text": "PRED W/S OFF", "when": "1" }` and both positions `proven`, with the measurement's date.
 
 ### Task 3 [owner]: The naming rule, heard
 
@@ -94,11 +120,15 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 04` (`Pla
 
 **Files:** Create `tools/a330-gen/PanelSweep/**` (`PanelSweep.csproj`, `Program.cs`, `SweepPlanner.cs`, `SweepRunner.cs`, `denylist.txt`, `README.md`); test `tests/MSFSBlindAssist.Tests/A330/A330PanelSweepPlannerTests.cs` (the planner is linked into the test project as the 757's is).
 
-- [ ] **Step 1:** Steps 1-5 for the planner (pure): for each control not denied, the positions to visit in order and the return to the position it started in; a button is planned as one press only where it reports a state. Tests: `A_selector_visits_every_other_position_and_returns`, `A_denied_control_is_skipped_with_its_reason`, `A_guard_is_opened_only_to_reach_its_switch_and_closed_again`, `A_button_with_no_state_is_skipped`.
-- [ ] **Step 2:** The runner: through `IniA330Definition`'s own write path, 400 ms apart, read back after 1.5 s (the control's read, and a downstream variable where the curation names one), restore, and write `sweep-<date>.tsv` (key, label, position, sent, read back, downstream, verdict). `--dry-run` prints the plan only.
+**Prerequisite:** plan 02's display reader client has landed (`IA330Displays`), so the runner can read the E/WD and the lower ECAM page; plan 08's memo and page lists give the proofs' words.
+
+- [ ] **Step 0 (no sim): the proof table.** In the evidence file, for every control: the indication that proves its positions (the review focus's "proof"), from the A330's E/WD memo list and lower ECAM pages, for example predictive windshear → PRED W/S OFF memo; seat belts and no smoking → their memos; strobe → STROBE LT OFF; packs, bleeds and crossbleed → the BLEED page; fuel pumps and crossfeed → the FUEL page; hydraulic pumps → the HYD page; generators, batteries and bus ties → the ELEC pages; probe heat and anti-ice → their memos; TCAS and transponder → the ND or the memo; lights with no memo → the simulator's light state (`LIGHT STATES`, `LIGHT LANDING:n` and the like). A control with no proof is listed for the owner as "read is its own variable". Write each proof into the curation file.
+- [ ] **Step 1:** Steps 1-5 for the planner (pure): for each control not denied, the positions to visit in order and the return to the position it started in; a button is planned as one press only where it reports a state; the lower ECAM page a control's proof needs is selected before it. Tests: `A_selector_visits_every_other_position_and_returns`, `A_denied_control_is_skipped_with_its_reason`, `A_guard_is_opened_only_to_reach_its_switch_and_closed_again`, `A_button_with_no_state_is_skipped`, `A_proof_on_a_lower_ecam_page_selects_the_page_first`.
+- [ ] **Step 2:** The runner: through `IniA330Definition`'s own write path, 400 ms apart; after each write it reads the control's read and its proof until both settle or 5 s pass, and records the time each took; restore, and write `sweep-<date>.tsv` (key, label, position, sent, read back, settle ms, proof before, proof after, verdict). Verdicts: `proven` (the proof followed the position's name), `inverted` (the proof followed the other name), `read-only` (the read moved, there is no proof), `dead` (nothing moved), `lagged` (settled only after 1.5 s: still a pass, its time goes to plan 06). `--dry-run` prints the plan only.
 - [ ] **Step 3:** `denylist.txt`, each line with its reason: the engine masters and start selector, the fire handles, agents and tests, the IDG disconnects, the RAT, the gear lever and gravity extension, the flap and speedbrake levers, the parking brake, the ADIRS selectors (a realignment), the batteries and external power (the cockpit goes dark), the APU, passenger oxygen, the evacuation command, the emergency lights, ditching, cargo and cabin doors, anything that calls the cabin or ground crew.
-- [ ] **Step 4 [owner present]:** Run the sweep on the ground, engines off, external power on. Then the denied controls by hand, one at a time, with the owner's go-ahead for each, at least: the parking brake's direction, the ADIRS selectors (measured 2026-11-19: input 1 on each put all three in NAV), the landing and nose light position words, the dome light and wipers. Record every verdict in the evidence file.
-- [ ] **Step 5:** Each dead, inverted or mislabeled control fixed in the curation file (a position's `input`, `value` or `proven`; a wrong `read`), one commit a cause: `fix(a330): the <panel> <control>`. Clear the probe side effect the developer doc lists (RMP 1's NAV backup) or say it cannot be cleared from outside.
+- [ ] **Step 4 [owner present]:** Run the sweep on the ground, engines off, external power on. Then the denied controls by hand, one at a time, with the owner's go-ahead for each, at least: the parking brake's direction, the ADIRS selectors (measured 2026-11-19: input 1 on each put all three in NAV), the landing and nose light position words, the dome light and wipers. Record every verdict in the evidence file. A proof the ground does not show (a memo only shown in flight) goes to plan 11's flight by its key, and stays unproven until then.
+- [ ] **Step 5:** Each dead, inverted or mislabeled control fixed in the curation file (a position's `input`, `value` or `proven`; a wrong `read`), one commit a cause: `fix(a330): the <panel> <control>`. A fix that changes what a position's value means is agreed with plan 06's claimant first: the First Officer writes these values (`IniAirbusKeys`). Clear the probe side effect the developer doc lists (RMP 1's NAV backup) or say it cannot be cleared from outside.
+- [ ] **Step 6:** Steps 1-5 for the gate: `test_every_offered_position_is_proven_or_listed` (a position with `proven` false is in the evidence file's unproven list, by key and position) and, in C#, `An_unproven_position_is_marked_in_the_map`, so plan 06 can refuse to write it. Commit.
 
 ### Task 5 [sim]: The controls and panels BA does not offer yet (R8, R9)
 
@@ -134,6 +164,7 @@ Work the groups of Task 1's table, each the same way: measure what the control w
 1. In the Panels list, walk the Overhead's Electrical and ADIRS panels: the names are the cockpit's, and the first rows are what you touch at the start of every flight.
 2. Move five controls you know by ear (beacon, strobe, seat belts, APU master, a fuel pump) from BA: each does what its row says and reads back.
 3. The first officer's radio panel: tune a frequency and swap it.
+4. In the Weather Radar panel, set Predictive windshear to Off, then Auto: the E/WD's PRED W/S OFF memo shows at Off and goes at Auto (Task 2a).
 
 ## Handoff to plan 12
 

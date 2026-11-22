@@ -58,6 +58,19 @@
 - Engine start with the simulator's engine covers on holds N2 at 0 for a minute (measured): the start flow checks the covers first and says so, never a silent wait (Task 6).
 - A flow run twice, or resumed after an aircraft switch: no step fires twice (the cross-profile dependency tests, Task 2).
 - The gear call with one gear not down (FO-13): the confirmation names it (Task 3).
+- A value the First Officer writes whose position name is unproven in the map (plan 04's review focus): the profile's values are pinned to the map's labels (`IniAirbusFoTests`), so a swapped name in the map becomes a wrong First Officer action that reads back as done (predictive windshear, 2026-11-22). Task 1 lists each write's proof status; once plan 04's sweep has landed, a write to an unproven position fails a test (Task 1 Step 2).
+
+## Measured on 2026-11-22 (in flight)
+
+- **The First Officer switches predictive windshear OFF for take-off and ON after landing.** The Taxi
+  flow's `TX_PWS` writes `A330_WX_PWS` = 1 and the Taxi checklist's "Predictive windshear: AUTO" reads 1
+  as done; After Landing's `AL_PWS_OFF` writes 0 and reads 0 as done (`IniAirbusFlowDefinitions.cs`
+  `TX_PWS`, `AL_PWS_OFF`; `IniAirbusChecklistDefinitions.cs` the same ids, at 7113f8803). Measured in
+  flight: 1 is OFF and 0 is AUTO (plan 04's 2026-11-22 block: the E/WD's PRED W/S OFF memo showed at 1
+  and went at 0). Both the write and the tick are wrong, and the read-back agrees with them.
+- `IniAirbusKeys`' summary calls its values "the generated map's measured positions". The 2026-10-16
+  probe measured which variable moved, not which position a value is, so these values are only as good
+  as the map's names: plan 04 counts 79 selectors and 23 push-buttons named by convention.
 
 ---
 
@@ -65,12 +78,19 @@
 
 As plan 01's Task 0, with this file's path and `docs(a330): claim plan 06` (`Plan: 06`). Branch from the base commit the index records for early plans.
 
+### Task 1a: Predictive windshear, measured inverted (no sim)
+
+Done in one commit with plan 04's Task 2a (the map's fix), by whichever plan is claimed first, who tells the other plan's claimant.
+
+- [ ] **Step 1:** Steps 1-5: `IniAirbusKeys` gains named positions as the Fenix's flows have (`PwsAuto = 0`, `PwsOff = 1`, citing this plan's 2026-11-22 block); `TX_PWS` writes `PwsAuto` and its checklist line is done at `PwsAuto`; `AL_PWS_OFF` writes `PwsOff` and is done at `PwsOff`. Tests `Taxi_sets_predictive_windshear_to_auto_0`, `After_landing_sets_predictive_windshear_off_1`, and `IniAirbusFoTests` pinned against plan 04's corrected label. Commit with plan 04's Task 2a as `fix(a330): the Weather Radar predictive windshear`.
+
 ### Task 1: The written sweep: what every step writes and reads back
 
 **Files:** the evidence file (the table); fixes in `FirstOfficer/IniAirbus/IniAirbusFlowDefinitions.cs`, `IniAirbusStateEvaluator.cs`, `IniAirbusActionExecutor.cs`, `IniAirbusKeys.cs`; test `tests/MSFSBlindAssist.Tests/FirstOfficer/IniAirbusReadBackTests.cs`.
 
-- [ ] **Step 1:** One table in the evidence file, a row a flow step and a row a checklist item: the control key, the route (`FoWriteRoute`: calculator, input event, toggle, hold), the value sent for the wanted position (`FoPositionValue`), the key and value the evaluator reads to call it done, and whether a write that worked could read as failed or a write that did nothing as done. Read the code; no sim needed.
+- [ ] **Step 1:** One table in the evidence file, a row a flow step and a row a checklist item: the control key, the route (`FoWriteRoute`: calculator, input event, toggle, hold), the value sent for the wanted position (`FoPositionValue`), the map's name for that value and its proof status (proven, unproven, or read is its own variable: plan 04's Task 4), the key and value the evaluator reads to call it done, and whether a write that worked could read as failed or a write that did nothing as done. Read the code; no sim needed. A value whose name is unproven and whose step makes aviation sense only the other way round is flagged for plan 04's sweep first.
 - [ ] **Steps 1-5 per defect found:** a test in `IniAirbusReadBackTests` that shows it on an in-memory map (`A_pushbutton_that_went_on_reads_done`, `A_step_with_no_read_back_says_sent_not_set`, one test a defect), the fix, commit `fix(a330-fo): <the step>`.
+- [ ] **Step 2 (after plan 04's Task 4 has landed):** Steps 1-5 for `An_fo_write_to_an_unproven_position_fails` (every flow step's and checklist action's value is a position plan 04 marks `proven`) and, where a control's proof is a variable (a lamp, a simulator variable), `A_step_is_done_by_its_proof` (the evaluator reads the proof, not the control's own variable). Each step the test catches is fixed, proven by plan 04, or becomes a Captain reminder until it is; each is listed in the record. The settle times of plan 04's `lagged` verdicts set that step's read-back wait ([FO-10], [FO-11]). Commit.
 
 ### Task 2: The profile in every cross-profile test
 
@@ -116,6 +136,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 06` (`Pla
 1. A cold aircraft at the gate: Shift+C, run Electrical Power Up to After Start with the First Officer; every step it reports is true in the cockpit.
 2. Landing: "gear down" is confirmed with three greens, and the ground spoilers are armed.
 3. Plan 11 flies the rest (the whole flight with the First Officer).
+4. After the Taxi flow the E/WD shows no PRED W/S OFF memo; after the After Landing flow it does (Task 1a).
 
 ## Handoff to plan 12
 

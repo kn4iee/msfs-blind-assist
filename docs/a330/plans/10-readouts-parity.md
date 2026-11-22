@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Task 0, the claim, is the controller's own, done before Task 1 is dispatched.
 
-**Goal:** Every key that reads or opens something on the app's other Airbus aircraft does so on the A330 or is recorded as not applicable with its reason; the definition has the members the app's shared features call on every other Airbus (visual guidance, taxi turn lead, flight phase, call-out muting); and everything the A330 speaks or formats is tested under a comma-decimal culture.
+**Goal:** Every key that reads or opens something on the app's other Airbus aircraft does so on the A330 or is recorded as not applicable with its reason, and so does everything they say without a key (radio frequency changes first); the definition has the members the app's shared features call on every other Airbus (visual guidance, taxi turn lead, flight phase, call-out muting); and everything the A330 speaks or formats is tested under a comma-decimal culture.
 
 **Architecture:** A parity table first: every hotkey action and every overridable definition member, the Fenix's and the FlyByWire A32NX's handling beside the A330's. Each gap is then a small addition in the read-outs file, fed by a variable measured live or by a display page plans 08 and 09 already build. Values that need a flight to measure are implemented with the base class's behavior and handed to plan 11.
 
@@ -31,12 +31,30 @@
   `INI_FMS2_message_light` (an FMS message is waiting), `INI_ATC_MSG`, `INI_COMPANY_MSG_RECEIVED`,
   `INI_ND_MESSAGE`.
 
+## Measured on 2026-11-22 (in flight)
+
+- **The A330 never says a radio frequency change.** `A330_COM1_ACT` and `A330_COM1_STBY` are
+  `OnRequest`, read only by the radio read-out key (`ReadRadios`), and VHF 2 is not registered at all.
+  The FlyByWire A32NX says "COM 1 active 121.500" for COM 1, 2 and 3, active and standby, and
+  "Transmitting on VHF 1" when the transmit selection moves (`FlyByWireA320Definition`'s COM radios
+  branch: silent first reading, VHF band only, Ctrl+M mute honoured); the Fenix says "RMP1 active
+  132.475" for each radio panel and "Squawk 1234" (`RmpFrequencyAnnouncement`, its squawk branch); the
+  A380 says "Squawk 1234"; the PMDG 737 and 777, the HorizonSim 787 and the iFly 737 announce COM 1
+  active. No plan had it: Task 5.
+- **The simulator's radios follow the aircraft's.** `COM ACTIVE FREQUENCY:1` 128.025 and
+  `COM STANDBY FREQUENCY:1` 128.025 matched `INI_COM1_FREQUENCY` 128025 and `INI_COM1_STBY_FREQUENCY`
+  128025 (kHz); `COM ACTIVE FREQUENCY:2` 123.450 matched `INI_COM2_FREQUENCY` 123450;
+  `COM STANDBY FREQUENCY:2` read 118.125, `COM ACTIVE FREQUENCY:3` 124.850, `TRANSPONDER CODE:1` 4636.
+  Not measured: a tune or swap on the radio panel, and how soon each variable follows it.
+
 ## Review Focus
 
 - A key that says nothing at all on the A330 while it speaks on every other Airbus: the parity test fails on an action neither handled nor listed as not applicable (Task 1).
 - A weight or fuel figure in the wrong unit: the unit follows the aircraft's own unit setting, read at the time of the key (Task 2 test in kg and lb).
 - "5,2 tonnes" under de-DE, or a typed value misread: every sentence builder is run under de-DE and sv-SE (Task 4).
 - The take-off call-outs muted by one Ctrl+M row silencing another's ([VAR-8]): each call-out checks its own row and the branch is exempt from the wrap (Task 3 test).
+- Something the other Airbus aircraft say by themselves that the A330 never says (a radio frequency change, 2026-11-22): parity covers background announcements as well as keys (Task 1 Step 3), and each gap is closed or listed with its reason.
+- A frequency swap said twice or four times (active and standby both change): each changed value is said once, and a swap is heard as the new active and the new standby (Task 5 test).
 
 ---
 
@@ -50,6 +68,7 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 10` (`Pla
 
 - [ ] **Step 1:** The table, from the code: a row every `HotkeyAction` the Fenix definition or the FlyByWire A32NX definition handles (their `HandleHotkeyAction` and hotkey maps), with what each does there and what the A330 does (handled in which plan's file, or missing). A second table: every virtual member of `BaseAircraftDefinition` and `IAircraftDefinition` those two override, and whether the A330 does.
 - [ ] **Step 2:** Steps 1-5: `Every_action_the_other_Airbus_aircraft_handle_is_handled_or_listed` (the test holds a list `NotApplicable` of action and reason; an action the A330's dispatcher does not handle and the list lacks fails). It fails now on the missing ones: Tasks 2 and 3 empty the failures. Commit `test(a330): hotkey parity with the other Airbus aircraft`.
+- [ ] **Step 3:** The same for what is said without a key. A third table, from the code: every kind of background announcement the Fenix, the FlyByWire A32NX and the Headwind A330 make (their `IsAnnounced` variables and what their update handlers speak, grouped: radios and transponder, autopilot and autothrust, master warning and caution, ECAM, flight modes, FCU values, flaps, gear and spoilers, lights and signs, APU and engines, alerts, calls and messages), with the A330's handling beside it (which plan's file, or missing) and the sentence each of the three says (the index's announcement convention: the A330's sentence is the A32NX's or the Fenix's). Then Steps 1-5 for `Every_announcement_the_other_Airbus_aircraft_make_is_made_or_listed`: the test holds the table's kinds, each mapped to the A330 key that announces it (checked `IsAnnounced` in `GetVariables()`, or claimed by a handler the test names) or to a `NotApplicable` reason. A missing kind owned by another plan (08's ECAM, 05's FCU and autopilot, 09's flight modes) goes to that plan's claimant; the rest are Task 5's. Commit `test(a330): announcement parity with the other Airbus aircraft`.
 
 ### Task 2 [sim]: The missing read-outs
 
@@ -77,14 +96,24 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 10` (`Pla
 
 - [ ] **Steps 1-5:** one theory over every sentence builder the A330 has that formats a number (find them: `git grep -n -E "\\$\"|ToString\\(" MSFSBlindAssist/Aircraft/IniA330Definition*.cs MSFSBlindAssist/Aircraft/A330`): each run under en-US, de-DE and sv-SE with `TestCulture.Run` must give the same text. A builder in another plan's file that fails is fixed by that plan's claimant if the plan is open, else here with a note in the record. Commit `test(a330): spoken text under comma-decimal cultures`.
 
+### Task 5: The radios said when they change
+
+**Files:** `Aircraft/IniA330Definition.Readouts.cs`; test `A330RadioAnnouncementTests.cs`; the evidence file.
+
+- [ ] **Step 1 [sim]:** On the captain's radio panel, with the owner's go-ahead: tune VHF 1's standby, swap it, tune VHF 2's, swap it. Record which variables move (the simulator's `COM ACTIVE/STANDBY FREQUENCY:1/2` and the aircraft's `INI_COM1/2_(STBY_)FREQUENCY`), in what order and how soon, and whether a swap moves both in one update or two. The announcement takes the variable that follows the panel first and never shows a value in between.
+- [ ] **Steps 1-5:** COM 1 and COM 2, active and standby, announced exactly as the FlyByWire A32NX's are (the index's announcement convention): `Continuous`, a Ctrl+M row each, the first reading seeded silently, said only on a change of more than 0.5 kHz inside the VHF band (118.000 to 137.000), in the A32NX's sentence "COM 1 active 128.025" / "COM 1 standby 128.025", three decimals with the invariant culture ([CORE-21]), the Ctrl+M mute honoured; the radio read-out key reads the same keys. Check [VAR-7] (no second continuous key with the same simulator name in the batch) before registering. Tests: `Tuning_COM_1_standby_is_said_once`, `A_swap_says_the_new_active_and_the_new_standby_once_each`, `The_first_reading_is_silent`, `A_value_outside_the_VHF_band_is_silent`, `A_frequency_is_said_with_a_point_under_de_DE`, `Muting_COM_1_standby_leaves_COM_1_active_spoken`, and `The_sentence_is_the_A32NXs` (the A330's builder and the A32NX's give the same text for the same radio and value). Commit `feat(a330): radio frequency changes are said`.
+- [ ] **Steps 1-5, the rest of the radios as the A32NX and the Fenix say them:** "Transmitting on VHF n" when the transmit selection moves to a radio (the rising edge only, as the A32NX's `COM_TRANSMIT:n`; measure first which variable the A330's audio panel moves: the simulator's `COM TRANSMIT:n` or an `INI_*`); "Squawk 1234" when the transponder code changes (the A380's and the Fenix's sentence; the A330 reads `TRANSPONDER CODE:1`, 4636 on 2026-11-22: say whether it is BCD as on the FlyByWire aircraft or plain); COM 3 as the A32NX says it, or listed in `NotApplicable` if the A330's VHF 3 is data only. Tests named for each, as above. Commit a radio at a time.
+- [ ] **Step 2:** The radio read-out key (`ReadRadios`) says each radio in the same words ("COM 1 active 128.025, standby 128.025"), so the key and the announcement agree; test `The_radio_read_out_uses_the_announcement_words`.
+
 ## In-sim checks (owner)
 
 1. Press each read-out key of the hotkey guide's A330 list once on the ground and once in cruise: none is silent, and fuel and weight match the aircraft's displays.
 2. Open the A330's window list and open three windows from it.
+3. Tune VHF 1's standby and swap it: you hear "COM 1 standby ...", then the new active and standby, each once, as on the FlyByWire A32NX (Task 5).
 
 ## Handoff to plan 12
 
-- **Pilot-facing:** the new read-out keys and the window list. Hotkey guide and `guide/hotkey-reference.md`: every key added by any plan, in the Airbus chapters' order. Changelog `improvement`.
+- **Pilot-facing:** the new read-out keys and the window list; radio frequency changes said (Task 5). Hotkey guide and `guide/hotkey-reference.md`: every key added by any plan, in the Airbus chapters' order. Changelog `improvement`.
 - **Rule proposals:** none expected.
 - **For plan 11:** the visual-guidance biases and the taxi turn lead to measure; the flight-phase variable through a whole flight.
 - **Frozen files:** `Services/DefAnnounceMuteSets.cs` (done here by exception if needed).

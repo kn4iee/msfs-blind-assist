@@ -35,13 +35,13 @@ no access; a task that needs the reader program running says so.
 | 01 | `01-foundation.md`: an independent review of the branch's commits and its fixes; the hooks, the definition split by owner, the tests split by owner, the A330 in every all-aircraft test | first | — |
 | 02 | `02-reader-client.md`: the app's side of the display reader: the frame contract, the client that starts the reader program and receives its frames, the status and its one spoken notice, the live display window, a replay source for tests | early | 01; its Task 6 needs the reader program |
 | 03 | `03-mcdu.md`: the MCDU window on the reader, both sides, the scratchpad and FMS messages, the keys never verified; the pixel reader, its glyph file and training tool removed; a spoken message, not an AI read, when the reader cannot read | later | 02; its sim tasks need the reader program |
-| 04 | `04-panels.md`: every input event accounted for, names and positions from the aircraft's own strings, a live sweep of every control, the missing panels, the order by daily use | early | 01 |
+| 04 | `04-panels.md`: every input event accounted for, names and positions from the aircraft's own strings, a live sweep of every control, the missing panels, the order by daily use; each position proven by the cockpit's own display, not its own read-back | early | 01; its Task 4 after plan 02 (the E/WD and lower ECAM are its proofs) |
 | 05 | `05-fcu-autopilot.md`: the FCU, autopilot and altimeter windows proven and fixed, knob call-outs, the autopilot members the app's automation uses | early | 01 |
-| 06 | `06-first-officer.md`: the First Officer at parity with the other Airbus profiles, in the simulator's own procedure order, every write seen to take effect | early | 01; its Task 5 after plan 04's Task 6 |
+| 06 | `06-first-officer.md`: the First Officer at parity with the other Airbus profiles, in the simulator's own procedure order, every write seen to take effect, only to positions plan 04 has proven | early | 01; its Task 1a with plan 04's Task 2a; its Task 1 Step 2 after plan 04's Task 4; its Task 5 after plan 04's Task 6 |
 | 07 | `07-efb.md`: every EFB page against the EFB checklist, fixtures and tests, the connection closed on a switch (the chocks and covers press left alone) | early | 01 |
 | 08 | `08-ecam.md`: the E/WD and lower ECAM windows, with the ECAM keys in them, and their call-outs | later | 02; its sim tasks need the reader program |
 | 09 | `09-pfd-nd-displays.md`: the FMA's words read from the PFD, the PFD window, the ND, ISIS and DCDU windows, with their controls in them, and their call-outs | later | 02; its sim tasks need the reader program |
-| 10 | `10-readouts-parity.md`: the missing hotkeys and definition members, the comma-decimal tests | later | 01; its display-fed read-outs after 08 and 09 |
+| 10 | `10-readouts-parity.md`: the missing hotkeys and definition members, what the other Airbus aircraft say without a key (radio frequency changes first), the comma-decimal tests | later | 01; its display-fed read-outs after 08 and 09 |
 | 11 | `11-flight.md`: one flight gate to gate with the First Officer; the measurements only a flight gives | audit | 03-10 |
 | 12 | `12-integration.md`: handoffs, the release carrying the reader program, the chocks and covers press removed, rules, docs, guide, hotkey guide, changelog, the pull request, delete `docs/a330/` | last | all |
 
@@ -199,6 +199,13 @@ reviewer after each); plans 11 and 12 are live work, worked with superpowers:exe
 - What is spoken is the value read back; a direct interaction is confirmed once, with what the screen
   reader cannot say (CORE-7); a background change speaks once, after a silent first reading, through the
   non-interrupting announce.
+- Announcements sound like the Fenix's and the FlyByWire A32NX's (owner, 2026-11-22: "Would like the
+  announcements to sound like fenix/fbw"): for the same event the A330 says the same sentence, in the
+  same order, with the same number format, as those two do (COM 1 active 128.025, Squawk 1234,
+  Transmitting on VHF 1); a cockpit word inside it (a memo, a flight mode, a control's name) stays as
+  the aircraft writes it. Where the Fenix and the A32NX differ, the A32NX's sentence until the owner
+  rules, and the plan's evidence file lists both. Each announcing plan's test pins the sentence against
+  the A32NX's or the Fenix's own builder where one exists, so the two cannot drift apart.
 - A display read is spoken or shown only from a COMPLETE frame (plan 02's `A330Frame.Complete`), and a
   call-out only once two complete frames in a row agree.
 - Colours and hidden list rows (spec M14, M15): the reader does not give them yet. Build and test on the
