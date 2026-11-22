@@ -61,6 +61,76 @@ public class A330HooksTests : IDisposable
     }
 
     [Fact]
+    public void A_hook_is_declared_without_an_access_modifier()
+    {
+        string hooks = File.ReadAllText(Path.Combine(AircraftFolder(), "IniA330Definition.Hooks.cs"));
+        var withModifier = Regex.Matches(hooks, @"^\s*(?:public|private|protected|internal|static|virtual|override|abstract)\b[^\n]*\bpartial void\b[^\n]*", RegexOptions.Multiline)
+            .Concat(Regex.Matches(hooks, @"^\s*partial\s+(?:public|private|protected|internal)\b[^\n]*", RegexOptions.Multiline))
+            .Select(m => m.Value.Trim()).ToList();
+        Assert.True(withModifier.Count == 0, "partial void hooks take no access modifier: " + string.Join(" | ", withModifier));
+    }
+
+    private static readonly (string Method, string[] Hooks)[] Contract =
+    {
+        ("BuildVariables", new[] { "AddPanelVariables", "AddFcuVariables", "AddFlightDisplayVariables", "AddEcamVariables",
+            "AddMcduVariables", "AddReadoutVariables", "AddFirstOfficerVariables" }),
+        ("HandleUIVariableSet", new[] { "HandleFcuSet", "HandleEcamSet", "HandleFlightDisplaySet", "HandlePanelSet" }),
+        ("ProcessSimVarUpdate", new[] { "ProcessReadoutUpdate", "ProcessPanelUpdate", "ProcessFlightDisplayUpdate",
+            "ProcessFcuUpdate", "ProcessEcamUpdate", "ProcessMcduUpdate" }),
+        ("TryGetDisplayOverride", new[] { "FormatFlightDisplay", "FormatFcuDisplay", "FormatPanelDisplay",
+            "FormatReadoutDisplay", "FormatEcamDisplay" }),
+        ("HandleHotkeyAction", new[] { "HandleReadoutHotkey", "HandleFcuHotkey", "HandleFlightDisplayHotkey",
+            "HandleEcamHotkey", "HandleMcduHotkey", "HandleEfbHotkey" }),
+        ("ResetAnnouncementBaselines", new[] { "ResetPanelBaselines", "ResetFlightDisplayBaselines", "ResetReadoutBaselines",
+            "ResetFcuBaselines", "ResetEcamBaselines", "ResetMcduBaselines", "ResetReader" }),
+        ("OnSimContextReset", new[] { "ResetPanelBaselines", "ResetFlightDisplayBaselines", "ResetReadoutBaselines",
+            "ResetFcuBaselines", "ResetEcamBaselines", "ResetMcduBaselines", "ResetReader" }),
+        ("OnSwitchedAway", new[] { "CloseMcduWindows", "CloseEfb", "CloseEcamWindows", "CloseFlightDisplayWindows",
+            "CloseFcuWindows", "StopReader" }),
+    };
+
+    /// <summary>The method's lines from its signature to its closing brace (the first line that is exactly
+    /// four spaces and "}"), whichever of the two files holds it.</summary>
+    private static string BodyOf(string method, string source)
+    {
+        var sig = Regex.Match(source, @"^    (?:public|protected) override [^\n]*\b" + method + @"\(", RegexOptions.Multiline);
+        if (!sig.Success) return "";
+        int end = source.IndexOf("\n    }", sig.Index, StringComparison.Ordinal);
+        return source[sig.Index..(end < 0 ? source.Length : end)];
+    }
+
+    [Fact]
+    public void The_dispatchers_call_their_hooks_in_the_contract_order()
+    {
+        string folder = AircraftFolder();
+        string hooksSrc = File.ReadAllText(Path.Combine(folder, "IniA330Definition.Hooks.cs"));
+        var declared = Regex.Matches(hooksSrc, @"^\s*partial void (\w+)\(", RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value).ToHashSet();
+        string source = File.ReadAllText(Path.Combine(folder, "IniA330Definition.Handlers.cs"))
+            + "\n" + File.ReadAllText(Path.Combine(folder, "IniA330Definition.Variables.cs"));
+
+        foreach (var (method, expected) in Contract)
+        {
+            string body = BodyOf(method, source);
+            Assert.True(body.Length > 0, $"{method} was not found in Handlers.cs or Variables.cs");
+            var found = Regex.Matches(body, @"(?<![\w.])(\w+)\(")
+                .Select(m => (m.Groups[1].Value, m.Index))
+                .Where(t => declared.Contains(t.Item1))
+                .OrderBy(t => t.Index).Select(t => t.Item1).ToList();
+            Assert.True(expected.SequenceEqual(found),
+                $"{method} calls hooks [{string.Join(", ", found)}], contract is [{string.Join(", ", expected)}]");
+        }
+
+        // the reset hooks take false in ResetAnnouncementBaselines and true in OnSimContextReset
+        foreach (var (method, arg) in new[] { ("ResetAnnouncementBaselines", "false"), ("OnSimContextReset", "true") })
+        {
+            string body = BodyOf(method, source);
+            foreach (string hook in declared.Where(n => n.StartsWith("Reset", StringComparison.Ordinal)))
+                Assert.True(Regex.IsMatch(body, @"(?<![\w.])" + hook + @"\(" + arg + @"\)"), $"{method} must call {hook}({arg})");
+        }
+    }
+
+    [Fact]
     public void The_dispatchers_still_reach_the_base_class_for_an_unknown_variable()
     {
         var def = new IniA330Definition();
