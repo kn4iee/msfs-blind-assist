@@ -5,6 +5,7 @@
 // test builds itself, never the generated control map's labels, and every wording is written out here.
 
 using System.Drawing;
+using System.Reflection;
 using System.Windows.Forms;
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft;
@@ -14,7 +15,6 @@ using MSFSBlindAssist.Forms;
 using MSFSBlindAssist.Forms.IniA330;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Tests.FirstOfficer;
-using WinKeys = System.Windows.Forms.Keys;
 
 namespace MSFSBlindAssist.Tests;
 
@@ -99,7 +99,7 @@ public class A330DisplayWindowTests
         protected override IReadOnlyList<string> Rows(A330Frame frame) =>
             Compose?.Invoke(frame) ?? frame.Texts.Select(t => t.Text.Trim()).ToList();
 
-        protected override IReadOnlyList<A330KeyRow> Keys => _keys;
+        protected override IReadOnlyList<A330KeyRow> KeyRows => _keys;
         protected override bool NeedsColours => _colours;
         protected override bool NeedsHiddenRowsLeftOut => _listRows;
 
@@ -107,7 +107,7 @@ public class A330DisplayWindowTests
         protected override bool ShowWithoutActivation => true;
 
         /// <summary>A key press as the message loop hands it to the window.</summary>
-        public bool Press(WinKeys key, bool autoRepeat = false)
+        public bool Press(Keys key, bool autoRepeat = false)
         {
             // WM_KEYDOWN; bit 30 of lParam marks an auto-repeat
             var msg = Message.Create(IntPtr.Zero, 0x0100, (IntPtr)(int)key, (IntPtr)(autoRepeat ? (1 << 30) | 1 : 1));
@@ -158,7 +158,20 @@ public class A330DisplayWindowTests
 
     private static A330Frame Mcdu() => A330ReplayDisplays.FromFixtures("p02_mcdu_init.json").Latest(A330Gauge.McduCaptain)!;
 
-    private static A330Frame NotDrawn(A330Gauge gauge) => new(gauge, [], Complete: false, Missing: 0, ReadTicks: 0, Drawn: false);
+    /// <summary>A frame of a display that draws nothing, read at <paramref name="readTicks"/> (the window's clock).</summary>
+    private static A330Frame NotDrawn(A330Gauge gauge, long readTicks) =>
+        new(gauge, [], Complete: false, Missing: 0, ReadTicks: readTicks, Drawn: false);
+
+    private static readonly MethodInfo RaiseCommitted =
+        typeof(ComboBox).GetMethod("OnSelectionChangeCommitted", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+    /// <summary>The pilot's choice in a list, as Windows Forms sees it: the selection moves (SelectedIndexChanged), then
+    /// the pilot commits it (SelectionChangeCommitted: a click, Enter, an arrow in the closed list).</summary>
+    private static void Choose(ComboBox combo, int index)
+    {
+        combo.SelectedIndex = index;
+        RaiseCommitted.Invoke(combo, [EventArgs.Empty]);
+    }
 
     private static A330Frame Partial(A330Gauge gauge) =>
         new(gauge, [new A330Text(1, 10, 20, "INIT", "F", 20, null, [10, 11, 12, 13])], Complete: false, Missing: 3, ReadTicks: 0);
@@ -279,7 +292,7 @@ public class A330DisplayWindowTests
 
         // The state comes before a frame that is not complete, drawn or not.
         rig.Displays.SetState(A330ReaderState.Starting);
-        rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain));
+        rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain, rig.Clock));
         w.RefreshNow();
         Assert.Equal(new[] { "A330 displays starting" }, w.Items());
         rig.Displays.Show(Partial(A330Gauge.McduCaptain));
@@ -363,7 +376,7 @@ public class A330DisplayWindowTests
 
         // Not drawn: the display is off, and the count starts from there.
         rig.Clock = 131_000;
-        rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain));
+        rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain, rig.Clock));
         w.RefreshNow();
         Assert.Equal(new[] { "Captain's MCDU is off" }, w.Items());
         rig.Displays.Show(Partial(A330Gauge.McduCaptain));
@@ -408,10 +421,11 @@ public class A330DisplayWindowTests
     public void A_display_that_is_not_drawn_says_it_is_off()
     {
         using var rig = new Rig();
-        rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain));
-        rig.Displays.Show(NotDrawn(A330Gauge.Sd));
-        var mcdu = rig.Window();
-        var sd = rig.Window(A330Gauge.Sd);
+        long t0 = rig.Clock;
+        rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain, t0));
+        rig.Displays.Show(NotDrawn(A330Gauge.Sd, t0));
+        var mcdu = rig.Window();                                  // 250 ms: fresh for three refreshes, 750 ms
+        var sd = rig.Window(A330Gauge.Sd, refreshMs: 1000);      // 1 s: fresh for 3 s
 
         mcdu.Show();
         sd.Show();
@@ -419,10 +433,49 @@ public class A330DisplayWindowTests
         Assert.Equal(new[] { "Captain's MCDU is off" }, mcdu.Items());
         Assert.Equal(new[] { "System display is off" }, sd.Items());
 
-        // Long after: still off, never "cannot read".
-        rig.Clock += 120_000;
+        // A frame is fresh for three of the window's own refreshes: three seconds for the 1 s window.
+        rig.Clock = t0 + 3000;
+        sd.RefreshNow();
+        Assert.Equal(new[] { "System display is off" }, sd.Items());
+        rig.Clock = t0 + 3001;
+        sd.RefreshNow();
+        Assert.Equal(new[] { "Reading the system display" }, sd.Items());
+
+        // While such frames keep coming the display stays off, long after, and never "cannot read".
+        for (int s = 1; s <= 120; s++)
+        {
+            rig.Clock = t0 + s * 1000;
+            rig.Displays.Show(NotDrawn(A330Gauge.McduCaptain, rig.Clock));
+            mcdu.RefreshNow();
+            Assert.Equal(new[] { "Captain's MCDU is off" }, mcdu.Items());
+        }
+
+        // A frame older than three of the window's refreshes is no frame: the window reads, and 30 s after the last
+        // fresh one it cannot read. The count does not start again from the old frame.
+        long last = rig.Clock;
+        rig.Clock = last + 750;
         mcdu.RefreshNow();
         Assert.Equal(new[] { "Captain's MCDU is off" }, mcdu.Items());
+        rig.Clock = last + 751;
+        mcdu.RefreshNow();
+        Assert.Equal(new[] { "Reading the captain's MCDU" }, mcdu.Items());
+        rig.Clock = last + 750 + 29_999;
+        mcdu.RefreshNow();
+        Assert.Equal(new[] { "Reading the captain's MCDU" }, mcdu.Items());
+        rig.Clock = last + 750 + 30_000;
+        mcdu.RefreshNow();
+        Assert.Equal(new[] { "The display reader cannot read the captain's MCDU" }, mcdu.Items());
+
+        // Cold and dark the pilot opened the window and closed it; the aircraft is powered and the window opened again,
+        // with only that old frame kept: it reads, never "off".
+        mcdu.Close();
+        var again = rig.Window();
+        rig.Clock += 60_000;
+        again.Show();
+        Assert.Equal(new[] { "Reading the captain's MCDU" }, again.Items());
+        rig.Clock += 30_000;
+        again.RefreshNow();
+        Assert.Equal(new[] { "The display reader cannot read the captain's MCDU" }, again.Items());
         Assert.Empty(rig.Speech.All);
     }
 
@@ -447,7 +500,7 @@ public class A330DisplayWindowTests
         rig.Clock += 30_000;
         w.RefreshNow();
         Assert.Equal(new[] { cannotRead }, w.Items());
-        rig.Displays.Show(NotDrawn(gauge));
+        rig.Displays.Show(NotDrawn(gauge, rig.Clock));
         w.RefreshNow();
         Assert.Equal(new[] { off }, w.Items());
     }
@@ -540,7 +593,7 @@ public class A330DisplayWindowTests
         w.Control<Button>(PushKey).PerformClick();
         Assert.Equal((PushKey, 1.0, vars[PushKey]), rig.Def.Sets[^1]);
 
-        w.Control<ComboBox>(ModeKey).SelectedIndex = 2;   // the pilot's choice: Right
+        Choose(w.Control<ComboBox>(ModeKey), 2);   // the pilot's choice: Right
         Assert.Equal((ModeKey, 2.0, vars[ModeKey]), rig.Def.Sets[^1]);
         Assert.Equal(3, rig.Def.Sets.Count);
         Assert.Empty(rig.Speech.All);   // the press's own read-back is the definition's; the window adds nothing
@@ -565,8 +618,15 @@ public class A330DisplayWindowTests
         Assert.Equal("Right", combo.SelectedItem);
         Assert.Empty(rig.Def.Sets);
 
-        // The pilot's choice presses once, and stays shown until the control's state changes.
+        // A selection that moves without a commit presses nothing: the pilot browsing an open list (each arrow a
+        // SelectedIndexChanged), a list cancelled after it, or a selection set in code.
         combo.SelectedIndex = 0;
+        combo.SelectedIndex = 1;
+        combo.SelectedIndex = 2;
+        Assert.Empty(rig.Def.Sets);
+
+        // The pilot's commit presses once, the position committed, and stays shown until the control's state changes.
+        Choose(combo, 0);
         Assert.Equal((ModeKey, 0.0), (rig.Def.Sets.Single().Key, rig.Def.Sets.Single().Value));
         w.RefreshNow();
         Assert.Equal("Left", combo.SelectedItem);
@@ -574,6 +634,12 @@ public class A330DisplayWindowTests
         w.RefreshNow();
         Assert.Equal("Left", combo.SelectedItem);
         Assert.Single(rig.Def.Sets);
+
+        // A browse through an open list then a commit: one press, of the position committed.
+        combo.SelectedIndex = 1;
+        Choose(combo, 2);
+        Assert.Equal(2, rig.Def.Sets.Count);
+        Assert.Equal((ModeKey, 2.0), (rig.Def.Sets[^1].Key, rig.Def.Sets[^1].Value));
 
         // Unread: no position is shown, rather than a guess.
         using var unread = new Rig();
@@ -657,9 +723,9 @@ public class A330DisplayWindowTests
         // F5 reads the display again now, without a word; a held key's repeats do not.
         var frame = replay.Latest(A330Gauge.McduCaptain)!;
         replay.Show(frame with { Texts = [frame.Texts[0] with { Text = "  INIT B" }, .. frame.Texts.Skip(1)] });
-        Assert.True(w.Press(WinKeys.F5, autoRepeat: true));
+        Assert.True(w.Press(Keys.F5, autoRepeat: true));
         Assert.Equal("INIT", w.Items()[0]);
-        Assert.True(w.Press(WinKeys.F5));
+        Assert.True(w.Press(Keys.F5));
         Assert.Equal("INIT B", w.Items()[0]);
 
         w.Hide();
@@ -678,7 +744,7 @@ public class A330DisplayWindowTests
         bool closed = false;
         w.FormClosed += (_, _) => closed = true;
 
-        Assert.True(w.Press(WinKeys.Escape));
+        Assert.True(w.Press(Keys.Escape));
 
         Assert.True(closed);
         Assert.True(w.IsDisposed);

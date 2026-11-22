@@ -5,7 +5,6 @@ using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.A330.Display;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
-using WinKeys = System.Windows.Forms.Keys;
 
 namespace MSFSBlindAssist.Forms.IniA330;
 
@@ -26,31 +25,33 @@ internal sealed record A330KeyRow(string VarKey, double? PressValue = null);
 /// window <see cref="NeedsColours"/> and no text of the frame has a colour, and by "List rows not read yet" when it
 /// <see cref="NeedsHiddenRowsLeftOut"/> and the frame does not leave hidden rows out (both: colours first; spec M14, M15);
 /// (2) else, while the reader is not Running, one row, its status ("A330 displays starting");
-/// (3) else, when the display's newest frame is not drawn, one row, "&lt;Display&gt; is off" (cold and dark no display
-/// draws anything: a state, not a failure);
+/// (3) else, when the display's newest frame is not drawn and fresh (no older than three refreshes, the rule of the
+/// client's latest frame), one row, "&lt;Display&gt; is off" (cold and dark no display draws anything: a state, not a
+/// failure); an older one counts as no frame, since the client keeps the newest frame after the display is let go;
 /// (4) else one row, "Reading the &lt;display&gt;", and once <see cref="CannotReadAfterMs"/> have passed with no
 /// complete frame, "The display reader cannot read the &lt;display&gt;". That count runs from when the window began
-/// wanting the display or from when the reader became Running, whichever is later; a complete or a not-drawn frame
-/// starts it again. The first refresh with rows selects row 0, so the reader has a current row. A
+/// wanting the display or from when the reader became Running, whichever is later; a complete frame or a fresh
+/// not-drawn one starts it again. The first refresh with rows selects row 0, so the reader has a current row. A
 /// <see cref="Rows"/> that throws, or gives a null row, keeps the rows shown (logged once).</para>
 /// <para>The display. While the window is shown it wants its display (<see cref="IA330Displays.Want"/>, with itself
 /// as the owner and <c>refreshMs</c>); hidden, closed or disposed, it releases it, once. It polls on its UI timer and
 /// subscribes to no event of the displays, so nothing here marshals from another thread.</para>
-/// <para>The keys under the list, after it in the tab order and in <see cref="Keys"/> order: a button labelled from
+/// <para>The keys under the list, after it in the tab order and in <see cref="KeyRows"/> order: a button labelled from
 /// <see cref="IniA330Definition.DescribeControl"/> ("STS: On"; the label alone while the state is unread or the key has
 /// none) and pressed through <see cref="IniA330Definition.PressFromWindow"/>; or a label and a choice list of the
 /// control's positions, in the panel's order, which shows the control's position (none while unread), follows a change
-/// of it, and presses only on the pilot's own choice, never on a selection the window sets. A label is set only when
-/// its text changes. A key that is no control is left out.</para>
+/// of it, and presses only when the pilot commits a choice (<see cref="ComboBox.SelectionChangeCommitted"/>, as the
+/// panel's choice lists do: browsing an open list presses nothing until the pilot commits, and a cancelled list nothing
+/// at all), never on a selection the window sets. A label is set only when its text changes. A key that is no control
+/// is left out.</para>
 /// <para>Silence. The window never calls the announcer: the screen reader reads the title, the list and the controls,
 /// so nothing is spoken on open, refresh, F5 or close ([CORE-7]). A press's read-back is the definition's own.</para>
 /// <para>Keys. F5 refreshes now (once per press); Escape closes the window, unless it is closing a choice list's open
 /// list, and the window that had the foreground before <see cref="ShowForm"/> gets it back.</para>
-/// <para>For a derived window. <see cref="Rows"/>, <see cref="Keys"/>, <see cref="NeedsColours"/> and
-/// <see cref="NeedsHiddenRowsLeftOut"/> are read only after the constructors have run (<see cref="Keys"/> once, as the
-/// window first loads or refreshes), so they may answer from the derived window's own fields. A derived window takes its
-/// own keys by overriding <see cref="ProcessCmdKey"/> and calling the base for the rest. Inside it, <c>Keys</c> is the
-/// property: name the key enumeration <see cref="System.Windows.Forms.Keys"/> in full.</para>
+/// <para>For a derived window. <see cref="Rows"/>, <see cref="KeyRows"/>, <see cref="NeedsColours"/> and
+/// <see cref="NeedsHiddenRowsLeftOut"/> are read only after the constructors have run (<see cref="KeyRows"/> once, as
+/// the window first loads or refreshes), so they may answer from the derived window's own fields. A derived window takes
+/// its own keys by overriding <see cref="ProcessCmdKey"/> and calling the base for the rest.</para>
 /// </remarks>
 internal abstract class A330DisplayWindow : Form
 {
@@ -146,8 +147,8 @@ internal abstract class A330DisplayWindow : Form
     /// <summary>The list's lines from a complete frame, the top of the display first. UI thread, at every refresh.</summary>
     protected abstract IReadOnlyList<string> Rows(A330Frame frame);
 
-    /// <summary>The cockpit controls under the list (spec D9), in order. Read once.</summary>
-    protected virtual IReadOnlyList<A330KeyRow> Keys => [];
+    /// <summary>The cockpit controls under the list (spec D9), in order: one button or choice list each. Read once.</summary>
+    protected virtual IReadOnlyList<A330KeyRow> KeyRows => [];
 
     /// <summary>True for a window whose rows need the frame's colours: until the reader gives them it says so (spec M14).</summary>
     protected virtual bool NeedsColours => false;
@@ -228,7 +229,9 @@ internal abstract class A330DisplayWindow : Form
             return [_displays.StatusText];
         }
 
-        if (_displays.Newest(Gauge) is { Drawn: false })
+        // Only a fresh one: the client keeps the newest frame after the display is let go, so an old "not drawn" (the
+        // window opened cold and dark, closed, the aircraft powered, opened again) would say "off" for ever.
+        if (_displays.Newest(Gauge) is { Drawn: false } off && now - off.ReadTicks <= 3L * _refreshMs)
         {
             _countFrom = now;
             return [char.ToUpperInvariant(name[0]) + name[1..] + " is off"];
@@ -256,7 +259,7 @@ internal abstract class A330DisplayWindow : Form
             Dock = DockStyle.Bottom,
             Name = RowList.Name + " controls",
         };
-        foreach (var key in Keys)
+        foreach (var key in KeyRows)
         {
             if (Aircraft.DescribeControl(key.VarKey, Sim) is not { } described)
             {
@@ -327,26 +330,24 @@ internal abstract class A330DisplayWindow : Form
         panel.Controls.Add(label);
         panel.Controls.Add(combo);
 
-        int shown = -1;                       // the position the list shows: set by the window or chosen by the pilot
-        bool showing = false;                 // true while the window sets it
+        bool showing = false;                 // true while the window sets the selection
         string? followed = described.State;   // the control's state the list last followed
         void ShowPosition(string? state)
         {
             int i = state is null ? -1 : names.IndexOf(state);
-            shown = i;
             if (combo.SelectedIndex == i) return;
             showing = true;
             try { combo.SelectedIndex = i; }
             finally { showing = false; }
         }
 
-        combo.SelectedIndexChanged += (_, _) =>
+        // The panel's own event (MainForm.PanelBuilder): it fires only on the pilot's commit (a click, Enter, an arrow in
+        // the closed list), never while the pilot browses an open list, for a cancelled list, for a selection set in code
+        // or for the list's replay of it when its handle is made, all of which raise SelectedIndexChanged.
+        combo.SelectionChangeCommitted += (_, _) =>
         {
-            int i = combo.SelectedIndex;
-            // A selection the window set, the list's own replay of it when its handle is made, or none: never a press.
-            if (showing || i < 0 || i == shown) return;
-            shown = i;
-            Aircraft.PressFromWindow(varKey, values[i], Sim, Announcer);
+            if (showing || combo.SelectedIndex < 0) return;
+            Aircraft.PressFromWindow(varKey, values[combo.SelectedIndex], Sim, Announcer);
         };
         ShowPosition(described.State);
 
@@ -411,17 +412,17 @@ internal abstract class A330DisplayWindow : Form
         _previousWindow = IntPtr.Zero;
     }
 
-    protected override bool ProcessCmdKey(ref Message msg, WinKeys keyData)
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         if (msg.Msg is WM_KEYDOWN or WM_SYSKEYDOWN)
         {
             // Escape closes, unless it is closing a choice list's open list.
-            if (keyData == WinKeys.Escape && ActiveControl is not ComboBox { DroppedDown: true })
+            if (keyData == Keys.Escape && ActiveControl is not ComboBox { DroppedDown: true })
             {
                 Close();
                 return true;
             }
-            if (keyData == WinKeys.F5)
+            if (keyData == Keys.F5)
             {
                 // Once per press: a held key repeats, and each repeat has the already-down bit set.
                 if ((msg.LParam.ToInt64() & KeyWasDown) == 0) RefreshNow();
