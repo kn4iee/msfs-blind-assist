@@ -1,0 +1,25 @@
+{
+  "gauge": "Ewd",
+  "complete": true,
+  "missing": 0,
+  "texts": [
+    {"order": 34, "x": 671.0, "baseline": 30.0, "text": "XX", "font": "A330_ecam_font", "size": 28.4, "colour": [1.0, 0.55, 0.0], "charX": [671.0, 689.0]},
+    {"order": 35, "x": 671.0, "baseline": 60.0, "text": "XX", "font": "A330_ecam_font", "size": 28.4, "colour": [1.0, 0.55, 0.0], "charX": [671.0, 689.0]},
+    {"order": 13, "x": 216.0, "baseline": 112.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [216.0, 233.0]},
+    {"order": 24, "x": 516.0, "baseline": 112.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [516.0, 533.0]},
+    {"order": 14, "x": 243.0, "baseline": 147.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [243.0, 260.0]},
+    {"order": 25, "x": 543.0, "baseline": 147.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [543.0, 560.0]},
+    {"order": 17, "x": 216.0, "baseline": 260.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [216.0, 233.0]},
+    {"order": 28, "x": 516.0, "baseline": 260.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [516.0, 533.0]},
+    {"order": 18, "x": 216.0, "baseline": 326.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [216.0, 233.0]},
+    {"order": 29, "x": 516.0, "baseline": 326.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [516.0, 533.0]},
+    {"order": 19, "x": 216.0, "baseline": 388.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [216.0, 233.0]},
+    {"order": 30, "x": 516.0, "baseline": 388.0, "text": "XX", "font": "A330_ecam_font", "size": 26.4, "colour": [1.0, 0.55, 0.0], "charX": [516.0, 533.0]},
+    {"order": 33, "x": 363.0, "baseline": 396.0, "text": "KG/H", "font": "A330_ecam_font", "size": 22.3, "colour": [0.4, 0.859, 1.0], "charX": [363.0, 377.0, 391.0, 405.0]},
+    {"order": 31, "x": 126.0, "baseline": 493.0, "text": "54580", "font": "A330_ecam_font", "size": 28.4, "colour": [0.376, 0.804, 0.388], "charX": [126.0, 144.0, 162.0, 180.0, 198.0]},
+    {"order": 32, "x": 246.0, "baseline": 493.0, "text": "KG", "font": "A330_ecam_font", "size": 22.3, "colour": [0.4, 0.859, 1.0], "charX": [246.0, 260.0]},
+    {"order": 49, "x": 22.0, "baseline": 557.0, "text": "IR IN ALIGN 2 MN", "font": "A330_ecam_font", "size": 26.4, "colour": [0.376, 0.804, 0.388], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0, 209.0, 226.0, 243.0, 260.0, 277.0]},
+    {"order": 50, "x": 528.0, "baseline": 563.0, "text": "PARK BRK", "font": "A330_ecam_font", "size": 26.4, "colour": [0.376, 0.804, 0.388], "charX": [528.0, 545.0, 562.0, 579.0, 596.0, 613.0, 630.0, 647.0]},
+    {"order": 51, "x": 528.0, "baseline": 591.0, "text": "ELEC EXT PWR", "font": "A330_ecam_font", "size": 26.4, "colour": [0.376, 0.804, 0.388], "charX": [528.0, 545.0, 562.0, 579.0, 596.0, 613.0, 630.0, 647.0, 664.0, 681.0, 698.0, 715.0]}
+  ]
+}
