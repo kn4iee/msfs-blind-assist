@@ -176,25 +176,82 @@ What moves where, each as the implementation of its hook (the existing `case` bo
 
 ## Handoff to plan 12
 
-- **Pilot-facing:** nothing new; any fix from Task 2 that a pilot would notice, as its changelog line.
-- **Rule proposal:** none expected; a measured trap from the review proposes its line.
-- **Frozen files:** the seam calls made in `MainForm.AircraftSwitch.cs`; the two test lists.
+- **Pilot-facing** (the A330 is not in `main` yet, so these belong in its one `aircraft` fragment and the
+  guide, not in fix fragments): in the autopilot window (Ctrl+P) "Altitude push (managed)" is now Alt+A (it
+  shared Alt+S with "Speed pull", which Alt+S still presses); the FCU, V/S-FPA and altimeter windows take a
+  comma decimal ("-0,5", "0,82", "29,92") on any PC; the knob buttons and Standard in those windows no longer
+  repeat themselves 1.2 s later; a heading or V/S typed after pressing the window's TRK/FPA button goes to
+  the window the FCU now shows; the flaps, speedbrake, guards and sliders follow a change made elsewhere
+  while their panel is open; Ctrl+M no longer lists "Speedbrake lever" or "Landing elevation selected
+  (feet)", and the landing elevation is no longer spoken on every change; the First Officer will not tick
+  an engine master off without the APU or external power on the buses; the EFB never reads a password
+  field's value; picking the A330 from the Aircraft menu after loading it in the simulator under another
+  profile finds its controls. Guide (`guide/airbus-aircraft.md`): the Ctrl+P access keys and the Ctrl+M rows
+  if the A330 section lists them.
+- **Rule proposal:** `[INI-10] A330 behaviour goes in the owning area file through its hook
+  (IniA330Definition.Hooks.cs, called in the order A330HooksTests pins); Handlers.cs and Variables.cs hold
+  only the dispatchers and write primitives; a key two areas use lives in A330SharedKeys, which takes
+  append-only additions; a map control never reuses a definition key or read (A330VariableOverlapTests).`
+  Full text: the seams exist so plans 02-10 never edit one file twice (spec R2); the tests named fail on a
+  call out of order, a second use of a key literal, a call-out row that clashes, and a map overlap.
+- **Frozen files plan 01 changed:** `MainForm.AircraftSwitch.cs` (the `StartIniA330Displays()` seam call);
+  `MainForm.cs` (the same call beside the startup `StartBbs757Displays()`, one line: the startup site is
+  there, not in the switch file); `SimConnect/SimConnectManager.InputEventReads.cs`, `.Dispatch.cs`,
+  `.Setup.cs` (finding A1); the all-aircraft test lists `ComboLabelCollapseTests`, `FirstOfficerWindowsTests`,
+  `SpokenDecimalCultureTests`, `CalcPathProbeOptInTests`, `TakeoffCalloutFeedTests`, `DefAnnounceMuteSetsTests`.
+- **Gaps for other plans:** A2 (the input-event catalogue read before the cockpit exists): plan 04's live
+  sweep shows it, the file is 12's. C2, C3, C11-C13 (the MCDU pop-out): plan 03, which removes it. C5, C14
+  (the chocks and covers press): plan 12, which removes it. Plan 07: whether the EFB's SimBrief and Hoppie
+  identifier boxes are plain text fields that speak their value (spec section 4's EFB checklist item 11; sim);
+  a disabled or read-only password row passes no `disabled` flag (`coherent-a330-efb-agent.js:437-441`); C15;
+  add `tools/a330-efb-test/**` to `.claude/rules/inibuilds.md` once the folder exists (`ClaudeContextBudgetTests`
+  refuses a glob that matches no file). Plan 10: `TakeoffCalloutFeedKey` and the A330 row of
+  `DefAnnounceMuteSetsTests` (A10) are done here. The pull request: "also seen on the HS787": an Aircraft-menu
+  switch to it after an in-sim load under another profile still uses the old input-event catalogue, as on
+  `main` (`InputEventReads.cs:73` counts read variables, and the HS787 only writes). The Minor rows of
+  "Review findings" go to the plan named in their row.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** claimed
+- **Status:** waiting on owner: every commit is local; the claim, the work and this record go to the branch
+  once the owner says push (with the private push check first)
 - **Claimed by:** kn4iee
-- **Worked by:** kn4iee with Claude (superpowers:subagent-driven-development)
+- **Worked by:** kn4iee with Claude (superpowers:subagent-driven-development: a fresh implementer a task, a
+  task review after each, a final whole-plan review)
 - **Started:** 2026-11-21, from 53a20303c
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
-- **Changed from the plan:**
-- **Rulings made while working:**
+- **Landed:** (the push)
+- **Tests at landing:** 26,055 passed, 0 failed, the whole suite with `ClaudeRulesHookTests` (2026-11-21);
+  25,950 at the start.
+- **Tasks:** 0 claim f46629314 (not pushed). 1 review 4991c6e83. 2 the 14 Critical and Important findings,
+  one commit each, 209706d1b..9d433be80. 3 hooks 891e7e545, call order pinned a2e302e73. 4 the split
+  a2675620f..0b86bd23c, overlap guards 2594d7dcd. 5 a496c0a34. 6 546619daa, b42d3c2e6 (the sweeps found
+  nothing to fix). 7 the final review's fixes 2bf4694ba..309ed6e4d. A scratch snapshot of every variable
+  definition, panel, Ctrl+M row and display text was byte-identical across Tasks 3-7 (only the order the
+  variables are added in moved, in Task 4).
+- **Waiting on the owner:** the push; the two in-sim checks above; the rulings below and "Changed from the
+  plan" are Claude's, the owner's to reverse.
+- **In-sim results:** not run (no simulator in this session).
+- **Changed from the plan:** the review covered four code commits, not two (the branch had grown);
+  `BuildVariables` keeps the base variables LAST, as before, not "after the base variables"; its local helpers
+  became members of Variables.cs (one renamed `OnRequestVar`: a rule scan refuses a method named
+  `OnRequest` there); `OnSwitchedAway` came in Task 3 so every hook had its call site; the `Reset*` hooks
+  have two call sites (false and true); `EcamView` and `PfdNdView` were one declaration and were split;
+  Task 2's tests were split by owner in Task 6 with the rest; the `tests/.../A330/**` glob came in Task 2;
+  `tools/a330-efb-test/**` waits for plan 07; one startup line in `MainForm.cs`; two hooks the plan did not
+  list: `CloseReadouts()` (10) on the way out, and an `IsMuteWrapExempt` dispatcher with hooks for 10, 04,
+  09, 08 and 03 (the final review: a later plan had no seam for either); `A330SharedKeys` takes append-only
+  additions from the plan that creates a key's second use (frozen otherwise); `DescribeControl` gives a push
+  key an empty state, never "unread"; the A330 also joined four more all-aircraft lists (spec R3).
+- **Rulings made while working** (Claude; the owner may reverse): the claim and the work stay local until
+  the owner says push; the hook order for the variables is the plan's (Ctrl+M sorts by label and no
+  definition name matched a map read, and guard tests now fail on any overlap); a row added twice, or
+  clashing with a variable, throws when the Ctrl+M list is built, and tests build the real list; the
+  credential finding (C4) was fixed with a test of the agent's source order until plan 07's harness exists;
+  the take-off feed contract (A3) was fixed here although plan 10 lists its member; the MCDU pop-out (C2, C3)
+  and the chocks and covers press (C5) were handed to the plans that remove them, the branch being
+  unreleased.
 
 ### Review findings
 
