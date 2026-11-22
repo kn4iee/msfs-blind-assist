@@ -70,16 +70,11 @@ public partial class IniA330Definition
     // Announcements
     // =====================================================================
 
-    private A330FmaText? _fmaAnnounced;
-    private System.Windows.Forms.Timer? _fmaTimer;
-    private ScreenReaderAnnouncer? _fmaAnnouncer;
-    private readonly Dictionary<string, double> _fmaValues = new();
     private readonly TakeoffVSpeedCallouts _takeoffCallouts = new();
     private bool _calloutOnGround = true;
 
     public override void ResetAnnouncementBaselines()
     {
-        _fmaAnnounced = null;
         _takeoffCallouts.Reset();
         ResetPanelBaselines(false);   // plan 04
         ResetFlightDisplayBaselines(false);   // plan 09
@@ -92,8 +87,6 @@ public partial class IniA330Definition
 
     public override void OnSimContextReset()
     {
-        _fmaAnnounced = null;
-        _fmaValues.Clear();
         _takeoffCallouts.Reset();
         ResetPanelBaselines(true);   // plan 04
         ResetFlightDisplayBaselines(true);   // plan 09
@@ -161,62 +154,11 @@ public partial class IniA330Definition
             case TakeoffVrKey: _takeoffCallouts.SetVR(value); return true;
             case TakeoffV2Key: _takeoffCallouts.SetV2(value); return true;
         }
-        if (FmaInputVars.Any(f => f.key == varName))
-        {
-            _fmaValues[varName] = value;
-            ScheduleFma(announcer);
-            return true;
-        }
         if (_silentKeys.Contains(varName)) return true;
         return base.ProcessSimVarUpdate(varName, value, announcer);
     }
 
-    // After a context reset (_fmaValues cleared) a flight load re-delivers only CHANGED vars, so an
-    // unchanged one falls back to the cache rather than reading 0 until it next moves.
-    private int Fv(string key) => _fmaValues.TryGetValue(key, out var v) ? (int)Math.Round(v)
-        : (int)Math.Round(_sim?.GetCachedVariableValue(key) ?? 0);
-
     private SimConnectManager? _sim;
-
-    internal A330FmaText CurrentFma()
-    {
-        double fcuAlt = _sim?.GetCachedVariableValue("A330_FCU_ALT") ?? 0;
-        double alt = _sim?.GetCachedVariableValue("A330_ALTITUDE") ?? 0;
-        return A330Fma.Compose(new A330FmaInputs(
-            Fv("A330_M_AT"), Fv("A330_M_PITCH"), Fv("A330_M_PITCH_ARM"), Fv("A330_M_PITCH_ARM2"),
-            Fv("A330_M_ROLL"), Fv("A330_M_ROLL_ARM"), Fv("A330_M_APPR"),
-            Fv("A330_M_MACH") != 0, Fv("A330_M_TRKFPA") != 0, Fv("A330_M_TOGA_LOCK") != 0 || Fv("A330_M_THR_LATCH") != 0,
-            Fv("A330_M_CAP"), fcuAlt > alt));
-    }
-
-    /// <summary>Capture modes flip within a frame or two; settle 300 ms so one change is spoken once.</summary>
-    private void ScheduleFma(ScreenReaderAnnouncer announcer)
-    {
-        _fmaAnnouncer = announcer;
-        if (_fmaTimer == null)
-        {
-            _fmaTimer = new System.Windows.Forms.Timer { Interval = 300 };
-            _fmaTimer.Tick += (_, _) => { _fmaTimer!.Stop(); AnnounceFmaChange(); };
-        }
-        _fmaTimer.Stop();
-        _fmaTimer.Start();
-    }
-
-    private void AnnounceFmaChange()
-    {
-        var now = CurrentFma();
-        var prev = _fmaAnnounced;
-        _fmaAnnounced = now;
-        Log.Channel("fma").Info($"{ShortName} FMA: {now.Summary()} [at={Fv("A330_M_AT")} pitch={Fv("A330_M_PITCH")}/{Fv("A330_M_PITCH_ARM")}/{Fv("A330_M_PITCH_ARM2")} roll={Fv("A330_M_ROLL")}/{Fv("A330_M_ROLL_ARM")} appr={Fv("A330_M_APPR")}]");
-        if (prev == null || _fmaAnnouncer == null) return;   // baseline-first
-        var parts = new List<string>();
-        if (now.Thrust != prev.Thrust && now.Thrust.Length > 0) parts.Add(now.Thrust);
-        if (now.Vertical != prev.Vertical && now.Vertical.Length > 0) parts.Add(now.Vertical);
-        if (now.Lateral != prev.Lateral && now.Lateral.Length > 0) parts.Add(now.Lateral);
-        if (now.Armed != prev.Armed && now.Armed.Length > 0) parts.Add("armed " + now.Armed);
-        if (now.Capability != prev.Capability && now.Capability.Length > 0) parts.Add(now.Capability);
-        if (parts.Count > 0 && !DisabledMonitorSet.Contains(FmaMonitorKey)) _fmaAnnouncer.Announce(string.Join(", ", parts));
-    }
 
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
@@ -228,18 +170,8 @@ public partial class IniA330Definition
         if (text == null) FormatReadoutDisplay(varKey, value, ref text);   // plan 10
         if (text == null) FormatEcamDisplay(varKey, value, ref text);   // plan 08
         if (text != null) { displayText = text; return true; }
-        var f = CurrentFma();
-        switch (varKey)
-        {
-            case "A330_FMA_THRUST": displayText = Or(f.Thrust); return true;
-            case "A330_FMA_VERT": displayText = Or(f.Vertical); return true;
-            case "A330_FMA_LAT": displayText = Or(f.Lateral); return true;
-            case "A330_FMA_ARMED": displayText = Or(f.Armed); return true;
-            case "A330_FMA_CAP": displayText = Or(f.Capability); return true;
-        }
         displayText = "";
         return false;
-        static string Or(string s) => s.Length > 0 ? s : "none";
     }
 
     public override void OnDisplayPanelShown(string panelKey, SimConnectManager simConnect)
@@ -252,9 +184,9 @@ public partial class IniA330Definition
     // Hotkeys
     // =====================================================================
 
-    /// <summary>Instrument camera views (0-based), found by sweeping all 38 on 2026-10-16: view 3 frames
-    /// both ECAM screens, view 6 the captain's PFD and ND under the FCU.</summary>
-    internal const int EcamView = 3, PfdNdView = 6;
+    /// <summary>Instrument camera view (0-based), found by sweeping all 38 on 2026-10-16: view 3 frames
+    /// both ECAM screens.</summary>
+    internal const int EcamView = 3;
 
     public override bool HandleHotkeyAction(HotkeyAction action, SimConnectManager simConnect,
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
@@ -308,12 +240,6 @@ public partial class IniA330Definition
                 announcer.AnnounceImmediate($"FCU {window}{Suffix(fma.Vertical)}");
                 return true;
             }
-            case HotkeyAction.ReadApproachCapability:
-            {
-                string cap = A330Fma.Capability(Fv("A330_M_CAP"));
-                announcer.AnnounceImmediate(cap.Length > 0 ? cap : "No landing capability shown");
-                return true;
-            }
             case HotkeyAction.ReadFlaps:
             {
                 int idx = (int)Math.Round(Cur("A330_FLAPS"));
@@ -335,15 +261,6 @@ public partial class IniA330Definition
             case HotkeyAction.ReadSpeedF: ReadSpeed(simConnect, announcer, "A330_F_SPEED", "F speed"); return true;
             case HotkeyAction.ReadSpeedVLS: ReadSpeed(simConnect, announcer, "A330_VLS", "VLS"); return true;
             case HotkeyAction.ReadSpeedVFE: ReadSpeed(simConnect, announcer, "A330_VMAX", "Maximum speed"); return true;
-            // ---- display reads (AI vision on the aircraft's own instrument camera) ----
-            case HotkeyAction.ReadDisplayPFD:
-                ReadDisplay(Services.GeminiService.DisplayType.PFD, "PFD", announcer, parentForm,
-                    new Services.InstrumentViewRequest(simConnect, PfdNdView));
-                return true;
-            case HotkeyAction.ReadDisplayND:
-                ReadDisplay(Services.GeminiService.DisplayType.ND, "Navigation Display", announcer, parentForm,
-                    new Services.InstrumentViewRequest(simConnect, PfdNdView));
-                return true;
             case HotkeyAction.ReadDisplayUpperECAM:
                 ReadDisplay(Services.GeminiService.DisplayType.UpperECAM, "Upper ECAM", announcer, parentForm,
                     new Services.InstrumentViewRequest(simConnect, EcamView));

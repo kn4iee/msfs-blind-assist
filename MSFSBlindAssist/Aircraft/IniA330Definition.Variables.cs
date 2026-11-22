@@ -7,21 +7,6 @@ public partial class IniA330Definition
     /// <summary>Continuous keys never spoken by the generic monitor (knob positions, caches).</summary>
     private readonly HashSet<string> _silentKeys = new();
 
-    internal static readonly string[] FmaDisplayKeys =
-        { "A330_FMA_THRUST", "A330_FMA_VERT", "A330_FMA_LAT", "A330_FMA_ARMED", "A330_FMA_CAP", "A330_FMA_AP" };
-
-    internal const string FmaMonitorKey = "A330_M_PITCH";
-
-    // FMA inputs: silent caches composed in ProcessSimVarUpdate
-    internal static readonly (string key, string lvar)[] FmaInputVars =
-    {
-        ("A330_M_AT", "INI_AT_MODE"), ("A330_M_PITCH", "INI_PITCH_MODE"), ("A330_M_PITCH_ARM", "INI_PITCH_MODE_ARM"),
-        ("A330_M_PITCH_ARM2", "INI_PITCH_MODE_ARM2"), ("A330_M_ROLL", "INI_ROLL_MODE"), ("A330_M_ROLL_ARM", "INI_ROLL_MODE_ARM"),
-        ("A330_M_APPR", "INI_PITCH_ROLL_MODE"), ("A330_M_MACH", "INI_AIRSPEED_IS_MACH"), ("A330_M_TRKFPA", "INI_TRACK_FPA_STATE"),
-        ("A330_M_TOGA_LOCK", "INI_TOGA_LOCK_ACTIVE"), ("A330_M_THR_LATCH", "INI_FORCE_THRUST_LATCH"),
-        ("A330_M_CAP", "INI_AUTOPILOT_CAPABILITY"), ("A330_M_SPD_MANAGED", "INI_SPEED_MANAGED"),
-    };
-
     /// <summary>The fuel tanks the module publishes in kilograms (centre comes from the sim, see FuelSummary).</summary>
     internal static readonly (string key, string lvar, string name)[] FuelVars =
     {
@@ -126,17 +111,6 @@ public partial class IniA330Definition
         var vars = new Dictionary<string, SimVarDefinition>();
         _usedNames.Clear();
 
-        // ---------------- Flight modes ----------------
-        foreach (var (key, lvar) in FmaInputVars) Silent(vars, key, lvar, key);
-        vars[FmaMonitorKey].ExcludeFromMonitorManager = false;   // one Ctrl+M row mutes every flight-mode change
-        vars[FmaMonitorKey].DisplayName = "Flight mode changes";
-        Synthetic(vars, "A330_FMA_THRUST", "Thrust mode");
-        Synthetic(vars, "A330_FMA_VERT", "Vertical mode");
-        Synthetic(vars, "A330_FMA_LAT", "Lateral mode");
-        Synthetic(vars, "A330_FMA_ARMED", "Armed modes");
-        Synthetic(vars, "A330_FMA_CAP", "Landing capability");
-        Synthetic(vars, "A330_FMA_AP", "Autopilot and autothrust");
-
         // ---------------- Fuel caches ----------------
         foreach (var (key, lvar, name) in FuelVars) Silent(vars, key, lvar, name);
         Silent(vars, "A330_FUEL_CENTER", "FUEL TANK CENTER QUANTITY", "Centre tank", "gallons", SimVarType.SimVar);
@@ -202,13 +176,6 @@ public partial class IniA330Definition
         AddMcduVariables(vars);   // plan 03
         AddReadoutVariables(vars);   // plan 10
         AddFirstOfficerVariables(vars);   // plan 06
-
-        // Four names are read by a second key (the Speed window units and HDG-V/S or TRK-FPA controls, the
-        // base class's altitude and trim). Two Continuous batched keys with one Name shift every later
-        // struct slot in the batch ([VAR-7]), so each silent cache copy takes its own once-a-second
-        // subscription instead: the same sample rate, so nothing a pilot hears or sees changes.
-        foreach (var key in new[] { "A330_M_MACH", "A330_M_TRKFPA", "A330_ALTITUDE", "A330_TRIM" })
-            vars[key].ExcludeFromBatch = true;
 
         foreach (var kv in GetBaseVariables())
             if (!vars.ContainsKey(kv.Key)) vars[kv.Key] = kv.Value;
