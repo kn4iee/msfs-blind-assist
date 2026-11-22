@@ -1,0 +1,27 @@
+{
+  "gauge": "McduCaptain",
+  "complete": true,
+  "missing": 0,
+  "hiddenRowsLeftOut": true,
+  "texts": [
+    {"order": 7, "x": 22.0, "baseline": 43.0, "text": "     DATA INDEX", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0, 209.0, 226.0, 243.0, 260.0]},
+    {"order": 8, "x": 327.0, "baseline": 43.0, "text": "1/2", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [327.0, 344.0, 361.0]},
+    {"order": 6, "x": 394.0, "baseline": 43.0, "text": "ab", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [394.0, 411.0]},
+    {"order": 9, "x": 394.0, "baseline": 43.0, "text": "ab", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [394.0, 411.0]},
+    {"order": 10, "x": 39.0, "baseline": 69.0, "text": "POSITION", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0]},
+    {"order": 11, "x": 22.0, "baseline": 95.0, "text": "<MONITOR", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0]},
+    {"order": 12, "x": 39.0, "baseline": 121.0, "text": "IRS", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [39.0, 56.0, 73.0]},
+    {"order": 13, "x": 22.0, "baseline": 147.0, "text": "<MONITOR", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0]},
+    {"order": 14, "x": 39.0, "baseline": 172.0, "text": " GPS", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [39.0, 56.0, 73.0, 90.0]},
+    {"order": 15, "x": 22.0, "baseline": 198.0, "text": "<MONITOR", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0]},
+    {"order": 16, "x": 22.0, "baseline": 250.0, "text": "<A/C STATUS", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0]},
+    {"order": 17, "x": 39.0, "baseline": 276.0, "text": "CLOSEST", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0]},
+    {"order": 21, "x": 327.0, "baseline": 276.0, "text": "PRINT", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [327.0, 344.0, 361.0, 378.0, 395.0]},
+    {"order": 18, "x": 22.0, "baseline": 302.0, "text": "<AIRPORTS", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0]},
+    {"order": 22, "x": 275.0, "baseline": 302.0, "text": "FUNCTION>", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [275.0, 292.0, 309.0, 326.0, 343.0, 360.0, 377.0, 394.0, 411.0]},
+    {"order": 19, "x": 39.0, "baseline": 327.0, "text": "EQUITIME", "font": "FMGSfont_B", "size": 29.5, "colour": [0.3, 0.3, 0.3], "charX": [39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0]},
+    {"order": 23, "x": 361.0, "baseline": 327.0, "text": "AOC", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [361.0, 378.0, 395.0]},
+    {"order": 20, "x": 22.0, "baseline": 353.0, "text": "<POINT", "font": "FMGSfont_A", "size": 29.5, "colour": [0.3, 0.3, 0.3], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0]},
+    {"order": 24, "x": 275.0, "baseline": 353.0, "text": "FUNCTION>", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [275.0, 292.0, 309.0, 326.0, 343.0, 360.0, 377.0, 394.0, 411.0]}
+  ]
+}

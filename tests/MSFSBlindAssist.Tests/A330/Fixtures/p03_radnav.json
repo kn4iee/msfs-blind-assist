@@ -1,0 +1,25 @@
+{
+  "gauge": "McduCaptain",
+  "complete": true,
+  "missing": 0,
+  "hiddenRowsLeftOut": true,
+  "texts": [
+    {"order": 6, "x": 22.0, "baseline": 43.0, "text": "       RADIO NAV", "font": "FMGSfont_A", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0, 209.0, 226.0, 243.0, 260.0, 277.0]},
+    {"order": 7, "x": 22.0, "baseline": 69.0, "text": "VOR1/FREQ", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0]},
+    {"order": 17, "x": 275.0, "baseline": 69.0, "text": "VOR2/FREQ", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [275.0, 292.0, 309.0, 326.0, 343.0, 360.0, 377.0, 394.0, 411.0]},
+    {"order": 8, "x": 22.0, "baseline": 95.0, "text": " GSU/116.90", "font": "FMGSfont_B", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0]},
+    {"order": 18, "x": 241.0, "baseline": 95.0, "text": "GSU/116.90 ", "font": "FMGSfont_B", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [241.0, 258.0, 275.0, 292.0, 309.0, 326.0, 343.0, 360.0, 377.0, 394.0, 411.0]},
+    {"order": 9, "x": 22.0, "baseline": 121.0, "text": "CRS", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0]},
+    {"order": 19, "x": 377.0, "baseline": 121.0, "text": "CRS", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [377.0, 394.0, 411.0]},
+    {"order": 10, "x": 22.0, "baseline": 147.0, "text": "[ ]", "font": "FMGSfont_B", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [22.0, 39.0, 56.0]},
+    {"order": 20, "x": 377.0, "baseline": 147.0, "text": "[ ]", "font": "FMGSfont_A", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [377.0, 394.0, 411.0]},
+    {"order": 11, "x": 22.0, "baseline": 172.0, "text": "ILS /FREQ", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0]},
+    {"order": 12, "x": 22.0, "baseline": 198.0, "text": "[  ]/[    ]", "font": "FMGSfont_B", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0]},
+    {"order": 13, "x": 22.0, "baseline": 224.0, "text": "CRS", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0]},
+    {"order": 14, "x": 22.0, "baseline": 250.0, "text": "[ ]", "font": "FMGSfont_B", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [22.0, 39.0, 56.0]},
+    {"order": 15, "x": 22.0, "baseline": 276.0, "text": "ADF1/FREQ", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0]},
+    {"order": 21, "x": 275.0, "baseline": 276.0, "text": "ADF2/FREQ", "font": "FMGSfont_B", "size": 29.5, "colour": [1.0, 1.0, 1.0], "charX": [275.0, 292.0, 309.0, 326.0, 343.0, 360.0, 377.0, 394.0, 411.0]},
+    {"order": 16, "x": 22.0, "baseline": 302.0, "text": "[  ]/[   . ]", "font": "FMGSfont_A", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [22.0, 39.0, 56.0, 73.0, 90.0, 107.0, 124.0, 141.0, 158.0, 175.0, 192.0, 209.0]},
+    {"order": 22, "x": 241.0, "baseline": 302.0, "text": "[  ]/[   .]", "font": "FMGSfont_A", "size": 29.5, "colour": [0.4, 0.859, 1.0], "charX": [241.0, 258.0, 275.0, 292.0, 309.0, 326.0, 343.0, 360.0, 377.0, 394.0, 411.0]}
+  ]
+}
