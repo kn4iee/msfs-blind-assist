@@ -630,6 +630,8 @@ public sealed class IniA330CduForm : Form
         if (key == null && !e.Control && ((!e.Alt && e.KeyCode == Keys.PageUp) || (e.Alt && e.KeyCode == Keys.Up))) key = _profile.SlewUp;
         if (key == null && e.Alt && !e.Control && e.KeyCode == Keys.Right) key = _profile.NextPage;
         if (key == null && e.Alt && !e.Control && e.KeyCode == Keys.Left) key = _profile.PrevPage;
+        // Alt+Shift+F: SEC F-PLN, as the Fenix and FlyByWire windows (handled here, so no mnemonic fires).
+        if (key == null && e.Alt && !e.Control && e.Shift && e.KeyCode == Keys.F) key = "SEC";
         if (key == null && e.Alt && !e.Control && !e.Shift)
         {
             key = _profile.AltKeys.TryGetValue(e.KeyCode, out var page) ? page : null;

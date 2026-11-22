@@ -45,18 +45,20 @@ internal sealed record CduFormProfile(
         firstOfficer ? A330Gauge.McduFirstOfficer : A330Gauge.McduCaptain, firstOfficer,
         new[]
         {
-            ("&DIR", "DIR", "Alt+D"), ("PROG", "PROG", "Alt+G"), ("&PERF", "PERF", "Alt+P"), ("&INIT", "INIT", "Alt+I"),
-            ("D&ATA", "DATA", "Alt+A"), ("&F-PLN", "FPLAN", "Alt+F"), ("&RAD NAV", "RADNAV", "Alt+R"),
-            ("FUEL PRED", "FUEL", "Alt+U"), ("SEC F-PLN", "SEC", "Alt+X"), ("ATC COMM", "ATC", "Alt+T"),
-            ("MCDU &MENU", "MENU", "Alt+M"), ("AIRPORT", "AIRPORT", "Alt+O"), ("OVFY", "OVERFLY", "Alt+V"),
+            // The Fenix A320 window's shortcuts, so the muscle memory transfers (spec D16). A label's & letter is its
+            // Alt shortcut (WinForms); ATC COMM and SEC F-PLN carry none: Alt+K is in AltKeys, Alt+Shift+F in the form.
+            ("&DIR", "DIR", "Alt+D"), ("&PROG", "PROG", "Alt+P"), ("P&ERF", "PERF", "Alt+E"), ("&INIT", "INIT", "Alt+I"),
+            ("DA&TA", "DATA", "Alt+T"), ("&F-PLN", "FPLAN", "Alt+F"), ("&RAD NAV", "RADNAV", "Alt+R"),
+            ("FUEL PRED", "FUEL", "Alt+U"), ("SEC F-PLN", "SEC", "Alt+Shift+F"), ("ATC COMM", "ATC", "Alt+K"),
+            ("MCDU &MENU", "MENU", "Alt+M"), ("&AIRPORT", "AIRPORT", "Alt+A"), ("&OVFY", "OVERFLY", "Alt+O"),
             ("Previous page", "PREV", "Alt+Left"), ("Next page", "NEXT", "Alt+Right"),
             ("Slew up", "UARROW", "Page Up"), ("Slew down", "DOWN", "Page Down"), ("CLR", "CLR", "Backspace"),
         },
         new Dictionary<Keys, string>
         {
-            [Keys.D] = "DIR", [Keys.G] = "PROG", [Keys.P] = "PERF", [Keys.I] = "INIT", [Keys.A] = "DATA",
-            [Keys.F] = "FPLAN", [Keys.R] = "RADNAV", [Keys.U] = "FUEL", [Keys.X] = "SEC",
-            [Keys.T] = "ATC", [Keys.M] = "MENU", [Keys.O] = "AIRPORT", [Keys.V] = "OVERFLY",
+            [Keys.D] = "DIR", [Keys.P] = "PROG", [Keys.E] = "PERF", [Keys.I] = "INIT", [Keys.T] = "DATA",
+            [Keys.F] = "FPLAN", [Keys.R] = "RADNAV", [Keys.U] = "FUEL", [Keys.K] = "ATC",
+            [Keys.M] = "MENU", [Keys.A] = "AIRPORT", [Keys.O] = "OVERFLY",
         },
         // Key for key, as the FlyByWire A320 and Fenix windows: Page Up and Alt+Up press the MCDU's
         // up-arrow key, Page Down and Alt+Down its down-arrow key (the owner's ruling, 2026-11-20; this
