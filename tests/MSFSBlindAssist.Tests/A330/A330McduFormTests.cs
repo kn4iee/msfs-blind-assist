@@ -494,14 +494,219 @@ public sealed class A330McduFormTests : IDisposable
         for (int i = 1; i < rig.Sent.Count; i++) Assert.True(rig.Sent[i].At - rig.Sent[i - 1].At >= 150, $"key {i} came too soon");
         Assert.Equal(new[] { "A330 MCDU unavailable: the display reader is not installed", "Typed K1., not confirmed" }, rig.Speech.All);
 
-        // A page shown, and still no typed line from the reader: sent at today's pace, and not confirmed.
+        // A page shown, and still no typed line from the reader: sent at today's pace.
         using var shown = new Rig(A330ReplayDisplays.FromFixtures("p03_init.json"));
         var s = shown.Window();
         s.Show();
         await s.TypeAsync("ab");
         Assert.Equal(new[] { "INI_MCDU1_A", "INI_MCDU1_B" }, shown.Sent.Select(x => x.Flag));
         Assert.Equal(150, shown.Sent[1].At - shown.Sent[0].At);
-        Assert.Equal(new[] { "Typed AB, not confirmed" }, shown.Speech.All);
+    }
+
+    [Fact]
+    public async Task With_a_page_shown_and_no_typed_line_the_pages_scratchpad_line_confirms_the_entry()
+    {
+        using var rig = new Rig(A330ReplayDisplays.FromFixtures("p03_init.json"));
+        var w = rig.Window();
+        w.Show();
+
+        // No sentence of the window's own: the page's scratchpad line, read back once it settles, is the confirmation.
+        await w.TypeAsync("ab");
+        Assert.Empty(rig.Speech.All);
+        rig.Displays.Show(WithPad(Init(), "AB"));
+        for (int i = 0; i < 6; i++) Tick(rig, w);
+        Assert.Equal(new[] { "AB" }, rig.Speech.All);
+
+        // No page shown: nothing else can confirm it, so the window says what it typed.
+        rig.Displays.Forget(A330Gauge.McduCaptain);
+        Tick(rig, w);
+        await w.TypeAsync("c");
+        Assert.Equal(new[] { "AB", "Typed C, not confirmed" }, rig.Speech.All);
+    }
+
+    /// <summary>A window on INIT with an empty scratchpad line, whose typed line follows the keys.</summary>
+    private static (Rig Rig, IniA330CduForm Window) TypingOnInit()
+    {
+        var rig = new Rig { TypedLine = true };
+        rig.Displays.Show(WithPad(Init(), ""));
+        rig.Displays.SetScratchpad(false, "");
+        var w = rig.Window();
+        w.Show();
+        return (rig, w);
+    }
+
+    [Fact]
+    public async Task A_message_after_a_typed_entry_and_a_line_key_is_said_once()
+    {
+        var (rig, w) = TypingOnInit();
+        using var _ = rig;
+        await w.TypeAsync("kjfk");
+        Assert.Equal(new[] { "KJFK" }, rig.Speech.All);
+
+        // At once the pilot presses the line key; the MCDU refuses the entry, and its message reaches the scratchpad
+        // line well within 750 ms of the entry.
+        Key(w, Keys.Control | Keys.D1);
+        rig.Displays.Show(WithPad(Init(), "FORMAT ERROR"));
+        Tick(rig, w);
+        Tick(rig, w);
+        Assert.Equal(new[] { "KJFK", "FORMAT ERROR" }, rig.Speech.All);
+        for (int i = 0; i < 6; i++) Tick(rig, w);
+        Assert.Equal(2, rig.Speech.All.Count);
+    }
+
+    [Fact]
+    public async Task Backspace_after_a_typed_entry_says_what_is_left()
+    {
+        var (rig, w) = TypingOnInit();
+        using var _ = rig;
+        await w.TypeAsync("kjfk");
+
+        // Backspace in the emptied entry box, straight after the entry: CLR, and what is left is said.
+        w.HandleScratchpadKey(new KeyEventArgs(Keys.Back));
+        Assert.Equal("INI_MCDU1_CLR", rig.Sent[^1].Flag);
+        rig.Displays.Show(WithPad(Init(), "KJF"));
+        for (int i = 0; i < 4; i++) Tick(rig, w);
+        Assert.Equal(new[] { "KJFK", "KJF" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task A_typed_entry_the_page_catches_up_with_says_nothing_more()
+    {
+        var (rig, w) = TypingOnInit();
+        using var _ = rig;
+        await w.TypeAsync("kjfk");
+
+        // The page's frames lag the typed line: its scratchpad line shows nothing, then part of the entry, then all of it.
+        Tick(rig, w);
+        rig.Displays.Show(WithPad(Init(), "KJ"));
+        Tick(rig, w);
+        Tick(rig, w);
+        rig.Displays.Show(WithPad(Init(), "KJFK"));
+        for (int i = 0; i < 4; i++) Tick(rig, w);
+        Assert.Equal(new[] { "KJFK" }, rig.Speech.All);
+
+        // What arrives after it, untyped, is said.
+        rig.Displays.Show(WithPad(Init(), "NAV ACCUR DOWNGRADED"));
+        Tick(rig, w);
+        Tick(rig, w);
+        Assert.Equal(new[] { "KJFK", "NAV ACCUR DOWNGRADED" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void Arriving_on_and_leaving_the_F_PLN_says_nothing_about_the_scratchpad()
+    {
+        var empty = WithPad(Init(), "");
+        using var rig = new Rig();
+        rig.Displays.Show(empty);
+        var w = rig.Window();
+        w.Show();
+
+        rig.Displays.Show(Fixture("p03_fpln.json"));
+        for (int i = 0; i < 4; i++) Tick(rig, w);
+        string fplnTitle = Items(w)[0];
+        Assert.EndsWith("\U00002191\U00002193", Items(w)[^1]);   // the slew arrows are on the screen, and listed
+
+        rig.Displays.Show(empty);
+        for (int i = 0; i < 4; i++) Tick(rig, w);
+        Assert.Equal(new[] { fplnTitle, InitTitle }, rig.Speech.All);   // the two titles, nothing about the scratchpad
+    }
+
+    /// <summary>Waits that complete only when the test runs them, one at a time, each moving the clock by its length.</summary>
+    private sealed class HeldWaits
+    {
+        private readonly Rig _rig;
+        private readonly Queue<(int Ms, TaskCompletionSource Done)> _waits = new();
+
+        public HeldWaits(Rig rig, IniA330CduForm w)
+        {
+            _rig = rig;
+            w.Delay = ms =>
+            {
+                var done = new TaskCompletionSource();
+                _waits.Enqueue((ms, done));
+                return done.Task;
+            };
+        }
+
+        private void RunOne()
+        {
+            var (ms, done) = _waits.Dequeue();
+            _rig.Advance(ms);
+            done.SetResult();
+        }
+
+        public void RunUntil(Func<bool> reached)
+        {
+            while (!reached() && _waits.Count > 0) RunOne();
+            Assert.True(reached());
+        }
+
+        public void RunAll()
+        {
+            while (_waits.Count > 0) RunOne();
+        }
+    }
+
+    [Fact]
+    public void Hiding_closing_disposing_or_switching_sides_stops_an_entry_in_progress()
+    {
+        using var rig = new Rig(A330ReplayDisplays.FromFixtures("p03_init.json")) { TypedLine = true };
+        rig.Displays.SetScratchpad(false, "");
+        var w = rig.Window();
+        var waits = new HeldWaits(rig, w);
+        w.Show();
+        string[] Flags() => rig.Sent.Select(s => s.Flag).ToArray();
+
+        // Hidden while the entry waits for a key to show: the rest is not sent, and nothing is said for it.
+        var entry = w.TypeAsync("kjfk");
+        waits.RunUntil(() => rig.Sent.Count == 2);
+        Assert.False(entry.IsCompleted);
+        w.Hide();
+        waits.RunAll();
+        Assert.True(entry.IsCompleted);
+        Assert.Equal(new[] { "INI_MCDU1_K", "INI_MCDU1_J" }, Flags());
+        Assert.Empty(rig.Speech.All);
+
+        // Closed while a key that never shows is waited for: no "Missed" from a closed window. (Each part starts
+        // once the keys already sent have shown, on a typed line emptied again.)
+        w.Show();
+        rig.Advance(1000);
+        rig.Dropped.Add("B");
+        rig.Displays.SetScratchpad(false, "");
+        rig.Sent.Clear();
+        entry = w.TypeAsync("abc");
+        waits.RunUntil(() => rig.Sent.Count == 2);
+        w.Close();
+        waits.RunAll();
+        Assert.True(entry.IsCompleted);
+        Assert.Equal(new[] { "INI_MCDU1_A", "INI_MCDU1_B" }, Flags());
+        Assert.Empty(rig.Speech.All);
+
+        // A side switch mid-entry: the rest goes to neither side.
+        w.Show();
+        rig.Advance(1000);
+        rig.Dropped.Clear();
+        rig.Displays.SetScratchpad(false, "");
+        rig.Sent.Clear();
+        entry = w.TypeAsync("xyz");
+        waits.RunUntil(() => rig.Sent.Count == 1);
+        Key(w, Keys.Control | Keys.Shift | Keys.R);
+        waits.RunAll();
+        Assert.True(entry.IsCompleted);
+        Assert.Equal(new[] { "INI_MCDU1_X" }, Flags());
+        Assert.Equal(new[] { "Right MCDU" }, rig.Speech.All);
+
+        // Disposed mid-entry: nothing more.
+        rig.Advance(1000);
+        rig.Displays.SetScratchpad(true, "");
+        rig.Sent.Clear();
+        entry = w.TypeAsync("12");
+        waits.RunUntil(() => rig.Sent.Count == 1);
+        w.Dispose();
+        waits.RunAll();
+        Assert.True(entry.IsCompleted);
+        Assert.Equal(new[] { "INI_MCDU2_1" }, Flags());
+        Assert.Equal(new[] { "Right MCDU" }, rig.Speech.All);
     }
 
     [Fact]
@@ -606,6 +811,52 @@ public sealed class A330McduFormTests : IDisposable
         rig.Displays.Show(tmpy);
         Tick(rig, w);
         Assert.Equal(2, rig.Speech.All.Count);
+    }
+
+    [Fact]
+    public void A_temporary_flight_plan_is_said_whether_the_window_or_the_screen_reader_reads_the_title()
+    {
+        using var rig = new Rig(A330ReplayDisplays.FromFixtures("p03_init.json"));
+        var w = rig.Window();
+        bool focused = false;
+        w.ScreenHasFocus = () => focused;
+        w.Show();
+        var tmpy = WithPad(WithText(Fixture("p03_fpln.json"), 9, " FROM TMPY"), "NAV ACCUR DOWNGRADED");
+
+        // The pilot is on the list, away from its first row: moving the selection there makes the screen reader read
+        // the title, so the window does not say it again; of a temporary flight plan it says only that.
+        focused = true;
+        List(w).SelectedIndex = 4;
+        rig.Displays.Show(Menu());
+        Tick(rig, w);
+        Assert.Empty(rig.Speech.All);
+        Assert.Equal(0, List(w).SelectedIndex);
+        List(w).SelectedIndex = 4;
+        rig.Displays.Show(tmpy);
+        Tick(rig, w);
+        Assert.Equal(new[] { "Temporary flight plan" }, rig.Speech.All);
+        Tick(rig, w);
+        Tick(rig, w);
+        Assert.Single(rig.Speech.All);
+
+        // Already on the first row: the selection does not move, so the window says the title itself.
+        rig.Displays.Show(Menu());
+        Tick(rig, w);
+        Assert.Equal("MCDU MENU", rig.Speech.All[^1]);
+        rig.Displays.Show(tmpy);
+        Tick(rig, w);
+        string title = Items(w)[0];
+        Assert.Equal(title + ", temporary flight plan", rig.Speech.All[^1]);
+
+        // The focus elsewhere: the window says it too.
+        focused = false;
+        List(w).SelectedIndex = 4;
+        rig.Displays.Show(Menu());
+        Tick(rig, w);
+        rig.Displays.Show(tmpy);
+        Tick(rig, w);
+        Assert.Equal(new[] { "Temporary flight plan", "MCDU MENU", title + ", temporary flight plan", "MCDU MENU", title + ", temporary flight plan" },
+            rig.Speech.All);
     }
 
     [Fact]

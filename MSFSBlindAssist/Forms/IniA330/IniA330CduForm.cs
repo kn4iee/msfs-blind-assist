@@ -28,14 +28,19 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// <para>What it says ([CORE-7]: once, only what the screen reader cannot say, through the non-interrupting announce).
 /// Opening the window while the reader cannot read the MCDU: "A330 MCDU unavailable: &lt;reason&gt;", again only when
 /// the reason changes, and "MCDU ready" with the first page after it (spec D3; never an AI read). A new title, unless
-/// moving the focused list to it makes the screen reader read it (", temporary flight plan" when it carries TMPY). After
-/// a line key with a page shown, what the pressed line now holds or "No change" (<see cref="A330McduLineKeyWatch"/>).
-/// The page's scratchpad line, read back when it changes without the pilot typing (two stable refreshes,
-/// <see cref="CduScratchpadAnnouncer"/>). A typed entry, confirmed from the MCDU's own typed line
-/// (<see cref="IA330Displays.McduScratchpad"/>, never the page's scratchpad line): each key is sent only once the one
-/// before has shown, at least 150 ms apart, and waited for up to 600 ms; then the typed line is said, or
-/// "Missed &lt;KEY&gt;. Scratchpad: ..." and the rest of the entry is not sent. With no typed line from the reader the
-/// keys go at 150 ms a key and the window says "Typed ..., not confirmed".</para>
+/// moving the focused list to it makes the screen reader read it; one that carries TMPY adds ", temporary flight plan",
+/// or, when the screen reader reads the title, the window says "Temporary flight plan" alone. After a line key with a
+/// page shown, what the pressed line now holds or "No change" (<see cref="A330McduLineKeyWatch"/>). The page's
+/// scratchpad line, read back when it changes (two stable refreshes, <see cref="CduScratchpadAnnouncer"/>), without the
+/// F-PLN's slew arrows at its end (on the screen and listed, but no text on the scratchpad). A typed entry, confirmed
+/// from the MCDU's own typed line (<see cref="IA330Displays.McduScratchpad"/>): each key is sent only once the one before
+/// has shown, at least 150 ms apart, and waited for up to 600 ms; then the typed line is said, or
+/// "Missed &lt;KEY&gt;. Scratchpad: ..." and the rest of the entry is not sent. What was said is then not said again by
+/// the scratchpad line's read-back (the line showing it, or part of it while the frames catch up) until the next key
+/// that is not part of an entry. With no typed line from the reader the keys go at 150 ms a key, and the page's
+/// scratchpad line read back is the confirmation; with no page shown either, the window says "Typed ..., not
+/// confirmed". Hiding, closing or disposing the window, or a side switch, stops an entry: its other keys are not sent
+/// and nothing is said for it.</para>
 /// <para>Keys. The aircraft's own <c>INI_MCDU1_&lt;KEY&gt;</c> (captain) or <c>INI_MCDU2_&lt;KEY&gt;</c> (first officer)
 /// press flags: write 1, the aircraft consumes it and resets it to 0 (writing 0 straight after kills the press,
 /// measured). Every write is sequence-prefixed so a repeated key is never coalesced by the MobiFlight channel. Keys are
@@ -60,7 +65,7 @@ public sealed class IniA330CduForm : Form
     private const int KeyGapMs = 150;          // today's typing pace
     private const int KeyShowsWithinMs = 600;  // how long a typed key may take to show on the typed line
     private const int KeyPollMs = 25;
-    private const int TypedEchoMs = 3 * RefreshMs;   // the page's frames show the typed line within three refreshes
+    private const int TypedEchoMs = 3 * RefreshMs;   // the page's frames show an unconfirmed entry within three refreshes
 
     private readonly IA330Displays _displays;
     private readonly SimConnectManager _sim;
@@ -91,7 +96,8 @@ public sealed class IniA330CduForm : Form
     private string _lastTitle = "";
     private int? _rowBeforeGap;                        // the pilot's row when a page gave way to the status row
     private A330McduLineKeyWatch? _lineWatch;
-    private long? _reseedScratchAt;                    // after a confirmed entry: when the scratchpad read-back starts afresh
+    private string? _alreadySaid;                      // the typed line the window last said for an entry, until the next key
+    private int _entryGeneration;                      // moves on when the window hides or switches side: an entry stops
     private long? _lastKeyMs;
     private int _seq;
 
@@ -111,6 +117,7 @@ public sealed class IniA330CduForm : Form
         _profile = profile;
         _wantedGauge = profile.Gauge;
         SendPressFlag = WritePressFlag;
+        ScreenHasFocus = () => _display.Focused;
 
         SetTitle();
         KeyPreview = true;
@@ -144,6 +151,10 @@ public sealed class IniA330CduForm : Form
     /// <summary>Writes one press flag (the whole L:var name, "INI_MCDU1_INIT"); false when it could not be sent. A test records them.</summary>
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Func<string, bool> SendPressFlag { get; set; }
+
+    /// <summary>True while the screen list has the focus (its own <see cref="Control.Focused"/>); a test sets it, never taking the focus.</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    internal Func<bool> ScreenHasFocus { get; set; }
 
     /// <summary>True: shown without taking the focus (the tests never take the focus of whoever is at the computer).</summary>
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -239,6 +250,7 @@ public sealed class IniA330CduForm : Form
     {
         _timer.Stop();
         _lineWatch = null;
+        _entryGeneration++;   // an entry in progress stops: hidden, closed or disposed
         if (!_wanting) return;
         _wanting = false;
         _displays.Release(_wantedGauge, this);
@@ -251,7 +263,7 @@ public sealed class IniA330CduForm : Form
         _lastTitle = "";
         _lineWatch = null;
         _rowBeforeGap = null;
-        _reseedScratchAt = null;
+        _alreadySaid = null;
     }
 
     // ---- sides ----
@@ -260,6 +272,7 @@ public sealed class IniA330CduForm : Form
     {
         bool firstOfficer = _side.SelectedIndex == 1;
         if (firstOfficer == _profile.FirstOfficer) return;
+        _entryGeneration++;   // an entry in progress stops: its other keys go to neither side
         _profile = _profile.ForSide(firstOfficer);
         SetTitle();
         if (_wanting)
@@ -336,10 +349,15 @@ public sealed class IniA330CduForm : Form
         if (title.Length > 0 && title != _lastTitle)
         {
             // Moving the focused list to the title row makes the screen reader read it; announce only when that will
-            // not happen (focus elsewhere, or already on row 0), never both.
-            bool selectionSpeaks = _display.Focused && saved != 0 && _display.Items.Count > 0;
-            if (_lastTitle.Length > 0 && !selectionSpeaks)
-                Speak(title.Contains("TMPY", StringComparison.Ordinal) ? title + ", temporary flight plan" : title);
+            // not happen (focus elsewhere, or already on row 0), never both. A temporary flight plan is said either way,
+            // so a pilot knows INSERT is waiting: after the title, or alone when the screen reader reads the title.
+            bool selectionSpeaks = ScreenHasFocus() && saved != 0 && _display.Items.Count > 0;
+            bool temporary = title.Contains("TMPY", StringComparison.Ordinal);
+            if (_lastTitle.Length > 0)
+            {
+                if (!selectionSpeaks) Speak(temporary ? title + ", temporary flight plan" : title);
+                else if (temporary) Speak("Temporary flight plan");
+            }
             _lastTitle = title;
             target = 0;
         }
@@ -358,20 +376,30 @@ public sealed class IniA330CduForm : Form
         if (_display.SelectedIndex != 0) _display.SelectedIndex = 0;
     }
 
-    /// <summary>The page's scratchpad line read back when it changes without the pilot typing; held while an entry is
-    /// typed, and after a confirmed one started afresh once the page's frames have caught up, so what was just said is
-    /// not said again.</summary>
+    /// <summary>The page's scratchpad line read back when it changes; held while an entry is typed. After an entry the
+    /// window has said, the line showing that text, or a start of it while the frames catch up, is taken silently as
+    /// the line's starting point; any other change is said as usual.</summary>
     private void FeedScratchpad(IReadOnlyList<A330McduLine> page, long now)
     {
         if (_typing) return;
-        if (_reseedScratchAt is long at)
+        string row = ScratchpadText(page[A330McduLines.ScratchpadRow]);
+        if (_alreadySaid is { } said && said.StartsWith(row, StringComparison.Ordinal))
         {
-            if (now < at) return;
-            _reseedScratchAt = null;
             _scratch.Reset();
+            _scratch.OnPoll(row, Utc(now));
+            return;
         }
-        string row = page[A330McduLines.ScratchpadRow].Text.Trim();
         Speak(_scratch.OnPoll(row, Utc(now)));
+    }
+
+    /// <summary>The scratchpad line as its read-back says it: its characters, without the F-PLN's slew arrows (the
+    /// codes <c>e</c> and <c>f</c>, drawn at the line's end: on the screen and listed, but no text on the scratchpad), trimmed.</summary>
+    private static string ScratchpadText(A330McduLine line)
+    {
+        var text = new System.Text.StringBuilder(line.Cells.Count);
+        foreach (var cell in line.Cells)
+            text.Append(cell is { } c && c.Character is not ('e' or 'f') ? A330McduCharacters.Display(c) : " ");
+        return text.ToString().Trim();
     }
 
     private void FollowLineKey(IReadOnlyList<A330McduLine> page, long now)
@@ -431,7 +459,11 @@ public sealed class IniA330CduForm : Form
             ? key[3] - '0'
             : null;
 
-    private void Press(string key) => _ = PressAsync(key);
+    private void Press(string key)
+    {
+        _alreadySaid = null;   // a key that is no part of an entry: whatever it brings to the scratchpad line is said
+        _ = PressAsync(key);
+    }
 
     private async Task PressAsync(string key)
     {
@@ -462,21 +494,24 @@ public sealed class IniA330CduForm : Form
     }
 
     /// <summary>Types <paramref name="text"/> on the MCDU of the side shown, confirmed from its typed line when the
-    /// reader gives one. UI thread.</summary>
+    /// reader gives one. UI thread. Hiding, closing or disposing the window, or a side switch, stops it.</summary>
     internal async Task TypeAsync(string text)
     {
         var profile = _profile;
+        var entry = new Entry(this, _entryGeneration);
+        _alreadySaid = null;
         try
         {
             await _keyGate.WaitAsync();
             _typing = true;
             try
             {
+                if (entry.Stopped) return;
                 string? pad = _displays.McduScratchpad(profile.FirstOfficer);
                 var keys = profile.KeysToType(text, pad ?? "");
                 if (keys.Count == 0) return;
-                if (pad is null) await TypeUnconfirmedAsync(profile, keys);
-                else await TypeConfirmedAsync(profile, keys);
+                if (pad is null) await TypeUnconfirmedAsync(profile, keys, entry);
+                else await TypeConfirmedAsync(profile, keys, entry);
             }
             finally
             {
@@ -490,47 +525,54 @@ public sealed class IniA330CduForm : Form
         }
     }
 
-    /// <summary>No typed line from the reader: every key at today's pace, then the page's own read-back.</summary>
-    private async Task TypeUnconfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys)
+    /// <summary>One typed entry: stopped once the window is disposed, hidden or closed, or switched to the other side.</summary>
+    private readonly record struct Entry(IniA330CduForm Window, int Generation)
+    {
+        public bool Stopped => Window.IsDisposed || Window._entryGeneration != Generation;
+    }
+
+    /// <summary>No typed line from the reader: every key at today's pace. With a page shown, its scratchpad line read
+    /// back is the confirmation; with none, the window says what it typed.</summary>
+    private async Task TypeUnconfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys, Entry entry)
     {
         foreach (var k in keys)
         {
             await PaceAsync();
-            if (IsDisposed || !Send(profile, k.Key)) return;
+            if (entry.Stopped || !Send(profile, k.Key)) return;
         }
         _scratch.SuppressUntil = Utc(NowMs() + TypedEchoMs);
-        _announcer.Announce($"Typed {keys[^1].Expected}, not confirmed");
+        if (_shownPage is null) _announcer.Announce($"Typed {keys[^1].Expected}, not confirmed");
     }
 
     /// <summary>Each key once the one before has shown on the typed line; a key that does not show stops the entry.</summary>
-    private async Task TypeConfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys)
+    private async Task TypeConfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys, Entry entry)
     {
         string? shown = null;
         foreach (var k in keys)
         {
             await PaceAsync();
-            if (IsDisposed || !Send(profile, k.Key)) return;
-            (bool landed, shown) = await ShowsAsync(profile.FirstOfficer, k.Expected, NowMs());
-            if (IsDisposed) return;
+            if (entry.Stopped || !Send(profile, k.Key)) return;
+            (bool landed, shown) = await ShowsAsync(profile.FirstOfficer, k.Expected, NowMs(), entry);
+            if (entry.Stopped) return;
             if (!landed)
             {
-                _reseedScratchAt = NowMs() + TypedEchoMs;
+                _alreadySaid = shown;
                 _announcer.Announce($"Missed {k.Key}. {PadWords(shown)}");
                 return;
             }
         }
-        _reseedScratchAt = NowMs() + TypedEchoMs;
+        _alreadySaid = shown;
         _announcer.Announce(shown!);
     }
 
     /// <summary>Polls the typed line until it is <paramref name="expected"/>, for up to <see cref="KeyShowsWithinMs"/>.</summary>
-    private async Task<(bool Landed, string? Pad)> ShowsAsync(bool firstOfficer, string expected, long sentAt)
+    private async Task<(bool Landed, string? Pad)> ShowsAsync(bool firstOfficer, string expected, long sentAt, Entry entry)
     {
         while (true)
         {
             string? pad = _displays.McduScratchpad(firstOfficer);
             if (pad == expected) return (true, pad);
-            if (NowMs() - sentAt >= KeyShowsWithinMs || IsDisposed) return (false, pad);
+            if (NowMs() - sentAt >= KeyShowsWithinMs || entry.Stopped) return (false, pad);
             await Delay(KeyPollMs);
         }
     }
@@ -544,6 +586,9 @@ public sealed class IniA330CduForm : Form
 
     /// <summary>A key as the message loop hands it to the window (its key handler); for the tests.</summary>
     internal void HandleKey(KeyEventArgs e) => Form_KeyDown(this, e);
+
+    /// <summary>A key in the scratchpad entry box (its key handler); for the tests.</summary>
+    internal void HandleScratchpadKey(KeyEventArgs e) => Scratchpad_KeyDown(_scratchpad, e);
 
     private void Form_KeyDown(object? sender, KeyEventArgs e)
     {
