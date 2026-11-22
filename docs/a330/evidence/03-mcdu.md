@@ -47,6 +47,6 @@ Each shows as one cell (the braille rule). Wording of each stand-in: the owner's
   by `A330McduScreen.From` (a text starts off the grid), and the scratchpad line cannot be trusted while
   `HiddenRowsLeftOut` is false: the Global Constraints' rule holds for both the window and the FMS message
   call-out. (The page held the owner's route: not captured as a fixture.)
-- The first officer's MCDU: the reader gave no frame while the display stayed still; not measured further.
+- The first officer's MCDU: the reader gave no frame for it; not measured further.
 - `INI_FMS1_message_light` 0 and `INI_FMS2_message_light` 0, with no FMS message on either scratchpad line.
   `INI_FMC_PAGE1` 4. What the lamps read with a message queued: not measured yet (Task 5 Step 2).

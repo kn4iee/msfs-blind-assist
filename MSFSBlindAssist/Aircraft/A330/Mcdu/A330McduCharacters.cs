@@ -15,12 +15,12 @@ internal static class A330McduCharacters
     public static string Display(A330McduCell cell) => cell.Character switch
     {
         BoxCode => "-",
-        'd' => "°",
-        'a' => "←",
-        'b' => "→",
-        'e' => "↑",
-        'f' => "↓",
-        'c' => "Δ",
+        'd' => "\u00B0",
+        'a' => "\u2190",
+        'b' => "\u2192",
+        'e' => "\u2191",
+        'f' => "\u2193",
+        'c' => "\u0394",
         var other => other.ToString(),
     };
 
