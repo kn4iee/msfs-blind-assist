@@ -19,7 +19,7 @@ public class A330McduPagesTests
     {
         yield return new object[] { "p03_initb.json", new[]
         {
-            "INIT FUEL PREDICTION ←→",
+            "INIT FUEL PREDICTION \u2190\u2192",
             "   TAXI           ZFW/ZFWCG",
             "1: 0.6          125.0/27.0",
             "   TRIP /TIME         BLOCK",
@@ -36,7 +36,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_data1.json", new[]
         {
-            "DATA INDEX   1/2 ←→",
+            "DATA INDEX   1/2 \u2190\u2192",
             "    POSITION",
             "1: <MONITOR",
             "    IRS",
@@ -52,7 +52,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_data2.json", new[]
         {
-            "DATA INDEX   2/2 ←→",
+            "DATA INDEX   2/2 \u2190\u2192",
             "                    STORED",
             "1: <WAYPOINTS    WAYPOINTS>",
             "                    STORED",
@@ -73,7 +73,7 @@ public class A330McduPagesTests
             "    ACTIVE NAV DATA BASE",
             "2: 29OCT-26NOV   AB49012001",
             "    SECOND NAV DATA BASE",
-            "3: ←01OCT-29OCT",
+            "3: \u219001OCT-29OCT",
             "4:",
             "   CHG CODE",
             "5: [ ]",
@@ -83,7 +83,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_fpln1.json", new[]
         {
-            "FROM          MSF773 ←→",
+            "FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: KATL26L ----  ---/ -----",
             "    VRSTY3 BRG292    1NM",
@@ -96,11 +96,11 @@ public class A330McduPagesTests
             "5: RIGGZ   ----  ---/ -----",
             "    DEST   TIME  DIST  EFOB",
             "6: KMCO17L ----  394   -.--",
-            "Scratchpad: NAV ACCURACY UPGRAD   ↑↓",
+            "Scratchpad: NAV ACCURACY UPGRAD   \u2191\u2193",
         } };
         yield return new object[] { "p03_fpln2.json", new[]
         {
-            "FROM          MSF773 ←→",
+            "FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: RIVTT   ----  250/ -----",
             "    VRSTY3          40NM",
@@ -112,11 +112,11 @@ public class A330McduPagesTests
             "5: ALYNA   ----  ---/ -----",
             "    DEST   TIME  DIST  EFOB",
             "6: KMCO17L ----  394   -.--",
-            "Scratchpad: NAV ACCURACY UPGRAD   ↑↓",
+            "Scratchpad: NAV ACCURACY UPGRAD   \u2191\u2193",
         } };
         yield return new object[] { "p03_fpln3.json", new[]
         {
-            "FROM          MSF773 ←→",
+            "FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: BANYA   ----  210/  7000",
             "    ALYNA4           0NM",
@@ -124,36 +124,36 @@ public class A330McduPagesTests
             "3: ---F-PLN DISCONTINUITY--",
             "                    14NM",
             "4: SEEDO   ----  ---/  2500",
-            "                     3-3.0°",
+            "                     3-3.0\u00B0",
             "5: COCAS   ----  ---/  1500",
             "    DEST   TIME  DIST  EFOB",
             "6: KMCO17L ----  394   -.--",
-            "Scratchpad: NAV ACCURACY UPGRAD   ↑↓",
+            "Scratchpad: NAV ACCURACY UPGRAD   \u2191\u2193",
         } };
         yield return new object[] { "p03_latrev.json", new[]
         {
             "LAT REV FROM RIGGZ",
-            "      33°34.6N/084°41.8W",
+            "      33\u00B034.6N/084\u00B041.8W",
             "1:                FIX INFO>",
             "2: <OFFSET",
             "                  NEXT WPT",
             "3: <HOLD            [     ]",
             "    ENABLE        NEW DEST",
-            "4: ←ALTN             [    ]",
+            "4: \u2190ALTN             [    ]",
             "5:                 AIRWAYS>",
             "6: <RETURN",
             "Scratchpad:",
         } };
         yield return new object[] { "p03_sids.json", new[]
         {
-            "DEPARTURES FROM KATL ←→",
+            "DEPARTURES FROM KATL \u2190\u2192",
             "    RWY      SID     TRANS",
             "1: 26L      -----     -----",
             "   SIDS   AVAILABLE   TRANS",
-            "2: ←NONE",
-            "3: ←ATL2",
-            "4: ←BANNG3",
-            "5: ←CUTTN2",
+            "2: \u2190NONE",
+            "3: \u2190ATL2",
+            "4: \u2190BANNG3",
+            "5: \u2190CUTTN2",
             "6: *ERASE           INSERT*",
             "Scratchpad: NAV ACCURACY UPGRAD",
         } };
@@ -167,7 +167,7 @@ public class A330McduPagesTests
             "    V2  CLEAN     FLAPS/THS",
             "3: 151    O=209     2/UP0.5",
             "   TRANS ALT   FLEX TO TEMP",
-            "4: 18000                50°",
+            "4: 18000                50\u00B0",
             "   THR RED/ACC  ENG OUT ACC",
             "5:  2500/2500          2500",
             "    UPLINK (inop)     NEXT",
@@ -182,7 +182,7 @@ public class A330McduPagesTests
             "2: <REPORT",
             "3:",
             "     BRG /DIST",
-            "4:  ---° /---    TO [     ]",
+            "4:  ---\u00B0 /---    TO [     ]",
             "    PREDICTIVE",
             "5: <GPS         GPS PRIMARY",
             "   REQUIRED ACCUR ESTIMATED",
@@ -223,7 +223,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_init.json", new[]
         {
-            "INIT        ←→",
+            "INIT        \u2190\u2192",
             "    CO RTE          FROM/TO",
             "1: ----------     ----/----",
             "   ALTN/CO RTE",
@@ -234,7 +234,7 @@ public class A330McduPagesTests
             "   COST INDEX",
             "5: 20                 WIND>",
             "   CRZ FL/TEMP        TROPO",
-            "6: ---- /---°         36090",
+            "6: ---- /---\u00B0         36090",
             "Scratchpad: NAV ACCUR DOWNGRADED",
         } };
         yield return new object[] { "p03_menu.json", new[]
@@ -251,7 +251,7 @@ public class A330McduPagesTests
         } };
         yield return new object[] { "p03_fpln.json", new[]
         {
-            "FROM          MSF773 ←→",
+            "FROM          MSF773 \u2190\u2192",
             "                 SPD/ALT",
             "1: (LIM)   0003  250/ 10000",
             "    VRSTY3           4NM",
@@ -264,21 +264,21 @@ public class A330McduPagesTests
             "5: (T/C)   0015  .74/ FL330",
             "    DEST   TIME  DIST  EFOB",
             "6: KMCO17L 0103  394   47.3",
-            "Scratchpad:                       ↑↓",
+            "Scratchpad:                       \u2191\u2193",
         } };
         yield return new object[] { "p03_departures.json", new[]
         {
-            "DEPARTURES FROM KATL ←→",
+            "DEPARTURES FROM KATL \u2190\u2192",
             "    RWY      SID     TRANS",
             "1: ---      -----     -----",
             "      AVAILABLE RUNWAYS",
-            "2: ←08L  2700M",
+            "2: \u219008L  2700M",
             "         084",
-            "3: ←26R  2700M",
+            "3: \u219026R  2700M",
             "         264",
-            "4: ←08R  3000M",
+            "4: \u219008R  3000M",
             "         084",
-            "5: ←26L  3000M",
+            "5: \u219026L  3000M",
             "         264",
             "6: <RETURN",
             "Scratchpad: NAV ACCURACY UPGRAD",
