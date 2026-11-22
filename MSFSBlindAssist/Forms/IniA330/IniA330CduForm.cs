@@ -40,7 +40,9 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// that is not part of an entry. With no typed line from the reader the keys go at 150 ms a key, and the page's
 /// scratchpad line read back is the confirmation; with no page shown either, the window says "Typed ..., not
 /// confirmed". Hiding, closing or disposing the window, or a side switch, stops an entry: its other keys are not sent
-/// and nothing is said for it.</para>
+/// and nothing is said for it. CLR (Backspace, the CLR button) while the scratchpad line shows a message (the line, not
+/// the typed line): "Message cleared: &lt;message&gt;" once a frame shows the line without it, within 1.5 s, and no
+/// "Scratchpad cleared" for that change; the next queued message is read back as usual.</para>
 /// <para>Keys. The aircraft's own <c>INI_MCDU1_&lt;KEY&gt;</c> (captain) or <c>INI_MCDU2_&lt;KEY&gt;</c> (first officer)
 /// press flags: write 1, the aircraft consumes it and resets it to 0 (writing 0 straight after kills the press,
 /// measured). Every write is sequence-prefixed so a repeated key is never coalesced by the MobiFlight channel. Keys are
@@ -66,6 +68,7 @@ public sealed class IniA330CduForm : Form
     private const int KeyShowsWithinMs = 600;  // how long a typed key may take to show on the typed line
     private const int KeyPollMs = 25;
     private const int TypedEchoMs = 3 * RefreshMs;   // the page's frames show an unconfirmed entry within three refreshes
+    private const int ClearShowsWithinMs = 1500;     // how long a cleared message may take to leave the scratchpad line
 
     private readonly IA330Displays _displays;
     private readonly SimConnectManager _sim;
@@ -97,6 +100,7 @@ public sealed class IniA330CduForm : Form
     private int? _rowBeforeGap;                        // the pilot's row when a page gave way to the status row
     private A330McduLineKeyWatch? _lineWatch;
     private string? _alreadySaid;                      // the typed line the window last said for an entry, until the next key
+    private (string Message, long Until)? _clearing;   // CLR pressed on a message: said once its line no longer holds it
     private int _entryGeneration;                      // moves on when the window hides or switches side: an entry stops
     private long? _lastKeyMs;
     private int _seq;
@@ -264,6 +268,7 @@ public sealed class IniA330CduForm : Form
         _lineWatch = null;
         _rowBeforeGap = null;
         _alreadySaid = null;
+        _clearing = null;
     }
 
     // ---- sides ----
@@ -329,6 +334,7 @@ public sealed class IniA330CduForm : Form
         ShowStatusRow(row);
         Speak(_availability.Next(reason, pageShown: false));
         if (_lineWatch?.Expired(now) == true) _lineWatch = null;
+        if (_clearing is { } c && now > c.Until) _clearing = null;
     }
 
     private void SetStatus(string s)
@@ -383,6 +389,23 @@ public sealed class IniA330CduForm : Form
     {
         if (_typing) return;
         string row = ScratchpadText(page[A330McduLines.ScratchpadRow]);
+        if (_clearing is { } clearing)
+        {
+            if (now > clearing.Until) _clearing = null;
+            else if (row != clearing.Message)
+            {
+                // CLR took the message off the line: say which, once. An emptied line is then the read-back's silent
+                // starting point (no "Scratchpad cleared" for it); the next queued message is read back as usual.
+                _clearing = null;
+                Speak("Message cleared: " + clearing.Message);
+                if (row.Length == 0)
+                {
+                    _scratch.Reset();
+                    _scratch.OnPoll(row, Utc(now));
+                    return;
+                }
+            }
+        }
         if (_alreadySaid is { } said && said.StartsWith(row, StringComparison.Ordinal))
         {
             _scratch.Reset();
@@ -487,9 +510,16 @@ public sealed class IniA330CduForm : Form
         }
     }
 
+    /// <summary>CLR. On a message (the page's scratchpad line, not the MCDU's typed line, <see cref="A330McduMessages.Message"/>)
+    /// the window says "Message cleared: ..." once a frame shows the line without it, within 1.5 s, or nothing.</summary>
     private void Clear()
     {
-        _scratch.SuppressUntil = Utc(NowMs() + 400);
+        long now = NowMs();
+        _scratch.SuppressUntil = Utc(now + 400);
+        _clearing = _shownPage is { } page
+            && A330McduMessages.Message(ScratchpadText(page[A330McduLines.ScratchpadRow]), _displays.McduScratchpad(_profile.FirstOfficer)) is { } message
+                ? (message, now + ClearShowsWithinMs)
+                : null;
         Press("CLR");
     }
 
