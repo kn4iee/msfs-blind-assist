@@ -78,6 +78,80 @@ internal sealed record CduFormProfile(
 /// </summary>
 internal static class CduLineText
 {
+    private const int MaxRowCells = 37;
+    private const string Unavailable = " (unavailable)";
+    private const string Inop = " (inop)";
+
+    private static bool IsGrey(MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduCell? cell)
+    {
+        if (cell?.Colour is not { } c) return false;
+        float max = Math.Max(c.R, Math.Max(c.G, c.B)), min = Math.Min(c.R, Math.Min(c.G, c.B));
+        return max - min <= 0.02f && max < 0.5f;
+    }
+
+    /// <summary>
+    /// The row's text with the greyed-prompt marker: one marker after each run of grey fields, written into
+    /// the blanks after the run (never moving a later field) or after the row's last character, and never
+    /// taking the row past 37 cells. A cell with no colour is never grey. Pure.
+    /// </summary>
+    public static string ForWindow(MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine line)
+    {
+        var chars = new char[MaxRowCells];
+        Array.Fill(chars, ' ');
+        int n = Math.Min(line.Text.Length, MaxRowCells);
+        for (int i = 0; i < n; i++) chars[i] = line.Text[i];
+
+        // fields: runs of non-blank cells with at most one blank between two of them
+        var fields = new List<(int Start, int End, bool Grey)>();
+        int col = 0, width = Math.Min(line.Cells.Count, line.Text.Length);
+        while (col < width)
+        {
+            if (line.Text[col] == ' ') { col++; continue; }
+            int start = col, end = col, nonBlank = 0, grey = 0;
+            while (col < width)
+            {
+                if (line.Text[col] != ' ') { end = col; nonBlank++; if (IsGrey(line.Cells[col])) grey++; col++; }
+                else if (col + 1 < width && line.Text[col + 1] != ' ') col++;
+                else break;
+            }
+            fields.Add((start, end, grey * 2 > nonBlank));
+        }
+
+        int length = line.Text.Length;
+        for (int f = 0; f < fields.Count; f++)
+        {
+            if (!fields[f].Grey || (f + 1 < fields.Count && fields[f + 1].Grey)) continue;
+            int after = fields[f].End + 1;
+            if (f + 1 == fields.Count)
+            {
+                string marker = length + Unavailable.Length > MaxRowCells ? Unavailable.TrimStart() : Unavailable;
+                for (int k = 0; k < marker.Length && after + k < MaxRowCells; k++) chars[after + k] = marker[k];
+            }
+            else
+            {
+                int gap = fields[f + 1].Start - after;
+                string? marker = gap >= 16 ? Unavailable : gap >= 9 ? Inop : null;
+                if (marker != null) for (int k = 0; k < marker.Length; k++) chars[after + k] = marker[k];
+            }
+        }
+        return new string(chars).TrimEnd();
+    }
+
+    /// <summary>The window's list from the 14 lines: title, each label row (indented, no number), each data row "n: value", then the scratchpad.</summary>
+    public static IReadOnlyList<string> Listing(IReadOnlyList<MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine> lines)
+    {
+        var result = new List<string> { ForWindow(lines[0]).Trim() };
+        for (int k = 1; k <= 6; k++)
+        {
+            string label = ForWindow(lines[2 * k - 1]);
+            if (label.Length > 0) result.Add(("   " + label).TrimEnd());
+            string data = ForWindow(lines[2 * k]);
+            result.Add(data.Length > 0 ? $"{k}: {data}" : $"{k}:");
+        }
+        result.Add(("Scratchpad: " + ForWindow(lines[MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLines.ScratchpadRow])).TrimEnd());
+        return result;
+    }
+
     public static string WithColour(A330CduLine line)
     {
         var text = line.Text;
