@@ -177,8 +177,15 @@ What moves where, each as the implementation of its hook (the existing `case` bo
 ## Handoff to plan 12
 
 - **Pilot-facing** (the A330 is not in `main` yet, so these belong in its one `aircraft` fragment and the
-  guide, not in fix fragments): in the autopilot window (Ctrl+P) "Altitude push (managed)" is now Alt+A (it
-  shared Alt+S with "Speed pull", which Alt+S still presses); the FCU, V/S-FPA and altimeter windows take a
+  guide, not in fix fragments): the FCU windows (Ctrl+H, S, A, V) and the autopilot window (Ctrl+P) work
+  like the Fenix's (owner, 2026-11-21): each starts with the Fenix's buttons in the Fenix's order ("Heading
+  Push", "Heading Pull", "HDG/VS TRK/FPA"; "Speed Push", "Speed Pull", "SPD/MACH"; "Altitude Push",
+  "Altitude Pull"; "V/S Push", "V/S Pull"; Ctrl+P "AP1", "AP2", "ATHR", "APPR", "LOC"), the A330's own
+  buttons follow with their live state (LOC, ATHR, ALT, knob steps, metric altitude, AP1 and AP2, TRK/FPA and
+  APPR; in Ctrl+P the knobs' pushes and pulls, ALT and Read flight modes), no window has Alt letters (which
+  also ends the Alt+S clash, B1), each value window ends with Cancel, and the input-mode toggle hotkeys
+  Shift+A (AP 1), Ctrl+O (AP 2), Ctrl+J (A/THR), Ctrl+L (LOC) and Shift+P (APPR) are gone, as on the Fenix
+  (the in-app hotkey guide already says so); the FCU, V/S-FPA and altimeter windows take a
   comma decimal ("-0,5", "0,82", "29,92") on any PC; the knob buttons and Standard in those windows no longer
   repeat themselves 1.2 s later; a heading or V/S typed after pressing the window's TRK/FPA button goes to
   the window the FCU now shows; the flaps, speedbrake, guards and sliders follow a change made elsewhere
@@ -186,8 +193,8 @@ What moves where, each as the implementation of its hook (the existing `case` bo
   (feet)", and the landing elevation is no longer spoken on every change; the First Officer will not tick
   an engine master off without the APU or external power on the buses; the EFB never reads a password
   field's value; picking the A330 from the Aircraft menu after loading it in the simulator under another
-  profile finds its controls. Guide (`guide/airbus-aircraft.md`): the Ctrl+P access keys and the Ctrl+M rows
-  if the A330 section lists them.
+  profile finds its controls. Guide (`guide/airbus-aircraft.md`, `guide/hotkey-reference.md`): the A330's FCU
+  and Ctrl+P buttons, the five removed toggle hotkeys, and the Ctrl+M rows, where the A330 section lists them.
 - **Rule proposal:** `[INI-10] A330 behaviour goes in the owning area file through its hook
   (IniA330Definition.Hooks.cs, called in the order A330HooksTests pins); Handlers.cs and Variables.cs hold
   only the dispatchers and write primitives; a key two areas use lives in A330SharedKeys, which takes
@@ -205,7 +212,9 @@ What moves where, each as the implementation of its hook (the existing `case` bo
   identifier boxes are plain text fields that speak their value (spec section 4's EFB checklist item 11; sim);
   a disabled or read-only password row passes no `disabled` flag (`coherent-a330-efb-agent.js:437-441`); C15;
   add `tools/a330-efb-test/**` to `.claude/rules/inibuilds.md` once the folder exists (`ClaudeContextBudgetTests`
-  refuses a glob that matches no file). Plan 10: `TakeoffCalloutFeedKey` and the A330 row of
+  refuses a glob that matches no file). Plan 05: the FCU and autopilot windows now follow the Fenix's names and
+  order (the owner's request); a new FCU button or key goes after the Fenix's, never between them, and with no
+  Alt letter. Plan 10: `TakeoffCalloutFeedKey` and the A330 row of
   `DefAnnounceMuteSetsTests` (A10) are done here. The pull request: "also seen on the HS787": an Aircraft-menu
   switch to it after an in-sim load under another profile still uses the old input-event catalogue, as on
   `main` (`InputEventReads.cs:73` counts read variables, and the HS787 only writes). The Minor rows of
@@ -222,12 +231,13 @@ Kept in this file only, so no other plan's push ever touches it.
   task review after each, a final whole-plan review)
 - **Started:** 2026-11-21, from 53a20303c
 - **Landed:** (the push)
-- **Tests at landing:** 26,055 passed, 0 failed, the whole suite with `ClaudeRulesHookTests` (2026-11-21);
+- **Tests at landing:** 26,064 passed, 0 failed, the whole suite with `ClaudeRulesHookTests` (2026-11-21);
   25,950 at the start.
 - **Tasks:** 0 claim f46629314 (not pushed). 1 review 4991c6e83. 2 the 14 Critical and Important findings,
   one commit each, 209706d1b..9d433be80. 3 hooks 891e7e545, call order pinned a2e302e73. 4 the split
   a2675620f..0b86bd23c, overlap guards 2594d7dcd. 5 a496c0a34. 6 546619daa, b42d3c2e6 (the sweeps found
-  nothing to fix). 7 the final review's fixes 2bf4694ba..309ed6e4d. A scratch snapshot of every variable
+  nothing to fix). 7 the final review's fixes 2bf4694ba..309ed6e4d. The owner's request after the plan (FCU
+  windows and keys like the Fenix's) e2135a7ec, 2b5ae3772, e5ed5f503, reviewed clean. A scratch snapshot of every variable
   definition, panel, Ctrl+M row and display text was byte-identical across Tasks 3-7 (only the order the
   variables are added in moved, in Task 4).
 - **Waiting on the owner:** the push; the two in-sim checks above; the rulings below and "Changed from the
@@ -243,7 +253,12 @@ Kept in this file only, so no other plan's push ever touches it.
   list: `CloseReadouts()` (10) on the way out, and an `IsMuteWrapExempt` dispatcher with hooks for 10, 04,
   09, 08 and 03 (the final review: a later plan had no seam for either); `A330SharedKeys` takes append-only
   additions from the plan that creates a key's second use (frozen otherwise); `DescribeControl` gives a push
-  key an empty state, never "unread"; the A330 also joined four more all-aircraft lists (spec R3).
+  key an empty state, never "unread"; the A330 also joined four more all-aircraft lists (spec R3); at the
+  owner's request (2026-11-21) the FCU and autopilot windows take the Fenix's button names and order with the
+  A330's own buttons after them, lose their Alt letters, and the five autoflight toggle hotkeys the Fenix
+  does not have are removed (plan 05's files and the in-app hotkey guide, plan 12's, changed here; the
+  shared value window's own "Cancel" stands for the Fenix's Close; the A330 has no EXPED or disconnect
+  buttons, so Ctrl+P has none).
 - **Rulings made while working** (Claude; the owner may reverse): the claim and the work stay local until
   the owner says push; the hook order for the variables is the plan's (Ctrl+M sorts by label and no
   definition name matched a map read, and guard tests now fail on any overlap); a row added twice, or
