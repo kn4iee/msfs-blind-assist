@@ -231,7 +231,7 @@ two data files the private reference hands over (the controls' names; the order 
 ## Base commits
 
 - Plan 01 starts from the commit that added this folder ("docs(a330): plans for the parity work").
-- Early plans (02, 04-07) start from the commit plan 01 records here: 309ed6e4d (plan 01's last code commit,
+- Early plans (02, 04-07) start from the commit plan 01 records here: e5ed5f503 (plan 01's last code commit,
   2026-11-21).
 - Later plans (03, 08-12) start from the branch once their "After" plans have landed; record the commit you
   started from in your plan's execution record ("Started").

@@ -224,13 +224,13 @@ What moves where, each as the implementation of its hook (the existing `case` bo
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** waiting on owner: every commit is local; the claim, the work and this record go to the branch
-  once the owner says push (with the private push check first)
+- **Status:** landed (the two in-sim checks wait on the owner)
 - **Claimed by:** kn4iee
 - **Worked by:** kn4iee with Claude (superpowers:subagent-driven-development: a fresh implementer a task, a
   task review after each, a final whole-plan review)
 - **Started:** 2026-11-21, from 53a20303c
-- **Landed:** (the push)
+- **Landed:** 2026-11-21; last code commit e5ed5f503 (the base commit for plans 02 and 04-07). The claim
+  went to the branch with the work, not first: Claude held every push for the owner's go-ahead.
 - **Tests at landing:** 26,064 passed, 0 failed, the whole suite with `ClaudeRulesHookTests` (2026-11-21);
   25,950 at the start.
 - **Tasks:** 0 claim f46629314 (not pushed). 1 review 4991c6e83. 2 the 14 Critical and Important findings,
@@ -240,7 +240,7 @@ Kept in this file only, so no other plan's push ever touches it.
   windows and keys like the Fenix's) e2135a7ec, 2b5ae3772, e5ed5f503, reviewed clean. A scratch snapshot of every variable
   definition, panel, Ctrl+M row and display text was byte-identical across Tasks 3-7 (only the order the
   variables are added in moved, in Task 4).
-- **Waiting on the owner:** the push; the two in-sim checks above; the rulings below and "Changed from the
+- **Waiting on the owner:** the two in-sim checks above; the rulings below and "Changed from the
   plan" are Claude's, the owner's to reverse.
 - **In-sim results:** not run (no simulator in this session).
 - **Changed from the plan:** the review covered four code commits, not two (the branch had grown);
