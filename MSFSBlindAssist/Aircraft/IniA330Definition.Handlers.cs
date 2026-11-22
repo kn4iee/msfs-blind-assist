@@ -184,10 +184,6 @@ public partial class IniA330Definition
     // Hotkeys
     // =====================================================================
 
-    /// <summary>Instrument camera view (0-based), found by sweeping all 38 on 2026-10-16: view 3 frames
-    /// both ECAM screens.</summary>
-    internal const int EcamView = 3;
-
     public override bool HandleHotkeyAction(HotkeyAction action, SimConnectManager simConnect,
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
@@ -261,14 +257,6 @@ public partial class IniA330Definition
             case HotkeyAction.ReadSpeedF: ReadSpeed(simConnect, announcer, "A330_F_SPEED", "F speed"); return true;
             case HotkeyAction.ReadSpeedVLS: ReadSpeed(simConnect, announcer, "A330_VLS", "VLS"); return true;
             case HotkeyAction.ReadSpeedVFE: ReadSpeed(simConnect, announcer, "A330_VMAX", "Maximum speed"); return true;
-            case HotkeyAction.ReadDisplayUpperECAM:
-                ReadDisplay(Services.GeminiService.DisplayType.UpperECAM, "Upper ECAM", announcer, parentForm,
-                    new Services.InstrumentViewRequest(simConnect, EcamView));
-                return true;
-            case HotkeyAction.ReadDisplayLowerECAM:
-                ReadDisplay(Services.GeminiService.DisplayType.LowerECAM, "System display", announcer, parentForm,
-                    new Services.InstrumentViewRequest(simConnect, EcamView));
-                return true;
             // ---- windows ----
             case HotkeyAction.ShowFenixMCDU:
                 hotkeyManager.ExitInputHotkeyMode();
