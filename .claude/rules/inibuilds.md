@@ -3,7 +3,7 @@ paths:
   - "MSFSBlindAssist/Aircraft/IniA330Definition*.cs"
   - "MSFSBlindAssist/Aircraft/A330/**"
   - "MSFSBlindAssist/Forms/IniA330/**"
-  - "MSFSBlindAssist/MainForm.IniBuilds.cs"
+  - "MSFSBlindAssist/MainForm.IniBuilds*.cs"
   - "MSFSBlindAssist/SimConnect/SimConnectManager.InputEventReads.cs"
   - "MSFSBlindAssist/Resources/coherent-a330-efb-agent.js"
   - "MSFSBlindAssist/Resources/a330_control_map.json"
