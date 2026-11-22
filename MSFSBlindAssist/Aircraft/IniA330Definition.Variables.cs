@@ -7,33 +7,6 @@ public partial class IniA330Definition
     /// <summary>Continuous keys never spoken by the generic monitor (knob positions, caches).</summary>
     private readonly HashSet<string> _silentKeys = new();
 
-    /// <summary>FCU buttons: key -> what a press does (an L:var press flag, or an input event).</summary>
-    internal static readonly (string key, string label, string? pulse, string? inputEvent)[] AutopilotButtons =
-    {
-        ("A330_AP1", "AP 1", "INI_AP1_BUTTON", null),
-        ("A330_AP2", "AP 2", "INI_AP2_BUTTON", null),
-        ("A330_ATHR", "A/THR", null, "AIRLINER_ATHR_PUSH"),
-        ("A330_SPD_PULL", "Speed knob pull (selected speed)", "INI_FCU_SELECTED_SPEED_BUTTON", null),
-        ("A330_SPD_PUSH", "Speed knob push (managed speed)", "INI_FCU_MANAGED_SPEED_BUTTON", null),
-        ("A330_HDG_PULL", "Heading knob pull (selected heading)", "INI_FCU_SELECTED_HEADING_BUTTON", null),
-        ("A330_HDG_PUSH", "Heading knob push (managed, NAV)", "INI_FCU_MANAGED_HEADING_BUTTON", null),
-        ("A330_ALT_PULL", "Altitude knob pull (open climb or descent)", "INI_FCU_ALTITUDE_PULL_COMMAND", null),
-        ("A330_ALT_PUSH", "Altitude knob push (managed climb or descent)", "INI_FCU_ALTITUDE_PUSH_COMMAND", null),
-        ("A330_VS_PULL", "V/S knob pull (selected vertical speed)", null, "AIRLINER_MCU_VS_PULL"),
-        ("A330_VS_PUSH", "V/S knob push (level off)", null, "AIRLINER_MCU_VS_PUSH"),
-        ("A330_LOC", "LOC", "INI_LOCALIZER_BUTTON", null),
-        ("A330_APPR", "APPR", "INI_APPROACH_BUTTON", null),
-        ("A330_ALT_BTN", "ALT (hold the current altitude)", null, "AIRLINER_ALT_PUSH"),
-    };
-
-    internal static readonly string[] AutopilotSelectKeys = { "A330_SPD_MACH", "A330_TRK_FPA", "A330_ALT_STEP", "A330_METRIC" };
-
-    internal static IEnumerable<string> AutopilotControlKeys =>
-        AutopilotButtons.Select(b => b.key).Concat(AutopilotSelectKeys);
-
-    internal static readonly string[] AutopilotDisplayKeys =
-        { "A330_AP1_ON", "A330_AP2_ON", "A330_ATHR_ON", "A330_FCU_SPD", "A330_FCU_HDG", "A330_FCU_ALT", "A330_FCU_VS" };
-
     internal static readonly string[] FmaDisplayKeys =
         { "A330_FMA_THRUST", "A330_FMA_VERT", "A330_FMA_LAT", "A330_FMA_ARMED", "A330_FMA_CAP", "A330_FMA_AP" };
 
@@ -153,26 +126,6 @@ public partial class IniA330Definition
         var vars = new Dictionary<string, SimVarDefinition>();
         _usedNames.Clear();
 
-        var engaged = new Dictionary<double, string> { [0] = "Off", [1] = "Engaged" };
-
-        // ---------------- Autopilot (FCU) ----------------
-        foreach (var (key, label, _, _) in AutopilotButtons) Button(vars, key, label);
-        Watched(vars, "A330_SPD_MACH", "INI_AIRSPEED_IS_MACH", "Speed window units", new() { [0] = "Knots", [1] = "Mach" });
-        Watched(vars, "A330_TRK_FPA", "INI_TRACK_FPA_STATE", "HDG-V/S or TRK-FPA", new() { [0] = "HDG V/S", [1] = "TRK FPA" });
-        // ALT knob step (measured: input 0 reads 1 and the knob steps 100 feet)
-        Watched(vars, "A330_ALT_STEP", "INI_ALTITUDE_STATE", "Altitude knob steps", new() { [1] = "100 feet", [0] = "1000 feet" });
-        Watched(vars, "A330_METRIC", "INI_FCU_METRIC_STATE", "Metric altitude", new() { [0] = "Off", [1] = "On" });
-        Watched(vars, "A330_AP1_ON", "INI_AP1_ON", "Autopilot 1", engaged);
-        Watched(vars, "A330_AP2_ON", "INI_AP2_ON", "Autopilot 2", engaged);
-        Watched(vars, "A330_ATHR_ON", "INI_AT_ON", "Autothrust", engaged);
-        Silent(vars, "A330_FCU_SPD", "INI_AIRSPEED_DIAL", "FCU speed");
-        Silent(vars, "A330_FCU_HDG", "INI_HEADING_DIAL", "FCU heading");
-        Silent(vars, "A330_FCU_TRK", "INI_TRK_DIAL", "FCU track");
-        Silent(vars, "A330_FCU_ALT", "INI_ALTITUDE_DIAL", "FCU altitude");
-        Silent(vars, "A330_FCU_VS", "INI_VVI_DIAL", "FCU vertical speed");
-        Silent(vars, "A330_FCU_FPA", "INI_FPA_DIAL", "FCU flight path angle");
-        Silent(vars, "A330_ALTITUDE", "INDICATED ALTITUDE", "Altitude", "feet", SimVarType.SimVar);
-
         // ---------------- Flight modes ----------------
         foreach (var (key, lvar) in FmaInputVars) Silent(vars, key, lvar, key);
         vars[FmaMonitorKey].ExcludeFromMonitorManager = false;   // one Ctrl+M row mutes every flight-mode change
@@ -214,11 +167,6 @@ public partial class IniA330Definition
                  })
             OnRequestVar(vars, key, lvar, display);
         OnRequestVar(vars, "A330_GS_FRESH", "GROUND VELOCITY", "Ground speed", "knots", SimVarType.SimVar);
-        OnRequestVar(vars, "A330_BARO_FRESH", "KOHLSMAN SETTING MB:1", "Captain altimeter setting", "millibars", SimVarType.SimVar);
-        OnRequestVar(vars, "A330_BARO_STD_FRESH", "KOHLSMAN SETTING STD:1", "Captain altimeter standard", "Bool", SimVarType.SimVar);
-        // The cockpit's own baro mode (2/3 = STD). Measured live 2026-10-17 on the
-        // A330 at FL220 in STD: this read 3 while KOHLSMAN SETTING STD:1 read 0, so STD comes from here.
-        OnRequestVar(vars, "A330_BARO_MODE_FRESH", "XMLVAR_Baro1_Mode", "Captain altimeter mode");
         foreach (var (key, simvar, units) in new[]
                  {
                      ("A330_NAV1_FREQ", "NAV ACTIVE FREQUENCY:1", "MHz"), ("A330_NAV2_FREQ", "NAV ACTIVE FREQUENCY:2", "MHz"),
