@@ -72,3 +72,53 @@ own protocol to the display reader (the typed line and the frames, as `A330Reade
   no two texts on one cell: the same geometry as the captain's.
 - Put back as found: the first officer's MCDU on INIT, its cost index unchanged (120), the scratchpad empty. The
   frames of the INIT page hold the owner's route: none was kept as a fixture.
+
+## Task 6 Step 1 (offline): the window against the cockpit's pages
+
+Eighteen captured pages of 2026-11-20 (Claude's test route), each pinned with the window's whole listing in
+`A330McduPagesTests`: MCDU MENU, INIT A and B, DATA INDEX 1 and 2, A/C STATUS, P/N XLOAD, four F-PLN screens (three
+slews), LAT REV at a waypoint, DEPARTURES (runways and SIDs), PERF TAKE OFF, PROG, RAD NAV, FUEL PRED. The expected
+listings came from a second, separate implementation of the plan's rules (the controller's, not committed); all
+eighteen agreed with the window's at the first run. The owner's walk of the same pages in the window, on both sides
+and with the owner's route, is Step 3.
+
+## Task 6 Step 2: the window against the app's other Airbus MCDU windows, and braille
+
+Compared on the eighteen pages `A330McduPagesTests` pins, against `FenixMCDUForm` and `FlyByWireMCDUForm` (their line
+builders and `FenixMcduFormat` / `FbwMcduFormat`). Nothing below was changed: each is a candidate for the owner.
+
+**The same as the other two windows:** a label row indented three cells, a data row `n: ` and its text, `n:` for a line
+with nothing on it (as the FlyByWire window; the Fenix leaves an empty data row out when it has a label),
+`Scratchpad: ` before the scratchpad line (new in this plan: the pixel-read window showed the line alone), every row
+right-trimmed with its columns kept, Ctrl+Shift+L/R and the Left/Right selector (the Fenix's), the page keys
+(Task 4b), the degree sign, the arrows and the overfly mark as the Fenix shows them.
+
+**Braille:** a field's cell is its column plus three on both label and data rows (the label row's three-cell indent
+and the data row's `n: ` are the same width), so a right-hand field is in the same cell on every row; no row passes 40
+cells with its prefix (`No_row_with_its_prefix_passes_40_cells`); one screen row a list item; the status row is a
+read-only box, first in the tab order; the scratchpad line is always listed.
+
+**Candidates (different from the Fenix or the FlyByWire window, or open):**
+
+1. **Title.** The A330 lists the title row as drawn, trimmed (`INIT        ←→`), with the page arrows where the
+   cockpit draws them; the Fenix writes `Title: <title>`, the FlyByWire `Title: <title>   <page>` and its arrows as
+   `▲ ▼ ◄ ►` at the end. A `Title: ` prefix would match both.
+2. **Entry boxes.** The Fenix's stand-in `-` (used here, ruling C1) makes a required box row read like a dash row that
+   needs nothing: INIT shows `1: ----------     ----/----` (boxes: FROM/TO required) next to
+   `2: ----/----------` (dashes). Spec D4 wants an amber box row to read "as empty and required". A one-cell stand-in
+   of its own (the owner's Task 2 Step 3 ruling) would tell them apart.
+3. **Greyed prompts.** Only the A330 marks them: `(unavailable)` after a prompt, or `(inop)` where only the short
+   form fits in the gap before the next field (`<TO DATA (inop)   PHASE>`), or `(unavailable)` without its blank at
+   the end of a full row (`<FM1           NAV B/UP>(unavailable)`). The wording and the short form are Claude's.
+4. **The page number of P/N XLOAD** (`1/7`, drawn half a row below the title) lands on row 1, a label row, under the
+   title: `                        1/7`. Read as a label, not as the title's page number.
+5. **The F-PLN slew arrows** are drawn on the scratchpad line, so the listing ends `Scratchpad: NAV ACCURACY UPGRAD
+   ↑↓`; the FlyByWire window puts its arrows on the title line. The scratchpad read-back and the FMS message call-out
+   leave them out (Tasks 4 and 5).
+6. **Not built (no task asked for them; the plan's "Measured on 2026-11-20" describes them):** the AIRPORT key saying
+   which airport it jumped to; a flight plan row with no name read as "unnamed waypoint"; never sending the slew key
+   that moves to earlier rows while a list shows its first row; a whole-list or whole-flight-plan read-out.
+7. **The window shows no page rows until the display reader leaves the hidden list rows out (spec M15).** Measured
+   2026-11-22: today's reader sends no `hiddenRowsLeftOut`, so every page lists only "List rows not read yet" and the
+   FMS message call-out says nothing; the message lamps of Task 5 Step 2 say a message is waiting (the white ones do
+   not light them). The plan says the window ships once M15 is solved or the owner rules otherwise.

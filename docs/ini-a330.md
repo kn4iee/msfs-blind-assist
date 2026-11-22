@@ -44,24 +44,20 @@ different aircraft built on the FlyByWire A32NX.
   open with their buttons; the knob-steps button drives the aircraft and its label follows.
 * **ECAM pages** (`INI_ECAM_ACTIVE_PAGE`): ENG 1, HYD 2, EL/AC 3, EL/DC 4, BLEED 5, COND 6,
   PRESS 7, FUEL 8, APU 9, F/CTL 10, DOOR 11, WHEEL 12, STS 14.
-* **MCDU — read from pixels:** there is no text export (`iniAirbusMCDU_1` answers
-  ILLEGAL_OPERATION; `INI_MCDU_OPTION` changes nothing). Shift+M forces the pop-out
-  (`A330CduPopout` with `CduPopoutProfile.A330`): instrument view 12 (captain MCDU head-on; F/O 13 —
-  0-based), wait for the camera to stop moving, bring the sim to the foreground (Alt-tap,
-  AttachThreadInput, SwitchToThisWindow, then WScript `AppActivate` — a 2024 window refuses the
-  plain call from a background process), Right-Alt click the DARK GLASS found by flooding from the
-  expected screen point (a text-colour search fails here: the menu page is mostly white/grey), 2
-  rounds. Measured: 5/5 first-click successes from a background console starting in the pilot view,
-  and Shift+M from the app with NO pop-out open created it and read the page; page keys, Page Up/Down
-  and Alt shortcuts verified in the window. Grid `CduLayout.A330` (y0 30.2, pitch 23.8, advance 15.0,
-  cap height 18.3 — must equal the trainer's `BASE_CAP`, pinned by a test — ink threshold 40: grey
-  text peaks ~77, so a higher threshold loses it). Colour per character (`CduColour`); grey words are
-  spoken "(unavailable)" (`CduLineText`). Glyphs: `Resources/a330-cdu-glyphs.bin`, trained in
-  `tools/a330-cdu-ocr` (39 labelled pages; leave-one-page-out 99.79 % (4237/4246), residual
-  confusions O/Q, R/P, long dash vs '='). The three F-PLN pages added 2026-10-17 taught `(`, `)` and
-  the ditto `"` — before them "(T/C)" read "1T/C1" and a repeated speed read "." — retrain there,
-  never patch the .bin. `A330CduScreenReaderTests` reads those three committed captures end to end.
-* **MCDU keys:** write 1 to `INI_MCDU1_<KEY>`. Verified: DIR PROG PERF INIT DATA FPLAN RADNAV
+* **MCDU — from the display reader (plan 03, 2026-11-22):** the window (Shift+M) shows the page from the
+  display reader's frames (`IA330Displays`, plan 02), both MCDUs (Ctrl+Shift+L / Ctrl+Shift+R, as the Fenix
+  window): no pop-out, no camera move, no focus change. A frame becomes the 14 rows of 24 cells by where each
+  text's first character sits (`A330McduScreen`, `A330McduGeometry`: Left 22 + column x 16.87, Top 43 + row x
+  25.85, nearest cell); a text starting off that grid refuses the page. Special codes show as one cell each
+  (`A330McduCharacters`: box `-`, degree, arrows, overfly mark); a row keeps its 24 columns for braille; a greyed
+  prompt reads "(unavailable)" (or "(inop)" where only that fits before the next field), and with no colours
+  nothing is marked. Typing waits for the MCDU's own typed line (600 ms a key at most, 150 ms pace); an FMS message
+  on the captain's scratchpad line is spoken with the window closed (Ctrl+M row "FMS messages"). While a frame
+  does not leave the hidden list rows out (spec M15) the window lists only "List rows not read yet" and no message
+  is taken from the scratchpad line. There is no AI read of the MCDU. The pixel reader (`A330CduScreenReader`,
+  `A330CduPopout`, `CduLayout`, the glyph file, `tools/a330-cdu-ocr`) is still in the tree, unused by the window,
+  until the owner's check of plan 03 Task 6; it is described in this file's history.
+* **MCDU keys:** write 1 to `INI_MCDU1_<KEY>` (the first officer's: `INI_MCDU2_<KEY>`). Verified: DIR PROG PERF INIT DATA FPLAN RADNAV
   AIRPORT MENU FUEL SEC ATC PREV NEXT, letters, digits. Slew keys verified in flight 2026-10-17:
   `UARROW` moves on to later rows (down the F-PLN, a screen down a list), `DOWN` back toward the top.
   The window sends them key for key, as the FlyByWire A320 and Fenix windows do: Page Up and Alt+Up
