@@ -96,6 +96,10 @@ public partial class IniA330Definition
         Silent(vars, A330SharedKeys.SlatAngle, "LEADING EDGE FLAPS LEFT ANGLE", "Slat angle", "degrees", SimVarType.SimVar);
         Silent(vars, "A330_GEAR_POS", "GEAR CENTER POSITION", "Nose gear", "percent", SimVarType.SimVar);
         Silent(vars, A330SharedKeys.Trim, "ELEVATOR TRIM POSITION", "Stabilizer trim", "degrees", SimVarType.SimVar);
+        // The base class also reads this name, and two Continuous batched keys with one Name shift every later
+        // struct slot in the batch ([VAR-7]), so this silent copy takes its own once-a-second subscription
+        // instead: the same sample rate, so nothing a pilot hears or sees changes.
+        vars[A330SharedKeys.Trim].ExcludeFromBatch = true;
 
         // ---------------- Generated cockpit controls ----------------
         foreach (var c in _map.Controls)

@@ -92,12 +92,12 @@ public partial class IniA330Definition
         Synthetic(vars, "A330_FMA_CAP", "Landing capability");
         Synthetic(vars, A330SharedKeys.FmaAp, "Autopilot and autothrust");
 
-        // Four names are read by a second key (the Speed window units and HDG-V/S or TRK-FPA controls, the
-        // base class's altitude and trim). Two Continuous batched keys with one Name shift every later
-        // struct slot in the batch ([VAR-7]), so each silent cache copy takes its own once-a-second
-        // subscription instead: the same sample rate, so nothing a pilot hears or sees changes.
-        foreach (var key in new[] { A330SharedKeys.MMach, A330SharedKeys.MTrkfpa, A330SharedKeys.Altitude, A330SharedKeys.Trim })
-            vars[key].ExcludeFromBatch = true;
+        // The Speed window's units and the HDG-V/S or TRK-FPA controls read a second key on these two names.
+        // Two Continuous batched keys with one Name shift every later struct slot in the batch ([VAR-7]), so
+        // each silent cache copy takes its own once-a-second subscription instead: the same sample rate, so
+        // nothing a pilot hears or sees changes.
+        vars[A330SharedKeys.MMach].ExcludeFromBatch = true;
+        vars[A330SharedKeys.MTrkfpa].ExcludeFromBatch = true;
     }
 
     partial void ProcessFlightDisplayUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)

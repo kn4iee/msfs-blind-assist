@@ -494,6 +494,10 @@ public partial class IniA330Definition
         Silent(vars, A330SharedKeys.FcuVs, "INI_VVI_DIAL", "FCU vertical speed");
         Silent(vars, A330SharedKeys.FcuFpa, "INI_FPA_DIAL", "FCU flight path angle");
         Silent(vars, A330SharedKeys.Altitude, "INDICATED ALTITUDE", "Altitude", "feet", SimVarType.SimVar);
+        // The base class also reads this name; two Continuous batched keys with one Name shift every later
+        // struct slot in the batch ([VAR-7]), so this silent copy takes its own once-a-second subscription
+        // instead: the same sample rate, so nothing a pilot hears or sees changes.
+        vars[A330SharedKeys.Altitude].ExcludeFromBatch = true;
 
         OnRequestVar(vars, "A330_BARO_FRESH", "KOHLSMAN SETTING MB:1", "Captain altimeter setting", "millibars", SimVarType.SimVar);
         OnRequestVar(vars, "A330_BARO_STD_FRESH", "KOHLSMAN SETTING STD:1", "Captain altimeter standard", "Bool", SimVarType.SimVar);
