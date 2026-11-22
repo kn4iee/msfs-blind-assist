@@ -248,10 +248,26 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
   display window may be heard twice: the screen reader says the choice, then the definition's announcement of the
   change. Plan 02's windows have no key rows, so nothing hears it yet; check it with the first window that has them
   (plan 08 or 09) and, if it speaks twice, give `PressFromWindow` the panel's echo mark.
-- **For the plans that derive from `A330DisplayWindow` (03, 08, 09):** the base has no hook after each refresh and
-  none for rows while no complete frame has come (plan 09's PFD window lists the variables' values and "PFD not read
-  yet" until a PFD frame comes). A plan that needs one asks plan 02's claimant while it is open, else hands it off
-  here. The base's key rows are `KeyRows` (not `Keys`, which would hide the key enumeration).
+- **For the plans that derive from `A330DisplayWindow` (03, 08, 09):** `RowsWithoutFrame(statusRow)` lists a
+  window's own rows while no complete frame has come (plan 09's PFD window: the variables' values and "PFD not read
+  yet"). The base has no hook after each refresh: a plan that needs one hands it off here. A derived window's `Rows`
+  leaves out anything that could be a hidden list row while `HiddenRowsLeftOut` is false; the base only adds "List
+  rows not read yet". The key rows are `KeyRows` (not `Keys`, which would hide the key enumeration). The events of
+  `IA330Displays` come on any thread, possibly out of order: marshal, and read `State` / `Latest` in the handler.
+- **For the owner (the public-text rule):** `A330ReaderTransport.cs` reaches `KillOnCloseJob` through the namespace
+  it lives in today (since e3fd30c11). Whether the job moves to a neutral namespace before the pull request is the
+  owner's call; it touches frozen `Services/` files.
+- **The reader program:** it must never write what a pilot typed to its standard error, which the app keeps in
+  `a330-displays.log`.
+- **Kept deferred from the reviews** (none blocks a pilot; listed so they are not lost): writes to the reader's
+  standard input happen under the client's lock on the UI thread, so a reader that stopped reading its input could
+  hold the app (a writer queue inside `A330ReaderProcess` would remove it); an exit raised before the client
+  subscribes is lost (the hello deadline then restarts it); a present reader that fails to start reports "not
+  installed"; the notice's second sentence ("The MCDU window cannot read its screen") is true only once plan 03 lands;
+  a refused choice keeps showing until the control's state changes (as the main panel); a reader that leaves
+  `Running` for less than a refresh does not restart the 30-second count; closing a window from code returns focus
+  too (as the A330's FCU window); the colour bands are not pinned at their edges and black reads "grey"; a few test
+  gaps (a window press through `PressFromWindow` against a direct write, Escape with a choice list open).
 - **What the live check found** (evidence file): the reader reports `Running` only once a display is wanted and
   found, so with no window open and no call-out wanting a display the state stays `Starting` (a passing state:
   nothing is spoken).
@@ -260,17 +276,21 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** claimed
+- **Status:** landed (the two in-sim checks wait on the owner)
 - **Claimed by:** kn4iee
 - **Worked by:** kn4iee, with Claude (subagent-driven development)
 - **Started:** 2026-11-22, from b9aa5d0a3 (the branch tip: e5c9d2b6a plus plan 01's two record commits)
-- **Landed:** (filled in after the whole-plan review)
-- **Tests at landing:** (filled in after the whole-plan review)
+- **Landed:** 2026-11-22; last code commit c4ff9741e (the whole-plan review's fix wave)
+- **Tests at landing:** 26,056 passed, 0 failed (filter `FullyQualifiedName!~ClaudeRulesHookTests`; 25,898 at the
+  start); no compiler warning from plan 02's files
 - **Tasks:** 0 claim e00faa97f (pushed first). 1 the contract 497f0513d. 2 the protocol 42dc140f7. 3 the client
   d56949925, review fix e3fd30c11. 4 the definition's part and the notice 7113f8803. 5 the display window and the
   replay source 8bc3026bc, review fix a700a9c1d. 6 [sim] run by Claude with a throwaway harness, recorded in
   c7643649a (`docs/a330/evidence/02-reader-client.md`, and the new "Displays" section of `docs/ini-a330.md`). Each
-  task had a review of its own (spec and quality); each push ran the private push check first.
+  task had a review of its own (spec and quality); each push ran the private push check first. A whole-plan review
+  (Opus) then found no Critical and four Important items; the fix wave c4ff9741e answers two of them and seven
+  Minor ones; the other two were answered from the reader's own source (it answers `hello` at once while it
+  prepares, and a `reset` keeps its wanted displays) and one is the owner's (the namespace, in the handoff).
 - **Waiting on the owner:** the two in-sim checks above. Check 1's MCDU window is plan 03's; until it lands, check 1
   is "no notice is spoken with the A330 loaded" only. Both need a build with the reader program beside the app
   (plan 12 puts it in the release).
@@ -291,6 +311,11 @@ Kept in this file only, so no other plan's push ever touches it.
   - The window's status rows follow "Changed on 2026-11-21" ("Reading the <display>", and "The display reader
     cannot read the <display>" after 30 s) rather than Task 5's "reading".
   - `Keys` is `KeyRows`.
+  - Task 3's "no `hello` within 5 s sets `Failed`": a missed hello now counts as an exit, restarted within the same
+    budget (three in five minutes, then `Failed`); the test is `No_hello_in_five_seconds_restarts_the_program`.
+  - Added in the whole-plan review: `RowsWithoutFrame`; the pilot's row kept across a gap in frames; nothing but a
+    `hello` taken before the reader's `hello`; a not-drawn frame is never complete; a dropped line logged by its
+    length and first key only.
   - Extra tests for the Review Focus lines Task 3 named none for: `A_broken_line_is_dropped_and_the_client_carries_on`,
     `Each_client_starts_its_own_program`.
 - **Rulings made while working** (Claude's; the owner may reverse any):
@@ -313,3 +338,6 @@ Kept in this file only, so no other plan's push ever touches it.
     the pilot's commit).
   - The window polls on its own timer and subscribes to no event of the client.
   - The double speech a window press may cause is plan 01's file: a handoff above, not a change here.
+  - A missed hello is retried, not final (R5: BA says it cannot read only when it cannot).
+  - One hook for later windows now (`RowsWithoutFrame`, which plan 09 already needs); a post-refresh hook waits for
+    a plan that needs one.

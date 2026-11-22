@@ -140,13 +140,15 @@ displays itself; the app only receives frames (`Aircraft/A330/Display/`, measure
 * **Lifetime.** `MainForm.IniBuilds.Displays.cs` starts it with the A330 (`StartDisplays`); a switch away
   and the app's exit stop it (`StopReader`); a flight load or a dropped connection sends it `reset`
   (`ResetReader(true)`). It runs without a window in a kill-on-close job, so it ends with the app even
-  on a crash, and each app instance has its own. If it exits by itself the client starts it again after
-  5 s, at most three times in five minutes, then reports `Failed`.
+  on a crash, and each app instance has its own. If it exits by itself, or does not answer the app's
+  `hello` within 5 s, the client starts it again after 5 s, at most three times in five minutes, then
+  reports `Failed`.
 * **Protocol** (`A330ReaderProtocol`, version 1): one JSON object a line on its standard input and
   output. The app sends `hello`, `want` (a display and a refresh), `release`, `reset` and `quit`; the
   reader sends its `hello` with its version (another version is `OutOfDate`), its state, frames and the
-  MCDU's scratchpad. A line the app cannot parse is dropped. The reader's standard error goes to
-  `a330-displays.log`.
+  MCDU's scratchpad. Nothing but a `hello` is taken before the reader's `hello`. A line the app cannot
+  parse is dropped and the first of a run is logged by its length and first key only, never its text. The
+  reader's standard error goes to `a330-displays.log`, so it must never write what a pilot typed there.
 * **What consumers see** (`IniA330Definition.Displays`, an `IA330Displays`): a frame is a display's drawn
   texts with positions, fonts and, once the reader gives them, colours (spec M14), marked complete or not,
   drawn or not, and whether hidden list rows were left out (spec M15). `Latest` is the newest complete
@@ -165,8 +167,10 @@ displays itself; the app only receives frames (`Aircraft/A330/Display/`, measure
   words, "<Display> is off", "Reading the <display>", and after 30 s "The display reader cannot read the
   <display>"); "Colours not read yet" and "List rows not read yet" above the rows for a window that needs
   them; the cockpit controls under the list (`A330KeyRow`: a button or a list of positions, labelled with
-  the control's state, pressed through `PressFromWindow`). F5 refreshes, Escape closes; the window never
-  speaks.
+  the control's state, pressed through `PressFromWindow`). After a gap in frames the pilot's row is kept.
+  A derived window may list rows of its own while no complete frame has come (`RowsWithoutFrame`), and its
+  `Rows` leaves out anything that could be a hidden list row while `HiddenRowsLeftOut` is false. F5
+  refreshes, Escape closes; the window never speaks.
 * **Tests** build on captured frames (`tests/MSFSBlindAssist.Tests/A330/Fixtures/p02_*.json`, each a
   frame in the protocol's form and nothing else) through the replay source `A330ReplayDisplays`.
 
