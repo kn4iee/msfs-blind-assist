@@ -10,6 +10,7 @@ using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.A330;
 using MSFSBlindAssist.Aircraft.A330.Display;
 using MSFSBlindAssist.Aircraft.A330.Mcdu;
+using MSFSBlindAssist.Forms.FlyByWireA320;
 using MSFSBlindAssist.Forms.IniA330;
 using MSFSBlindAssist.Settings;
 using MSFSBlindAssist.Tests.FirstOfficer;
@@ -138,7 +139,7 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Read(Pad("INITIALIZE WEIGHT/CG"));
         Assert.Empty(rig.Speech.All);
         rig.Read(Pad("INITIALIZE WEIGHT/CG"));
-        Assert.Equal(new[] { "MCDU message: INITIALIZE WEIGHT/CG" }, rig.Speech.All);
+        Assert.Equal(new[] { "INITIALIZE WEIGHT/CG" }, rig.Speech.All);
         for (int i = 0; i < 5; i++) rig.Read(Pad("INITIALIZE WEIGHT/CG"));
         Assert.Single(rig.Speech.All);
         Assert.Empty(rig.Speech.Interrupts);   // the non-interrupting announce
@@ -151,7 +152,53 @@ public sealed class A330McduMessagesTests : IDisposable
         // The next message is said too.
         rig.Read(Pad("CHECK TAKE OFF DATA"));
         rig.Read(Pad("CHECK TAKE OFF DATA"));
-        Assert.Equal(new[] { "MCDU message: INITIALIZE WEIGHT/CG", "MCDU message: CHECK TAKE OFF DATA" }, rig.Speech.All);
+        Assert.Equal(new[] { "INITIALIZE WEIGHT/CG", "CHECK TAKE OFF DATA" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_message_is_said_alone_as_the_A32NX_says_one_with_its_window_closed()
+    {
+        // The FlyByWire A32NX's own read-back, its window closed, with the same message on its scratchpad for 2 s.
+        const string message = "INITIALIZE WEIGHT/CG";
+        var fbw = new FbwMcduReadBack();
+        var t0 = new DateTime(2026, 11, 22, 12, 0, 0, DateTimeKind.Utc);
+        var fbwSaid = new List<string>();
+        for (int ms = 0; ms < 2000; ms += FbwMcduReadBack.TickMs)
+            if (fbw.OnScratchpadTick(message, windowVisible: false, t0.AddMilliseconds(ms)) is { } say) fbwSaid.Add(say);
+        Assert.Equal(new[] { message }, fbwSaid);
+
+        using var rig = new WatchRig();
+        rig.Show(Pad(""));
+        rig.Start();
+        rig.Tick();
+        rig.Read(Pad(message));
+        rig.Read(Pad(message));
+        Assert.Equal(fbwSaid, rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_keys_own_echo_on_the_scratchpad_line_is_not_a_message()
+    {
+        // CLR on an empty scratchpad writes CLR there (measured 2026-11-20), and the overfly key its mark (the code c):
+        // the pilot's own keys, never an FMS message.
+        Assert.Null(A330McduMessages.Message("CLR", null));
+        Assert.Null(A330McduMessages.Message("CLR", ""));
+        Assert.Null(A330McduMessages.Message("\u0394", null));
+        Assert.Null(A330McduMessages.Message("\u0394", ""));
+
+        using var rig = new WatchRig();
+        rig.Show(Pad(""));
+        rig.Displays.SetScratchpad(false, "");
+        rig.Start();
+        rig.Tick();
+        for (int i = 0; i < 3; i++) rig.Read(Pad("CLR"));
+        for (int i = 0; i < 3; i++) rig.Read(Pad("c"));
+        Assert.Empty(rig.Speech.All);
+
+        // A message after them is said as usual.
+        rig.Read(Pad("NOT ALLOWED"));
+        rig.Read(Pad("NOT ALLOWED"));
+        Assert.Equal(new[] { "NOT ALLOWED" }, rig.Speech.All);
     }
 
     [Fact]
@@ -170,7 +217,7 @@ public sealed class A330McduMessagesTests : IDisposable
 
         // A second frame with the same message: spoken, once.
         rig.Read(Pad("NOT ALLOWED"));
-        Assert.Equal(new[] { "MCDU message: NOT ALLOWED" }, rig.Speech.All);
+        Assert.Equal(new[] { "NOT ALLOWED" }, rig.Speech.All);
         rig.Tick();
         rig.Tick();
         Assert.Single(rig.Speech.All);
@@ -187,7 +234,7 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Read(Pad(""));
         rig.Read(Pad("NOT ALLOWED"));
         rig.Read(Pad("NOT ALLOWED"));
-        Assert.Equal(new[] { "MCDU message: NOT ALLOWED", "MCDU message: NOT ALLOWED" }, rig.Speech.All);
+        Assert.Equal(new[] { "NOT ALLOWED", "NOT ALLOWED" }, rig.Speech.All);
     }
 
     [Fact]
@@ -204,13 +251,13 @@ public sealed class A330McduMessagesTests : IDisposable
 
         // A row that is none of those is a message, with a typed line or without.
         Assert.Null(m.Next(Screen(Pad("FORMAT ERROR")), "KJFK"));
-        Assert.Equal("MCDU message: FORMAT ERROR", m.Next(Screen(Pad("FORMAT ERROR")), "KJFK"));
+        Assert.Equal("FORMAT ERROR", m.Next(Screen(Pad("FORMAT ERROR")), "KJFK"));
 
         // An empty typed line is no typed text: it hides no message.
         var empty = new A330McduMessages();
         Assert.Null(empty.Next(Screen(Pad("")), ""));
         Assert.Null(empty.Next(Screen(Pad("NOT ALLOWED")), ""));
-        Assert.Equal("MCDU message: NOT ALLOWED", empty.Next(Screen(Pad("NOT ALLOWED")), ""));
+        Assert.Equal("NOT ALLOWED", empty.Next(Screen(Pad("NOT ALLOWED")), ""));
 
         // The watch reads the captain's typed line from the display reader.
         using var rig = new WatchRig();
@@ -224,7 +271,7 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Empty(rig.Speech.All);
         rig.Read(Pad("NOT ALLOWED"));
         rig.Read(Pad("NOT ALLOWED"));
-        Assert.Equal(new[] { "MCDU message: NOT ALLOWED" }, rig.Speech.All);
+        Assert.Equal(new[] { "NOT ALLOWED" }, rig.Speech.All);
     }
 
     [Fact]
@@ -246,7 +293,7 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Null(m.Next(Screen(Hidden("RWY 08L")), null));
         Assert.Null(m.Next(Screen(Pad("NOT ALLOWED")), null));
         Assert.Null(m.Next(Screen(Hidden("")), null));
-        Assert.Equal("MCDU message: NOT ALLOWED", m.Next(Screen(Pad("NOT ALLOWED")), null));
+        Assert.Equal("NOT ALLOWED", m.Next(Screen(Pad("NOT ALLOWED")), null));
 
         // The watch says nothing from such frames.
         using var rig = new WatchRig();
@@ -275,7 +322,7 @@ public sealed class A330McduMessagesTests : IDisposable
 
         rig.Read(Pad("NAV ACCUR DOWNGRADED"));
         rig.Read(Pad("NAV ACCUR DOWNGRADED"));
-        Assert.Equal(new[] { "MCDU message: NAV ACCUR DOWNGRADED" }, rig.Speech.All);
+        Assert.Equal(new[] { "NAV ACCUR DOWNGRADED" }, rig.Speech.All);
 
         // A tick with no complete frame is no reading: the first one after the start is still silent.
         using var late = new WatchRig();
@@ -303,7 +350,7 @@ public sealed class A330McduMessagesTests : IDisposable
         Reading("NOT ALLOWED");
         Reading("");
         Reading("NOT ALLOWED");
-        Assert.Equal(new[] { "MCDU message: NOT ALLOWED", "MCDU message: NOT ALLOWED" }, rig.Speech.All);
+        Assert.Equal(new[] { "NOT ALLOWED", "NOT ALLOWED" }, rig.Speech.All);
 
         // One reading of an empty line between two of the message is no clearing: nothing more.
         Reading("", times: 1);
@@ -321,8 +368,8 @@ public sealed class A330McduMessagesTests : IDisposable
         Reading("NOT ALLOWED");
         Assert.Equal(new[]
         {
-            "MCDU message: NOT ALLOWED", "MCDU message: NOT ALLOWED", "MCDU message: NOT ALLOWED",
-            "MCDU message: FORMAT ERROR", "MCDU message: NOT ALLOWED",
+            "NOT ALLOWED", "NOT ALLOWED", "NOT ALLOWED",
+            "FORMAT ERROR", "NOT ALLOWED",
         }, rig.Speech.All);
     }
 
@@ -349,7 +396,7 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Empty(rig.Speech.All);
         rig.Read(Pad("FORMAT ERROR"));
         rig.Read(Pad("FORMAT ERROR"));
-        Assert.Equal(new[] { "MCDU message: FORMAT ERROR" }, rig.Speech.All);
+        Assert.Equal(new[] { "FORMAT ERROR" }, rig.Speech.All);
 
         // Muted again: the display is let go at the next tick, and nothing more is said.
         Mute(true);
@@ -371,7 +418,7 @@ public sealed class A330McduMessagesTests : IDisposable
         // A message on the F-PLN's scratchpad line is said without the arrows beside it.
         var withMessage = fpln with { Texts = fpln.Texts.Append(PadText("NOT IN DATABASE")).ToList() };
         Assert.Null(m.Next(Screen(withMessage), null));
-        Assert.Equal("MCDU message: NOT IN DATABASE", m.Next(Screen(withMessage), null));
+        Assert.Equal("NOT IN DATABASE", m.Next(Screen(withMessage), null));
     }
 
     [Fact]
@@ -417,7 +464,7 @@ public sealed class A330McduMessagesTests : IDisposable
         // A new one with the window closed is.
         rig.Read(Pad("FORMAT ERROR"));
         rig.Read(Pad("FORMAT ERROR"));
-        Assert.Equal(new[] { "MCDU message: FORMAT ERROR" }, rig.Speech.All);
+        Assert.Equal(new[] { "FORMAT ERROR" }, rig.Speech.All);
 
         // The window shown on the first officer's side: still nothing from the watch.
         w.Show();
@@ -449,7 +496,7 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Empty(rig.Speech.All);
         rig.Read(Pad("FORMAT ERROR"));
         rig.Read(Pad("FORMAT ERROR"));
-        Assert.Equal(new[] { "MCDU message: FORMAT ERROR" }, rig.Speech.All);
+        Assert.Equal(new[] { "FORMAT ERROR" }, rig.Speech.All);
     }
 
     [Fact]
@@ -544,19 +591,33 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Lamp(false, 1);
         Assert.Equal(new[] { captainOff, captainOn, foOn, captainOff, captainOn, foOff, foOff, captainOn }, rig.Speech.All);
 
-        // A reconnect delivers every value again: the first reading of each is silent, the next change is said.
-        rig.Def.ResetAnnouncementBaselines();
+        // A reconnect, in the order the app runs it: the drop (OnSimContextReset), the first batch re-firing every value,
+        // then the Connected branch (ResetAnnouncementBaselines). The lamps keep their last readings: a value re-fired
+        // unchanged is silent, and the next change after the reconnect is said.
+        rig.Def.OnSimContextReset();
         rig.Lamp(false, 1);
-        rig.Lamp(true, 1);
-        Assert.Equal(8, rig.Speech.All.Count);
         rig.Lamp(true, 0);
-        Assert.Equal(foOff, rig.Speech.All[^1]);
+        rig.Def.ResetAnnouncementBaselines();
+        Assert.Equal(8, rig.Speech.All.Count);
+        rig.Lamp(true, 1);
+        Assert.Equal(foOn, rig.Speech.All[^1]);
+        Assert.Equal(9, rig.Speech.All.Count);
 
-        // So does a switch away and back (the variables are registered again).
-        rig.Def.OnSwitchedAway();
+        // A value that changed while the connection was down is a real change: its re-fire is said.
+        rig.Def.OnSimContextReset();
         rig.Lamp(false, 0);
         rig.Lamp(true, 1);
-        Assert.Equal(9, rig.Speech.All.Count);
+        rig.Def.ResetAnnouncementBaselines();
+        Assert.Equal(captainOff, rig.Speech.All[^1]);
+        Assert.Equal(10, rig.Speech.All.Count);
+
+        // A switch away and back starts afresh (the variables are registered again): the first reading of each is silent.
+        rig.Def.OnSwitchedAway();
+        rig.Lamp(false, 1);
+        rig.Lamp(true, 0);
+        Assert.Equal(10, rig.Speech.All.Count);
+        rig.Lamp(true, 1);
+        Assert.Equal(foOn, rig.Speech.All[^1]);
     }
 
     [Theory]
@@ -572,7 +633,7 @@ public sealed class A330McduMessagesTests : IDisposable
             rig.Tick();
             rig.Read(Pad("V1/VR/V2 DISAGREE"));
             rig.Read(Pad("V1/VR/V2 DISAGREE"));
-            Assert.Equal(new[] { "MCDU message: V1/VR/V2 DISAGREE" }, rig.Speech.All);
+            Assert.Equal(new[] { "V1/VR/V2 DISAGREE" }, rig.Speech.All);
 
             rig.Show(Pad("") with { HiddenRowsLeftOut = false });
             rig.Lamp(false, 0.75);
@@ -697,5 +758,34 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Displays.Show(Pad(""));
         for (int i = 0; i < 4; i++) rig.Tick();
         Assert.Equal(new[] { "KJFK", "KJF", "NOT ALLOWED", "Scratchpad cleared" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void Backspace_on_a_keys_own_echo_says_no_message_cleared()
+    {
+        using var rig = new WindowRig();
+        rig.Displays.Show(Pad(""));
+        rig.Displays.SetScratchpad(false, "");
+        rig.Window.Show();
+
+        // Two Backspaces on an empty scratchpad: the first CLR writes CLR on the line, the second takes it off.
+        rig.Backspace();
+        rig.Displays.Show(Pad("CLR"));
+        for (int i = 0; i < 4; i++) rig.Tick();
+        rig.Backspace();
+        rig.Displays.Show(Pad(""));
+        for (int i = 0; i < 4; i++) rig.Tick();
+
+        // The overfly key's mark (the code c) alone on the line, then Backspace.
+        rig.Displays.Show(Pad("c"));
+        for (int i = 0; i < 4; i++) rig.Tick();
+        rig.Backspace();
+        rig.Displays.Show(Pad(""));
+        for (int i = 0; i < 4; i++) rig.Tick();
+
+        // The line's own read-back says what it shows, as for any other change; no "Message cleared".
+        Assert.Equal(new[] { "INI_MCDU1_CLR", "INI_MCDU1_CLR", "INI_MCDU1_CLR" }, rig.Sent);
+        Assert.DoesNotContain(rig.Speech.All, s => s.StartsWith("Message cleared", StringComparison.Ordinal));
+        Assert.Equal(new[] { "CLR", "Scratchpad cleared", "\u0394", "Scratchpad cleared" }, rig.Speech.All);
     }
 }

@@ -6,19 +6,22 @@ namespace MSFSBlindAssist.Aircraft.A330.Mcdu;
 /// </summary>
 /// <remarks>
 /// <para>The line: the scratchpad row's characters as the window shows them, without the F-PLN's slew arrows (the
-/// codes <c>e</c> and <c>f</c>, drawn at the line's right end), trimmed. It is a message unless it is empty, or is the
-/// MCDU's typed line, a start of it, or a line that starts with it (the page and the typed line can be a frame
+/// codes <c>e</c> and <c>f</c>, drawn at the line's right end), trimmed. It is a message unless it is empty, is a key's
+/// own echo (the <c>CLR</c> that CLR writes on an empty scratchpad, measured 2026-11-20, or the overfly mark alone), or
+/// is the MCDU's typed line, a start of it, or a line that starts with it (the page and the typed line can be a frame
 /// apart while the pilot types).</para>
 /// <para>A screen that may hold hidden list rows (<see cref="A330McduScreen.HiddenRowsLeftOut"/> false: one can sit on
 /// the scratchpad line) counts for nothing: no message, and nothing kept from it. The first reading after the watch
 /// starts is its starting point and is never spoken. A message is spoken once two readings in a row agree on it and it
 /// is not the last one spoken; two readings in a row with no message on the line forget the last one spoken, so the
 /// same message coming back later is spoken again, and one stray reading does not.</para>
+/// <para>What is spoken is the message alone, as the FlyByWire A32NX's window speaks an FMS message while it is closed
+/// (<c>FbwMcduReadBack</c>).</para>
 /// </remarks>
 internal sealed class A330McduMessages
 {
-    /// <summary>What the call-out says before the message.</summary>
-    public const string Prefix = "MCDU message: ";
+    /// <summary>What CLR writes on an empty scratchpad (measured 2026-11-20): the key's own echo, never a message.</summary>
+    private const string ClrEcho = "CLR";
 
     private bool _started;
     private string _previous = "";   // the last reading's message, "" for none
@@ -51,7 +54,7 @@ internal sealed class A330McduMessages
         }
         if (message == _spoken) return null;
         _spoken = message;
-        return Prefix + message;
+        return message;
     }
 
     /// <summary>The scratchpad line's text: its characters as the window shows them (<see cref="A330McduCharacters.Display"/>),
@@ -67,12 +70,13 @@ internal sealed class A330McduMessages
         return text.ToString().Trim();
     }
 
-    /// <summary>The line's text when it is a message; null when it is empty or is typed text: the typed line, a start
-    /// of it, or a line that starts with it. An empty or missing typed line hides nothing.</summary>
+    /// <summary>The line's text when it is a message; null when it is empty, a key's own echo (<c>CLR</c>, or the
+    /// overfly mark alone), or typed text: the typed line, a start of it, or a line that starts with it. An empty or
+    /// missing typed line hides nothing.</summary>
     public static string? Message(string line, string? typedScratchpad)
     {
         string text = (line ?? "").Trim();
-        if (text.Length == 0) return null;
+        if (text.Length == 0 || text == ClrEcho || text == A330McduCharacters.OverflyMark) return null;
         string typed = (typedScratchpad ?? "").Trim();
         if (typed.Length > 0
             && (typed.StartsWith(text, StringComparison.Ordinal) || text.StartsWith(typed, StringComparison.Ordinal)))

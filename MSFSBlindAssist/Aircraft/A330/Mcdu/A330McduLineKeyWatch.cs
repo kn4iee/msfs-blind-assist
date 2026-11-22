@@ -5,7 +5,7 @@ namespace MSFSBlindAssist.Aircraft.A330.Mcdu;
 /// <summary>
 /// After a line key, what the window says from the pages that follow (measured 2026-11-20: an entry can be refused with
 /// no message, and a message can wait behind others, so never silence): a new title is the title's announcement and
-/// nothing more; the pressed line's data row changed, that row's listing text ("3: DAL14          IRS INIT>"); only
+/// nothing more; the pressed line's data row changed, that row's listing text ("3: MSF773         IRS INIT>"); only
 /// its label row changed, the label; the scratchpad line changed, its own read-back and nothing more; none of these
 /// within <see cref="WatchMs"/>, "No change". Rows are compared as the window lists them. Pure: the clock is the caller's.
 /// </summary>

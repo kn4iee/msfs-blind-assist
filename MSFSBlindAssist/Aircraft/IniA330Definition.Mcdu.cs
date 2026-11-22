@@ -21,9 +21,11 @@ namespace MSFSBlindAssist.Aircraft;
 /// is said; unmuted, it is wanted again at the next reading, which starts afresh (silent). While the MCDU window is shown
 /// (either side) the watch says nothing, as the window's own scratchpad line says it, but keeps reading, so closing the
 /// window does not repeat what the pilot heard. A switch away stops the timer and lets the display go; a flight reload
-/// or a reconnect makes the next reading silent again.</para>
+/// or a reconnect makes the next reading silent again. The message is said alone, as the FlyByWire A32NX says one with
+/// its window closed.</para>
 /// <para>The lamps. While the frames cannot say the message (hidden list rows, spec M15), the lamps say one is waiting,
-/// in the Fenix's MCDU FM lamp sentences, under the same row (<see cref="SpeakFmsLamp"/>). Measured 2026-11-22: the first
+/// in the Fenix's MCDU FM lamp sentences, under the same row (<see cref="SpeakFmsLamp"/>); a flight reload or a
+/// reconnect keeps each lamp's last reading, so the next change is said. Measured 2026-11-22: the first
 /// officer's lamp stayed 0 while a white message (FORMAT ERROR) showed on that MCDU; amber messages are not measured
 /// yet.</para>
 /// <para>Everything here runs on the UI thread: the variable updates and the timer's ticks.</para>
@@ -104,9 +106,11 @@ public partial class IniA330Definition
     partial void ResetMcduBaselines(bool contextReset)
     {
         if (_mcduMessages is not null) FreshMcduMessages();
-        // A connect delivers every value again, so the lamps' next readings are first readings. A flight load keeps the
-        // simulator's value cache and delivers only changed values: their last readings stay, so a change is said.
-        if (!contextReset) Array.Clear(_fmsLampLit);
+        // The lamps keep their last readings on both paths. A flight load keeps the simulator's value cache and delivers
+        // only changed values, so a change is said. A reconnect re-fires every value BEFORE the Connected branch calls
+        // ResetAnnouncementBaselines (IAircraftDefinition's order): a value re-fired unchanged is silent against the kept
+        // reading, a changed one is a real change, and clearing here would eat the next change. A switch away clears
+        // them (StopMcduWatch).
     }
 
     /// <summary>Starts the watch, once. UI thread.</summary>

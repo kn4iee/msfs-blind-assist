@@ -22,9 +22,10 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// row, each data row "n: value", "Scratchpad: ..."), reconciled in place so the pilot keeps their row. With no
 /// complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or one
 /// that does not leave hidden rows out (spec M15), the list is one status row instead (<see cref="A330McduStatus"/>:
-/// the display windows' own words, or "List rows not read yet"). The status box above the list says the same, or over a
-/// page the display's name ("Captain's MCDU"), or "Colours not read yet" while the frame has no colour (spec M14), when
-/// no prompt is marked unavailable. It never shows half a page.</para>
+/// the display windows' own words, or "List rows not read yet" for any complete frame that does not leave them out, on
+/// the grid or off it, as a list page whose hidden rows sit below the screen is). The status box above the list says
+/// the same, or over a page the display's name ("Captain's MCDU"), or "Colours not read yet" while the frame has no
+/// colour (spec M14), when no prompt is marked unavailable. It never shows half a page.</para>
 /// <para>What it says ([CORE-7]: once, only what the screen reader cannot say, through the non-interrupting announce).
 /// Opening the window while the reader cannot read the MCDU: "A330 MCDU unavailable: &lt;reason&gt;", again only when
 /// the reason changes, and "MCDU ready" with the first page after it (spec D3; never an AI read). A new title, unless
@@ -33,15 +34,17 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// page shown, what the pressed line now holds or "No change" (<see cref="A330McduLineKeyWatch"/>). The page's
 /// scratchpad line, read back when it changes (two stable refreshes, <see cref="CduScratchpadAnnouncer"/>), without the
 /// F-PLN's slew arrows at its end (on the screen and listed, but no text on the scratchpad). A typed entry, confirmed
-/// from the MCDU's own typed line (<see cref="IA330Displays.McduScratchpad"/>): each key is sent only once the one before
-/// has shown, at least 150 ms apart, and waited for up to 600 ms; then the typed line is said, or
+/// from the MCDU's own typed line (<see cref="IA330Displays.McduScratchpad"/>), read from 150 ms after the key before
+/// (so a line key or CLR sent just before the entry has shown): each key is sent only once the one before has shown,
+/// at least 150 ms apart, and waited for up to 600 ms; then the typed line is said, or
 /// "Missed &lt;KEY&gt;. Scratchpad: ..." and the rest of the entry is not sent. What was said is then not said again by
 /// the scratchpad line's read-back (the line showing it, or part of it while the frames catch up) until the next key
 /// that is not part of an entry. With no typed line from the reader the keys go at 150 ms a key, and the page's
 /// scratchpad line read back is the confirmation; with no page shown either, the window says "Typed ..., not
 /// confirmed". Hiding, closing or disposing the window, or a side switch, stops an entry: its other keys are not sent
 /// and nothing is said for it. CLR (Backspace, the CLR button) while the scratchpad line shows a message (the line, not
-/// the typed line): "Message cleared: &lt;message&gt;" once a frame shows the line without it, within 1.5 s, and no
+/// the typed line; never a key's own echo: the CLR that CLR writes on an empty scratchpad, or the overfly mark alone):
+/// "Message cleared: &lt;message&gt;" once a frame shows the line without it, within 1.5 s, and no
 /// "Scratchpad cleared" for that change; the next queued message is read back as usual. With no typed line from the
 /// reader, CLR says no "Message cleared".</para>
 /// <para>Keys. The aircraft's own <c>INI_MCDU1_&lt;KEY&gt;</c> (captain) or <c>INI_MCDU2_&lt;KEY&gt;</c> (first officer)
@@ -324,9 +327,11 @@ public sealed class IniA330CduForm : Form
 
         string row;
         string? reason = null;
-        if (screen is not null)
+        if (frame is { Complete: true, HiddenRowsLeftOut: false })
         {
-            // Read, but rows the MCDU does not show may be in it (spec M15): no page rows, and nothing said of them.
+            // Read, but rows the MCDU does not show may be in it (spec M15): no page rows, and nothing said of them. A
+            // list page's hidden rows can sit below the screen, which puts the frame off the grid; the reader is at work
+            // all the same, so the frame restarts the "cannot read" count as a page does (as A330DisplayWindow's does).
             _status.Restart(now);
             row = A330McduStatus.ListRowsNotReadRow;
         }
@@ -539,6 +544,10 @@ public sealed class IniA330CduForm : Form
             _typing = true;
             try
             {
+                if (entry.Stopped) return;
+                // The entry starts from the typed line as it is once the pace allows the first key, so a line key or
+                // CLR sent just before the entry has shown on it.
+                await PaceAsync();
                 if (entry.Stopped) return;
                 string? pad = _displays.McduScratchpad(profile.FirstOfficer);
                 var keys = profile.KeysToType(text, pad ?? "");

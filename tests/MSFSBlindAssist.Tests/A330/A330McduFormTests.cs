@@ -329,6 +329,42 @@ public sealed class A330McduFormTests : IDisposable
         Assert.Empty(rig.Speech.All);
     }
 
+    /// <summary>The frame with a list row the MCDU does not show, below the screen (row 20): off the MCDU's grid.</summary>
+    private static A330Frame OffGrid(A330Frame frame) => frame with
+    {
+        Texts = frame.Texts.Append(new A330Text(998, A330McduGeometry.Left, A330McduGeometry.Top + 20 * A330McduGeometry.RowPitch,
+            "08L", A330McduGeometry.LargeFont, 29.5f, null, [A330McduGeometry.Left])).ToList(),
+    };
+
+    [Fact]
+    public void A_list_page_with_its_hidden_rows_below_the_screen_shows_list_rows_not_read_yet_and_says_nothing()
+    {
+        // Today's list pages (measured 2026-11-22, ARRIVAL): the rows the MCDU does not show sit below the screen, so
+        // the frame is off the grid, and it does not leave hidden rows out. The reader is at work: never "cannot read".
+        var list = OffGrid(Init()) with { HiddenRowsLeftOut = false };
+        Assert.Null(A330McduScreen.From(list));
+        using var rig = new Rig();
+        rig.Displays.Show(list);
+        var w = rig.Window();
+        w.Show();
+        Assert.Equal(new[] { "List rows not read yet" }, Items(w));
+        Assert.Equal("List rows not read yet", Status(w).Text);
+
+        for (int s = 0; s < 40; s++) Tick(rig, w, 1000);
+        Assert.Equal(new[] { "List rows not read yet" }, Items(w));
+        Assert.Equal("List rows not read yet", Status(w).Text);
+        Assert.Empty(rig.Speech.All);
+
+        // A frame off the grid that does leave hidden rows out is a geometry the window does not know: after 30 s with
+        // no page, the display reader cannot read the MCDU.
+        rig.Displays.Show(OffGrid(Init()) with { HiddenRowsLeftOut = true });
+        Tick(rig, w);
+        Assert.Equal(new[] { "Reading the captain's MCDU" }, Items(w));
+        Tick(rig, w, 30_000);
+        Assert.Equal(new[] { "The display reader cannot read the captain's MCDU" }, Items(w));
+        Assert.Equal(new[] { "A330 MCDU unavailable: the display reader cannot read the captain's MCDU" }, rig.Speech.All);
+    }
+
     // ---- Spoken status (spec D3) -------------------------------------------------------------------------
 
     [Theory]
@@ -567,6 +603,26 @@ public sealed class A330McduFormTests : IDisposable
         rig.Displays.Show(WithPad(Init(), "KJF"));
         for (int i = 0; i < 4; i++) Tick(rig, w);
         Assert.Equal(new[] { "KJFK", "KJF" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public async Task An_entry_straight_after_CLR_starts_from_what_CLR_left_on_the_typed_line()
+    {
+        var (rig, w) = TypingOnInit();
+        using var _ = rig;
+        await w.TypeAsync("kjfk");
+        Assert.Equal(new[] { "KJFK" }, rig.Speech.All);
+
+        // CLR, whose change reaches the typed line 100 ms after its press, and at once an entry: the entry starts from
+        // the typed line CLR left, so its key is not missed.
+        rig.LagMs = 100;
+        w.HandleScratchpadKey(new KeyEventArgs(Keys.Back));
+        rig.LagMs = 40;
+        await w.TypeAsync("a");
+        Assert.Equal(new[] { "INI_MCDU1_CLR", "INI_MCDU1_A" }, rig.Sent.Skip(4).Select(s => s.Flag));
+        Assert.True(rig.Sent[^1].At - rig.Sent[^2].At >= 150, "the entry's key came too soon after CLR");
+        Assert.DoesNotContain(rig.Speech.All, s => s.StartsWith("Missed", StringComparison.Ordinal));
+        Assert.Equal(new[] { "KJFK", "KJFA" }, rig.Speech.All);
     }
 
     [Fact]
@@ -872,10 +928,10 @@ public sealed class A330McduFormTests : IDisposable
         Assert.Equal("INI_MCDU1_LSK3L", rig.Sent[^1].Flag);
         Tick(rig, w);   // the frame from before the press
         Assert.Empty(rig.Speech.All);
-        var named = WithText(init, 13, "DAL14");
+        var named = WithText(init, 13, "MSF773");
         rig.Displays.Show(named);
         Tick(rig, w);
-        Assert.Equal(new[] { "3: DAL14          IRS INIT>" }, rig.Speech.All);
+        Assert.Equal(new[] { "3: MSF773         IRS INIT>" }, rig.Speech.All);
         Tick(rig, w, 2000);
         Assert.Single(rig.Speech.All);
 
