@@ -243,6 +243,18 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
 - **Pilot-facing:** the notice and the status wording, for the guide's "Things to know". Nothing else by itself.
 - **Rule proposals:** INI-10: nothing in this repository reads the A330's displays itself; display text comes only from the reader program through `A330ReaderClient`, and public text never says how the reader works. INI-11: only a frame with `Complete` true is shown or spoken (`IA330Displays.Latest`); `Newest` is for pairing single texts and for saying "reading", never for a page. INI-12: a fixture is a frame in the protocol's form and nothing else.
 - **Frozen files:** the release and preview workflows build the reader program and place it beside the app (plan 12's Task 2); `docs/updates.md` if it lists what a release carries.
+- **Request for a frozen file (plan 01's `IniA330Definition.Handlers.cs`):** `PressFromWindow` writes through
+  `HandleUIVariableSet` without the main panel's UI-set echo mark (CORE-8's `MarkUiSet`), so a choice made in a
+  display window may be heard twice: the screen reader says the choice, then the definition's announcement of the
+  change. Plan 02's windows have no key rows, so nothing hears it yet; check it with the first window that has them
+  (plan 08 or 09) and, if it speaks twice, give `PressFromWindow` the panel's echo mark.
+- **For the plans that derive from `A330DisplayWindow` (03, 08, 09):** the base has no hook after each refresh and
+  none for rows while no complete frame has come (plan 09's PFD window lists the variables' values and "PFD not read
+  yet" until a PFD frame comes). A plan that needs one asks plan 02's claimant while it is open, else hands it off
+  here. The base's key rows are `KeyRows` (not `Keys`, which would hide the key enumeration).
+- **What the live check found** (evidence file): the reader reports `Running` only once a display is wanted and
+  found, so with no window open and no call-out wanting a display the state stays `Starting` (a passing state:
+  nothing is spoken).
 
 ## Execution record
 
@@ -252,10 +264,52 @@ Kept in this file only, so no other plan's push ever touches it.
 - **Claimed by:** kn4iee
 - **Worked by:** kn4iee, with Claude (subagent-driven development)
 - **Started:** 2026-11-22, from b9aa5d0a3 (the branch tip: e5c9d2b6a plus plan 01's two record commits)
-- **Landed:**
-- **Tests at landing:**
-- **Tasks:**
-- **Waiting on the owner:**
-- **In-sim results:**
+- **Landed:** (filled in after the whole-plan review)
+- **Tests at landing:** (filled in after the whole-plan review)
+- **Tasks:** 0 claim e00faa97f (pushed first). 1 the contract 497f0513d. 2 the protocol 42dc140f7. 3 the client
+  d56949925, review fix e3fd30c11. 4 the definition's part and the notice 7113f8803. 5 the display window and the
+  replay source 8bc3026bc, review fix a700a9c1d. 6 [sim] run by Claude with a throwaway harness, recorded in
+  c7643649a (`docs/a330/evidence/02-reader-client.md`, and the new "Displays" section of `docs/ini-a330.md`). Each
+  task had a review of its own (spec and quality); each push ran the private push check first.
+- **Waiting on the owner:** the two in-sim checks above. Check 1's MCDU window is plan 03's; until it lands, check 1
+  is "no notice is spoken with the A330 loaded" only. Both need a build with the reader program beside the app
+  (plan 12 puts it in the release).
+- **In-sim results:** 2026-11-22, MSFS 2024 1.9.24.0, A330-200 (GE), reader 1.0.0 (protocol 1): Steps 1 to 3 pass
+  (evidence file): `Running` in 0.67 s with a complete frame, a display window listing the page at 0.54 s, the reader
+  ended by hand dropped the frame in 50 ms, showed "A330 displays starting" at 0.12 s and filled the list again at
+  5.8 s without a word, two clients have two readers, a reader ends with its process, none beside the app is
+  `NotInstalled`. Not run: `OutOfDate` (no older reader build exists). Step 4: the defaults stand (250 ms for a
+  window, 1000 ms in the background).
 - **Changed from the plan:**
-- **Rulings made while working:**
+  - Fixtures: the 2026-11-20 captures (already the protocol's frame form; the gauge name `Ewd2` written as `Ewd`):
+    `p02_mcdu_init.json` (INIT A: 18 texts, 146 characters, 127 not spaces) and `p02_ewd_ground.json` (on the
+    ground: 18 texts, 71 characters, 64 not spaces). The plan's "64 characters" for the E/WD counted no spaces.
+  - Added: `A330Colours.Word(A330Text)` (null without a colour); the client's `internal Tick()` and a constructor that
+    runs no timer, for tests; `A330GaugeNames`; the window's `NeedsColours` / `NeedsHiddenRowsLeftOut` (the waiting
+    rows of the Global Constraints), `ShowForm`, `NowMs`, `RefreshNow`, and the protected `Aircraft`, `Sim`,
+    `Announcer`, `Gauge` and `RowList` for derived windows; the replay's `Forget`.
+  - The window's status rows follow "Changed on 2026-11-21" ("Reading the <display>", and "The display reader
+    cannot read the <display>" after 30 s) rather than Task 5's "reading".
+  - `Keys` is `KeyRows`.
+  - Extra tests for the Review Focus lines Task 3 named none for: `A_broken_line_is_dropped_and_the_client_carries_on`,
+    `Each_client_starts_its_own_program`.
+- **Rulings made while working** (Claude's; the owner may reverse any):
+  - Clock values are milliseconds of `Environment.TickCount64`, the app's convention for injected clocks.
+  - A330 fixtures are read from the source tree, since the frozen test csproj copies only the root `Fixtures` folder.
+  - Only the seven states the reader can know parse from its lines; `NotInstalled`, `OutOfDate` and `Failed` are the
+    client's own.
+  - The client reports `Stopped` until started; `Stop` always ends in `Stopped`; a `Start` after `Stop` begins a new
+    run (a full restart budget); within a run `NotInstalled`, `OutOfDate` and `Failed` are final.
+  - A dropped line: the first of a run is logged, later ones are not.
+  - The notice: a lasting state's words plus ". The MCDU window cannot read its screen.", first at 30 s after the
+    aircraft became active, a new reason at once, each once; "A330 displays ready" once after one; spoken with the
+    non-interrupting announce. `ResetReader(false)` does nothing; `ResetReader(true)` resets.
+  - Display names: captain's MCDU, first officer's MCDU, E/WD, system display, captain's PFD, first officer's PFD,
+    captain's ND, first officer's ND, captain's DCDU, first officer's DCDU, ISIS.
+  - A waiting row ("Colours not read yet", "List rows not read yet") comes above the rows of a complete frame.
+  - A key row's label is the control's label alone when it has no state, else "Label: State".
+  - "<Display> is off" only from a not-drawn frame no older than three refreshes; an older one counts as no frame.
+  - A choice list presses on `SelectionChangeCommitted`, the main panel's own event (an open list presses once, on
+    the pilot's commit).
+  - The window polls on its own timer and subscribes to no event of the client.
+  - The double speech a window press may cause is plan 01's file: a handoff above, not a change here.
