@@ -23,7 +23,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// window does not repeat what the pilot heard. A switch away stops the timer and lets the display go; a flight reload
 /// or a reconnect makes the next reading silent again.</para>
 /// <para>The lamps. While the frames cannot say the message (hidden list rows, spec M15), the lamps say one is waiting,
-/// in the Fenix's MCDU FM lamp sentences, under the same row (<see cref="SpeakFmsLamp"/>).</para>
+/// in the Fenix's MCDU FM lamp sentences, under the same row (<see cref="SpeakFmsLamp"/>). Measured 2026-11-22: the first
+/// officer's lamp stayed 0 while a white message (FORMAT ERROR) showed on that MCDU; amber messages are not measured
+/// yet.</para>
 /// <para>Everything here runs on the UI thread: the variable updates and the timer's ticks.</para>
 /// </remarks>
 public partial class IniA330Definition
@@ -51,6 +53,7 @@ public partial class IniA330Definition
     private System.Windows.Forms.Timer? _mcduWatchTimer;
     private ScreenReaderAnnouncer? _mcduWatchAnnouncer;
     private A330McduMessages? _mcduMessages;   // set while the captain's MCDU is wanted
+    private long? _mcduLastReadTicks;          // the read time of the last frame the watch took
 
     /// <summary>Test seam: whether the watch runs its own timer (a test runs <see cref="WatchMcduMessages"/> itself).</summary>
     internal bool RunMcduWatchTimer { get; set; } = true;
@@ -73,7 +76,8 @@ public partial class IniA330Definition
 
     /// <summary>An FMS message lamp says a message is waiting while the frames cannot say the message itself, in the
     /// Fenix's MCDU FM lamp sentence, under the FMS messages row: the first reading silent, a change said once. Measured
-    /// 2026-11-22: both lamps 0 with no message; until a reading with a message queued, 0 is off and any other value lit.
+    /// 2026-11-22: both lamps 0 with no message, and the first officer's lamp stayed 0 while a white message (FORMAT ERROR)
+    /// showed on that MCDU; amber messages are not measured yet. 0 is off and any other value lit.
     /// The captain's lamp speaks only while the captain's MCDU has no complete frame that leaves hidden list rows out
     /// (none, one off its grid, or one that may hold them); the first officer's always, as that MCDU is not watched.</summary>
     private void SpeakFmsLamp(int side, double value, ScreenReaderAnnouncer announcer)
@@ -99,8 +103,10 @@ public partial class IniA330Definition
 
     partial void ResetMcduBaselines(bool contextReset)
     {
-        if (_mcduMessages is not null) _mcduMessages = new A330McduMessages();
-        Array.Clear(_fmsLampLit);
+        if (_mcduMessages is not null) FreshMcduMessages();
+        // A connect delivers every value again, so the lamps' next readings are first readings. A flight load keeps the
+        // simulator's value cache and delivers only changed values: their last readings stay, so a change is said.
+        if (!contextReset) Array.Clear(_fmsLampLit);
     }
 
     /// <summary>Starts the watch, once. UI thread.</summary>
@@ -126,7 +132,12 @@ public partial class IniA330Definition
             return;
         }
         if (_mcduMessages is null) WantMcduCaptain();
-        if (Displays.Latest(A330Gauge.McduCaptain) is not { } frame || A330McduScreen.From(frame) is not { } screen) return;
+        if (Displays.Latest(A330Gauge.McduCaptain) is not { } frame) return;
+        // The timer and the display reader's refresh are not in step, and the latest frame can be up to three refreshes
+        // old: a frame already taken is not a new reading, for speaking or for forgetting.
+        if (frame.ReadTicks == _mcduLastReadTicks) return;
+        _mcduLastReadTicks = frame.ReadTicks;
+        if (A330McduScreen.From(frame) is not { } screen) return;
         string? say = _mcduMessages!.Next(screen, Displays.McduScratchpad(firstOfficer: false));
         if (say is null || McduWindowShown) return;
         _mcduWatchAnnouncer?.Announce(say);
@@ -138,8 +149,15 @@ public partial class IniA330Definition
     /// <summary>Wants the captain's MCDU, with a fresh message watch whose first reading is silent.</summary>
     private void WantMcduCaptain()
     {
-        _mcduMessages = new A330McduMessages();
+        FreshMcduMessages();
         Displays.Want(A330Gauge.McduCaptain, _mcduWatchOwner, McduWatchRefreshMs);
+    }
+
+    /// <summary>A fresh message watch: its first reading, of the next frame it takes, is silent.</summary>
+    private void FreshMcduMessages()
+    {
+        _mcduMessages = new A330McduMessages();
+        _mcduLastReadTicks = null;
     }
 
     private void ReleaseMcduCaptain()

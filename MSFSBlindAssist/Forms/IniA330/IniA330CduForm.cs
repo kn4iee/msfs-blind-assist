@@ -42,7 +42,8 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// confirmed". Hiding, closing or disposing the window, or a side switch, stops an entry: its other keys are not sent
 /// and nothing is said for it. CLR (Backspace, the CLR button) while the scratchpad line shows a message (the line, not
 /// the typed line): "Message cleared: &lt;message&gt;" once a frame shows the line without it, within 1.5 s, and no
-/// "Scratchpad cleared" for that change; the next queued message is read back as usual.</para>
+/// "Scratchpad cleared" for that change; the next queued message is read back as usual. With no typed line from the
+/// reader, CLR says no "Message cleared".</para>
 /// <para>Keys. The aircraft's own <c>INI_MCDU1_&lt;KEY&gt;</c> (captain) or <c>INI_MCDU2_&lt;KEY&gt;</c> (first officer)
 /// press flags: write 1, the aircraft consumes it and resets it to 0 (writing 0 straight after kills the press,
 /// measured). Every write is sequence-prefixed so a repeated key is never coalesced by the MobiFlight channel. Keys are
@@ -511,13 +512,15 @@ public sealed class IniA330CduForm : Form
     }
 
     /// <summary>CLR. On a message (the page's scratchpad line, not the MCDU's typed line, <see cref="A330McduMessages.Message"/>)
-    /// the window says "Message cleared: ..." once a frame shows the line without it, within 1.5 s, or nothing.</summary>
+    /// the window says "Message cleared: ..." once a frame shows the line without it, within 1.5 s, or nothing. With no
+    /// typed line from the reader, typed text cannot be told from a message, so it says nothing of the kind.</summary>
     private void Clear()
     {
         long now = NowMs();
         _scratch.SuppressUntil = Utc(now + 400);
         _clearing = _shownPage is { } page
-            && A330McduMessages.Message(ScratchpadText(page[A330McduLines.ScratchpadRow]), _displays.McduScratchpad(_profile.FirstOfficer)) is { } message
+            && _displays.McduScratchpad(_profile.FirstOfficer) is { } typed
+            && A330McduMessages.Message(ScratchpadText(page[A330McduLines.ScratchpadRow]), typed) is { } message
                 ? (message, now + ClearShowsWithinMs)
                 : null;
         Press("CLR");

@@ -93,10 +93,20 @@ public sealed class A330McduMessagesTests : IDisposable
         /// <summary>The first variable update with the A330 active: the watch starts.</summary>
         public void Start() => Lamp(false, 0);
 
-        /// <summary>One reading of the watch (its timer's work).</summary>
+        /// <summary>The watch's timer ticks once (its work): a reading when the latest frame is a new one.</summary>
         public void Tick() => Def.WatchMcduMessages();
 
-        public void Show(A330Frame frame) => Displays.Show(frame);
+        private long _readTicks = 1_000_000;
+
+        /// <summary>A new frame from the display reader: its own read time, as every frame the reader gives has.</summary>
+        public void Show(A330Frame frame) => Displays.Show(frame with { ReadTicks = ++_readTicks });
+
+        /// <summary>A new frame, and the watch's next tick reads it.</summary>
+        public void Read(A330Frame frame)
+        {
+            Show(frame);
+            Tick();
+        }
 
         public int CaptainWants => Displays.Wants.Count(w => w.Gauge == A330Gauge.McduCaptain);
 
@@ -124,13 +134,12 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Equal(1000, want.RefreshMs);
         rig.Tick();
 
-        // Spoken once two readings agree, and once only.
-        rig.Show(Pad("INITIALIZE WEIGHT/CG"));
-        rig.Tick();
+        // Spoken once two frames in a row agree, and once only.
+        rig.Read(Pad("INITIALIZE WEIGHT/CG"));
         Assert.Empty(rig.Speech.All);
-        rig.Tick();
+        rig.Read(Pad("INITIALIZE WEIGHT/CG"));
         Assert.Equal(new[] { "MCDU message: INITIALIZE WEIGHT/CG" }, rig.Speech.All);
-        for (int i = 0; i < 5; i++) rig.Tick();
+        for (int i = 0; i < 5; i++) rig.Read(Pad("INITIALIZE WEIGHT/CG"));
         Assert.Single(rig.Speech.All);
         Assert.Empty(rig.Speech.Interrupts);   // the non-interrupting announce
 
@@ -140,10 +149,45 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Single(rig.Displays.Wants);
 
         // The next message is said too.
-        rig.Show(Pad("CHECK TAKE OFF DATA"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("CHECK TAKE OFF DATA"));
+        rig.Read(Pad("CHECK TAKE OFF DATA"));
         Assert.Equal(new[] { "MCDU message: INITIALIZE WEIGHT/CG", "MCDU message: CHECK TAKE OFF DATA" }, rig.Speech.All);
+    }
+
+    [Fact]
+    public void One_frame_read_on_two_ticks_is_one_reading()
+    {
+        using var rig = new WatchRig();
+        rig.Show(Pad(""));
+        rig.Start();
+        rig.Tick();
+
+        // The timer and the display reader's refresh are not in step: one frame can be the latest on several ticks.
+        // It is one reading, so it never agrees with itself.
+        rig.Show(Pad("NOT ALLOWED"));
+        for (int i = 0; i < 4; i++) rig.Tick();
+        Assert.Empty(rig.Speech.All);
+
+        // A second frame with the same message: spoken, once.
+        rig.Read(Pad("NOT ALLOWED"));
+        Assert.Equal(new[] { "MCDU message: NOT ALLOWED" }, rig.Speech.All);
+        rig.Tick();
+        rig.Tick();
+        Assert.Single(rig.Speech.All);
+
+        // Nor does one frame with an empty line, read on several ticks, forget the message.
+        rig.Show(Pad(""));
+        for (int i = 0; i < 3; i++) rig.Tick();
+        rig.Read(Pad("NOT ALLOWED"));
+        rig.Read(Pad("NOT ALLOWED"));
+        Assert.Single(rig.Speech.All);
+
+        // Two frames of it do.
+        rig.Read(Pad(""));
+        rig.Read(Pad(""));
+        rig.Read(Pad("NOT ALLOWED"));
+        rig.Read(Pad("NOT ALLOWED"));
+        Assert.Equal(new[] { "MCDU message: NOT ALLOWED", "MCDU message: NOT ALLOWED" }, rig.Speech.All);
     }
 
     [Fact]
@@ -176,12 +220,10 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Tick();
         rig.Displays.SetScratchpad(false, "KJFK");
         rig.Displays.SetScratchpad(true, "NOT ALLOWED");   // the first officer's typed line is not the captain's
-        rig.Show(Pad("KJFK"));
-        for (int i = 0; i < 4; i++) rig.Tick();
+        for (int i = 0; i < 4; i++) rig.Read(Pad("KJFK"));
         Assert.Empty(rig.Speech.All);
-        rig.Show(Pad("NOT ALLOWED"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("NOT ALLOWED"));
+        rig.Read(Pad("NOT ALLOWED"));
         Assert.Equal(new[] { "MCDU message: NOT ALLOWED" }, rig.Speech.All);
     }
 
@@ -211,8 +253,7 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Show(Hidden(""));
         rig.Start();
         rig.Tick();
-        rig.Show(Hidden("08L"));
-        for (int i = 0; i < 4; i++) rig.Tick();
+        for (int i = 0; i < 4; i++) rig.Read(Hidden("08L"));
         Assert.Empty(rig.Speech.All);
     }
 
@@ -222,29 +263,27 @@ public sealed class A330McduMessagesTests : IDisposable
         using var rig = new WatchRig();
         rig.Show(Pad("INITIALIZE WEIGHT/CG"));
         rig.Start();
-        for (int i = 0; i < 4; i++) rig.Tick();
+        rig.Tick();
+        for (int i = 0; i < 3; i++) rig.Read(Pad("INITIALIZE WEIGHT/CG"));
         Assert.Empty(rig.Speech.All);   // on the line before the watch started: its starting point
 
         // A flight reload: the next reading is the starting point again.
-        rig.Show(Pad("CHECK TAKE OFF DATA"));
-        rig.Tick();
+        rig.Read(Pad("CHECK TAKE OFF DATA"));
         rig.Def.OnSimContextReset();
-        for (int i = 0; i < 3; i++) rig.Tick();
+        for (int i = 0; i < 3; i++) rig.Read(Pad("CHECK TAKE OFF DATA"));
         Assert.Empty(rig.Speech.All);
 
-        rig.Show(Pad("NAV ACCUR DOWNGRADED"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("NAV ACCUR DOWNGRADED"));
+        rig.Read(Pad("NAV ACCUR DOWNGRADED"));
         Assert.Equal(new[] { "MCDU message: NAV ACCUR DOWNGRADED" }, rig.Speech.All);
 
-        // A reading with no complete frame is no reading: the first one after the start is still silent.
+        // A tick with no complete frame is no reading: the first one after the start is still silent.
         using var late = new WatchRig();
         late.Start();
         late.Tick();
         late.Tick();
-        late.Show(Pad("INITIALIZE WEIGHT/CG"));
-        late.Tick();
-        late.Tick();
+        late.Read(Pad("INITIALIZE WEIGHT/CG"));
+        late.Read(Pad("INITIALIZE WEIGHT/CG"));
         Assert.Empty(late.Speech.All);
     }
 
@@ -258,8 +297,7 @@ public sealed class A330McduMessagesTests : IDisposable
 
         void Reading(string pad, int times = 2)
         {
-            rig.Show(Pad(pad));
-            for (int i = 0; i < times; i++) rig.Tick();
+            for (int i = 0; i < times; i++) rig.Read(Pad(pad));
         }
 
         Reading("NOT ALLOWED");
@@ -298,29 +336,26 @@ public sealed class A330McduMessagesTests : IDisposable
         // Muted from the start: the captain's MCDU is not even wanted.
         rig.Start();
         rig.Tick();
-        rig.Show(Pad("NOT ALLOWED"));
-        for (int i = 0; i < 4; i++) rig.Tick();
+        for (int i = 0; i < 4; i++) rig.Read(Pad("NOT ALLOWED"));
         Assert.Equal(0, rig.CaptainWants);
         Assert.Empty(rig.Speech.All);
 
-        // Unmuted: wanted again on the next reading, which is the watch's starting point.
+        // Unmuted: wanted again on the next tick, whose reading is the watch's starting point.
         Mute(false);
         rig.Tick();
         Assert.Equal(1, rig.CaptainWants);
         Assert.Equal(1000, rig.Displays.Wants[^1].RefreshMs);
-        rig.Tick();
+        rig.Read(Pad("NOT ALLOWED"));
         Assert.Empty(rig.Speech.All);
-        rig.Show(Pad("FORMAT ERROR"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("FORMAT ERROR"));
+        rig.Read(Pad("FORMAT ERROR"));
         Assert.Equal(new[] { "MCDU message: FORMAT ERROR" }, rig.Speech.All);
 
-        // Muted again: the display is let go at the next reading, and nothing more is said.
+        // Muted again: the display is let go at the next tick, and nothing more is said.
         Mute(true);
         rig.Tick();
         Assert.Equal((A330Gauge.McduCaptain, rig.Displays.Wants[^1].Owner), Assert.Single(rig.Displays.Releases));
-        rig.Show(Pad("CHECK TAKE OFF DATA"));
-        for (int i = 0; i < 4; i++) rig.Tick();
+        for (int i = 0; i < 4; i++) rig.Read(Pad("CHECK TAKE OFF DATA"));
         Assert.Single(rig.Speech.All);
         Assert.Equal(1, rig.CaptainWants);
     }
@@ -363,9 +398,9 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Tick();
 
         // The window's own scratchpad line says the message; the watch keeps reading, silently.
-        rig.Show(Pad("NOT ALLOWED"));
         for (int i = 0; i < 2; i++)
         {
+            rig.Show(Pad("NOT ALLOWED"));
             clock += 250;
             w.RefreshNow();
             rig.Tick();
@@ -375,22 +410,20 @@ public sealed class A330McduMessagesTests : IDisposable
 
         // Closed with the message still there: not said again.
         w.Close();
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("NOT ALLOWED"));
+        rig.Read(Pad("NOT ALLOWED"));
         Assert.Empty(rig.Speech.All);
 
         // A new one with the window closed is.
-        rig.Show(Pad("FORMAT ERROR"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("FORMAT ERROR"));
+        rig.Read(Pad("FORMAT ERROR"));
         Assert.Equal(new[] { "MCDU message: FORMAT ERROR" }, rig.Speech.All);
 
         // The window shown on the first officer's side: still nothing from the watch.
         w.Show();
         w.HandleKey(new KeyEventArgs(Keys.Control | Keys.Shift | Keys.R));
-        rig.Show(Pad("CHECK TAKE OFF DATA"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("CHECK TAKE OFF DATA"));
+        rig.Read(Pad("CHECK TAKE OFF DATA"));
         Assert.Single(rig.Speech.All);
     }
 
@@ -404,20 +437,18 @@ public sealed class A330McduMessagesTests : IDisposable
 
         rig.Def.OnSwitchedAway();
         Assert.Equal(rig.Displays.Wants.Select(w => (w.Gauge, w.Owner)), rig.Displays.Releases);
-        rig.Show(Pad("NOT ALLOWED"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("NOT ALLOWED"));
+        rig.Read(Pad("NOT ALLOWED"));
         Assert.Empty(rig.Speech.All);
 
         // Back on the aircraft, its first update starts the watch again, from a silent first reading.
         rig.Start();
         Assert.Equal(2, rig.CaptainWants);
         rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("NOT ALLOWED"));
         Assert.Empty(rig.Speech.All);
-        rig.Show(Pad("FORMAT ERROR"));
-        rig.Tick();
-        rig.Tick();
+        rig.Read(Pad("FORMAT ERROR"));
+        rig.Read(Pad("FORMAT ERROR"));
         Assert.Equal(new[] { "MCDU message: FORMAT ERROR" }, rig.Speech.All);
     }
 
@@ -506,19 +537,26 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Equal(6, rig.Speech.All.Count);
         Mute(false);
 
-        // After a flight reload, the first reading of each is silent again.
+        // A flight reload keeps the simulator's value cache, so no lamp value arrives until a lamp changes: the first
+        // change after it is a real one, and is said.
         rig.Def.OnSimContextReset();
-        rig.Lamp(false, 1);
         rig.Lamp(true, 0);
-        Assert.Equal(6, rig.Speech.All.Count);
-        rig.Lamp(true, 1);
-        Assert.Equal(foOn, rig.Speech.All[^1]);
+        rig.Lamp(false, 1);
+        Assert.Equal(new[] { captainOff, captainOn, foOn, captainOff, captainOn, foOff, foOff, captainOn }, rig.Speech.All);
 
-        // And after a switch away and back.
+        // A reconnect delivers every value again: the first reading of each is silent, the next change is said.
+        rig.Def.ResetAnnouncementBaselines();
+        rig.Lamp(false, 1);
+        rig.Lamp(true, 1);
+        Assert.Equal(8, rig.Speech.All.Count);
+        rig.Lamp(true, 0);
+        Assert.Equal(foOff, rig.Speech.All[^1]);
+
+        // So does a switch away and back (the variables are registered again).
         rig.Def.OnSwitchedAway();
         rig.Lamp(false, 0);
-        rig.Lamp(true, 0);
-        Assert.Equal(7, rig.Speech.All.Count);
+        rig.Lamp(true, 1);
+        Assert.Equal(9, rig.Speech.All.Count);
     }
 
     [Theory]
@@ -532,9 +570,8 @@ public sealed class A330McduMessagesTests : IDisposable
             rig.Show(Pad(""));
             rig.Start();
             rig.Tick();
-            rig.Show(Pad("V1/VR/V2 DISAGREE"));
-            rig.Tick();
-            rig.Tick();
+            rig.Read(Pad("V1/VR/V2 DISAGREE"));
+            rig.Read(Pad("V1/VR/V2 DISAGREE"));
             Assert.Equal(new[] { "MCDU message: V1/VR/V2 DISAGREE" }, rig.Speech.All);
 
             rig.Show(Pad("") with { HiddenRowsLeftOut = false });
@@ -632,5 +669,33 @@ public sealed class A330McduMessagesTests : IDisposable
         Assert.Equal("KJF", rig.Speech.All[^1]);
         Assert.DoesNotContain(rig.Speech.All, s => s == "Message cleared: KJFK" || s == "Scratchpad cleared");
         Assert.Empty(rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public void Backspace_with_no_typed_line_from_the_reader_says_no_message_cleared()
+    {
+        // The display reader gives no typed line: typed text and a message cannot be told apart, so Backspace never
+        // says "Message cleared"; the line's read-back works as before.
+        using var rig = new WindowRig();
+        rig.Displays.Show(Pad(""));
+        rig.Window.Show();
+        Assert.Null(rig.Displays.McduScratchpad(false));
+
+        rig.Displays.Show(Pad("KJFK"));
+        rig.Tick();
+        rig.Tick();
+        rig.Backspace();
+        Assert.Equal("INI_MCDU1_CLR", rig.Sent[^1]);
+        rig.Displays.Show(Pad("KJF"));
+        for (int i = 0; i < 4; i++) rig.Tick();
+        Assert.Equal(new[] { "KJFK", "KJF" }, rig.Speech.All);
+
+        rig.Displays.Show(Pad("NOT ALLOWED"));
+        rig.Tick();
+        rig.Tick();
+        rig.Backspace();
+        rig.Displays.Show(Pad(""));
+        for (int i = 0; i < 4; i++) rig.Tick();
+        Assert.Equal(new[] { "KJFK", "KJF", "NOT ALLOWED", "Scratchpad cleared" }, rig.Speech.All);
     }
 }
