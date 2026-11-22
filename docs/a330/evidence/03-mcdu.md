@@ -4,11 +4,12 @@ Two sessions, both MSFS 2024 (`FlightSimulator2024.exe` 1.9.24.0) with the A330-
 
 - **2026-11-20, on the ground**, cold and dark to a programmed MCDU (KATL to KMCO, typed by Claude, flight number
   MSF773): the captain's MCDU frames the plan's "Measured on 2026-11-20" section describes. The fixtures
-  `p03_*.json` are five of them, the frame alone (drawn text, positions, fonts, colours), with
+  `p03_*.json` (eighteen) are some of them, the frame alone (drawn text, positions, fonts, colours), with
   `"hiddenRowsLeftOut": true` added because those frames held the screen's rows only. No page that holds the
   owner's own route or anything the owner typed was made a fixture (spec section 4).
-- **2026-11-22, in flight**, the display reader 1.0.0 (protocol 1), reads only: nothing was written to the
-  simulator.
+- **2026-11-22, in flight**, the display reader 1.0.0 (protocol 1): reads of both MCDUs and the lamps, and on the
+  first officer's MCDU only a few keys through the calculator path, put back as found (the owner had said that day:
+  "The sim is also up and in flight if needed").
 
 ## Task 1: the grid
 
@@ -39,7 +40,7 @@ glyphs as the characters the window now shows for them.
 
 Each shows as one cell (the braille rule). Wording of each stand-in: the owner's (Task 2 Step 3).
 
-## In flight, 2026-11-22 (reads only)
+## In flight, 2026-11-22
 
 - The captain's MCDU on an ARRIVAL list page: a complete frame of 50 texts in 0.1 s, with no colour (M14) and
   without `hiddenRowsLeftOut` (M15). The rows of the list the MCDU does not show were in the frame on rows 14 to 29,
@@ -57,7 +58,7 @@ own protocol to the display reader (the typed line and the frames, as `A330Reade
 
 | Step | Row 13 of the frame | Typed line |
 | --- | --- | --- |
-| On INIT, still (as found) | no frame yet: the window would show "Reading the first officer's MCDU" until the page changed | `""` |
+| On INIT (as found) | no frame in the first 6 s | `""` |
 | DATA (DATA INDEX 1) | (empty); complete frames from then on | `""` |
 | X | `X` | `"X"` |
 | SPACE | `X` | `"X "`: a trailing space is kept, so a SPACE is confirmed like any other key |
@@ -70,7 +71,7 @@ own protocol to the display reader (the typed line and the frames, as `A330Reade
   message was not tried. So the lamp sentence of Task 5 Step 2 speaks at most for amber messages, not measured yet.
 - Both pages the reader gave for the first officer's MCDU (DATA INDEX 1, INIT) place every text inside the grid with
   no two texts on one cell: the same geometry as the captain's.
-- Put back as found: the first officer's MCDU on INIT, its cost index unchanged (120), the scratchpad empty. The
+- Put back as found: the first officer's MCDU on INIT, its cost index unchanged, the scratchpad empty. The
   frames of the INIT page hold the owner's route: none was kept as a fixture.
 
 ## Task 6 Step 1 (offline): the window against the cockpit's pages
@@ -122,3 +123,15 @@ read-only box, first in the tab order; the scratchpad line is always listed.
    2026-11-22: today's reader sends no `hiddenRowsLeftOut`, so every page lists only "List rows not read yet" and the
    FMS message call-out says nothing; the message lamps of Task 5 Step 2 say a message is waiting (the white ones do
    not light them). The plan says the window ships once M15 is solved or the owner rules otherwise.
+8. **A line key's read-back looks at the pressed line only**: a key whose effect lands on another row is said as "No
+   change" (pinned on purpose). Saying "No change on line N", or comparing every row, would mislead less.
+9. **A side switch** says "Left MCDU" or "Right MCDU" only; the Fenix then says the new side's title too.
+
+## Announcements against the A32NX and the Fenix
+
+- **An FMS message with the window closed:** the A32NX says the message alone (`FbwMcduReadBack`); the Fenix window
+  says the scratchpad line alone; the A330 says the message alone (it said "MCDU message: <message>" until the
+  whole-plan review; the plan's example).
+- **Backspace on a message:** the A32NX and the Fenix speak the line's next state; the A330 says "Message cleared:
+  <message>" (the plan's Review Focus) and then the line's next state: for the owner to rule.
+- **The lamps:** the Fenix's "MCDU FM Captain: On" / "MCDU FM FO: On".
