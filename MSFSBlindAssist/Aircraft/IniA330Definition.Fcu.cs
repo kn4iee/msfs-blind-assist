@@ -96,7 +96,7 @@ public partial class IniA330Definition
         yield return R("Altitude Pull", () => CurrentFma().Vertical, "A330_ALT_PULL");
         yield return R("V/S Push", () => "", "A330_VS_PUSH");
         yield return R("V/S Pull", () => "", "A330_VS_PULL");
-        yield return R("ALT", () => "", AltButtonKey);
+        yield return R("ALT (hold this altitude)", () => "", AltButtonKey);
         yield return new("Read flight modes", () => "", () => announcer.AnnounceImmediate(CurrentFma().Summary()));
     }
 
@@ -360,7 +360,7 @@ public partial class IniA330Definition
     {
         new("Altitude Push", () => "", () => PressAutopilot(sim, announcer, "A330_ALT_PUSH")) { SuppressStateAnnounce = () => true },
         new("Altitude Pull", () => "", () => PressAutopilot(sim, announcer, "A330_ALT_PULL")) { SuppressStateAnnounce = () => true },
-        new("ALT", () => CurrentFma().Vertical == "ALT" ? "Active" : "", () => PressAutopilot(sim, announcer, AltButtonKey)) { SuppressStateAnnounce = () => true },
+        new("ALT (hold the current altitude)", () => CurrentFma().Vertical == "ALT" ? "Active" : "", () => PressAutopilot(sim, announcer, AltButtonKey)) { SuppressStateAnnounce = () => true },
         new("Knob steps (100 or 1000 feet)", () => (sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5 ? "100 feet" : "1000 feet",
             () => SetInputEvent(sim, announcer, "Altitude knob steps", "AIRLINER_MCU_ALTSELECT", AltStepInput(!((sim.GetCachedVariableValue("A330_ALT_STEP") ?? 0) > 0.5)))),
         new("Metric altitude",() => On(sim, "A330_METRIC") ? "On" : "Off",

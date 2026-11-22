@@ -35,7 +35,7 @@ public class A330FcuTests
             def.HeadingToggles(sim, null!).Select(t => t.Label));
         Assert.Equal(new[] { "Speed Push", "Speed Pull", "SPD/MACH", "ATHR" },
             def.SpeedToggles(sim, null!).Select(t => t.Label));
-        Assert.Equal(new[] { "Altitude Push", "Altitude Pull", "ALT", "Knob steps (100 or 1000 feet)", "Metric altitude", "AP1", "AP2" },
+        Assert.Equal(new[] { "Altitude Push", "Altitude Pull", "ALT (hold the current altitude)", "Knob steps (100 or 1000 feet)", "Metric altitude", "AP1", "AP2" },
             def.AltitudeToggles(sim, null!).Select(t => t.Label));
         Assert.Equal(new[] { "V/S Push", "V/S Pull", "HDG/VS TRK/FPA", "APPR" },
             def.VsToggles(sim, null!).Select(t => t.Label));
@@ -50,7 +50,7 @@ public class A330FcuTests
         {
             "AP1", "AP2", "ATHR", "APPR", "LOC",
             "Speed Push", "Speed Pull", "Heading Push", "Heading Pull", "Altitude Push", "Altitude Pull",
-            "V/S Push", "V/S Pull", "ALT", "Read flight modes",
+            "V/S Push", "V/S Pull", "ALT (hold this altitude)", "Read flight modes",
         }, def.AutopilotRows(sim, null!).Select(r => r.Label));
     }
 
@@ -61,7 +61,7 @@ public class A330FcuTests
         var sim = new SimConnectManager(IntPtr.Zero);
         var all = def.HeadingToggles(sim, null!).Concat(def.SpeedToggles(sim, null!))
             .Concat(def.AltitudeToggles(sim, null!)).Concat(def.VsToggles(sim, null!)).ToList();
-        foreach (var name in new[] { "Heading Pull", "Altitude Push", "Altitude Pull", "ALT", "V/S Push", "V/S Pull" })
+        foreach (var name in new[] { "Heading Pull", "Altitude Push", "Altitude Pull", "ALT (hold the current altitude)", "V/S Push", "V/S Pull" })
             Assert.Equal("", all.Single(t => t.Label == name).GetCurrentState());
         // Heading Push has no state unless NAV is the lateral mode; with nothing read it has none
         Assert.Equal("", all.Single(t => t.Label == "Heading Push").GetCurrentState());
@@ -148,7 +148,7 @@ public class A330FcuTests
         var expectedSilent = new[]
         {
             "Heading Pull", "Heading Push",
-            "Altitude Pull", "Altitude Push", "ALT",
+            "Altitude Pull", "Altitude Push", "ALT (hold the current altitude)",
             "V/S Pull", "V/S Push",
         }.OrderBy(s => s).ToList();
         Assert.Equal(expectedSilent, silent);
