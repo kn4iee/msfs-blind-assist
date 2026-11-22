@@ -292,7 +292,7 @@ public partial class IniA330Definition
     {
         // as the Fenix's window: 0-360, a fraction rounds to the nearest degree
         if (!NumberParsing.TryParseTyped(input, out double typed) || typed < 0 || typed > 360) return null;
-        int h = (int)Math.Round(typed, MidpointRounding.AwayFromZero);
+        int h = (int)Math.Round(typed);   // plain Math.Round, as the Fenix's window (270.5 -> 270)
         bool trk = isTrk();
         return new(trk ? "INI_TRK_DIAL" : "INI_HEADING_DIAL", trk ? A330SharedKeys.FcuTrk : A330SharedKeys.FcuHdg, h % 360, 0.6, trk);
     }
@@ -325,6 +325,7 @@ public partial class IniA330Definition
         return new(
             "Set FCU heading",
             $"{word} (0-360):",
+            $"{word} Label",
             $"{word} value",
             $"Enter {word.ToLowerInvariant()} value between 0 and 360 degrees",
             new[]
@@ -355,6 +356,7 @@ public partial class IniA330Definition
         => new(
             "Set FCU Speed",
             "Speed (100-399 / 0.10-0.89):",
+            "Speed Label",
             "Speed value",
             "Enter speed value: 100-399 knots or 0.10-0.89 Mach",
             new[]
@@ -394,6 +396,7 @@ public partial class IniA330Definition
         => new(
             "Set FCU altitude",
             "Altitude (100-49000):",
+            "Altitude Label",
             "Altitude value",
             "Enter altitude value between 100 and 49000 feet",
             new[]
@@ -416,6 +419,7 @@ public partial class IniA330Definition
         return new(
             "Set FCU vertical speed",
             openedFpa ? "FPA (-9.9 to 9.9):" : "V/S (-6000 to 6000):",
+            openedFpa ? "FPA Label" : "Vertical Speed Label",
             openedFpa ? "FPA value" : "Vertical speed value",
             openedFpa ? "Enter flight path angle value between -9.9 and 9.9 degrees" : "Enter vertical speed value between -6000 and 6000 feet per minute",
             new[]

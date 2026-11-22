@@ -96,6 +96,22 @@ public class A330FcuWindowTests
     }
 
     [Fact]
+    public void Each_label_is_named_as_in_the_Fenix_windows()
+    {
+        Assert.Equal("Heading Label", Heading().LabelName);
+        Assert.Equal("Speed Label", Speed().LabelName);
+        Assert.Equal("Altitude Label", Altitude().LabelName);
+        Assert.Equal("Vertical Speed Label", Vs().LabelName);
+        Assert.Equal("Track Label", Heading(true).LabelName);
+        Assert.Equal("FPA Label", Vs(true).LabelName);
+        // and the names the Fenix source gives them
+        string dir = Path.Combine(ClaudeContextBudgetTests.RepoRoot(), "MSFSBlindAssist", "Forms", "FenixA320");
+        foreach (var (file, name) in new[] { ("FenixHeadingWindow.cs", "Heading Label"), ("FenixSpeedWindow.cs", "Speed Label"),
+                     ("FenixAltitudeWindow.cs", "Altitude Label"), ("FenixVSWindow.cs", "Vertical Speed Label") })
+            Assert.Contains($"AccessibleName = \"{name}\"", File.ReadAllText(Path.Combine(dir, file)));
+    }
+
+    [Fact]
     public void No_button_label_carries_an_access_key_or_a_state()
     {
         foreach (var s in new[] { Heading(), Heading(true), Speed(), Altitude(), Vs(), Vs(true) })
@@ -181,6 +197,9 @@ public class A330FcuWindowTests
     {
         Assert.Equal(270, IniA330Definition.HeadingSet("270.4", () => false)!.Target);
         Assert.Equal(271, IniA330Definition.HeadingSet("270.6", () => false)!.Target);
+        // half to even, as the Fenix's Math.Round
+        Assert.Equal(270, IniA330Definition.HeadingSet("270.5", () => false)!.Target);
+        Assert.Equal(272, IniA330Definition.HeadingSet("271.5", () => false)!.Target);
         Assert.Equal(0, IniA330Definition.HeadingSet("359.6", () => false)!.Target);
     }
 

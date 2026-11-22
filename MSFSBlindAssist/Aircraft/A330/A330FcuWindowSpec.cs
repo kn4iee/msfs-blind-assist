@@ -15,6 +15,7 @@ public sealed record A330FcuCommit(string? Error, Action? Set);
 public sealed record A330FcuWindowSpec(
     string Title,
     string FieldLabel,
+    string LabelName,
     string ValueName,
     string ValueDescription,
     IReadOnlyList<A330FcuButton> Buttons,

@@ -35,7 +35,7 @@ public class IniA330FcuValueWindow : Form
         var label = new Label
         {
             Text = spec.FieldLabel, Location = new Point(20, 25), Size = new Size(190, 20),
-            AccessibleName = spec.ValueName.Replace(" value", " Label"),
+            AccessibleName = spec.LabelName,
         };
         _valueBox = new TextBox
         {
