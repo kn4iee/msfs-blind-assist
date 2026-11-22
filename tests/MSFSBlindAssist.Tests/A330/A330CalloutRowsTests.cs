@@ -40,8 +40,16 @@ public class A330CalloutRowsTests : IDisposable
     {
         var all = A330CalloutRows.Combine(One("mcdu"), One("ecam"), One("pfd"), One("nd"), One("datalink")).Select(r => r.Key);
         Assert.Equal(new[] { "mcdu", "ecam", "pfd", "nd", "datalink" }, all);
-        // the real lists start empty: nothing is added to Ctrl+M until a plan fills its area
-        Assert.Empty(A330CalloutRows.All);
+    }
+
+    [Fact]
+    public void The_real_lists_build_into_the_monitor_manager_without_a_duplicate_or_a_clash()
+    {
+        // Covers every later plan's list: a key added twice, or one a variable already has, throws here
+        // and not from the Ctrl+M dialog's constructor when the pilot opens it.
+        var vars = new IniA330Definition().GetVariables();
+        var rows = A330CalloutRows.Build(MonitorRowBuilder.Build(vars), A330CalloutRows.All, vars.Keys);
+        Assert.Equal(rows.Count, rows.Select(r => r.Key).Distinct().Count());
     }
 
     [Fact]
