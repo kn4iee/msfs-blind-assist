@@ -7,6 +7,7 @@ using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils;
 using MSFSBlindAssist.Utils.Logging;
+using MSFSBlindAssist.Aircraft.A330;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -37,7 +38,7 @@ public partial class IniA330Definition
         AutopilotButtons.Select(b => b.key).Concat(AutopilotSelectKeys);
 
     internal static readonly string[] AutopilotDisplayKeys =
-        { "A330_AP1_ON", "A330_AP2_ON", "A330_ATHR_ON", "A330_FCU_SPD", "A330_FCU_HDG", "A330_FCU_ALT", "A330_FCU_VS" };
+        { "A330_AP1_ON", "A330_AP2_ON", "A330_ATHR_ON", A330SharedKeys.FcuSpd, A330SharedKeys.FcuHdg, A330SharedKeys.FcuAlt, A330SharedKeys.FcuVs };
 
     /// <summary>The ALT knob step selector's input for 100-foot / 1000-foot steps: input 0 = 100 ft
     /// (measured: input 0 reads 1 and the knob steps 100 feet).</summary>
@@ -62,7 +63,7 @@ public partial class IniA330Definition
         }
     }
 
-    private bool SpeedManaged() => (_sim?.GetCachedVariableValue("A330_M_SPD_MANAGED") ?? 0) > 0.5;
+    private bool SpeedManaged() => (_sim?.GetCachedVariableValue(A330SharedKeys.MSpdManaged) ?? 0) > 0.5;
 
     private string ApStatus()
     {
@@ -288,7 +289,7 @@ public partial class IniA330Definition
     {
         if (!TryParseHeading(input, out int h)) return null;
         bool trk = isTrk();
-        return new(trk ? "INI_TRK_DIAL" : "INI_HEADING_DIAL", trk ? "A330_FCU_TRK" : "A330_FCU_HDG", h % 360, 0.6, trk);
+        return new(trk ? "INI_TRK_DIAL" : "INI_HEADING_DIAL", trk ? A330SharedKeys.FcuTrk : A330SharedKeys.FcuHdg, h % 360, 0.6, trk);
     }
 
     /// <summary>The V/S dialog's check, in whichever of V/S and FPA isFpa() says the aircraft is in, read now.</summary>
@@ -303,8 +304,8 @@ public partial class IniA330Definition
     {
         bool fpa = isFpa();
         if (!TryParseVs(input, fpa, out double v)) return null;
-        return fpa ? new("INI_FPA_DIAL", "A330_FCU_FPA", Math.Round(v, 1), 0.06, true)
-                   : new("INI_VVI_DIAL", "A330_FCU_VS", Math.Round(v / 100.0) * 100, 60, false);
+        return fpa ? new("INI_FPA_DIAL", A330SharedKeys.FcuFpa, Math.Round(v, 1), 0.06, true)
+                   : new("INI_VVI_DIAL", A330SharedKeys.FcuVs, Math.Round(v / 100.0) * 100, 60, false);
     }
 
     internal const string AltButtonKey = "A330_ALT_BTN";
@@ -326,7 +327,7 @@ public partial class IniA330Definition
     /// <summary>The HDG-V/S / TRK-FPA key: a toggle on the aircraft, so one press flips it. The dialog
     /// it sits in was opened in one mode; the button shows the live one.</summary>
     private ToggleButtonDef TrkFpaToggle(SimConnectManager sim, ScreenReaderAnnouncer announcer) =>
-        new("&TRK/FPA", () => Fv("A330_M_TRKFPA") == 1 ? "TRK FPA" : "HDG V/S", () =>
+        new("&TRK/FPA", () => Fv(A330SharedKeys.MTrkfpa) == 1 ? "TRK FPA" : "HDG V/S", () =>
         {
             if (CanCalc(sim, announcer, "TRK-FPA")) Pulse(sim, "INI_FCU_HDG_VS_COMMAND");
         });
@@ -347,8 +348,8 @@ public partial class IniA330Definition
     {
         new("&Selected (pull)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PULL")),
         new("&Managed (push)", () => SpeedManaged() ? "Managed" : "Selected", () => PressAutopilot(sim, announcer, "A330_SPD_PUSH")),
-        new("SPD/MA&CH", () => Fv("A330_M_MACH") == 1 ? "Mach" : "Knots",
-            () => SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", Fv("A330_M_MACH") == 1 ? 0 : 1)),
+        new("SPD/MA&CH", () => Fv(A330SharedKeys.MMach) == 1 ? "Mach" : "Knots",
+            () => SetInputEvent(sim, announcer, "Speed/Mach", "AIRLINER_SPDMACH", Fv(A330SharedKeys.MMach) == 1 ? 0 : 1)),
         new("A/&THR", () => On(sim, "A330_ATHR_ON") ? "On" : "Off", () => PressAutopilot(sim, announcer, "A330_ATHR")),
     };
 
@@ -375,7 +376,7 @@ public partial class IniA330Definition
 
     private void ShowHeadingDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
     {
-        bool trk = Fv("A330_M_TRKFPA") == 1;
+        bool trk = Fv(A330SharedKeys.MTrkfpa) == 1;
         var toggles = HeadingToggles(sim, announcer);
         var dlg = new ValueInputForm(trk ? "FCU Track" : "FCU Heading", trk ? "track" : "heading", "0-359", announcer,
             input => TryParseHeading(input, out _) ? (true, "") : (false, "Enter a heading between 0 and 359"),
@@ -383,7 +384,7 @@ public partial class IniA330Definition
             input =>
             {
                 // HDG or TRK as the aircraft is NOW (the TRK/FPA button in this dialog changes it)
-                if (HeadingSet(input, () => Fv("A330_M_TRKFPA") == 1) is not { } set) return;
+                if (HeadingSet(input, () => Fv(A330SharedKeys.MTrkfpa) == 1) is not { } set) return;
                 string word = set.Alt ? "track" : "heading";
                 SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, v => $"{word} {((int)Math.Round(v) % 360 + 360) % 360:000}", set.Tolerance);
             });
@@ -402,7 +403,7 @@ public partial class IniA330Definition
             {
                 if (!TryParseSpeed(input, out double v)) return;
                 if (SpeedManaged()) announcer.AnnounceImmediate("Speed is managed; pull the speed knob to fly this speed.");
-                bool wantMach = v < 1, isMach = Fv("A330_M_MACH") == 1;
+                bool wantMach = v < 1, isMach = Fv(A330SharedKeys.MMach) == 1;
                 if (wantMach != isMach)
                 {
                     // one window holds both (measured: SPD/MACH turned 100 into 0.151) — swap units first
@@ -413,12 +414,12 @@ public partial class IniA330Definition
                     async Task SetAfterSwap()
                     {
                         await Task.Delay(600);
-                        SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", "A330_FCU_SPD", wantMach ? Math.Round(v, 2) : Math.Round(v),
+                        SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", A330SharedKeys.FcuSpd, wantMach ? Math.Round(v, 2) : Math.Round(v),
                             s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
                     }
                 }
                 else
-                    SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", "A330_FCU_SPD", wantMach ? Math.Round(v, 2) : Math.Round(v),
+                    SetAndConfirm(sim, announcer, "INI_AIRSPEED_DIAL", A330SharedKeys.FcuSpd, wantMach ? Math.Round(v, 2) : Math.Round(v),
                         s => wantMach ? FormattableString.Invariant($"Mach {s:0.00}") : $"speed {s:0} knots", wantMach ? 0.006 : 0.6);
             });
         dlg.ShowCancelButton = false;
@@ -434,7 +435,7 @@ public partial class IniA330Definition
             input =>
             {
                 if (TryParseAltitude(input, out int a))
-                    SetAndConfirm(sim, announcer, "INI_ALTITUDE_DIAL", "A330_FCU_ALT", Math.Round(a / 100.0) * 100, v => $"altitude {v:0} feet");
+                    SetAndConfirm(sim, announcer, "INI_ALTITUDE_DIAL", A330SharedKeys.FcuAlt, Math.Round(a / 100.0) * 100, v => $"altitude {v:0} feet");
             });
         dlg.ShowCancelButton = false;
         dlg.Show(parent);
@@ -442,17 +443,17 @@ public partial class IniA330Definition
 
     private void ShowVsDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parent)
     {
-        bool fpa = Fv("A330_M_TRKFPA") == 1;
+        bool fpa = Fv(A330SharedKeys.MTrkfpa) == 1;
         var toggles = VsToggles(sim, announcer);
         var dlg = new ValueInputForm(fpa ? "FCU Flight Path Angle" : "FCU Vertical Speed", fpa ? "flight path angle" : "vertical speed",
             fpa ? "-9.9 to 9.9 degrees" : "-6000 to 6000 feet per minute", announcer,
             // the title and range are as the dialog opened; the mode the value is checked and written for
             // is the aircraft's own at that moment, since the TRK/FPA button in this dialog changes it
-            input => VsValidator(input, () => Fv("A330_M_TRKFPA") == 1),
+            input => VsValidator(input, () => Fv(A330SharedKeys.MTrkfpa) == 1),
             toggles,
             input =>
             {
-                if (VsSet(input, () => Fv("A330_M_TRKFPA") == 1) is not { } set) return;
+                if (VsSet(input, () => Fv(A330SharedKeys.MTrkfpa) == 1) is not { } set) return;
                 if (set.Alt) SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => FormattableString.Invariant($"flight path angle {x:0.0} degrees"), set.Tolerance);
                 else SetAndConfirm(sim, announcer, set.Lvar, set.CacheKey, set.Target, x => $"vertical speed {x:0} feet per minute", set.Tolerance);
             });
@@ -486,13 +487,13 @@ public partial class IniA330Definition
         Watched(vars, "A330_AP1_ON", "INI_AP1_ON", "Autopilot 1", engaged);
         Watched(vars, "A330_AP2_ON", "INI_AP2_ON", "Autopilot 2", engaged);
         Watched(vars, "A330_ATHR_ON", "INI_AT_ON", "Autothrust", engaged);
-        Silent(vars, "A330_FCU_SPD", "INI_AIRSPEED_DIAL", "FCU speed");
-        Silent(vars, "A330_FCU_HDG", "INI_HEADING_DIAL", "FCU heading");
-        Silent(vars, "A330_FCU_TRK", "INI_TRK_DIAL", "FCU track");
-        Silent(vars, "A330_FCU_ALT", "INI_ALTITUDE_DIAL", "FCU altitude");
-        Silent(vars, "A330_FCU_VS", "INI_VVI_DIAL", "FCU vertical speed");
-        Silent(vars, "A330_FCU_FPA", "INI_FPA_DIAL", "FCU flight path angle");
-        Silent(vars, "A330_ALTITUDE", "INDICATED ALTITUDE", "Altitude", "feet", SimVarType.SimVar);
+        Silent(vars, A330SharedKeys.FcuSpd, "INI_AIRSPEED_DIAL", "FCU speed");
+        Silent(vars, A330SharedKeys.FcuHdg, "INI_HEADING_DIAL", "FCU heading");
+        Silent(vars, A330SharedKeys.FcuTrk, "INI_TRK_DIAL", "FCU track");
+        Silent(vars, A330SharedKeys.FcuAlt, "INI_ALTITUDE_DIAL", "FCU altitude");
+        Silent(vars, A330SharedKeys.FcuVs, "INI_VVI_DIAL", "FCU vertical speed");
+        Silent(vars, A330SharedKeys.FcuFpa, "INI_FPA_DIAL", "FCU flight path angle");
+        Silent(vars, A330SharedKeys.Altitude, "INDICATED ALTITUDE", "Altitude", "feet", SimVarType.SimVar);
 
         OnRequestVar(vars, "A330_BARO_FRESH", "KOHLSMAN SETTING MB:1", "Captain altimeter setting", "millibars", SimVarType.SimVar);
         OnRequestVar(vars, "A330_BARO_STD_FRESH", "KOHLSMAN SETTING STD:1", "Captain altimeter standard", "Bool", SimVarType.SimVar);
@@ -533,22 +534,22 @@ public partial class IniA330Definition
 
     partial void FormatFcuDisplay(string varKey, double value, ref string? text)
     {
-        bool fpa = Fv("A330_M_TRKFPA") == 1;
+        bool fpa = Fv(A330SharedKeys.MTrkfpa) == 1;
         switch (varKey)
         {
-            case "A330_FMA_AP": text = ApStatus(); return;
-            case "A330_FCU_SPD":
-                text = SpeedManaged() ? "Managed" : Fv("A330_M_MACH") == 1 ? FormattableString.Invariant($"Mach {value:0.00}") : $"{value:0} knots";
+            case A330SharedKeys.FmaAp: text = ApStatus(); return;
+            case A330SharedKeys.FcuSpd:
+                text = SpeedManaged() ? "Managed" : Fv(A330SharedKeys.MMach) == 1 ? FormattableString.Invariant($"Mach {value:0.00}") : $"{value:0} knots";
                 return;
-            case "A330_FCU_HDG":
+            case A330SharedKeys.FcuHdg:
             {
-                double v = fpa ? _sim?.GetCachedVariableValue("A330_FCU_TRK") ?? value : value;
+                double v = fpa ? _sim?.GetCachedVariableValue(A330SharedKeys.FcuTrk) ?? value : value;
                 text = $"{(fpa ? "track" : "heading")} {((int)Math.Round(v) % 360 + 360) % 360:000}";
                 return;
             }
-            case "A330_FCU_ALT": text = $"{value:0} feet"; return;
-            case "A330_FCU_VS":
-                text = fpa ? FormattableString.Invariant($"flight path angle {(_sim?.GetCachedVariableValue("A330_FCU_FPA") ?? 0):0.0} degrees") : $"{value:0} feet per minute";
+            case A330SharedKeys.FcuAlt: text = $"{value:0} feet"; return;
+            case A330SharedKeys.FcuVs:
+                text = fpa ? FormattableString.Invariant($"flight path angle {(_sim?.GetCachedVariableValue(A330SharedKeys.FcuFpa) ?? 0):0.0} degrees") : $"{value:0} feet per minute";
                 return;
         }
     }

@@ -14,15 +14,15 @@ public partial class IniA330Definition
 
     internal static readonly (string section, string panel, string key)[] OwnPlacedControls =
     {
-        ("Pedestal", "Flaps and Speedbrake", "A330_FLAPS"), ("Pedestal", "Flaps and Speedbrake", "A330_SPDBRK"),
+        ("Pedestal", "Flaps and Speedbrake", A330SharedKeys.Flaps), ("Pedestal", "Flaps and Speedbrake", "A330_SPDBRK"),
         ("Pedestal", "Flaps and Speedbrake", "A330_SPLR_ARM"), ("Pedestal", "Parking Brake", "A330_PARKBRK"),
-        ("Main Instrument Panel", "Landing Gear", "A330_GEAR"), ("Main Instrument Panel", "Brakes", "A330_AUTOBRAKE"),
+        ("Main Instrument Panel", "Landing Gear", A330SharedKeys.Gear), ("Main Instrument Panel", "Brakes", A330SharedKeys.Autobrake),
     };
 
     internal static readonly (string panel, string key)[] OwnPlacedDisplays =
     {
-        ("Flaps and Speedbrake", "A330_SLAT_ANGLE"), ("Flaps and Speedbrake", "A330_FLAP_ANGLE"),
-        ("Flaps and Speedbrake", "A330_TRIM"), ("Landing Gear", "A330_GEAR_POS"),
+        ("Flaps and Speedbrake", A330SharedKeys.SlatAngle), ("Flaps and Speedbrake", A330SharedKeys.FlapAngle),
+        ("Flaps and Speedbrake", A330SharedKeys.Trim), ("Landing Gear", "A330_GEAR_POS"),
     };
 
     /// <summary>The A330's flap lever (FS flight model: 4 handle positions after UP; 1+F is automatic).</summary>
@@ -71,13 +71,13 @@ public partial class IniA330Definition
     partial void AddPanelVariables(Dictionary<string, SimVarDefinition> vars)
     {
         // ---------------- Flight controls (the definition's own) ----------------
-        Add(vars, "A330_FLAPS", new SimVarDefinition
+        Add(vars, A330SharedKeys.Flaps, new SimVarDefinition
         {
             Name = "FLAPS HANDLE INDEX", DisplayName = "Flaps", Type = SimVarType.SimVar, Units = "number",
             UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
             ValueDescriptions = Enumerable.Range(0, FlapDetents.Length).ToDictionary(i => (double)i, i => FlapDetents[i]),
         });
-        _silentKeys.Add("A330_FLAPS");   // detent call-outs come from ProcessSimVarUpdate
+        _silentKeys.Add(A330SharedKeys.Flaps);   // detent call-outs come from ProcessSimVarUpdate
         Add(vars, "A330_SPDBRK", new SimVarDefinition
         {
             Name = "SPOILERS HANDLE POSITION", DisplayName = "Speedbrake lever", Type = SimVarType.SimVar, Units = "percent over 100",
@@ -88,14 +88,14 @@ public partial class IniA330Definition
         });
         _silentKeys.Add("A330_SPDBRK");
         Watched(vars, "A330_SPLR_ARM", "SPOILERS ARMED", "Ground spoilers", new() { [0] = "Disarmed", [1] = "Armed" }, units: "Bool", type: SimVarType.SimVar);
-        Watched(vars, "A330_GEAR", "INI_GEAR_HANDLE_STATUS", "Landing gear lever", new() { [0] = "Up", [1] = "Down" });
+        Watched(vars, A330SharedKeys.Gear, "INI_GEAR_HANDLE_STATUS", "Landing gear lever", new() { [0] = "Up", [1] = "Down" });
         Watched(vars, "A330_PARKBRK", ParkingBrakeRead.name, "Parking brake", new() { [0] = "Off", [1] = "Set" },
             units: ParkingBrakeRead.units, type: ParkingBrakeRead.type);
-        Watched(vars, "A330_AUTOBRAKE", "INI_AUTOBRAKE_LEVEL", "Autobrake", new(AutobrakeLevels));
-        Silent(vars, "A330_FLAP_ANGLE", "TRAILING EDGE FLAPS LEFT ANGLE", "Flap angle", "degrees", SimVarType.SimVar);
-        Silent(vars, "A330_SLAT_ANGLE", "LEADING EDGE FLAPS LEFT ANGLE", "Slat angle", "degrees", SimVarType.SimVar);
+        Watched(vars, A330SharedKeys.Autobrake, "INI_AUTOBRAKE_LEVEL", "Autobrake", new(AutobrakeLevels));
+        Silent(vars, A330SharedKeys.FlapAngle, "TRAILING EDGE FLAPS LEFT ANGLE", "Flap angle", "degrees", SimVarType.SimVar);
+        Silent(vars, A330SharedKeys.SlatAngle, "LEADING EDGE FLAPS LEFT ANGLE", "Slat angle", "degrees", SimVarType.SimVar);
         Silent(vars, "A330_GEAR_POS", "GEAR CENTER POSITION", "Nose gear", "percent", SimVarType.SimVar);
-        Silent(vars, "A330_TRIM", "ELEVATOR TRIM POSITION", "Stabilizer trim", "degrees", SimVarType.SimVar);
+        Silent(vars, A330SharedKeys.Trim, "ELEVATOR TRIM POSITION", "Stabilizer trim", "degrees", SimVarType.SimVar);
 
         // ---------------- Generated cockpit controls ----------------
         foreach (var c in _map.Controls)
@@ -170,7 +170,7 @@ public partial class IniA330Definition
         // ProcessSimVarUpdate consumes these (it returns true), which skips MainForm's control refresh, so an
         // open panel kept the position it was built with. Each control below follows a change made elsewhere
         // through RefreshControlWhenDefHandled: its write fires on a user commit alone, so a refresh sends nothing.
-        vars["A330_FLAPS"].RefreshControlWhenDefHandled = IsFlapDetent;
+        vars[A330SharedKeys.Flaps].RefreshControlWhenDefHandled = IsFlapDetent;
         vars["A330_SPDBRK"].RefreshControlWhenDefHandled = IsSpeedbrakeAtRest;
         foreach (var def in vars.Values)
         {
@@ -189,7 +189,7 @@ public partial class IniA330Definition
         double? cur = sim.GetCachedVariableValue(varKey);
         switch (varKey)
         {
-            case "A330_FLAPS":
+            case A330SharedKeys.Flaps:
                 if (CanCalc(sim, announcer, "Flaps"))
                     Write(sim, $"{Num(Math.Round(Math.Clamp(Math.Round(value), 0, FlapDetents.Length - 1) * 16383.0 / (FlapDetents.Length - 1)))} (>K:FLAPS_SET)");
                 handled = true; return;
@@ -201,14 +201,14 @@ public partial class IniA330Definition
                 if (CanCalc(sim, announcer, "Ground spoilers"))
                     Write(sim, value > 0.5 ? "(>K:SPOILERS_ARM_ON)" : "(>K:SPOILERS_ARM_OFF)");
                 handled = true; return;
-            case "A330_GEAR":
+            case A330SharedKeys.Gear:
                 if (CanCalc(sim, announcer, "Gear"))
                     Write(sim, value > 0.5 ? "(>K:GEAR_DOWN)" : "(>K:GEAR_UP)");
                 handled = true; return;
             case "A330_PARKBRK":
                 SetInputEvent(sim, announcer, "Parking brake", "AIRLINER_PARKINGBRAKE", ParkingBrakeInput(value > 0.5));
                 handled = true; return;
-            case "A330_AUTOBRAKE":
+            case A330SharedKeys.Autobrake:
                 SetAutobrake(sim, (int)Math.Round(value), cur);
                 handled = true; return;
         }
@@ -251,7 +251,7 @@ public partial class IniA330Definition
     {
         switch (varName)
         {
-            case "A330_FLAPS":
+            case A330SharedKeys.Flaps:
             {
                 int idx = (int)Math.Round(value);
                 if (_lastFlapIndex < 0 || idx == _lastFlapIndex) { _lastFlapIndex = idx; handled = true; return; }
@@ -266,9 +266,9 @@ public partial class IniA330Definition
     {
         switch (varKey)
         {
-            case "A330_FLAP_ANGLE": case "A330_SLAT_ANGLE": text = $"{value:0} degrees"; return;
+            case A330SharedKeys.FlapAngle: case A330SharedKeys.SlatAngle: text = $"{value:0} degrees"; return;
             case "A330_GEAR_POS": text = $"{value:0} percent down"; return;
-            case "A330_TRIM": text = FormatTrim(value); return;
+            case A330SharedKeys.Trim: text = FormatTrim(value); return;
             case "A330_LDG_ELEV_FT": text = $"{value:0} feet"; return;
         }
     }

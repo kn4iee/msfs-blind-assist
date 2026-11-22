@@ -1222,6 +1222,7 @@ public partial class MainForm
         // Likewise the PMDG 737 display readers unless it is the PMDG 737 (a reader already running restarts).
         StartPmdg737Displays();
         StartBbs757Displays();   // and the BlueBird 757's (with its CDU message watch) unless it is the 757
+        StartIniA330Displays();   // and the iniBuilds A330's unless it is the A330
 
         // Rebuild sections from new aircraft structure
         foreach (var section in currentAircraft.GetPanelStructure().Keys)

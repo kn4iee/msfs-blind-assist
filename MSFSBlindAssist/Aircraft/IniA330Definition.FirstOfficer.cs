@@ -1,6 +1,7 @@
 // Plan 06 owns this file: the First Officer.
 
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Aircraft.A330;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -32,7 +33,7 @@ public partial class IniA330Definition
     internal (bool Calc, string? InputEvent, bool Toggle, int HoldMs)? FoWriteRoute(string key)
     {
         GetVariables();
-        if (key == "A330_AUTOBRAKE")
+        if (key == A330SharedKeys.Autobrake)
             return (false, AutobrakeEvent(3), false, 0);
         if (!_controlsByKey.TryGetValue(key, out var c) || c.Kind == "status") return null;
         return c.Mode switch

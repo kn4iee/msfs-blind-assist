@@ -5,6 +5,7 @@ using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
+using MSFSBlindAssist.Aircraft.A330;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -179,8 +180,8 @@ public partial class IniA330Definition
         {
             case HotkeyAction.ReadHeading:
             {
-                bool trk = Fv("A330_M_TRKFPA") == 1;
-                int v = ((int)Math.Round(Cur(trk ? "A330_FCU_TRK" : "A330_FCU_HDG")) % 360 + 360) % 360;
+                bool trk = Fv(A330SharedKeys.MTrkfpa) == 1;
+                int v = ((int)Math.Round(Cur(trk ? A330SharedKeys.FcuTrk : A330SharedKeys.FcuHdg)) % 360 + 360) % 360;
                 announcer.AnnounceImmediate($"FCU {(trk ? "track" : "heading")} {v:000}{Suffix(fma.Lateral)}");
                 handled = true; return;
             }
@@ -190,30 +191,30 @@ public partial class IniA330Definition
                     double m = Cur("A330_MANAGED_SPEED");
                     announcer.AnnounceImmediate($"Speed managed{(m > 0 ? $", target {m:0} knots" : "")}{Suffix(fma.Thrust)}");
                 }
-                else if (Fv("A330_M_MACH") == 1)
-                    announcer.AnnounceImmediate(FormattableString.Invariant($"FCU Mach {Cur("A330_FCU_SPD"):0.00}{Suffix(fma.Thrust)}"));
+                else if (Fv(A330SharedKeys.MMach) == 1)
+                    announcer.AnnounceImmediate(FormattableString.Invariant($"FCU Mach {Cur(A330SharedKeys.FcuSpd):0.00}{Suffix(fma.Thrust)}"));
                 else
-                    announcer.AnnounceImmediate($"FCU speed {Cur("A330_FCU_SPD"):0} knots{Suffix(fma.Thrust)}");
+                    announcer.AnnounceImmediate($"FCU speed {Cur(A330SharedKeys.FcuSpd):0} knots{Suffix(fma.Thrust)}");
                 handled = true; return;
             case HotkeyAction.ReadAltitude:
-                announcer.AnnounceImmediate($"FCU altitude {Cur("A330_FCU_ALT"):0} feet{Suffix(fma.Vertical)}");
+                announcer.AnnounceImmediate($"FCU altitude {Cur(A330SharedKeys.FcuAlt):0} feet{Suffix(fma.Vertical)}");
                 handled = true; return;
             case HotkeyAction.ReadFCUVerticalSpeedFPA:
             {
-                bool fpa = Fv("A330_M_TRKFPA") == 1;
-                string window = fpa ? FormattableString.Invariant($"flight path angle {Cur("A330_FCU_FPA"):0.0} degrees") : $"vertical speed {Cur("A330_FCU_VS"):0} feet per minute";
+                bool fpa = Fv(A330SharedKeys.MTrkfpa) == 1;
+                string window = fpa ? FormattableString.Invariant($"flight path angle {Cur(A330SharedKeys.FcuFpa):0.0} degrees") : $"vertical speed {Cur(A330SharedKeys.FcuVs):0} feet per minute";
                 announcer.AnnounceImmediate($"FCU {window}{Suffix(fma.Vertical)}");
                 handled = true; return;
             }
             case HotkeyAction.ReadFlaps:
             {
-                int idx = (int)Math.Round(Cur("A330_FLAPS"));
+                int idx = (int)Math.Round(Cur(A330SharedKeys.Flaps));
                 string lever = idx >= 0 && idx < FlapDetents.Length ? FlapDetents[idx] : $"Flap lever {idx}";
-                announcer.AnnounceImmediate($"{lever}. Slats {Cur("A330_SLAT_ANGLE"):0}, flaps {Cur("A330_FLAP_ANGLE"):0} degrees");
+                announcer.AnnounceImmediate($"{lever}. Slats {Cur(A330SharedKeys.SlatAngle):0}, flaps {Cur(A330SharedKeys.FlapAngle):0} degrees");
                 handled = true; return;
             }
             case HotkeyAction.ReadGear:
-                announcer.AnnounceImmediate(Cur("A330_GEAR") > 0.5 ? "Gear lever down" : "Gear lever up");
+                announcer.AnnounceImmediate(Cur(A330SharedKeys.Gear) > 0.5 ? "Gear lever down" : "Gear lever up");
                 handled = true; return;
             case HotkeyAction.ReadFuelQuantity:
                 announcer.AnnounceImmediate(FuelSummary(sim));

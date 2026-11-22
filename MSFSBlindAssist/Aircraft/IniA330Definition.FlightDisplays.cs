@@ -11,7 +11,7 @@ namespace MSFSBlindAssist.Aircraft;
 public partial class IniA330Definition
 {
     internal static readonly string[] FmaDisplayKeys =
-        { "A330_FMA_THRUST", "A330_FMA_VERT", "A330_FMA_LAT", "A330_FMA_ARMED", "A330_FMA_CAP", "A330_FMA_AP" };
+        { "A330_FMA_THRUST", "A330_FMA_VERT", "A330_FMA_LAT", "A330_FMA_ARMED", "A330_FMA_CAP", A330SharedKeys.FmaAp };
 
     internal const string FmaMonitorKey = "A330_M_PITCH";
 
@@ -20,9 +20,9 @@ public partial class IniA330Definition
     {
         ("A330_M_AT", "INI_AT_MODE"), ("A330_M_PITCH", "INI_PITCH_MODE"), ("A330_M_PITCH_ARM", "INI_PITCH_MODE_ARM"),
         ("A330_M_PITCH_ARM2", "INI_PITCH_MODE_ARM2"), ("A330_M_ROLL", "INI_ROLL_MODE"), ("A330_M_ROLL_ARM", "INI_ROLL_MODE_ARM"),
-        ("A330_M_APPR", "INI_PITCH_ROLL_MODE"), ("A330_M_MACH", "INI_AIRSPEED_IS_MACH"), ("A330_M_TRKFPA", "INI_TRACK_FPA_STATE"),
+        ("A330_M_APPR", "INI_PITCH_ROLL_MODE"), (A330SharedKeys.MMach, "INI_AIRSPEED_IS_MACH"), (A330SharedKeys.MTrkfpa, "INI_TRACK_FPA_STATE"),
         ("A330_M_TOGA_LOCK", "INI_TOGA_LOCK_ACTIVE"), ("A330_M_THR_LATCH", "INI_FORCE_THRUST_LATCH"),
-        ("A330_M_CAP", "INI_AUTOPILOT_CAPABILITY"), ("A330_M_SPD_MANAGED", "INI_SPEED_MANAGED"),
+        ("A330_M_CAP", "INI_AUTOPILOT_CAPABILITY"), (A330SharedKeys.MSpdManaged, "INI_SPEED_MANAGED"),
     };
 
     private A330FmaText? _fmaAnnounced;
@@ -37,12 +37,12 @@ public partial class IniA330Definition
 
     internal A330FmaText CurrentFma()
     {
-        double fcuAlt = _sim?.GetCachedVariableValue("A330_FCU_ALT") ?? 0;
-        double alt = _sim?.GetCachedVariableValue("A330_ALTITUDE") ?? 0;
+        double fcuAlt = _sim?.GetCachedVariableValue(A330SharedKeys.FcuAlt) ?? 0;
+        double alt = _sim?.GetCachedVariableValue(A330SharedKeys.Altitude) ?? 0;
         return A330Fma.Compose(new A330FmaInputs(
             Fv("A330_M_AT"), Fv("A330_M_PITCH"), Fv("A330_M_PITCH_ARM"), Fv("A330_M_PITCH_ARM2"),
             Fv("A330_M_ROLL"), Fv("A330_M_ROLL_ARM"), Fv("A330_M_APPR"),
-            Fv("A330_M_MACH") != 0, Fv("A330_M_TRKFPA") != 0, Fv("A330_M_TOGA_LOCK") != 0 || Fv("A330_M_THR_LATCH") != 0,
+            Fv(A330SharedKeys.MMach) != 0, Fv(A330SharedKeys.MTrkfpa) != 0, Fv("A330_M_TOGA_LOCK") != 0 || Fv("A330_M_THR_LATCH") != 0,
             Fv("A330_M_CAP"), fcuAlt > alt));
     }
 
@@ -90,13 +90,13 @@ public partial class IniA330Definition
         Synthetic(vars, "A330_FMA_LAT", "Lateral mode");
         Synthetic(vars, "A330_FMA_ARMED", "Armed modes");
         Synthetic(vars, "A330_FMA_CAP", "Landing capability");
-        Synthetic(vars, "A330_FMA_AP", "Autopilot and autothrust");
+        Synthetic(vars, A330SharedKeys.FmaAp, "Autopilot and autothrust");
 
         // Four names are read by a second key (the Speed window units and HDG-V/S or TRK-FPA controls, the
         // base class's altitude and trim). Two Continuous batched keys with one Name shift every later
         // struct slot in the batch ([VAR-7]), so each silent cache copy takes its own once-a-second
         // subscription instead: the same sample rate, so nothing a pilot hears or sees changes.
-        foreach (var key in new[] { "A330_M_MACH", "A330_M_TRKFPA", "A330_ALTITUDE", "A330_TRIM" })
+        foreach (var key in new[] { A330SharedKeys.MMach, A330SharedKeys.MTrkfpa, A330SharedKeys.Altitude, A330SharedKeys.Trim })
             vars[key].ExcludeFromBatch = true;
     }
 

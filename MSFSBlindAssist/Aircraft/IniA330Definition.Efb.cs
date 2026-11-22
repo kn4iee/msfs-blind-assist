@@ -25,6 +25,14 @@ public partial class IniA330Definition
         }, f => { _efbClient?.SetActive(true); f.ShowForm(); });
     }
 
+    /// <summary>The aircraft was switched away from: the EFB connection is closed (its window closes with
+    /// the tracked windows).</summary>
+    partial void CloseEfb()
+    {
+        _efbClient?.Dispose();
+        _efbClient = null;
+    }
+
     partial void HandleEfbHotkey(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeys, ref bool handled)
     {
         switch (action)

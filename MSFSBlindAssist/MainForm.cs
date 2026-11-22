@@ -560,6 +560,7 @@ public partial class MainForm : Form
         // PMDG 737: the display readers wait for the PMDG SDK themselves, so they start with the aircraft.
         StartPmdg737Displays();
         StartBbs757Displays();   // likewise the BlueBird 757's, which wait for the simulator themselves
+        StartIniA330Displays();   // and the iniBuilds A330's (plan 02 implements it; a no-op until then)
 
         // Don't set focus - let default tab order handle it for proper menu accessibility
     }

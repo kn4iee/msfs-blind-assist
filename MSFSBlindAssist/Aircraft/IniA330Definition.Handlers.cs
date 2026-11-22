@@ -64,6 +64,30 @@ public partial class IniA330Definition
         return handled;
     }
 
+    /// <summary>A display window's press of a panel control: the panel's own write and nothing else. False
+    /// when the key is no control.</summary>
+    internal bool PressFromWindow(string varKey, double value, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        if (!IsPanelControl(varKey) || !GetVariables().TryGetValue(varKey, out var def)) return false;
+        return HandleUIVariableSet(varKey, value, def, sim, announcer);
+    }
+
+    /// <summary>A panel control's label and its state as the panel shows it; State null while unread. Null
+    /// when the key is no control.</summary>
+    internal (string Label, string? State)? DescribeControl(string varKey, SimConnectManager sim)
+    {
+        if (!IsPanelControl(varKey) || !GetVariables().TryGetValue(varKey, out var def)) return null;
+        if (sim.GetCachedVariableValue(varKey) is not double value) return (def.DisplayName, null);
+        if (TryGetDisplayOverride(varKey, value, out string text)) return (def.DisplayName, text);
+        return (def.DisplayName, def.ValueDescriptions.TryGetValue(def.DescriptionKeyFor(value), out var described)
+            ? described : Num(value));
+    }
+
+    private bool IsPanelControl(string varKey) => GetPanelControls().Values.Any(keys => keys.Contains(varKey));
+
+    /// <summary>True while a row the plans added (or any row) is muted in Ctrl+M.</summary>
+    internal bool IsCalloutMuted(string key) => DisabledMonitorSet.Contains(key);
+
     // =====================================================================
     // Announcements
     // =====================================================================
@@ -173,8 +197,8 @@ public partial class IniA330Definition
             // ---- windows ----
             case HotkeyAction.MonitorManager:
                 hotkeyManager.ExitOutputHotkeyMode();
-                ShowTrackedWindow(() => new Forms.IniA330.A330MonitorManagerForm(GetVariables(), ShortName,
-                    DisabledMonitorList), m => m.ShowForm());
+                ShowTrackedWindow(() => new Forms.IniA330.A330MonitorManagerForm(GetVariables(), ShortName),
+                    m => m.ShowForm());
                 return true;
         }
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
