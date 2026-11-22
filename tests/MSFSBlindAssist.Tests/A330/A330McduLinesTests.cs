@@ -33,7 +33,7 @@ public class A330McduLinesTests
 
     private static readonly string[] IniListing =
     {
-        "INIT        ←→",
+        "INIT        \U00002190\U00002192",
         "    CO RTE          FROM/TO",
         "1: ----------     ----/----",
         "   ALTN/CO RTE",
@@ -44,7 +44,7 @@ public class A330McduLinesTests
         "   COST INDEX",
         "5: 20                 WIND>",
         "   CRZ FL/TEMP        TROPO",
-        "6: ---- /---°         36090",
+        "6: ---- /---\U000000B0         36090",
         "Scratchpad: NAV ACCUR DOWNGRADED",
     };
 
@@ -72,7 +72,7 @@ public class A330McduLinesTests
     {
         var listing = CduLineText.Listing(Lines("p03_init.json"));
         Assert.Contains("3: --------       IRS INIT>", listing);
-        Assert.Contains("6: ---- /---°         36090", listing);
+        Assert.Contains("6: ---- /---\U000000B0         36090", listing);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class A330McduLinesTests
     public void Each_special_character_takes_one_cell()
     {
         var row = Row((0, "oda", null), (3, "bef", null), (6, "c\"", null));
-        Assert.Equal("-°←→↑↓Δ\"", row.Text);
+        Assert.Equal("-\U000000B0\U00002190\U00002192\U00002191\U00002193\U00000394\"", row.Text);
         Assert.Equal(8, row.Text.Length);
     }
 
