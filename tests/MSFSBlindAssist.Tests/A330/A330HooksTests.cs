@@ -86,7 +86,9 @@ public class A330HooksTests : IDisposable
         ("OnSimContextReset", new[] { "ResetPanelBaselines", "ResetFlightDisplayBaselines", "ResetReadoutBaselines",
             "ResetFcuBaselines", "ResetEcamBaselines", "ResetMcduBaselines", "ResetReader" }),
         ("OnSwitchedAway", new[] { "CloseMcduWindows", "CloseEfb", "CloseEcamWindows", "CloseFlightDisplayWindows",
-            "CloseFcuWindows", "StopReader" }),
+            "CloseFcuWindows", "CloseReadouts", "StopReader" }),
+        ("IsMuteWrapExempt", new[] { "IsReadoutMuteWrapExempt", "IsPanelMuteWrapExempt", "IsFlightDisplayMuteWrapExempt",
+            "IsEcamMuteWrapExempt", "IsMcduMuteWrapExempt" }),
     };
 
     /// <summary>The method's lines from its signature to its closing brace (the first line that is exactly
@@ -141,6 +143,15 @@ public class A330HooksTests : IDisposable
         Assert.False(def.TryGetDisplayOverride(key, 1, out _));
         Assert.False(def.ProcessSimVarUpdate(key, 1, speech));
         Assert.Empty(speech.All);
+    }
+
+    [Fact]
+    public void Only_the_take_off_feed_is_exempt_from_the_mute_wrap()
+    {
+        var def = new IniA330Definition();
+        Assert.True(def.IsMuteWrapExempt(IniA330Definition.TakeoffIasKey));
+        Assert.False(def.IsMuteWrapExempt(IniA330Definition.TakeoffV1Key));
+        Assert.False(def.IsMuteWrapExempt("A330_FLAPS"));
     }
 
     [Fact]

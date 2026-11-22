@@ -83,6 +83,23 @@ public partial class IniA330Definition
             ? described : Num(value));
     }
 
+    /// <summary>Which airspeed-style feeds speak call-outs another row owns, so MainForm's mute wrap leaves
+    /// them to check each row themselves ([VAR-8]). The hooks run in this order and stop at the first true.</summary>
+    public override bool IsMuteWrapExempt(string varName)
+    {
+        bool exempt = false;
+        IsReadoutMuteWrapExempt(varName, ref exempt);   // plan 10
+        if (exempt) return true;
+        IsPanelMuteWrapExempt(varName, ref exempt);   // plan 04
+        if (exempt) return true;
+        IsFlightDisplayMuteWrapExempt(varName, ref exempt);   // plan 09
+        if (exempt) return true;
+        IsEcamMuteWrapExempt(varName, ref exempt);   // plan 08
+        if (exempt) return true;
+        IsMcduMuteWrapExempt(varName, ref exempt);   // plan 03
+        return exempt || base.IsMuteWrapExempt(varName);
+    }
+
     private bool IsPanelControl(string varKey) => GetPanelControls().Values.Any(keys => keys.Contains(varKey));
 
     /// <summary>True while a row the plans added (or any row) is muted in Ctrl+M.</summary>
@@ -123,6 +140,7 @@ public partial class IniA330Definition
         CloseEcamWindows();   // plan 08
         CloseFlightDisplayWindows();   // plan 09
         CloseFcuWindows();   // plan 05
+        CloseReadouts();   // plan 10
         StopReader();   // plan 02
         base.OnSwitchedAway();
     }

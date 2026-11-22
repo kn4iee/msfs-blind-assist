@@ -34,7 +34,10 @@ public partial class IniA330Definition
 
     /// <summary>The airspeed feed speaks V1, Rotate and V2, whose Ctrl+M rows are the V-speeds', so it is
     /// kept out of MainForm's mute wrap and checks each call's row itself.</summary>
-    public override bool IsMuteWrapExempt(string varName) => varName == TakeoffIasKey;
+    partial void IsReadoutMuteWrapExempt(string varKey, ref bool exempt)
+    {
+        if (varKey == TakeoffIasKey) exempt = true;
+    }
 
     internal string FuelSummary(SimConnectManager sim)
     {

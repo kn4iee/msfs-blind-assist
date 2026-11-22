@@ -58,11 +58,19 @@ public partial class IniA330Definition
     partial void ResetMcduBaselines(bool contextReset);           // plan 03
     partial void ResetReader(bool contextReset);                  // plan 02
 
+    // IsMuteWrapExempt: Readout, Panel, FlightDisplay, Ecam, Mcdu; stops at the first true, else the base class.
+    partial void IsReadoutMuteWrapExempt(string varKey, ref bool exempt);        // plan 10
+    partial void IsPanelMuteWrapExempt(string varKey, ref bool exempt);          // plan 04
+    partial void IsFlightDisplayMuteWrapExempt(string varKey, ref bool exempt);  // plan 09
+    partial void IsEcamMuteWrapExempt(string varKey, ref bool exempt);           // plan 08
+    partial void IsMcduMuteWrapExempt(string varKey, ref bool exempt);           // plan 03
+
     // OnSwitchedAway, in this order, then the base class.
     partial void CloseMcduWindows();           // plan 03
     partial void CloseEfb();                   // plan 07
     partial void CloseEcamWindows();           // plan 08
     partial void CloseFlightDisplayWindows();  // plan 09
     partial void CloseFcuWindows();            // plan 05
+    partial void CloseReadouts();              // plan 10: cancel the read-backs still to be spoken
     partial void StopReader();                 // plan 02
 }
