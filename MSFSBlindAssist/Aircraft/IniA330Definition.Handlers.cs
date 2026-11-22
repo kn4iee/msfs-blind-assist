@@ -257,10 +257,6 @@ public partial class IniA330Definition
             case HotkeyAction.ReadSpeedVLS: ReadSpeed(simConnect, announcer, "A330_VLS", "VLS"); return true;
             case HotkeyAction.ReadSpeedVFE: ReadSpeed(simConnect, announcer, "A330_VMAX", "Maximum speed"); return true;
             // ---- windows ----
-            case HotkeyAction.ShowPMDGEFB:
-                hotkeyManager.ExitInputHotkeyMode();
-                ShowEfb(announcer);
-                return true;
             case HotkeyAction.MonitorManager:
                 hotkeyManager.ExitOutputHotkeyMode();
                 ShowTrackedWindow(() => new Forms.IniA330.A330MonitorManagerForm(GetVariables(), ShortName,
@@ -268,23 +264,6 @@ public partial class IniA330Definition
                 return true;
         }
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
-    }
-
-    private SimConnect.CoherentPmdgEfbClient? _efbClient;
-
-    private void ShowEfb(ScreenReaderAnnouncer announcer)
-    {
-        ShowTrackedWindow(() =>
-        {
-            _efbClient?.Dispose();
-            _efbClient = SimConnect.CoherentPmdgEfbClient.ForIniA330();
-            _efbClient.Start();
-            var client = _efbClient;
-            var f = new Forms.FBWA380.FbwEfbForm(client, announcer, $"{ShortName} EFB", "EFB", "EFB");
-            f.VisibleChanged += (_, _) => client.SetActive(!f.IsDisposed && f.Visible);
-            f.Disposed += (_, _) => { client.Dispose(); if (ReferenceEquals(_efbClient, client)) _efbClient = null; };
-            return f;
-        }, f => { _efbClient?.SetActive(true); f.ShowForm(); });
     }
 
     internal string FuelSummary(SimConnectManager sim)
