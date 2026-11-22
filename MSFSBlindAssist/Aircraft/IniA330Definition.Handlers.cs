@@ -72,11 +72,13 @@ public partial class IniA330Definition
         return HandleUIVariableSet(varKey, value, def, sim, announcer);
     }
 
-    /// <summary>A panel control's label and its state as the panel shows it; State null while unread. Null
-    /// when the key is no control.</summary>
+    /// <summary>A panel control's label and its state as the panel shows it; State null while a stateful
+    /// control is unread, and "" (no state) for a push key, whose own variable is never read. Null when the
+    /// key is no control.</summary>
     internal (string Label, string? State)? DescribeControl(string varKey, SimConnectManager sim)
     {
         if (!IsPanelControl(varKey) || !GetVariables().TryGetValue(varKey, out var def)) return null;
+        if (def.RenderAsButton) return (def.DisplayName, "");
         if (sim.GetCachedVariableValue(varKey) is not double value) return (def.DisplayName, null);
         if (TryGetDisplayOverride(varKey, value, out string text)) return (def.DisplayName, text);
         return (def.DisplayName, def.ValueDescriptions.TryGetValue(def.DescriptionKeyFor(value), out var described)

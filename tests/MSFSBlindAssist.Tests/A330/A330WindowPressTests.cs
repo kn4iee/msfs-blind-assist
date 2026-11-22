@@ -11,6 +11,7 @@ namespace MSFSBlindAssist.Tests;
 public class A330WindowPressTests
 {
     private const string SelectorKey = "TEST_SELECTOR";
+    private const string PushKey = "TEST_PUSH";
 
     private static A330ControlMap Map() => new()
     {
@@ -25,6 +26,11 @@ public class A330WindowPressTests
                     new A330ControlMap.Position { Value = 0, Input = 1, Label = "Off" },
                     new A330ControlMap.Position { Value = 1, Input = 0, Label = "On" },
                 },
+            },
+            new A330ControlMap.Control
+            {
+                Key = PushKey, Section = "Test section", Panel = "Test panel", Label = "Test key", Kind = "button",
+                Event = "AIRLINER_TEST_PUSH", Mode = "push",
             },
         },
     };
@@ -100,6 +106,15 @@ public class A330WindowPressTests
         Assert.Equal(("Test selector", (string?)"On"), def.DescribeControl(SelectorKey, on));
         var off = SeededSimConnectCache.With(("TEST_SELECTOR", 0));
         Assert.Equal(("Test selector", (string?)"Off"), def.DescribeControl(SelectorKey, off));
+    }
+
+    [Fact]
+    public void Describe_gives_a_push_key_no_state_rather_than_unread()
+    {
+        // a key's own variable is never read (null would mean "not read yet" for ever); a window shows the label only
+        var def = new Recording();
+        Assert.Equal(("Test key", (string?)""), def.DescribeControl(PushKey, new SimConnectManager(IntPtr.Zero)));
+        Assert.Equal(("Test key", (string?)""), def.DescribeControl(PushKey, SeededSimConnectCache.With(("MSFSBA_" + PushKey, 1))));
     }
 
     [Theory]
