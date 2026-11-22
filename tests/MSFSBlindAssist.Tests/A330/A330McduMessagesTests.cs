@@ -438,6 +438,89 @@ public sealed class A330McduMessagesTests : IDisposable
         def.OnSwitchedAway();
     }
 
+    // ---- the FMS message lamps ----
+
+    /// <summary>What the Fenix says for its MCDU FM lamp row: its variable's name and value description, as its generic
+    /// row speaks them (<c>FenixA320Definition</c>, <c>I_CDU1_FM</c> and <c>I_CDU2_FM</c>).</summary>
+    private static string Fenix(string key, double value)
+    {
+        var v = new FenixA320Definition().GetVariables()[key];
+        return v.DisplayName + ": " + v.ValueDescriptions[value];
+    }
+
+    /// <summary>A frame of today's list pages: a hidden list row below the screen, so it is off the MCDU's grid.</summary>
+    private static A330Frame OffGrid(A330Frame frame) => frame with
+    {
+        Texts = frame.Texts.Append(new A330Text(998, A330McduGeometry.Left, A330McduGeometry.Top + 20 * A330McduGeometry.RowPitch,
+            "08L", A330McduGeometry.LargeFont, 29.5f, null, [A330McduGeometry.Left])).ToList(),
+    };
+
+    [Fact]
+    public void The_FMS_message_lamp_says_a_message_is_waiting_once()
+    {
+        string captainOn = Fenix("I_CDU1_FM", 1), captainOff = Fenix("I_CDU1_FM", 0);
+        string foOn = Fenix("I_CDU2_FM", 1), foOff = Fenix("I_CDU2_FM", 0);
+        Assert.Equal("MCDU FM Captain: On", captainOn);   // the Fenix's own sentence
+        Assert.Equal("MCDU FM FO: Off", foOff);
+
+        using var rig = new WatchRig();
+        // Frames that cannot say the message: hidden list rows may be in them.
+        rig.Show(Pad("") with { HiddenRowsLeftOut = false });
+
+        // The first reading of each lamp is silent, whatever it reads.
+        rig.Lamp(false, 1);
+        rig.Lamp(true, 0);
+        Assert.Empty(rig.Speech.All);
+
+        // A change is spoken once; any value but 0 is lit.
+        rig.Lamp(false, 0);
+        rig.Lamp(false, 0);
+        rig.Lamp(false, 1);
+        rig.Lamp(false, 0.5);
+        rig.Lamp(true, 1);
+        rig.Lamp(true, 1);
+        Assert.Equal(new[] { captainOff, captainOn, foOn }, rig.Speech.All);
+        Assert.Empty(rig.Speech.Interrupts);   // the non-interrupting announce
+
+        // No complete frame of the captain's MCDU, or one off its grid (today's list pages): the lamp still speaks.
+        rig.Displays.Forget(A330Gauge.McduCaptain);
+        rig.Lamp(false, 0);
+        rig.Show(OffGrid(Pad("")));
+        Assert.Null(A330McduScreen.From(OffGrid(Pad(""))));
+        rig.Lamp(false, 1);
+        Assert.Equal(new[] { captainOff, captainOn, foOn, captainOff, captainOn }, rig.Speech.All);
+
+        // Frames that can say the message: the captain's lamp is silent (the message itself is said), the first
+        // officer's still speaks (that MCDU is not watched).
+        rig.Show(Pad("NOT ALLOWED"));
+        rig.Lamp(false, 0);
+        rig.Lamp(false, 1);
+        rig.Lamp(true, 0);
+        Assert.Equal(new[] { captainOff, captainOn, foOn, captainOff, captainOn, foOff }, rig.Speech.All);
+
+        // The row muted: nothing from either lamp.
+        Mute(true);
+        rig.Show(Pad("") with { HiddenRowsLeftOut = false });
+        rig.Lamp(false, 0);
+        rig.Lamp(true, 1);
+        Assert.Equal(6, rig.Speech.All.Count);
+        Mute(false);
+
+        // After a flight reload, the first reading of each is silent again.
+        rig.Def.OnSimContextReset();
+        rig.Lamp(false, 1);
+        rig.Lamp(true, 0);
+        Assert.Equal(6, rig.Speech.All.Count);
+        rig.Lamp(true, 1);
+        Assert.Equal(foOn, rig.Speech.All[^1]);
+
+        // And after a switch away and back.
+        rig.Def.OnSwitchedAway();
+        rig.Lamp(false, 0);
+        rig.Lamp(true, 0);
+        Assert.Equal(7, rig.Speech.All.Count);
+    }
+
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
@@ -453,6 +536,10 @@ public sealed class A330McduMessagesTests : IDisposable
             rig.Tick();
             rig.Tick();
             Assert.Equal(new[] { "MCDU message: V1/VR/V2 DISAGREE" }, rig.Speech.All);
+
+            rig.Show(Pad("") with { HiddenRowsLeftOut = false });
+            rig.Lamp(false, 0.75);
+            Assert.Equal("MCDU FM Captain: On", rig.Speech.All[^1]);
             return 0;
         });
     }

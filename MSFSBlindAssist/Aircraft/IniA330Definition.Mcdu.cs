@@ -22,6 +22,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// (either side) the watch says nothing, as the window's own scratchpad line says it, but keeps reading, so closing the
 /// window does not repeat what the pilot heard. A switch away stops the timer and lets the display go; a flight reload
 /// or a reconnect makes the next reading silent again.</para>
+/// <para>The lamps. While the frames cannot say the message (hidden list rows, spec M15), the lamps say one is waiting,
+/// in the Fenix's MCDU FM lamp sentences, under the same row (<see cref="SpeakFmsLamp"/>).</para>
 /// <para>Everything here runs on the UI thread: the variable updates and the timer's ticks.</para>
 /// </remarks>
 public partial class IniA330Definition
@@ -39,6 +41,11 @@ public partial class IniA330Definition
 
     private static readonly Dictionary<double, string> FmsLampValues = new() { [0] = "Off", [1] = "On" };
 
+    /// <summary>The lamps' names in what is said: the Fenix's MCDU FM lamp rows' own (its <c>I_CDU1_FM</c> and <c>I_CDU2_FM</c>).</summary>
+    private const string FmsLampCaptainName = "MCDU FM Captain", FmsLampFirstOfficerName = "MCDU FM FO";
+
+    private readonly bool?[] _fmsLampLit = new bool?[2];   // captain, first officer; null until the first reading
+
     private readonly object _mcduWatchOwner = new();
     private bool _mcduWatchOn;
     private System.Windows.Forms.Timer? _mcduWatchTimer;
@@ -51,18 +58,40 @@ public partial class IniA330Definition
     partial void AddMcduVariables(Dictionary<string, SimVarDefinition> vars)
     {
         // Consumed by ProcessMcduUpdate, never spoken by the generic monitor, no row of their own ([VAR-9]).
-        Watched(vars, FmsLampCaptainKey, "INI_FMS1_message_light", "MCDU FM Captain", FmsLampValues, silent: true);
-        Watched(vars, FmsLampFirstOfficerKey, "INI_FMS2_message_light", "MCDU FM FO", FmsLampValues, silent: true);
+        Watched(vars, FmsLampCaptainKey, "INI_FMS1_message_light", FmsLampCaptainName, FmsLampValues, silent: true);
+        Watched(vars, FmsLampFirstOfficerKey, "INI_FMS2_message_light", FmsLampFirstOfficerName, FmsLampValues, silent: true);
     }
 
     partial void ProcessMcduUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
     {
-        if (varName != FmsLampCaptainKey && varName != FmsLampFirstOfficerKey) return;
+        int side = varName == FmsLampCaptainKey ? 0 : varName == FmsLampFirstOfficerKey ? 1 : -1;
+        if (side < 0) return;
         handled = true;
         StartMcduWatch(announcer);
+        SpeakFmsLamp(side, value, announcer);
     }
 
-    /// <summary>The lamps belong to the FMS messages row, which their branch checks itself ([VAR-8]).</summary>
+    /// <summary>An FMS message lamp says a message is waiting while the frames cannot say the message itself, in the
+    /// Fenix's MCDU FM lamp sentence, under the FMS messages row: the first reading silent, a change said once. Measured
+    /// 2026-11-22: both lamps 0 with no message; until a reading with a message queued, 0 is off and any other value lit.
+    /// The captain's lamp speaks only while the captain's MCDU has no complete frame that leaves hidden list rows out
+    /// (none, one off its grid, or one that may hold them); the first officer's always, as that MCDU is not watched.</summary>
+    private void SpeakFmsLamp(int side, double value, ScreenReaderAnnouncer announcer)
+    {
+        bool lit = value != 0;
+        bool? before = _fmsLampLit[side];
+        _fmsLampLit[side] = lit;
+        if (before is null || before == lit) return;
+        if (IsCalloutMuted(A330CalloutRows.FmsMessageKey)) return;
+        if (side == 0 && CaptainFramesSayTheMessage()) return;
+        announcer.Announce($"{(side == 0 ? FmsLampCaptainName : FmsLampFirstOfficerName)}: {FmsLampValues[lit ? 1 : 0]}");
+    }
+
+    /// <summary>True while the captain's MCDU has a complete frame the watch can read a message from.</summary>
+    private bool CaptainFramesSayTheMessage() =>
+        Displays.Latest(A330Gauge.McduCaptain) is { } frame && A330McduScreen.From(frame) is { HiddenRowsLeftOut: true };
+
+    /// <summary>The lamps' branch speaks the FMS messages row's call-out and checks that row itself ([VAR-8]).</summary>
     partial void IsMcduMuteWrapExempt(string varKey, ref bool exempt)
     {
         if (varKey == FmsLampCaptainKey || varKey == FmsLampFirstOfficerKey) exempt = true;
@@ -71,6 +100,7 @@ public partial class IniA330Definition
     partial void ResetMcduBaselines(bool contextReset)
     {
         if (_mcduMessages is not null) _mcduMessages = new A330McduMessages();
+        Array.Clear(_fmsLampLit);
     }
 
     /// <summary>Starts the watch, once. UI thread.</summary>
@@ -127,6 +157,7 @@ public partial class IniA330Definition
         ReleaseMcduCaptain();
         _mcduWatchOn = false;
         _mcduWatchAnnouncer = null;
+        Array.Clear(_fmsLampLit);
     }
 
     // ---- the window ----
