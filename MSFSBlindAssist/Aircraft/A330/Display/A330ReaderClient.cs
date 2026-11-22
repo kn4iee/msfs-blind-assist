@@ -75,6 +75,8 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
             if (_started) return;
             _started = true;
             _restartAt = -1;
+            _exits.Clear();          // a new run: a full restart budget and a fresh first dropped line
+            _droppedLogged = false;
             StartProgram(post);
             if (_runTimer && !IsTerminal(_state) && _timer == null)
                 _timer = new System.Threading.Timer(_ => TickSafe(), null, TickIntervalMs, TickIntervalMs);
@@ -104,7 +106,7 @@ internal sealed class A330ReaderClient : IA330Displays, IDisposable
             _restartAt = -1;
             _sent.Clear();
             old?.WriteLine(A330ReaderProtocol.Quit());
-            if (!IsTerminal(_state)) SetState(A330ReaderState.Stopped, post);
+            SetState(A330ReaderState.Stopped, post);
             _timer?.Dispose();
             _timer = null;
         }

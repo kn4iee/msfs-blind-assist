@@ -400,6 +400,56 @@ public class A330ReaderClientTests
     }
 
     [Fact]
+    public void Stop_always_ends_in_Stopped()
+    {
+        var missing = new Rig { Installed = false };
+        missing.Client.Start();
+        Assert.Equal(A330ReaderState.NotInstalled, missing.Client.State);
+        missing.Client.Stop();
+        Assert.Equal(A330ReaderState.Stopped, missing.Client.State);
+
+        var failed = new Rig().Started();
+        failed.Clock = 5_000;
+        failed.Client.Tick();
+        Assert.Equal(A330ReaderState.Failed, failed.Client.State);
+        failed.Client.Stop();
+        Assert.Equal(A330ReaderState.Stopped, failed.Client.State);
+    }
+
+    [Fact]
+    public void A_Start_after_Stop_begins_a_new_run_with_a_full_restart_budget()
+    {
+        var rig = new Rig().Started().Hello();
+        for (int i = 0; i < 3; i++)
+        {
+            rig.Current.Exit();
+            rig.Clock += 5_000;
+            rig.Client.Tick();
+            rig.Hello();
+        }
+        rig.Current.Exit();
+        Assert.Equal(A330ReaderState.Failed, rig.Client.State);
+        rig.Client.Start();                       // no Stop in between: still a no-op
+        Assert.Equal(4, rig.Starts);
+
+        rig.Client.Stop();
+        rig.Client.Start();
+        Assert.Equal(5, rig.Starts);
+        Assert.Equal(A330ReaderState.Starting, rig.Client.State);
+        rig.Hello();
+        for (int i = 0; i < 3; i++)
+        {
+            rig.Current.Exit();
+            Assert.Equal(A330ReaderState.Starting, rig.Client.State);
+            rig.Clock += 5_000;
+            rig.Client.Tick();
+            rig.Hello();
+        }
+        rig.Current.Exit();
+        Assert.Equal(A330ReaderState.Failed, rig.Client.State);
+    }
+
+    [Fact]
     public void A_broken_line_is_dropped_and_the_client_carries_on()
     {
         var rig = new Rig().Started().Hello();
