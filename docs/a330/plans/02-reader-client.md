@@ -248,10 +248,10 @@ As plan 01's Task 0, with this file's path and `docs(a330): claim plan 02` (`Pla
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:**
-- **Started:**
+- **Status:** claimed
+- **Claimed by:** kn4iee
+- **Worked by:** kn4iee, with Claude (subagent-driven development)
+- **Started:** 2026-11-22, from b9aa5d0a3 (the branch tip: e5c9d2b6a plus plan 01's two record commits)
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
