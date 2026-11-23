@@ -280,18 +280,90 @@ public sealed class A330McduSlewTests
         Assert.Equal(2, rig.Sent.Count);
         Assert.Empty(rig.Held);
 
-        // Still no new frame: each press is judged on the next frame, and says so again, in its own direction.
-        Key(w, Keys.PageDown);
+        // Still no new frame: another press the same way waits again, and says so again.
+        Key(w, Keys.Alt | Keys.Up);
         rig.RunHeld(1100);
-        Assert.Equal(new[] { "End of list", "Top of list" }, rig.Speech.All);
+        Assert.Equal(new[] { "End of list", "End of list" }, rig.Speech.All);
         Assert.Equal(2, rig.Sent.Count);
+        Assert.Empty(rig.Held);
 
-        // A frame at last, with rows hidden above: Page Down goes, at once.
-        Next(rig, w, Runways(above: true, below: false, first: "a08R"));
+        // A press the other way waits for nothing: it is judged at once on the page shown, which has rows hidden above.
         Key(w, Keys.PageDown);
-        Assert.Equal("INI_MCDU1_DOWN", rig.Sent[^1]);
-        Assert.Equal(3, rig.Sent.Count);
+        Assert.Empty(rig.Held);
+        Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_UARROW", "INI_MCDU1_DOWN" }, rig.Sent);
+        Assert.Equal(2, rig.Speech.All.Count);
         Assert.Empty(rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public void A_press_the_other_way_is_judged_at_once_on_the_page_shown()
+    {
+        // Rows hidden both ways: Page Up goes, and Page Down straight after it goes too, without waiting for a frame to
+        // show the Page Up (only the key pace between them).
+        using var rig = new Rig();
+        rig.Displays.Show(Runways(above: true, below: true));
+        var w = rig.Window();
+        Key(w, Keys.PageUp);
+        long pressed = rig.Clock;
+        Key(w, Keys.PageDown);
+        Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_DOWN" }, rig.Sent);
+        Assert.Equal(150, rig.Clock - pressed);
+        Assert.Empty(rig.Speech.All);
+
+        // The two undo each other, so the page shown is where the list is: the next press is judged on it at once.
+        pressed = rig.Clock;
+        Key(w, Keys.Alt | Keys.Down);
+        Assert.Equal("INI_MCDU1_DOWN", rig.Sent[^1]);
+        Assert.Equal(150, rig.Clock - pressed);
+
+        // And that one is awaited by the next press its way, as any slew is.
+        pressed = rig.Clock;
+        Key(w, Keys.PageDown);
+        Assert.Equal(3, rig.Sent.Count);
+        Assert.Equal(new[] { "Top of list" }, rig.Speech.All);
+        Assert.Equal(1000, rig.Clock - pressed);
+    }
+
+    [Fact]
+    public void A_press_the_other_way_the_page_does_not_allow_is_refused_at_once_and_the_slew_before_it_is_still_awaited()
+    {
+        // At the list's top: Page Up goes; Page Down straight after it is judged at once on the page shown, still at the top.
+        using var rig = new Rig();
+        rig.Displays.Show(Runways(above: false, below: true));
+        var w = rig.Window();
+        Key(w, Keys.PageUp);
+        long pressed = rig.Clock;
+        Key(w, Keys.PageDown);
+        Assert.Equal(new[] { "Top of list" }, rig.Speech.All);
+        Assert.Equal(pressed, rig.Clock);
+        Assert.Single(rig.Sent);
+
+        // The Page Up has still not shown, so another Page Up waits for it: it could take the list past its end.
+        Key(w, Keys.PageUp);
+        Assert.Equal(new[] { "Top of list", "End of list" }, rig.Speech.All);
+        Assert.Equal(1000, rig.Clock - pressed);
+        Assert.Single(rig.Sent);
+    }
+
+    [Fact]
+    public void Frames_stopping_while_a_slew_waits_send_it_as_with_no_page_shown()
+    {
+        using var rig = new Rig();
+        rig.Displays.Show(Runways(above: false, below: true));
+        var w = rig.Window(held: true);
+        Key(w, Keys.PageUp);
+        Key(w, Keys.PageUp);
+        rig.RunHeld(200);
+        Assert.Single(rig.Sent);
+
+        // No frame any more: the window shows its status row, and the key goes as it always has, with nothing said.
+        rig.Displays.Forget(A330Gauge.McduCaptain);
+        rig.RunHeld(25);
+        Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_UARROW" }, rig.Sent);
+        Assert.Empty(rig.Held);
+        Assert.Equal(new[] { "Reading the captain's MCDU" },
+            w.Controls.Find("Screen", true).OfType<ListBox>().Single().Items.Cast<string>());
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]
