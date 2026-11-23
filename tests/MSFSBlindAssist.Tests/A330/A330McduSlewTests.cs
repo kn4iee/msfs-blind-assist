@@ -1,9 +1,11 @@
 // The A330's MCDU window never slews a list past its top or its end: a frame says whether its page has a list the
 // display clips and whether rows of it are hidden above or below, and the window sends Page Up (the MCDU's UARROW, on to
 // later rows) only while rows are hidden below, Page Down (DOWN, back toward the top) only while rows are hidden above,
-// one slew at a time. The aircraft counts a slew press past either end, so the next presses the other way only undo it
-// and the list looks stuck (measured 2026-11-20). Each window is a real WinForms form, shown far off the screen and
-// without taking focus, on a clock the test moves; its key writes and its waits go through the window's test seams.
+// one slew at a time, judged only on a page (a frame the reader has left the hidden rows out of). The aircraft counts a
+// slew press past either end, so the next presses the other way only undo it and the list looks stuck (measured
+// 2026-11-20). A press not sent says nothing, as a press at a list's end on the other MCDU windows (owner, 2026-11-23).
+// Each window is a real WinForms form, shown far off the screen and without taking focus, on a clock the test moves; its
+// key writes and its waits go through the window's test seams.
 
 using System.Drawing;
 using System.Windows.Forms;
@@ -162,7 +164,7 @@ public sealed class A330McduSlewTests
     }
 
     [Fact]
-    public void Page_Up_is_sent_only_while_rows_are_hidden_below_and_otherwise_says_end_of_list()
+    public void Page_Up_is_sent_only_while_rows_are_hidden_below_and_otherwise_does_nothing_silently()
     {
         using var rig = new Rig();
         rig.Displays.Show(Runways(above: false, below: true));
@@ -170,25 +172,21 @@ public sealed class A330McduSlewTests
 
         Key(w, Keys.PageUp);
         Assert.Equal(new[] { "INI_MCDU1_UARROW" }, rig.Sent);
-        Assert.Empty(rig.Speech.All);
 
-        // The list at its end: nothing sent, and the window says so, once a press, Page Up and Alt+Up alike.
+        // The list at its end: nothing sent, Page Up and Alt+Up alike, and nothing said (as on the other MCDU windows).
         Next(rig, w, Runways(above: true, below: false, first: "a26L"));
         Key(w, Keys.PageUp);
-        Assert.Equal(new[] { "End of list" }, rig.Speech.All);
         Key(w, Keys.Alt | Keys.Up);
-        Assert.Equal(new[] { "End of list", "End of list" }, rig.Speech.All);
         Assert.Single(rig.Sent);
-        Assert.Empty(rig.Speech.Interrupts);   // the non-interrupting announce
 
         // Page Down still goes: rows are hidden above.
         Key(w, Keys.PageDown);
         Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_DOWN" }, rig.Sent);
-        Assert.Equal(2, rig.Speech.All.Count);
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]
-    public void Page_Down_is_sent_only_while_rows_are_hidden_above_and_otherwise_says_top_of_list()
+    public void Page_Down_is_sent_only_while_rows_are_hidden_above_and_otherwise_does_nothing_silently()
     {
         // The owner's case: a list at its top, where a slew toward the top is counted and undoes the next one down.
         using var rig = new Rig();
@@ -198,7 +196,6 @@ public sealed class A330McduSlewTests
         Key(w, Keys.PageDown);
         Key(w, Keys.Alt | Keys.Down);
         Assert.Empty(rig.Sent);
-        Assert.Equal(new[] { "Top of list", "Top of list" }, rig.Speech.All);
 
         // Slewed on: rows are hidden above, so Page Down goes.
         Key(w, Keys.PageUp);
@@ -210,8 +207,7 @@ public sealed class A330McduSlewTests
         Next(rig, w, Runways(above: false, below: true));
         Key(w, Keys.Alt | Keys.Down);
         Assert.Equal(2, rig.Sent.Count);
-        Assert.Equal(new[] { "Top of list", "Top of list", "Top of list" }, rig.Speech.All);
-        Assert.Empty(rig.Speech.Interrupts);
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]
@@ -236,7 +232,8 @@ public sealed class A330McduSlewTests
         Key(w, Keys.PageDown);
         Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_DOWN" }, rig.Sent);
 
-        // A list frame that does not leave hidden rows out: no page shown either, whatever its edges say.
+        // A list frame that does not leave hidden rows out, and none that does within the wait: no page shown either,
+        // whatever its edges say.
         Next(rig, w, Runways(above: false, below: false) with { HiddenRowsLeftOut = false });
         rig.Sent.Clear();
         Key(w, Keys.PageUp);
@@ -246,7 +243,7 @@ public sealed class A330McduSlewTests
     }
 
     [Fact]
-    public void A_second_slew_waits_for_a_new_frame_and_with_none_in_1_s_says_the_list_did_not_move()
+    public void A_second_slew_waits_for_a_new_page_and_with_none_in_1_5_s_is_not_sent()
     {
         using var rig = new Rig();
         rig.Displays.Show(Runways(above: false, below: true));
@@ -259,40 +256,76 @@ public sealed class A330McduSlewTests
         Key(w, Keys.PageUp);
         rig.RunHeld(400);
         Assert.Single(rig.Sent);
-        Assert.Empty(rig.Speech.All);
         Assert.NotEmpty(rig.Held);
 
-        // The frame comes, with rows still below: the press goes.
+        // The page comes, with rows still below: the press goes.
         rig.Displays.Show(Runways(above: true, below: true, first: "a26R"));
         rig.RunHeld(100);
         Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_UARROW" }, rig.Sent);
-        Assert.Empty(rig.Speech.All);
         Assert.Empty(rig.Held);
 
-        // A third, and no new frame comes in 1 s: the list did not move, so nothing is sent and the window says so.
+        // A third, and no new page comes in 1.5 s: the list did not move, so nothing is sent.
         Key(w, Keys.PageUp);
         long pressed = rig.Clock;
-        rig.RunHeld(950);
-        Assert.Empty(rig.Speech.All);
+        rig.RunHeld(1450);
+        Assert.NotEmpty(rig.Held);
         rig.RunHeld(100);
-        Assert.Equal(new[] { "End of list" }, rig.Speech.All);
-        Assert.InRange(rig.Clock - pressed, 1000, 1025);
+        Assert.InRange(rig.Clock - pressed, IniA330CduForm.SlewShowsWithinMs, IniA330CduForm.SlewShowsWithinMs + 25);
         Assert.Equal(2, rig.Sent.Count);
         Assert.Empty(rig.Held);
 
-        // Still no new frame: another press the same way waits again, and says so again.
+        // Still no new page: another press the same way waits again, and is not sent again.
         Key(w, Keys.Alt | Keys.Up);
-        rig.RunHeld(1100);
-        Assert.Equal(new[] { "End of list", "End of list" }, rig.Speech.All);
+        rig.RunHeld(1600);
         Assert.Equal(2, rig.Sent.Count);
         Assert.Empty(rig.Held);
 
-        // A press the other way waits for nothing: it is judged at once on the page shown, which has rows hidden above.
+        // A press the other way does not wait for that slew: it is judged at once on the page, which has rows hidden above.
         Key(w, Keys.PageDown);
         Assert.Empty(rig.Held);
         Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_UARROW", "INI_MCDU1_DOWN" }, rig.Sent);
-        Assert.Equal(2, rig.Speech.All.Count);
-        Assert.Empty(rig.Speech.Interrupts);
+        Assert.Empty(rig.Speech.All);
+    }
+
+    [Fact]
+    public void A_slew_waits_for_the_reader_to_leave_the_hidden_rows_out_of_the_newest_frame()
+    {
+        // The reader sends each new frame once as read (its list keys not known yet, the hidden rows in it), then with
+        // the hidden rows left out. A press is never judged on the frame as read, nor on the page it replaced: the
+        // second Page Up here would take the list past its end (the owner's stuck ARRIVAL list).
+        using var rig = new Rig();
+        rig.Displays.Show(Runways(above: false, below: true));
+        var w = rig.Window(held: true);
+        Key(w, Keys.PageUp);
+        Key(w, Keys.PageUp);
+        rig.Displays.Show(Runways(above: false, below: false, first: "a26L") with { List = false, HiddenRowsLeftOut = false });
+        rig.RunHeld(500);
+        Assert.Single(rig.Sent);
+        Assert.NotEmpty(rig.Held);
+
+        rig.Displays.Show(Runways(above: true, below: false, first: "a26L"));
+        rig.RunHeld(25);
+        Assert.Empty(rig.Held);
+        Assert.Equal(new[] { "INI_MCDU1_UARROW" }, rig.Sent);
+
+        // A new page on its way the same: the page shown (no list) does not judge a slew on the list arriving.
+        Next(rig, w, Departures());
+        rig.Displays.Show(Runways(above: false, below: false) with { List = false, HiddenRowsLeftOut = false });
+        Key(w, Keys.PageDown);
+        rig.RunHeld(300);
+        Assert.NotEmpty(rig.Held);
+        rig.Displays.Show(Runways(above: false, below: true));
+        rig.RunHeld(25);
+        Assert.Empty(rig.Held);
+        Assert.Single(rig.Sent);   // at the list's top: not sent
+
+        // No page within 1.5 s: judged on the page shown.
+        rig.Displays.Show(Runways(above: false, below: false) with { List = false, HiddenRowsLeftOut = false });
+        Key(w, Keys.PageUp);
+        rig.RunHeld(1600);
+        Assert.Empty(rig.Held);
+        Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_UARROW" }, rig.Sent);
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]
@@ -308,7 +341,6 @@ public sealed class A330McduSlewTests
         Key(w, Keys.PageDown);
         Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_DOWN" }, rig.Sent);
         Assert.Equal(150, rig.Clock - pressed);
-        Assert.Empty(rig.Speech.All);
 
         // The two undo each other, so the page shown is where the list is: the next press is judged on it at once.
         pressed = rig.Clock;
@@ -320,8 +352,8 @@ public sealed class A330McduSlewTests
         pressed = rig.Clock;
         Key(w, Keys.PageDown);
         Assert.Equal(3, rig.Sent.Count);
-        Assert.Equal(new[] { "Top of list" }, rig.Speech.All);
-        Assert.Equal(1000, rig.Clock - pressed);
+        Assert.Equal(IniA330CduForm.SlewShowsWithinMs, rig.Clock - pressed);
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]
@@ -334,15 +366,14 @@ public sealed class A330McduSlewTests
         Key(w, Keys.PageUp);
         long pressed = rig.Clock;
         Key(w, Keys.PageDown);
-        Assert.Equal(new[] { "Top of list" }, rig.Speech.All);
         Assert.Equal(pressed, rig.Clock);
         Assert.Single(rig.Sent);
 
         // The Page Up has still not shown, so another Page Up waits for it: it could take the list past its end.
         Key(w, Keys.PageUp);
-        Assert.Equal(new[] { "Top of list", "End of list" }, rig.Speech.All);
-        Assert.Equal(1000, rig.Clock - pressed);
+        Assert.Equal(IniA330CduForm.SlewShowsWithinMs, rig.Clock - pressed);
         Assert.Single(rig.Sent);
+        Assert.Empty(rig.Speech.All);
     }
 
     [Fact]
@@ -397,26 +428,24 @@ public sealed class A330McduSlewTests
 
         Click(w, "Slew down");
         Assert.Empty(rig.Sent);
-        Assert.Equal(new[] { "Top of list" }, rig.Speech.All);
         Click(w, "Slew up");
         Assert.Equal(new[] { "INI_MCDU1_UARROW" }, rig.Sent);
 
-        // Again before a new frame, and none comes in 1 s.
+        // Again before a new page, and none comes in 1.5 s.
         Click(w, "Slew up");
-        Assert.Equal(new[] { "Top of list", "End of list" }, rig.Speech.All);
         Assert.Single(rig.Sent);
 
         Next(rig, w, Runways(above: true, below: false, first: "a26L"));
         Click(w, "Slew up");
         Click(w, "Slew down");
         Assert.Equal(new[] { "INI_MCDU1_UARROW", "INI_MCDU1_DOWN" }, rig.Sent);
-        Assert.Equal(new[] { "Top of list", "End of list", "End of list" }, rig.Speech.All);
+        Assert.Empty(rig.Speech.All);
     }
 
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
-    public void The_window_says_the_same_under_a_comma_decimal_culture(string culture)
+    public void The_window_says_nothing_under_a_comma_decimal_culture_either(string culture)
     {
         TestCulture.Run(culture, () =>
         {
@@ -425,7 +454,7 @@ public sealed class A330McduSlewTests
             var w = rig.Window();
             Key(w, Keys.PageUp);
             Key(w, Keys.PageDown);
-            Assert.Equal(new[] { "End of list", "Top of list" }, rig.Speech.All);
+            Assert.Empty(rig.Speech.All);
             Assert.Empty(rig.Sent);
             return 0;
         });

@@ -132,8 +132,10 @@ read-only box, first in the tab order; the scratchpad line is always listed.
 - **An FMS message with the window closed:** the A32NX says the message alone (`FbwMcduReadBack`); the Fenix window
   says the scratchpad line alone; the A330 says the message alone (it said "MCDU message: <message>" until the
   whole-plan review; the plan's example).
-- **Backspace on a message:** the A32NX and the Fenix speak the line's next state; the A330 says "Message cleared:
-  <message>" (the plan's Review Focus) and then the line's next state: for the owner to rule.
+- **Backspace on a message:** the A32NX and the Fenix speak the line's next state; the A330 said "Message cleared:
+  <message>" (the plan's Review Focus) and then the line's next state. Ruled 2026-11-23 (owner: "The user side needs
+  to be like the fenix and other mcdu readers, forms, and announcements!"): the line's next state only, as the
+  others; with it went the line-key read-back (item 8), the TMPY phrase, the AIRPORT waypoint and the list-end words.
 - **The lamps:** the Fenix's "MCDU FM Captain: On" / "MCDU FM FO: On".
 
 ## 2026-11-22, after landing: the window's pages with the display reader's new build

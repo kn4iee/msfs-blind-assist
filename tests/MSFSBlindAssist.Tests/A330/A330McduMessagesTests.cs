@@ -679,8 +679,10 @@ public sealed class A330McduMessagesTests : IDisposable
     }
 
     [Fact]
-    public void Backspace_on_a_queued_message_says_message_cleared()
+    public void Backspace_on_a_queued_message_says_only_what_the_scratchpad_line_then_shows()
     {
+        // As on the other MCDU windows: CLR says nothing of its own (no "Message cleared", owner 2026-11-23); the
+        // line's read-back says "Scratchpad cleared", the next queued message, or what is left of typed text.
         using var rig = new WindowRig();
         rig.Displays.Show(Pad(""));
         rig.Displays.SetScratchpad(false, "");
@@ -690,45 +692,38 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Tick();
         Assert.Equal(new[] { "NOT ALLOWED" }, rig.Speech.All);
 
-        // Backspace: CLR. The frame from before the press still holds the message; the next one does not: said once,
-        // and the line's own read-back does not add "Scratchpad cleared".
         rig.Backspace();
         Assert.Equal("INI_MCDU1_CLR", rig.Sent[^1]);
-        rig.Tick();
-        Assert.Single(rig.Speech.All);
+        rig.Tick();   // the frame from before the press
         rig.Displays.Show(Pad(""));
-        rig.Tick();
-        Assert.Equal("Message cleared: NOT ALLOWED", rig.Speech.All[^1]);
         for (int i = 0; i < 6; i++) rig.Tick();
-        Assert.Equal(new[] { "NOT ALLOWED", "Message cleared: NOT ALLOWED" }, rig.Speech.All);
+        Assert.Equal(new[] { "NOT ALLOWED", "Scratchpad cleared" }, rig.Speech.All);
 
-        // The next queued message takes its place: the line's read-back says it as usual.
+        // The next queued message takes its place: said as usual.
         rig.Displays.Show(Pad("FORMAT ERROR"));
         rig.Tick();
         rig.Tick();
         rig.Backspace();
         rig.Displays.Show(Pad("NOT IN DATABASE"));
         for (int i = 0; i < 4; i++) rig.Tick();
-        Assert.Equal(new[] { "NOT ALLOWED", "Message cleared: NOT ALLOWED", "FORMAT ERROR", "Message cleared: FORMAT ERROR", "NOT IN DATABASE" },
-            rig.Speech.All);
+        Assert.Equal(new[] { "NOT ALLOWED", "Scratchpad cleared", "FORMAT ERROR", "NOT IN DATABASE" }, rig.Speech.All);
 
-        // The message still there 1.5 s after the press: nothing is said for it.
+        // The message still there after the press: nothing.
         rig.Backspace();
         for (int i = 0; i < 7; i++) rig.Tick();
-        Assert.Equal(5, rig.Speech.All.Count);
+        Assert.Equal(4, rig.Speech.All.Count);
 
-        // Backspace on typed text is no message cleared: what is left is said, as before.
+        // Backspace on typed text: what is left is said.
         rig.Displays.SetScratchpad(false, "KJFK");
         rig.Displays.Show(Pad("KJFK"));
         rig.Tick();
         rig.Tick();
-        Assert.Equal("KJFK", rig.Speech.All[^1]);
         rig.Backspace();
         rig.Displays.SetScratchpad(false, "KJF");
         rig.Displays.Show(Pad("KJF"));
         for (int i = 0; i < 4; i++) rig.Tick();
-        Assert.Equal("KJF", rig.Speech.All[^1]);
-        Assert.DoesNotContain(rig.Speech.All, s => s == "Message cleared: KJFK" || s == "Scratchpad cleared");
+        Assert.Equal(new[] { "NOT ALLOWED", "Scratchpad cleared", "FORMAT ERROR", "NOT IN DATABASE", "KJFK", "KJF" }, rig.Speech.All);
+        Assert.DoesNotContain(rig.Speech.All, s => s.StartsWith("Message cleared", StringComparison.Ordinal));
         Assert.Empty(rig.Speech.Interrupts);
     }
 

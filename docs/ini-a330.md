@@ -52,16 +52,20 @@ different aircraft built on the FlyByWire A32NX.
   (`A330McduCharacters`: box `-`, degree, arrows, overfly mark); a row keeps its 24 columns for braille; a greyed
   prompt reads "(unavailable)" (or "(inop)" where only that fits before the next field), and with no colours
   nothing is marked. As in the Fenix and FlyByWire windows the first line reads `Title: ` and the title, with a page
-  counter drawn half a row under the title (P/N XLOAD's `1/7`) on it; after AIRPORT the window says the first
-  waypoint of the F-PLN it moved to, and an F-PLN waypoint row with no name reads `unnamed`. Typing waits for the
-  MCDU's own typed line (600 ms a key at most, 150 ms pace); an FMS message on the captain's scratchpad line is
-  spoken with the window closed, the message alone as the A32NX speaks one (Ctrl+M row "FMS messages"). Since its
-  build of 2026-11-22 the display reader gives the MCDU's colours, leaves out the list rows the MCDU hides, and says
-  whether a list has rows hidden above or below (`A330Frame.List`, `ListAbove`, `ListBelow`); a frame it cannot vouch
-  for comes without them, and the window then lists only "List rows not read yet" and takes no message from the
-  scratchpad line. The slew keys are never sent past a list's top or end ("Top of list", "End of list"): the A330
-  counts such presses and the list then seems stuck (seen by the owner on ARRIVAL, 2026-11-22). There is no AI read
-  of the MCDU. The pixel reader (`A330CduScreenReader`, `A330CduPopout`, `CduLayout`, the glyph file,
+  counter drawn half a row under the title (P/N XLOAD's `1/7`) on it, and an F-PLN waypoint row with no name reads
+  `unnamed`. The window says what the Fenix, FlyByWire, PMDG and MD-11 windows say and nothing more (owner,
+  2026-11-23): a new title, the scratchpad line when it changes, the side, and "A330 MCDU unavailable: ..." / "MCDU
+  ready"; a line key, a slew, AIRPORT and CLR say nothing of their own. Typing waits for the MCDU's own typed line
+  (600 ms a key at most, 150 ms pace); an FMS message on the captain's scratchpad line is spoken with the window
+  closed, the message alone as the A32NX speaks one (Ctrl+M row "FMS messages"). Since its build of 2026-11-22 the
+  display reader gives the MCDU's colours, leaves out the list rows the MCDU hides, and says whether a list has rows
+  hidden above or below (`A330Frame.List`, `ListAbove`, `ListBelow`). It sends each new frame once without them
+  (moments later, with them): the window keeps the page it shows meanwhile, for up to 3 s after the last page read,
+  then lists only "Reading the captain's MCDU" until a page comes, and takes no message from the scratchpad line of a
+  frame without them. The slew keys are never sent past a list's top or end, silently (a press at a list's end does
+  nothing, as on the other windows): the A330 counts such presses and the list then seems stuck (seen by the owner on
+  ARRIVAL, 2026-11-22); a slew is judged only on a page, waiting up to 1.5 s for one. There is no AI read of the
+  MCDU. The pixel reader (`A330CduScreenReader`, `A330CduPopout`, `CduLayout`, the glyph file,
   `tools/a330-cdu-ocr`) is still in the tree, unused by the window, until the owner has checked the new window; it
   is described in this file's history.
 * **MCDU keys:** write 1 to `INI_MCDU1_<KEY>` (the first officer's: `INI_MCDU2_<KEY>`). Verified: DIR PROG PERF INIT DATA FPLAN RADNAV

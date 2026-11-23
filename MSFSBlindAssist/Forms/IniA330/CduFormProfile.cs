@@ -30,10 +30,6 @@ internal sealed record CduFormProfile(
     /// <summary>What the cockpit calls the unit, used in the window title and every status message.</summary>
     public string Device { get; init; } = "MCDU";
 
-    /// <summary>The key that moves the flight plan to its next airport (destination, alternate, origin); after it the
-    /// window says the flight plan's first waypoint (<see cref="MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduAirportWatch"/>).</summary>
-    public string AirportKey { get; init; } = "AIRPORT";
-
     /// <summary>
     /// The A330 MCDU of one side: the captain's (<c>INI_MCDU1_</c>, <see cref="A330Gauge.McduCaptain"/>) or the first
     /// officer's (<c>INI_MCDU2_</c>, <see cref="A330Gauge.McduFirstOfficer"/>); both sides have the same keys. Key

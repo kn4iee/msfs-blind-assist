@@ -12,14 +12,11 @@ internal readonly record struct A330McduStatusRow(string Text, string? Unavailab
 /// is not drawn; "Reading the &lt;display&gt;"; and once <see cref="Forms.IniA330.A330DisplayWindow.CannotReadAfterMs"/>
 /// have passed with no page read, "The display reader cannot read the &lt;display&gt;". The count runs from when the
 /// window began wanting the display, from when the reader became Running, or from the last page read or fresh not-drawn
-/// frame, whichever is latest. Also the row over a page: the display's name, or "Colours not read yet" (spec M14), and
-/// the row for a frame that does not leave hidden rows out (spec M15). Pure: the clock is the caller's.
+/// frame, whichever is latest. Also the row over a page, the display's name, and "Reading the &lt;display&gt;" for a
+/// frame that does not leave hidden rows out (spec M15). Pure: the clock is the caller's.
 /// </summary>
 internal sealed class A330McduStatus
 {
-    public const string ColoursNotReadRow = "Colours not read yet";
-    public const string ListRowsNotReadRow = "List rows not read yet";
-
     private const string UnavailablePrefix = "A330 displays unavailable: ";
 
     private readonly int _refreshMs;
@@ -54,14 +51,16 @@ internal sealed class A330McduStatus
 
         _countFrom ??= nowMs;
         if (nowMs - _countFrom.Value < Forms.IniA330.A330DisplayWindow.CannotReadAfterMs)
-            return new A330McduStatusRow("Reading the " + name, null);
+            return new A330McduStatusRow(ReadingRow(gauge), null);
         string cannot = "the display reader cannot read the " + name;
         return new A330McduStatusRow(Capitalised(cannot), cannot);
     }
 
-    /// <summary>The status row over a page: the display's name, or "Colours not read yet" while the frame has none.</summary>
-    public static string PageRow(A330Gauge gauge, bool coloursRead) =>
-        coloursRead ? Capitalised(A330GaugeNames.Name(gauge)) : ColoursNotReadRow;
+    /// <summary>"Reading the &lt;display&gt;": the reader is at work and the window has no page to show yet.</summary>
+    public static string ReadingRow(A330Gauge gauge) => "Reading the " + A330GaugeNames.Name(gauge);
+
+    /// <summary>The status row over a page: the display's name.</summary>
+    public static string PageRow(A330Gauge gauge) => Capitalised(A330GaugeNames.Name(gauge));
 
     /// <summary>A lasting state's words without the displays' own lead-in ("the display reader is not installed").</summary>
     private static string Reason(string stateText) =>

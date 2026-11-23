@@ -21,21 +21,21 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// (<see cref="IA330Displays.Latest"/>) as its listing (<see cref="CduLineText.Listing"/>: "Title: ..." with the page
 /// counter where the page draws one, each label row, each data row "n: value", a nameless F-PLN waypoint "unnamed",
 /// "Scratchpad: ...", as the Fenix and FlyByWire windows list a page), reconciled in place so the pilot keeps their
-/// row. With no complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or one
-/// that does not leave hidden rows out (spec M15), the list is one status row instead (<see cref="A330McduStatus"/>:
-/// the display windows' own words, or "List rows not read yet" for any complete frame that does not leave them out, on
-/// the grid or off it, as a list page whose hidden rows sit below the screen is). The status box above the list says
-/// the same, or over a page the display's name ("Captain's MCDU"), or "Colours not read yet" while the frame has no
-/// colour (spec M14), when no prompt is marked unavailable. It never shows half a page.</para>
-/// <para>What it says ([CORE-7]: once, only what the screen reader cannot say, through the non-interrupting announce).
-/// Opening the window while the reader cannot read the MCDU: "A330 MCDU unavailable: &lt;reason&gt;", again only when
-/// the reason changes, and "MCDU ready" with the first page after it (spec D3; never an AI read). A new title, unless
-/// moving the focused list to it makes the screen reader read it; one that carries TMPY adds ", temporary flight plan",
-/// or, when the screen reader reads the title, the window says "Temporary flight plan" alone; the title is said
-/// without the list's "Title: ". After a line key with a page shown, what the pressed line now holds, or "No change"
-/// when nothing on the page changed within 1.5 s, or nothing when only other rows changed
-/// (<see cref="A330McduLineKeyWatch"/>). After AIRPORT with a page shown, the first waypoint of the F-PLN it moved to,
-/// once (<see cref="A330McduAirportWatch"/>). The page's
+/// row. Only a frame that leaves hidden rows out (spec M15) is a page. The reader sends each new frame once as read and
+/// then, moments later, with its hidden rows left out; meanwhile, and for up to <see cref="HoldPageMs"/> after the last
+/// page read, the page shown stays as it is and nothing is said of it, as the Fenix window keeps its last screen. With
+/// no complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or no
+/// page within that time, the list is one status row instead, in the display windows' own words
+/// (<see cref="A330McduStatus"/>: "Reading the captain's MCDU" for any complete frame that does not leave hidden rows
+/// out). The status box above the list says the same, or over a page the display's name ("Captain's MCDU"). It never
+/// shows half a page.</para>
+/// <para>What it says: what the Fenix, FlyByWire, PMDG and MD-11 MCDU windows say, and nothing more ([CORE-7]: once,
+/// only what the screen reader cannot say, through the non-interrupting announce). Opening the window while the reader
+/// cannot read the MCDU: "A330 MCDU unavailable: &lt;reason&gt;", again only when the reason changes, and "MCDU ready"
+/// with the first page after it (the other windows' "MCDU disconnected" and "MCDU connected"; spec D3, never an AI
+/// read). A new title, unless moving the focused list to it makes the screen reader read it, said without the list's
+/// "Title: ". A line key, a page key, a slew and AIRPORT say nothing of their own: the title and the scratchpad line
+/// say what changed, and the pilot reads the list (owner, 2026-11-23). The page's
 /// scratchpad line, read back when it changes (two stable refreshes, <see cref="CduScratchpadAnnouncer"/>), without the
 /// F-PLN's slew arrows at its end (on the screen and listed, but no text on the scratchpad). A typed entry, confirmed
 /// from the MCDU's own typed line (<see cref="IA330Displays.McduScratchpad"/>), read from 150 ms after the key before
@@ -46,12 +46,8 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// that is not part of an entry. With no typed line from the reader the keys go at 150 ms a key, and the page's
 /// scratchpad line read back is the confirmation; with no page shown either, the window says "Typed ..., not
 /// confirmed". Hiding, closing or disposing the window, or a side switch, stops an entry: its other keys are not sent
-/// and nothing is said for it. CLR (Backspace, the CLR button) while the scratchpad line shows a message (the line, not
-/// the typed line; never a key's own echo: the CLR that CLR writes on an empty scratchpad, or the overfly mark alone):
-/// "Message cleared: &lt;message&gt;" once a frame shows the line without it, within 1.5 s, and no
-/// "Scratchpad cleared" for that change; the next queued message is read back as usual. With no typed line from the
-/// reader, CLR says no "Message cleared". A slew key the window does not send (below): "End of list" or "Top of list",
-/// once a press.</para>
+/// and nothing is said for it. CLR (Backspace, the CLR button) says nothing of its own: the scratchpad line's read-back
+/// says what is left, "Scratchpad cleared", or the next queued message.</para>
 /// <para>Keys. The aircraft's own <c>INI_MCDU1_&lt;KEY&gt;</c> (captain) or <c>INI_MCDU2_&lt;KEY&gt;</c> (first officer)
 /// press flags: write 1, the aircraft consumes it and resets it to 0 (writing 0 straight after kills the press,
 /// measured). Every write is sequence-prefixed so a repeated key is never coalesced by the MobiFlight channel. Keys are
@@ -62,16 +58,18 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// it, so the list looks stuck (measured 2026-11-20). On a page whose frame has a list the display clips
 /// (<see cref="A330Frame.List"/>), Page Up and Alt+Up (the MCDU's up arrow, which moves the list on to later rows) are
 /// sent only while rows of it are hidden below (<see cref="A330Frame.ListBelow"/>), Page Down and Alt+Down (back toward
-/// the top) only while rows are hidden above (<see cref="A330Frame.ListAbove"/>); otherwise the window says "End of
-/// list" or "Top of list" and sends nothing. One slew at a time each way: after a slew sent on a list, the next slew
-/// press the same way is judged on the first frame that differs from the newest one when that slew went out, waited for
-/// up to 1 s; with none, the list did not move, and the press says "End of list" or "Top of list" and sends nothing, as
-/// each later press that way does until a frame differs. A press the other way waits for nothing: it is judged at once
-/// on the page shown, so a slew back from a list's end goes at once; sent, it undoes the slew before it, which no press
-/// then waits for; refused, that slew is still awaited. Any change of the frame's texts counts as a new frame, a new
-/// scratchpad message included. With no page shown (the frames stopping during a wait included), or on a page whose
-/// frame has no such list (or does not say), the slew keys go as they always have. The Slew up and Slew down buttons
-/// are the same keys.</para>
+/// the top) only while rows are hidden above (<see cref="A330Frame.ListAbove"/>); otherwise nothing is sent and nothing
+/// is said: at a list's end a press does nothing, as on the other MCDU windows (owner, 2026-11-23: no top or end of
+/// list words). A slew is judged on a page: while the newest frame is one the reader has not yet left hidden rows out
+/// of, the press waits for one that has, up to <see cref="SlewShowsWithinMs"/>, then is judged on the page shown. One
+/// slew at a time each way: after a slew sent on a list, the next slew press the same way waits, as long, for a page
+/// whose texts differ from the newest page when that slew went out; with none, the list did not move, and the press is
+/// not sent, as each later press that way is not until a page differs. A press the other way does not wait for the
+/// slew before it: it is judged on the page as it is, so a slew back from a list's end goes; sent, it undoes the slew
+/// before it, which no press then waits for; refused, that slew is still awaited. Any change of the page's texts
+/// counts as a new page, a new scratchpad message included. With no frame (the frames stopping during a wait
+/// included), no page shown, or a page whose frame has no such list (or does not say), the slew keys go as they always
+/// have. The Slew up and Slew down buttons are the same keys.</para>
 /// <para>Sides, as the Fenix window: a Left/Right selector after the status box, and Ctrl+Shift+L / Ctrl+Shift+R. A
 /// switch lets the old side's display go, wants the new one, switches the key prefix, starts the title and scratchpad
 /// read-backs afresh and, off the selector, says "Left MCDU" or "Right MCDU"; then, as the Fenix window does, the new
@@ -92,14 +90,15 @@ public sealed class IniA330CduForm : Form
     private const int KeyShowsWithinMs = 600;  // how long a typed key may take to show on the typed line
     private const int KeyPollMs = 25;
     private const int TypedEchoMs = 3 * RefreshMs;   // the page's frames show an unconfirmed entry within three refreshes
-    private const int ClearShowsWithinMs = 1500;     // how long a cleared message may take to leave the scratchpad line
-    private const int SlewShowsWithinMs = 1000;      // how long a slew may take to show before the list is taken as not moved
 
-    /// <summary>Said for a slew key not sent, its list showing its last row (Page Up moves on to later rows).</summary>
-    internal const string EndOfList = "End of list";
+    /// <summary>How long a slew may take to show as a page (the reader's frame, then the same with its hidden rows left
+    /// out) before the list is taken as not moved.</summary>
+    internal const int SlewShowsWithinMs = 1500;
 
-    /// <summary>Said for a slew key not sent, its list showing its first row (Page Down moves back toward the top).</summary>
-    internal const string TopOfList = "Top of list";
+    /// <summary>How long after the last page read the page shown stays while the newest frames are ones the reader has
+    /// not left hidden rows out of yet (it does within moments, or tries again 2 s after a frame it could not): the
+    /// owner's ceiling for a display to refresh.</summary>
+    internal const int HoldPageMs = 3000;
 
     private readonly IA330Displays _displays;
     private readonly SimConnectManager _sim;
@@ -128,14 +127,12 @@ public sealed class IniA330CduForm : Form
     private A330Gauge _wantedGauge;
     private IReadOnlyList<A330McduLine>? _shownPage;   // the page listed now; null while the status row is
     private A330Frame? _shownFrame;                    // the frame that page came from; null while the status row is
-    private (A330Frame Frame, bool Up)? _slewPending;  // a slew sent on a list, its way and the newest frame then, until a frame differs
+    private (A330Frame Frame, bool Up)? _slewPending;  // a slew sent on a list, its way and the newest page then, until a page differs
+    private long _pageReadAt;                          // when the page shown was last read
     private string _lastTitle = "";
     private int? _rowBeforeGap;                        // the pilot's row when a page gave way to the status row
-    private A330McduLineKeyWatch? _lineWatch;
-    private A330McduAirportWatch? _airportWatch;
     private bool _titleAfterSwitch;                    // a side switch: the new side's first title is said
     private string? _alreadySaid;                      // the typed line the window last said for an entry, until the next key
-    private (string Message, long Until)? _clearing;   // CLR pressed on a message: said once its line no longer holds it
     private int _entryGeneration;                      // moves on when the window hides or switches side: an entry stops
     private long? _lastKeyMs;
     private int _seq;
@@ -288,8 +285,6 @@ public sealed class IniA330CduForm : Form
     private void StopWanting()
     {
         _timer.Stop();
-        _lineWatch = null;
-        _airportWatch = null;
         _entryGeneration++;   // an entry in progress stops: hidden, closed or disposed
         if (!_wanting) return;
         _wanting = false;
@@ -303,11 +298,8 @@ public sealed class IniA330CduForm : Form
         _scratch.Reset();
         _lastTitle = "";
         _titleAfterSwitch = false;
-        _lineWatch = null;
-        _airportWatch = null;
         _rowBeforeGap = null;
         _alreadySaid = null;
-        _clearing = null;
         _slewPending = null;
     }
 
@@ -357,18 +349,17 @@ public sealed class IniA330CduForm : Form
         if (frame is not null && screen is { HiddenRowsLeftOut: true })
         {
             _status.Restart(now);
+            _pageReadAt = now;
             var page = A330McduLines.From(screen);
-            SetStatus(A330McduStatus.PageRow(gauge, frame.Texts.Any(t => t.Colour is not null)));
+            SetStatus(A330McduStatus.PageRow(gauge));
             _shownFrame = frame;
-            // A frame that differs from the one a slew went out on: the next slew is judged on the page as it is. Any
+            // A page that differs from the one a slew went out on: the next slew is judged on the page as it is. Any
             // change of the texts counts (SameTexts, the client's own test of a changed frame), a new scratchpad message
-            // included, so a press can then be judged on a frame that has not shown the slew yet.
+            // included, so a press can then be judged on a page that has not shown the slew yet.
             if (_slewPending is { } pending && !A330ReaderClient.SameTexts(pending.Frame.Texts, frame.Texts)) _slewPending = null;
             ShowPage(page);
             Speak(_availability.Next(null, pageShown: true));
             FeedScratchpad(page, now);
-            FollowLineKey(page, now);
-            FollowAirportKey(page, now);
             return;
         }
 
@@ -376,20 +367,24 @@ public sealed class IniA330CduForm : Form
         string? reason = null;
         if (frame is { Complete: true, HiddenRowsLeftOut: false })
         {
-            // Read, but rows the MCDU does not show may be in it (spec M15): no page rows, and nothing said of them. A
-            // list page's hidden rows can sit below the screen, which puts the frame off the grid; the reader is at work
-            // all the same, so the frame restarts the "cannot read" count as a page does (as A330DisplayWindow's does).
+            // Read, but rows the MCDU does not show may be in it (spec M15): no page rows, and nothing said of them. The
+            // reader sends every new frame so once, before it has left those rows out, so the page shown stays for a
+            // while, unchanged and unspoken, as the Fenix window keeps its last screen. A list page's hidden rows can sit
+            // below the screen, which puts the frame off the grid; the reader is at work all the same, so the frame
+            // restarts the "cannot read" count as a page does (as A330DisplayWindow's does).
             _status.Restart(now);
-            row = A330McduStatus.ListRowsNotReadRow;
+            if (_shownPage is not null && now - _pageReadAt < HoldPageMs) return;
+            row = A330McduStatus.ReadingRow(gauge);
         }
         else (row, reason) = _status.Row(_displays.State, _displays.StatusText, _displays.Newest(gauge), gauge, now);
         SetStatus(row);
         ShowStatusRow(row);
         Speak(_availability.Next(reason, pageShown: false));
-        if (_lineWatch?.Expired(now) == true) _lineWatch = null;
-        if (_airportWatch?.Expired(now) == true) _airportWatch = null;
-        if (_clearing is { } c && now > c.Until) _clearing = null;
     }
+
+    /// <summary>True for a frame the window shows as a page: complete, on the MCDU's grid, its hidden rows left out.</summary>
+    private static bool ShowsPage(A330Frame frame) =>
+        frame.Complete && A330McduScreen.From(frame) is { HiddenRowsLeftOut: true };
 
     private void SetStatus(string s)
     {
@@ -409,16 +404,11 @@ public sealed class IniA330CduForm : Form
         if (title.Length > 0 && title != _lastTitle)
         {
             // Moving the focused list to the title row makes the screen reader read it; announce only when that will
-            // not happen (focus elsewhere, or already on row 0), never both. A temporary flight plan is said either way,
-            // so a pilot knows INSERT is waiting: after the title, or alone when the screen reader reads the title.
+            // not happen (focus elsewhere, or already on row 0), never both. The title is said as it is drawn (a
+            // temporary flight plan's carries TMPY), as the Fenix and FlyByWire windows say theirs.
             // The first page of an open is not a title change; the first of a side switch is.
             bool selectionSpeaks = ScreenHasFocus() && saved != 0 && _display.Items.Count > 0;
-            bool temporary = title.Contains("TMPY", StringComparison.Ordinal);
-            if (_lastTitle.Length > 0 || _titleAfterSwitch)
-            {
-                if (!selectionSpeaks) Speak(temporary ? title + ", temporary flight plan" : title);
-                else if (temporary) Speak("Temporary flight plan");
-            }
+            if ((_lastTitle.Length > 0 || _titleAfterSwitch) && !selectionSpeaks) Speak(title);
             _lastTitle = title;
             _titleAfterSwitch = false;
             target = 0;
@@ -446,23 +436,6 @@ public sealed class IniA330CduForm : Form
     {
         if (_typing) return;
         string row = ScratchpadText(page[A330McduLines.ScratchpadRow]);
-        if (_clearing is { } clearing)
-        {
-            if (now > clearing.Until) _clearing = null;
-            else if (row != clearing.Message)
-            {
-                // CLR took the message off the line: say which, once. An emptied line is then the read-back's silent
-                // starting point (no "Scratchpad cleared" for it); the next queued message is read back as usual.
-                _clearing = null;
-                Speak("Message cleared: " + clearing.Message);
-                if (row.Length == 0)
-                {
-                    _scratch.Reset();
-                    _scratch.OnPoll(row, Utc(now));
-                    return;
-                }
-            }
-        }
         if (_alreadySaid is { } said && said.StartsWith(row, StringComparison.Ordinal))
         {
             _scratch.Reset();
@@ -480,22 +453,6 @@ public sealed class IniA330CduForm : Form
         foreach (var cell in line.Cells)
             text.Append(cell is { } c && c.Character is not ('e' or 'f') ? A330McduCharacters.Display(c) : " ");
         return text.ToString().Trim();
-    }
-
-    private void FollowLineKey(IReadOnlyList<A330McduLine> page, long now)
-    {
-        if (_lineWatch is null) return;
-        var (over, say) = _lineWatch.OnPage(page, now);
-        if (over) _lineWatch = null;
-        Speak(say);
-    }
-
-    private void FollowAirportKey(IReadOnlyList<A330McduLine> page, long now)
-    {
-        if (_airportWatch is null) return;
-        var (over, say) = _airportWatch.OnPage(page, now);
-        if (over) _airportWatch = null;
-        Speak(say);
     }
 
     /// <summary>A refresh's sentence, said only while the window is shown.</summary>
@@ -542,11 +499,6 @@ public sealed class IniA330CduForm : Form
         if (wait > 0) await Delay((int)wait);
     }
 
-    private static int? LineOf(string key) =>
-        key.Length == 5 && key.StartsWith("LSK", StringComparison.Ordinal) && key[3] is >= '1' and <= '6' && key[4] is 'L' or 'R'
-            ? key[3] - '0'
-            : null;
-
     private void Press(string key)
     {
         _alreadySaid = null;   // a key that is no part of an entry: whatever it brings to the scratchpad line is said
@@ -573,13 +525,15 @@ public sealed class IniA330CduForm : Form
                 }
                 await PaceAsync();
                 if (IsDisposed || !Send(profile, key)) return;
-                // One slew at a time each way: on a list, the next slew this way waits for a frame that differs from the
-                // newest one now.
-                if (slew) _slewPending = list is not null && ReferenceEquals(profile, _profile) ? (_displays.Latest(profile.Gauge) ?? list, up) : null;
-                if (LineOf(key) is int line && _shownPage is { } page && ReferenceEquals(profile, _profile))
-                    _lineWatch = new A330McduLineKeyWatch(line, page, NowMs());
-                if (key == profile.AirportKey && _shownPage is { } shown && ReferenceEquals(profile, _profile))
-                    _airportWatch = new A330McduAirportWatch(shown, NowMs());
+                // One slew at a time each way: on a list, the next slew this way waits for a page that differs from the
+                // newest page now.
+                if (slew)
+                {
+                    var newest = _displays.Latest(profile.Gauge);
+                    _slewPending = list is not null && ReferenceEquals(profile, _profile)
+                        ? (newest is not null && ShowsPage(newest) ? newest : list, up)
+                        : null;
+                }
             }
             finally { _keyGate.Release(); }
         }
@@ -589,63 +543,50 @@ public sealed class IniA330CduForm : Form
         }
     }
 
-    /// <summary>Whether a slew key of the side shown goes, and, when it goes, the list frame the next slew its way is to
+    /// <summary>Whether a slew key of the side shown goes, and, when it goes, the list page the next slew its way is to
     /// wait on (null when the key goes as it always has, no page shown or a page whose frame has no list the display clips,
     /// and when it undoes an unshown slew the other way). On such a list Page Up goes only while rows are hidden below,
-    /// Page Down only while rows are hidden above. After a slew sent on a list, the next press the SAME way waits up to
-    /// <see cref="SlewShowsWithinMs"/> for a frame that differs from the newest one then; a press the other way waits for
-    /// nothing and is judged at once on the page shown (a slew back from a list's end goes at once). A key not sent says
-    /// <see cref="EndOfList"/> or <see cref="TopOfList"/> for its direction, once ([CORE-7]: the screen reader cannot say
-    /// it); a window hidden, closed, disposed or switched to the other side during the wait sends and says nothing.</summary>
+    /// Page Down only while rows are hidden above. While the newest frame is not yet a page (the reader has not left its
+    /// hidden rows out), the press waits up to <see cref="SlewShowsWithinMs"/> for one, then is judged on the page shown.
+    /// After a slew sent on a list, the next press the SAME way waits as long for a page that differs from the newest page
+    /// then, and with none the list did not move; a press the other way does not wait for that slew. A key not sent is
+    /// silent, as a press at a list's end is on the other MCDU windows; a window hidden, closed, disposed or switched to
+    /// the other side during the wait sends nothing.</summary>
     private async Task<(bool Send, A330Frame? Awaited)> SlewAsync(CduFormProfile profile, bool up)
     {
-        string notSent = up ? EndOfList : TopOfList;
         int generation = _entryGeneration;
-        if (_slewPending is { } pending && pending.Up == up)
+        var pending = _slewPending is { } p && p.Up == up ? p : ((A330Frame Frame, bool Up)?)null;
+        // Wait for a page: one the reader has left the hidden rows out of, and after a slew this way one that differs
+        // from the page then (any change of its texts counts, see RefreshNow). No frame at all: no page, and the key goes
+        // as it always has.
+        long since = NowMs();
+        while (_displays.Latest(profile.Gauge) is { } latest
+               && (!ShowsPage(latest) || (pending is { } same && A330ReaderClient.SameTexts(latest.Texts, same.Frame.Texts))))
         {
-            // No frame has shown the last slew this way yet: wait for one that differs (any change of its texts counts,
-            // see RefreshNow). None in time: the list did not move.
-            long since = NowMs();
-            while (_displays.Latest(profile.Gauge) is { } latest && A330ReaderClient.SameTexts(latest.Texts, pending.Frame.Texts))
+            if (NowMs() - since >= SlewShowsWithinMs)
             {
-                if (NowMs() - since >= SlewShowsWithinMs)
-                {
-                    Speak(notSent);
-                    return (false, null);
-                }
-                await Delay(KeyPollMs);
-                if (IsDisposed || _entryGeneration != generation) return (false, null);
+                if (pending is not null) return (false, null);   // the slew before it never showed: the list did not move
+                break;                                           // no page in time: judged on the page shown
             }
-            // A frame that differs, or none at all (no page: the key goes as it always has).
-            _slewPending = null;
+            await Delay(KeyPollMs);
+            if (IsDisposed || _entryGeneration != generation) return (false, null);
         }
+        if (pending is not null) _slewPending = null;
         // The page judged is the one shown, and the newest frame's.
         if (Visible) RefreshNow();
         if (_shownFrame is not { List: true } frame) return (true, null);
-        if (!(up ? frame.ListBelow : frame.ListAbove))
-        {
-            // Refused: an unshown slew the other way is still awaited by the next press its way.
-            Speak(notSent);
-            return (false, null);
-        }
+        // Refused, silently: an unshown slew the other way is still awaited by the next press its way.
+        if (!(up ? frame.ListBelow : frame.ListAbove)) return (false, null);
         // Sent against an unshown slew the other way, it undoes that one: the list is back where the page shown has it,
         // so no press waits on either.
         bool undoes = _slewPending is { } other && other.Up != up;
         return (true, undoes ? null : frame);
     }
 
-    /// <summary>CLR. On a message (the page's scratchpad line, not the MCDU's typed line, <see cref="A330McduMessages.Message"/>)
-    /// the window says "Message cleared: ..." once a frame shows the line without it, within 1.5 s, or nothing. With no
-    /// typed line from the reader, typed text cannot be told from a message, so it says nothing of the kind.</summary>
+    /// <summary>CLR. It says nothing of its own: the scratchpad line's read-back says what CLR left.</summary>
     private void Clear()
     {
-        long now = NowMs();
-        _scratch.SuppressUntil = Utc(now + 400);
-        _clearing = _shownPage is { } page
-            && _displays.McduScratchpad(_profile.FirstOfficer) is { } typed
-            && A330McduMessages.Message(ScratchpadText(page[A330McduLines.ScratchpadRow]), typed) is { } message
-                ? (message, now + ClearShowsWithinMs)
-                : null;
+        _scratch.SuppressUntil = Utc(NowMs() + 400);
         Press("CLR");
     }
 
