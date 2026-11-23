@@ -15,4 +15,9 @@ public sealed record A330Text(int Order, float X, float Baseline, string Text, s
 /// it is a state, not a failure.
 /// HiddenRowsLeftOut is true only when the reader vouches that rows the display does not show (the rest of a list) are left
 /// out; false until spec M15 is solved. On the wire "hiddenRowsLeftOut":true, absent meaning false.
-public sealed record A330Frame(A330Gauge Gauge, IReadOnlyList<A330Text> Texts, bool Complete, int Missing, long ReadTicks, bool Drawn = true, bool HiddenRowsLeftOut = false);
+/// List is true when the frame has a list the display clips (shows only some of its rows); ListAbove when rows of that list
+/// are hidden above the ones shown, ListBelow when rows of it are hidden below them. All three are false for a frame
+/// without such a list, and while the reader does not say. On the wire "list":true, "listAbove":true and "listBelow":true,
+/// each absent meaning false.
+public sealed record A330Frame(A330Gauge Gauge, IReadOnlyList<A330Text> Texts, bool Complete, int Missing, long ReadTicks, bool Drawn = true, bool HiddenRowsLeftOut = false,
+    bool List = false, bool ListAbove = false, bool ListBelow = false);

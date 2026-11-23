@@ -128,25 +128,33 @@ internal static class A330ReaderProtocol
             if (d.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
             drawn = d.GetBoolean();
         }
-        bool hidden = false;
-        if (f.TryGetProperty("hiddenRowsLeftOut", out var h))
-        {
-            if (h.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
-            hidden = h.GetBoolean();
-        }
+        if (!Flag(f, "hiddenRowsLeftOut", out bool hidden)
+            || !Flag(f, "list", out bool list) || !Flag(f, "listAbove", out bool above) || !Flag(f, "listBelow", out bool below))
+            return null;
 
         // A display that draws nothing: no texts and not complete, whatever the line's complete and texts say (its texts
         // are not read).
-        if (!drawn) return new A330Frame(gauge.Value, [], Complete: false, miss, nowTicks, Drawn: false, hidden);
+        if (!drawn) return new A330Frame(gauge.Value, [], Complete: false, miss, nowTicks, Drawn: false, hidden, list, above, below);
 
-        var list = new List<A330Text>();
+        var read = new List<A330Text>();
         foreach (var te in texts.EnumerateArray())
         {
             var t = ReadText(te);
             if (t == null) return null;
-            list.Add(t);
+            read.Add(t);
         }
-        return new A330Frame(gauge.Value, list, complete.GetBoolean(), miss, nowTicks, drawn, hidden);
+        return new A330Frame(gauge.Value, read, complete.GetBoolean(), miss, nowTicks, drawn, hidden, list, above, below);
+    }
+
+    /// An optional true/false of the frame object, absent meaning false; false when it is there and not a true or false
+    /// (the frame is then malformed).
+    private static bool Flag(JsonElement f, string key, out bool value)
+    {
+        value = false;
+        if (!f.TryGetProperty(key, out var e)) return true;
+        if (e.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
+        value = e.GetBoolean();
+        return true;
     }
 
     private static A330Text? ReadText(JsonElement t)
