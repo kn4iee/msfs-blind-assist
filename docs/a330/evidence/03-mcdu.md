@@ -135,3 +135,23 @@ read-only box, first in the tab order; the scratchpad line is always listed.
 - **Backspace on a message:** the A32NX and the Fenix speak the line's next state; the A330 says "Message cleared:
   <message>" (the plan's Review Focus) and then the line's next state: for the owner to rule.
 - **The lamps:** the Fenix's "MCDU FM Captain: On" / "MCDU FM FO: On".
+
+## 2026-11-22, after landing: the window's pages with the display reader's new build
+
+The display reader's build of that evening (its own private work) gives the MCDU's colours and leaves out the list rows
+the MCDU hides, and says whether a list has rows hidden above or below. Measured through the reader's `capture` command
+on the first officer's MCDU only (the owner had given free rein on that side; FROM/TO EDDF/EDDM typed there to have a
+long list, which the FMS cannot blank again: the owner was told):
+
+| Page | Frame | Kept | Left out | List flags |
+| --- | --- | --- | --- | --- |
+| F-PLN in flight (earlier that day) | 50 texts | everything on the screen | a leg's label above the list, the row under the destination line | (before the flags existed) |
+| F-PLN after landing (PPOS, discontinuity, END OF F-PLN) | 21 texts | all 21 | none | none |
+| DEPARTURES at EDDF, not slewed | 36 texts | title, header, four runways, <RETURN | the 5th runway (under <RETURN), the 6th (on the scratchpad line), the rest below the screen | list, below |
+| the same after one slew (UARROW) | 36 texts | title, header, runways 5 to 8, <RETURN | runways 1 to 4 (two above the screen, two over the header lines) | list, above |
+| INIT right after the FROM/TO entry | 17 texts | (not vouched for) | | none: the reader could not vouch for it, so the window would list "List rows not read yet" for that frame |
+
+The not-slewed DEPARTURES frame through the window's rules lists exactly the cockpit's screen: the title, `RWY SID TRANS`,
+the four runways each with its course and ILS, `<RETURN` and an empty scratchpad line. Colours came with most texts
+(white, green, cyan, amber, magenta). Put back: the first officer's MCDU left on that DEPARTURES list, FROM/TO EDDF/EDDM in
+the FMS.
