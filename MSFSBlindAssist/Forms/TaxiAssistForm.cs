@@ -4873,9 +4873,10 @@ public class TaxiAssistForm : Form
                         _announcer.AnnounceImmediate("Pick the taxiway or holding point to hold short of.");
                         return;
                     }
-                    // The first junction the route reaches by TAXI distance, never one inside a
-                    // runway's clear margin (FindTaxiwayIntersectionNodes leaves those out). A fresh
-                    // router: its BlockedNodes is empty (TURN-1).
+                    // The junction nearest the start node by graph distance, never one inside a
+                    // runway's clear margin (FindTaxiwayIntersectionNodes leaves those out); the
+                    // manager's ApplyLegEndSetback then ends the leg at the first meeting along the
+                    // route itself. A fresh router: its BlockedNodes is empty (TURN-1).
                     var distancesFromStartNode = new TaxiRouter(_graph).ComputeGraphDistancesFrom(startNode.NodeId);
                     destNode = TaxiwayHoldPlacement.NearestByTaxiDistance(
                         _graph.FindTaxiwayIntersectionNodes(lastTaxiway, taxiwayTarget, destComponentId),
