@@ -64,6 +64,11 @@ public partial class TaxiGuidanceManager
         int nextIdx = _currentSegmentIndex + 1;
         if (nextIdx >= _route.Segments.Count)
         {
+            // A leg with no destination (Progressive Taxi) has no "X ahead.": its end is counted
+            // down by CheckHoldShortCountdown, the way a hold short is.
+            if (_progressiveTerminator != null)
+                return;
+
             // Hold during the start-warning grace window (_startChatterSuppressUntil,
             // armed by StartGuidance whenever a route-reach or unmapped-start warning
             // exists): this callout would otherwise cut off a warning spoken by the
