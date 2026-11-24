@@ -15,7 +15,7 @@ using MSFSBlindAssist.Settings;
 // entered with no hold short, route changes while following the tone, and so on.
 //
 //   dotnet run --project tools/VirtualPilot -p:Platform=x64 -c Release -- <mode> [options]
-//     mode: landings | taxi | all | wrongturn | departures | traffic | turnpicks | fetchosm
+//     mode: landings | taxi | all | wrongturn | departures | traffic | turnpicks | legends | fetchosm
 //     --airports N          busiest N airports by taxi-path count (default 100)
 //     --icao A,B,C          explicit airport list (overrides --airports)
 //     --shard i/n           run only airports i, i+n, i+2n … (for parallel processes)
@@ -79,6 +79,11 @@ int landings = 0, taxis = 0;
 var settings = new UserSettings { TaxiGuidanceToneVolume = 0.0, TaxiGuidanceHardPanTone = false };
 var started = DateTime.Now;
 string? depTraceFilter = null;
+#if !OLDAPP
+// The `legends` mode: one row per leg flown, and its CSV (<out>.legends.csv).
+var legendRows = new List<LegendRow>();
+StreamWriter? legendCsv = null;
+#endif
 
 if (opt.Trace != null) { captureLog = true; RunTrace(opt.Trace); return 0; }
 
@@ -86,6 +91,13 @@ outWriter = new StreamWriter(opt.Out) { AutoFlush = true };
 resultsWriter = new StreamWriter(Path.ChangeExtension(opt.Out, ".results.txt")) { AutoFlush = false };
 var outFile = outWriter;
 outFile.WriteLine($"# VirtualPilot {opt.Mode} — {airports.Count} airports — {nav.Sim} navdata — {DateTime.Now:yyyy-MM-dd HH:mm}");
+#if !OLDAPP
+if (opt.Mode == "legends")
+{
+    legendCsv = new StreamWriter(Path.ChangeExtension(opt.Out, ".legends.csv")) { AutoFlush = true };
+    legendCsv.WriteLine(LegendRow.Header);
+}
+#endif
 int ai = 0;
 foreach (var icao in airports)
 {
@@ -105,6 +117,7 @@ foreach (var icao in airports)
 #if !OLDAPP
         if (opt.Mode is "traffic") RunTraffic(w);
         if (opt.Mode is "turnpicks") RunTurnPicks(w);
+        if (opt.Mode is "legends") RunLegEnds(w);
 #endif
     }
     catch (Exception ex) { Add(new Finding(icao, "HARNESS_EXCEPTION", "", ex.ToString().Split('\n')[0])); }
@@ -113,6 +126,9 @@ foreach (var icao in airports)
 }
 
 outFile.WriteLine();
+#if !OLDAPP
+if (opt.Mode == "legends") { LegendSummary(outFile); legendCsv?.Dispose(); }
+#endif
 outFile.WriteLine($"# landings={landings} taxis={taxis}");
 foreach (var kv in counts) outFile.WriteLine($"# {kv.Key,-28} {kv.Value}");
 Console.WriteLine($"landings={landings} taxis={taxis}");
@@ -597,6 +613,582 @@ static (List<TaxiNode> path, (double lat, double lon) at)? ChartedWayAt(TaxiRout
     return null;
 }
 
+// ── Leg ends: "hold short of taxiway B" on a leg with no destination ─────────────
+// A Progressive Taxi leg, "via A, hold short of taxiway B", loaded as the form loads it: the junction
+// is the first by taxi distance from the node the aircraft is on (FindTaxiwayIntersectionNodes +
+// NearestByTaxiDistance, which leave out a junction inside a runway's clear margin), the wingspan
+// 36 m. Per airport, up to K ordered pairs (A, B) that meet clear of every runway, in a seeded order:
+//   plain: start on A, 250 to 600 m along A from the nearest junction and facing it (only where the
+//          form's own pick is that junction);
+//   turn:  for up to K pairs where A meets B on both sides of a node M at which a taxiway Z joins A,
+//          start on Z 150 to 400 m before M, facing M, where A leaves M to each side (a T), the form's
+//          junction is on one of M's two arms and the clearance's route turns onto A at M, and load
+//          "via Z, A" with the Turn on A's row set Left, then Right (spec 8.1: a turn word is the Turn
+//          pick).
+// Each leg is flown following the tone; the pilot brakes on any line ending "Stop." and the flight
+// ends at a standstill after the leg has ended (ProgressiveHold). Where it ended and where the aircraft
+// came to rest are measured HERE, along the route and on over the graph to the junction the app holds
+// short of (JunctionAhead; the node is the app's, read by reflection, with the harness's own pick of it
+// beside it as a cross-check). After every load the route is checked: each Turn pick's indices
+// still name its departure and join (LEGEND_PICK_INDEX), no off-chart leg is split
+// (LEGEND_OFFCHART_SPLIT) or ends the route (LEGEND_ENDS_OFFCHART), and a pick that changed the route
+// passes no node on B between its turn and its stop (LEGEND_PICK_NOT_FIRST_JUNCTION). The rest of the
+// route is read too: LEG_PICK_LINK_CROSSES_B on the charted link to the picked turn,
+// LEG_PASSES_B_JUNCTION without such a pick, LEG_PASSES_B_IN_RUNWAY_MARGIN for a meeting inside a
+// runway's clear margin, which the app skips by design.
+// A stop can insert a node into the airport's shared graph, as at the pilot's Calculate in the app,
+// so legs are flown in a fixed order and only nodes present at load are chosen as starts.
+void RunLegEnds(World w)
+{
+    var g = w.Graph;
+    int seed = 41; foreach (char ch in w.Icao) seed = seed * 31 + ch;
+    var rnd = new Random(seed);
+    var original = new HashSet<int>(g.Nodes.Keys);
+    // Every ordered pair of named taxiways sharing a node, with the nodes they share.
+    var pairNodes = new SortedDictionary<string, List<int>>(StringComparer.Ordinal);
+    foreach (var (id, edges) in g.Adjacency)
+    {
+        var names = edges.Select(e => e.TaxiwayName).Where(n => !string.IsNullOrWhiteSpace(n))
+                         .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var a in names)
+            foreach (var b in names)
+                if (!a.Equals(b, StringComparison.OrdinalIgnoreCase))
+                {
+                    string k = a + "\u0001" + b;
+                    if (!pairNodes.TryGetValue(k, out var l)) pairNodes[k] = l = new List<int>();
+                    l.Add(id);
+                }
+    }
+    var order = pairNodes.Keys.Select(k => (key: k, r: rnd.Next())).OrderBy(x => x.r).ThenBy(x => x.key, StringComparer.Ordinal)
+                              .Select(x => x.key).ToList();
+    int plain = 0, turns = 0;
+    foreach (var key in order)
+    {
+        if (plain >= opt.TaxiPerAirport && turns >= opt.TaxiPerAirport) break;
+        var ab = key.Split('\u0001');
+        string a = ab[0], b = ab[1];
+        var junctions = new HashSet<int>();
+        foreach (int comp in pairNodes[key].Select(n => g.Nodes.TryGetValue(n, out var nn) ? nn.ComponentId : -1).Distinct())
+            foreach (int j in g.FindTaxiwayIntersectionNodes(a, b, comp)) junctions.Add(j);
+        if (junctions.Count == 0) continue;   // they meet only inside a runway's clear margin
+        if (plain < opt.TaxiPerAirport && PlainLegStart(w, a, b, junctions, original, rnd) is { } pl)
+        {
+            plain++;
+            FlyAndRecordLeg(w, pl);
+        }
+        if (turns < opt.TaxiPerAirport && TurnLegStart(w, a, b, junctions, original, rnd) is { } tl)
+        {
+            turns++;
+            foreach (var side in new[] { TurnSide.Left, TurnSide.Right })
+            {
+                tl.Pick = side;
+                FlyAndRecordLeg(w, tl);
+            }
+        }
+    }
+}
+
+void FlyAndRecordLeg(World w, LegPlan lp)
+{
+    var fs = new List<Finding>();
+    bool traced = depTraceFilter != null && lp.Describe().Contains(depTraceFilter, StringComparison.OrdinalIgnoreCase);
+    var row = FlyLeg(w, lp, traced, fs);
+    taxis++;
+    if (depTraceFilter != null)
+    {
+        if (!traced) return;
+        legendRows.Add(row);
+        foreach (var f in fs) Console.WriteLine("FINDING " + f);
+        return;
+    }
+    legendRows.Add(row);
+    legendCsv?.WriteLine(row.Csv());
+    Codes("LEGEND", w.Icao, lp.Describe(), fs);
+}
+
+/// <summary>A plain leg: a node on A 250 to 600 m along A from the nearest junction, facing it.</summary>
+LegPlan? PlainLegStart(World w, string a, string b, HashSet<int> junctions, HashSet<int> original, Random rnd)
+{
+    var g = w.Graph;
+    var (dist, toward) = AlongTaxiway(g, junctions, a, blocked: -1, maxM: 700);
+    var cands = dist.Where(kv => kv.Value >= 250 && kv.Value <= 600 && original.Contains(kv.Key))
+                    .Select(kv => kv.Key).OrderBy(x => x).ToList();
+    for (int tries = 0; tries < 8 && cands.Count > 0; tries++)
+    {
+        int i = rnd.Next(cands.Count); int id = cands[i]; cands.RemoveAt(i);
+        if (!UsableLegStart(g, id)) continue;
+        int j = id;
+        for (int guard = 0; !junctions.Contains(j) && guard < 100000; guard++) j = toward[j];
+        var sn = g.Nodes[id];
+        // The junction the form would end the leg at: only where it is the one the aircraft faces.
+        if (FormLegEnd(g, sn.Latitude, sn.Longitude, a, b) != j) continue;
+        var nx = g.Nodes[toward[id]];
+        return new LegPlan
+        {
+            Icao = w.Icao, Kind = "plain", A = a, B = b, StartNode = id, Dest = j, AlongM = dist[id],
+            Lat = sn.Latitude, Lon = sn.Longitude, Hdg = TaxiPlan.Bearing(sn.Latitude, sn.Longitude, nx.Latitude, nx.Longitude),
+            Seq = new List<string> { a },
+        };
+    }
+    return null;
+}
+
+/// <summary>
+/// A turn leg: a node M on A with exactly two A neighbours and an edge on another taxiway Z, where A
+/// meets B (clear of every runway) within 1,200 m on both sides; the start is on Z, 150 to 400 m along
+/// Z from M, facing M, on a stretch of Z that touches neither A nor B before M, and arriving along it A
+/// leaves M 30 to 150 degrees to each side (a T).
+/// </summary>
+LegPlan? TurnLegStart(World w, string a, string b, HashSet<int> junctions, HashSet<int> original, Random rnd)
+{
+    var g = w.Graph;
+    var ms = new List<(int m, string z)>();
+    foreach (var (id, edges) in g.Adjacency)
+    {
+        if (!original.Contains(id) || edges.Any(e => Named(e.TaxiwayName, b))) continue;
+        if (edges.Where(e => Named(e.TaxiwayName, a)).Select(e => e.ToNodeId).Distinct().Count() != 2) continue;
+        foreach (var z in edges.Select(e => e.TaxiwayName)
+                     .Where(n => !string.IsNullOrWhiteSpace(n) && !Named(n, a) && !Named(n, b))
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+            ms.Add((id, z));
+    }
+    ms = ms.OrderBy(x => x.m).ThenBy(x => x.z, StringComparer.Ordinal).ToList();
+    for (int tries = 0; tries < 12 && ms.Count > 0; tries++)
+    {
+        int i = rnd.Next(ms.Count); var (m, z) = ms[i]; ms.RemoveAt(i);
+        var mn = g.Nodes[m];
+        if (!ClearOfRunwaysAt(g, mn.Latitude, mn.Longitude)) continue;
+        var arms = new List<int>();
+        foreach (int nb in g.Adjacency[m].Where(e => Named(e.TaxiwayName, a)).Select(e => e.ToNodeId).Distinct())
+        {
+            var (d, _) = AlongTaxiway(g, new[] { nb }, a, blocked: m, maxM: 1200);
+            int jn = d.Where(kv => junctions.Contains(kv.Key)).OrderBy(kv => kv.Value).ThenBy(kv => kv.Key)
+                      .Select(kv => kv.Key).DefaultIfEmpty(-1).First();
+            if (jn >= 0) arms.Add(jn);
+        }
+        if (arms.Count != 2 || arms[0] == arms[1]) continue;
+        var (zd, zToward) = AlongTaxiway(g, new[] { m }, z, blocked: -1, maxM: 420);
+        var zc = zd.Where(kv => kv.Value >= 150 && kv.Value <= 400 && original.Contains(kv.Key))
+                   .Select(kv => kv.Key).OrderBy(x => x).ToList();
+        while (zc.Count > 0)
+        {
+            int k = rnd.Next(zc.Count); int s = zc[k]; zc.RemoveAt(k);
+            if (!UsableLegStart(g, s) || HasEdgeNamed(g, s, a) || HasEdgeNamed(g, s, b)) continue;
+            bool clean = true; int beforeM = s;
+            for (int c = zToward[s]; c != m; c = zToward[c])
+            {
+                if (HasEdgeNamed(g, c, a) || HasEdgeNamed(g, c, b)) { clean = false; break; }
+                beforeM = c;
+            }
+            if (!clean) continue;
+            // A T: arriving along Z, one arm of A leaves 30 to 150 degrees to the left and the other as
+            // much to the right, so both Turn picks name a real turn.
+            var bm = g.Nodes[beforeM];
+            double arrive = TaxiPlan.Bearing(bm.Latitude, bm.Longitude, mn.Latitude, mn.Longitude);
+            var rel = g.Adjacency[m].Where(e => Named(e.TaxiwayName, a)).Select(e => e.ToNodeId).Distinct()
+                       .Select(id => Geo.Norm(TaxiPlan.Bearing(mn.Latitude, mn.Longitude, g.Nodes[id].Latitude, g.Nodes[id].Longitude) - arrive))
+                       .ToList();
+            if (!(rel.Count == 2 && rel.Any(r => r <= -30 && r >= -150) && rel.Any(r => r >= 30 && r <= 150))) continue;
+            var sn = g.Nodes[s]; var nx = g.Nodes[zToward[s]];
+            // The form's end is a junction on one of M's two arms, and the clearance's own route (no
+            // pick) turns onto A at M: a turn the pilot could be told to make either way.
+            int dest = FormLegEnd(g, sn.Latitude, sn.Longitude, a, b);
+            if (dest != arms[0] && dest != arms[1]) continue;
+            var plainWay = new TaxiRouter(g).FindConstrainedPath(s, dest, new List<string> { z, a });
+            int atM = plainWay?.Segments.FindIndex(sg => sg.FromNode.NodeId == m) ?? -1;
+            if (atM < 0 || !Named(plainWay!.Segments[atM].TaxiwayName, a)) continue;
+            return new LegPlan
+            {
+                Icao = w.Icao, Kind = "turn", A = a, B = b, Z = z, M = m, StartNode = s, Dest = dest, AlongM = zd[s],
+                Lat = sn.Latitude, Lon = sn.Longitude, Hdg = TaxiPlan.Bearing(sn.Latitude, sn.Longitude, nx.Latitude, nx.Longitude),
+                Seq = new List<string> { z, a },
+            };
+        }
+    }
+    return null;
+}
+
+/// <summary>Loads one leg as the form does, checks the route, flies it and measures where it ended.</summary>
+LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
+{
+    string where = lp.Describe();
+    if (trace) Console.WriteLine("=== " + w.Icao + " " + where);
+    var g = w.Graph;
+    var row = new LegendRow
+    {
+        Icao = w.Icao, Kind = lp.Kind, A = lp.A, B = lp.B, Z = lp.Z ?? "", Pick = lp.Pick?.ToString() ?? "none",
+        StartM = lp.AlongM, FormDest = lp.Dest,
+    };
+    var cap = new Cap(() => simNow);
+    var mgr = new TaxiGuidanceManager(cap);
+    try
+    {
+        mgr.AircraftWingspanMetres = 36;
+        string? err = mgr.LoadRoute(provider, w.Icao, lp.Lat, lp.Lon, lp.Hdg, lp.Dest, $"hold short of taxiway {lp.B}",
+            new List<string>(lp.Seq), null,
+            destinationHeading: null, destinationThresholdLat: null, destinationThresholdLon: null, destinationHeadingTrue: null,
+            isRunwayDestination: false, prebuiltGraph: g, announceSummary: true,
+            progressiveTerminator: new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortTaxiway, lp.B),
+            userTurnPicks: lp.Pick is { } pickSide ? new Dictionary<int, TurnSide> { [1] = pickSide } : null);
+        string said = ((mgr.LastRouteSummary ?? "") + " " + (StartWarning(mgr) ?? "")).Trim();
+        var route = mgr.CurrentRoute;
+        if (trace) Console.WriteLine($"LOAD {err ?? "ok"}: {said}");
+        if (err != null || route == null || route.Segments.Count == 0)
+        {
+            row.Outcome = lp.Pick == null ? "" : "LOAD_FAILED";
+            row.Note = "refused: " + (err ?? "no route");
+            fs.Add(new Finding(w.Icao, "LEG_ROUTE_REFUSED", where, err ?? "no route"));
+            return row;
+        }
+
+        // What became of the pick, as the summary note says it (the turnpicks mode's reading).
+        AppliedTurnPick? applied = null;
+        if (lp.Pick is { } side)
+        {
+            applied = route.TurnPicks.FirstOrDefault(p => p.RowIndex == 1);
+            string sideWord = side == TurnSide.Left ? "left" : "right";
+            row.Outcome =
+                said.Contains($"no {sideWord} turn onto taxiway", StringComparison.OrdinalIgnoreCase) ? "NO_TURN"
+                : said.Contains("does not lead to", StringComparison.OrdinalIgnoreCase) ? "NO_LEAD"
+                : said.Contains("would be a long detour", StringComparison.OrdinalIgnoreCase) ? "DETOUR"
+                : said.Contains($"onto taxiway {lp.A} does not pass", StringComparison.OrdinalIgnoreCase) ? "NO_PIN"
+                : applied == null ? "SILENT"
+                : applied.IsOffChart ? "OFFCHART" : applied.ChangedRoute ? "CHARTED" : "MET";
+        }
+
+        // The route as loaded: the stop placement left every pick's indices and the off-chart leg whole.
+        int n = route.Segments.Count;
+        foreach (var p in route.TurnPicks)
+        {
+            bool depOk = p.FirstSegmentAfterDeparture >= 0 && p.FirstSegmentAfterDeparture < n
+                         && route.Segments[p.FirstSegmentAfterDeparture].FromNode.NodeId == p.DepartureNodeId;
+            bool joinOk = p.FirstTaxiwaySegment >= 0 && p.FirstTaxiwaySegment < n
+                          && route.Segments[p.FirstTaxiwaySegment].FromNode.NodeId == p.JoinNodeId;
+            if (!depOk || !joinOk)
+                fs.Add(new Finding(w.Icao, "LEGEND_PICK_INDEX", where,
+                    $"row {p.RowIndex} onto {p.TaxiwayName}: segment {p.FirstSegmentAfterDeparture} should leave n{p.DepartureNodeId}, "
+                    + $"segment {p.FirstTaxiwaySegment} should leave n{p.JoinNodeId} ({n} segments)"));
+        }
+        for (int k = 0; k + 1 < n; k++)
+            if (route.Segments[k].IsOffChartTurn && route.Segments[k + 1].IsOffChartTurn)
+            {
+                fs.Add(new Finding(w.Icao, "LEGEND_OFFCHART_SPLIT", where, $"segments {k} and {k + 1} of {n} are both off-chart"));
+                break;
+            }
+        if (route.Segments[^1].IsOffChartTurn)
+            fs.Add(new Finding(w.Icao, "LEGEND_ENDS_OFFCHART", where, $"the last of {n} segments is off-chart"));
+
+        int appJunction = AppJunctionOf(mgr);
+        if (appJunction < 0)   // the field renamed or gone: the harness's own pick stands in, and says so
+            fs.Add(new Finding(w.Icao, "LEG_APP_JUNCTION_UNREAD", where, "TaxiGuidanceManager._destinationNodeId could not be read; measured to the harness's own pick"));
+        var ahead = JunctionAhead(g, route, lp.A, lp.B, appJunction);
+        row.HarnessJunction = ahead?.harnessNode ?? -1;
+        row.RouteM = route.TotalDistanceMeters;
+        row.LastSegmentM = route.Segments[^1].DistanceMeters;
+        row.LastTaxiway = route.Segments[^1].TaxiwayName ?? "";
+        if (ahead is { } ah0) { row.SetbackM = ah0.metres; row.Junction = ah0.node; }
+        else fs.Add(new Finding(w.Icao, "LEG_JUNCTION_NOT_FOUND", where, $"no node on {lp.B} within 400 m of the route's end n{route.Segments[^1].ToNode.NodeId}"));
+
+        // The leg stops before the FIRST meeting with B along its own way (from a pick's join, the way
+        // picked): the route passes no other node on B before its stop. Judged along the route, not by
+        // a walk of the graph, which at a Y-shaped junction goes back up the branch the route left. The
+        // whole route is read: a picked route can cross B on the charted link to its turn
+        // (LEG_PICK_LINK_CROSSES_B: KDEN "D, D8, right onto D8, hold short of WC").
+        for (int k = 0; k < n; k++)
+        {
+            var node = route.Segments[k].ToNode;
+            if (node.NodeId == (ahead?.node ?? -1) || !HasEdgeNamed(g, node.NodeId, lp.B)) continue;
+            bool inMargin = !ClearOfRunwaysAt(g, node.Latitude, node.Longitude);
+            bool beforeTheTurn = applied != null && k < applied.FirstTaxiwaySegment;
+            string code = inMargin ? "LEG_PASSES_B_IN_RUNWAY_MARGIN"
+                : beforeTheTurn ? (applied!.ChangedRoute ? "LEG_PICK_LINK_CROSSES_B" : "LEG_PASSES_B_JUNCTION")
+                : applied is { ChangedRoute: true } ? "LEGEND_PICK_NOT_FIRST_JUNCTION" : "LEG_PASSES_B_JUNCTION";
+            fs.Add(new Finding(w.Icao, code, where,
+                $"segment {k} of {n} reaches n{node.NodeId} on {lp.B}{(inMargin ? ", inside a runway's clear margin" : "")}; "
+                + $"the leg stops before n{(ahead?.node ?? -1)}"));
+            break;
+        }
+        if (trace)
+        {
+            Console.WriteLine($"ROUTE {n} segs {route.TotalDistanceMeters:F0} m; junction n{(ahead?.node ?? -1)} (the harness's own pick n{row.HarnessJunction}), stop {(ahead?.metres ?? double.NaN):F1} m before it; form dest n{lp.Dest}");
+            for (int k = 0; k < n; k++)
+            {
+                var sg = route.Segments[k];
+                Console.WriteLine($"  seg{k,-3} {sg.TaxiwayName,-8} {sg.DistanceMeters,6:F1} m brg {sg.BearingDegrees,3:F0} n{sg.FromNode.NodeId}->n{sg.ToNode.NodeId}"
+                    + $"{(sg.IsOffChartTurn ? " OFFCHART" : "")}{(sg.IsHoldShortPoint ? " HOLD " + sg.HoldShortRunway : "")}");
+            }
+            foreach (var p in route.TurnPicks)
+                Console.WriteLine($"  PICK row {p.RowIndex} {p.Side} onto {p.TaxiwayName}: departure n{p.DepartureNodeId} seg {p.FirstSegmentAfterDeparture}, join n{p.JoinNodeId} seg {p.FirstTaxiwaySegment}, changed={p.ChangedRoute} offchart={p.IsOffChart}");
+            // The graph around the stop, two edges out: what the junction measurement walks.
+            var near = new List<int> { route.Segments[^1].ToNode.NodeId };
+            for (int hop = 0; hop < 2; hop++)
+                foreach (int id in near.ToList())
+                    if (g.Adjacency.TryGetValue(id, out var es)) near.AddRange(es.Select(e => e.ToNodeId).Where(x => !near.Contains(x)));
+            foreach (int id in near.Distinct())
+                if (g.Adjacency.TryGetValue(id, out var es))
+                    Console.WriteLine($"  NEAR n{id}: {string.Join(", ", es.Select(e => $"{(e.TaxiwayName.Length > 0 ? e.TaxiwayName : "(unnamed)")}->n{e.ToNodeId} {e.DistanceMeters:F0} m"))}");
+        }
+
+        mgr.StartGuidance(settings);
+        var cue = mgr.ConsumeStartHoldCue();
+        if (trace && cue != null) Console.WriteLine($"  START-HOLD {cue}");
+        double lat = lp.Lat, lon = lp.Lon, hdg = lp.Hdg, gs = 0, t = 0, holdWait = 0, still = 0;
+        var pilot = new PilotModel(hdg, 0);
+        bool braking = false;
+        double? endT = null; (double lat, double lon) endAt = default;
+        double budget = route.TotalDistanceMeters / 3.0 + 240;
+        string countdownLead = $"Hold short taxiway {lp.B} in";
+        while (t < budget)
+        {
+            simNow = simNow.AddMilliseconds(100); t += 0.1;
+            var st = mgr.State;
+            if (st != TaxiGuidanceState.HoldShort) mgr.UpdatePosition(lat, lon, hdg, 0.0, gs);
+            st = mgr.State;
+            float pan = mgr.SteeringToneForHarness.ObservedPan;
+            foreach (var s in cap.TakeNew())
+            {
+                if (trace) Console.WriteLine($"  {t,6:F1}s SPEAK {s}");
+                string said1 = s.TrimEnd();
+                if (said1.EndsWith("Stop.", StringComparison.Ordinal) || said1.Contains(" Stop. ", StringComparison.Ordinal)) braking = true;
+                if (s.Contains(countdownLead, StringComparison.OrdinalIgnoreCase))
+                {
+                    row.Countdown++;
+                    row.Tiers += s.Contains("Slow down.", StringComparison.Ordinal) ? "S" : s.Contains("Stop.", StringComparison.Ordinal) ? "X" : "O";
+                }
+                if (s.Contains("Route changed", StringComparison.OrdinalIgnoreCase)) row.Recalcs++;
+            }
+            if (st == TaxiGuidanceState.ProgressiveHold && endT == null)
+            {
+                endT = t; endAt = (lat, lon); braking = true;
+                // Not yet turned onto the last segment's line: the 25 m capture reached round a corner.
+                if (mgr.CurrentRoute is { Segments.Count: > 0 } rEnd)
+                    row.EndHeadingOffDeg = Math.Abs(Geo.Norm(hdg - rEnd.Segments[^1].BearingDegrees));
+                if (trace) Console.WriteLine($"  {t,6:F1}s LEG ENDED at {gs:F1} kt ({lat:F6},{lon:F6})");
+            }
+            if (st == TaxiGuidanceState.HoldShort && gs < 0.3)
+            {
+                holdWait += 0.1;
+                if (holdWait > 2) { mgr.ContinuePastHoldShort(); holdWait = 0; braking = false; }
+            }
+            if (endT != null && gs < 0.05) break;
+            if (st is TaxiGuidanceState.Arrived or TaxiGuidanceState.LiningUp || st == TaxiGuidanceState.Inactive && t > 2) break;
+            // Stopped on "Stop." with nothing to end the leg or hold: the pilot would wait for ever.
+            if (braking && gs < 0.05 && st == TaxiGuidanceState.Taxiing) { still += 0.1; if (still > 15) break; }
+            else still = 0;
+            double target = braking || st is TaxiGuidanceState.HoldShort or TaxiGuidanceState.ProgressiveHold ? 0 : pilot.TaxiTarget(pan, cap);
+            pilot.Step(ref hdg, ref gs, pan, target, 0.1, holdHeading: null);
+            (lat, lon) = Geo.Move(lat, lon, hdg, gs * 0.5144 * 0.1);
+            if (trace && ((int)Math.Round(t * 10)) % 10 == 0)
+                Console.WriteLine($"  {t,6:F1}s {st,-15} seg={mgr.SegmentIndexForHarness} ({lat:F6},{lon:F6}) hdg={hdg:F0} gs={gs:F1} pan={pan:F2}{(braking ? " BRAKING" : "")}");
+        }
+
+        // Measured on the route as it stood when the flight ended (a route change re-places the stop).
+        var aheadNow = JunctionAhead(g, mgr.CurrentRoute ?? route, lp.A, lp.B, AppJunctionOf(mgr)) ?? ahead;
+        row.Ended = endT != null;
+        if (endT is double te && aheadNow is { } ah)
+        {
+            row.Seconds = te;
+            row.EndM = SignedMetresToEnd(ah.line, endAt.lat, endAt.lon);
+            row.StandM = SignedMetresToEnd(ah.line, lat, lon);
+            var jn = g.Nodes[ah.node];
+            row.StandStraightM = Geo.Dist(lat, lon, jn.Latitude, jn.Longitude);
+            if (row.EndM <= 0 || row.StandM <= 0)
+                fs.Add(new Finding(w.Icao, "LEG_AT_OR_PAST_JUNCTION", where, $"ended {row.EndM:F1} m and came to rest {row.StandM:F1} m before the junction n{ah.node}"));
+        }
+        if (endT == null)
+        {
+            string at = aheadNow is { } ah2 ? $"{SignedMetresToEnd(ah2.line, lat, lon):F0} m before the junction n{ah2.node}" : "no junction found";
+            row.Note = $"not ended after {t:F0} s: {at}, {gs:F1} kt, state {mgr.State}{(braking ? ", braked on Stop." : "")}";
+            fs.Add(new Finding(w.Icao, "LEG_NOT_ENDED", where, row.Note));
+        }
+        if (trace)
+            Console.WriteLine($"  RESULT ended={row.Ended} t={row.Seconds:F1} s end {row.EndM:F1} m standstill {row.StandM:F1} m before the junction; {row.Countdown} countdown line(s)");
+    }
+    catch (Exception ex)
+    {
+        row.Note = "exception: " + ex.GetType().Name + ": " + ex.Message;
+        fs.Add(new Finding(w.Icao, "LEG_EXCEPTION", where, row.Note));
+    }
+    finally { try { mgr.StopGuidance(); mgr.Dispose(); } catch { } }
+    return row;
+}
+
+void LegendSummary(TextWriter? file)
+{
+    void Line(string s) { Console.WriteLine(s); file?.WriteLine("# " + s); }
+    var groups = new (string label, List<LegendRow> rows)[]
+    {
+        ("without picks", legendRows.Where(r => r.Pick == "none").ToList()),
+        ("with picks", legendRows.Where(r => r.Pick != "none").ToList()),
+        ("picks that changed the route", legendRows.Where(r => r.Outcome is "CHARTED" or "OFFCHART").ToList()),
+    };
+    foreach (var (label, rows) in groups)
+    {
+        if (rows.Count == 0) { Line($"{label}: no legs"); continue; }
+        var ended = rows.Where(r => r.Ended).ToList();
+        var stand = ended.Select(r => r.StandM).Where(x => !double.IsNaN(x)).OrderBy(x => x).ToList();
+        var endM = ended.Select(r => r.EndM).Where(x => !double.IsNaN(x)).OrderBy(x => x).ToList();
+        Line(string.Create(CultureInfo.InvariantCulture,
+            $"{label}: {rows.Count} legs, {ended.Count} ended ({100.0 * ended.Count / rows.Count:F1} %); before the junction at standstill "
+            + $"min {(stand.Count > 0 ? stand[0] : double.NaN):F1} m, median {MedianOf(stand):F1} m; when the leg ended min "
+            + $"{(endM.Count > 0 ? endM[0] : double.NaN):F1} m, median {MedianOf(endM):F1} m; at or past the junction "
+            + $"{ended.Count(r => r.EndM <= 0 || r.StandM <= 0)}"));
+    }
+}
+
+static double MedianOf(List<double> sorted)
+    => sorted.Count == 0 ? double.NaN
+     : sorted.Count % 2 == 1 ? sorted[sorted.Count / 2] : (sorted[sorted.Count / 2 - 1] + sorted[sorted.Count / 2]) / 2;
+
+static bool Named(string? name, string taxiway) => string.Equals(name, taxiway, StringComparison.OrdinalIgnoreCase);
+
+static bool HasEdgeNamed(TaxiGraph g, int nodeId, string taxiway)
+    => g.Adjacency.TryGetValue(nodeId, out var es) && es.Any(e => Named(e.TaxiwayName, taxiway));
+
+static bool ClearOfRunwaysAt(TaxiGraph g, double lat, double lon)
+    => RouteRunwayCrossings.RunwayWithinClearMargin(g.RunwayCenterlines, lat, lon) == null;
+
+/// <summary>A start the form would take as the aircraft's own node: no stand, clear of every runway, nearest to itself.</summary>
+static bool UsableLegStart(TaxiGraph g, int id)
+{
+    if (!g.Nodes.TryGetValue(id, out var n) || n.Type == TaxiNodeType.Parking) return false;
+    if (!ClearOfRunwaysAt(g, n.Latitude, n.Longitude)) return false;
+    return g.FindNearestNode(n.Latitude, n.Longitude, excludeBridgeOnlyStandStubs: true)?.NodeId == id;
+}
+
+/// <summary>The junction the form passes for "hold short of taxiway": the first by taxi distance from the aircraft's node.</summary>
+static int FormLegEnd(TaxiGraph g, double lat, double lon, string lastTaxiway, string target)
+{
+    var sn = g.FindNearestNode(lat, lon, excludeBridgeOnlyStandStubs: true);
+    if (sn == null) return -1;
+    var dists = new TaxiRouter(g).ComputeGraphDistancesFrom(sn.NodeId);
+    return TaxiwayHoldPlacement.NearestByTaxiDistance(
+        g.FindTaxiwayIntersectionNodes(g.ResolveTaxiwayName(lastTaxiway), g.ResolveTaxiwayName(target), sn.ComponentId), dists);
+}
+
+/// <summary>
+/// Metres along one taxiway's own edges from the nearest of <paramref name="sources"/>, never through
+/// <paramref name="blocked"/>, and for each node reached the next node toward that source.
+/// </summary>
+static (Dictionary<int, double> dist, Dictionary<int, int> toward) AlongTaxiway(TaxiGraph g, IEnumerable<int> sources, string taxiway, int blocked, double maxM)
+{
+    var dist = new Dictionary<int, double>(); var toward = new Dictionary<int, int>();
+    var pq = new PriorityQueue<int, double>(); var done = new HashSet<int>();
+    foreach (int s in sources) { dist[s] = 0; pq.Enqueue(s, 0); }
+    while (pq.TryDequeue(out int cur, out double d))
+    {
+        if (!done.Add(cur)) continue;
+        if (d > maxM) break;
+        if (!g.Adjacency.TryGetValue(cur, out var edges)) continue;
+        foreach (var e in edges)
+        {
+            if (e.ToNodeId == blocked || !Named(e.TaxiwayName, taxiway)) continue;
+            double nd = d + e.DistanceMeters;
+            if (!dist.TryGetValue(e.ToNodeId, out double od) || nd < od) { dist[e.ToNodeId] = nd; toward[e.ToNodeId] = cur; pq.Enqueue(e.ToNodeId, nd); }
+        }
+    }
+    return (dist, toward);
+}
+
+/// <summary>
+/// The junction a leg holds short of, and how far its stop is from it, never back through the node
+/// before the stop. WHICH node: the one the app holds short of (<paramref name="appJunction"/>, its
+/// destination node, which a "hold short of taxiway" stop leaves on the junction), read and not
+/// worked out, because a stop moved back before a turn sits where the taxiway forks and a walk from it
+/// can take the other branch (KLSV "via E, F, hold short of J": the J junction is 12 m along F, the
+/// stop 35 m back on E, and the nearest J node along E lies the other way). The harness's own pick
+/// (<c>harnessNode</c>: the nearest node on B along A or the last segment's taxiway, else over any
+/// edge) is kept beside it as a cross-check, and used when the app's is not reachable. HOW FAR: the
+/// shortest way over any edge not on B, as the route the stop was cut from can leave A for a stretch
+/// (KORD "via P1, DD, left onto DD": DD, 30 m of P1, then DD into P, which along DD alone is 100 m).
+/// With a line from up to 400 m back along the route, through the stop, to the junction, to measure
+/// the aircraft on.
+/// </summary>
+static (int node, double metres, List<(double Lat, double Lon)> line, int harnessNode)? JunctionAhead(TaxiGraph g, TaxiRoute route, string a, string b, int appJunction)
+{
+    if (route.Segments.Count == 0) return null;
+    var last = route.Segments[^1];
+    var stop = last.ToNode; int before = last.FromNode.NodeId;
+    var line = new List<(double Lat, double Lon)> { (stop.Latitude, stop.Longitude) };
+    double back = 0;
+    for (int k = route.Segments.Count - 1; k >= 0 && back < 400; k--)
+    {
+        var fn = route.Segments[k].FromNode;
+        line.Add((fn.Latitude, fn.Longitude));
+        back += route.Segments[k].DistanceMeters;
+    }
+    line.Reverse();
+    string own = last.TaxiwayName ?? "";
+    var (cleared, _, _) = WalkFromStop(g, stop.NodeId, before, b, e => Named(e.TaxiwayName, a) || Named(e.TaxiwayName, own));
+    var (nearest, dist, from) = WalkFromStop(g, stop.NodeId, before, b, e => !Named(e.TaxiwayName, b));
+    int harnessNode = HasEdgeNamed(g, stop.NodeId, b) ? stop.NodeId : cleared >= 0 && dist.ContainsKey(cleared) ? cleared : nearest;
+    int j = appJunction >= 0 && dist.ContainsKey(appJunction) ? appJunction : harnessNode;
+    if (j < 0) return null;
+    var path = new List<int>();
+    for (int c = j; c != stop.NodeId; c = from[c]) path.Add(c);
+    path.Reverse();
+    foreach (int id in path) line.Add((g.Nodes[id].Latitude, g.Nodes[id].Longitude));
+    return (j, dist[j], line, harnessNode);
+}
+
+/// <summary>The node the app routes to (<c>_destinationNodeId</c>), read by reflection: for a "hold short of taxiway" leg, the junction its stop is set back from. -1 when it cannot be read.</summary>
+static int AppJunctionOf(TaxiGuidanceManager m)
+    => typeof(TaxiGuidanceManager).GetField("_destinationNodeId", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(m) is int id ? id : -1;
+
+/// <summary>Shortest ways from a stop over the edges <paramref name="use"/> allows, never into <paramref name="before"/>, up to 400 m; with the nearest node that has an edge on B (-1 when none).</summary>
+static (int nearestOnB, Dictionary<int, double> dist, Dictionary<int, int> from) WalkFromStop(TaxiGraph g, int stop, int before, string b, Func<TaxiEdge, bool> use)
+{
+    var dist = new Dictionary<int, double> { [stop] = 0 }; var from = new Dictionary<int, int>();
+    var pq = new PriorityQueue<int, double>(); var done = new HashSet<int>();
+    int nearest = -1;
+    pq.Enqueue(stop, 0);
+    while (pq.TryDequeue(out int cur, out double d))
+    {
+        if (!done.Add(cur)) continue;
+        if (d > 400) break;
+        if (nearest < 0 && cur != stop && HasEdgeNamed(g, cur, b)) nearest = cur;
+        if (!g.Adjacency.TryGetValue(cur, out var edges)) continue;
+        foreach (var e in edges)
+        {
+            if (e.ToNodeId == before || !use(e)) continue;
+            double nd = d + e.DistanceMeters;
+            if (!dist.TryGetValue(e.ToNodeId, out double od) || nd < od) { dist[e.ToNodeId] = nd; from[e.ToNodeId] = cur; pq.Enqueue(e.ToNodeId, nd); }
+        }
+    }
+    return (nearest, dist, from);
+}
+
+/// <summary>Metres from a point to the END of a line, along it: negative once past the end (and more than the line's length before its start).</summary>
+static double SignedMetresToEnd(List<(double Lat, double Lon)> q, double lat, double lon)
+{
+    double kx = 111320.0 * Math.Cos(lat * Math.PI / 180), ky = 110540.0;
+    var len = new double[Math.Max(0, q.Count - 1)];
+    double total = 0;
+    for (int i = 0; i + 1 < q.Count; i++)
+    {
+        len[i] = Math.Sqrt(Math.Pow((q[i + 1].Lon - q[i].Lon) * kx, 2) + Math.Pow((q[i + 1].Lat - q[i].Lat) * ky, 2));
+        total += len[i];
+    }
+    if (q.Count < 2) return q.Count == 1 ? -Math.Sqrt(Math.Pow((q[0].Lon - lon) * kx, 2) + Math.Pow((q[0].Lat - lat) * ky, 2)) : double.NaN;
+    double best = double.MaxValue, along = 0, cum = 0;
+    for (int i = 0; i + 1 < q.Count; i++)
+    {
+        double ax = (q[i].Lon - lon) * kx, ay = (q[i].Lat - lat) * ky;
+        double dx = (q[i + 1].Lon - q[i].Lon) * kx, dy = (q[i + 1].Lat - q[i].Lat) * ky, l2 = dx * dx + dy * dy;
+        double tr = l2 < 1e-9 ? 0 : -(ax * dx + ay * dy) / l2, tc = Math.Clamp(tr, 0, 1);
+        double dd = Math.Sqrt(Math.Pow(ax + tc * dx, 2) + Math.Pow(ay + tc * dy, 2));
+        if (dd < best - 1e-9)
+        {
+            best = dd;
+            // Past either end of the whole line, measure on along the end segment's own direction.
+            double tt = (i == q.Count - 2 && tr > 1) || (i == 0 && tr < 0) ? tr : tc;
+            along = cum + tt * len[i];
+        }
+        cum += len[i];
+    }
+    return total - along;
+}
+
 // ── Ground traffic (GroundTrafficMonitor driven headlessly through IGroundTrafficSimSource) ──
 // Simulated AI aircraft placed around real taxi routes; the monitor is wired exactly as MainForm
 // wires it (SuppressCheck, RouteContextProvider = the manager's GetGroundTrafficContext) and ticked
@@ -928,6 +1520,18 @@ void RunTrace(string spec)
         // --trace ICAO:turn:<text in the scenario description>  (e.g. "turn Left onto C")
         depTraceFilter = string.Join(":", parts.Skip(2));
         RunTurnPicks(w);
+        if (Environment.GetEnvironmentVariable("VP_ALLLOG") == "1") foreach (var l in logSink) Console.WriteLine("LOG " + l);
+        return;
+    }
+    if (parts.Length >= 3 && parts[1].Equals("legend", StringComparison.OrdinalIgnoreCase))
+    {
+        // --trace ICAO:legend:<text in the leg's description>  (e.g. "via A hold short of B", "turn Left onto A")
+        //   every leg of the airport is flown as the run flies it (a stop can insert a node into the shared
+        //   graph, so a later leg depends on the earlier ones); only the matching ones are printed
+        depTraceFilter = string.Join(":", parts.Skip(2));
+        RunLegEnds(w);
+        Console.WriteLine(LegendRow.Header);
+        foreach (var r in legendRows) Console.WriteLine(r.Csv());
         if (Environment.GetEnvironmentVariable("VP_ALLLOG") == "1") foreach (var l in logSink) Console.WriteLine("LOG " + l);
         return;
     }
@@ -2498,6 +3102,52 @@ static class SpokenClearance
 }
 
 #if !OLDAPP
+/// <summary>A `legends` leg: where it starts and what the form is given ("via A" or "via Z, A" with a Turn on A).</summary>
+sealed class LegPlan
+{
+    public string Icao = "", Kind = "", A = "", B = "";
+    public string? Z;
+    public int M = -1, StartNode, Dest;
+    public double Lat, Lon, Hdg, AlongM;
+    public List<string> Seq = new();
+    public TurnSide? Pick;
+    public string Describe() => Kind == "turn"
+        ? $"via {Z},{A} turn {Pick} onto {A} hold short of {B} from n{StartNode} ({AlongM:F0} m along {Z} before n{M})"
+        : $"via {A} hold short of {B} from n{StartNode} ({AlongM:F0} m along {A} before the junction)";
+}
+
+/// <summary>One `legends` leg as flown: a CSV row. Metres are along the route to the B junction ahead of the stop.</summary>
+sealed class LegendRow
+{
+    public string Icao = "", A = "", B = "", Pick = "none", Outcome = "", Kind = "", Z = "", Note = "";
+    public bool Ended;
+    public double Seconds = double.NaN, EndM = double.NaN, StandM = double.NaN, StandStraightM = double.NaN,
+                  StartM = double.NaN, SetbackM = double.NaN, RouteM = double.NaN, LastSegmentM = double.NaN,
+                  EndHeadingOffDeg = double.NaN;
+    /// <summary>The junction measured to (the app's), the harness's own pick of it (a cross-check), and the form's.</summary>
+    public int Countdown, Recalcs, Junction = -1, HarnessJunction = -1, FormDest = -1;
+    /// <summary>The countdown lines heard, in order: O "in N", S "… Slow down.", X "… Stop.".</summary>
+    public string Tiers = "";
+    /// <summary>The taxiway of the route's last segment as loaded (not A when the stop moved back before the turn onto A).</summary>
+    public string LastTaxiway = "";
+
+    public const string Header = "icao,a,b,pick,outcome,ended,seconds_to_end,end_m_before_junction,standstill_m_before_junction,"
+        + "kind,z,standstill_straight_m_to_junction,start_m_to_junction,stop_m_before_junction_at_load,route_m,last_segment_m,"
+        + "last_taxiway,end_heading_off_last_segment_deg,countdown_lines,countdown_tiers,route_changes,junction_node,"
+        + "harness_junction_node,form_dest_node,note";
+
+    public string Csv() => string.Join(",", new[]
+    {
+        Icao, A, B, Pick, Outcome, Ended ? "1" : "0", F(Seconds), F(EndM), F(StandM),
+        Kind, Z, F(StandStraightM), F(StartM), F(SetbackM), F(RouteM), F(LastSegmentM), LastTaxiway, F(EndHeadingOffDeg),
+        I(Countdown), Tiers, I(Recalcs), I(Junction), I(HarnessJunction), I(FormDest), Note,
+    }.Select(Quote));
+
+    private static string F(double v) => double.IsNaN(v) ? "" : v.ToString("F1", CultureInfo.InvariantCulture);
+    private static string I(int v) => v.ToString(CultureInfo.InvariantCulture);
+    private static string Quote(string s) => s.Contains(',') || s.Contains('"') ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
+}
+
 /// <summary>Simulated AI aircraft for the traffic mode.</summary>
 sealed class SimTraffic
 {

@@ -48,6 +48,7 @@ tools/VirtualPilot/bin/x64/Release/net10.0-windows/VirtualPilot.exe <mode> [opti
 | `all` | landings + taxi |
 | `departures` | per runway end: named (OSM) holding-point departures (`HP`, flown free and on a clearance), intersection departures (`IX`), full-length backtracks where the runway list would say "(backtrack required)" (`BT`); per airport: gate → gate taxis across the field (`G2G`) and ATC clearances with explicit "hold short of runway X" instructions (`HSCLR`) — each also voiced as a written and a spoken-NATO clearance and fed to the SayIntentions import's own parser (`CLR_*`) |
 | `turnpicks` | per taxi plan, the clearance a controller would give, then, for every row and both sides, the Turn pick a pilot could set on that row: each is loaded as the planner loads it and what became of it is recorded (already made, charted, off-chart leg, or refused and why); a pick that changes the route is flown following the tone, and flown once more with the pilot taking the charted way at the junction instead. `turn_report.py runs/NAME` summarises it |
+| `legends` | Progressive Taxi legs that end "hold short of taxiway B", loaded as the form loads them (the junction first by taxi distance, wingspan 36 m). Per airport, up to K pairs (A, B), in a seeded order: "via A" from a node on A 250 to 600 m before the nearest junction, facing it; and, where A meets B on both sides of a T at M where taxiway Z joins A, "via Z, A" from Z 150 to 400 m before M with the Turn on A set Left, then Right. The pilot brakes on any line ending "Stop."; the flight ends at a standstill after the leg has ended. Where the leg ended and where the aircraft stood are measured by the harness, along the route and on over the graph to the junction the app holds short of (its destination node, read by reflection). One row per leg in `<out>.legends.csv` (with the countdown lines heard, the last segment's length and taxiway, and the heading against it when the leg ended); the share ended and the standstill distances are printed and written into the findings footer |
 | `fetchosm` | downloads the raw Overpass answer for each airport into `runs/_osm/ICAO.json` (one polite request at a time — Overpass rate-limits hard, expect ~1 airport a minute). Every mode then builds the app's OWN OSM-augmented graph from that snapshot (names, holding points); `VP_NOOSM=1` flies plain navdata, `VP_OSMDIR` points elsewhere. The snapshot pins the data so a before/after run measures the code, not OSM churn |
 
 Options: `--airports N` (busiest by taxi-path count, default 100), `--icao A,B`, `--shard i/n`
@@ -79,7 +80,10 @@ whose description contains the text — e.g. `KORD:dep:IX Y4 L 5`), `ICAO:turn:<
 `ICAO:pick:<lat>,<lon>,<heading>:<runway>:<clearance>[:miss]`: one clearance from a position to a
 runway, a Turn pick written `=L` or `=R` after its taxiway, `:miss` to take the charted way at the
 junction instead. The KBOS incident of 2026-11-14 is
-`KBOS:pick:42.363953,-71.006981,170:33L:H,C=L`. `VP_SHOWCLR=1` prints the voiced
+`KBOS:pick:42.363953,-71.006981,170:33L:H,C=L`. `ICAO:legend:<text>` flies every `legends` leg of the
+airport as the run does (a stop can insert a node into the shared graph, so a leg depends on the ones
+before it) and prints the matching ones frame by frame, with the graph two edges around the stop
+(e.g. `KDTW:legend:turn Right onto Y hold short of V`). `VP_SHOWCLR=1` prints the voiced
 clearances, `VP_STUBSTATS=1` the destination entry-stub length and hold label of every departure.
 
 ### A/B against a frozen build
@@ -145,6 +149,9 @@ decelerating speed (Normal/End exits 18 kt at the junction, High-speed 35 kt).
 | `TURN_PICK_LOST_WHILE_FOLLOWING` | "was missed" or "could not be kept" while the pilot followed the tone | medium — exit→gate plans start facing away from their route, and a first-row pick at a stand is judged from the harness's arbitrary start heading |
 | `OFFCHART_LEG_NOT_TAXIED`, `OFFCHART_LEG_NOT_ANNOUNCED`, `OFFCHART_LEG_OFF_PAVEMENT` | arrived without coming within 25 m of the middle of the leg; a leg of 40 m or more that is not the route's first segment taxied with no "Off-chart leg" sentence; more than 12 m beyond the nearest taxi edge while on the leg | medium; the last is **low**, as `TAXI_OFF_PAVEMENT` (the app's own pavement map has the aprons this index lacks) |
 | `TURN_MISS_SAID_MISSED` / `_SAID_NOT_KEPT` / `_NOT_SAID` / `_NO_REROUTE` / `_NOT_FLOWN` | the miss flight: the route change said so; changed with no word about the pick; never changed in 150 m (the pilot then follows the tone again); the pilot never came within 5 m of the junction | information; `_NOT_SAID` is the known limit (a pick counts as made once the segment index passes its join) |
+| `LEGEND_PICK_INDEX`, `LEGEND_OFFCHART_SPLIT`, `LEGEND_ENDS_OFFCHART` | a `legends` route as loaded: a Turn pick's segment indices no longer name its departure and join nodes; two off-chart segments in a row (the stop split the leg); the route ends on an off-chart leg | high |
+| `LEGEND_PICK_NOT_FIRST_JUNCTION`, `LEG_PASSES_B_JUNCTION`, `LEG_PICK_LINK_CROSSES_B`, `LEG_PASSES_B_IN_RUNWAY_MARGIN` | the route passes a node on B before its stop: between a pick that changed the route and the stop; without such a pick; on the charted link to the picked turn, before it; at a node inside a runway's clear margin, which the app skips by design (the leg then holds short of a later meeting) | high. Judged along the route, not by a walk of the graph, which at a Y-shaped junction goes back up the branch the route left (EGLL A9E) |
+| `LEG_NOT_ENDED`, `LEG_AT_OR_PAST_JUNCTION`, `LEG_ROUTE_REFUSED`, `LEG_JUNCTION_NOT_FOUND`, `LEG_APP_JUNCTION_UNREAD` | no `ProgressiveHold` before the time budget, or 15 s stopped after "Stop." with nothing held; ended or stood at or past the junction; the load refused; no node on B within 400 m of the stop; the app's junction (`_destinationNodeId`) could not be read, so the harness's own pick was measured to | medium: the pilot model brakes on every "Stop.", also a runway hold's |
 
 ## Findings of the first run (2026-09-18, 100 busiest fs2020 airports)
 
@@ -486,3 +493,79 @@ flight that fails to arrive.
 - In the miss flights, three runway entries with no hold: the pilot, deliberately off the route, drove
   on at a runway the charted way leads to (KATL M6: "Warning: approaching runway 09L at M6, off
   route." was spoken, and the recalculated route said "with no hold short point").
+
+## Leg ends and taxiway holds (2026-11-24, 2024 navdata, plain navdata)
+
+Stage 1 of the Taxi UI Redesign: a leg with no destination is counted down and ended like a hold
+short (`ProgressiveLegEnd`), and "hold short of taxiway B" stops a wingspan-based setback before the
+first junction the route reaches, never on, inside or behind a runway (`TaxiwayHoldPlacement`; 34.8 m
+for a 36 m wingspan). The setback constants are assumptions the owner has not yet confirmed in the sim.
+
+**Nothing else moved.** The branch before the stage (`f7d5c13ba`) against its end (`61a3e554f`), the
+same harness in both, modes `all wrongturn turnpicks rwystop missedexit`, the 100 busiest airports:
+23,940 scenarios in both runs, none only in one; 40,378 result lines and 4,726 finding lines, not one
+different. No existing mode flies a leg with no destination or a taxiway hold.
+
+**Where the legs end** (`legends --airports 40 --taxi-per-airport 3`, 38 of the 40 airports gave a
+leg; 113 plain legs and 61 turn legs flown both ways):
+
+| | without picks | with picks | picks that changed the route |
+|---|---|---|---|
+| legs | 113 | 122 | 42 |
+| ended | 112 (99.1 %) | 122 (100 %) | 42 (100 %) |
+| ended or stood at or past the junction | 0 | 0 | 0 |
+| stood before the junction: min / median / p90 | 46.8 / 54.8 / 69.5 m | 16.4 / 56.5 / 75.5 m | 16.4 / 55.6 / 82.1 m |
+| the leg ended: min / median | 51.7 / 62.5 m | 21.1 / 63.6 m | 21.1 / 61.6 m |
+| the stop at load, median before the junction | 37.9 m | 35.5 m | 34.8 m |
+
+Distances are along the route and on over the graph to the junction the app holds short of. What
+became of the picks: already made 24, charted 35, off-chart leg 7, no such turn 20, does not lead there
+36. No `LEGEND_*` finding: every pick's indices still name its departure and join after the stop is
+placed, no off-chart leg is split or ends a route, and no picked route passes a node on B between its
+turn and its stop. No leg needed a route change. The run is deterministic: four shards give the same
+235 rows as one process.
+
+**Measured, left as it is** (traced with `--trace ICAO:legend:…`):
+
+- **The countdown depends on the last segment.** It runs only while the aircraft is on the route's
+  last segment, and the 25 m capture radius usually ends the leg before the "Stop." tier is due, so the
+  closing sentence takes its place. Of the 234 legs that ended, 85 heard "in N metres" and then "Slow
+  down" (last segment median 100 m), 114 "Slow down" only (15 m), 10 "Stop." only (6 m), and 25, all
+  turn legs, no countdown line at all before "Hold short of taxiway B. Set a new route when cleared."
+  (6.5 m: a stop a few metres past a node, LTFM "B7, B8A", VHHH "H, H8"). None heard three lines.
+- **A stop less than 25 m past a turn ends the leg before the turn.** The capture is a straight line
+  to the stop, so it reaches round the corner: 45 turn legs ended with the aircraft still more than 45°
+  off the last segment (LFPG "Q2, Y6": the stop 17 m along Y6, the leg ended on Q2 before the 110° turn,
+  "Taxiway Y6. Hold short of taxiway Q." spoken together). The aircraft stops short of B either way.
+- **A stop moves back before the turn onto A when no pick holds it there.** In 46 of the 56 refused
+  picks the route ends on Z, not A: the junction with B lies less than the setback past the turn
+  (KLSV "E, F": J is 12 m along F, the stop 35 m back on E; KORD "N3, N" to A10). With a pick applied
+  the stop never moves back before the turn.
+- **Eight legs stood under 25 m from the junction**, all turn legs whose stop is at the junction or
+  within 5 m of it: the picked turn lies less than the setback before B (ZUTF "V6, K" to K2, KJFK "B,
+  MB" to P), or the setback point falls on the off-chart leg (OTHH "A5, A6"; ZSPD and WMKK are off-chart
+  legs too, not traced). They stood 16 to 23 m before it along the route, 15 to 19 m in a straight
+  line: the capture radius and the braking.
+- **Two picked routes reach their turn over B.** The charted link to the turn crosses B before the
+  join, and the leg then holds short of B a few metres on (`LEG_PICK_LINK_CROSSES_B`): KDEN "D, D8,
+  right onto D8, hold short of WC" crosses WC at n3738 ("Crossing taxiway WC.") and stops at the WC
+  junction n3678, 8 m from it, the aircraft 8.6 m from that node; EGLL "A9W, A9E, left onto A9E, hold
+  short of A" drives 6 m along A to its turn. The leg still stops before the first meeting with B past
+  the turn, which is all the acceptance check asks.
+- **A loop near the end ends the leg at its apex.** ZBAD "via Z3" reverses 165° three segments before
+  the end; KDTW "K, Y, right onto Y" is a picked route that reverses about 170° 94 m after the join,
+  just past TURN-4's 80 m. The straight-line capture fires as the aircraft passes near the stop on the
+  way out, before the loop is driven: 112 and 99 m before the junction along the route, 63 and 56 m in
+  a straight line.
+- **84 legs stood more than 60 m back**: an existing node up to 40 m beyond the setback is taken before
+  a new one is inserted, and the capture radius ends the leg 25 m before the stop.
+- **KPHL "via G, hold short of E" did not end**: it starts 34 m before the runway 17 hold line at G.
+  Standing still, the runway countdown says "Hold short runway 17 at G in 35 metres. Slow down." and
+  then "Hold short runway 17 at G. Stop." (the stopped-in-zone line), but the hold's standstill capture
+  is 30 m, so guidance stays in Taxiing and the pilot model, braking on "Stop.", never moves. A runway
+  hold's behaviour and the pilot model's, not the leg end's.
+- The turn legs' starts are chosen from the graph and checked with the router alone; `LoadRoute`'s own
+  route can join A elsewhere (KORD "C1, C" joins C 125 m before M), and 56 of the 122 picks were
+  refused (no such turn 20, does not lead there 36). The refusals were not traced one by one.
+- The junction is the app's own (`_destinationNodeId`, read by reflection): the harness's walk from
+  the stop picked another node in 19 legs, all refused picks whose stop sits at a fork before the turn.
