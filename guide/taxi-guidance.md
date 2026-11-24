@@ -170,7 +170,7 @@ A list beside the first taxiway, starting with **(none)**, then every runway at 
 
 After the runways the same list holds every taxiway and every named holding point at the airport, together in name order. A taxiway is listed by its name alone, and a holding point has "(holding point)" after its name: "L", "L1 (holding point)", "L2 (holding point)", "M". Press the first letter of a name to jump to it.
 
-- Choose a taxiway for "via A, hold short of taxiway B". Guidance stops before the place where your route first meets that taxiway, far enough back for your whole aircraft to stay clear of it, with *"Stop. Hold short of taxiway B. Press continue when cleared."*
+- Choose a taxiway for "via A, hold short of taxiway B". Guidance stops before the place where your route first meets that taxiway, with *"Stop. Hold short of taxiway B. Press continue when cleared."* Where the route leaves room, the stop is far enough back for your whole aircraft to stay clear of taxiway B. When your turn onto the row's taxiway is very close to B, BA stops you just after the turn, close to B, and your nose may be near its edge.
 - Choose a holding point for "via L, hold short of L2". Guidance stops at that point, with *"Stop. Hold short of holding point L2. Press continue when cleared."* The holding points come from online data, so they need the online names setting switched on and the airport's data loaded.
 
 If your route never reaches the taxiway or holding point you chose, the route still loads and the summary ends with a note such as *"Note: requested hold-short(s) not on route — holding point L2 (route does not pass it after taxiway L)."*
@@ -436,18 +436,18 @@ Some controllers give a clearance one piece at a time: "taxi via A, B, hold shor
 2. Enter the taxiways for this leg as usual. You need at least one, unless the leg ends at a named holding point or after crossing a runway; otherwise you hear *"Select at least one taxiway for progressive taxi."*
 3. Below your last taxiway row, choose how the leg ends in the **Terminator** list:
    - **Hold short of runway**: then choose the runway in **Runway to hold short of**. Guidance ends at that runway's hold line on your last taxiway.
-   - **Hold short of taxiway or named holding point**: then choose the target in **Hold short of taxiway or holding point**. The list holds every taxiway at the airport with the named holding points among them, each marked "(holding point)", for example "L2 (holding point)". For a taxiway, guidance ends before the first place your last taxiway meets it, far enough back for your whole aircraft to stay clear of it; how far depends on your wingspan. For a holding point, such as "hold short of L2" or "hold at VIKAS", guidance ends at that point, and you do not need to enter a taxiway first. The holding points come from online data.
+   - **Hold short of taxiway or named holding point**: then choose the target in **Hold short of taxiway or holding point**. The list holds every taxiway at the airport with the named holding points among them, each marked "(holding point)", for example "L2 (holding point)". For a taxiway, guidance ends before the first place your last taxiway meets it. Where the route leaves room, the end is far enough back for your whole aircraft to stay clear of that taxiway; how far depends on your wingspan. When your turn onto your last taxiway is very close to the taxiway you hold short of, BA stops you just after the turn, close to that taxiway, and your nose may be near its edge. For a holding point, such as "hold short of L2" or "hold at VIKAS", guidance ends at that point, and you do not need to enter a taxiway first. The holding points come from online data.
    - **After crossing runway**: then choose the runway in **Runway to cross**, and optionally the taxiway to cross at in **Cross at taxiway (optional)**. Leave that at (none) to cross at the nearest point. Use this when ATC has already cleared you across: BA does not stop you before that runway, and the leg ends just past it.
    - **End of last taxiway**: guidance ends at the end of your last taxiway. If that taxiway runs onto a runway, the leg ends at its last point clear of the runway.
 4. Press **Calculate Route**.
 
-The **Turn** lists stay on every row. When the last row has a Turn set, two of the terminators follow it. **End of last taxiway** ends at the end of that taxiway in the picked direction, never on a runway, and **Hold short of taxiway or named holding point** with a taxiway stops you before the first place you meet that taxiway in the picked direction, with your aircraft clear of it. If there is no such point that way, you hear the "does not lead to" note described under [warnings in the summary](#warnings-in-the-summary-and-what-to-do), and BA keeps the charted turn. The other terminators keep their usual end point, and give the same note if the picked turn leads away from it.
+The **Turn** lists stay on every row. When the last row has a Turn set, two of the terminators follow it. **End of last taxiway** ends at the end of that taxiway in the picked direction, never on a runway, and **Hold short of taxiway or named holding point** with a taxiway stops you before the first place you meet that taxiway in the picked direction, clear of it where the route leaves room, as described above. If there is no such point that way, you hear the "does not lead to" note described under [warnings in the summary](#warnings-in-the-summary-and-what-to-do), and BA keeps the charted turn. The other terminators keep their usual end point, and give the same note if the picked turn leads away from it.
 
-As you near the end of the leg, BA counts you down the way it does before a hold short (see [The countdown](#the-countdown)): *"Hold short taxiway D in 120 metres."*, then *"Hold short taxiway D in 60 metres. Slow down."*, then *"Hold short taxiway D in 30 metres. Stop."* The words name how the leg ends: *"Hold short runway 09"*, *"Hold at VIKAS"*, or *"Route ends"* for a leg that ends across a runway or at the end of your last taxiway. The countdown starts only on the final stretch of taxi line before the end, so when that stretch is short you hear only one or two of these lines, or none.
+As you near the end of the leg, BA counts it down with lines like those before a hold short (see [The countdown](#the-countdown)): *"Hold short taxiway D in 120 metres."*, *"Hold short taxiway D in 60 metres. Slow down."* and *"Hold short taxiway D in 30 metres. Stop."* The words name how the leg ends: *"Hold short runway 09"*, *"Hold at VIKAS"*, or *"Route ends"* for a leg that ends across a runway or at the end of your last taxiway. The countdown starts only on the final stretch of taxi line before the end, so you usually hear one or two of these lines, sometimes none, and rarely all three. Usually the leg ends before the *"Stop."* line is due: the end-of-leg sentence below is your cue to stop. Unlike a hold short, a leg has no separate *"Stop."* line when you come to a stop early.
 
-The leg ends when you come within about 25 metres (80 feet) of its end, or when you stop within about 30 metres (100 feet) of it. A leg that ends at a hold short or a holding point also ends when you stop at any point after *"Slow down."*, so stop where BA tells you to: you do not need to creep up to the end. A leg that ends across a runway or at the end of your last taxiway never ends on a runway or right beside one, and BA does not say *"Slow down."* or *"Stop."* there until you are clear of the runway.
+The leg ends when you come within about 25 metres (80 feet) of its end, usually while you are still rolling, or when you stop within about 30 metres (100 feet) of it. A leg that ends at a hold short or a holding point also ends when you stop at any point after *"Slow down."*, so stop where BA tells you to: you do not need to creep up to the end. A leg that ends across a runway or at the end of your last taxiway never ends on a runway or right beside one, and BA does not say *"Slow down."* or *"Stop."* there until you are clear of the runway.
 
-When you reach the end of the leg, the tone stops and you hear one of:
+When the leg ends, the tone stops and you hear one of the sentences listed next. It is your cue to stop: bring the aircraft to a stop and hold there until ATC gives you the next piece.
 
 - *"Hold short of runway 09. Set a new route when cleared."*
 - *"Hold short of taxiway D. Set a new route when cleared."*
@@ -944,14 +944,14 @@ This is a reference list of every taxi guidance callout, grouped by when you hea
 
 | You hear | What it means | What to do |
 |---|---|---|
-| *"Hold short taxiway D in 120 metres."* | The end of the leg is coming. It is named the way the leg ends: *"Hold short runway 09"*, *"Hold at VIKAS"*, or *"Route ends"* across a runway or at the end of your last taxiway. On a short last stretch you hear only some of these three lines. | Prepare to stop. |
+| *"Hold short taxiway D in 120 metres."* | The end of the leg is coming. It is named the way the leg ends: *"Hold short runway 09"*, *"Hold at VIKAS"*, or *"Route ends"* across a runway or at the end of your last taxiway. You usually hear one or two of these three lines, sometimes none, rarely all three. | Prepare to stop. |
 | *"Hold short taxiway D in 60 metres. Slow down."* | The end of the leg is close. | Slow down. |
-| *"Hold short taxiway D in 30 metres. Stop."* | Stop now. | Stop. |
-| *"Hold short of runway 09. Set a new route when cleared."* | End of the leg. | Plan the next leg when ATC gives it. |
-| *"Hold short of taxiway D. Set a new route when cleared."* | End of the leg. | Plan the next leg. |
-| *"Across runway 09. Hold position. Set a new route when cleared."* | You are across the runway you were cleared over. | Plan the next leg. |
-| *"Hold at VIKAS. Set a new route when cleared."* | At the named holding point. | Plan the next leg. |
-| *"Route ended. Hold position. Set a new route when cleared."* | End of your last taxiway. | Plan the next leg. |
+| *"Hold short taxiway D in 30 metres. Stop."* | Stop now. Usually the leg ends before this line is due. | Stop. |
+| *"Hold short of runway 09. Set a new route when cleared."* | End of the leg, often while you are still rolling. | Stop and hold; plan the next leg when ATC gives it. |
+| *"Hold short of taxiway D. Set a new route when cleared."* | End of the leg, often while you are still rolling. | Stop and hold; plan the next leg. |
+| *"Across runway 09. Hold position. Set a new route when cleared."* | You are across the runway you were cleared over. | Stop and hold; plan the next leg. |
+| *"Hold at VIKAS. Set a new route when cleared."* | At the named holding point. | Stop and hold; plan the next leg. |
+| *"Route ended. Hold position. Set a new route when cleared."* | End of your last taxiway. | Stop and hold; plan the next leg. |
 | *"There is no place to hold short of taxiway D on C clear of a runway."* | C meets D only on or beside a runway, where BA never stops you for a taxiway. No route was calculated. | Check with ATC; end the leg another way. |
 | *"Taxiway C has no end clear of a runway."* | Every end of C is on or beside a runway. No route was calculated. | Check with ATC; end the leg another way. |
 
@@ -1023,7 +1023,7 @@ This is a reference list of every taxi guidance callout, grouped by when you hea
 
 **I'm stopped at a hold line and nothing happens.** BA is waiting for you. Press Input Y when cleared. At a Progressive Taxi end point, plan the next leg instead.
 
-**A Progressive leg ended before I reached the taxiway I hold short of.** That is by design: BA stops you far enough back for your whole aircraft to stay clear of that taxiway, and ends the leg as you come up to that point or stop near it.
+**A Progressive leg ended before I reached the taxiway I hold short of.** That is by design: where the route leaves room, BA sets the end far enough back for your whole aircraft to stay clear of that taxiway, and ends the leg about 25 metres (80 feet) before that point, or where you stop near it. When your turn onto the last taxiway is very close to the taxiway you hold short of, the end is just after the turn, close to it. Either way, the end-of-leg sentence is your cue to stop.
 
 **BA says there is no place to hold short of a taxiway clear of a runway.** Your last taxiway meets that taxiway only on a runway or right beside one, and BA never stops you for a taxiway there. Check the clearance with ATC; if the stop they mean is the runway's hold line, choose **Hold short of runway** instead.
 
