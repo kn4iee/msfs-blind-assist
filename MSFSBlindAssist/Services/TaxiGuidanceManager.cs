@@ -4369,8 +4369,9 @@ public partial class TaxiGuidanceManager : IDisposable
                     ? "the next runway" : pairedSeg.HoldShortRunway;
                 // Cleared as a Continue before the line clears a stop: the one runway the offer named, at this one stop
                 // (ClearedCrossingHolds.ClearAt), recorded with its node, so it is still counted down and said at its
-                // line, and the Hold short key can put it back. A stop ClearAt refuses (one shared with the pilot's own
-                // taxiway or holding-point hold) records nothing and is taken off as it always was.
+                // line, and the Hold short key can put it back. Never taken off by hand: a stop ClearAt would refuse (one
+                // shared with the pilot's own taxiway or holding-point hold) is never offered (the offer scan below), and
+                // should one still be refused it stays a stop and nothing is said.
                 if (RouteRunwayCrossings.ExtractRunwayDesignator(pairedSeg.HoldShortRunway) is string pairedRunway
                     && pairedSeg.ToNode != null
                     && ClearedCrossingHolds.ClearAt(_route, segIdx + 1, pairedRunway))
@@ -4378,13 +4379,10 @@ public partial class TaxiGuidanceManager : IDisposable
                     _clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,
                         new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId));
                     _guidanceLog.Info($"Paired Continue: runway {pairedRunway} cleared at node {pairedSeg.ToNode.NodeId}.");
+                    AnnounceInstruction($"Also cleared across {label}. No stop between the runways.");
                 }
                 else
-                {
-                    pairedSeg.IsHoldShortPoint = false;
-                    pairedSeg.HoldShortRunway = "";
-                }
-                AnnounceInstruction($"Also cleared across {label}. No stop between the runways.");
+                    _guidanceLog.Info($"Paired Continue: \"{label}\" not cleared, the stop stays.");
             }
             return;
         }
@@ -4585,6 +4583,10 @@ public partial class TaxiGuidanceManager : IDisposable
                     // runways ("runway 28R and runway 01L") is never offered, or a double press would clear a
                     // third runway the pilot never heard named as part of the pair.
                     if (Navigation.RouteRunwayCrossings.ExtractRunwayDesignators(s.HoldShortRunway).Count != 1)
+                        break;
+                    // Nor a stop the press could not clear: one shared with the pilot's own taxiway, holding-point or
+                    // end-of-taxiway hold ("runway 28L at taxiway W") stays a stop (ClearedCrossingHolds.ClearAt refuses it).
+                    if (!ClearedCrossingHolds.CanClearLabel(s.HoldShortRunway, Navigation.RouteRunwayCrossings.ExtractRunwayDesignator(s.HoldShortRunway) ?? ""))
                         break;
                     _pairedCrossingSegIdx = i;
                     (_pairedCrossingWindowFrom, _pairedCrossingWindowUntil) =

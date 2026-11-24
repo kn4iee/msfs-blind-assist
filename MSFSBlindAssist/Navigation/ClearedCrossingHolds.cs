@@ -466,6 +466,16 @@ public static class ClearedCrossingHolds
     // ---- labels ----
 
     /// <summary>
+    /// Whether <see cref="ClearAt"/> would clear <paramref name="runway"/> at a hold short labelled
+    /// <paramref name="label"/>: the label names the runway (either end), and that part is not the pilot's own taxiway,
+    /// holding-point or end-of-taxiway stop shared with it ("runway 28L at taxiway W"), which is never cleared. The
+    /// paired-crossing offer asks it before it offers a stop, so a "cleared across both" press never meets a stop it
+    /// cannot clear.
+    /// </summary>
+    public static bool CanClearLabel(string? label, string? runway)
+        => !string.IsNullOrWhiteSpace(runway) && CanClear(label, runway);
+
+    /// <summary>
     /// Whether clearing <paramref name="runway"/> takes a part off <paramref name="label"/>: the label names the
     /// runway (either end) as the first designator of one of its parts, and that part is not the pilot's own stop
     /// shared with it ("runway 09 at taxiway W"), which stays.

@@ -870,6 +870,8 @@ public class ClearedCrossingHoldsTests
         var stop = route.Segments[2];
         Assert.Equal(sharedLabel, stop.HoldShortRunway);
         Assert.True(ClearedCrossingHolds.CanClearEarly(true, stop.IsHoldShortPoint, stop.HoldShortRunway, isFinalSegment: false));
+        // What the paired offer asks before it offers a stop: refused, so this one is never offered as a pair.
+        Assert.False(ClearedCrossingHolds.CanClearLabel(stop.HoldShortRunway, "09"));
 
         Assert.False(ClearedCrossingHolds.ClearAt(route, 3, RouteRunwayCrossings.ExtractRunwayDesignator(stop.HoldShortRunway)!));
 
@@ -879,6 +881,29 @@ public class ClearedCrossingHoldsTests
         Assert.Empty(stop.ClearedRunways);
         Assert.False(ev.Cleared);
     }
+
+    // Whether clearing a runway at a stop with this label takes a part off it, as ClearAt judges it: the label names the
+    // runway (either end) and that part is not the pilot's own taxiway, holding-point or end-of-taxiway stop shared
+    // with it. The paired offer asks this first, so a "cleared across both" press is never offered for a stop it could
+    // not clear.
+    [Theory]
+    [InlineData("runway 28L", "28L", true)]
+    [InlineData("runway 28L", "10R", true)]
+    [InlineData("runway 28L at F", "28L", true)]
+    [InlineData("runway 06L at D5 and runway 02", "06L", true)]
+    [InlineData("D5, Runway 22R", "22R", true)]
+    [InlineData("runway 09 at taxiway W and runway 01", "01", true)]
+    [InlineData("runway 28L at taxiway W", "28L", false)]
+    [InlineData("runway 28L at holding point B3", "28L", false)]
+    [InlineData("runway 09 at taxiway W and runway 01", "09", false)]
+    [InlineData("end of taxiway D", "09", false)]
+    [InlineData("taxiway W", "09", false)]
+    [InlineData("runway 28L", "01", false)]
+    [InlineData("runway 28L", "", false)]
+    [InlineData("", "28L", false)]
+    [InlineData(null, "28L", false)]
+    public void CanClearLabel_refuses_a_stop_shared_with_the_pilots_own_hold(string? label, string runway, bool expected)
+        => Assert.Equal(expected, ClearedCrossingHolds.CanClearLabel(label, runway));
 
     // An early press records its crossing as an entered one would be: into a NEW list (LoadRoute's Fail and rollback
     // snapshots hold the old one), never twice for the same runway at the same stop.

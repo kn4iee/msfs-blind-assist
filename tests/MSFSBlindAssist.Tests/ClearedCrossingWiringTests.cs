@@ -315,8 +315,9 @@ public class ClearedCrossingWiringTests
     }
 
     // ClearAt can refuse even a stop whose label names the runway (one shared with the pilot's own taxiway or holding-point
-    // hold). Both Continue paths act on its answer: nothing is recorded or said unless it cleared, and otherwise the press
-    // does what it did before (early: nothing; paired: the stop taken off as it always was).
+    // hold). Both Continue paths act on its answer: nothing is recorded, changed or said unless it cleared. The early press
+    // then does what it always did (nothing); the paired press is never offered such a stop, and should ClearAt still
+    // refuse, the stop stays and nothing is said: the paired path never takes a stop off by hand.
     [Fact]
     public void Both_Continue_paths_act_only_on_what_ClearAt_cleared()
     {
@@ -333,9 +334,33 @@ public class ClearedCrossingWiringTests
 
         int pairedClear = cont.IndexOf("&& ClearedCrossingHolds.ClearAt(_route, segIdx + 1, pairedRunway))", StringComparison.Ordinal);
         int pairedRecord = cont.IndexOf("new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId)", StringComparison.Ordinal);
-        int pairedElse = cont.IndexOf("pairedSeg.IsHoldShortPoint = false;", StringComparison.Ordinal);
-        Assert.True(pairedClear >= 0 && pairedRecord > pairedClear && pairedElse > pairedRecord,
-            "the paired press records only inside ClearAt's yes, and takes the stop off as before otherwise");
+        Assert.True(pairedClear >= 0 && pairedRecord > pairedClear, "the paired press records only inside ClearAt's yes");
+        // The paired sentence is said inside that yes block too (no closing brace at the block's own indentation before it).
+        Assert.Matches(@"ClearAt\(_route, segIdx \+ 1, pairedRunway\)\)\s*\{(?:(?!\n {16}\})[\s\S])*AnnounceInstruction\(\$""Also cleared across \{label\}\. No stop between the runways\.""\);", cont);
+        // Never blanked by hand: a stop ClearAt will not clear stays a stop, and nothing is said for it.
+        Assert.DoesNotContain("pairedSeg.IsHoldShortPoint = false;", cont);
+        Assert.DoesNotContain("pairedSeg.HoldShortRunway = \"\";", cont);
+        int pairedEnd = cont.IndexOf("return;", pairedClear, StringComparison.Ordinal);
+        Assert.True(pairedEnd > pairedClear, "the end of the paired branch not found");
+        string pairedTail = cont[pairedClear..pairedEnd];
+        Assert.DoesNotMatch(@"pairedSeg\.\w+\s*=[^=]", pairedTail);
+        Assert.Single(Regex.Matches(pairedTail, @"AnnounceInstruction\(|SpeakNow\("));
+    }
+
+    // The paired offer is never made for a stop the press could not clear: after the two-runway refusal, the offer scan
+    // breaks on a stop ClearAt would refuse (ClearedCrossingHolds.CanClearLabel: one shared with the pilot's own taxiway,
+    // holding-point or end-of-taxiway hold), before it records the stop or opens the window.
+    [Fact]
+    public void The_paired_offer_skips_a_stop_shared_with_the_pilots_own_hold()
+    {
+        string cont = Member(ManagerSource(), "public void ContinuePastHoldShort(");
+
+        int twoRunways = cont.IndexOf("if (Navigation.RouteRunwayCrossings.ExtractRunwayDesignators(s.HoldShortRunway).Count != 1)", StringComparison.Ordinal);
+        int refused = cont.IndexOf("if (!ClearedCrossingHolds.CanClearLabel(s.HoldShortRunway, Navigation.RouteRunwayCrossings.ExtractRunwayDesignator(s.HoldShortRunway) ?? \"\"))", StringComparison.Ordinal);
+        int offered = cont.IndexOf("_pairedCrossingSegIdx = i;", StringComparison.Ordinal);
+        Assert.True(twoRunways >= 0 && refused > twoRunways && offered > refused,
+            "the scan refuses a stop the press cannot clear, after the two-runway refusal and before the offer");
+        Assert.Matches(@"CanClearLabel\(s\.HoldShortRunway, [^\n]*\)\)\s+break;", cont);
     }
 
     // The paired-runway double Continue clears its stop the same way: the one runway the offer named, at that stop,
