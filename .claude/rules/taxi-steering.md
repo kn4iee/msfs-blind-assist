@@ -12,6 +12,8 @@ paths:
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.MathUtils.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.TrafficContext.cs"
   - "tests/MSFSBlindAssist.Tests/**/*TaxiFrameUtterance*.cs"
+  - "MSFSBlindAssist/Navigation/ProgressiveLegEnd.cs"
+  - "tests/MSFSBlindAssist.Tests/**/*ProgressiveLegEnd*.cs"
 ---
 # Taxi steering tone, lineup and turn cues rules
 
@@ -41,6 +43,7 @@ Loaded when Claude reads matching code. Background: docs/taxi-guidance.md. Full 
 - [STR-22] Everything taxi guidance says in one position frame is ONE utterance (`SpeakNow` → `ComposeFrameUtterance`, flushed by `UpdatePosition`), safety lines first; never call `_announcer.AnnounceImmediate` directly inside the manager. Full: docs/invariants/taxi-steering.md#str-22
 - [STR-23] While the opening turn is pending (`_initialTurnPending`) the tone keeps to the side the opening cue SAID (`_initialTurnSign`, capped at 179°), never the short way round, which flips between frames near a reversal. Full: docs/invariants/taxi-steering.md#str-23
 - [STR-24] An opening near-reversal (150° or more) goes toward the only side with stands (`RouteStartTurnCue.PreferRampSide`, plain routes only): the navdata has no apron polygons, so stands are the evidence; stands on both sides or neither keep the short way. Full: docs/invariants/taxi-steering.md#str-24
+- [STR-25] A leg with no destination ends by `ProgressiveLegEnd.Arrived` (inside 25 m, or stopped after the slow-down call or within 30 m), only while Taxiing, and is counted down like a hold short; never the gate radius; the across-runway and end-of-taxiway endings never end, nor say "Slow down" or "Stop", beside a runway (`MaySpeak`). Full: docs/invariants/taxi-steering.md#str-25
 
 Mirrored from takeoff-and-callouts.md and gsx-stands-docking.md (they govern the lineup code in TaxiGuidanceManager.Rollout.cs; change them there and here together):
 - [TKO-2] Auto-activate-Takeoff-Assist-on-lineup is a one-shot latch (`_autoActivateFired`) that must NOT reset on lineup drift-out; re-engaging after a deliberate manual deactivation would surprise the pilot. Full: docs/invariants/takeoff-and-callouts.md#tko-2
