@@ -29,6 +29,15 @@ public static class ProgressiveLegEnd
             && (distToEndM < CaptureRadiusM || (stood && distToEndM <= StandstillCaptureM));
     }
 
+    /// <summary>
+    /// Whether a countdown tier may be spoken (and latched) now. BA never asks for a stop on a runway:
+    /// for the two endings that are not a hold (across a runway, end of the taxiway) "Slow down" and
+    /// "Stop" wait while the aircraft is on or within the clear margin of a runway, the same test
+    /// <see cref="Arrived"/> uses. The outer tier, and every tier of a hold ending, speak as for a hold short.
+    /// </summary>
+    public static bool MaySpeak(ProgressiveTerminatorType type, CountdownTier tier, bool nearARunway)
+        => tier == CountdownTier.Outer || EndsAtAHold(type) || !nearARunway;
+
     public static string CountdownLead(ProgressiveTerminator terminator, string? segmentHoldLabel)
     {
         if (!string.IsNullOrEmpty(segmentHoldLabel)) return $"Hold short {segmentHoldLabel}";

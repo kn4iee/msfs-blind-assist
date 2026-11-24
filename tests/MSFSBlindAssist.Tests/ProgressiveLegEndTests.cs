@@ -34,6 +34,28 @@ public class ProgressiveLegEndTests
     }
     [Fact] public void A_hold_leg_still_ends_beside_a_runway()
         => Assert.True(ProgressiveLegEnd.Arrived(ProgressiveTerminatorType.HoldShortRunway, 10.0, 0.0, false, nearARunway: true));
+    // BA never asks for a stop on a runway: a leg that does not end at a hold (across a runway, end of
+    // the taxiway) holds its "Slow down" and "Stop" calls until the aircraft is clear of the runway's margin.
+    [Theory]
+    [InlineData(ProgressiveTerminatorType.AfterCrossingRunway)]
+    [InlineData(ProgressiveTerminatorType.EndOfTaxiway)]
+    public void A_leg_not_ending_at_a_hold_asks_for_no_slow_down_or_stop_on_or_beside_a_runway(ProgressiveTerminatorType type)
+    {
+        Assert.False(ProgressiveLegEnd.MaySpeak(type, CountdownTier.SlowDown, nearARunway: true));
+        Assert.False(ProgressiveLegEnd.MaySpeak(type, CountdownTier.Stop, nearARunway: true));
+        Assert.True(ProgressiveLegEnd.MaySpeak(type, CountdownTier.Outer, nearARunway: true));
+        Assert.True(ProgressiveLegEnd.MaySpeak(type, CountdownTier.SlowDown, nearARunway: false));
+        Assert.True(ProgressiveLegEnd.MaySpeak(type, CountdownTier.Stop, nearARunway: false));
+    }
+    [Theory]
+    [InlineData(ProgressiveTerminatorType.HoldShortRunway)]
+    [InlineData(ProgressiveTerminatorType.HoldShortTaxiway)]
+    [InlineData(ProgressiveTerminatorType.HoldAtNamedPoint)]
+    public void A_hold_ending_speaks_every_tier_beside_a_runway(ProgressiveTerminatorType type)
+    {
+        foreach (var tier in new[] { CountdownTier.Outer, CountdownTier.SlowDown, CountdownTier.Stop })
+            Assert.True(ProgressiveLegEnd.MaySpeak(type, tier, nearARunway: true));
+    }
     [Theory]
     [InlineData(ProgressiveTerminatorType.HoldShortTaxiway, "L", null, "Hold short taxiway L")]
     [InlineData(ProgressiveTerminatorType.HoldShortRunway, "04R", null, "Hold short runway 04R")]

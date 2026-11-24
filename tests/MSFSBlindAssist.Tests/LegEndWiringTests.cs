@@ -33,6 +33,21 @@ public class LegEndWiringTests
         Assert.Contains("(!legEndTaxiing || (!ProgressiveLegEnd.EndsAtAHold(", text);
     }
 
+    // BA never asks for a stop on a runway: the countdown takes the frame's runway test and asks
+    // ProgressiveLegEnd.MaySpeak (unit-tested there) before it speaks or latches "Slow down" or "Stop".
+    [Fact]
+    public void The_countdown_asks_ProgressiveLegEnd_before_a_slow_down_or_stop()
+    {
+        string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+
+        Assert.Contains("CheckHoldShortCountdown(distToTarget, currentSeg, nearARunway);", text);
+        Assert.Contains("ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.SlowDown, nearARunway)", text);
+        Assert.Contains("ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.Stop, nearARunway)", text);
+        Assert.Contains("if (stopMaySpeak) _holdShortSlowDownAnnounced = true;", text);
+        Assert.Contains("!_holdShortSlowDownAnnounced && slowDownMaySpeak)", text);
+        Assert.Contains("!_holdShortStopAnnounced && stopMaySpeak)", text);
+    }
+
     private static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
