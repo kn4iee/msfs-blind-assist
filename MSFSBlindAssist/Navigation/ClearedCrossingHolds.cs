@@ -13,12 +13,13 @@ public sealed record ClearedCrossing(string Runway, string? At = null, int AtNod
 /// <summary>
 /// Clears ONE runway crossing at ONE place, and puts it back. The automatic pass still places a stop before every
 /// runway on every route [HLD-4]; this runs after it and only takes a stop the pilot was cleared across off the
-/// route: the stop keeps the label it was placed with (<see cref="TaxiRouteSegment.PlacedHoldLabel"/>), the runway
-/// goes on <see cref="TaxiRouteSegment.ClearedRunways"/>, and its event stays <see cref="TaxiRouteRunwayEvent.Held"/>,
+/// route: the stop keeps the label it was placed with (<see cref="TaxiRouteSegment.PlacedHoldLabel"/>; a start hold,
+/// <see cref="TaxiRoute.PlacedStartHoldLabel"/>), the runway goes on <see cref="TaxiRouteSegment.ClearedRunways"/>
+/// (<see cref="TaxiRoute.StartHoldClearedRunways"/>), and its event stays <see cref="TaxiRouteRunwayEvent.Held"/>,
 /// marked <see cref="TaxiRouteRunwayEvent.Cleared"/>, so it is still counted down and announced.
 ///
 /// <para>Never by runway name alone, never carried to another crossing of the same runway: a request clears the
-/// first crossing of its runway that matches its place, and a recalculation clears only the stop at the node it
+/// first crossing of its runway, in route order, that matches its place, and a recalculation clears only the stop at the node it
 /// was applied at (<see cref="ClearedCrossing.StopNodeId"/>). A stop guarding two runways loses only the named one
 /// ([HLD-11]: the other still takes its own Continue). A stop that is the pilot's own taxiway, holding-point or
 /// "end of taxiway" hold is never cleared. Pure.</para>
@@ -39,13 +40,17 @@ public static class ClearedCrossingHolds
     /// Clears each request's crossing on <paramref name="route"/>, after the automatic pass.
     ///
     /// <para>A request's candidates are the crossings of its runway (either end) still held by a stop that names
-    /// it: held, not passed, not cleared, with a stop node. On the pilot's Calculate the match is the first
-    /// candidate, or with a place the first whose event location or stop segment's taxiway is <c>At</c>, or whose
-    /// stop node is <c>AtNodeId</c>; with <paramref name="runStartSegmentOf"/> and a <c>SeqIndex</c>, candidates
-    /// whose stop lies at or after that taxiway step's first segment are tried first. No crossing of the runway at
-    /// all: <see cref="Outcome.NotOnRoute"/>; candidates but no match: <see cref="Outcome.Elsewhere"/>; a runway only
-    /// crossed already, or held only by the pilot's own taxiway stop, neither. With no candidate, a crossing with no
-    /// stop (#355's decision 3) is marked cleared, so it is not said as having "no hold short point".</para>
+    /// it: held, not passed, not cleared, with a stop node. On the pilot's Calculate the match is taken in ROUTE
+    /// order (where the route reaches the runway, <see cref="TaxiRouteRunwayEvent.ReachNodeIndex"/>) from the
+    /// candidates and the crossings with no stop (#355's decision 3: neither held nor passed), so a bare request
+    /// clears the crossing in front of the aircraft, never a later one: the first of them, or with a place the first
+    /// whose event location or stop segment's taxiway is <c>At</c> (a crossing with no stop: its location), or whose
+    /// stop node is <c>AtNodeId</c>. With <paramref name="runStartSegmentOf"/> and a <c>SeqIndex</c>, those the
+    /// route reaches at or after that taxiway step's first segment are tried first: the reach, not the stop, which
+    /// can be set back onto the taxiway before (the binding a pilot's runway pick uses). A crossing with no stop is
+    /// marked cleared, so it is not said as having "no hold short point". No crossing of the runway at all:
+    /// <see cref="Outcome.NotOnRoute"/>; candidates but no match: <see cref="Outcome.Elsewhere"/>; a runway only
+    /// crossed already, held only by the pilot's own taxiway stop, or crossed with no stop at another place, neither.</para>
     ///
     /// <para>On a <paramref name="recalculation"/> the match is the candidate whose stop node is the request's
     /// <c>StopNodeId</c>; anything else is dropped and in neither list (<see cref="DroppedOnRecalculation"/>).</para>
@@ -82,27 +87,32 @@ public static class ClearedCrossingHolds
                 continue;
             }
 
-            if (candidates.Count > 0)
+            // Route order: the pass records its events in it, but a pilot pick's event is merged in at the end.
+            var open = crossings
+                .Where(e => IsCandidate(route, e) || HasNoStop(e))
+                .OrderBy(e => e.ReachNodeIndex < 0 ? int.MaxValue : e.ReachNodeIndex)
+                .ToList();
+            TaxiRouteRunwayEvent? match = null;
+            if (runStartSegmentOf != null && request.SeqIndex >= 0)
             {
-                TaxiRouteRunwayEvent? match = null;
-                if (runStartSegmentOf != null && request.SeqIndex >= 0)
-                {
-                    int runStart = runStartSegmentOf(request.SeqIndex);
-                    if (runStart >= 0)
-                        match = FirstMatch(route, candidates.Where(e => e.StopNodeIndex >= runStart), request);
-                }
-                match ??= FirstMatch(route, candidates, request);
-                if (match != null) applied.Add(ClearMatch(route, match, request));
-                else elsewhere.Add(request);
-                continue;
+                int runStart = runStartSegmentOf(request.SeqIndex);
+                if (runStart >= 0)
+                    match = FirstMatch(route, open.Where(e => e.ReachNodeIndex >= runStart), request);
             }
+            match ??= FirstMatch(route, open, request);
 
-            var noStop = crossings.FirstOrDefault(e => !e.Held && !e.Passed && !e.Cleared
-                && (string.IsNullOrWhiteSpace(request.At) || SamePlace(e.Location, request.At)));
-            if (noStop != null)
+            if (match is null)
             {
-                noStop.Cleared = true;
+                if (candidates.Count > 0) elsewhere.Add(request);
+            }
+            else if (HasNoStop(match))
+            {
+                match.Cleared = true;
                 applied.Add(request with { StopNodeId = 0 });
+            }
+            else
+            {
+                applied.Add(ClearMatch(route, match, request));
             }
         }
         return new Outcome(applied, notOnRoute, elsewhere);
@@ -121,8 +131,12 @@ public static class ClearedCrossingHolds
 
         if (stopNodeIndex == 0)
         {
+            // Remembered on the route as a segment stop is on its segment: a cleared start hold leaves no label,
+            // and the runway straight ahead must still be counted down, said and put back (RestoreStartHold).
             if (!CanClear(route.StartHoldRunway, runway)) return false;
-            route.StartHoldRunway = RemainingLabel(route.StartHoldRunway, new[] { runway });
+            route.PlacedStartHoldLabel ??= route.StartHoldRunway;
+            AddCleared(route.StartHoldClearedRunways, runway);
+            route.StartHoldRunway = RemainingLabel(route.PlacedStartHoldLabel, route.StartHoldClearedRunways);
             MarkCleared(route, 0, runway, cleared: true);
             return true;
         }
@@ -132,8 +146,7 @@ public static class ClearedCrossingHolds
         if (!segment.IsHoldShortPoint || !CanClear(segment.HoldShortRunway, runway)) return false;
 
         segment.PlacedHoldLabel ??= segment.HoldShortRunway;
-        string normalized = RouteRunwayCrossings.NormalizeDesignator(runway);
-        if (!segment.ClearedRunways.Any(c => SameRunway(c, normalized))) segment.ClearedRunways.Add(normalized);
+        AddCleared(segment.ClearedRunways, runway);
         string? remaining = RemainingLabel(segment.PlacedHoldLabel, segment.ClearedRunways);
         if (remaining is null)
         {
@@ -184,6 +197,27 @@ public static class ClearedCrossingHolds
             .ToList();
         if (kept.Count == parts.Count) return placedLabel;
         return kept.Any(p => RouteRunwayCrossings.ExtractRunwayDesignator(p) != null) ? string.Join(" and ", kept) : null;
+    }
+
+    /// <summary>
+    /// Whether a runway was cleared at the route's start hold (<see cref="TaxiRoute.StartHoldClearedRunways"/>): the
+    /// start hold's counterpart of a cleared segment stop, which <see cref="NextClearedSegment"/> does not report.
+    /// </summary>
+    public static bool IsStartHoldCleared(TaxiRoute route)
+        => route is not null && route.StartHoldClearedRunways.Count > 0;
+
+    /// <summary>
+    /// Puts back every runway cleared at the start hold: its placed label, and its events (stop node 0) no longer
+    /// cleared. False when nothing was cleared there.
+    /// </summary>
+    public static bool RestoreStartHold(TaxiRoute route)
+    {
+        if (!IsStartHoldCleared(route)) return false;
+        route.StartHoldRunway = route.PlacedStartHoldLabel;
+        route.StartHoldClearedRunways.Clear();
+        route.PlacedStartHoldLabel = null;
+        MarkCleared(route, 0, runway: null, cleared: false);
+        return true;
     }
 
     /// <summary>A stop every runway of which is cleared: no longer a hold short, but still counted down and announced.</summary>
@@ -262,6 +296,9 @@ public static class ClearedCrossingHolds
         => e.Held && !e.Passed && !e.Cleared && e.StopNodeIndex >= 0
            && CanClear(StopLabel(route, e.StopNodeIndex), e.Designator);
 
+    // #355's decision 3: a crossing the route makes with no stop of its own, still ahead and not yet cleared.
+    private static bool HasNoStop(TaxiRouteRunwayEvent e) => !e.Held && !e.Passed && !e.Cleared;
+
     private static TaxiRouteRunwayEvent? FirstMatch(TaxiRoute route, IEnumerable<TaxiRouteRunwayEvent> candidates, ClearedCrossing request)
     {
         bool hasAt = !string.IsNullOrWhiteSpace(request.At);
@@ -282,10 +319,18 @@ public static class ClearedCrossingHolds
         return request with { StopNodeId = stopNodeId };
     }
 
-    private static void MarkCleared(TaxiRoute route, int stopNodeIndex, string runway, bool cleared)
+    // The events at that stop for that runway (either end); every event at it when runway is null.
+    private static void MarkCleared(TaxiRoute route, int stopNodeIndex, string? runway, bool cleared)
     {
         foreach (var e in route.RunwayEvents ?? new List<TaxiRouteRunwayEvent>())
-            if (e != null && e.StopNodeIndex == stopNodeIndex && SameRunway(e.Designator, runway)) e.Cleared = cleared;
+            if (e != null && e.StopNodeIndex == stopNodeIndex && (runway is null || SameRunway(e.Designator, runway)))
+                e.Cleared = cleared;
+    }
+
+    private static void AddCleared(List<string> clearedRunways, string runway)
+    {
+        string normalized = RouteRunwayCrossings.NormalizeDesignator(runway);
+        if (!clearedRunways.Any(c => SameRunway(c, normalized))) clearedRunways.Add(normalized);
     }
 
     // ---- the stop at a route node ----

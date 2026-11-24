@@ -141,13 +141,67 @@ public class ClearedCrossingHoldsTests
         Assert.True(later.Segments[0].IsHoldShortPoint);
         Assert.False(later.Segments[4].IsHoldShortPoint);
 
-        // One that starts past both: nothing lies after it, so the first crossing is the one.
+        // One that starts past both: nothing lies after it, so the first crossing is the one. The second crossing
+        // reaches the runway at node 6, where segment 6 starts, so a taxiway starting past both starts at node 7.
         var past = TwoCrossings();
         Pass(past, Runway09());
         ClearedCrossingHolds.Apply(past, new[] { new ClearedCrossing("09", SeqIndex: 1) }, recalculation: false,
-            runStartSegmentOf: _ => 6);
+            runStartSegmentOf: _ => 7);
         Assert.False(past.Segments[0].IsHoldShortPoint);
         Assert.True(past.Segments[4].IsHoldShortPoint);
+    }
+
+    [Fact]
+    public void A_crossing_entered_after_a_taxiway_is_matched_where_the_route_reaches_the_runway_on_it()
+    {
+        // KSFO-like: D crosses 28R (stop at node 1), comes round and meets Q at a junction inside 28R's clear margin,
+        // and Q crosses 28R again. Q's stop is set back onto D (node 5), before Q's first segment (6); the route
+        // reaches the runway on Q itself (node 7). Cleared "after Q", it is Q's crossing that is cleared, never D's.
+        var route = RouteOf(Node(1, 500, -300), Node(2, 500, -100), Node(3, 500, 0), Node(4, 500, 100),
+            Node(5, 700, 200), Node(6, 900, 100), Node(7, 900, 35), Node(8, 900, 0), Node(9, 900, -100));
+        for (int i = 0; i < route.Segments.Count; i++) route.Segments[i].TaxiwayName = i < 6 ? "D" : "Q";
+        var events = Pass(route, new[] { EastWest("10L", "28R") });
+        Assert.Equal(new[] { 1, 5 }, events.Select(e => e.StopNodeIndex));
+        Assert.Equal(new[] { 2, 7 }, events.Select(e => e.ReachNodeIndex));
+
+        var outcome = ClearedCrossingHolds.Apply(route, new[] { new ClearedCrossing("28R", SeqIndex: 2) }, recalculation: false,
+            runStartSegmentOf: seq => { Assert.Equal(2, seq); return 6; });
+
+        Assert.True(route.Segments[0].IsHoldShortPoint);
+        Assert.False(route.Segments[4].IsHoldShortPoint);
+        Assert.Equal(new[] { false, true }, events.Select(e => e.Cleared));
+        Assert.Equal(6, Assert.Single(outcome.Applied).StopNodeId);
+    }
+
+    [Fact]
+    public void A_bare_request_clears_the_first_crossing_in_route_order_even_one_with_no_stop()
+    {
+        // Loaded from inside 09's hold line: the route crosses 09 at once with no stop of its own, then again later
+        // at a stop. Cleared across 09, the crossing in front of the aircraft is the one cleared; the later stop stays.
+        var route = RouteOf(Node(1, 1000, 35), Node(2, 1000, 10), Node(3, 1000, -60), Node(4, 1000, -200),
+            Node(5, 1400, -200), Node(6, 1400, -100), Node(7, 1400, 0), Node(8, 1400, 100));
+        var events = Pass(route, Runway09(), aircraft: new AircraftPosition(Lat(35), Lon(1000)));
+        Assert.Equal(2, events.Count);
+        Assert.False(events[0].Held);
+        Assert.False(events[0].Passed);
+        Assert.True(events[1].Held);
+        Assert.True(route.Segments[4].IsHoldShortPoint);
+
+        var outcome = Clear(route, new ClearedCrossing("09"));
+
+        Assert.True(route.Segments[4].IsHoldShortPoint);
+        Assert.Equal(new[] { true, false }, events.Select(e => e.Cleared));
+        Assert.Equal(0, Assert.Single(outcome.Applied).StopNodeId);
+        Assert.Equal("", RouteRunwayCrossings.DescribeUnheldRunways(route.RunwayEvents));
+
+        // Cleared "after" a taxiway step that starts past the first crossing: the later stop.
+        var later = RouteOf(Node(1, 1000, 35), Node(2, 1000, 10), Node(3, 1000, -60), Node(4, 1000, -200),
+            Node(5, 1400, -200), Node(6, 1400, -100), Node(7, 1400, 0), Node(8, 1400, 100));
+        var laterEvents = Pass(later, Runway09(), aircraft: new AircraftPosition(Lat(35), Lon(1000)));
+        ClearedCrossingHolds.Apply(later, new[] { new ClearedCrossing("09", SeqIndex: 1) }, recalculation: false,
+            runStartSegmentOf: _ => 3);
+        Assert.False(later.Segments[4].IsHoldShortPoint);
+        Assert.Equal(new[] { false, true }, laterEvents.Select(e => e.Cleared));
     }
 
     [Fact]
@@ -350,12 +404,69 @@ public class ClearedCrossingHoldsTests
         var ev = Assert.Single(Pass(route, Runway09()));
         Assert.Equal("runway 09", route.StartHoldRunway);
 
+        Assert.False(ClearedCrossingHolds.IsStartHoldCleared(route));
+
         var outcome = Clear(route, new ClearedCrossing("09"));
 
         Assert.Null(route.StartHoldRunway);
         Assert.True(ev.Cleared);
         Assert.Equal(route.Segments[0].FromNode.NodeId, Assert.Single(outcome.Applied).StopNodeId);
         Assert.All(route.Segments, s => Assert.False(s.IsHoldShortPoint));
+        // Remembered on the route, as a segment stop is on its segment: counted down and put back like one.
+        Assert.Equal("runway 09", route.PlacedStartHoldLabel);
+        Assert.Equal(new[] { "09" }, route.StartHoldClearedRunways);
+        Assert.True(ClearedCrossingHolds.IsStartHoldCleared(route));
+        Assert.Equal(-1, ClearedCrossingHolds.NextClearedSegment(route, 0));
+    }
+
+    [Fact]
+    public void Restoring_a_start_hold_puts_it_and_its_label_back()
+    {
+        var route = StartsHeld();
+        var ev = Assert.Single(Pass(route, Runway09()));
+        Assert.False(ClearedCrossingHolds.RestoreStartHold(route));   // nothing cleared yet
+        Clear(route, new ClearedCrossing("27"));
+
+        Assert.True(ClearedCrossingHolds.RestoreStartHold(route));
+
+        Assert.Equal("runway 09", route.StartHoldRunway);
+        Assert.Null(route.PlacedStartHoldLabel);
+        Assert.Empty(route.StartHoldClearedRunways);
+        Assert.False(ClearedCrossingHolds.IsStartHoldCleared(route));
+        Assert.False(ev.Cleared);
+        Assert.False(ClearedCrossingHolds.RestoreStartHold(route));
+    }
+
+    [Fact]
+    public void A_start_hold_guarding_two_runways_is_cleared_one_runway_at_a_time_and_put_back_whole()
+    {
+        // No clear node before 09 and 01 is beyond it: both share the start hold.
+        var runways = new[] { EastWest("09", "27"), NorthSouth("01", "19", eastM: 1200, fromNorthM: -1500, toNorthM: 1500) };
+        var route = RouteOf(Node(1, 900, 35), Node(2, 1000, 0), Node(3, 1300, 0), Node(4, 1300, -60));
+        var events = Pass(route, runways);
+        Assert.Equal("runway 09 and runway 01", route.StartHoldRunway);
+        Assert.All(events, e => Assert.Equal(0, e.StopNodeIndex));
+
+        Clear(route, new ClearedCrossing("09"));
+
+        Assert.Equal("runway 01", route.StartHoldRunway);
+        Assert.Empty(RunwayHoldStages.From(route.StartHoldRunway));
+        Assert.Equal("runway 09 and runway 01", route.PlacedStartHoldLabel);
+        Assert.Equal(new[] { "09" }, route.StartHoldClearedRunways);
+        Assert.True(ClearedCrossingHolds.IsStartHoldCleared(route));
+        Assert.Equal(new[] { true, false }, events.Select(e => e.Cleared));
+
+        Clear(route, new ClearedCrossing("01"));
+        Assert.Null(route.StartHoldRunway);
+        Assert.Equal(new[] { "09", "01" }, route.StartHoldClearedRunways);
+
+        Assert.True(ClearedCrossingHolds.RestoreStartHold(route));
+
+        Assert.Equal("runway 09 and runway 01", route.StartHoldRunway);
+        Assert.Equal(new[] { "09", "01" }, RunwayHoldStages.From(route.StartHoldRunway));
+        Assert.Null(route.PlacedStartHoldLabel);
+        Assert.Empty(route.StartHoldClearedRunways);
+        Assert.All(events, e => Assert.False(e.Cleared));
     }
 
     [Fact]
@@ -499,6 +610,8 @@ public class ClearedCrossingHoldsTests
         var outcome = Clear(route, new ClearedCrossing("04R"));
 
         Assert.Null(route.StartHoldRunway);
+        Assert.Equal("runway 04R", route.PlacedStartHoldLabel);
+        Assert.True(ClearedCrossingHolds.IsStartHoldCleared(route));
         Assert.True(ev.Cleared);
         Assert.Equal(KbosHcJunctionFixture.Node(g, KbosHcJunctionFixture.HNorth), Assert.Single(outcome.Applied).StopNodeId);
         Assert.Equal(segments, route.Segments);

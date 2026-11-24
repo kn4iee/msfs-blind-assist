@@ -143,11 +143,13 @@ public class TaxiwayHoldPlacementTests
             TaxiwayHoldPlacement.ShiftEventsAfterSplit(events, m);
         }
 
-        foreach (var (m, expected) in new[] { (0, 3), (1, 3), (2, 2), (3, 2) })
+        // The route reaches the runway at node 3 (id 4), the end of segment 2.
+        foreach (var (m, expected, expectedReach) in new[] { (0, 3, 4), (1, 3, 4), (2, 2, 4), (3, 2, 3) })
         {
             var (route, events) = Crossing();
             var ev = Assert.Single(events);
             Assert.Equal(2, ev.StopNodeIndex);
+            Assert.Equal(3, ev.ReachNodeIndex);
             ev.Cleared = true;
 
             SplitAt(route, events, m);
@@ -156,15 +158,19 @@ public class TaxiwayHoldPlacementTests
             Assert.Equal(expected, moved.StopNodeIndex);
             Assert.Equal(3, NodeIdAt(route, moved.StopNodeIndex));
             Assert.True(route.Segments[moved.StopNodeIndex - 1].IsHoldShortPoint);
+            Assert.Equal(expectedReach, moved.ReachNodeIndex);
+            Assert.Equal(4, NodeIdAt(route, moved.ReachNodeIndex));
             // Every other member rides along.
             Assert.Equal((ev.Kind, ev.Designator, ev.Held, ev.Passed, ev.Location, ev.Cleared),
                          (moved.Kind, moved.Designator, moved.Held, moved.Passed, moved.Location, moved.Cleared));
         }
 
-        // A start hold (0) and no stop at all (-1) never move.
-        var unmoved = new List<TaxiRouteRunwayEvent> { new() { StopNodeIndex = 0 }, new() { StopNodeIndex = -1 }, new() };
+        // A start hold (0) and no stop at all (-1) never move; nor does a reach at the route's first node.
+        var unmoved = new List<TaxiRouteRunwayEvent>
+            { new() { StopNodeIndex = 0, ReachNodeIndex = 0 }, new() { StopNodeIndex = -1, ReachNodeIndex = 2 }, new() };
         TaxiwayHoldPlacement.ShiftEventsAfterSplit(unmoved, 0);
         Assert.Equal(new[] { 0, -1, -1 }, unmoved.Select(e => e.StopNodeIndex));
+        Assert.Equal(new[] { 0, 3, -1 }, unmoved.Select(e => e.ReachNodeIndex));
         TaxiwayHoldPlacement.ShiftEventsAfterSplit(null, 0);
     }
 

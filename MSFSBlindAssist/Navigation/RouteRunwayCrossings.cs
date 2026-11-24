@@ -919,6 +919,7 @@ public static class RouteRunwayCrossings
                 Passed = passed,
                 Location = LocationFor(route.Segments, passage, stopLabel),
                 StopNodeIndex = stopNodeIndex,
+                ReachNodeIndex = passage.ReachIndex,
             });
         }
         ReorderSharedLabels(route, passages);
@@ -1049,6 +1050,7 @@ public static class RouteRunwayCrossings
             Held = true,
             Location = LocationFor(route.Segments, passage, stopLabel),
             StopNodeIndex = stopNodeIndex,
+            ReachNodeIndex = passage.ReachIndex,
         };
         return UserRunwayHoldResult.Held;
     }

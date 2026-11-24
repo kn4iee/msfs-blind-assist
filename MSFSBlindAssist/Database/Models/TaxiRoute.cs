@@ -28,6 +28,21 @@ public class TaxiRoute
     public string? StartHoldRunway { get; set; }
 
     /// <summary>
+    /// The start hold's label as it was placed, kept while any runway at it is cleared
+    /// (<see cref="StartHoldClearedRunways"/>), so it can be put back
+    /// (<see cref="MSFSBlindAssist.Navigation.ClearedCrossingHolds.RestoreStartHold"/>): the start hold's counterpart
+    /// of <see cref="TaxiRouteSegment.PlacedHoldLabel"/>. Null otherwise.
+    /// </summary>
+    public string? PlacedStartHoldLabel { get; set; }
+
+    /// <summary>
+    /// The runways the pilot is cleared across at the start hold, normalized, in the order cleared; empty when none
+    /// (<see cref="MSFSBlindAssist.Navigation.ClearedCrossingHolds.IsStartHoldCleared"/>). With every runway cleared
+    /// <see cref="StartHoldRunway"/> is null, and this is what remembers that a runway lies straight ahead.
+    /// </summary>
+    public List<string> StartHoldClearedRunways { get; } = new();
+
+    /// <summary>
     /// A runway route's tail that the hold-short truncation cut off: the hold node, then every
     /// node on to the runway entry. After Continue the lineup tone follows it onto the pavement
     /// before the centreline intercept takes over. Null when nothing was cut.
@@ -176,11 +191,22 @@ public sealed class TaxiRouteRunwayEvent
     /// </summary>
     public int StopNodeIndex { get => _stopNodeIndex; init => _stopNodeIndex = value; }
 
-    /// <summary>A copy of this event whose stop is node <paramref name="stopNodeIndex"/>, every other member kept.</summary>
-    public TaxiRouteRunwayEvent WithStopNodeIndex(int stopNodeIndex)
+    private int _reachNodeIndex = -1;
+
+    /// <summary>
+    /// The first route node at or past the runway (<see cref="MSFSBlindAssist.Navigation.RunwayPassage.ReachIndex"/>):
+    /// where the route reaches it, which orders the events along the route and is what binds a crossing to the
+    /// taxiway it is crossed on, as a pilot's runway pick binds. The stop can lie further back, on the taxiway
+    /// before. -1 when not recorded. Kept valid across a split as <see cref="StopNodeIndex"/> is.
+    /// </summary>
+    public int ReachNodeIndex { get => _reachNodeIndex; init => _reachNodeIndex = value; }
+
+    /// <summary>A copy of this event with these stop and reach nodes, every other member kept.</summary>
+    public TaxiRouteRunwayEvent WithNodeIndices(int stopNodeIndex, int reachNodeIndex)
     {
         var copy = (TaxiRouteRunwayEvent)MemberwiseClone();
         copy._stopNodeIndex = stopNodeIndex;
+        copy._reachNodeIndex = reachNodeIndex;
         return copy;
     }
 }

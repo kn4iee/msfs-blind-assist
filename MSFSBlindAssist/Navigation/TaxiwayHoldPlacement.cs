@@ -205,15 +205,20 @@ public static class TaxiwayHoldPlacement
         return (first, second);
     }
 
-    /// The runway events with each stop node index above splitIndex moved up by one, replaced in place: segment
-    /// splitIndex became two, so its own end node (node splitIndex + 1, where the far half keeps the stop) and every
-    /// node after it are one further along. A start hold (0) and no stop (-1) never move. Null: nothing to shift.
+    /// The runway events with each stop and reach node index above splitIndex moved up by one, replaced in place:
+    /// segment splitIndex became two, so its own end node (node splitIndex + 1, where the far half keeps the stop) and
+    /// every node after it are one further along. A start hold (0) and no stop (-1) never move. Null: nothing to shift.
     public static void ShiftEventsAfterSplit(List<TaxiRouteRunwayEvent>? events, int splitIndex)
     {
         if (events == null) return;
+        static int Shifted(int nodeIndex, int split) => nodeIndex > split && nodeIndex >= 1 ? nodeIndex + 1 : nodeIndex;
         for (int i = 0; i < events.Count; i++)
-            if (events[i] is { } ev && ev.StopNodeIndex > splitIndex && ev.StopNodeIndex >= 1)
-                events[i] = ev.WithStopNodeIndex(ev.StopNodeIndex + 1);
+        {
+            if (events[i] is not { } ev) continue;
+            int stop = Shifted(ev.StopNodeIndex, splitIndex), reach = Shifted(ev.ReachNodeIndex, splitIndex);
+            if (stop != ev.StopNodeIndex || reach != ev.ReachNodeIndex)
+                events[i] = ev.WithNodeIndices(stop, reach);
+        }
     }
 
     /// The picks with each segment index above splitIndex moved up by one (segment splitIndex became two).
