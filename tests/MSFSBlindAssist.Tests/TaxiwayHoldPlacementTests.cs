@@ -70,6 +70,18 @@ public class TaxiwayHoldPlacementTests
     [Fact] public void A_recalculation_finds_the_node_inserted_at_load()                  // nodes at 0, 100, 225.4, 260: 34.6 m back
         => Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(At(0, 100, 225.4, 260), 2, 35, allowInsert: false, Everywhere));
 
+    // A runway crossed inside ONE edge has no node on it, so only sampling the stretch finds it (spec 8.6: move forward).
+    [Fact] public void Rule_2_never_lands_behind_a_runway_crossed_inside_one_edge()    // nodes at 0, 100, 260; band 205-245; point at 225
+        => Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 100, 260), 1, 35, allowInsert: true, RunwayBetween(205, 245)));
+    [Fact] public void Rule_1_never_lands_behind_a_runway_crossed_inside_one_edge()    // nodes at 0, 190, 260; band 200-250; node 70 m back
+        => Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 190, 260), 1, 35, allowInsert: true, RunwayBetween(200, 250)));
+    [Fact] public void Rule_3_never_lands_behind_a_runway_crossed_inside_one_edge()    // nodes at 0, 150, 260; band 180-230; node 110 m back
+        => Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 150, 260), 1, 60, allowInsert: false, RunwayBetween(180, 230)));
+    [Fact] public void An_inserted_point_whose_stretch_to_the_segment_end_crosses_a_runway_is_refused()
+        // nodes at 0, 300, 340; setback 120 puts the point at 220 on segment 0 (itself clear), but the band 240-260 lies
+        // between it and the segment's end node at 300: the stop moves forward to that node.
+        => Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), Choose(At(0, 300, 340), 1, 120, allowInsert: true, RunwayBetween(240, 260)));
+
     [Fact] public void Split_keeps_the_stop_on_the_far_half()
     {
         var seg = At(0, 100)[0]; seg.TaxiwayName = "A"; seg.IsHoldShortPoint = true; seg.HoldShortRunway = "runway 09";

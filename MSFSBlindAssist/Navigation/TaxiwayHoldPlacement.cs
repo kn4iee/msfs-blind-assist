@@ -19,6 +19,8 @@ public static class TaxiwayHoldPlacement
     public const double MinFromRouteStartM = 10.0;
     public const double NodeMatchToleranceM = 1.0;    // a recalculated route measures an inserted node from the split edges
 
+    public const double SampleStepM = 5.0;            // runway sampling along a stretch of route, at most this far apart
+
     public enum StopKind { ExistingNode, InsertOnSegment, Junction, NoSafeStop }
     public readonly record struct Stop(StopKind Kind, int SegmentIndex, double MetresBeforeSegmentEnd);
 
@@ -39,9 +41,13 @@ public static class TaxiwayHoldPlacement
         if (!isClearOfRunways(junctionNode.Latitude, junctionNode.Longitude))
             return new Stop(StopKind.NoSafeStop, -1, 0);
 
-        // lo: the smallest index whose end node, and every one after it up to the junction, is clear of runways.
+        // lo: the smallest index whose end node, and every one after it up to the junction, is clear of runways,
+        // with every sample along the segments after it clear too (a runway crossed inside one edge has no node on it).
         int lo = j;
-        while (lo > 0 && isClearOfRunways(segments[lo - 1].ToNode.Latitude, segments[lo - 1].ToNode.Longitude)) lo--;
+        while (lo > 0
+               && isClearOfRunways(segments[lo - 1].ToNode.Latitude, segments[lo - 1].ToNode.Longitude)
+               && StretchClear(segments[lo], segments[lo].DistanceMeters, isClearOfRunways))
+            lo--;
         lo = Math.Max(lo, firstUsableIndex);
 
         // Rule 1's candidate: the largest k whose end node lies at least the setback before the junction.
@@ -88,10 +94,11 @@ public static class TaxiwayHoldPlacement
                         fromStart -= metresBeforeEnd;
                         if (fromStart >= MinFromRouteStartM)
                         {
-                            double f = seg.DistanceMeters > 0 ? (seg.DistanceMeters - metresBeforeEnd) / seg.DistanceMeters : 0;
-                            double lat = seg.FromNode.Latitude + f * (seg.ToNode.Latitude - seg.FromNode.Latitude);
-                            double lon = seg.FromNode.Longitude + f * (seg.ToNode.Longitude - seg.FromNode.Longitude);
-                            if (m >= lo && isClearOfRunways(lat, lon))
+                            var (lat, lon) = PointBeforeEnd(seg, metresBeforeEnd);
+                            bool usable = m > lo
+                                ? isClearOfRunways(lat, lon)
+                                : m == lo && isClearOfRunways(lat, lon) && StretchClear(seg, metresBeforeEnd, isClearOfRunways);
+                            if (usable)
                                 return new Stop(StopKind.InsertOnSegment, m, metresBeforeEnd);
                             passedOver = true;
                         }
@@ -113,6 +120,27 @@ public static class TaxiwayHoldPlacement
 
         // Rule 4.
         return new Stop(StopKind.Junction, j, 0);
+    }
+
+    /// The point metresBeforeEnd back from the segment's end node, interpolated linearly between its two nodes.
+    public static (double Lat, double Lon) PointBeforeEnd(TaxiRouteSegment segment, double metresBeforeEnd)
+    {
+        double f = segment.DistanceMeters > 0 ? (segment.DistanceMeters - metresBeforeEnd) / segment.DistanceMeters : 0;
+        return (segment.FromNode.Latitude + f * (segment.ToNode.Latitude - segment.FromNode.Latitude),
+                segment.FromNode.Longitude + f * (segment.ToNode.Longitude - segment.FromNode.Longitude));
+    }
+
+    /// True when every sample from the segment's end node back to metresBack before it (steps of at most
+    /// SampleStepM, both ends included) is clear of runways.
+    private static bool StretchClear(TaxiRouteSegment segment, double metresBack, Func<double, double, bool> isClearOfRunways)
+    {
+        int steps = Math.Max(1, (int)Math.Ceiling(metresBack / SampleStepM));
+        for (int i = 0; i <= steps; i++)
+        {
+            var (lat, lon) = PointBeforeEnd(segment, metresBack * i / steps);
+            if (!isClearOfRunways(lat, lon)) return false;
+        }
+        return true;
     }
 
     public static (TaxiRouteSegment First, TaxiRouteSegment Second) Split(TaxiRouteSegment segment, TaxiNode mid, double metresBeforeEnd)
