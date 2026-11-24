@@ -466,10 +466,14 @@ public static class RouteRunwayCrossings
     {
         if (events is null || events.Count == 0) return "";
         var parts = new List<string>();
+        // A crossing the pilot is cleared across (still Held, marked Cleared) is named once, as cleared, never as a stop.
+        string cleared = ComposeRunwayGroup("cleared across",
+            events.Where(e => e.Kind == RunwayEventKind.Crossing && e.Cleared));
         string crossing = ComposeRunwayGroup("crossing",
-            events.Where(e => e.Kind == RunwayEventKind.Crossing));
+            events.Where(e => e.Kind == RunwayEventKind.Crossing && !e.Cleared));
         string entering = ComposeRunwayGroup("entering",
             events.Where(e => e.Kind == RunwayEventKind.Entry));
+        if (cleared.Length > 0) parts.Add(cleared);
         if (crossing.Length > 0) parts.Add(crossing);
         if (entering.Length > 0) parts.Add(entering);
         if (parts.Count == 0) return "";

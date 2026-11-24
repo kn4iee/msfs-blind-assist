@@ -571,7 +571,7 @@ public class ClearedCrossingHoldsTests
         Assert.True(ev.Cleared);
         AssertNothingReported(outcome);
         Assert.Equal("", RouteRunwayCrossings.DescribeUnheldRunways(route.RunwayEvents));
-        Assert.Equal("crossing runway 09", RouteRunwayCrossings.DescribeRunwayEvents(route.RunwayEvents));
+        Assert.Equal("cleared across runway 09", RouteRunwayCrossings.DescribeRunwayEvents(route.RunwayEvents));
 
         // Named at another place: not cleared, and its "no hold short point" still stands.
         var other = StartsHeld();

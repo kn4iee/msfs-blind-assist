@@ -219,6 +219,26 @@ public class RunwayEventDescriptionTests
         Assert.Equal("NW", RouteRunwayCrossings.Reciprocal("SE"));
     }
 
+    // --- a crossing the pilot is cleared across ----------------------------------------------
+
+    private static TaxiRouteRunwayEvent Cleared(string d, string? at = null)
+        => new() { Kind = RunwayEventKind.Crossing, Designator = d, Held = true, Cleared = true, Location = at };
+
+    [Fact]
+    public void A_cleared_crossing_is_named_as_cleared_and_not_as_a_stop()
+        => Assert.Equal("cleared across runway 24L at P, crossing runway 27",
+            RouteRunwayCrossings.DescribeRunwayEvents(new[] { Cross("27"), Cleared("24L", "P") }));
+
+    [Fact]
+    public void A_cleared_crossing_never_reads_as_having_no_hold_short_point()
+    {
+        Assert.Equal("cleared across runway 24L at P",
+            RouteRunwayCrossings.DescribeRunwayEvents(new[] { Cleared("24L", "P") }));
+        var unheld = Cleared("24L", "P");
+        unheld.Held = false;
+        Assert.Equal("cleared across runway 24L at P", RouteRunwayCrossings.DescribeRunwayEvents(new[] { unheld }));
+    }
+
     [Fact]
     public void The_warning_names_one_pavement_once_however_many_times_it_is_unheld()
         => Assert.Equal("crossing runway 10L/28R twice, with no hold short point for runway 10L",

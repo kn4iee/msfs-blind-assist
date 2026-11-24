@@ -415,3 +415,42 @@ public static class ClearedCrossingHolds
             || x.Equals(RouteRunwayCrossings.Reciprocal(y), StringComparison.OrdinalIgnoreCase);
     }
 }
+
+/// <summary>
+/// Every sentence BA speaks about a cleared crossing, exactly as worded. Distances arrive as ready-made text from
+/// <c>DistanceFormatter</c> (the pilot's metres or feet): this class never writes a unit. Pure.
+/// </summary>
+public static class ClearedCrossingCallouts
+{
+    public const string NoRunwayAhead = "No runway ahead on this route.";
+    public const string NoRoute = "No taxi route.";
+
+    /// <summary>The countdown to a cleared crossing; the first one also says it is cleared.</summary>
+    public static string Approach(string placedLabel, string distanceText, bool first)
+    {
+        string label = string.IsNullOrEmpty(placedLabel) ? placedLabel : char.ToUpperInvariant(placedLabel[0]) + placedLabel[1..];
+        return first ? $"{label} in {distanceText}, cleared to cross." : $"{label} in {distanceText}.";
+    }
+
+    /// <summary>At the hold line of a cleared crossing.</summary>
+    public static string AtTheLine(string placedLabel) => $"Crossing {placedLabel}.";
+
+    /// <summary>Continue pressed early: <paramref name="clearedRunway"/> is cleared, and what still holds (null: nothing).</summary>
+    public static string EarlyContinue(string clearedRunway, string? remainingLabel)
+        => string.IsNullOrWhiteSpace(remainingLabel)
+            ? $"Cleared across runway {clearedRunway}. No stop."
+            : $"Cleared across runway {clearedRunway}. Still holding short of {remainingLabel}.";
+
+    /// <summary>A cleared crossing put back as a stop.</summary>
+    public static string HoldRestored(string label, string distanceText) => $"Holding short of {label}. {distanceText}.";
+
+    /// <summary>The aircraft is past a stop's line.</summary>
+    public static string PastTheLine(string placedLabel) => $"Past the hold line of {placedLabel}.";
+
+    /// <summary>The next stop of any kind.</summary>
+    public static string NextStop(string label, string distanceText) => $"Next stop {label} in {distanceText}.";
+
+    /// <summary>A clause for a status readout: a cleared crossing, or a stop to hold short of.</summary>
+    public static string StatusClause(string label, string distanceText, bool cleared)
+        => cleared ? $", {label} in {distanceText}, cleared to cross" : $", hold short of {label} in {distanceText}";
+}
