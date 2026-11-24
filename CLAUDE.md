@@ -13,12 +13,12 @@ dotnet build MSFSBlindAssist.sln -c Debug
 dotnet build MSFSBlindAssist.sln -c Release
 ```
 
-The app runs from `MSFSBlindAssist\bin\x64\{Debug|Release}\net10.0-windows\`. Prerequisites: the MSFS_SDK environment variable and the .NET 10 SDK. The solution builds nine projects, `tools/PMDGDispatchTester`, `tools/ChangelogBuilder`, `tools/GuideBuilder`, `tools/LayoutBundle`, the vPilot plugin and `MSFSBlindAssist.DisplayLayouts` among them; the other 16 `tools/*` projects (`tools/CDUTest`, the probes and the sweeps) build on their own. Output paths, the projects and the probes in full: [docs/development.md](docs/development.md#build-output-and-traps).
+The app runs from `MSFSBlindAssist\bin\x64\{Debug|Release}\net10.0-windows\`. Prerequisites: the MSFS_SDK environment variable and the .NET 10 SDK. The solution builds nine projects, the vPilot plugin and `MSFSBlindAssist.DisplayLayouts` among them; [CORE-4] says which `tools/*` projects build on their own. Output paths, the projects and the probes in full: [docs/development.md](docs/development.md#build-output-and-traps).
 
 - [CORE-1] Always build the `.sln` or pass `-p:Platform=x64`; never the bare `.csproj`, which defaults to AnyCPU and writes to `bin\Debug\…`, so the x64 exe the app runs from never updates. Full: docs/invariants/core.md#core-1
 - [CORE-2] Keep `RuntimeIdentifier=win-x64` (else the build ships every platform's SQLite binaries) and `AppendRuntimeIdentifierToOutputPath=false` (else it writes to a `win-x64\` folder the app, release.yml and PostBuild never use) in the csproj. `dotnet publish` writes `win-x64\publish\`; other `win-x64\` build output predates 2026-08-25: stale. Full: docs/invariants/core.md#core-2
 - [CORE-3] The exe is file-locked while MSFSBA runs (MSB3021): close the app before building an exe the user will run. Full: docs/invariants/core.md#core-3
-- [CORE-4] `dotnet build MSFSBlindAssist.sln` builds only `tools/PMDGDispatchTester`, `tools/ChangelogBuilder`, `tools/GuideBuilder` and `tools/LayoutBundle`; the other 16 `tools/*` projects (`CDUTest`, the probes and the sweeps, listed in docs/development.md) build on their own, never as part of the solution. Full: docs/invariants/core.md#core-4
+- [CORE-4] `dotnet build MSFSBlindAssist.sln` builds only `tools/PMDGDispatchTester`, `tools/ChangelogBuilder`, `tools/GuideBuilder` and `tools/LayoutBundle`; the other 17 `tools/*` projects (`CDUTest`, the probes and the sweeps, listed in docs/development.md) build on their own, never as part of the solution. Full: docs/invariants/core.md#core-4
 
 ## Testing
 
@@ -96,6 +96,7 @@ Screen readers already announce every UI control interaction, so the app never r
 - [CORE-14] Every diagnostic log path resolves through `Utils/AppLogs.PathFor(...)` into `%APPDATA%\MSFSBlindAssist\logs`; never hand-build one (exempt, as in [CORE-15]: the vPilot plugin and the updater). Full: docs/invariants/core.md#core-14
 - [CORE-15] Never hand-build a log write (`File.AppendAllText`, a raw path): use `Log.Debug/Info/Warn/Error(category, msg)` for debug.log, or `Log.Channel(name)` for a named log. Exempt, as they cannot reference the app: the vPilot plugin's log ([VAT-6]) and the updater's own `%TEMP%` args log (`MSFSBlindAssistUpdater/Program.cs`). Full: docs/invariants/core.md#core-15
 - [CORE-17] Parse a number the pilot types with `NumberParsing.TryParseTyped`, one another program writes with `TryParseExternal`; never a bare `double.TryParse(s, out v)` (the PC's culture: "29.92" fails under sv-SE, reads 2992 under de-DE) or `NumberStyles.Any` with the invariant culture ("0,82" reads 82). Full: docs/invariants/core.md#core-17
+- [CORE-21] Format a decimal or grouped number for the pilot (speech, a window, a web address) with the invariant culture (`FormattableString.Invariant`), never a plain `{x:F1}`: "118,300" on a German Windows. Logs are exempt; `DecimalFormatSourceTests` scans. Full: docs/invariants/core.md#core-21
 - [VAT-13] Status/diagnostic text in any settings panel is a read-only `TextBox`, never a `Label`: a `Label` is not in the tab order, so a screen-reader user has to hunt for it with the review cursor. Full: docs/invariants/vatsim.md#vat-13
 - [A380C-6] Every form marshaling a background bridge push to the UI thread must wrap `BeginInvoke` in try/catch(InvalidOperationException) (`SafeBeginInvoke`); an `IsHandleCreated` check alone races handle destruction. Full: docs/invariants/a380-coherent.md#a380c-6
 
@@ -133,7 +134,7 @@ Each area's rules load automatically when Claude reads its code; their full text
 | [development.md](docs/development.md) | Dependencies, key files, build output paths and traps, and the Claude Code hooks | claude-tooling |
 | [tooling.md](docs/tooling.md) | Live debugging over the Coherent debugger (`:19999`), the probes in `tools/`, crash diagnosis | coherent-clients |
 | [troubleshooting-playbook.md](docs/troubleshooting-playbook.md) | A control "doesn't work": read this FIRST, before calling it broken or unsettable | troubleshooting |
-| [taxi-guidance.md](docs/taxi-guidance.md) | Taxi guidance, runway holds, landing exits and rollout, ground traffic, surroundings, takeoff assist | taxi-routing, taxi-turn-picks, taxi-graph, taxi-position, runway-holds, taxi-steering, landing-exits, exit-geometry, landing-rollout, rollout-exit-turn, landing-touchdown, rollout-geometry, runway-vacate, runway-backtrack, runway-entry, ground-traffic, surroundings, scenery-index, taxi-augmentation, takeoff-and-callouts |
+| [taxi-guidance.md](docs/taxi-guidance.md) | Taxi guidance, runway holds, landing exits and rollout, ground traffic, surroundings, takeoff assist | taxi-routing, route-runway-start, taxi-turn-picks, taxi-graph, taxi-position, runway-holds, taxi-steering, landing-exits, exit-geometry, landing-rollout, rollout-exit-turn, landing-touchdown, rollout-geometry, runway-vacate, runway-backtrack, runway-entry, ground-traffic, surroundings, scenery-index, taxi-augmentation, takeoff-and-callouts |
 | [virtual-pilot.md](docs/virtual-pilot.md) | Changing landing-rollout, exit or taxi guidance behaviour: measure it first with simulated landings, taxis and wrong turns through the real guidance code | virtual-pilot |
 | [gsx.md](docs/gsx.md) | GSX gate selection and Remote API, docking guidance, the metres/feet toggle | gsx-remote, gsx-stands-docking, gsx-stands, gsx-docking |
 | [weather.md](docs/weather.md) | ActiveSky, the weather radar, METAR readouts, weather announcements | weather |
@@ -159,6 +160,7 @@ Each area's rules load automatically when Claude reads its code; their full text
 | [gemini.md](docs/gemini.md) | AI providers (Gemini or Claude): display reads, scene and route description, route briefing | ai-display, route-briefing |
 | [location-data.md](docs/location-data.md) | Output C and Location Info (Shift+L): the offline GeoNames + Natural Earth download, its database and lookups | location-data |
 | [user-guide.md](docs/user-guide.md) | The pilot's user guide in `guide/`: writing it, how the website and the Help menu publish it, the one-page build, the PR line (CORE-19) | user-guide |
+| [sim-tablet.md](docs/sim-tablet.md) | MSFS 2024's own tablet (Extras, In-Sim Tablet, for every aircraft): its reader, input, and the SimBrief import into its Flight Planner | sim-tablet |
 
 ## Adding or changing a rule
 

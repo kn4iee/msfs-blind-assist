@@ -749,7 +749,7 @@ public partial class MainForm
         sb.AppendLine($"Engine 2 Oil Pressure: {C("HS787_EicasOilP_2")} psi");
         sb.AppendLine($"Engine 2 Oil Temp: {C("HS787_EicasOilT_2")} C");
         sb.AppendLine($"Total Fuel: {C("HS787_EicasFuelKg")} kg");
-        sb.AppendLine($"Gross Weight: {Math.Round(GV("HS787_EicasGwKg") / 1000.0, 1)} t");
+        sb.AppendLine(FormattableString.Invariant($"Gross Weight: {Math.Round(GV("HS787_EicasGwKg") / 1000.0, 1)} t"));
         sb.AppendLine($"TAT: {C("HS787_EicasTat")} C");
         sb.AppendLine();
         sb.Append(hs787CasClient?.GetAlertsText() ?? "");
@@ -1048,6 +1048,10 @@ public partial class MainForm
             coherentMd11Efb.Dispose();
             coherentMd11Efb = null;
         }
+
+        // The in-sim tablet (Extras) is left open: its view is the sim's, not the aircraft's, the
+        // window serves every aircraft, and its client reconnects by itself if the sim rebuilds the
+        // view. It is closed only on exit (MainForm.cs).
 
         // Dispose FBW A380 MCDU + EFB forms on swap; disposing the forms clears
         // their state-update wiring so the next aircraft doesn't get cross-talk.
