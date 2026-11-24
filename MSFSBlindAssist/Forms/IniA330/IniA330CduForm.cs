@@ -21,9 +21,10 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// (<see cref="IA330Displays.Latest"/>) as its listing (<see cref="CduLineText.Listing"/>: "Title: ..." with the page
 /// counter where the page draws one, each label row, each data row "n: value", "Scratchpad: ...", every row as drawn,
 /// as the Fenix and FlyByWire windows list a page), reconciled in place so the pilot keeps their
-/// row. Only a frame that leaves hidden rows out (spec M15) is a page. The reader sends each new frame once as read and
-/// then, moments later, with its hidden rows left out; meanwhile, and for up to <see cref="HoldPageMs"/> after the last
-/// page read, the page shown stays as it is and nothing is said of it, as the Fenix window keeps its last screen. With
+/// row. Only a frame that leaves hidden rows out (spec M15) and has every text on the grid is a page. The reader sends
+/// each new frame once as read and then, moments later, with its hidden rows left out, and now and then a frame with a
+/// text off the grid; meanwhile, for up to <see cref="HoldPageMs"/> after the last page read, the page shown stays as
+/// it is and nothing is said of it, as the Fenix window keeps its last screen. With
 /// no complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or no
 /// page within that time, the list is one status row instead, in the display windows' own words
 /// (<see cref="A330McduStatus"/>: "Reading the captain's MCDU" for any complete frame that does not leave hidden rows
@@ -33,7 +34,8 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// 2026-11-23; [CORE-7]: once, only what the screen reader cannot say, through the non-interrupting announce). While
 /// the window is shown and the reader cannot read the MCDU (a lasting state, or 30 s with no page): "MCDU
 /// disconnected", once, and "MCDU connected" with the first page after it (spec D3, never an AI read); the status box
-/// keeps the reason. A new title, said without the list's "Title: ", whenever it differs from the last title said:
+/// keeps the reason. A new title, said without the list's "Title: ", its words only (no slew arrows, no page counter:
+/// <see cref="CduLineText.SpokenTitle"/>, as the FlyByWire window), whenever they differ from the last title said:
 /// opening the window on a page changed while it was closed, or on its first page, says it too; the selection then
 /// goes to the first line after the title, as on the Fenix and FlyByWire windows. A line key, a page key, a slew and
 /// AIRPORT say nothing of their own: the title and the scratchpad line say what changed, and the pilot reads the list.
@@ -348,7 +350,8 @@ public sealed class IniA330CduForm : Form
         if (frame is { Complete: true } && screen is null && !_offGridLogged)
         {
             _offGridLogged = true;
-            _log.Warn($"{A330GaugeNames.Name(gauge)}: a complete frame with a text off the MCDU's grid; the status row is shown");
+            _log.Warn($"{A330GaugeNames.Name(gauge)}: a complete frame with a text off the MCDU's grid ({A330McduScreen.OffGrid(frame)}, "
+                + $"{(frame.HiddenRowsLeftOut ? "its hidden rows left out" : "its hidden rows not left out")}); the page shown is kept up to 3 s");
         }
 
         if (frame is not null && screen is { HiddenRowsLeftOut: true })
@@ -368,19 +371,21 @@ public sealed class IniA330CduForm : Form
             return;
         }
 
+        // A complete frame that is not a page: rows the MCDU does not show may be in it (spec M15), or a text of it is off
+        // the MCDU's grid. No page rows, and nothing said of them. The reader sends every new frame once before it has
+        // left those rows out, and now and then a frame with a text off the grid, so the page shown stays for a while,
+        // unchanged and unspoken, as the Fenix window keeps its last screen. A frame that does not leave hidden rows out
+        // is the reader at work (a list page's hidden rows can sit below the screen, off the grid): it restarts the
+        // "cannot read" count as a page does (as A330DisplayWindow's does); one off the grid with its rows left out
+        // does not, so a layout the window does not know ends in "cannot read".
+        if (frame is { Complete: true })
+        {
+            if (!frame.HiddenRowsLeftOut) _status.Restart(now);
+            if (_shownPage is not null && now - _pageReadAt < HoldPageMs) return;
+        }
         string row;
         string? reason = null;
-        if (frame is { Complete: true, HiddenRowsLeftOut: false })
-        {
-            // Read, but rows the MCDU does not show may be in it (spec M15): no page rows, and nothing said of them. The
-            // reader sends every new frame so once, before it has left those rows out, so the page shown stays for a
-            // while, unchanged and unspoken, as the Fenix window keeps its last screen. A list page's hidden rows can sit
-            // below the screen, which puts the frame off the grid; the reader is at work all the same, so the frame
-            // restarts the "cannot read" count as a page does (as A330DisplayWindow's does).
-            _status.Restart(now);
-            if (_shownPage is not null && now - _pageReadAt < HoldPageMs) return;
-            row = A330McduStatus.ReadingRow(gauge);
-        }
+        if (frame is { Complete: true, HiddenRowsLeftOut: false }) row = A330McduStatus.ReadingRow(gauge);
         else (row, reason) = _status.Row(_displays.State, _displays.StatusText, _displays.Newest(gauge), gauge, now);
         SetStatus(row);
         ShowStatusRow(row);
@@ -404,12 +409,14 @@ public sealed class IniA330CduForm : Form
         DisplayList.UpdateInPlace(_display, listing);
         _shownPage = page;
 
-        string title = CduLineText.Title(page);   // as said: without the list's "Title: "
+        // As said, and as a new page is told: the title's words, without the list's "Title: ", the slew arrows and the
+        // page counter, as the FlyByWire window says its title apart from its page number and arrows.
+        string title = CduLineText.SpokenTitle(page);
         int target;
         if (title.Length > 0 && title != _lastTitle)
         {
-            // As the Fenix and FlyByWire windows: a new title is said, as drawn (a temporary flight plan's carries TMPY),
-            // and the selection goes to the first line after it, which the screen reader then reads.
+            // As the Fenix and FlyByWire windows: a new title is said (a temporary flight plan's carries TMPY), and the
+            // selection goes to the first line after it, which the screen reader then reads.
             Speak(title);
             _lastTitle = title;
             target = 1;

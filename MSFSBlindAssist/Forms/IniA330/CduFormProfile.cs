@@ -127,9 +127,23 @@ internal static class CduLineText
     /// <summary>What the list's first line starts with, as in the Fenix and FlyByWire MCDU windows.</summary>
     public const string TitlePrefix = "Title: ";
 
-    /// <summary>The page's title as the window says it: row 0 as listed, trimmed at both ends, its gaps kept, without
-    /// the list's <see cref="TitlePrefix"/>.</summary>
+    /// <summary>The page's title as the window lists it: row 0, trimmed at both ends, its gaps kept, without the list's
+    /// <see cref="TitlePrefix"/>.</summary>
     public static string Title(IReadOnlyList<MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine> lines) => ForWindow(lines[0]).Trim();
+
+    /// <summary>The page's title as the window says it and tells a new page by: its words only, without the slew arrows
+    /// (U+2190 to U+2193) and the page counter (<c>1/2</c>) the title row also carries, as the FlyByWire window says its
+    /// title apart from its page number and arrows (owner, 2026-11-23: a refresh must not say the title again).</summary>
+    public static string SpokenTitle(IReadOnlyList<MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine> lines) => Spoken(Title(lines));
+
+    /// <summary>A listed title's words (<see cref="SpokenTitle"/>). Pure.</summary>
+    public static string Spoken(string title)
+    {
+        string words = System.Text.RegularExpressions.Regex.Replace(title, "[←-↓]", " ");
+        words = System.Text.RegularExpressions.Regex.Replace(words, @"(?<!\S)[0-9]+/[0-9]+(?!\S)", " ",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return words.Trim();
+    }
 
     /// <summary>The window's list from the 14 lines: "Title: " and the title, each label row (indented, no number),
     /// each data row "n: value", then the scratchpad.</summary>

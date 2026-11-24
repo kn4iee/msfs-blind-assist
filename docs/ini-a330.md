@@ -53,7 +53,8 @@ different aircraft built on the FlyByWire A32NX.
   listed as drawn: no word for greyed text, no colour, a nameless F-PLN row's name cells blank. As in the Fenix and
   FlyByWire windows the first line reads `Title: ` and the title, with a page counter drawn half a row under the
   title (P/N XLOAD's `1/7`) on it. The window says what the Fenix and FlyByWire windows say, in their words, and
-  nothing more (owner, 2026-11-23): a title that differs from the last one said (opening the window too), the
+  nothing more (owner, 2026-11-23): a title whose words differ from the last one said (opening the window too; the
+  slew arrows and the page counter on the title line are listed but never count, as on the FlyByWire window), the
   selection then on line 1; the scratchpad line when it changes; the side; "MCDU disconnected" / "MCDU connected"
   (the reason in the "Connection status" box, which reads "MCDU: Connected" over a page). A line key, a slew,
   AIRPORT and CLR say nothing of their own; Left and Right on the screen turn the page, as on those windows. Its
@@ -62,7 +63,8 @@ different aircraft built on the FlyByWire A32NX.
   closed, the message alone as the A32NX speaks one (Ctrl+M row "FMS messages"). Since its build of 2026-11-22 the
   display reader gives the MCDU's colours, leaves out the list rows the MCDU hides, and says whether a list has rows
   hidden above or below (`A330Frame.List`, `ListAbove`, `ListBelow`). It sends each new frame once without them
-  (moments later, with them): the window keeps the page it shows meanwhile, for up to 3 s after the last page read,
+  (moments later, with them), and now and then a frame with a text off the grid (logged once, with the text and its
+  place): the window keeps the page it shows meanwhile, for up to 3 s after the last page read,
   then lists only "Reading the captain's MCDU" until a page comes, and takes no message from the scratchpad line of a
   frame without them. The slew keys are never sent past a list's top or end, silently (a press at a list's end does
   nothing, as on the other windows): the A330 counts such presses and the list then seems stuck (seen by the owner on

@@ -29,6 +29,12 @@ public sealed class A330McduFormTests : IDisposable
 
     private const string InitTitle = "INIT        \U00002190\U00002192";
 
+    /// <summary>INIT's title as the window says it: its words, without the slew arrows the title row carries.</summary>
+    private const string InitSaid = "INIT";
+
+    /// <summary>A listed title as the window says it (<see cref="CduLineText.Spoken"/>, pinned in A330McduLinesTests).</summary>
+    private static string Said(string listedTitle) => CduLineText.Spoken(listedTitle);
+
     /// <summary>The windows of a test, its replay, what was spoken and every key flag the windows wrote.</summary>
     private sealed class Rig : IDisposable
     {
@@ -399,8 +405,42 @@ public sealed class A330McduFormTests : IDisposable
         rig.Displays.Show(Init());
         Tick(rig, w);
         Assert.Equal(init, Items(w));
-        Assert.Equal(new[] { "MCDU MENU", "FORMAT ERROR", InitTitle }, rig.Speech.All);
+        Assert.Equal(new[] { "MCDU MENU", "FORMAT ERROR", InitSaid }, rig.Speech.All);
         Assert.Empty(rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public void A_page_with_a_text_off_the_grid_keeps_the_page_shown_and_says_nothing()
+    {
+        // Measured 2026-11-23, once each session: a frame with its hidden rows left out and a text off the grid. Before,
+        // the page gave way to the status row for it, and the screen reader read the title row again when the page came
+        // back. Now the page stays, as for a frame the reader has not sorted yet.
+        using var rig = new Rig(A330ReplayDisplays.FromFixtures("p03_init.json"));
+        var w = rig.Window();
+        Open(rig, w);
+        var init = Items(w);
+        List(w).SelectedIndex = 6;
+
+        rig.Displays.Show(OffGrid(Init()) with { HiddenRowsLeftOut = true });
+        for (int i = 0; i < 11; i++)
+        {
+            Tick(rig, w);
+            Assert.Equal(init, Items(w));
+            Assert.Equal(6, List(w).SelectedIndex);
+        }
+        rig.Displays.Show(Init());
+        Tick(rig, w);
+        Assert.Equal(init, Items(w));
+        Assert.Equal(6, List(w).SelectedIndex);
+        Assert.Empty(rig.Speech.All);
+
+        // Off the grid for good: after 3 s the status row, and after 30 s with no page "MCDU disconnected".
+        rig.Displays.Show(OffGrid(Init()) with { HiddenRowsLeftOut = true });
+        Tick(rig, w, 3000);
+        Assert.Equal(new[] { "Reading the captain's MCDU" }, Items(w));
+        Tick(rig, w, 30_000);
+        Assert.Equal(new[] { "The display reader cannot read the captain's MCDU" }, Items(w));
+        Assert.Equal(new[] { "MCDU disconnected" }, rig.Speech.All);
     }
 
     /// <summary>The frame with a list row the MCDU does not show, below the screen (row 20): off the MCDU's grid.</summary>
@@ -532,7 +572,7 @@ public sealed class A330McduFormTests : IDisposable
         // The page: "MCDU connected", then its title, as on the FlyByWire window.
         rig.Displays.Show(Init());
         Tick(rig, w);
-        Assert.Equal(new[] { "MCDU disconnected", "MCDU connected", InitTitle }, rig.Speech.All);
+        Assert.Equal(new[] { "MCDU disconnected", "MCDU connected", InitSaid }, rig.Speech.All);
         Tick(rig, w);
         Tick(rig, w);
         Assert.Equal(3, rig.Speech.All.Count);
@@ -550,14 +590,14 @@ public sealed class A330McduFormTests : IDisposable
         rig.Displays.Show(Init());
         Tick(rig, w);
         Tick(rig, w);
-        Assert.Equal(new[] { "MCDU disconnected", "MCDU connected", InitTitle, "MCDU disconnected", "MCDU connected" }, rig.Speech.All);
+        Assert.Equal(new[] { "MCDU disconnected", "MCDU connected", InitSaid, "MCDU disconnected", "MCDU connected" }, rig.Speech.All);
 
         // A window opened on a readable page says its title only.
         using var ready = new Rig(A330ReplayDisplays.FromFixtures("p03_init.json"));
         var r = ready.Window();
         r.Show();
         Tick(ready, r);
-        Assert.Equal(new[] { InitTitle }, ready.Speech.All);
+        Assert.Equal(new[] { InitSaid }, ready.Speech.All);
     }
 
     // ---- Keys and typing ---------------------------------------------------------------------------------
@@ -719,7 +759,7 @@ public sealed class A330McduFormTests : IDisposable
 
         rig.Displays.Show(empty);
         for (int i = 0; i < 4; i++) Tick(rig, w);
-        Assert.Equal(new[] { fplnTitle, InitTitle }, rig.Speech.All);   // the two titles, nothing about the scratchpad
+        Assert.Equal(new[] { Said(fplnTitle), InitSaid }, rig.Speech.All);   // the two titles, nothing about the scratchpad
     }
 
     /// <summary>Waits that complete only when the test runs them, one at a time, each moving the clock by its length.</summary>
@@ -894,13 +934,13 @@ public sealed class A330McduFormTests : IDisposable
         using var rig = new Rig(A330ReplayDisplays.FromFixtures("p03_init.json"));
         var w = rig.Window();
         w.Show();
-        Assert.Equal(new[] { InitTitle }, rig.Speech.All);   // the title said without the list's prefix
+        Assert.Equal(new[] { InitSaid }, rig.Speech.All);   // the title's words, without the list's prefix and the arrows
         Assert.Equal(1, List(w).SelectedIndex);
 
         List(w).SelectedIndex = 6;
         rig.Displays.Show(Menu());
         Tick(rig, w);
-        Assert.Equal(new[] { InitTitle, "MCDU MENU" }, rig.Speech.All);
+        Assert.Equal(new[] { InitSaid, "MCDU MENU" }, rig.Speech.All);
         Assert.Equal("Title: MCDU MENU", Items(w)[0]);
         Assert.Equal(1, List(w).SelectedIndex);
 
@@ -915,9 +955,9 @@ public sealed class A330McduFormTests : IDisposable
         var tmpy = WithPad(WithText(Fixture("p03_fpln.json"), 9, " FROM TMPY"), "NAV ACCUR DOWNGRADED");
         rig.Displays.Show(tmpy);
         Tick(rig, w);
-        string title = TitleOf(w);
+        string title = Said(TitleOf(w));
         Assert.Contains("TMPY", title);
-        Assert.Equal(new[] { InitTitle, "MCDU MENU", title }, rig.Speech.All);
+        Assert.Equal(new[] { InitSaid, "MCDU MENU", title }, rig.Speech.All);
 
         // A gap in the frames and the same page back: not a new title.
         rig.Displays.Forget(A330Gauge.McduCaptain);
@@ -936,6 +976,34 @@ public sealed class A330McduFormTests : IDisposable
         Assert.Equal("MCDU MENU", rig.Speech.All[^1]);
         Assert.Equal(4, rig.Speech.All.Count);
         Assert.Empty(rig.Speech.Interrupts);
+    }
+
+    [Fact]
+    public void Only_the_titles_words_tell_a_new_page_not_its_page_counter_or_arrows()
+    {
+        // The FlyByWire window says its title apart from its page number and arrows: a refresh that changes only those
+        // says nothing (owner, 2026-11-23: a refresh read part of the title again).
+        using var rig = new Rig(A330ReplayDisplays.FromFixtures("p03_data1.json"));
+        var w = rig.Window();
+        w.Show();
+        Assert.Equal("Title: DATA INDEX   1/2 ←→", Items(w)[0]);
+        Assert.Equal(new[] { "DATA INDEX" }, rig.Speech.All);
+
+        // Page 2 of 2: the listed title line follows the counter, and nothing is said.
+        List(w).SelectedIndex = 3;
+        rig.Displays.Show(Fixture("p03_data2.json"));
+        Tick(rig, w);
+        Tick(rig, w);
+        Assert.Equal("Title: DATA INDEX   2/2 ←→", Items(w)[0]);
+        Assert.Single(rig.Speech.All);
+        Assert.Equal(3, List(w).SelectedIndex);
+
+        // The arrows gone from the title row: nothing either.
+        var noArrows = Fixture("p03_data2.json");
+        noArrows = noArrows with { Texts = noArrows.Texts.Where(t => !(A330McduGeometry.RowOf(t.Baseline) == 0 && t.Text.Trim() == "ab")).ToList() };
+        rig.Displays.Show(noArrows);
+        Tick(rig, w);
+        Assert.Single(rig.Speech.All);
     }
 
     [Fact]
@@ -1059,7 +1127,7 @@ public sealed class A330McduFormTests : IDisposable
         // Back to the left.
         Key(w, Keys.Control | Keys.Shift | Keys.L);
         Assert.Equal("A330 MCDU (Left)", w.Text);
-        Assert.Equal(new[] { "Left MCDU", InitTitle }, rig.Speech.All.TakeLast(2));
+        Assert.Equal(new[] { "Left MCDU", InitSaid }, rig.Speech.All.TakeLast(2));
         Assert.Equal((A330Gauge.McduFirstOfficer, (object)w), rig.Displays.Releases[^1]);
         Assert.Equal((A330Gauge.McduCaptain, (object)w, 250), rig.Displays.Wants[^1]);
         Assert.Equal("Title: " + InitTitle, Items(w)[0]);
@@ -1097,9 +1165,9 @@ public sealed class A330McduFormTests : IDisposable
 
         // A scratchpad that holds a message: said once its line has read the same twice, and once only.
         Key(w, Keys.Control | Keys.Shift | Keys.L);
-        Assert.Equal(new[] { "Right MCDU", "MCDU MENU", "Left MCDU", InitTitle }, rig.Speech.All);
+        Assert.Equal(new[] { "Right MCDU", "MCDU MENU", "Left MCDU", InitSaid }, rig.Speech.All);
         for (int i = 0; i < 4; i++) Tick(rig, w);
-        Assert.Equal(new[] { "Right MCDU", "MCDU MENU", "Left MCDU", InitTitle, "NAV ACCUR DOWNGRADED" }, rig.Speech.All);
+        Assert.Equal(new[] { "Right MCDU", "MCDU MENU", "Left MCDU", InitSaid, "NAV ACCUR DOWNGRADED" }, rig.Speech.All);
 
         // The new side's page arriving after a gap: its title and its scratchpad when it comes, once.
         replay.Forget(A330Gauge.McduFirstOfficer);
@@ -1114,7 +1182,7 @@ public sealed class A330McduFormTests : IDisposable
         w.ScreenHasFocus = () => true;
         List(w).SelectedIndex = 4;
         Key(w, Keys.Control | Keys.Shift | Keys.L);
-        Assert.Equal(new[] { "Left MCDU", InitTitle }, rig.Speech.All.TakeLast(2));
+        Assert.Equal(new[] { "Left MCDU", InitSaid }, rig.Speech.All.TakeLast(2));
         Assert.Equal(10, rig.Speech.All.Count);
         Assert.Equal(1, List(w).SelectedIndex);
         Assert.Empty(rig.Speech.Interrupts);
@@ -1134,7 +1202,7 @@ public sealed class A330McduFormTests : IDisposable
         rig.Displays.Show(fpln);
         Tick(rig, w);
         Tick(rig, w, 2000);
-        Assert.Equal(new[] { TitleOf(w) }, rig.Speech.All);
+        Assert.Equal(new[] { Said(TitleOf(w)) }, rig.Speech.All);
 
         // On the F-PLN (the button): the plan moved to the destination, the same title: nothing.
         PageKey(w, "&AIRPORT").PerformClick();

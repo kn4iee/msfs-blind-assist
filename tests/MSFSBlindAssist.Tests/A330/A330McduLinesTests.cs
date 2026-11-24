@@ -108,6 +108,23 @@ public class A330McduLinesTests
         Assert.Equal(menuInvariant, TestCulture.Run("de-DE", () => CduLineText.Listing(Lines("p03_menu.json"))));
     }
 
+    [Fact]
+    public void The_spoken_title_is_its_words_without_the_slew_arrows_and_the_page_counter()
+    {
+        Assert.Equal("DATA INDEX", CduLineText.Spoken("DATA INDEX   1/2 ←→"));
+        Assert.Equal("FROM          MSF773", CduLineText.Spoken("FROM          MSF773 ←→"));
+        Assert.Equal("INIT", CduLineText.Spoken("INIT        ←→"));
+        Assert.Equal("P/N XLOAD", CduLineText.Spoken("P/N XLOAD  1/7"));   // only a counter of digits goes
+        Assert.Equal("TAKE OFF RWY 26L", CduLineText.Spoken("TAKE OFF RWY 26L"));
+        Assert.Equal("", CduLineText.Spoken("↑↓"));
+
+        // On a captured page: the counter is listed on the title line and not said.
+        var xload = Lines("p03_xload.json");
+        Assert.Contains("1/7", CduLineText.Title(xload));
+        Assert.DoesNotContain("1/7", CduLineText.SpokenTitle(xload));
+        Assert.NotEmpty(CduLineText.SpokenTitle(xload));
+    }
+
     [Theory]
     [InlineData("p03_init.json")]
     [InlineData("p03_fpln.json")]

@@ -66,6 +66,21 @@ internal sealed class A330McduScreen
         return screen;
     }
 
+    /// <summary>For the log: the first text of the frame whose first character falls off the 14 rows and 24 columns, with
+    /// its place ("'08L' at row 20, column 0"), or "no text off the grid".</summary>
+    public static string OffGrid(A330Frame frame)
+    {
+        foreach (var text in frame.Texts.OrderBy(t => t.Order))
+        {
+            if (string.IsNullOrEmpty(text.Text)) continue;
+            int row = A330McduGeometry.RowOf(text.Baseline);
+            int column = A330McduGeometry.ColumnOf(text.X);
+            if (row < 0 || row >= A330McduGeometry.Rows || column < 0 || column >= A330McduGeometry.Columns)
+                return FormattableString.Invariant($"'{text.Text}' at row {row}, column {column}");
+        }
+        return "no text off the grid";
+    }
+
     /// A page counter: digits, a slash, digits ("1/7", "12/14").
     private static bool IsPageCounter(string text) =>
         System.Text.RegularExpressions.Regex.IsMatch(text, "^[0-9]+/[0-9]+$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
