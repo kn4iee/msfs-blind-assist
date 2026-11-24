@@ -3831,7 +3831,8 @@ public partial class TaxiGuidanceManager
         if (stop < 0)
         {
             // Neither the planner nor a Turn pick ends a leg inside a runway's margin, but the capture radius
-            // before the junction can reach one: the leg then ends at the junction.
+            // before the junction can reach one: the leg then ends at the junction, never while the aircraft
+            // is on runway pavement (ProgressiveLegEnd.HeldOffByRunway).
             Log.Warn("Taxi", $"Leg end: taxiway {term.Target} meets the route at node {_destinationNodeId} inside a runway's " +
                              $"clear margin, or within {ProgressiveLegEnd.CaptureRadiusM:F0} m of one along the route; the route is left as built");
             return;

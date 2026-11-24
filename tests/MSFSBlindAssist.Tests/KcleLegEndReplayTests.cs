@@ -30,7 +30,7 @@ public class KcleLegEndReplayTests
             double distJ = GreatCircleM(f.lat, f.lon, track.junctionNode.lat, track.junctionNode.lon);
             double dist = Math.Max(0, distJ - setbackM);
             if (dist * 3.28084 <= Math.Clamp(f.gs * 1.68781 * 8.0, 150.0, 400.0)) slowDownSpoken = true;
-            if (ProgressiveLegEnd.Arrived(ProgressiveTerminatorType.HoldShortTaxiway, dist, f.gs, slowDownSpoken, false))
+            if (ProgressiveLegEnd.Arrived(ProgressiveTerminatorType.HoldShortTaxiway, dist, f.gs, slowDownSpoken, false, false))
                 return f;
         }
         throw new InvalidOperationException("The replayed leg never ended.");

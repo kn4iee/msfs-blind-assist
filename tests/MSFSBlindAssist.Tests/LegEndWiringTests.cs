@@ -30,22 +30,49 @@ public class LegEndWiringTests
 
         Assert.Contains("bool legEndTaxiing = legEnd != null && _state == TaxiGuidanceState.Taxiing;", text);
         Assert.Contains("legEndTaxiing && ProgressiveLegEnd.Arrived(", text);
-        Assert.Contains("(!legEndTaxiing || (!ProgressiveLegEnd.EndsAtAHold(", text);
+        Assert.Contains("(!legEndTaxiing || ProgressiveLegEnd.HeldOffByRunway(legEnd.Type, nearARunway, onRunwayPavement))", text);
     }
 
-    // BA never asks for a stop on a runway: the countdown takes the frame's runway test and asks
+    // The countdown of a leg end runs only while Taxiing too: the frame that enters a mid-route hold after
+    // an overrun onto the last segment never adds the leg end's "... Stop." to the hold's own sentence.
+    [Fact]
+    public void The_leg_end_countdown_runs_only_while_taxiing()
+    {
+        string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+        int method = text.IndexOf("private void CheckHoldShortCountdown(", StringComparison.Ordinal);
+        Assert.True(method >= 0, "CheckHoldShortCountdown not found");
+        int legEndAt = text.IndexOf("var legEnd = ", method, StringComparison.Ordinal);
+        int choiceEnd = text.IndexOf("? _progressiveTerminator : null;", method, StringComparison.Ordinal);
+        Assert.True(legEndAt > method && choiceEnd > legEndAt, "the countdown's legEnd choice not found");
+        Assert.Contains("_state == TaxiGuidanceState.Taxiing", text[legEndAt..choiceEnd]);
+    }
+
+    // BA never asks for a stop on a runway: the countdown takes the frame's runway tests and asks
     // ProgressiveLegEnd.MaySpeak (unit-tested there) before it speaks or latches "Slow down" or "Stop".
     [Fact]
     public void The_countdown_asks_ProgressiveLegEnd_before_a_slow_down_or_stop()
     {
         string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
 
-        Assert.Contains("CheckHoldShortCountdown(distToTarget, currentSeg, nearARunway);", text);
-        Assert.Contains("ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.SlowDown, nearARunway)", text);
-        Assert.Contains("ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.Stop, nearARunway)", text);
+        Assert.Contains("CheckHoldShortCountdown(distToTarget, currentSeg, nearARunway, onRunwayPavement);", text);
+        Assert.Contains("ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.SlowDown, nearARunway, onRunwayPavement)", text);
+        Assert.Contains("ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.Stop, nearARunway, onRunwayPavement)", text);
         Assert.Contains("if (stopMaySpeak) _holdShortSlowDownAnnounced = true;", text);
         Assert.Contains("!_holdShortSlowDownAnnounced && slowDownMaySpeak)", text);
         Assert.Contains("!_holdShortStopAnnounced && stopMaySpeak)", text);
+    }
+
+    // No leg ends on runway pavement, whatever its ending (spec 8.5): the frame asks once, from the graph's
+    // own runway geometry (RunwayShape, no margin), never building one [SUR-24], and hands the answer to
+    // ProgressiveLegEnd.Arrived (unit-tested there).
+    [Fact]
+    public void The_arrival_test_is_given_the_frame_s_runway_pavement_test()
+    {
+        string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+
+        Assert.Contains("bool onRunwayPavement = nearARunway", text);
+        Assert.Contains("Navigation.RouteRunwayCrossings.RunwayUnder(_graph?.RunwayCenterlines, lat, lon) != null;", text);
+        Assert.Matches(@"ProgressiveLegEnd\.Arrived\(legEnd\.Type, distToTarget, groundSpeedKts,\s+_holdShortSlowDownAnnounced, nearARunway, onRunwayPavement\)", text);
     }
 
     // A hold short of a taxiway, mid-route or at the end of a leg, stops where the pure

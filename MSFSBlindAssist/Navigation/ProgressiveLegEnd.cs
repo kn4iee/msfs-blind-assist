@@ -19,25 +19,34 @@ public static class ProgressiveLegEnd
         or ProgressiveTerminatorType.HoldShortTaxiway
         or ProgressiveTerminatorType.HoldAtNamedPoint;
 
+    /// <summary>
+    /// Whether the runway the aircraft is on or beside holds the leg end off this frame: a leg never ends,
+    /// and BA never asks for a stop, on runway pavement (<paramref name="onRunwayPavement"/>), whatever the
+    /// ending; the two endings that are not a hold (across a runway, end of the taxiway) also wait while the
+    /// aircraft is within a runway's clear margin (<paramref name="nearARunway"/>). A hold ending's own line
+    /// can lie inside that margin, so off the pavement it is judged as a hold short is.
+    /// </summary>
+    public static bool HeldOffByRunway(ProgressiveTerminatorType type, bool nearARunway, bool onRunwayPavement)
+        => onRunwayPavement || (!EndsAtAHold(type) && nearARunway);
+
     public static bool Arrived(ProgressiveTerminatorType type, double distToEndM, double groundSpeedKts,
-                               bool slowDownSpoken, bool nearARunway)
+                               bool slowDownSpoken, bool nearARunway, bool onRunwayPavement)
     {
+        if (HeldOffByRunway(type, nearARunway, onRunwayPavement)) return false;
         bool stood = groundSpeedKts <= StandstillMaxKts;
         if (EndsAtAHold(type))
             return distToEndM < CaptureRadiusM
                 || (stood && (slowDownSpoken || distToEndM <= StandstillCaptureM));
-        return !nearARunway
-            && (distToEndM < CaptureRadiusM || (stood && distToEndM <= StandstillCaptureM));
+        return distToEndM < CaptureRadiusM || (stood && distToEndM <= StandstillCaptureM);
     }
 
     /// <summary>
     /// Whether a countdown tier may be spoken (and latched) now. BA never asks for a stop on a runway:
-    /// for the two endings that are not a hold (across a runway, end of the taxiway) "Slow down" and
-    /// "Stop" wait while the aircraft is on or within the clear margin of a runway, the same test
-    /// <see cref="Arrived"/> uses. The outer tier, and every tier of a hold ending, speak as for a hold short.
+    /// "Slow down" and "Stop" wait while the runway holds the leg end off (<see cref="HeldOffByRunway"/>,
+    /// the same test <see cref="Arrived"/> uses). The outer tier always speaks.
     /// </summary>
-    public static bool MaySpeak(ProgressiveTerminatorType type, CountdownTier tier, bool nearARunway)
-        => tier == CountdownTier.Outer || EndsAtAHold(type) || !nearARunway;
+    public static bool MaySpeak(ProgressiveTerminatorType type, CountdownTier tier, bool nearARunway, bool onRunwayPavement)
+        => tier == CountdownTier.Outer || !HeldOffByRunway(type, nearARunway, onRunwayPavement);
 
     public static string CountdownLead(ProgressiveTerminator terminator, string? segmentHoldLabel)
     {

@@ -2710,6 +2710,11 @@ public partial class TaxiGuidanceManager : IDisposable
         // its countdown (CheckHoldShortCountdown).
         bool nearARunway = onFinalSegment && _progressiveTerminator != null
             && Navigation.RouteRunwayCrossings.RunwayWithinClearMargin(_graph?.RunwayCenterlines, lat, lon) != null;
+        // On a runway's pavement (no margin), for the same leg: asked only when nearARunway, since the pavement
+        // lies inside the margin, from the graph's own runway shapes, never building a graph [SUR-24]. No leg
+        // ends, whatever its ending, nor says "Slow down" or "Stop" there (ProgressiveLegEnd.HeldOffByRunway).
+        bool onRunwayPavement = nearARunway
+            && Navigation.RouteRunwayCrossings.RunwayUnder(_graph?.RunwayCenterlines, lat, lon) != null;
 
         // Landing-exit ("vacate onto the taxiway") arrival — fire the "Off the runway.
         // Stop and hold position." closure for EVERY exit type. The final node is the
@@ -2796,9 +2801,10 @@ public partial class TaxiGuidanceManager : IDisposable
         {
             // A leg with no destination (Progressive Taxi) ends the way a hold short does, not the
             // way a stand does: inside the capture radius, or stopped short of its end (after "Slow
-            // down" for a hold ending, else close to it), and the two endings that are not a hold
-            // never end while the aircraft is on or within the clear margin of a runway
-            // (ProgressiveLegEnd; nearARunway, asked above only for such a leg).
+            // down" for a hold ending, else close to it). No leg ends while the aircraft is on runway
+            // pavement, and the two endings that are not a hold not while it is within the clear
+            // margin of a runway either (ProgressiveLegEnd; nearARunway and onRunwayPavement, asked
+            // above only for such a leg).
             //
             // Only while still Taxiing: AdvanceToNearestSegment can enter a mid-route hold
             // (HandleHoldShort) earlier in this same frame, and the frame carries on to here with
@@ -2808,7 +2814,7 @@ public partial class TaxiGuidanceManager : IDisposable
             bool legEndTaxiing = legEnd != null && _state == TaxiGuidanceState.Taxiing;
             bool arrived = legEnd != null
                 ? legEndTaxiing && ProgressiveLegEnd.Arrived(legEnd.Type, distToTarget, groundSpeedKts,
-                    _holdShortSlowDownAnnounced, nearARunway)
+                    _holdShortSlowDownAnnounced, nearARunway, onRunwayPavement)
                 : distToTarget < arrivalRadius;
 
             // Runway hold-short STANDSTILL capture. The runway route ends at the hold
@@ -2856,11 +2862,11 @@ public partial class TaxiGuidanceManager : IDisposable
             // runway — exactly what the block above withholds. See the
             // `announcementClearRadius` comment at the top of this method.
             //
-            // A leg with no destination keeps this backstop, only while Taxiing, and for its two
-            // endings that are not a hold (across a runway, end of the taxiway) not on or beside a
-            // runway, as above.
+            // A leg with no destination keeps this backstop, only while Taxiing, and never while the
+            // runway holds the leg end off: on runway pavement, and for its two endings that are not a
+            // hold (across a runway, end of the taxiway) beside a runway too, as above.
             bool backstopHeldOff = legEnd != null
-                && (!legEndTaxiing || (!ProgressiveLegEnd.EndsAtAHold(legEnd.Type) && nearARunway));
+                && (!legEndTaxiing || ProgressiveLegEnd.HeldOffByRunway(legEnd.Type, nearARunway, onRunwayPavement));
             if (!arrived && !_isRunwayLineup && !backstopHeldOff)
             {
                 AlongTrackToSegmentEnd(lat, lon, currentSeg,
@@ -3143,7 +3149,7 @@ public partial class TaxiGuidanceManager : IDisposable
         CheckUpcomingAnnouncements(distToTarget, currentSeg, announcementClearRadius);
 
         // Check hold-short countdown (300/150/50ft cadence) — critical runway incursion prevention
-        CheckHoldShortCountdown(distToTarget, currentSeg, nearARunway);
+        CheckHoldShortCountdown(distToTarget, currentSeg, nearARunway, onRunwayPavement);
 
         // Check ground speed warnings (too fast for turn, too fast straight)
         CheckSpeedWarnings(distToTarget, currentSeg);
@@ -3571,15 +3577,20 @@ public partial class TaxiGuidanceManager : IDisposable
     /// Announces at 300ft, 150ft, 50ft from hold-short node. Only fires on segments
     /// ending at a hold-short, and on the last segment of a leg with no destination
     /// (Progressive Taxi), whose end is counted down the same way in its own words
-    /// (<see cref="ProgressiveLegEnd"/>). <paramref name="nearARunway"/> is the frame's one
-    /// runway test, asked only on such a leg's last segment.
+    /// (<see cref="ProgressiveLegEnd"/>). <paramref name="nearARunway"/> and
+    /// <paramref name="onRunwayPavement"/> are the frame's runway tests, asked only on such a
+    /// leg's last segment.
     /// </summary>
-    private void CheckHoldShortCountdown(double distToTargetM, TaxiRouteSegment currentSeg, bool nearARunway)
+    private void CheckHoldShortCountdown(double distToTargetM, TaxiRouteSegment currentSeg, bool nearARunway,
+                                         bool onRunwayPavement)
     {
         // The leg's end, on its last segment. One countdown with one set of latches, so a last
         // segment that is itself a hold-short point (a "Hold short" tick box on the last row)
-        // speaks the leg end's countdown only, never both.
+        // speaks the leg end's countdown only, never both. Only while Taxiing, as its arrival test:
+        // the frame that enters a mid-route hold after an overrun onto the last segment
+        // (AdvanceToNearestSegment, earlier in the frame) never adds the leg end's line to the hold's.
         var legEnd = _route != null && _currentSegmentIndex == _route.Segments.Count - 1
+                     && _state == TaxiGuidanceState.Taxiing
             ? _progressiveTerminator : null;
         if (!currentSeg.IsHoldShortPoint && legEnd == null)
         {
@@ -3623,12 +3634,13 @@ public partial class TaxiGuidanceManager : IDisposable
             ProgressiveLegEnd.CountdownLead(term, currentSeg.IsHoldShortPoint ? currentSeg.HoldShortRunway : null),
             DistanceFormatter.FromFeet(distFeet), tier);
 
-        // BA never asks for a stop on a runway. A leg end that is not a hold (across a runway, end
-        // of the taxiway) holds "Slow down" and "Stop" while the aircraft is on or within the clear
-        // margin of a runway (ProgressiveLegEnd.MaySpeak): neither spoken nor latched there, so once
-        // clear only the deepest tier that applies speaks, by the rule below. Always true for a hold.
-        bool slowDownMaySpeak = legEnd == null || ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.SlowDown, nearARunway);
-        bool stopMaySpeak = legEnd == null || ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.Stop, nearARunway);
+        // BA never asks for a stop on a runway. A leg end holds "Slow down" and "Stop" while the
+        // aircraft is on runway pavement, and one that is not a hold (across a runway, end of the
+        // taxiway) while it is within the clear margin of a runway too (ProgressiveLegEnd.MaySpeak):
+        // neither spoken nor latched there, so once clear only the deepest tier that applies speaks,
+        // by the rule below.
+        bool slowDownMaySpeak = legEnd == null || ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.SlowDown, nearARunway, onRunwayPavement);
+        bool stopMaySpeak = legEnd == null || ProgressiveLegEnd.MaySpeak(legEnd.Type, CountdownTier.Stop, nearARunway, onRunwayPavement);
 
         // Fire in natural countdown order. Each block returns after announcing so
         // only one callout fires per frame — no stacking. A segment first reached already
