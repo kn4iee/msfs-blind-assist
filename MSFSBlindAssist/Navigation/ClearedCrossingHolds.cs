@@ -202,8 +202,9 @@ public static class ClearedCrossingHolds
     /// <summary>
     /// The other half of <see cref="RemainingLabel"/>: <paramref name="placedLabel"/>'s parts (split the same way, at
     /// <c>" and runway "</c>) whose first designator is cleared (either end), joined with <c>" and "</c>; the whole label
-    /// when every runway is cleared. Null when no part is. What a stop's cleared runways are called where the aircraft
-    /// crosses them: at a stop still holding for another runway, the Continue that releases it names this part.
+    /// when every runway is cleared. Null when no part is. Not null says a cleared runway is crossed at that stop: the
+    /// Continue that releases a stop still holding for another runway then names every runway at it
+    /// (<see cref="LineLabel"/>, the whole placed label), since the aircraft crosses them all.
     /// </summary>
     public static string? ClearedPartLabel(string? placedLabel, IReadOnlyCollection<string> clearedRunways)
     {
@@ -512,11 +513,13 @@ public static class ClearedCrossingCallouts
     public static string AtTheLine(string placedLabel) => $"Crossing {placedLabel}.";
 
     /// <summary>
-    /// A Continue's confirmation, then <paramref name="crossingLine"/> (<see cref="AtTheLine"/> for the runway cleared at
-    /// a stop that held for another), as one utterance; the confirmation exactly as it was when there is none.
+    /// How a Continue that lets the aircraft go opens its sentence: "Continuing. ", then <paramref name="crossingLine"/>
+    /// (<see cref="AtTheLine"/> for every runway at a released stop the pilot was cleared across for one of its
+    /// runways) straight after it, in the order things happen, before the taxiway, the turn cue and any paired-Continue
+    /// offer that follow. Exactly "Continuing. " when there is none.
     /// </summary>
-    public static string AfterContinue(string confirmation, string? crossingLine)
-        => string.IsNullOrWhiteSpace(crossingLine) ? confirmation : $"{confirmation.TrimEnd()} {crossingLine}";
+    public static string Continuing(string? crossingLine)
+        => string.IsNullOrWhiteSpace(crossingLine) ? "Continuing. " : $"Continuing. {crossingLine.Trim()} ";
 
     /// <summary>Continue pressed early: <paramref name="clearedRunway"/> is cleared, and what still holds (null: nothing).</summary>
     public static string EarlyContinue(string clearedRunway, string? remainingLabel)
