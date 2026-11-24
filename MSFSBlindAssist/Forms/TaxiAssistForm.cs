@@ -4944,7 +4944,19 @@ public class TaxiAssistForm : Form
                     : pinnedCross ? $"taxiway {taxiwayTarget} crossing runway {runwayTarget}"
                     : $"runway {runwayTarget}";
                 string from = string.IsNullOrEmpty(lastTaxiway) ? "your position" : lastTaxiway;
-                string msg = $"Could not find {what} from {from}. Check your entry.";
+                // The leg end exists, but only inside a runway's clear margin (the unfiltered lookup,
+                // same arguments, finds it): the entry is right, so say why, not "Check your entry".
+                string? besideRunway = term.Type switch
+                {
+                    ProgressiveTerminatorType.HoldShortTaxiway
+                        when _graph.FindTaxiwayIntersectionNode(lastTaxiway, taxiwayTarget, destComponentId) >= 0
+                        => ProgressiveLegEnd.NoHoldShortClearOfARunway(taxiwayTarget, from),
+                    ProgressiveTerminatorType.EndOfTaxiway
+                        when _graph.FindTaxiwayEndNode(startNode.NodeId, lastTaxiway) >= 0
+                        => ProgressiveLegEnd.NoEndClearOfARunway(lastTaxiway),
+                    _ => null,
+                };
+                string msg = besideRunway ?? $"Could not find {what} from {from}. Check your entry.";
                 _announcer.AnnounceImmediate(msg);
                 lblStatus.Text = msg;
                 return;

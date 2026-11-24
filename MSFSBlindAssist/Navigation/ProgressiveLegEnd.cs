@@ -4,7 +4,8 @@ namespace MSFSBlindAssist.Navigation;
 public enum CountdownTier { Outer, SlowDown, Stop }
 
 /// <summary>
-/// Decides when a Progressive Taxi leg with no destination has ended, and words the countdown to its end.
+/// Decides when a Progressive Taxi leg with no destination has ended, and words the countdown to its end
+/// and the refusal of a leg end found only beside a runway.
 /// Pure: distances arrive as ready-made text, so this class never writes a unit of its own.
 /// </summary>
 public static class ProgressiveLegEnd
@@ -60,4 +61,15 @@ public static class ProgressiveLegEnd
             _ => text,
         };
     }
+
+    /// <summary>
+    /// The refusal when <paramref name="onTaxiway"/> meets <paramref name="taxiway"/> only inside a
+    /// runway's clear margin: the pilot's entry is right, so it says why rather than "Check your entry".
+    /// </summary>
+    public static string NoHoldShortClearOfARunway(string taxiway, string onTaxiway)
+        => $"There is no place to hold short of taxiway {taxiway} on {onTaxiway} clear of a runway.";
+
+    /// <summary>The refusal when every end of <paramref name="taxiway"/> lies inside a runway's clear margin.</summary>
+    public static string NoEndClearOfARunway(string taxiway)
+        => $"Taxiway {taxiway} has no end clear of a runway.";
 }

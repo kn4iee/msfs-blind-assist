@@ -4217,19 +4217,8 @@ public partial class TaxiGraph
     /// </summary>
     public int FindTaxiwayIntersectionNode(string fromTaxiway, string toTaxiway, int requiredComponentId)
     {
-        foreach (var kvp in Adjacency)
-        {
-            int nodeId = kvp.Key;
-            if (!Nodes.TryGetValue(nodeId, out var node) || node.ComponentId != requiredComponentId)
-                continue;
-            bool onFrom = false, onTo = false;
-            foreach (var e in kvp.Value)
-            {
-                if (e.TaxiwayName.Equals(fromTaxiway, StringComparison.OrdinalIgnoreCase)) onFrom = true;
-                else if (e.TaxiwayName.Equals(toTaxiway, StringComparison.OrdinalIgnoreCase)) onTo = true;
-            }
-            if (onFrom && onTo) return nodeId;
-        }
+        foreach (int nodeId in TaxiwayJunctions(fromTaxiway, toTaxiway, requiredComponentId, clearOfRunways: false))
+            return nodeId;
         return -1;
     }
 
@@ -4242,25 +4231,48 @@ public partial class TaxiGraph
     /// (<see cref="TaxiwayHoldPlacement.NearestByTaxiDistance"/>). Empty when there is none.
     /// </summary>
     public List<int> FindTaxiwayIntersectionNodes(string fromTaxiway, string toTaxiway, int requiredComponentId)
+        => TaxiwayJunctions(fromTaxiway, toTaxiway, requiredComponentId, clearOfRunways: true).ToList();
+
+    /// <summary>
+    /// The one junction test both intersection lookups share, lazily in <see cref="Adjacency"/> order:
+    /// each node in the component where <paramref name="fromTaxiway"/> meets
+    /// <paramref name="toTaxiway"/> (<see cref="IsJunctionOf"/>), and with
+    /// <paramref name="clearOfRunways"/> only those outside every runway's clear margin.
+    /// </summary>
+    private IEnumerable<int> TaxiwayJunctions(string fromTaxiway, string toTaxiway, int requiredComponentId,
+        bool clearOfRunways)
     {
-        var junctions = new List<int>();
         foreach (var kvp in Adjacency)
         {
-            int nodeId = kvp.Key;
-            if (!Nodes.TryGetValue(nodeId, out var node) || node.ComponentId != requiredComponentId)
-                continue;
-            bool onFrom = false, onTo = false;
-            foreach (var e in kvp.Value)
-            {
-                if (e.TaxiwayName.Equals(fromTaxiway, StringComparison.OrdinalIgnoreCase)) onFrom = true;
-                else if (e.TaxiwayName.Equals(toTaxiway, StringComparison.OrdinalIgnoreCase)) onTo = true;
-            }
-            if (onFrom && onTo
-                && RouteRunwayCrossings.RunwayWithinClearMargin(RunwayCenterlines, node.Latitude, node.Longitude) == null)
-                junctions.Add(nodeId);
+            if (!Nodes.TryGetValue(kvp.Key, out var node) || node.ComponentId != requiredComponentId) continue;
+            if (!IsJunctionOf(kvp.Value, fromTaxiway, toTaxiway)) continue;
+            if (clearOfRunways && !IsClearOfRunways(node)) continue;
+            yield return kvp.Key;
         }
-        return junctions;
     }
+
+    /// <summary>
+    /// Whether a node's <paramref name="edges"/> carry both taxiways. An edge on
+    /// <paramref name="fromTaxiway"/> never also counts for <paramref name="toTaxiway"/>, so a query
+    /// naming one taxiway twice finds no junction.
+    /// </summary>
+    private static bool IsJunctionOf(List<TaxiEdge> edges, string fromTaxiway, string toTaxiway)
+    {
+        bool onFrom = false, onTo = false;
+        foreach (var e in edges)
+        {
+            if (e.TaxiwayName.Equals(fromTaxiway, StringComparison.OrdinalIgnoreCase)) onFrom = true;
+            else if (e.TaxiwayName.Equals(toTaxiway, StringComparison.OrdinalIgnoreCase)) onTo = true;
+        }
+        return onFrom && onTo;
+    }
+
+    /// <summary>
+    /// Outside every runway's clear margin (<see cref="RouteRunwayCrossings.RunwayWithinClearMargin"/>):
+    /// where a Progressive Taxi leg may end.
+    /// </summary>
+    private bool IsClearOfRunways(TaxiNode node)
+        => RouteRunwayCrossings.RunwayWithinClearMargin(RunwayCenterlines, node.Latitude, node.Longitude) == null;
 
     /// <summary>
     /// Returns the node on <paramref name="taxiway"/> (in the same connected component as
@@ -4271,21 +4283,7 @@ public partial class TaxiGraph
     /// <paramref name="taxiway"/> exists in the component.
     /// </summary>
     public int FindTaxiwayEndNode(int fromNodeId, string taxiway)
-    {
-        if (!Nodes.TryGetValue(fromNodeId, out var from)) return -1;
-        int comp = from.ComponentId;
-        int best = -1;
-        double bestDist = -1;
-        foreach (var kvp in Adjacency)
-        {
-            int nodeId = kvp.Key;
-            if (!Nodes.TryGetValue(nodeId, out var node) || node.ComponentId != comp) continue;
-            if (!kvp.Value.Any(e => e.TaxiwayName.Equals(taxiway, StringComparison.OrdinalIgnoreCase))) continue;
-            double d = FastDistanceMeters(from.Latitude, from.Longitude, node.Latitude, node.Longitude);
-            if (d > bestDist) { bestDist = d; best = nodeId; }
-        }
-        return best;
-    }
+        => FarthestTaxiwayNode(fromNodeId, taxiway, clearOfRunways: false);
 
     /// <summary>
     /// As <see cref="FindTaxiwayEndNode"/>, but only among nodes outside every runway's clear margin
@@ -4295,6 +4293,15 @@ public partial class TaxiGraph
     /// such node exists in the component.
     /// </summary>
     public int FindTaxiwayEndNodeClearOfRunways(int fromNodeId, string taxiway)
+        => FarthestTaxiwayNode(fromNodeId, taxiway, clearOfRunways: true);
+
+    /// <summary>
+    /// The one end-node search both end-of-taxiway lookups share: the node on
+    /// <paramref name="taxiway"/>, in <paramref name="fromNodeId"/>'s component, farthest from it in a
+    /// straight line, with <paramref name="clearOfRunways"/> only among nodes outside every runway's
+    /// clear margin (<see cref="IsClearOfRunways"/>). -1 when there is none.
+    /// </summary>
+    private int FarthestTaxiwayNode(int fromNodeId, string taxiway, bool clearOfRunways)
     {
         if (!Nodes.TryGetValue(fromNodeId, out var from)) return -1;
         int comp = from.ComponentId;
@@ -4305,7 +4312,7 @@ public partial class TaxiGraph
             int nodeId = kvp.Key;
             if (!Nodes.TryGetValue(nodeId, out var node) || node.ComponentId != comp) continue;
             if (!kvp.Value.Any(e => e.TaxiwayName.Equals(taxiway, StringComparison.OrdinalIgnoreCase))) continue;
-            if (RouteRunwayCrossings.RunwayWithinClearMargin(RunwayCenterlines, node.Latitude, node.Longitude) != null) continue;
+            if (clearOfRunways && !IsClearOfRunways(node)) continue;
             double d = FastDistanceMeters(from.Latitude, from.Longitude, node.Latitude, node.Longitude);
             if (d > bestDist) { bestDist = d; best = nodeId; }
         }

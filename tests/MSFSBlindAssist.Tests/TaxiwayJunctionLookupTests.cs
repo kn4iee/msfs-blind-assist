@@ -90,6 +90,8 @@ public class TaxiwayJunctionLookupTests
         var junctions = g.FindTaxiwayIntersectionNodes("A", "B", g.Nodes[west].ComponentId);
 
         Assert.Equal(new[] { west }, junctions);
+        // The unfiltered lookup still sees both: the form tells "beside a runway" from "no junction" by it.
+        Assert.Contains(g.FindTaxiwayIntersectionNode("A", "B", g.Nodes[west].ComponentId), new[] { west, NodeAt(g, 400, 0) });
     }
 
     [Fact]
@@ -124,5 +126,7 @@ public class TaxiwayJunctionLookupTests
         int start = NodeAt(g, 0, -200);
 
         Assert.Equal(-1, g.FindTaxiwayEndNodeClearOfRunways(start, "A"));
+        // The unfiltered lookup still finds the taxiway's far end, so the form says why it refused.
+        Assert.Equal(NodeAt(g, 300, 0), g.FindTaxiwayEndNode(start, "A"));
     }
 }

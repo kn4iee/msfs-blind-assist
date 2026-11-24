@@ -65,6 +65,15 @@ public class ProgressiveLegEndTests
     [InlineData(ProgressiveTerminatorType.EndOfTaxiway, "", "end of taxiway A", "Hold short end of taxiway A")]
     public void The_countdown_lead_follows_the_ending(ProgressiveTerminatorType type, string target, string? label, string expected)
         => Assert.Equal(expected, ProgressiveLegEnd.CountdownLead(new ProgressiveTerminator(type, target), label));
+    // A leg end that exists only inside a runway's clear margin: the pilot's entry is right, so the
+    // refusal says why instead of "Check your entry".
+    [Fact] public void A_leg_end_found_only_beside_a_runway_is_refused_with_the_reason()
+    {
+        Assert.Equal("There is no place to hold short of taxiway L on A clear of a runway.",
+            ProgressiveLegEnd.NoHoldShortClearOfARunway("L", "A"));
+        Assert.Equal("Taxiway A has no end clear of a runway.",
+            ProgressiveLegEnd.NoEndClearOfARunway("A"));
+    }
     [Fact] public void The_countdown_reads_the_same_under_a_comma_decimal_culture()
     {
         TestCulture.Run("de-DE", () =>
