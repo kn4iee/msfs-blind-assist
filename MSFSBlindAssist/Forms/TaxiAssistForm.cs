@@ -4793,8 +4793,9 @@ public class TaxiAssistForm : Form
             // Component + start node for the graph-distance terminator helpers,
             // mirroring FindFarSideRunwayNode's aircraft-component restriction so
             // the resolved node is actually reachable from the aircraft. Task 6 Defect A:
-            // startNode.NodeId feeds FindTaxiwayEndNode below as a real route start, so a
-            // bridge-only stand stub must be excluded here too.
+            // startNode.NodeId feeds FindTaxiwayEndNodeClearOfRunways and the junction's taxi
+            // distances below as a real route start, so a bridge-only stand stub must be
+            // excluded here too.
             var startNode = _graph.FindNearestNode(_aircraftLat, _aircraftLon, excludeBridgeOnlyStandStubs: true);
             if (startNode == null)
             {
@@ -4872,7 +4873,13 @@ public class TaxiAssistForm : Form
                         _announcer.AnnounceImmediate("Pick the taxiway or holding point to hold short of.");
                         return;
                     }
-                    destNode = _graph.FindTaxiwayIntersectionNode(lastTaxiway, taxiwayTarget, destComponentId);
+                    // The first junction the route reaches by TAXI distance, never one inside a
+                    // runway's clear margin (FindTaxiwayIntersectionNodes leaves those out). A fresh
+                    // router: its BlockedNodes is empty (TURN-1).
+                    var distancesFromStartNode = new TaxiRouter(_graph).ComputeGraphDistancesFrom(startNode.NodeId);
+                    destNode = TaxiwayHoldPlacement.NearestByTaxiDistance(
+                        _graph.FindTaxiwayIntersectionNodes(lastTaxiway, taxiwayTarget, destComponentId),
+                        distancesFromStartNode);
                     term = new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortTaxiway, taxiwayTarget);
                     break;
                 }
@@ -4918,7 +4925,9 @@ public class TaxiAssistForm : Form
                 }
                 default: // 3: End of last taxiway
                 {
-                    destNode = _graph.FindTaxiwayEndNode(startNode.NodeId, lastTaxiway);
+                    // Never on or beside a runway: a taxiway that runs onto one ends at its last
+                    // node clear of it.
+                    destNode = _graph.FindTaxiwayEndNodeClearOfRunways(startNode.NodeId, lastTaxiway);
                     term = new ProgressiveTerminator(ProgressiveTerminatorType.EndOfTaxiway, "");
                     break;
                 }
@@ -4955,6 +4964,8 @@ public class TaxiAssistForm : Form
             };
 
             var progTurnPicks = GetUserTurnPicks();
+            // Sizes the setback of a taxiway stop; _aircraftWingspan is in feet, 0 when unknown.
+            _guidanceManager.AircraftWingspanMetres = _aircraftWingspan * 0.3048;
             string? progError = _guidanceManager.LoadRoute(
                 _dataProvider, _currentIcao,
                 _aircraftLat, _aircraftLon, AircraftHeadingTrue(),
@@ -5159,6 +5170,8 @@ public class TaxiAssistForm : Form
         }
 
         var mainTurnPicks = GetUserTurnPicks();
+        // Sizes the setback of a taxiway stop; _aircraftWingspan is in feet, 0 when unknown.
+        _guidanceManager.AircraftWingspanMetres = _aircraftWingspan * 0.3048;
         string? error = _guidanceManager.LoadRoute(
             _dataProvider, _currentIcao,
             _aircraftLat, _aircraftLon, AircraftHeadingTrue(),

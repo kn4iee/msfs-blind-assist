@@ -938,6 +938,54 @@ public class TurnPickApplierTests
         Assert.Equal(Node(g, Em), Nodes(res.Route).Last());
     }
 
+    /// A north-south runway across the cross graph at easting x, 1 km long, pavement on the same line,
+    /// 30 m half-width (RunwayFixture.Line's fields).
+    private static TaxiGraph.RunwayCenterline NorthSouthRunwayAt(double x)
+    {
+        var north = P(x, 500);
+        var south = P(x, -500);
+        return new TaxiGraph.RunwayCenterline
+        {
+            Name1 = "18", Name2 = "36",
+            Lat1 = north.Lat, Lon1 = north.Lon, Lat2 = south.Lat, Lon2 = south.Lon,
+            HalfWidthMeters = RunwayShape.DefaultHalfWidthMeters,
+            PavementLat1 = north.Lat, PavementLon1 = north.Lon, PavementLat2 = south.Lat, PavementLon2 = south.Lon,
+            PavementHalfWidthMeters = 30.0,
+        };
+    }
+
+    [Fact]
+    public void Progressive_end_of_taxiway_that_way_stops_clear_of_a_runway()
+    {
+        var g = Cross();
+        g.RunwayCenterlines.Add(NorthSouthRunwayAt(300));   // En is on its centreline
+        var r0 = Route(g, ANorth, Wn, AB);
+        var ctx = Ctx(g, AB, Wn, heading: 180,
+            terminator: new ProgressiveTerminator(ProgressiveTerminatorType.EndOfTaxiway, ""));
+
+        var res = TurnPickApplier.Apply(r0, Picks((1, TurnSide.Left)), ctx);
+
+        Assert.Empty(res.Refusals);
+        Assert.Equal(Node(g, Em), res.DestinationNodeId);
+        Assert.Equal(Node(g, Em), Nodes(res.Route).Last());
+    }
+
+    [Fact]
+    public void Progressive_hold_short_that_way_skips_a_meeting_inside_a_runway_margin()
+    {
+        var g = Cross(withX1: true);
+        g.RunwayCenterlines.Add(NorthSouthRunwayAt(150));   // Em, the first meeting with X1, is on its centreline
+        var r0 = Route(g, ANorth, Wm, AB);
+        var ctx = Ctx(g, AB, Wm, heading: 180,
+            terminator: new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortTaxiway, "X1"));
+
+        var res = TurnPickApplier.Apply(r0, Picks((1, TurnSide.Left)), ctx);
+
+        Assert.Empty(res.Refusals);
+        Assert.Equal(Node(g, En), res.DestinationNodeId);
+        Assert.Equal(Node(g, En), Nodes(res.Route).Last());
+    }
+
     [Fact]
     public void A_pick_already_met_does_not_re_resolve_the_progressive_end()
     {

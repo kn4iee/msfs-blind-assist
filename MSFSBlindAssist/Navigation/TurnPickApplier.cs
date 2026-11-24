@@ -606,7 +606,10 @@ internal static class TurnPickApplier
 
     /// Section 5: walking only the taxiway's own edges from v (v itself counts), never into a blocked
     /// node: the farthest node by path distance (EndOfTaxiway) or the nearest that also carries the
-    /// target taxiway (HoldShortTaxiway). 0 when there is none.
+    /// target taxiway (HoldShortTaxiway). A node counts only when it is outside every runway's clear
+    /// margin (RouteRunwayCrossings.RunwayWithinClearMargin), the rule the form's own lookups keep: a
+    /// leg never ends on or beside a runway, picked turn or not. The walk itself still passes through
+    /// such nodes. 0 when there is none.
     private static int ResolveProgressiveEnd(TaxiGraph graph, int v, string name, HashSet<int> blocked,
         ProgressiveTerminator terminator)
     {
@@ -633,11 +636,15 @@ internal static class TurnPickApplier
             }
         }
 
+        bool ClearOfRunways(int n) => graph.Nodes.TryGetValue(n, out var node)
+            && RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, node.Latitude, node.Longitude) == null;
+
         if (terminator.Type == ProgressiveTerminatorType.EndOfTaxiway)
-            return order.OrderByDescending(n => dist[n]).ThenBy(n => n).First();
+            return order.Where(ClearOfRunways).OrderByDescending(n => dist[n]).ThenBy(n => n).FirstOrDefault();
 
         foreach (int n in order)   // settled nearest first
-            if (graph.Adjacency.TryGetValue(n, out var edges) && edges.Any(e => Named(e.TaxiwayName, terminator.Target)))
+            if (ClearOfRunways(n) && graph.Adjacency.TryGetValue(n, out var edges)
+                && edges.Any(e => Named(e.TaxiwayName, terminator.Target)))
                 return n;
         return 0;
     }

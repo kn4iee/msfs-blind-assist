@@ -4234,6 +4234,35 @@ public partial class TaxiGraph
     }
 
     /// <summary>
+    /// Every node <see cref="FindTaxiwayIntersectionNode"/> would accept (on
+    /// <paramref name="fromTaxiway"/>, with an edge on <paramref name="toTaxiway"/>, in the
+    /// component), in <see cref="Adjacency"/> order, leaving out any node inside a runway's clear
+    /// margin (<see cref="RouteRunwayCrossings.RunwayWithinClearMargin"/>): a Progressive Taxi leg
+    /// never ends on or beside a runway. The caller picks among them by taxi distance
+    /// (<see cref="TaxiwayHoldPlacement.NearestByTaxiDistance"/>). Empty when there is none.
+    /// </summary>
+    public List<int> FindTaxiwayIntersectionNodes(string fromTaxiway, string toTaxiway, int requiredComponentId)
+    {
+        var junctions = new List<int>();
+        foreach (var kvp in Adjacency)
+        {
+            int nodeId = kvp.Key;
+            if (!Nodes.TryGetValue(nodeId, out var node) || node.ComponentId != requiredComponentId)
+                continue;
+            bool onFrom = false, onTo = false;
+            foreach (var e in kvp.Value)
+            {
+                if (e.TaxiwayName.Equals(fromTaxiway, StringComparison.OrdinalIgnoreCase)) onFrom = true;
+                else if (e.TaxiwayName.Equals(toTaxiway, StringComparison.OrdinalIgnoreCase)) onTo = true;
+            }
+            if (onFrom && onTo
+                && RouteRunwayCrossings.RunwayWithinClearMargin(RunwayCenterlines, node.Latitude, node.Longitude) == null)
+                junctions.Add(nodeId);
+        }
+        return junctions;
+    }
+
+    /// <summary>
     /// Returns the node on <paramref name="taxiway"/> (in the same connected component as
     /// <paramref name="fromNodeId"/>) that is farthest — by straight-line distance — from
     /// <paramref name="fromNodeId"/>.  Used by the progressive-taxi terminator to locate
@@ -4252,6 +4281,31 @@ public partial class TaxiGraph
             int nodeId = kvp.Key;
             if (!Nodes.TryGetValue(nodeId, out var node) || node.ComponentId != comp) continue;
             if (!kvp.Value.Any(e => e.TaxiwayName.Equals(taxiway, StringComparison.OrdinalIgnoreCase))) continue;
+            double d = FastDistanceMeters(from.Latitude, from.Longitude, node.Latitude, node.Longitude);
+            if (d > bestDist) { bestDist = d; best = nodeId; }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// As <see cref="FindTaxiwayEndNode"/>, but only among nodes outside every runway's clear margin
+    /// (<see cref="RouteRunwayCrossings.RunwayWithinClearMargin"/>): the "End of last taxiway"
+    /// Progressive Taxi leg never ends on or beside a runway, so a taxiway that runs onto one ends at
+    /// its last node clear of it. Returns -1 when <paramref name="fromNodeId"/> is not found or no
+    /// such node exists in the component.
+    /// </summary>
+    public int FindTaxiwayEndNodeClearOfRunways(int fromNodeId, string taxiway)
+    {
+        if (!Nodes.TryGetValue(fromNodeId, out var from)) return -1;
+        int comp = from.ComponentId;
+        int best = -1;
+        double bestDist = -1;
+        foreach (var kvp in Adjacency)
+        {
+            int nodeId = kvp.Key;
+            if (!Nodes.TryGetValue(nodeId, out var node) || node.ComponentId != comp) continue;
+            if (!kvp.Value.Any(e => e.TaxiwayName.Equals(taxiway, StringComparison.OrdinalIgnoreCase))) continue;
+            if (RouteRunwayCrossings.RunwayWithinClearMargin(RunwayCenterlines, node.Latitude, node.Longitude) != null) continue;
             double d = FastDistanceMeters(from.Latitude, from.Longitude, node.Latitude, node.Longitude);
             if (d > bestDist) { bestDist = d; best = nodeId; }
         }
