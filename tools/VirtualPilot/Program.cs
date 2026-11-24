@@ -635,7 +635,8 @@ static (List<TaxiNode> path, (double lat, double lon) at)? ChartedWayAt(TaxiRout
 // passes no node on B between its turn and its stop (LEGEND_PICK_NOT_FIRST_JUNCTION). The rest of the
 // route is read too: LEG_PICK_LINK_CROSSES_B on the charted link to the picked turn,
 // LEG_PASSES_B_JUNCTION without such a pick, LEG_PASSES_B_IN_RUNWAY_MARGIN for a meeting inside a
-// runway's clear margin, which the app skips by design.
+// runway's clear margin, which the app skips by design. While flying, LEG_ENDED_ON_RUNWAY when the leg
+// ends, or its countdown says "Slow down" or "Stop", with the aircraft on runway pavement (spec 8.5, 8.8).
 // A stop can insert a node into the airport's shared graph, as at the pilot's Calculate in the app,
 // so legs are flown in a fixed order and only nodes present at load are chosen as starts.
 void RunLegEnds(World w)
@@ -955,6 +956,12 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
                 {
                     row.Countdown++;
                     row.Tiers += s.Contains("Slow down.", StringComparison.Ordinal) ? "S" : s.Contains("Stop.", StringComparison.Ordinal) ? "X" : "O";
+                    // BA never asks for a stop on a runway (spec 8.8): no "Slow down" or "Stop" of the leg end
+                    // while the aircraft is on runway pavement.
+                    if ((s.Contains("Slow down.", StringComparison.Ordinal) || s.Contains("Stop.", StringComparison.Ordinal))
+                        && RouteRunwayCrossings.RunwayUnder(g.RunwayCenterlines, lat, lon) is { } rwySaid)
+                        fs.Add(new Finding(w.Icao, "LEG_ENDED_ON_RUNWAY", where,
+                            $"\"{s.Trim()}\" spoken on runway {rwySaid.Name1}/{rwySaid.Name2} pavement at {gs:F1} kt ({lat:F6},{lon:F6})"));
                 }
                 if (s.Contains("Route changed", StringComparison.OrdinalIgnoreCase)) row.Recalcs++;
             }
@@ -965,6 +972,10 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
                 if (mgr.CurrentRoute is { Segments.Count: > 0 } rEnd)
                     row.EndHeadingOffDeg = Math.Abs(Geo.Norm(hdg - rEnd.Segments[^1].BearingDegrees));
                 if (trace) Console.WriteLine($"  {t,6:F1}s LEG ENDED at {gs:F1} kt ({lat:F6},{lon:F6})");
+                // A leg never ends while the aircraft is on a runway (spec 8.5).
+                if (RouteRunwayCrossings.RunwayUnder(g.RunwayCenterlines, lat, lon) is { } rwyEnd)
+                    fs.Add(new Finding(w.Icao, "LEG_ENDED_ON_RUNWAY", where,
+                        $"the leg ended on runway {rwyEnd.Name1}/{rwyEnd.Name2} pavement at {gs:F1} kt ({lat:F6},{lon:F6})"));
             }
             if (st == TaxiGuidanceState.HoldShort && gs < 0.3)
             {
