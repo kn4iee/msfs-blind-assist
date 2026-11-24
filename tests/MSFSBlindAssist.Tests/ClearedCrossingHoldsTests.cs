@@ -584,6 +584,130 @@ public class ClearedCrossingHoldsTests
         Assert.Equal("no hold short point for runway 09", RouteRunwayCrossings.DescribeUnheldRunways(other.RunwayEvents));
     }
 
+    // A runway is never crossed in silence: a fully cleared stop is counted down like one, in its own words. A leg end
+    // on the same segment wins (its countdown already holds "Slow down" and "Stop" off a runway), and nothing is
+    // counted down while holding (the frame that enters another stop's hold never adds a cleared crossing's line).
+    [Fact]
+    public void A_fully_cleared_stop_is_counted_down_as_cleared_unless_a_leg_end_owns_it()
+    {
+        var route = AcrossOnA();
+        Pass(route, Runway09());
+        Assert.False(ClearedCrossingHolds.CountsDownAsCleared(route.Segments[0], legEndApplies: false, taxiing: true));
+
+        Clear(route, new ClearedCrossing("09"));
+
+        Assert.True(ClearedCrossingHolds.CountsDownAsCleared(route.Segments[0], legEndApplies: false, taxiing: true));
+        Assert.False(ClearedCrossingHolds.CountsDownAsCleared(route.Segments[0], legEndApplies: true, taxiing: true));
+        Assert.False(ClearedCrossingHolds.CountsDownAsCleared(route.Segments[0], legEndApplies: false, taxiing: false));
+        Assert.False(ClearedCrossingHolds.CountsDownAsCleared(route.Segments[1], legEndApplies: false, taxiing: true));
+
+        // A stop still guarding another runway is a hold short, counted down as one.
+        var (shared, runways) = Intersection();
+        Pass(shared, runways);
+        Clear(shared, new ClearedCrossing("09"));
+        Assert.False(ClearedCrossingHolds.CountsDownAsCleared(shared.Segments[0], legEndApplies: false, taxiing: true));
+    }
+
+    // What the countdown and the line say for a stop cleared on the real pass, under a comma-decimal culture.
+    [Fact]
+    public void A_cleared_stop_is_counted_down_and_said_at_its_line_by_its_placed_label()
+    {
+        var route = AcrossOnA();
+        Pass(route, Runway09());
+        Clear(route, new ClearedCrossing("27"));
+        var stop = route.Segments[0];
+        string label = ClearedCrossingHolds.LineLabel(stop.PlacedHoldLabel, stop.ClearedRunways);
+
+        Assert.Equal("runway 09", label);
+        TestCulture.Run("de-DE", () =>
+        {
+            Assert.Equal("Runway 09 in 120 metres, cleared to cross.", ClearedCrossingCallouts.Approach(label, "120 metres", first: true));
+            Assert.Equal("Runway 09 in 45 metres.", ClearedCrossingCallouts.Approach(label, "45 metres", first: false));
+            Assert.Equal("Crossing runway 09.", ClearedCrossingCallouts.AtTheLine(label));
+            return 0;
+        });
+    }
+
+    [Fact]
+    public void The_line_is_named_by_the_label_its_stop_was_placed_with()
+    {
+        Assert.Equal("runway 04L at C", ClearedCrossingHolds.LineLabel("runway 04L at C", new[] { "04L" }));
+        // No placed label (never left so by ClearAt): the cleared runways, so the line is never said without a runway.
+        Assert.Equal("runway 09 and runway 01", ClearedCrossingHolds.LineLabel(null, new[] { "09", "01" }));
+        Assert.Equal("runway", ClearedCrossingHolds.LineLabel(" ", Array.Empty<string>()));
+        Assert.Equal("Crossing runway 09 and runway 01.",
+            TestCulture.Run("de-DE", () => ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(null, new[] { "09", "01" }))));
+    }
+
+    // A start hold is a cleared start (said as the aircraft starts across) only with every runway it guarded cleared:
+    // one still guarding a runway holds, and Continue releasing it (StartHoldRunway null) does not make it a cleared one.
+    [Fact]
+    public void A_start_hold_is_fully_cleared_only_with_every_runway_cleared()
+    {
+        var route = StartsHeld();
+        Pass(route, Runway09());
+        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(route));
+        Clear(route, new ClearedCrossing("09"));
+        Assert.True(ClearedCrossingHolds.IsStartHoldFullyCleared(route));
+        Assert.True(ClearedCrossingHolds.RestoreStartHold(route));
+        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(route));
+
+        static (TaxiRoute Route, TaxiGraph.RunwayCenterline[] Runways) TwoRunwayStart()
+        {
+            var runways = new[] { EastWest("09", "27"), NorthSouth("01", "19", eastM: 1200, fromNorthM: -1500, toNorthM: 1500) };
+            return (RouteOf(Node(1, 900, 35), Node(2, 1000, 0), Node(3, 1300, 0), Node(4, 1300, -60)), runways);
+        }
+
+        var (partial, partialRunways) = TwoRunwayStart();
+        Pass(partial, partialRunways);
+        Clear(partial, new ClearedCrossing("09"));
+        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(partial));
+        partial.StartHoldRunway = null;   // Continue released the hold for 01
+        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(partial));
+
+        var (both, bothRunways) = TwoRunwayStart();
+        Pass(both, bothRunways);
+        Clear(both, new ClearedCrossing("09"), new ClearedCrossing("01"));
+        Assert.True(ClearedCrossingHolds.IsStartHoldFullyCleared(both));
+        Assert.Equal("Crossing runway 09 and runway 01.", TestCulture.Run("de-DE",
+            () => ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(both.PlacedStartHoldLabel, both.StartHoldClearedRunways))));
+    }
+
+    // Standing at a cleared start hold the aircraft has not started across; it has once it moves (2 kt, the manager's
+    // own "a real taxi start" line) or is more than the stop tolerance (10 m) along the route.
+    [Theory]
+    [InlineData(0.0, 0.0, false)]
+    [InlineData(1.9, 0.0, false)]
+    [InlineData(2.0, 0.0, true)]
+    [InlineData(0.0, 10.0, false)]
+    [InlineData(0.0, 10.5, true)]
+    public void A_cleared_start_is_started_across_once_the_aircraft_moves(double groundSpeedKts, double progressM, bool expected)
+        => Assert.Equal(expected, ClearedCrossingHolds.HasStartedAcross(groundSpeedKts, progressM));
+
+    // A cleared crossing is used once: at its line every entry at that stop node goes, into a NEW list (LoadRoute's
+    // Fail and rollback snapshots hold the old one), and a crossing with no stop (node 0) is never "at" a line.
+    [Fact]
+    public void A_crossing_used_at_its_line_is_dropped_into_a_new_list()
+    {
+        var list = new List<ClearedCrossing>
+        {
+            new("09", StopNodeId: 7), new("27", StopNodeId: 7), new("01", StopNodeId: 9), new("18"),
+        };
+
+        var after = ClearedCrossingHolds.WithoutStop(list, 7);
+
+        Assert.NotSame(list, after);
+        Assert.Equal(4, list.Count);
+        Assert.Equal(new[] { "01", "18" }, after.Select(c => c.Runway));
+        Assert.True(ClearedCrossingHolds.HasStop(list, 7));
+        Assert.False(ClearedCrossingHolds.HasStop(after, 7));
+        Assert.True(ClearedCrossingHolds.HasStop(after, 9));
+        Assert.False(ClearedCrossingHolds.HasStop(list, 0));
+        var same = ClearedCrossingHolds.WithoutStop(list, 0);
+        Assert.NotSame(list, same);
+        Assert.Equal(list, same);
+    }
+
     [Theory]
     [InlineData("C")]
     [InlineData("")]

@@ -224,6 +224,74 @@ public static class ClearedCrossingHolds
     public static bool IsFullyCleared(TaxiRouteSegment segment)
         => segment is not null && segment.ClearedRunways.Count > 0 && !segment.IsHoldShortPoint;
 
+    /// <summary>
+    /// Whether the hold-short countdown counts <paramref name="segment"/> down as a cleared crossing: a stop every
+    /// runway of which is cleared (<see cref="IsFullyCleared"/>), while taxiing, that is not the end of a leg with no
+    /// destination. A runway is never crossed in silence, so it is counted down at the same distances as a stop, in
+    /// its own words (<see cref="ClearedCrossingCallouts.Approach"/>). A leg end on the same segment wins: its own
+    /// countdown is spoken, and it already holds its slow-down and stop calls off a runway (ProgressiveLegEnd). Not
+    /// while holding: the frame that enters another stop's hold never adds a cleared crossing's line to it.
+    /// </summary>
+    public static bool CountsDownAsCleared(TaxiRouteSegment segment, bool legEndApplies, bool taxiing)
+        => taxiing && !legEndApplies && IsFullyCleared(segment);
+
+    /// <summary>
+    /// Whether the route starts at a line every runway of which is cleared: the start hold's counterpart of
+    /// <see cref="IsFullyCleared"/>, judged from the label it was placed with, so a start hold still guarding a runway
+    /// is not one, even once Continue has released it (<see cref="TaxiRoute.StartHoldRunway"/> null).
+    /// </summary>
+    public static bool IsStartHoldFullyCleared(TaxiRoute route)
+        => IsStartHoldCleared(route) && RemainingLabel(route.PlacedStartHoldLabel, route.StartHoldClearedRunways) is null;
+
+    /// <summary>The ground speed, knots, at or above which an aircraft at a cleared start has started across it.</summary>
+    public const double StartCrossingMovingKts = 2.0;
+
+    /// <summary>
+    /// Whether an aircraft standing at a cleared start line has started across it, which is when the crossing is said:
+    /// moving at <see cref="StartCrossingMovingKts"/> or more (the manager's own line for a real taxi start), or more
+    /// than RouteRunwayCrossings.StopPassedToleranceMetres along the route (<paramref name="routeProgress"/>, in
+    /// metres, from RouteRunwayCrossings.RouteProgressMeters). Never while it stands at the line.
+    /// </summary>
+    public static bool HasStartedAcross(double groundSpeedKts, double routeProgress)
+        => groundSpeedKts >= StartCrossingMovingKts || routeProgress > RouteRunwayCrossings.StopPassedToleranceMetres;
+
+    /// <summary>
+    /// What a cleared line is called when it is counted down and said: the label its stop was placed with, else
+    /// (never left so by <see cref="ClearAt"/>) its cleared runways, so it is never said without a runway.
+    /// </summary>
+    public static string LineLabel(string? placedLabel, IReadOnlyCollection<string> clearedRunways)
+    {
+        if (!string.IsNullOrWhiteSpace(placedLabel)) return placedLabel;
+        if (clearedRunways is null || clearedRunways.Count == 0) return "runway";
+        return string.Join(" and ", clearedRunways.Select(r => "runway " + r));
+    }
+
+    /// <summary>
+    /// Whether a crossing in <paramref name="crossings"/> is cleared at the stop on node <paramref name="stopNodeId"/>.
+    /// Never for node 0, which a crossing with no stop records. No allocation: asked on position frames.
+    /// </summary>
+    public static bool HasStop(IReadOnlyList<ClearedCrossing> crossings, int stopNodeId)
+    {
+        if (crossings is null || stopNodeId <= 0) return false;
+        for (int i = 0; i < crossings.Count; i++)
+            if (crossings[i]?.StopNodeId == stopNodeId) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// <paramref name="crossings"/> without every crossing cleared at the stop on node <paramref name="stopNodeId"/>:
+    /// a cleared crossing is used once, at its line. Always a NEW list, never the one given changed: the manager's
+    /// list is held by LoadRoute's refusal snapshot and its rollback, so it is replaced, never mutated in place.
+    /// </summary>
+    public static List<ClearedCrossing> WithoutStop(IReadOnlyList<ClearedCrossing> crossings, int stopNodeId)
+    {
+        var kept = new List<ClearedCrossing>();
+        if (crossings is null) return kept;
+        foreach (var c in crossings)
+            if (c is not null && (stopNodeId <= 0 || c.StopNodeId != stopNodeId)) kept.Add(c);
+        return kept;
+    }
+
     /// <summary>The first segment at or after <paramref name="fromSegmentIndex"/> with a runway cleared at its stop, else -1.</summary>
     public static int NextClearedSegment(TaxiRoute route, int fromSegmentIndex)
     {

@@ -123,6 +123,124 @@ public class ClearedCrossingWiringTests
         Assert.Matches(@"userTurnPicks: progTurnPicks\.Count > 0 \? progTurnPicks : null,\s+(//[^\n]*\n\s+)*clearedCrossings: ", form);
     }
 
+    // A runway is never crossed in silence: a cleared crossing is counted down like a stop and said at its line.
+    [Fact]
+    public void A_cleared_crossing_is_counted_down_and_spoken_at_the_line()
+    {
+        string manager = ManagerSource() + RoutingSource();
+
+        Assert.Contains("ClearedCrossingCallouts.Approach(", manager);
+        Assert.Contains("ClearedCrossingCallouts.AtTheLine(", manager);
+    }
+
+    // The hold-short countdown counts a fully cleared stop down at the same distances by speed and on the same three
+    // latches, the distance from DistanceFormatter (the pilot's unit option), "cleared to cross" on the first call
+    // only; no "Slow down", no "Stop", no stopped-between-tiers line, and never held by the start grace window
+    // [RTE-27]. A leg end on the same segment wins, and nothing is counted down while holding
+    // (ClearedCrossingHolds.CountsDownAsCleared, unit-tested).
+    [Fact]
+    public void The_countdown_speaks_a_cleared_crossing_in_its_own_words()
+    {
+        string countdown = Member(ManagerSource(), "private void CheckHoldShortCountdown(");
+
+        Assert.Contains("bool clearedCrossing = ClearedCrossingHolds.CountsDownAsCleared(currentSeg, legEnd != null, _state == TaxiGuidanceState.Taxiing);", countdown);
+        Assert.Contains("if (!currentSeg.IsHoldShortPoint && legEnd == null && !clearedCrossing)", countdown);
+        Assert.Contains("ClearedCrossingCallouts.Approach(", countdown);
+        Assert.Contains("DistanceFormatter.FromFeet(distFeet), firstCall)", countdown);
+        // Each of the three tiers speaks the cleared line in place of the hold short's, after the leg end's.
+        Assert.Equal(3, Regex.Matches(countdown, @"\? LegEndLine\(legEnd, CountdownTier\.\w+\)\s+: clearedCrossing \? ClearedLine\(\)\s+: \$""Hold short ").Count);
+        Assert.Contains("if (legEnd == null && !clearedCrossing && _holdShortSlowDownAnnounced && !_holdShortStopAnnounced", countdown);
+        Assert.DoesNotContain("_startChatterSuppressUntil", countdown);
+        // "Cleared to cross" goes with the first call spoken: judged before this frame latches any tier.
+        int first = countdown.IndexOf("bool firstCall = ", StringComparison.Ordinal);
+        int latch = countdown.IndexOf("if (distFeet < stopDistFt)", StringComparison.Ordinal);
+        Assert.True(first >= 0 && latch > first, "firstCall must be read before the tiers are latched");
+    }
+
+    // [STR-5] The advance never passes a cleared line in silence: AdvanceSegment (the waypoint capture and the
+    // pin-breaker) and AdvanceToNearestSegment's jump, which checks every segment it passes BEFORE the hold-short
+    // test, since a cleared stop is no longer a hold short.
+    [Fact]
+    public void The_advance_never_passes_a_cleared_line_in_silence()
+    {
+        string routing = RoutingSource();
+
+        string advance = Member(routing, "private void AdvanceSegment(");
+        int said = advance.IndexOf("if (ClearedCrossingHolds.IsFullyCleared(completedSeg)) PassClearedLine(completedSeg);", StringComparison.Ordinal);
+        Assert.True(said >= 0 && said < advance.LastIndexOf("_currentSegmentIndex++;", StringComparison.Ordinal),
+            "AdvanceSegment says a cleared line before it moves past it");
+
+        string nearest = Member(routing, "private void AdvanceToNearestSegment(");
+        int loop = nearest.IndexOf("for (int i = _currentSegmentIndex; i < bestIdx; i++)", StringComparison.Ordinal);
+        int jumpSaid = nearest.IndexOf("if (ClearedCrossingHolds.IsFullyCleared(_route.Segments[i])) PassClearedLine(_route.Segments[i]);", StringComparison.Ordinal);
+        int skip = nearest.IndexOf("if (!_route.Segments[i].IsHoldShortPoint) continue;", StringComparison.Ordinal);
+        Assert.True(loop >= 0 && jumpSaid > loop && skip > jumpSaid, "the jump says each cleared line it passes, before the hold-short test");
+    }
+
+    // At the line: said once (SpeakNow, the frame's one utterance [STR-22]); the incursion watch's own "Crossing …" for
+    // that node latched off; the crossing used once, in a NEW list; remembered for the Hold short key; and the three
+    // countdown latches reset, so a stale "Slow down" latch never reaches a leg end's arrival test
+    // (ProgressiveLegEnd.Arrived) and the next countdown speaks.
+    [Fact]
+    public void At_the_line_the_crossing_is_said_once_used_once_and_the_countdown_starts_fresh()
+    {
+        string pass = Member(ManagerSource(), "private void PassClearedLine(string label, int stopNodeId)");
+
+        Assert.Contains("SpeakNow(ClearedCrossingCallouts.AtTheLine(label));", pass);
+        Assert.Contains("_lastIncursionWarnedNodeId = stopNodeId;", pass);
+        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", pass);
+        Assert.Contains("_passedClearedLabel = label;", pass);
+        Assert.Contains("_passedClearedAtUtc = MSFSBlindAssist.Utils.SimClock.UtcNow;", pass);
+        Assert.Contains("_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", pass);
+        Assert.Contains("PassClearedLine(ClearedCrossingHolds.LineLabel(segment.PlacedHoldLabel, segment.ClearedRunways), segment.ToNode.NodeId)",
+            Member(ManagerSource(), "private void PassClearedLine(TaxiRouteSegment segment)"));
+
+        // Ended with the route: cleared by StopGuidance and the rollout reset.
+        Assert.Contains("_passedClearedLabel = null;", Member(ManagerSource(), "public void StopGuidance("));
+        Assert.Contains("_passedClearedLabel = null;", Member(RolloutSource(), "private void EnterRunwayEndCountdown("));
+    }
+
+    // While a cleared stop is the current segment its countdown owns its node, as for a hold short: the incursion
+    // watch's "Crossing …" is not said on the approach, and the line latches it off after.
+    [Fact]
+    public void The_incursion_watch_leaves_a_cleared_stop_to_its_countdown()
+    {
+        string watch = Member(ManagerSource(), "private void CheckRunwayIncursion(");
+
+        Assert.Matches(@"_route\.Segments\[_currentSegmentIndex\]\.IsHoldShortPoint\s+\|\| ClearedCrossingHolds\.IsFullyCleared\(_route\.Segments\[_currentSegmentIndex\]\)", watch);
+    }
+
+    // A cleared START hold: the aircraft is at the line when the route starts, so there is no approach; the crossing is
+    // said once as it starts across, before the segment cursor moves in that frame, and used up like any other.
+    [Fact]
+    public void A_cleared_start_hold_is_said_once_as_the_aircraft_starts_across()
+    {
+        string manager = ManagerSource();
+        string frame = Member(manager, "private void UpdatePositionFrame(");
+        int start = frame.IndexOf("AnnounceClearedStartCrossing(lat, lon, groundSpeedKts);", StringComparison.Ordinal);
+        int advance = frame.IndexOf("AdvanceToNearestSegment(lat, lon, headingTrue);", StringComparison.Ordinal);
+        Assert.True(start >= 0 && advance > start, "the cleared start is judged before the segment cursor moves");
+
+        string method = Member(manager, "private void AnnounceClearedStartCrossing(");
+        Assert.Contains("ClearedCrossingHolds.HasStop(_clearedCrossings, start.NodeId)", method);
+        Assert.Contains("ClearedCrossingHolds.HasStartedAcross(groundSpeedKts,", method);
+        Assert.Contains("Navigation.RouteRunwayCrossings.RouteProgressMeters(_route.Segments, lat, lon)", method);
+        Assert.Contains("ClearedCrossingHolds.IsStartHoldFullyCleared(_route)", method);
+        Assert.Contains("PassClearedLine(ClearedCrossingHolds.LineLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways), start.NodeId);", method);
+    }
+
+    // _clearedCrossings is REPLACED, never mutated in place: LoadRoute's Fail snapshot and the load rollback hold the
+    // reference, so an in-place change would rewrite the snapshot a refused load restores [RTE-29].
+    [Fact]
+    public void The_cleared_crossings_list_is_replaced_never_mutated()
+    {
+        foreach (string file in Directory.GetFiles(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services"), "TaxiGuidanceManager*.cs"))
+            Assert.DoesNotMatch(@"_clearedCrossings\s*\.\s*(Add|AddRange|Insert|InsertRange|Remove|RemoveAll|RemoveAt|RemoveRange|Clear|Sort|Reverse)\s*\(",
+                File.ReadAllText(file));
+
+        Assert.Matches(@"//[^\n]*[Rr]eplaced, never mutated in place[^\n]*\n\s*private List<Navigation\.ClearedCrossing> _clearedCrossings = ", ManagerSource());
+    }
+
     // LoadRoute's Fail snapshot: from the first prior capture to the end of the Fail local function.
     private static string FailSnapshot(string routing)
     {

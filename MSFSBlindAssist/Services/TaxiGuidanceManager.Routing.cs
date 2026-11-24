@@ -1879,6 +1879,10 @@ public partial class TaxiGuidanceManager
             // past the segment and the real crossing then gets nothing.
             for (int i = _currentSegmentIndex; i < bestIdx; i++)
             {
+                // A stop the pilot was cleared across is not a hold short, so the test below would step over it:
+                // the jump says its line as it passes it, as AdvanceSegment does. Only lines before the first
+                // hold short are passed; the index never moves beyond that one.
+                if (ClearedCrossingHolds.IsFullyCleared(_route.Segments[i])) PassClearedLine(_route.Segments[i]);
                 if (!_route.Segments[i].IsHoldShortPoint) continue;
 
                 double distToHold = TaxiGraph.FastDistanceMeters(
@@ -2779,6 +2783,10 @@ public partial class TaxiGuidanceManager
             HandleHoldShort(completedSeg);
             return;
         }
+
+        // A stop the pilot was cleared across is no longer a hold short, but its line is never passed in silence:
+        // the waypoint capture and the pin-breaker both come through here.
+        if (ClearedCrossingHolds.IsFullyCleared(completedSeg)) PassClearedLine(completedSeg);
 
         _currentSegmentIndex++;
         _lastSegmentAdvanceTime = MSFSBlindAssist.Utils.SimClock.UtcNow;
