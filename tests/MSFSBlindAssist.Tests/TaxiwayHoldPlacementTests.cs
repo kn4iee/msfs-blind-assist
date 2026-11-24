@@ -45,11 +45,27 @@ public class TaxiwayHoldPlacementTests
     [Fact] public void Nothing_is_inserted_behind_or_at_the_aircraft()              // nodes at 0, 40: the point is 5 m from the start
         => Assert.Equal(new Stop(StopKind.Junction, 0, 0), Choose(At(0, 40), 0, 35, allowInsert: true, Everywhere));
 
-    // Spec 8.6 with a runway in the way: "cross 24L, hold short of L", L just past 24L.
+    // Spec 8.6 with a runway in the way: "cross 24L, hold short of L", L just past 24L. A stop is captured 25 m
+    // before it (CaptureRadiusM, mid-route and at a leg end alike), and a leg never ends, nor does BA ask for a
+    // stop, on a runway (spec 8.5, 8.8): a stop is usable only when the route from 25 m before it to the junction
+    // is clear. Here node 150 (k = 1) lies in the band and the setback point (170) too; node 190 (k = 2) is 5 m
+    // past the band, but its approach (165-190) is not clear; the junction's own (205-230) is: the stop is the junction.
     [Fact] public void A_stop_that_would_fall_on_a_runway_moves_forward_to_the_first_clear_node()   // nodes at 0, 100, 150, 190, 230; runway 140-185
-        => Assert.Equal(new Stop(StopKind.ExistingNode, 2, 0), Choose(At(0, 100, 150, 190, 230), 3, 60, allowInsert: true, RunwayBetween(140, 185)));
-    [Fact] public void A_recalculation_with_a_runway_in_the_way_also_stops_past_it()                // same layout, no insertion
-        => Assert.Equal(new Stop(StopKind.ExistingNode, 2, 0), Choose(At(0, 100, 150, 190, 230), 3, 60, allowInsert: false, RunwayBetween(140, 185)));
+        => Assert.Equal(new Stop(StopKind.Junction, 3, 0), Choose(At(0, 100, 150, 190, 230), 3, 60, allowInsert: true, RunwayBetween(140, 185)));
+    [Fact] public void A_recalculation_with_a_runway_in_the_way_also_stops_past_it()                // same layout, no insertion: the junction too
+        => Assert.Equal(new Stop(StopKind.Junction, 3, 0), Choose(At(0, 100, 150, 190, 230), 3, 60, allowInsert: false, RunwayBetween(140, 185)));
+    [Fact] public void A_node_just_past_the_margin_is_refused_when_its_approach_lies_on_the_runway()   // nodes at 0, 100, 195, 240; runway 140-185
+    {
+        // Node 195 (k = 1) is clear and 45 m before the junction, but its 25 m approach (170-195) crosses the band, and
+        // so does the inserted point's (180-205): the junction, whose approach (215-240) is clear, is the stop.
+        Assert.Equal(new Stop(StopKind.Junction, 2, 0), Choose(At(0, 100, 195, 240), 2, 35, allowInsert: false, RunwayBetween(140, 185)));
+        Assert.Equal(new Stop(StopKind.Junction, 2, 0), Choose(At(0, 100, 195, 240), 2, 35, allowInsert: true, RunwayBetween(140, 185)));
+    }
+    [Fact] public void A_junction_whose_own_approach_lies_on_a_runway_gets_no_stop()                 // nodes at 0, 100, 200, 230; runway 140-210
+        // The junction (230) is clear of the band, but the 25 m before it (205-230) is not: no point before it is usable.
+        => Assert.Equal(new Stop(StopKind.NoSafeStop, -1, 0), Choose(At(0, 100, 200, 230), 2, 35, allowInsert: true, RunwayBetween(140, 210)));
+    [Fact] public void Only_the_route_there_is_counts_before_a_stop_near_its_start()                 // nodes at 0, 15; runway 5-30 m behind the start
+        => Assert.Equal(new Stop(StopKind.Junction, 0, 0), Choose(At(0, 15), 0, 35, allowInsert: true, RunwayBetween(-30, -5)));
     [Fact] public void A_runway_behind_the_setback_point_changes_nothing()                           // nodes at 0, 100, 220, 260; runway 20-60
         => Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(At(0, 100, 220, 260), 2, 35, allowInsert: true, RunwayBetween(20, 60)));
     [Fact] public void A_junction_inside_a_runway_margin_gets_no_stop()                               // nodes at 0, 100, 200; runway 180-260
@@ -71,10 +87,12 @@ public class TaxiwayHoldPlacementTests
         => Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(At(0, 100, 225.4, 260), 2, 35, allowInsert: false, Everywhere));
 
     // A runway crossed inside ONE edge has no node on it, so only sampling the stretch finds it (spec 8.6: move forward).
+    // In the first two the band also reaches into the junction's own 25 m approach (235-260), so the junction is no
+    // stop either (spec 8.5, 8.8): nothing is placed.
     [Fact] public void Rule_2_never_lands_behind_a_runway_crossed_inside_one_edge()    // nodes at 0, 100, 260; band 205-245; point at 225
-        => Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 100, 260), 1, 35, allowInsert: true, RunwayBetween(205, 245)));
+        => Assert.Equal(new Stop(StopKind.NoSafeStop, -1, 0), Choose(At(0, 100, 260), 1, 35, allowInsert: true, RunwayBetween(205, 245)));
     [Fact] public void Rule_1_never_lands_behind_a_runway_crossed_inside_one_edge()    // nodes at 0, 190, 260; band 200-250; node 70 m back
-        => Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 190, 260), 1, 35, allowInsert: true, RunwayBetween(200, 250)));
+        => Assert.Equal(new Stop(StopKind.NoSafeStop, -1, 0), Choose(At(0, 190, 260), 1, 35, allowInsert: true, RunwayBetween(200, 250)));
     [Fact] public void Rule_3_never_lands_behind_a_runway_crossed_inside_one_edge()    // nodes at 0, 150, 260; band 180-230; node 110 m back
         => Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 150, 260), 1, 60, allowInsert: false, RunwayBetween(180, 230)));
     [Fact] public void An_inserted_point_whose_stretch_to_the_segment_end_crosses_a_runway_is_refused()

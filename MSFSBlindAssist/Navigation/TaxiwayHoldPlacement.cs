@@ -4,8 +4,9 @@ namespace MSFSBlindAssist.Navigation;
 
 /// <summary>
 /// Where a "hold short of a taxiway" stop goes on a route: set back from the junction so the aircraft
-/// stays off the taxiway, never on or inside a runway's clear margin, never splitting an off-chart leg,
-/// never before a picked turn. Pure.
+/// stays off the taxiway, never on or inside a runway's clear margin, nor where the aircraft would be
+/// captured by the stop on one (the <see cref="ProgressiveLegEnd.CaptureRadiusM"/> before it), never
+/// splitting an off-chart leg, never before a picked turn. Pure.
 /// </summary>
 public static class TaxiwayHoldPlacement
 {
@@ -33,22 +34,33 @@ public static class TaxiwayHoldPlacement
     /// <c>RouteRunwayCrossings.RunwayWithinClearMargin(_graph.RunwayCenterlines, lat, lon) == null</c>.</param>
     /// <param name="firstUsableIndex">The first segment on the taxiway the pilot was told to turn onto (a Turn pick's
     /// <c>FirstTaxiwaySegment</c>); 0 without one.</param>
+    /// <remarks>A candidate (an existing node or an inserted point) is usable only on or after
+    /// <paramref name="firstUsableIndex"/> and when the whole route from <see cref="ProgressiveLegEnd.CaptureRadiusM"/>
+    /// before it up to the junction is clear of runways, sampled at most <see cref="SampleStepM"/> apart: a mid-route
+    /// hold and a leg end are both captured that far before their stop, and a leg never ends, nor is a stop asked
+    /// for, on a runway (design 8.5, 8.8). Where that stretch runs off the start of the route, only the part that
+    /// exists is judged. A refused candidate moves forward to the first usable node, else the junction; a junction
+    /// whose own approach is not clear gets no stop at all.</remarks>
     public static Stop Choose(IReadOnlyList<TaxiRouteSegment> segments, int junctionSegmentIndex, double setbackM, bool allowInsert,
                               Func<double, double, bool> isClearOfRunways, int firstUsableIndex = 0)
     {
         int j = junctionSegmentIndex;
-        var junctionNode = segments[j].ToNode;
-        if (!isClearOfRunways(junctionNode.Latitude, junctionNode.Longitude))
+        // Metres along the route to each node: node i + 1 is segments[i].ToNode, node 0 the route's first node.
+        var along = new double[j + 2];
+        for (int i = 0; i <= j; i++) along[i + 1] = along[i] + segments[i].DistanceMeters;
+        double junctionM = along[j + 1];
+
+        // Clear from the capture radius before the point to the junction: clear for one point, clear for every
+        // point after it.
+        bool ApproachClear(double atM)
+            => RouteClear(segments, along, Math.Max(0, atM - ProgressiveLegEnd.CaptureRadiusM), junctionM, isClearOfRunways);
+
+        // The junction inside a runway's clear margin, or reached over one within the capture radius: no point
+        // before it is usable either.
+        if (!ApproachClear(junctionM))
             return new Stop(StopKind.NoSafeStop, -1, 0);
 
-        // lo: the smallest index whose end node, and every one after it up to the junction, is clear of runways,
-        // with every sample along the segments after it clear too (a runway crossed inside one edge has no node on it).
-        int lo = j;
-        while (lo > 0
-               && isClearOfRunways(segments[lo - 1].ToNode.Latitude, segments[lo - 1].ToNode.Longitude)
-               && StretchClear(segments[lo], segments[lo].DistanceMeters, isClearOfRunways))
-            lo--;
-        lo = Math.Max(lo, firstUsableIndex);
+        bool NodeUsable(int k) => k >= firstUsableIndex && ApproachClear(along[k + 1]);
 
         // Rule 1's candidate: the largest k whose end node lies at least the setback before the junction.
         int kFound = -1;
@@ -67,7 +79,7 @@ public static class TaxiwayHoldPlacement
         // Rule 1.
         if (kFound >= 0 && dK <= setbackM + ExistingNodeReachM)
         {
-            if (kFound >= lo) return new Stop(StopKind.ExistingNode, kFound, 0);
+            if (NodeUsable(kFound)) return new Stop(StopKind.ExistingNode, kFound, 0);
             passedOver = true;
         }
 
@@ -89,16 +101,10 @@ public static class TaxiwayHoldPlacement
                     else
                     {
                         double metresBeforeEnd = setbackM - dm;
-                        double fromStart = 0;
-                        for (int i = 0; i <= m; i++) fromStart += segments[i].DistanceMeters;
-                        fromStart -= metresBeforeEnd;
+                        double fromStart = along[m + 1] - metresBeforeEnd;
                         if (fromStart >= MinFromRouteStartM)
                         {
-                            var (lat, lon) = PointBeforeEnd(seg, metresBeforeEnd);
-                            bool usable = m > lo
-                                ? isClearOfRunways(lat, lon)
-                                : m == lo && isClearOfRunways(lat, lon) && StretchClear(seg, metresBeforeEnd, isClearOfRunways);
-                            if (usable)
+                            if (m >= firstUsableIndex && ApproachClear(fromStart))
                                 return new Stop(StopKind.InsertOnSegment, m, metresBeforeEnd);
                             passedOver = true;
                         }
@@ -111,12 +117,18 @@ public static class TaxiwayHoldPlacement
         // Rule 3.
         if ((!allowInsert || refusedOffChart) && kFound >= 0 && dK <= RecalcMaxBackM)
         {
-            if (kFound >= lo) return new Stop(StopKind.ExistingNode, kFound, 0);
+            if (NodeUsable(kFound)) return new Stop(StopKind.ExistingNode, kFound, 0);
             passedOver = true;
         }
 
+        // A refused candidate moves forward: the first usable node before the junction, else the junction, whose
+        // approach was found clear above.
         if (passedOver)
-            return lo >= j ? new Stop(StopKind.Junction, j, 0) : new Stop(StopKind.ExistingNode, lo, 0);
+        {
+            for (int k = Math.Max(0, firstUsableIndex); k < j; k++)
+                if (NodeUsable(k)) return new Stop(StopKind.ExistingNode, k, 0);
+            return new Stop(StopKind.Junction, j, 0);
+        }
 
         // Rule 4.
         return new Stop(StopKind.Junction, j, 0);
@@ -130,15 +142,23 @@ public static class TaxiwayHoldPlacement
                 segment.FromNode.Longitude + f * (segment.ToNode.Longitude - segment.FromNode.Longitude));
     }
 
-    /// True when every sample from the segment's end node back to metresBack before it (steps of at most
-    /// SampleStepM, both ends included) is clear of runways.
-    private static bool StretchClear(TaxiRouteSegment segment, double metresBack, Func<double, double, bool> isClearOfRunways)
+    /// True when every sample of the route from fromM to toM metres along it (alongM[i] is node i's distance, node 0
+    /// the route's first) is clear of runways: within each segment, steps of at most SampleStepM with both ends of
+    /// its piece included, so a runway crossed inside one edge, which has no node on it, is found too.
+    private static bool RouteClear(IReadOnlyList<TaxiRouteSegment> segments, double[] alongM, double fromM, double toM,
+                                   Func<double, double, bool> isClearOfRunways)
     {
-        int steps = Math.Max(1, (int)Math.Ceiling(metresBack / SampleStepM));
-        for (int i = 0; i <= steps; i++)
+        for (int i = 0; i + 1 < alongM.Length; i++)
         {
-            var (lat, lon) = PointBeforeEnd(segment, metresBack * i / steps);
-            if (!isClearOfRunways(lat, lon)) return false;
+            double segStart = alongM[i], segEnd = alongM[i + 1];
+            if (segEnd < fromM || segStart > toM) continue;
+            double a = Math.Max(segStart, fromM), b = Math.Min(segEnd, toM);
+            int steps = Math.Max(1, (int)Math.Ceiling((b - a) / SampleStepM));
+            for (int s = 0; s <= steps; s++)
+            {
+                var (lat, lon) = PointBeforeEnd(segments[i], segEnd - (a + (b - a) * s / steps));
+                if (!isClearOfRunways(lat, lon)) return false;
+            }
         }
         return true;
     }

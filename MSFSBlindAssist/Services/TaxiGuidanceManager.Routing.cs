@@ -3675,8 +3675,8 @@ public partial class TaxiGuidanceManager
                 continue;
             }
 
-            // The junction inside a runway's clear margin: no stop there. The runway's own automatic
-            // stop still stands before that runway.
+            // The junction inside a runway's clear margin, or reached over one within the capture radius:
+            // no stop there. The runway's own automatic stop still stands before that runway.
             int stopSeg = PlaceTaxiwayHoldStop(route, holdSeg, allowInsert, seqIdx + rowOffset, deferredRunwayPicks);
             if (stopSeg < 0)
             {
@@ -3701,13 +3701,13 @@ public partial class TaxiGuidanceManager
     /// The stop for a "hold short of taxiway" whose junction is the end node of segment
     /// <paramref name="junctionSegmentIndex"/>, as <see cref="TaxiwayHoldPlacement.Choose"/> places it:
     /// set back so the whole aircraft stays off the taxiway, never on or inside a runway's clear margin
-    /// nor behind a runway the route crosses, never before the turn a Turn pick on
-    /// <paramref name="rowIndex"/> told the pilot about. On a pilot's Calculate
-    /// (<paramref name="allowInsert"/>) the stop can be a node inserted on the segment's own edge,
-    /// through TaxiGraph's own mutator [RTE-30]: the segment's two halves replace it, and every Turn
-    /// pick and deferred runway pick indexed after it moves up by one. A recalculation never inserts.
+    /// nor behind a runway the route crosses, never with the capture radius before it on one, never
+    /// before the turn a Turn pick on <paramref name="rowIndex"/> told the pilot about. On a pilot's
+    /// Calculate (<paramref name="allowInsert"/>) the stop can be a node inserted on the segment's own
+    /// edge, through TaxiGraph's own mutator [RTE-30]: the segment's two halves replace it, and every
+    /// Turn pick and deferred runway pick indexed after it moves up by one. A recalculation never inserts.
     /// Returns the index of the segment whose end node is the stop, or -1 when the junction is inside a
-    /// runway's clear margin (nothing is placed).
+    /// runway's clear margin or its own capture radius reaches one (nothing is placed).
     /// </summary>
     /// <param name="rowIndex">The row of the taxiway sequence as loaded that the stop belongs to, the
     /// numbering of <see cref="AppliedTurnPick.RowIndex"/>.</param>
@@ -3725,7 +3725,8 @@ public partial class TaxiGuidanceManager
         switch (stop.Kind)
         {
             case TaxiwayHoldPlacement.StopKind.NoSafeStop:
-                _guidanceLog.Info($"Taxiway hold: junction node {junctionNodeId} is inside a runway's clear margin; no stop placed");
+                _guidanceLog.Info($"Taxiway hold: junction node {junctionNodeId} is inside a runway's clear margin, or within " +
+                                  $"{ProgressiveLegEnd.CaptureRadiusM:F0} m of one along the route; no stop placed");
                 return -1;
             case TaxiwayHoldPlacement.StopKind.ExistingNode:
             case TaxiwayHoldPlacement.StopKind.Junction:
@@ -3829,9 +3830,10 @@ public partial class TaxiGuidanceManager
             rowIndex: (taxiwaySequence?.Count ?? 0) - 1);
         if (stop < 0)
         {
-            // Neither the planner nor a Turn pick ends a leg inside a runway's margin.
-            Log.Warn("Taxi", $"Leg end: taxiway {term.Target} meets the route at node {_destinationNodeId} inside a " +
-                             "runway's clear margin; the route is left as built");
+            // Neither the planner nor a Turn pick ends a leg inside a runway's margin, but the capture radius
+            // before the junction can reach one: the leg then ends at the junction.
+            Log.Warn("Taxi", $"Leg end: taxiway {term.Target} meets the route at node {_destinationNodeId} inside a runway's " +
+                             $"clear margin, or within {ProgressiveLegEnd.CaptureRadiusM:F0} m of one along the route; the route is left as built");
             return;
         }
         if (stop < route.Segments.Count - 1)
