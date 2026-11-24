@@ -163,6 +163,7 @@ public class HotkeyManager : IDisposable
         private const int HOTKEY_TAXI_FORM = 9202;          // Input mode: Shift+Y (Open taxi form)
         private const int HOTKEY_TAXI_CONTINUE = 9203;      // Input mode: Y (Continue past hold-short)
         private const int HOTKEY_TAXI_STOP = 9204;          // Input mode: Ctrl+Y (Stop guidance)
+        private const int HOTKEY_TAXI_HOLD_SHORT = 9221;    // Input mode: Alt+Y (Hold short of the next cleared runway)
         private const int HOTKEY_TAXI_WHERE_AM_I = 9205;    // Output mode: Alt+Y (Describe current location)
         private const int HOTKEY_LOOK_AROUND = 9219;        // Output mode: Alt+L (surroundings readout)
         private const int HOTKEY_SHOW_SURROUNDINGS = 9220;  // Output mode: Ctrl+Shift+L (surroundings window)
@@ -659,6 +660,9 @@ public class HotkeyManager : IDisposable
                         case HOTKEY_TAXI_CONTINUE:
                             TriggerHotkey(HotkeyAction.TaxiContinue);
                             break;
+                        case HOTKEY_TAXI_HOLD_SHORT:
+                            TriggerHotkey(HotkeyAction.TaxiHoldShort);
+                            break;
                         case HOTKEY_TAXI_STOP:
                             TriggerHotkey(HotkeyAction.TaxiStop);
                             break;
@@ -986,6 +990,8 @@ public class HotkeyManager : IDisposable
             // Taxi guidance hotkeys (Input mode)
             RegisterHotKey(windowHandle, HOTKEY_TAXI_FORM, MOD_SHIFT, 0x59);            // Shift+Y (Open Taxi Form)
             RegisterHotKey(windowHandle, HOTKEY_TAXI_CONTINUE, MOD_NONE, 0x59);         // Y (Continue past hold-short)
+            // Alt+Y is free in Input mode: Output mode's Alt+Y (Where Am I) is the other, exclusive mode's.
+            RegisterHotKey(windowHandle, HOTKEY_TAXI_HOLD_SHORT, MOD_ALT, 0x59);        // Alt+Y (Hold short of the next cleared runway)
             RegisterHotKey(windowHandle, HOTKEY_TAXI_STOP, MOD_CONTROL, 0x59);          // Ctrl+Y (Stop guidance)
             RegisterHotKey(windowHandle, HOTKEY_LANDING_EXIT, MOD_SHIFT, 0x58);         // Shift+X (Landing Exit Planner)
             // Fourth of the Y family, because what it builds is a TAXI ROUTE: Y continues
@@ -1047,6 +1053,7 @@ public class HotkeyManager : IDisposable
             // Taxi guidance hotkeys
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_FORM);
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_CONTINUE);
+            UnregisterHotKey(windowHandle, HOTKEY_TAXI_HOLD_SHORT);
             UnregisterHotKey(windowHandle, HOTKEY_TAXI_STOP);
             UnregisterHotKey(windowHandle, HOTKEY_LANDING_EXIT);
             UnregisterHotKey(windowHandle, HOTKEY_SI_BUILD_TAXI_ROUTE);
@@ -1407,6 +1414,7 @@ public class HotkeyManager : IDisposable
         TaxiStatus,
         TaxiRepeat,
         TaxiContinue,
+        TaxiHoldShort,  // Input Alt+Y — put the stop back at the next cleared runway (never clears one)
         TaxiStop,
         TaxiWhereAmI,
         LookAround,

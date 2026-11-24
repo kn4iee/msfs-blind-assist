@@ -379,6 +379,80 @@ public class ClearedCrossingWiringTests
         Assert.Contains("if (Navigation.RouteRunwayCrossings.ExtractRunwayDesignators(s.HoldShortRunway).Count != 1)", cont);
     }
 
+    // The Hold short key (spec 8.8), under the state lock [STR-13]: the pure ClearedCrossingHolds.DecideHoldShortKey
+    // (ClearedCrossingHoldShortKeyTests) decides from the route, the state and the aircraft, and the manager acts on it.
+    // It never clears a runway (no ClearAt, no WithCrossing); it speaks through AnnounceInstruction and SpeakNow only
+    // [STR-22]; every answer it reports is spoken, each worded by ClearedCrossingCallouts.
+    [Fact]
+    public void The_hold_short_key_decides_purely_and_never_clears_a_runway()
+    {
+        string manager = ManagerSource();
+        string key = Member(manager, "public void HoldShortOfNextClearedRunway(");
+
+        Assert.Matches(@"public void HoldShortOfNextClearedRunway\(\)\s*\{\s*lock \(_stateLock\)", key);
+        Assert.Contains("ClearedCrossingHolds.DecideHoldShortKey(_route,", key);
+        Assert.Contains("TaxiGuidanceState.RouteLoaded or TaxiGuidanceState.Taxiing or TaxiGuidanceState.HoldShort", key);
+        Assert.Contains("AnnounceInstruction(ClearedCrossingCallouts.NoRoute);", key);
+        Assert.Contains("SpeakNow(ClearedCrossingCallouts.PastTheLine(decision.Label));", key);
+        Assert.Contains("SpeakNow(ClearedCrossingCallouts.NextStop(decision.Label, FormatDistance(decision.Metres)));", key);
+        Assert.Contains("SpeakNow(ClearedCrossingCallouts.NoRunwayAhead);", key);
+        Assert.Contains("PutClearedStopBack(decision);", key);
+        // The minute "Past the hold line" is said for, from the line's own time on the sim clock.
+        Assert.Contains("(MSFSBlindAssist.Utils.SimClock.UtcNow - _passedClearedAtUtc).TotalSeconds", key);
+
+        string back = Member(manager, "private void PutClearedStopBack(");
+        string both = key + back;
+        Assert.DoesNotContain("ClearAt(", both);
+        Assert.DoesNotContain("WithCrossing(", both);
+        Assert.DoesNotContain("_announcer.", both);
+    }
+
+    // Putting a stop back: the start hold through RestoreStartHold, a segment's through RestoreAt; the crossing leaves
+    // _clearedCrossings as a NEW list (WithoutStop), the three countdown latches start fresh, the watch's latch for that
+    // node is lifted, the line is no longer "passed", and the window hears ClearedCrossingsChanged after the sentence.
+    // A stop the aircraft holds at asks for every runway again (its hold stages composed afresh, [HLD-11]); a line the
+    // segment jump said early puts the cursor back onto its segment, so its countdown and hold run as for any stop.
+    [Fact]
+    public void Putting_a_stop_back_restores_it_and_tells_the_window()
+    {
+        string manager = ManagerSource();
+        string back = Member(manager, "private void PutClearedStopBack(");
+
+        Assert.Contains("ClearedCrossingHolds.RestoreStartHold(_route)", back);
+        Assert.Contains("ClearedCrossingHolds.RestoreAt(_route, decision.SegmentIndex)", back);
+        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", back);
+        Assert.Contains("_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", back);
+        Assert.Contains("_currentSegmentIndex = decision.CursorIndex;", back);
+        Assert.Contains("ComposeHoldEntry(", back);
+        Assert.Contains("if (_lastIncursionWarnedNodeId == stopNodeId) _lastIncursionWarnedNodeId = -1;", back);
+        Assert.Contains("if (_passedClearedNodeId == stopNodeId) ForgetPassedClearedLine();", back);
+        int said = back.IndexOf("AnnounceInstruction(ClearedCrossingCallouts.HoldRestored(decision.Label, FormatDistance(decision.Metres)));", StringComparison.Ordinal);
+        int told = back.IndexOf("ClearedCrossingsChanged?.Invoke(this, EventArgs.Empty);", StringComparison.Ordinal);
+        Assert.True(said >= 0 && told > said, "the window is told after the sentence");
+        Assert.Contains("public event EventHandler? ClearedCrossingsChanged;", manager);
+    }
+
+    // The line just passed is remembered with its node, so the key can judge it from the route geometry; it ends with
+    // the route (StopGuidance, the rollout reset) and with a successful new load (it used to survive a new Calculate),
+    // cleared only once nothing can refuse the load any more, so a refused load leaves it alone [RTE-29].
+    [Fact]
+    public void The_line_passed_is_remembered_with_its_node_and_ends_with_the_route()
+    {
+        string manager = ManagerSource();
+
+        Assert.Contains("_passedClearedNodeId = stopNodeId;", Member(manager, "private void UseClearedCrossing(string label, int stopNodeId)"));
+        Assert.Contains("_passedClearedNodeId = 0;", Member(manager, "public void StopGuidance("));
+        Assert.Contains("_passedClearedNodeId = 0;", Member(RolloutSource(), "private void EnterRunwayEndCountdown("));
+        string forget = Member(manager, "private void ForgetPassedClearedLine(");
+        Assert.Contains("_passedClearedLabel = null;", forget);
+        Assert.Contains("_passedClearedNodeId = 0;", forget);
+        Assert.Contains("_passedClearedAtUtc = DateTime.MinValue;", forget);
+
+        string load = Member(RoutingSource(), "public string? LoadRoute(");
+        Assert.Matches(@"ForgetPassedClearedLine\(\);\s+return null;\s+\}\s+catch \(Exception ex\)", load);
+        Assert.Single(Regex.Matches(load, @"ForgetPassedClearedLine\(\);"));
+    }
+
     // LoadRoute's Fail snapshot: from the first prior capture to the end of the Fail local function.
     private static string FailSnapshot(string routing)
     {

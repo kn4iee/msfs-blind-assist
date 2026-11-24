@@ -430,6 +430,11 @@ public partial class MainForm
             case HotkeyAction.TaxiContinue:
                 taxiGuidanceManager.ContinuePastHoldShort();
                 break;
+            case HotkeyAction.TaxiHoldShort:
+                // Input Alt+Y — ATC took a crossing back: the stop at the next cleared runway is put back, or the manager
+                // says the aircraft is past the line or names the next stop. Speaks for itself; never clears a runway.
+                taxiGuidanceManager.HoldShortOfNextClearedRunway();
+                break;
             case HotkeyAction.TaxiStop:
                 taxiGuidanceManager.StopGuidance();
                 dockingGuidanceManager?.SetDestinationGate(null);

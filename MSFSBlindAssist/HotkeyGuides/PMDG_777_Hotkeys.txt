@@ -232,6 +232,7 @@ MCP Set Values:
 Taxi Guidance:
   Shift+Y    Open Taxi Assist Form (enter ATC taxi clearance, start guidance)
   Y          Continue past current hold-short point
+  Alt+Y      Hold short of the next cleared runway
   Ctrl+Y     Stop Taxi Guidance
   Shift+X    Open Landing Exit Planner (pick a runway exit taxiway before
              touchdown; guidance auto-starts when you land — reuses the ILS

@@ -410,7 +410,8 @@ public static class RouteRunwayCrossings
                 segment.ToNode.Latitude, segment.ToNode.Longitude);
 
     // Equirectangular from the segment's start: 111,132 m per degree of latitude, cos(mid-latitude) for longitude.
-    private static (double Along, double Perpendicular) ProjectOntoSegment(TaxiNode from, TaxiNode to, double lat, double lon)
+    // Along is clamped to the segment. Internal for the Hold short key's own along-route test (ClearedCrossingHolds.MetresPastStop).
+    internal static (double Along, double Perpendicular) ProjectOntoSegment(TaxiNode from, TaxiNode to, double lat, double lon)
     {
         const double MetersPerDegLat = 111132.0;
         double metersPerDegLon = MetersPerDegLat * Math.Cos((from.Latitude + to.Latitude) * 0.5 * (Math.PI / 180.0));

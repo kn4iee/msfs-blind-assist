@@ -340,6 +340,253 @@ public static class ClearedCrossingHolds
         return -1;
     }
 
+    // ---- the Hold short key ----
+
+    /// <summary>What the Hold short key (Input Alt+Y, spec 8.8) does: <see cref="DecideHoldShortKey"/>.</summary>
+    public enum HoldShortKeyAnswer
+    {
+        /// <summary>No route, or guidance in a state with no route to hold on.</summary>
+        NoRoute,
+        /// <summary>The cleared start hold comes back (<see cref="RestoreStartHold"/>).</summary>
+        RestoreStartHold,
+        /// <summary>The cleared stop on <see cref="HoldShortKeyDecision.SegmentIndex"/> comes back (<see cref="RestoreAt"/>).</summary>
+        RestoreSegment,
+        /// <summary>The aircraft is past the line: said, nothing changes.</summary>
+        PastTheLine,
+        /// <summary>No cleared runway ahead: the next stop of any kind is named, nothing changes.</summary>
+        NextStop,
+        /// <summary>No stop ahead at all.</summary>
+        NoRunwayAhead,
+    }
+
+    /// <summary>The aircraft as the key sees it: where it is, and how fast it moves (knots).</summary>
+    public readonly record struct HoldShortKeyAircraft(double Lat, double Lon, double GroundSpeedKts);
+
+    /// <summary>The last cleared line said as passed: its label, its stop node, and how long ago, in seconds (sim clock).</summary>
+    public sealed record PassedLine(string Label, int StopNodeId, double SecondsAgo);
+
+    /// <summary>
+    /// What the key is judged from: whether guidance has a route to hold on (loaded, taxiing or holding short), the
+    /// segment cursor, whether it is holding short and whether at the destination's own hold, the aircraft (null: no
+    /// position yet), the runways, the last cleared line passed (null: none), and the destination's name.
+    /// </summary>
+    public sealed record HoldShortKeyState(bool Guiding, int CurrentSegmentIndex, bool Holding, bool HoldingAtDestination,
+                                           HoldShortKeyAircraft? Aircraft, IReadOnlyList<TaxiGraph.RunwayCenterline>? Runways,
+                                           PassedLine? Passed, string? DestinationName);
+
+    /// <summary>
+    /// The key's answer: what it does; the label it speaks; the segment whose stop it puts back or names (-1: the start
+    /// hold, or none); how far that stop is along the route, in metres (as the status readout measures: straight to the
+    /// current segment's end, then the segments after it); and, for a stop put back, the segment cursor guidance must
+    /// have (the current one, or the stop's own segment when the cursor already moved past a line the aircraft is still
+    /// short of). Metres are unit-native; the manager formats them (FormatDistance).
+    /// </summary>
+    public sealed record HoldShortKeyDecision(HoldShortKeyAnswer Answer, string Label = "", int SegmentIndex = -1,
+                                              double Metres = 0.0, int CursorIndex = -1);
+
+    /// <summary>How long after its line is said as passed a cleared crossing is still reported as passed.</summary>
+    public const double PastTheLineWindowSeconds = 60.0;
+
+    // How far either side of a stop, along the route, the key looks for the segment the aircraft is on.
+    private const double StopWindowMetres = 200.0;
+
+    /// <summary>
+    /// The Hold short key (spec 8.8): which answer applies. It never changes the route; the manager acts on it. In order:
+    /// <list type="number">
+    /// <item>No route, or no route to hold on: <see cref="HoldShortKeyAnswer.NoRoute"/>.</item>
+    /// <item>A cleared start hold, while the aircraft holds at it or has not started across it
+    /// (<see cref="HasStartedAcross"/>, or inside the clear margin of a runway, the pass's own test for a start hold
+    /// [HLD-10]): it comes back.</item>
+    /// <item>The last cleared line said as passed, when the route geometry puts the aircraft still short of it (the
+    /// segment jump says a line up to ~100 m early; a Continue releasing a shared stop says it at the press): it comes
+    /// back, with the cursor back onto its segment.</item>
+    /// <item>The next cleared runway ahead, or the shared stop the aircraft holds at: it comes back, unless the aircraft
+    /// is past its line, which is said instead.</item>
+    /// <item>The line said as passed, for <see cref="PastTheLineWindowSeconds"/>, unless the route puts the aircraft
+    /// short of it: <see cref="HoldShortKeyAnswer.PastTheLine"/>.</item>
+    /// <item>The next stop of any kind: the start hold before it holds, a runway, a taxiway, a holding point, an end of
+    /// taxiway, the destination's own hold (named too while holding there).</item>
+    /// <item>Else <see cref="HoldShortKeyAnswer.NoRunwayAhead"/>.</item>
+    /// </list>
+    /// Past a line is more than RouteRunwayCrossings.StopPassedToleranceMetres beyond its stop node along the route
+    /// (<c>MetresPastStop</c>), or, with the aircraft off the route there, on the pavement of a runway the stop
+    /// guards (RouteRunwayCrossings.RunwayUnder): BA never asks for a stop on a runway. Pure.
+    /// </summary>
+    public static HoldShortKeyDecision DecideHoldShortKey(TaxiRoute? route, HoldShortKeyState state)
+    {
+        if (route is null || state is null || !state.Guiding || route.Segments.Count == 0)
+            return new HoldShortKeyDecision(HoldShortKeyAnswer.NoRoute);
+        var segments = route.Segments;
+        int cursor = Math.Clamp(state.CurrentSegmentIndex, 0, segments.Count);
+        var aircraft = state.Aircraft;
+        bool atDestination = state.Holding && state.HoldingAtDestination;
+        bool atStartHold = state.Holding && !atDestination && cursor == 0 && route.StartHoldRunway != null;
+
+        // The start hold: the aircraft stands at its line until it starts across.
+        if (IsStartHoldCleared(route) && cursor == 0 && !atDestination
+            && (atStartHold || !StartedAcross(route, aircraft, state.Runways)))
+            return new HoldShortKeyDecision(HoldShortKeyAnswer.RestoreStartHold,
+                LineLabel(route.PlacedStartHoldLabel, route.StartHoldClearedRunways), -1, MetresToStart(route, aircraft), cursor);
+
+        // The line said as passed, still ahead by the route: the cursor already moved past it.
+        if (!state.Holding && state.Passed is { StopNodeId: > 0 } passed && aircraft is { } a)
+        {
+            int k = PassedClearedSegment(route, cursor, passed.StopNodeId);
+            if (k >= 0 && MetresPastStop(route, k + 1, a.Lat, a.Lon) is double past
+                && past <= RouteRunwayCrossings.StopPassedToleranceMetres)
+                return new HoldShortKeyDecision(HoldShortKeyAnswer.RestoreSegment,
+                    LineLabel(segments[k].PlacedHoldLabel, segments[k].ClearedRunways), k, MetresToStop(route, k, k, aircraft), k);
+        }
+
+        // The next cleared runway ahead; holding at a stop cleared for one of its runways, that stop.
+        int from = state.Holding && !atDestination && !atStartHold && cursor > 0 ? cursor - 1 : cursor;
+        int next = NextClearedSegment(route, from);
+        if (next >= 0)
+        {
+            string label = LineLabel(segments[next].PlacedHoldLabel, segments[next].ClearedRunways);
+            bool heldHere = state.Holding && next == cursor - 1;
+            if (!heldHere && IsPastStop(route, next + 1, label, aircraft, state.Runways))
+                return new HoldShortKeyDecision(HoldShortKeyAnswer.PastTheLine, label, next);
+            return new HoldShortKeyDecision(HoldShortKeyAnswer.RestoreSegment, label, next,
+                MetresToStop(route, cursor, next, aircraft), cursor);
+        }
+
+        // The line said as passed, for a minute, unless the route puts the aircraft short of it.
+        if (state.Passed is { } line && !string.IsNullOrWhiteSpace(line.Label)
+            && line.SecondsAgo >= 0.0 && line.SecondsAgo <= PastTheLineWindowSeconds
+            && !IsShortOfNode(route, line.StopNodeId, aircraft))
+            return new HoldShortKeyDecision(HoldShortKeyAnswer.PastTheLine, line.Label.Trim());
+
+        // The next stop of any kind.
+        if (!state.Holding && cursor == 0 && !string.IsNullOrWhiteSpace(route.StartHoldRunway))
+            return new HoldShortKeyDecision(HoldShortKeyAnswer.NextStop, route.StartHoldRunway.Trim(), -1,
+                MetresToStart(route, aircraft), cursor);
+        for (int i = cursor; i < segments.Count; i++)
+            if (segments[i].IsHoldShortPoint)
+                return new HoldShortKeyDecision(HoldShortKeyAnswer.NextStop, StopName(route, i, state.DestinationName), i,
+                    MetresToStop(route, cursor, i, aircraft), cursor);
+        if (atDestination)
+        {
+            int last = segments.Count - 1;
+            return new HoldShortKeyDecision(HoldShortKeyAnswer.NextStop, StopName(route, last, state.DestinationName), last,
+                MetresToStop(route, cursor, last, aircraft), cursor);
+        }
+        return new HoldShortKeyDecision(HoldShortKeyAnswer.NoRunwayAhead);
+    }
+
+    /// <summary>
+    /// How far beyond route node <paramref name="stopNodeIndex"/> (the end of segment <c>stopNodeIndex - 1</c>; 0 the
+    /// start) the aircraft is, along the route: negative short of it. Its position on the route is its projection onto the
+    /// nearest segment (clamped, ties to the earlier) within RouteRunwayCrossings.RouteJoinMaxCrossTrackMetres, among the
+    /// segments within 200 m of the stop along the route, the projection RouteRunwayCrossings.RouteProgressMeters uses.
+    /// Null when no segment there qualifies (the aircraft is off the route there) or the node is not on the route.
+    /// </summary>
+    public static double? MetresPastStop(TaxiRoute route, int stopNodeIndex, double lat, double lon)
+    {
+        if (route is null || stopNodeIndex < 0 || stopNodeIndex > route.Segments.Count) return null;
+        var segments = route.Segments;
+        double stopDistance = 0.0;
+        for (int i = 0; i < stopNodeIndex; i++) stopDistance += SegmentLength(segments[i]);
+
+        double? progress = null;
+        double nearest = double.MaxValue, start = 0.0;
+        for (int i = 0; i < segments.Count; i++)
+        {
+            var seg = segments[i];
+            double length = SegmentLength(seg);
+            if (seg?.FromNode != null && seg.ToNode != null
+                && start + length >= stopDistance - StopWindowMetres && start <= stopDistance + StopWindowMetres)
+            {
+                var (along, perpendicular) = RouteRunwayCrossings.ProjectOntoSegment(seg.FromNode, seg.ToNode, lat, lon);
+                if (perpendicular <= RouteRunwayCrossings.RouteJoinMaxCrossTrackMetres && perpendicular < nearest)
+                {
+                    nearest = perpendicular;
+                    progress = start + along;
+                }
+            }
+            start += length;
+        }
+        return progress - stopDistance;
+    }
+
+    // Started across a cleared start hold: moving, more than the stop tolerance along the route (HasStartedAcross), or
+    // inside the clear margin of a runway, where the pass never places a start hold and the per-frame start-hold entry
+    // skips it. No position yet: still at the line.
+    private static bool StartedAcross(TaxiRoute route, HoldShortKeyAircraft? aircraft, IReadOnlyList<TaxiGraph.RunwayCenterline>? runways)
+        => aircraft is { } a
+           && (HasStartedAcross(a.GroundSpeedKts, RouteRunwayCrossings.RouteProgressMeters(route.Segments, a.Lat, a.Lon))
+               || RouteRunwayCrossings.RunwayWithinClearMargin(runways, a.Lat, a.Lon) != null);
+
+    // Past the line of the stop on route node stopNodeIndex: by the route; off the route there, on the pavement of a
+    // runway the stop guards. No position yet: not past.
+    private static bool IsPastStop(TaxiRoute route, int stopNodeIndex, string label, HoldShortKeyAircraft? aircraft,
+                                   IReadOnlyList<TaxiGraph.RunwayCenterline>? runways)
+    {
+        if (aircraft is not { } a) return false;
+        if (MetresPastStop(route, stopNodeIndex, a.Lat, a.Lon) is double past)
+            return past > RouteRunwayCrossings.StopPassedToleranceMetres;
+        return runways is not null
+            && RouteRunwayCrossings.RunwayUnder(runways.Where(r => r != null && GuardsRunway(label, r)), a.Lat, a.Lon) != null;
+    }
+
+    // Whether the route puts the aircraft at or short of a stop on node stopNodeId (a segment's end): a line said as passed
+    // that a recalculation made a stop ahead again is never reported passed.
+    private static bool IsShortOfNode(TaxiRoute route, int stopNodeId, HoldShortKeyAircraft? aircraft)
+    {
+        if (aircraft is not { } a || stopNodeId <= 0) return false;
+        for (int i = 0; i < route.Segments.Count; i++)
+            if (route.Segments[i].ToNode?.NodeId == stopNodeId
+                && MetresPastStop(route, i + 1, a.Lat, a.Lon) is double past
+                && past <= RouteRunwayCrossings.StopPassedToleranceMetres)
+                return true;
+        return false;
+    }
+
+    // The segment behind the cursor whose stop, on node stopNodeId, still has a runway cleared at it; -1 for none.
+    private static int PassedClearedSegment(TaxiRoute route, int cursor, int stopNodeId)
+    {
+        for (int i = Math.Min(cursor, route.Segments.Count) - 1; i >= 0; i--)
+            if (route.Segments[i].ToNode?.NodeId == stopNodeId && route.Segments[i].ClearedRunways.Count > 0) return i;
+        return -1;
+    }
+
+    private static bool GuardsRunway(string label, TaxiGraph.RunwayCenterline runway)
+        => RouteRunwayCrossings.ExtractRunwayDesignators(label).Any(d => SameRunway(d, runway.Name1) || SameRunway(d, runway.Name2));
+
+    // Along the route from the aircraft to the stop at the end of segment stopSegment, as the status readout measures:
+    // straight to the end of the segment the aircraft is on, then the segments after it. No position yet: the segments.
+    private static double MetresToStop(TaxiRoute route, int cursor, int stopSegment, HoldShortKeyAircraft? aircraft)
+    {
+        var segments = route.Segments;
+        int c = Math.Clamp(Math.Min(cursor, stopSegment), 0, segments.Count - 1);
+        double metres = aircraft is { } a && segments[c].ToNode is { } end
+            ? TaxiGraph.FastDistanceMeters(a.Lat, a.Lon, end.Latitude, end.Longitude)
+            : segments[c].DistanceMeters;
+        for (int i = c + 1; i <= stopSegment && i < segments.Count; i++) metres += segments[i].DistanceMeters;
+        return Math.Max(metres, 0.0);
+    }
+
+    private static double MetresToStart(TaxiRoute route, HoldShortKeyAircraft? aircraft)
+        => aircraft is { } a && route.Segments.Count > 0 && route.Segments[0].FromNode is { } start
+            ? TaxiGraph.FastDistanceMeters(a.Lat, a.Lon, start.Latitude, start.Longitude)
+            : 0.0;
+
+    // The stop's own label; the destination's name for an unlabelled last segment.
+    private static string StopName(TaxiRoute route, int segmentIndex, string? destinationName)
+    {
+        string? label = route.Segments[segmentIndex].HoldShortRunway;
+        if (!string.IsNullOrWhiteSpace(label)) return label.Trim();
+        return segmentIndex == route.Segments.Count - 1 && !string.IsNullOrWhiteSpace(destinationName)
+            ? destinationName.Trim()
+            : "the hold line";
+    }
+
+    private static double SegmentLength(TaxiRouteSegment? segment)
+        => segment?.FromNode == null || segment.ToNode == null
+            ? 0.0
+            : TaxiGraph.FastDistanceMeters(segment.FromNode.Latitude, segment.FromNode.Longitude,
+                segment.ToNode.Latitude, segment.ToNode.Longitude);
+
     /// <summary>
     /// What the pilot is told about the crossings that could not be cleared, one sentence per request: a runway the
     /// route does not cross, and one it crosses only somewhere else, whose stop stays. Empty when there are none.

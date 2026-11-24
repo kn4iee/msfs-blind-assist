@@ -261,10 +261,13 @@ public partial class TaxiGuidanceManager : IDisposable
     // rollback [RTE-29], emptied by StopGuidance and the rollout reset. A crossing is used once, at its line (PassClearedLine).
     // Replaced, never mutated in place: LoadRoute's Fail snapshot and the load rollback hold the reference.
     private List<Navigation.ClearedCrossing> _clearedCrossings = new();
-    // The last cleared line the aircraft passed, and when (SimClock), for the Hold short key's "Past the hold line of
-    // …"; set only at the line (PassClearedLine), cleared by StopGuidance and the rollout reset. LoadRoute never
-    // writes them, so a refused load has nothing of theirs to put back.
+    // The last cleared line said as passed, its stop node and when (SimClock), for the Hold short key: "Past the hold
+    // line of …", or, with the route putting the aircraft still short of that node, the stop put back
+    // (HoldShortOfNextClearedRunway). Set only where a crossing is used (UseClearedCrossing), cleared by StopGuidance, the
+    // rollout reset, the key putting that stop back and a successful LoadRoute, after its last refusal (ForgetPassedClearedLine),
+    // so a refused load has nothing of theirs to put back.
     private string? _passedClearedLabel;
+    private int _passedClearedNodeId;
     private DateTime _passedClearedAtUtc = DateTime.MinValue;
     // The crossings the LoadRoute call in progress was asked to clear, re-keyed with the clearance rows;
     // AdoptRoute's pass applies them and records what it cleared in _clearedCrossings.
@@ -2245,6 +2248,13 @@ public partial class TaxiGuidanceManager : IDisposable
     /// </summary>
     public event EventHandler<TakeoffAssistAutoActivateEventArgs>? RequestTakeoffAssistAutoActivate;
 
+    /// <summary>
+    /// Raised when the Hold short key puts back a stop the pilot was cleared across
+    /// (<see cref="HoldShortOfNextClearedRunway"/>), so a window that shows the route's crossings can follow. Raised
+    /// under the state lock after the key's sentence, like <see cref="StateChanged"/>.
+    /// </summary>
+    public event EventHandler? ClearedCrossingsChanged;
+
     public TaxiGuidanceManager(ScreenReaderAnnouncer announcer)
     {
         _announcer = announcer;
@@ -3761,16 +3771,29 @@ public partial class TaxiGuidanceManager : IDisposable
     /// <summary>
     /// A cleared crossing just said where the aircraft crosses it (a cleared line, or the Continue releasing a stop that
     /// held for another runway): the incursion watch's own "Crossing …" for that node is latched off, the crossing is
-    /// used once (a new list: <c>_clearedCrossings</c> is replaced, never mutated), and it is remembered, with when,
-    /// for the Hold short key.
+    /// used once (a new list: <c>_clearedCrossings</c> is replaced, never mutated), and it is remembered, with its node
+    /// and when, for the Hold short key.
     /// </summary>
     private void UseClearedCrossing(string label, int stopNodeId)
     {
         _lastIncursionWarnedNodeId = stopNodeId;
         _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);
         _passedClearedLabel = label;
+        _passedClearedNodeId = stopNodeId;
         _passedClearedAtUtc = MSFSBlindAssist.Utils.SimClock.UtcNow;
         _guidanceLog.Info($"Cleared crossing passed: \"{_passedClearedLabel}\" at node {stopNodeId}.");
+    }
+
+    /// <summary>
+    /// Forgets the last cleared line said as passed (its label, node and time): a successful new load, whose route it
+    /// is not about, and the Hold short key putting that very stop back, after which the aircraft is short of a stop
+    /// again, never "past" it.
+    /// </summary>
+    private void ForgetPassedClearedLine()
+    {
+        _passedClearedLabel = null;
+        _passedClearedNodeId = 0;
+        _passedClearedAtUtc = DateTime.MinValue;
     }
 
     /// <summary>
@@ -4621,6 +4644,109 @@ public partial class TaxiGuidanceManager : IDisposable
         } // end lock(_stateLock)
     }
 
+    /// <summary>
+    /// The Hold short key (Input Alt+Y, spec 8.8). ATC can take a crossing back ("hold short of 04L, traffic"); a sighted
+    /// pilot just stops at the line. This puts the stop back at the next cleared runway ahead, whether a Cross step or an
+    /// early Continue cleared it: at the start hold, at a stop ahead, at a line the segment jump said early, or at a stop
+    /// guarding two runways the aircraft holds at, which then asks for both again. Past the line or on the runway it only
+    /// says so (BA never asks for a stop on a runway); with no cleared runway ahead it names the next stop of any kind.
+    /// It never clears anything: only Continue and a Cross step clear a runway. The answer is the pure
+    /// <see cref="ClearedCrossingHolds.DecideHoldShortKey"/>'s, judged from the route geometry and the aircraft's last
+    /// position, never from the "passed" note alone; the note is reported for a minute at most.
+    /// </summary>
+    public void HoldShortOfNextClearedRunway()
+    {
+        lock (_stateLock)
+        {
+        bool guiding = _state is TaxiGuidanceState.RouteLoaded or TaxiGuidanceState.Taxiing or TaxiGuidanceState.HoldShort;
+        bool holding = _state == TaxiGuidanceState.HoldShort;
+        var passed = _passedClearedLabel == null
+            ? null
+            : new ClearedCrossingHolds.PassedLine(_passedClearedLabel, _passedClearedNodeId,
+                (MSFSBlindAssist.Utils.SimClock.UtcNow - _passedClearedAtUtc).TotalSeconds);
+        var aircraft = _positionInitialized
+            ? new ClearedCrossingHolds.HoldShortKeyAircraft(_lastLat, _lastLon, _lastGroundSpeedKts)
+            : (ClearedCrossingHolds.HoldShortKeyAircraft?)null;
+        var decision = ClearedCrossingHolds.DecideHoldShortKey(_route, new ClearedCrossingHolds.HoldShortKeyState(
+            guiding, _currentSegmentIndex, holding, holding && _holdShortAtDestination, aircraft,
+            _graph?.RunwayCenterlines, passed, _destinationName));
+        _guidanceLog.Info($"Hold short key: {decision.Answer} \"{decision.Label}\" segment={decision.SegmentIndex} " +
+                          $"cursor={_currentSegmentIndex} state={_state}.");
+
+        switch (decision.Answer)
+        {
+            case ClearedCrossingHolds.HoldShortKeyAnswer.NoRoute:
+                AnnounceInstruction(ClearedCrossingCallouts.NoRoute);
+                break;
+            case ClearedCrossingHolds.HoldShortKeyAnswer.RestoreStartHold:
+            case ClearedCrossingHolds.HoldShortKeyAnswer.RestoreSegment:
+                PutClearedStopBack(decision);
+                break;
+            // What the key only reports is no instruction, so the repeat key (Ctrl+Y) keeps the last one.
+            case ClearedCrossingHolds.HoldShortKeyAnswer.PastTheLine:
+                SpeakNow(ClearedCrossingCallouts.PastTheLine(decision.Label));
+                break;
+            case ClearedCrossingHolds.HoldShortKeyAnswer.NextStop:
+                SpeakNow(ClearedCrossingCallouts.NextStop(decision.Label, FormatDistance(decision.Metres)));
+                break;
+            default:
+                SpeakNow(ClearedCrossingCallouts.NoRunwayAhead);
+                break;
+        }
+        } // end lock(_stateLock)
+    }
+
+    /// <summary>
+    /// Puts back the stop the Hold short key's <paramref name="decision"/> names, the start hold
+    /// (<see cref="ClearedCrossingHolds.RestoreStartHold"/>) or a segment's (<see cref="ClearedCrossingHolds.RestoreAt"/>),
+    /// with every runway it was placed with, and says so with the distance along the route. Its crossing leaves
+    /// <c>_clearedCrossings</c> (a new list: replaced, never mutated), so a recalculation never clears it again; a line
+    /// the segment jump said early gets the cursor back onto its segment; the three countdown latches start fresh, so
+    /// it is counted down and held like any stop (on the current segment the key's sentence is its first call: the
+    /// outer call would only cut it off with the same distance); a stop the aircraft holds at stages its runways
+    /// afresh, one Continue each [HLD-11]; the incursion watch's latch for that node is lifted, so its crossing is said
+    /// after the Continue that releases it; and the line is no longer "passed". Then the window is told
+    /// (<see cref="ClearedCrossingsChanged"/>). A start hold put back while taxiing is entered by the next taxiing frame,
+    /// with the pass's own tests, as for a route adopted while guidance runs.
+    /// </summary>
+    private void PutClearedStopBack(ClearedCrossingHolds.HoldShortKeyDecision decision)
+    {
+        if (_route == null || _route.Segments.Count == 0) return;
+        bool startHold = decision.Answer == ClearedCrossingHolds.HoldShortKeyAnswer.RestoreStartHold;
+        if (!startHold && (decision.SegmentIndex < 0 || decision.SegmentIndex >= _route.Segments.Count)) return;
+        int stopNodeId = (startHold ? _route.Segments[0].FromNode : _route.Segments[decision.SegmentIndex].ToNode)?.NodeId ?? 0;
+        bool restored = startHold
+            ? ClearedCrossingHolds.RestoreStartHold(_route)
+            : ClearedCrossingHolds.RestoreAt(_route, decision.SegmentIndex);
+        if (!restored) return;
+
+        _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);
+        bool heldHere = _state == TaxiGuidanceState.HoldShort
+            && (startHold ? _currentSegmentIndex == 0 : decision.SegmentIndex == _currentSegmentIndex - 1);
+        if (!heldHere && decision.CursorIndex >= 0 && decision.CursorIndex != _currentSegmentIndex)
+        {
+            _currentSegmentIndex = decision.CursorIndex;
+            _lastSegmentAdvanceTime = MSFSBlindAssist.Utils.SimClock.UtcNow;
+        }
+        _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;
+        if (heldHere)
+        {
+            string cue = ComposeHoldEntry(startHold ? _route.StartHoldRunway : _route.Segments[decision.SegmentIndex].HoldShortRunway);
+            if (startHold && LastRouteStartHoldCue != null) LastRouteStartHoldCue = cue;
+        }
+        else if (!startHold && _state == TaxiGuidanceState.Taxiing && decision.SegmentIndex == _currentSegmentIndex)
+        {
+            _holdShortOuterAnnounced = true;
+        }
+        if (_lastIncursionWarnedNodeId == stopNodeId) _lastIncursionWarnedNodeId = -1;
+        if (_passedClearedNodeId == stopNodeId) ForgetPassedClearedLine();
+        _guidanceLog.Info($"Hold short key: \"{decision.Label}\" put back at node {stopNodeId}, segment {decision.SegmentIndex}, " +
+                          $"cursor {_currentSegmentIndex}{(heldHere ? ", held here" : "")}.");
+
+        AnnounceInstruction(ClearedCrossingCallouts.HoldRestored(decision.Label, FormatDistance(decision.Metres)));
+        ClearedCrossingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private void HandleArrival()
     {
         // Progressive Taxi leg: reached its terminator (hold short / after crossing /
@@ -4871,6 +4997,7 @@ public partial class TaxiGuidanceManager : IDisposable
         // A crossing cleared on the route just stopped is never cleared on the next one.
         _clearedCrossings = new List<Navigation.ClearedCrossing>();
         _passedClearedLabel = null;
+        _passedClearedNodeId = 0;
         _passedClearedAtUtc = DateTime.MinValue;
         _lineupAnnouncedAligned = false;
         _lineupStubActive = false;

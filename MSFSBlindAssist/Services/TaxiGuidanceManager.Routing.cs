@@ -1576,6 +1576,10 @@ public partial class TaxiGuidanceManager
                     QueueSpeech(summary);
             }
 
+            // A successful load: the last cleared line said as passed belongs to the route just replaced (a
+            // recalculation keeps it; it never comes here). Cleared last, so no refusal can follow it [RTE-29].
+            ForgetPassedClearedLine();
+
             return null;
         }
         catch (Exception ex)
