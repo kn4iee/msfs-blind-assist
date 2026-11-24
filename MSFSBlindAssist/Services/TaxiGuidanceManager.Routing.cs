@@ -1108,12 +1108,13 @@ public partial class TaxiGuidanceManager
             // junction with the named taxiway after the chosen row. Warnings from
             // both flavors fold into the one note the summary carries. A stop may
             // split a segment here (a pilot's Calculate), so the runway picks just
-            // deferred, which hold segment indices, are re-indexed with it.
+            // deferred, which hold segment indices, are re-indexed with it, and so are
+            // the honoured picks' events, which hold their stop's node index.
             if (userTaxiwayHoldShorts != null && userTaxiwayHoldShorts.Count > 0 && taxiwaySequence != null)
             {
                 string? taxiwayHoldWarning = ApplyUserTaxiwayHoldShorts(
                     route, taxiwaySequence, userTaxiwayHoldShorts,
-                    allowInsert: true, deferredRunwayPicks: deferredRunwayPicks);
+                    allowInsert: true, deferredRunwayPicks: deferredRunwayPicks, userPickEvents: userPickEvents);
                 if (taxiwayHoldWarning != null)
                     runwayHoldShortWarning = runwayHoldShortWarning == null
                         ? taxiwayHoldWarning
@@ -3630,9 +3631,12 @@ public partial class TaxiGuidanceManager
     /// a suffix of the loaded one).</param>
     /// <param name="deferredRunwayPicks">The runway picks deferred on this route, which hold segment
     /// indices: re-indexed when a stop splits a segment.</param>
+    /// <param name="userPickEvents">The honoured runway picks' events, built before this runs, which hold
+    /// their stop's node index (<see cref="TaxiRouteRunwayEvent.StopNodeIndex"/>): re-indexed with them.</param>
     private string? ApplyUserTaxiwayHoldShorts(
         TaxiRoute route, List<string> taxiwaySequence, Dictionary<int, string> userTaxiwayHoldShorts,
-        bool allowInsert, int rowOffset = 0, List<DeferredRunwayPick>? deferredRunwayPicks = null)
+        bool allowInsert, int rowOffset = 0, List<DeferredRunwayPick>? deferredRunwayPicks = null,
+        List<TaxiRouteRunwayEvent>? userPickEvents = null)
     {
         if (_graph == null) return null;
         var unmatched = new List<string>();
@@ -3677,7 +3681,8 @@ public partial class TaxiGuidanceManager
 
             // The junction inside a runway's clear margin, or reached over one within the capture radius:
             // no stop there. The runway's own automatic stop still stands before that runway.
-            int stopSeg = PlaceTaxiwayHoldStop(route, holdSeg, allowInsert, seqIdx + rowOffset, deferredRunwayPicks);
+            int stopSeg = PlaceTaxiwayHoldStop(route, holdSeg, allowInsert, seqIdx + rowOffset, deferredRunwayPicks,
+                userPickEvents);
             if (stopSeg < 0)
             {
                 noSafeStop.Add($"Note: no place to hold short of taxiway {rawTarget} clear of the runway; no stop will be called there.");
@@ -3705,14 +3710,15 @@ public partial class TaxiGuidanceManager
     /// before the turn a Turn pick on <paramref name="rowIndex"/> told the pilot about. On a pilot's
     /// Calculate (<paramref name="allowInsert"/>) the stop can be a node inserted on the segment's own
     /// edge, through TaxiGraph's own mutator [RTE-30]: the segment's two halves replace it, and every
-    /// Turn pick and deferred runway pick indexed after it moves up by one. A recalculation never inserts.
+    /// Turn pick and deferred runway pick indexed after it moves up by one, as does every runway event's
+    /// stop node after it. A recalculation never inserts.
     /// Returns the index of the segment whose end node is the stop, or -1 when the junction is inside a
     /// runway's clear margin or its own capture radius reaches one (nothing is placed).
     /// </summary>
     /// <param name="rowIndex">The row of the taxiway sequence as loaded that the stop belongs to, the
     /// numbering of <see cref="AppliedTurnPick.RowIndex"/>.</param>
     private int PlaceTaxiwayHoldStop(TaxiRoute route, int junctionSegmentIndex, bool allowInsert, int rowIndex,
-        List<DeferredRunwayPick>? deferredRunwayPicks = null)
+        List<DeferredRunwayPick>? deferredRunwayPicks = null, List<TaxiRouteRunwayEvent>? userPickEvents = null)
     {
         if (_graph == null) return junctionSegmentIndex;
         var graph = _graph;
@@ -3767,6 +3773,10 @@ public partial class TaxiGuidanceManager
                 if (deferredRunwayPicks[i].RunStart > m)
                     deferredRunwayPicks[i] = deferredRunwayPicks[i] with { RunStart = deferredRunwayPicks[i].RunStart + 1 };
         }
+        // The events already built (the honoured runway picks', merged in by AdoptRoute, and any the route
+        // carries) keep their stop on the same node, or a cleared crossing is matched at the wrong one.
+        TaxiwayHoldPlacement.ShiftEventsAfterSplit(userPickEvents, m);
+        TaxiwayHoldPlacement.ShiftEventsAfterSplit(route.RunwayEvents, m);
         double total = 0;
         foreach (var s in route.Segments) total += s.DistanceMeters;
         route.TotalDistanceMeters = total;

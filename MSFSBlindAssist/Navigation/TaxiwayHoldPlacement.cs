@@ -196,10 +196,24 @@ public static class TaxiwayHoldPlacement
             PathWidth = segment.PathWidth,
             IsHoldShortPoint = segment.IsHoldShortPoint,
             HoldShortRunway = segment.HoldShortRunway,
+            // The stop is the far half's, and so are the runways cleared at it (ClearedCrossingHolds).
+            PlacedHoldLabel = segment.PlacedHoldLabel,
             IsUncharted = segment.IsUncharted,
             IsOffChartTurn = segment.IsOffChartTurn,
         };
+        second.ClearedRunways.AddRange(segment.ClearedRunways);
         return (first, second);
+    }
+
+    /// The runway events with each stop node index above splitIndex moved up by one, replaced in place: segment
+    /// splitIndex became two, so its own end node (node splitIndex + 1, where the far half keeps the stop) and every
+    /// node after it are one further along. A start hold (0) and no stop (-1) never move. Null: nothing to shift.
+    public static void ShiftEventsAfterSplit(List<TaxiRouteRunwayEvent>? events, int splitIndex)
+    {
+        if (events == null) return;
+        for (int i = 0; i < events.Count; i++)
+            if (events[i] is { } ev && ev.StopNodeIndex > splitIndex && ev.StopNodeIndex >= 1)
+                events[i] = ev.WithStopNodeIndex(ev.StopNodeIndex + 1);
     }
 
     /// The picks with each segment index above splitIndex moved up by one (segment splitIndex became two).

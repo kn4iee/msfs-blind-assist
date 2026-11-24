@@ -497,14 +497,15 @@ public static class RouteRunwayCrossings
     /// "with no hold short point for runway 26R" / "… for runways 09L and 04L" — each pavement
     /// named ONCE however many of its passages went unheld, reciprocals merged onto the first name
     /// seen (the same pavement identity <see cref="ComposeRunwayGroup"/> uses). Empty when every
-    /// passage was held, which is the overwhelmingly common route and must gain no extra words.
+    /// passage was held, which is the overwhelmingly common route and must gain no extra words. A crossing the
+    /// pilot is cleared across (<see cref="TaxiRouteRunwayEvent.Cleared"/>) needs no stop, so it is not one.
     /// </summary>
     private static string ComposeUnheldWarning(IReadOnlyList<TaxiRouteRunwayEvent> events)
     {
         var names = new List<string>();
         foreach (var e in events)
         {
-            if (e.Held || e.Passed || string.IsNullOrWhiteSpace(e.Designator)) continue;
+            if (e.Held || e.Passed || e.Cleared || string.IsNullOrWhiteSpace(e.Designator)) continue;
             string designator = NormalizeDesignator(e.Designator);
             string reciprocal = Reciprocal(designator);
             if (names.Any(n => n.Equals(designator, StringComparison.OrdinalIgnoreCase)
@@ -903,7 +904,8 @@ public static class RouteRunwayCrossings
 
             string? preferred = destinationStrip ? destBare : null;
             bool held = PlaceHold(route, passage, preferred, userLabel: null,
-                runways, aircraft, out string announcedDesignator, out string? stopLabel, out bool passed);
+                runways, aircraft, out string announcedDesignator, out string? stopLabel, out bool passed,
+                out int stopNodeIndex);
             route.RunwayEvents.Add(new TaxiRouteRunwayEvent
             {
                 Kind = passage.Kind,
@@ -916,6 +918,7 @@ public static class RouteRunwayCrossings
                 // crossing invites a stop on the runway (ComposeUnheldWarning skips it).
                 Passed = passed,
                 Location = LocationFor(route.Segments, passage, stopLabel),
+                StopNodeIndex = stopNodeIndex,
             });
         }
         ReorderSharedLabels(route, passages);
@@ -1036,7 +1039,7 @@ public static class RouteRunwayCrossings
 
         string pick = runwayId.Trim();
         if (!PlaceHold(route, passage, preferred: pick, userLabel: $"runway {pick}",
-                runways, aircraft, out string announcedDesignator, out string? stopLabel, out _))
+                runways, aircraft, out string announcedDesignator, out string? stopLabel, out _, out int stopNodeIndex))
             return UserRunwayHoldResult.NotHeld;
 
         placed = new TaxiRouteRunwayEvent
@@ -1045,6 +1048,7 @@ public static class RouteRunwayCrossings
             Designator = announcedDesignator,
             Held = true,
             Location = LocationFor(route.Segments, passage, stopLabel),
+            StopNodeIndex = stopNodeIndex,
         };
         return UserRunwayHoldResult.Held;
     }
@@ -1132,15 +1136,18 @@ public static class RouteRunwayCrossings
     /// all, this is <c>preferred ?? passage.Designator</c> — unchanged from before this parameter
     /// existed.
     /// </param>
+    /// <param name="stopNodeIndex">The route node the placed stop sits at (<see cref="TaxiRouteRunwayEvent.StopNodeIndex"/>):
+    /// 0 for a start hold, <c>n &gt;= 1</c> for the end node of segment <c>n - 1</c>, -1 when nothing is held.</param>
     private static bool PlaceHold(
         TaxiRoute route, RunwayPassage passage, string? preferred, string? userLabel,
         IReadOnlyList<TaxiGraph.RunwayCenterline> runways, AircraftPosition? aircraft,
-        out string announcedDesignator, out string? stopLabel, out bool passed)
+        out string announcedDesignator, out string? stopLabel, out bool passed, out int stopNodeIndex)
     {
         string announceAs = preferred ?? passage.Designator;
         announcedDesignator = announceAs;
         stopLabel = null;
         passed = false;
+        stopNodeIndex = -1;
         var otherRunways = runways
             .Where(r => r != null && !ReferenceEquals(r, passage.Runway))
             .Select(RunwayShape.For)
@@ -1189,6 +1196,7 @@ public static class RouteRunwayCrossings
                 : ComposeSharedLabel(route.StartHoldRunway, announceAs) ?? route.StartHoldRunway;
             announcedDesignator = LabelDesignatorFor(route.StartHoldRunway, passage.Runway) ?? announceAs;
             stopLabel = route.StartHoldRunway;
+            stopNodeIndex = 0;
             return true;
         }
 
@@ -1206,6 +1214,7 @@ public static class RouteRunwayCrossings
         if (label != null) holdSeg.HoldShortRunway = label;
         announcedDesignator = LabelDesignatorFor(holdSeg.HoldShortRunway, passage.Runway) ?? announceAs;
         stopLabel = holdSeg.HoldShortRunway;
+        stopNodeIndex = stop.NodeIndex;
         return true;
     }
 

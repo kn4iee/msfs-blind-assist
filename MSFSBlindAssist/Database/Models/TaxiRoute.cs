@@ -63,6 +63,18 @@ public class TaxiRouteSegment
     public bool IsHoldShortPoint { get; set; }
     public string? HoldShortRunway { get; set; }
     /// <summary>
+    /// The stop's label as it was placed, kept while any runway at this stop is cleared
+    /// (<see cref="ClearedRunways"/>), so the stop and its label can be put back
+    /// (<see cref="MSFSBlindAssist.Navigation.ClearedCrossingHolds.RestoreAt"/>). Null otherwise.
+    /// </summary>
+    public string? PlacedHoldLabel { get; set; }
+    /// <summary>
+    /// The runways the pilot is cleared across at this stop, normalized, in the order cleared; empty when none.
+    /// A stop with every runway it guarded cleared is no longer a hold short
+    /// (<see cref="MSFSBlindAssist.Navigation.ClearedCrossingHolds.IsFullyCleared"/>).
+    /// </summary>
+    public List<string> ClearedRunways { get; } = new();
+    /// <summary>
     /// True for a SYNTHETIC crossing segment bridging two disconnected components of
     /// the taxi network over pavement that has no taxi paths in the scenery (the
     /// "uncharted apron" leg — see TaxiRouter.FindCrossComponentPath). Guidance
@@ -146,4 +158,29 @@ public sealed class TaxiRouteRunwayEvent
     /// when neither is known. Spoken only for a runway met once (VATSIM gap analysis 2026-08-31, P1).
     /// </summary>
     public string? Location { get; init; }
+
+    /// <summary>
+    /// The pilot is cleared across this runway at its stop
+    /// (<see cref="MSFSBlindAssist.Navigation.ClearedCrossingHolds"/>): still <see cref="Held"/> and still
+    /// announced, but the stop no longer holds the aircraft for it. Also set on a crossing with no stop the pilot
+    /// was cleared for, which then is not said as having "no hold short point".
+    /// </summary>
+    public bool Cleared { get; set; }
+
+    private int _stopNodeIndex = -1;
+
+    /// <summary>
+    /// The route node the stop sits at: <c>n &gt;= 1</c> is the end node of segment <c>n - 1</c>, 0 a start hold,
+    /// -1 no stop placed. A split of segment <c>m</c> moves every <c>n &gt; m</c> up by one
+    /// (<see cref="MSFSBlindAssist.Navigation.TaxiwayHoldPlacement.ShiftEventsAfterSplit"/>).
+    /// </summary>
+    public int StopNodeIndex { get => _stopNodeIndex; init => _stopNodeIndex = value; }
+
+    /// <summary>A copy of this event whose stop is node <paramref name="stopNodeIndex"/>, every other member kept.</summary>
+    public TaxiRouteRunwayEvent WithStopNodeIndex(int stopNodeIndex)
+    {
+        var copy = (TaxiRouteRunwayEvent)MemberwiseClone();
+        copy._stopNodeIndex = stopNodeIndex;
+        return copy;
+    }
 }

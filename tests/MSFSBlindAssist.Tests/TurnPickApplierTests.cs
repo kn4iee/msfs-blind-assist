@@ -1,31 +1,13 @@
 using MSFSBlindAssist.Database.Models;
 using MSFSBlindAssist.Navigation;
 using static MSFSBlindAssist.Tests.KbosHcJunctionFixture;
+using static MSFSBlindAssist.Tests.TurnPickFixture;
 
 namespace MSFSBlindAssist.Tests;
 
 public class TurnPickApplierTests
 {
-    // ---- helpers ----
-
-    private static TaxiRoute Route(TaxiGraph g, (double Lat, double Lon) from, (double Lat, double Lon) to,
-        params string[] seq)
-    {
-        var r = new TaxiRouter(g).FindConstrainedPath(Node(g, from), Node(g, to), seq.ToList());
-        Assert.NotNull(r);
-        Assert.Null(r!.ConstrainedFallbackReason);
-        return r;
-    }
-
-    private static TurnPickContext Ctx(TaxiGraph g, string[] seq, (double Lat, double Lon) to,
-        double heading = 0.0, (double Lat, double Lon)? aircraft = null,
-        ProgressiveTerminator? terminator = null, int pinnedNodeId = 0)
-    {
-        var ac = aircraft ?? to;
-        return new TurnPickContext(g, PavementMap.Build(g), seq, Node(g, to), DestinationIsRunway: false,
-            ac.Lat, ac.Lon, heading, terminator, pinnedNodeId,
-            MaxLengthRatio: 2.0, MaxLengthPadMeters: 500.0);
-    }
+    // ---- helpers (Route, Ctx and Picks: TurnPickFixture) ----
 
     private static List<int> Nodes(TaxiRoute route)
     {
@@ -35,9 +17,6 @@ public class TurnPickApplierTests
         ids.AddRange(route.Segments.Select(s => s.ToNode.NodeId));
         return ids;
     }
-
-    private static Dictionary<int, TurnSide> Picks(params (int Row, TurnSide Side)[] picks)
-        => picks.ToDictionary(p => p.Row, p => p.Side);
 
     private static void AssertInOrder(List<int> nodes, params int[] expected)
     {

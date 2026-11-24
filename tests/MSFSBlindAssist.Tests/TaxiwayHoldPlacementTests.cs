@@ -104,12 +104,68 @@ public class TaxiwayHoldPlacementTests
     {
         var seg = At(0, 100)[0]; seg.TaxiwayName = "A"; seg.IsHoldShortPoint = true; seg.HoldShortRunway = "runway 09";
         seg.TurnDirection = "left"; seg.TurnAngleDegrees = -90;
+        seg.PlacedHoldLabel = "runway 09 and runway 01"; seg.ClearedRunways.Add("01");   // a stop with one runway cleared
         var (first, second) = TaxiwayHoldPlacement.Split(seg, RunwayFixture.Node(9, 65, 0), 35);
         Assert.Equal(65, first.DistanceMeters, 1); Assert.Equal(9, first.ToNode.NodeId); Assert.False(first.IsHoldShortPoint);
         Assert.Equal(35, second.DistanceMeters, 1); Assert.Equal(9, second.FromNode.NodeId); Assert.True(second.IsHoldShortPoint);
         Assert.Equal("runway 09", second.HoldShortRunway); Assert.Equal("A", first.TaxiwayName); Assert.Equal("A", second.TaxiwayName);
         Assert.Equal("left", first.TurnDirection); Assert.Equal(-90, first.TurnAngleDegrees);
         Assert.Equal("straight", second.TurnDirection); Assert.Equal(0, second.TurnAngleDegrees);
+        // The cleared runways and the placed label go with the stop, onto the far half, as copies.
+        Assert.Null(first.PlacedHoldLabel); Assert.Empty(first.ClearedRunways);
+        Assert.Equal("runway 09 and runway 01", second.PlacedHoldLabel); Assert.Equal(new[] { "01" }, second.ClearedRunways);
+        Assert.NotSame(seg.ClearedRunways, second.ClearedRunways);
+    }
+
+    // Node n of a route is the end node of segment n - 1 (node 0 its first): splitting segment m makes every node
+    // after m one further along, its own end node (n = m + 1, where the far half keeps the stop) included.
+    [Fact] public void A_split_keeps_an_events_stop_on_the_same_node()
+    {
+        static int NodeIdAt(TaxiRoute route, int n) => n == 0 ? route.Segments[0].FromNode.NodeId : route.Segments[n - 1].ToNode.NodeId;
+
+        // Northbound across 09/27: the stop is the segment ending 100 m short of the centreline, route node 2 (id 3).
+        static (TaxiRoute Route, List<TaxiRouteRunwayEvent> Events) Crossing()
+        {
+            var route = RunwayFixture.RouteOf(RunwayFixture.Node(1, 500, -400), RunwayFixture.Node(2, 500, -300),
+                RunwayFixture.Node(3, 500, -100), RunwayFixture.Node(4, 500, 0), RunwayFixture.Node(5, 500, 100));
+            var events = RunwayFixture.Pass(route, new[] { RunwayFixture.EastWest() }).ToList();
+            return (route, events);
+        }
+
+        static void SplitAt(TaxiRoute route, List<TaxiRouteRunwayEvent> events, int m)
+        {
+            var seg = route.Segments[m];
+            var mid = new TaxiNode { NodeId = 99, Latitude = (seg.FromNode.Latitude + seg.ToNode.Latitude) / 2,
+                                     Longitude = (seg.FromNode.Longitude + seg.ToNode.Longitude) / 2 };
+            var (first, second) = TaxiwayHoldPlacement.Split(seg, mid, seg.DistanceMeters / 2);
+            route.Segments[m] = first;
+            route.Segments.Insert(m + 1, second);
+            TaxiwayHoldPlacement.ShiftEventsAfterSplit(events, m);
+        }
+
+        foreach (var (m, expected) in new[] { (0, 3), (1, 3), (2, 2), (3, 2) })
+        {
+            var (route, events) = Crossing();
+            var ev = Assert.Single(events);
+            Assert.Equal(2, ev.StopNodeIndex);
+            ev.Cleared = true;
+
+            SplitAt(route, events, m);
+
+            var moved = Assert.Single(events);
+            Assert.Equal(expected, moved.StopNodeIndex);
+            Assert.Equal(3, NodeIdAt(route, moved.StopNodeIndex));
+            Assert.True(route.Segments[moved.StopNodeIndex - 1].IsHoldShortPoint);
+            // Every other member rides along.
+            Assert.Equal((ev.Kind, ev.Designator, ev.Held, ev.Passed, ev.Location, ev.Cleared),
+                         (moved.Kind, moved.Designator, moved.Held, moved.Passed, moved.Location, moved.Cleared));
+        }
+
+        // A start hold (0) and no stop at all (-1) never move.
+        var unmoved = new List<TaxiRouteRunwayEvent> { new() { StopNodeIndex = 0 }, new() { StopNodeIndex = -1 }, new() };
+        TaxiwayHoldPlacement.ShiftEventsAfterSplit(unmoved, 0);
+        Assert.Equal(new[] { 0, -1, -1 }, unmoved.Select(e => e.StopNodeIndex));
+        TaxiwayHoldPlacement.ShiftEventsAfterSplit(null, 0);
     }
 
     [Fact] public void A_split_before_a_pick_moves_its_segment_indices_up()

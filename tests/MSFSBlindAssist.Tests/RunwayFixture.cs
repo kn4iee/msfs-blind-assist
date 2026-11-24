@@ -68,4 +68,19 @@ internal static class RunwayFixture
         for (int i = 0; i < points.Length; i++) nodes[i] = Node(i + 1, points[i].East, points[i].North);
         return nodes;
     }
+
+    public static TaxiRoute RouteOf(params TaxiNode[] nodes) => new() { Segments = Route(nodes) };
+
+    /// <summary>The automatic runway hold-short pass, as a route is adopted.</summary>
+    public static IReadOnlyList<TaxiRouteRunwayEvent> Pass(TaxiRoute route, TaxiGraph.RunwayCenterline[] runways,
+        string destination = "", RouteRunwayCrossings.AircraftPosition? aircraft = null)
+        => RouteRunwayCrossings.InsertRunwayHoldShorts(route, runways, destination, aircraft);
+
+    /// <summary>09/27 and 01/19 crossing at east 1400: the route meets both from one stop, labelled "runway 09 and runway 01".</summary>
+    public static (TaxiRoute Route, TaxiGraph.RunwayCenterline[] Runways) Intersection()
+    {
+        var route = RouteOf(Node(1, 1200, -200), Node(2, 1340, -60), Node(3, 1400, 0), Node(4, 1460, 60), Node(5, 1600, 200));
+        var runways = new[] { EastWest("09", "27"), NorthSouth("01", "19", eastM: 1400, fromNorthM: -1400, toNorthM: 1600) };
+        return (route, runways);
+    }
 }

@@ -14,11 +14,7 @@ namespace MSFSBlindAssist.Tests;
 
 public class RunwayHoldPlacementTests
 {
-    private static TaxiRoute RouteOf(params TaxiNode[] nodes) => new() { Segments = Route(nodes) };
-
-    private static IReadOnlyList<TaxiRouteRunwayEvent> Pass(TaxiRoute route, TaxiGraph.RunwayCenterline[] runways,
-        string destination = "", AircraftPosition? aircraft = null)
-        => RouteRunwayCrossings.InsertRunwayHoldShorts(route, runways, destination, aircraft);
+    // RouteOf, Pass and Intersection: RunwayFixture.
 
     /// <summary>
     /// A route adopted by a RECALCULATION: built from an aircraft already committed to where it is
@@ -307,13 +303,6 @@ public class RunwayHoldPlacementTests
         Assert.Equal(RunwayEventKind.Crossing, ev.Kind);
         Assert.True(ev.Held);
         Assert.Equal("runway 09", route.StartHoldRunway);
-    }
-
-    private static (TaxiRoute Route, TaxiGraph.RunwayCenterline[] Runways) Intersection()
-    {
-        var route = RouteOf(Node(1, 1200, -200), Node(2, 1340, -60), Node(3, 1400, 0), Node(4, 1460, 60), Node(5, 1600, 200));
-        var runways = new[] { EastWest("09", "27"), NorthSouth("01", "19", eastM: 1400, fromNorthM: -1400, toNorthM: 1600) };
-        return (route, runways);
     }
 
     [Fact]
