@@ -49,14 +49,16 @@ different aircraft built on the FlyByWire A32NX.
   window): no pop-out, no camera move, no focus change. A frame becomes the 14 rows of 24 cells by where each
   text's first character sits (`A330McduScreen`, `A330McduGeometry`: Left 22 + column x 16.87, Top 43 + row x
   25.85, nearest cell); a text starting off that grid refuses the page. Special codes show as one cell each
-  (`A330McduCharacters`: box `-`, degree, arrows, overfly mark); a row keeps its 24 columns for braille; a greyed
-  prompt reads "(unavailable)" (or "(inop)" where only that fits before the next field), and with no colours
-  nothing is marked. As in the Fenix and FlyByWire windows the first line reads `Title: ` and the title, with a page
-  counter drawn half a row under the title (P/N XLOAD's `1/7`) on it, and an F-PLN waypoint row with no name reads
-  `unnamed`. The window says what the Fenix, FlyByWire, PMDG and MD-11 windows say and nothing more (owner,
-  2026-11-23): a new title, the scratchpad line when it changes, the side, and "A330 MCDU unavailable: ..." / "MCDU
-  ready"; a line key, a slew, AIRPORT and CLR say nothing of their own. Typing waits for the MCDU's own typed line
-  (600 ms a key at most, 150 ms pace); an FMS message on the captain's scratchpad line is spoken with the window
+  (`A330McduCharacters`: box `-`, degree, arrows, overfly mark); a row keeps its 24 columns for braille and is
+  listed as drawn: no word for greyed text, no colour, a nameless F-PLN row's name cells blank. As in the Fenix and
+  FlyByWire windows the first line reads `Title: ` and the title, with a page counter drawn half a row under the
+  title (P/N XLOAD's `1/7`) on it. The window says what the Fenix and FlyByWire windows say, in their words, and
+  nothing more (owner, 2026-11-23): a title that differs from the last one said (opening the window too), the
+  selection then on line 1; the scratchpad line when it changes; the side; "MCDU disconnected" / "MCDU connected"
+  (the reason in the "Connection status" box, which reads "MCDU: Connected" over a page). A line key, a slew,
+  AIRPORT and CLR say nothing of their own; Left and Right on the screen turn the page, as on those windows. Its
+  controls carry their names ("MCDU selector", "MCDU Display", "MCDU Input"). Typing waits for the MCDU's own typed
+  line (600 ms a key at most, 150 ms pace) and says it once; an FMS message on the captain's scratchpad line is spoken with the window
   closed, the message alone as the A32NX speaks one (Ctrl+M row "FMS messages"). Since its build of 2026-11-22 the
   display reader gives the MCDU's colours, leaves out the list rows the MCDU hides, and says whether a list has rows
   hidden above or below (`A330Frame.List`, `ListAbove`, `ListBelow`). It sends each new frame once without them

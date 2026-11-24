@@ -157,8 +157,6 @@ MCDU:
                Alt+D DIR, Alt+G PROG, Alt+P PERF, Alt+I INIT, Alt+A DATA,
                Alt+F F-PLN, Alt+R RAD NAV, Alt+U FUEL PRED, Alt+X SEC F-PLN,
                Alt+T ATC COMM, Alt+M MCDU MENU, Alt+O AIRPORT
-             Text the MCDU draws in grey (an option that is not available yet) is
-             read with "(unavailable)" after it.
 
 EFB:
   Shift+T    Open the EFB tablet. The Pages list at the top is the tablet's side

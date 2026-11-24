@@ -46,8 +46,8 @@ public class A330McduPagesTests
             "4: <A/C STATUS",
             "    CLOSEST          PRINT",
             "5: <AIRPORTS      FUNCTION>",
-            "    EQUITIME (inop)    AOC",
-            "6: <POINT (inop)  FUNCTION>",
+            "    EQUITIME           AOC",
+            "6: <POINT         FUNCTION>",
             "Scratchpad:",
         } };
         yield return new object[] { "p03_data2.json", new[]
@@ -59,8 +59,8 @@ public class A330McduPagesTests
             "2: <NAVAIDS        NAVAIDS>",
             "                    STORED",
             "3: <RUNWAYS        RUNWAYS>",
-            "                    STORED (unavailable)",
-            "4: <ROUTES          ROUTES>(unavailable)",
+            "                    STORED",
+            "4: <ROUTES          ROUTES>",
             "5:",
             "6:",
             "Scratchpad:",
@@ -170,8 +170,8 @@ public class A330McduPagesTests
             "4: 18000                50\u00B0",
             "   THR RED/ACC  ENG OUT ACC",
             "5:  2500/2500          2500",
-            "    UPLINK (inop)     NEXT",
-            "6: <TO DATA (inop)   PHASE>",
+            "    UPLINK            NEXT",
+            "6: <TO DATA          PHASE>",
             "Scratchpad:",
         } };
         yield return new object[] { "p03_prog.json", new[]
@@ -240,11 +240,11 @@ public class A330McduPagesTests
         yield return new object[] { "p03_menu.json", new[]
         {
             "Title: MCDU MENU",
-            "                    SELECT (unavailable)",
-            "1: <FM1           NAV B/UP>(unavailable)",
+            "                    SELECT",
+            "1: <FM1           NAV B/UP>",
             "2: <ATSU",
-            "3: <AIDS (unavailable)",
-            "4: <CFDS (unavailable)",
+            "3: <AIDS",
+            "4: <CFDS",
             "5:",
             "6:",
             "Scratchpad: SELECT DESIRED SYSTEM",

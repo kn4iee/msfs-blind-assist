@@ -19,41 +19,44 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// <para>The page. While the window is shown it wants its side's MCDU from the display reader
 /// (<see cref="IA330Displays.Want"/>, every 250 ms) and, on a 250 ms UI timer, lists the latest complete frame
 /// (<see cref="IA330Displays.Latest"/>) as its listing (<see cref="CduLineText.Listing"/>: "Title: ..." with the page
-/// counter where the page draws one, each label row, each data row "n: value", a nameless F-PLN waypoint "unnamed",
-/// "Scratchpad: ...", as the Fenix and FlyByWire windows list a page), reconciled in place so the pilot keeps their
+/// counter where the page draws one, each label row, each data row "n: value", "Scratchpad: ...", every row as drawn,
+/// as the Fenix and FlyByWire windows list a page), reconciled in place so the pilot keeps their
 /// row. Only a frame that leaves hidden rows out (spec M15) is a page. The reader sends each new frame once as read and
 /// then, moments later, with its hidden rows left out; meanwhile, and for up to <see cref="HoldPageMs"/> after the last
 /// page read, the page shown stays as it is and nothing is said of it, as the Fenix window keeps its last screen. With
 /// no complete frame (the client gives none once the newest is three refreshes old), a frame off the MCDU's grid, or no
 /// page within that time, the list is one status row instead, in the display windows' own words
 /// (<see cref="A330McduStatus"/>: "Reading the captain's MCDU" for any complete frame that does not leave hidden rows
-/// out). The status box above the list says the same, or over a page the display's name ("Captain's MCDU"). It never
-/// shows half a page.</para>
-/// <para>What it says: what the Fenix, FlyByWire, PMDG and MD-11 MCDU windows say, and nothing more ([CORE-7]: once,
-/// only what the screen reader cannot say, through the non-interrupting announce). Opening the window while the reader
-/// cannot read the MCDU: "A330 MCDU unavailable: &lt;reason&gt;", again only when the reason changes, and "MCDU ready"
-/// with the first page after it (the other windows' "MCDU disconnected" and "MCDU connected"; spec D3, never an AI
-/// read). A new title, unless moving the focused list to it makes the screen reader read it, said without the list's
-/// "Title: ". A line key, a page key, a slew and AIRPORT say nothing of their own: the title and the scratchpad line
-/// say what changed, and the pilot reads the list (owner, 2026-11-23). The page's
+/// out). The status box above the list ("Connection status", as the Fenix and FlyByWire windows name theirs) says the
+/// same, or over a page "MCDU: Connected". It never shows half a page.</para>
+/// <para>What it says: what the Fenix and FlyByWire MCDU windows say, in their words, and nothing more (owner,
+/// 2026-11-23; [CORE-7]: once, only what the screen reader cannot say, through the non-interrupting announce). While
+/// the window is shown and the reader cannot read the MCDU (a lasting state, or 30 s with no page): "MCDU
+/// disconnected", once, and "MCDU connected" with the first page after it (spec D3, never an AI read); the status box
+/// keeps the reason. A new title, said without the list's "Title: ", whenever it differs from the last title said:
+/// opening the window on a page changed while it was closed, or on its first page, says it too; the selection then
+/// goes to the first line after the title, as on the Fenix and FlyByWire windows. A line key, a page key, a slew and
+/// AIRPORT say nothing of their own: the title and the scratchpad line say what changed, and the pilot reads the list.
+/// The page's
 /// scratchpad line, read back when it changes (two stable refreshes, <see cref="CduScratchpadAnnouncer"/>), without the
 /// F-PLN's slew arrows at its end (on the screen and listed, but no text on the scratchpad). A typed entry, confirmed
 /// from the MCDU's own typed line (<see cref="IA330Displays.McduScratchpad"/>), read from 150 ms after the key before
 /// (so a line key or CLR sent just before the entry has shown): each key is sent only once the one before has shown,
-/// at least 150 ms apart, and waited for up to 600 ms; then the typed line is said, or
-/// "Missed &lt;KEY&gt;. Scratchpad: ..." and the rest of the entry is not sent. What was said is then not said again by
-/// the scratchpad line's read-back (the line showing it, or part of it while the frames catch up) until the next key
-/// that is not part of an entry. With no typed line from the reader the keys go at 150 ms a key, and the page's
-/// scratchpad line read back is the confirmation; with no page shown either, the window says "Typed ..., not
-/// confirmed". Hiding, closing or disposing the window, or a side switch, stops an entry: its other keys are not sent
+/// at least 150 ms apart, and waited for up to 600 ms; then the typed line is said once (what the other windows'
+/// scratchpad read-back says), and a key that does not show stops the entry, the typed line then said as it stands.
+/// What was said is then not said again by the scratchpad line's read-back (the line showing it, or part of it while
+/// the frames catch up) until the next key that is not part of an entry. With no typed line from the reader the keys
+/// go at 150 ms a key, and the page's scratchpad line read back is the confirmation. Hiding, closing or disposing the
+/// window, or a side switch, stops an entry: its other keys are not sent
 /// and nothing is said for it. CLR (Backspace, the CLR button) says nothing of its own: the scratchpad line's read-back
 /// says what is left, "Scratchpad cleared", or the next queued message.</para>
 /// <para>Keys. The aircraft's own <c>INI_MCDU1_&lt;KEY&gt;</c> (captain) or <c>INI_MCDU2_&lt;KEY&gt;</c> (first officer)
 /// press flags: write 1, the aircraft consumes it and resets it to 0 (writing 0 straight after kills the press,
 /// measured). Every write is sequence-prefixed so a repeated key is never coalesced by the MobiFlight channel. Keys are
 /// sent whether or not a page can be read, but for a slew past a list's top or end. Same layout and keys as the other
-/// Airbus CDU windows: Ctrl/Alt+1..6 (or F1..F12) line keys, Alt+letter pages, Page Up/Down slew, Alt+Left/Right page,
-/// Alt+S scratchpad, Alt+Home the screen, Backspace CLR, Escape closes (hides) the window and gives the foreground back.</para>
+/// Airbus CDU windows: Ctrl/Alt+1..6 (or F1..F12) line keys, Alt+letter pages, Page Up/Down slew, Alt+Left/Right page
+/// (and Left/Right on the screen, as on the Fenix and FlyByWire windows), Alt+S scratchpad, Alt+Home the screen,
+/// Backspace CLR, Escape closes (hides) the window and gives the foreground back.</para>
 /// <para>Slews. The aircraft counts a slew pressed past a list's top or end, and the next slews the other way only undo
 /// it, so the list looks stuck (measured 2026-11-20). On a page whose frame has a list the display clips
 /// (<see cref="A330Frame.List"/>), Page Up and Alt+Up (the MCDU's up arrow, which moves the list on to later rows) are
@@ -74,7 +77,7 @@ namespace MSFSBlindAssist.Forms.IniA330;
 /// switch lets the old side's display go, wants the new one, switches the key prefix, starts the title and scratchpad
 /// read-backs afresh and, off the selector, says "Left MCDU" or "Right MCDU"; then, as the Fenix window does, the new
 /// side's page title (through the title path above) and its scratchpad line when it holds something, once. The
-/// shortcut to the side already shown says the side again. Opening the window says no title.</para>
+/// shortcut to the side already shown says the side again.</para>
 /// <para>Everything runs on the UI thread: the key writes, and the waits, which are awaited there
 /// ([SIM-20]). The window polls; it subscribes to no event of the displays.</para>
 /// </remarks>
@@ -113,14 +116,18 @@ public sealed class IniA330CduForm : Form
 
     private readonly TextBox _statusBox = new()
     {
-        Name = "Status", ReadOnly = true, TabStop = true, Width = 420, AccessibleName = "A330 MCDU status",
+        Name = "Status", ReadOnly = true, TabStop = true, Width = 420, AccessibleName = "Connection status",
     };
     private readonly ComboBox _side = new()
     {
-        Name = "Side", DropDownStyle = ComboBoxStyle.DropDownList, Width = 100, AccessibleName = "MCDU side",
+        Name = "Side", DropDownStyle = ComboBoxStyle.DropDownList, Width = 100, AccessibleName = "MCDU selector",
     };
-    private readonly ListBox _display = new() { Name = "Screen", IntegralHeight = false, Font = new Font("Consolas", 11f) };
-    private readonly TextBox _scratchpad = new() { Name = "Scratchpad", AccessibleName = "Scratchpad entry" };
+    // The Fenix and FlyByWire windows' accessible names.
+    private readonly ListBox _display = new()
+    {
+        Name = "Screen", IntegralHeight = false, Font = new Font("Consolas", 11f), AccessibleName = "MCDU Display",
+    };
+    private readonly TextBox _scratchpad = new() { Name = "Scratchpad", AccessibleName = "MCDU Input" };
 
     private IntPtr _previousWindow;
     private bool _wanting, _disposed, _typing, _offGridLogged;
@@ -131,7 +138,6 @@ public sealed class IniA330CduForm : Form
     private long _pageReadAt;                          // when the page shown was last read
     private string _lastTitle = "";
     private int? _rowBeforeGap;                        // the pilot's row when a page gave way to the status row
-    private bool _titleAfterSwitch;                    // a side switch: the new side's first title is said
     private string? _alreadySaid;                      // the typed line the window last said for an entry, until the next key
     private int _entryGeneration;                      // moves on when the window hides or switches side: an entry stops
     private long? _lastKeyMs;
@@ -188,7 +194,8 @@ public sealed class IniA330CduForm : Form
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Func<string, bool> SendPressFlag { get; set; }
 
-    /// <summary>True while the screen list has the focus (its own <see cref="Control.Focused"/>); a test sets it, never taking the focus.</summary>
+    /// <summary>True while the screen list has the focus (its own <see cref="Control.Focused"/>), where Left and Right turn
+    /// the page; a test sets it, never taking the focus.</summary>
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     internal Func<bool> ScreenHasFocus { get; set; }
 
@@ -227,7 +234,6 @@ public sealed class IniA330CduForm : Form
         _scratchpad.Width = 400;
         scratchRow.Controls.Add(_scratchpad);
         _display.Dock = DockStyle.Fill;
-        _display.AccessibleName = $"{_profile.Device} screen";
         _display.TabIndex = 1;
         Controls.Add(_display);
         Controls.Add(scratchRow);
@@ -291,13 +297,12 @@ public sealed class IniA330CduForm : Form
         _displays.Release(_wantedGauge, this);
     }
 
-    /// <summary>A new open: its first page is not a title change, and its scratchpad line is read silently first (a
-    /// side switch then says both, <see cref="OnSideSelected"/>).</summary>
+    /// <summary>A new open or a side switch: the scratchpad line is read silently first (a side switch then says it,
+    /// <see cref="OnSideSelected"/>). The last title said is kept across an open, as the Fenix and FlyByWire windows
+    /// keep it: a page that changed while the window was closed is said when it opens.</summary>
     private void StartReadBacksAfresh()
     {
         _scratch.Reset();
-        _lastTitle = "";
-        _titleAfterSwitch = false;
         _rowBeforeGap = null;
         _alreadySaid = null;
         _slewPending = null;
@@ -323,7 +328,7 @@ public sealed class IniA330CduForm : Form
         // The Fenix window's side switch: the new side's page title is said, through the title path as any new title,
         // and its scratchpad line when it holds something: read back from an empty starting point, so a message waiting
         // on that side is said once its line reads the same twice, and an empty line says nothing.
-        _titleAfterSwitch = true;
+        _lastTitle = "";
         _scratch.OnPoll("", Utc(NowMs()));
         // Off the selector, say which MCDU this is first; on it the screen reader has just read the new item ([CORE-7]).
         if (!_side.Focused) _announcer.Announce($"{SideName} {_profile.Device}");
@@ -351,14 +356,14 @@ public sealed class IniA330CduForm : Form
             _status.Restart(now);
             _pageReadAt = now;
             var page = A330McduLines.From(screen);
-            SetStatus(A330McduStatus.PageRow(gauge));
+            SetStatus(A330McduStatus.PageRow);
             _shownFrame = frame;
             // A page that differs from the one a slew went out on: the next slew is judged on the page as it is. Any
             // change of the texts counts (SameTexts, the client's own test of a changed frame), a new scratchpad message
             // included, so a press can then be judged on a page that has not shown the slew yet.
             if (_slewPending is { } pending && !A330ReaderClient.SameTexts(pending.Frame.Texts, frame.Texts)) _slewPending = null;
+            Speak(_availability.Next(null, pageShown: true));   // "MCDU connected" before the page's title, as on the FlyByWire window
             ShowPage(page);
-            Speak(_availability.Next(null, pageShown: true));
             FeedScratchpad(page, now);
             return;
         }
@@ -403,15 +408,11 @@ public sealed class IniA330CduForm : Form
         int target;
         if (title.Length > 0 && title != _lastTitle)
         {
-            // Moving the focused list to the title row makes the screen reader read it; announce only when that will
-            // not happen (focus elsewhere, or already on row 0), never both. The title is said as it is drawn (a
-            // temporary flight plan's carries TMPY), as the Fenix and FlyByWire windows say theirs.
-            // The first page of an open is not a title change; the first of a side switch is.
-            bool selectionSpeaks = ScreenHasFocus() && saved != 0 && _display.Items.Count > 0;
-            if ((_lastTitle.Length > 0 || _titleAfterSwitch) && !selectionSpeaks) Speak(title);
+            // As the Fenix and FlyByWire windows: a new title is said, as drawn (a temporary flight plan's carries TMPY),
+            // and the selection goes to the first line after it, which the screen reader then reads.
+            Speak(title);
             _lastTitle = title;
-            _titleAfterSwitch = false;
-            target = 0;
+            target = 1;
         }
         else target = afterGap && _rowBeforeGap is int before ? before : Math.Max(saved, 0);
         _rowBeforeGap = null;
@@ -632,8 +633,8 @@ public sealed class IniA330CduForm : Form
         public bool Stopped => Window.IsDisposed || Window._entryGeneration != Generation;
     }
 
-    /// <summary>No typed line from the reader: every key at today's pace. With a page shown, its scratchpad line read
-    /// back is the confirmation; with none, the window says what it typed.</summary>
+    /// <summary>No typed line from the reader: every key at today's pace. The page's scratchpad line read back is the
+    /// confirmation, as on the Fenix and FlyByWire windows; with no page shown nothing is said.</summary>
     private async Task TypeUnconfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys, Entry entry)
     {
         foreach (var k in keys)
@@ -642,10 +643,10 @@ public sealed class IniA330CduForm : Form
             if (entry.Stopped || !Send(profile, k.Key)) return;
         }
         _scratch.SuppressUntil = Utc(NowMs() + TypedEchoMs);
-        if (_shownPage is null) _announcer.Announce($"Typed {keys[^1].Expected}, not confirmed");
     }
 
-    /// <summary>Each key once the one before has shown on the typed line; a key that does not show stops the entry.</summary>
+    /// <summary>Each key once the one before has shown on the typed line; a key that does not show stops the entry, and
+    /// the typed line is said as it stands (what the scratchpad read-back would say), or nothing when it is empty.</summary>
     private async Task TypeConfirmedAsync(CduFormProfile profile, IReadOnlyList<CduTypedKey> keys, Entry entry)
     {
         string? shown = null;
@@ -658,7 +659,7 @@ public sealed class IniA330CduForm : Form
             if (!landed)
             {
                 _alreadySaid = shown;
-                _announcer.Announce($"Missed {k.Key}. {PadWords(shown)}");
+                if (!string.IsNullOrEmpty(shown)) _announcer.Announce(shown);
                 return;
             }
         }
@@ -677,13 +678,6 @@ public sealed class IniA330CduForm : Form
             await Delay(KeyPollMs);
         }
     }
-
-    private static string PadWords(string? pad) => pad switch
-    {
-        null => "Scratchpad not read",
-        "" => "Scratchpad empty",
-        _ => "Scratchpad: " + pad,
-    };
 
     /// <summary>A key as the message loop hands it to the window (its key handler); for the tests.</summary>
     internal void HandleKey(KeyEventArgs e) => Form_KeyDown(this, e);
@@ -731,6 +725,12 @@ public sealed class IniA330CduForm : Form
         if (key == null && !e.Control && ((!e.Alt && e.KeyCode == Keys.PageUp) || (e.Alt && e.KeyCode == Keys.Up))) key = _profile.SlewUp;
         if (key == null && e.Alt && !e.Control && e.KeyCode == Keys.Right) key = _profile.NextPage;
         if (key == null && e.Alt && !e.Control && e.KeyCode == Keys.Left) key = _profile.PrevPage;
+        // Left and Right on the screen turn the page too, as on the Fenix and FlyByWire windows (a list has no use for them).
+        if (key == null && !e.Alt && !e.Control && !e.Shift && ScreenHasFocus())
+        {
+            if (e.KeyCode == Keys.Right) key = _profile.NextPage;
+            else if (e.KeyCode == Keys.Left) key = _profile.PrevPage;
+        }
         // Alt+Shift+F: SEC F-PLN, as the Fenix and FlyByWire windows (handled here, so no mnemonic fires).
         if (key == null && e.Alt && !e.Control && e.Shift && e.KeyCode == Keys.F) key = "SEC";
         if (key == null && e.Alt && !e.Control && !e.Shift)

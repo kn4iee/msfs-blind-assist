@@ -55,15 +55,16 @@ public class A330McduLinesTests
     }
 
     [Fact]
-    public void MCDU_MENU_marks_the_greyed_prompts_unavailable()
+    public void MCDU_MENU_reads_its_greyed_prompts_as_drawn_with_no_marker()
     {
+        // No other aircraft's MCDU window says "unavailable" for greyed text (owner, 2026-11-23).
         var listing = CduLineText.Listing(Lines("p03_menu.json"));
-        Assert.Contains("                 SELECT (unavailable)".Insert(0, "   "), listing);
-        Assert.Contains("1: <FM1           NAV B/UP>(unavailable)", listing);
-        Assert.Contains("3: <AIDS (unavailable)", listing);
-        Assert.Contains("4: <CFDS (unavailable)", listing);
+        Assert.Contains("   " + "                 SELECT", listing);
+        Assert.Contains("1: <FM1           NAV B/UP>", listing);
+        Assert.Contains("3: <AIDS", listing);
+        Assert.Contains("4: <CFDS", listing);
         Assert.Contains("2: <ATSU", listing);
-        Assert.DoesNotContain(listing, l => l.Contains("MCDU MENU") && l.Contains("unavailable"));
+        Assert.DoesNotContain(listing, l => l.Contains("unavailable") || l.Contains("(inop)"));
         Assert.StartsWith("Scratchpad: SELECT DE", listing[^1]);
     }
 
@@ -139,34 +140,23 @@ public class A330McduLinesTests
     }
 
     [Fact]
-    public void The_unavailable_marker_moves_no_column()
+    public void A_greyed_prompt_reads_as_drawn_in_its_columns()
     {
-        var plain = Row((0, "<TO DATA", null), (18, "PHASE>", null));
-        var grey = Row((0, "<TO DATA", 0.3f), (18, "PHASE>", null));
-        Assert.Equal(plain.Text.Length, CduLineText.ForWindow(grey).Length);
-        Assert.Equal(plain.Text.IndexOf("PHASE>"), CduLineText.ForWindow(grey).IndexOf("PHASE>"));
-        var marked = Row((0, "<POINT", 0.3f), (15, "FUNCTION>", null));
-        Assert.Equal("<POINT (inop)  FUNCTION>", CduLineText.ForWindow(marked));
-        Assert.Equal(15, CduLineText.ForWindow(marked).IndexOf("FUNCTION>"));
-    }
-
-    [Fact]
-    public void The_measured_greyed_prompt_cases_read_as_the_cockpit_marks_them()
-    {
-        Assert.Equal("<FM1           NAV B/UP>(unavailable)",
-            CduLineText.ForWindow(Row((0, "<FM1", null), (15, "NAV B/UP>", 0.3f))));
-        Assert.Equal("<AIDS (unavailable)", CduLineText.ForWindow(Row((0, "<AIDS", 0.3f))));
-        Assert.Equal("                 SELECT (unavailable)",
-            CduLineText.ForWindow(Row((17, "SELECT", 0.3f))));
-        Assert.Equal("<TO DATA (inop)   PHASE>",
-            CduLineText.ForWindow(Row((0, "<TO DATA", 0.3f), (18, "PHASE>", null))));
-        Assert.Equal("<POINT (inop)  FUNCTION>",
-            CduLineText.ForWindow(Row((0, "<POINT", 0.3f), (15, "FUNCTION>", null))));
-        Assert.Equal("<WX REQUEST      D-ATIS>(unavailable)",
-            CduLineText.ForWindow(Row((0, "<WX REQUEST", 0.3f), (17, "D-ATIS>", 0.3f))));
-        // a coloured (not grey) prompt and a pale grey are not marked
-        Assert.Equal("<AIDS", CduLineText.ForWindow(Row((0, "<AIDS", null))));
-        Assert.Equal("<AIDS", CduLineText.ForWindow(Row((0, "<AIDS", 0.6f))));
+        // The measured greyed cases: each reads exactly as the same row drawn white, every column where it was.
+        foreach (var parts in new[]
+        {
+            new (int, string, float?)[] { (0, "<FM1", null), (15, "NAV B/UP>", 0.3f) },
+            new (int, string, float?)[] { (0, "<AIDS", 0.3f) },
+            new (int, string, float?)[] { (17, "SELECT", 0.3f) },
+            new (int, string, float?)[] { (0, "<TO DATA", 0.3f), (18, "PHASE>", null) },
+            new (int, string, float?)[] { (0, "<POINT", 0.3f), (15, "FUNCTION>", null) },
+            new (int, string, float?)[] { (0, "<WX REQUEST", 0.3f), (17, "D-ATIS>", 0.3f) },
+        })
+        {
+            var white = parts.Select(p => (p.Item1, p.Item2, (float?)null)).ToArray();
+            Assert.Equal(CduLineText.ForWindow(Row(white)), CduLineText.ForWindow(Row(parts)));
+        }
+        Assert.Equal("<POINT         FUNCTION>", CduLineText.ForWindow(Row((0, "<POINT", 0.3f), (15, "FUNCTION>", null))));
     }
 
     [Fact]
@@ -218,27 +208,21 @@ public class A330McduLinesTests
         }, true, 0, 0))!);
 
     [Fact]
-    public void A_flight_plan_row_with_no_name_reads_unnamed()
+    public void A_flight_plan_row_with_no_name_reads_as_drawn()
     {
+        // As the Fenix and FlyByWire windows list one: its name cells blank, no word added (owner, 2026-11-23).
         var fpln = PageTitled("FROM");
-        Assert.Equal("unnamed 0005  250/ 10000", fpln[2].Text);
-        Assert.Equal(8, fpln[2].Text.IndexOf("0005", StringComparison.Ordinal));   // no column moves
-        Assert.Contains("1: unnamed 0005  250/ 10000", CduLineText.Listing(fpln));
+        Assert.Equal("        0005  250/ 10000", fpln[2].Text);
+        Assert.Contains("1:         0005  250/ 10000", CduLineText.Listing(fpln));
         Assert.Equal("RIGGZ   0004", fpln[4].Text);
-        Assert.Equal("       X", fpln[6].Text);       // nothing from column 8 on: not a waypoint row
-        Assert.Equal("", fpln[8].Text);               // an empty row stays empty
-        Assert.Equal("        BRG292", fpln[3].Text); // a label row is never a waypoint
-        Assert.Equal("        394", fpln[12].Text);   // the destination row is not one of the five
-        Assert.Equal("unnamed 0005  250/ 10000", PageTitled("FROM TMPY")[2].Text);
+        Assert.Equal(fpln[2].Text, PageTitled("FROM TMPY")[2].Text);
+        Assert.Equal(fpln[2].Text, PageTitled("INIT")[2].Text);
+        Assert.DoesNotContain(CduLineText.Listing(fpln), l => l.Contains("unnamed"));
 
-        // Another page's row with an empty start is the page's own.
-        Assert.Equal("        0005  250/ 10000", PageTitled("INIT")[2].Text);
-
-        // A captured F-PLN with its first waypoint's name taken away.
+        // A captured F-PLN with its first waypoint's name taken away: only the name is gone, every column where it was.
         var frame = Fixture("p03_fpln1.json");
         var nameless = frame with { Texts = frame.Texts.Where(t => t.Text != "KATL26L").ToList() };
         var lines = A330McduLines.From(A330McduScreen.From(nameless)!);
-        Assert.Equal("unnamed ----  ---/ -----", lines[2].Text);
-        Assert.Equal(A330McduLines.From(A330McduScreen.From(frame)!)[2].Text.Length, lines[2].Text.Length);
+        Assert.Equal("        ----  ---/ -----", lines[2].Text);
     }
 }

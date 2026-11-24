@@ -115,71 +115,14 @@ internal sealed record CduFormProfile(
 }
 
 /// <summary>
-/// A CDU line as a screen reader user hears it, with what the A330 says in colour that matters for
-/// operating it: text drawn GREY is not available yet (an option the FMS will not take, a field
-/// that is not active) and is marked so — nothing else in the line can tell the pilot. Every other
-/// colour is read as plain text. Pure.
+/// A CDU line as the window lists it: its characters as drawn, in their columns, no colour said and no
+/// marker added (owner, 2026-11-23: no other aircraft's MCDU window says "unavailable" for greyed
+/// text, and none says a colour). Pure.
 /// </summary>
 internal static class CduLineText
 {
-    private const int MaxRowCells = 37;
-    private const string Unavailable = " (unavailable)";
-    private const string Inop = " (inop)";
-
-    private static bool IsGrey(MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduCell? cell)
-    {
-        if (cell?.Colour is not { } c) return false;
-        float max = Math.Max(c.R, Math.Max(c.G, c.B)), min = Math.Min(c.R, Math.Min(c.G, c.B));
-        return max - min <= 0.02f && max < 0.5f;
-    }
-
-    /// <summary>
-    /// The row's text with the greyed-prompt marker: one marker after each run of grey fields, written into
-    /// the blanks after the run (never moving a later field) or after the row's last character, and never
-    /// taking the row past 37 cells. A cell with no colour is never grey. Pure.
-    /// </summary>
-    public static string ForWindow(MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine line)
-    {
-        var chars = new char[MaxRowCells];
-        Array.Fill(chars, ' ');
-        int n = Math.Min(line.Text.Length, MaxRowCells);
-        for (int i = 0; i < n; i++) chars[i] = line.Text[i];
-
-        // fields: runs of non-blank cells with at most one blank between two of them
-        var fields = new List<(int Start, int End, bool Grey)>();
-        int col = 0, width = Math.Min(line.Cells.Count, line.Text.Length);
-        while (col < width)
-        {
-            if (line.Text[col] == ' ') { col++; continue; }
-            int start = col, end = col, nonBlank = 0, grey = 0;
-            while (col < width)
-            {
-                if (line.Text[col] != ' ') { end = col; nonBlank++; if (IsGrey(line.Cells[col])) grey++; col++; }
-                else if (col + 1 < width && line.Text[col + 1] != ' ') col++;
-                else break;
-            }
-            fields.Add((start, end, grey * 2 > nonBlank));
-        }
-
-        int length = line.Text.Length;
-        for (int f = 0; f < fields.Count; f++)
-        {
-            if (!fields[f].Grey || (f + 1 < fields.Count && fields[f + 1].Grey)) continue;
-            int after = fields[f].End + 1;
-            if (f + 1 == fields.Count)
-            {
-                string marker = length + Unavailable.Length > MaxRowCells ? Unavailable.TrimStart() : Unavailable;
-                for (int k = 0; k < marker.Length && after + k < MaxRowCells; k++) chars[after + k] = marker[k];
-            }
-            else
-            {
-                int gap = fields[f + 1].Start - after;
-                string? marker = gap >= 16 ? Unavailable : gap >= 9 ? Inop : null;
-                if (marker != null) for (int k = 0; k < marker.Length; k++) chars[after + k] = marker[k];
-            }
-        }
-        return new string(chars).TrimEnd();
-    }
+    /// <summary>The row's text as drawn, its 24 columns kept, without its trailing blanks. Pure.</summary>
+    public static string ForWindow(MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLine line) => line.Text.TrimEnd();
 
     /// <summary>What the list's first line starts with, as in the Fenix and FlyByWire MCDU windows.</summary>
     public const string TitlePrefix = "Title: ";

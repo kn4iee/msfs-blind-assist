@@ -110,6 +110,7 @@ public sealed class A330McduSlewTests
             else w.Delay = ms => { Clock += Math.Max(0, ms); return Task.CompletedTask; };
             _windows.Add(w);
             w.Show();
+            Speech.All.Clear();   // the page title said on opening, as the Fenix and FlyByWire windows say it (A330McduFormTests)
             return w;
         }
 

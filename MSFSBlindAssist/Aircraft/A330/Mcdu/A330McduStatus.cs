@@ -12,8 +12,8 @@ internal readonly record struct A330McduStatusRow(string Text, string? Unavailab
 /// is not drawn; "Reading the &lt;display&gt;"; and once <see cref="Forms.IniA330.A330DisplayWindow.CannotReadAfterMs"/>
 /// have passed with no page read, "The display reader cannot read the &lt;display&gt;". The count runs from when the
 /// window began wanting the display, from when the reader became Running, or from the last page read or fresh not-drawn
-/// frame, whichever is latest. Also the row over a page, the display's name, and "Reading the &lt;display&gt;" for a
-/// frame that does not leave hidden rows out (spec M15). Pure: the clock is the caller's.
+/// frame, whichever is latest. Also the row over a page, "MCDU: Connected" (the Fenix and FlyByWire windows'), and
+/// "Reading the &lt;display&gt;" for a frame that does not leave hidden rows out (spec M15). Pure: the clock is the caller's.
 /// </summary>
 internal sealed class A330McduStatus
 {
@@ -59,8 +59,8 @@ internal sealed class A330McduStatus
     /// <summary>"Reading the &lt;display&gt;": the reader is at work and the window has no page to show yet.</summary>
     public static string ReadingRow(A330Gauge gauge) => "Reading the " + A330GaugeNames.Name(gauge);
 
-    /// <summary>The status row over a page: the display's name.</summary>
-    public static string PageRow(A330Gauge gauge) => Capitalised(A330GaugeNames.Name(gauge));
+    /// <summary>The status row over a page, the Fenix and FlyByWire windows' words.</summary>
+    public const string PageRow = "MCDU: Connected";
 
     /// <summary>A lasting state's words without the displays' own lead-in ("the display reader is not installed").</summary>
     private static string Reason(string stateText) =>

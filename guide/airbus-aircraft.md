@@ -775,8 +775,6 @@ Inside the window:
 - Page Up and Page Down (or Alt+Up and Alt+Down) scroll the flight plan; Alt+Left and Alt+Right change page. Backspace is CLR when the screen has focus.
 - Page keys: Alt+D DIR, Alt+G PROG, Alt+P PERF, Alt+I INIT, Alt+A DATA, Alt+F F-PLN, Alt+R RAD NAV, Alt+U FUEL PRED, Alt+X SEC F-PLN, Alt+T ATC COMM, Alt+M MCDU MENU, Alt+O AIRPORT.
 
-Text the MCDU draws in grey, an option that is not available yet, is read with "(unavailable)" after it.
-
 ### EFB {#efb-ini-a330}
 
 Input Shift+T opens the tablet in a window called **A330 EFB**. Its Pages list is the tablet's side bar: Dashboard, OFP, Ground (doors, GPU, wheel chocks, engine covers, pitot covers, jetway, catering, luggage, pushback), Payload, Panel State, Take Off (performance) and Options. Doors and ground equipment say their state. On the ground, pressing **Chocks**, **Engine Covers** or **Pitot Covers** takes them off or puts them back, and BA reads the new state, for example *"Chocks: not placed"*. The tablet itself cannot do this in MSFS 2024, so BA does it for you.

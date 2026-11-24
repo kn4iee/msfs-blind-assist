@@ -442,6 +442,7 @@ public sealed class A330McduMessagesTests : IDisposable
         rig.Show(Pad(""));
         rig.Start();
         w.Show();
+        windowSpeech.All.Clear();   // the page title said on opening, as the Fenix and FlyByWire windows say it
         rig.Tick();
 
         // The window's own scratchpad line says the message; the watch keeps reading, silently.
@@ -675,6 +676,13 @@ public sealed class A330McduMessagesTests : IDisposable
 
         public void Backspace() => Window.HandleScratchpadKey(new KeyEventArgs(Keys.Back));
 
+        /// <summary>Shows the window; the page title it says on opening (as the Fenix and FlyByWire windows) is not these tests' subject.</summary>
+        public void Show()
+        {
+            Window.Show();
+            Speech.All.Clear();
+        }
+
         public void Dispose() => Window.Dispose();
     }
 
@@ -686,7 +694,7 @@ public sealed class A330McduMessagesTests : IDisposable
         using var rig = new WindowRig();
         rig.Displays.Show(Pad(""));
         rig.Displays.SetScratchpad(false, "");
-        rig.Window.Show();
+        rig.Show();
         rig.Displays.Show(Pad("NOT ALLOWED"));
         rig.Tick();
         rig.Tick();
@@ -734,7 +742,7 @@ public sealed class A330McduMessagesTests : IDisposable
         // says "Message cleared"; the line's read-back works as before.
         using var rig = new WindowRig();
         rig.Displays.Show(Pad(""));
-        rig.Window.Show();
+        rig.Show();
         Assert.Null(rig.Displays.McduScratchpad(false));
 
         rig.Displays.Show(Pad("KJFK"));
@@ -761,7 +769,7 @@ public sealed class A330McduMessagesTests : IDisposable
         using var rig = new WindowRig();
         rig.Displays.Show(Pad(""));
         rig.Displays.SetScratchpad(false, "");
-        rig.Window.Show();
+        rig.Show();
 
         // Two Backspaces on an empty scratchpad: the first CLR writes CLR on the line, the second takes it off.
         rig.Backspace();
