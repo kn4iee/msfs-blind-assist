@@ -255,6 +255,17 @@ public partial class TaxiGuidanceManager : IDisposable
     // Junction nodes a made Turn pick keeps out of later recalculations of this route, so none
     // can route back through the junction the pilot turned away from. Empty for a fresh route.
     private HashSet<int> _turnBlockedNodes = new();
+    // The runway crossings cleared on the route being flown, each with the node of the stop it cleared
+    // (ClearedCrossing.StopNodeId): a recalculation clears again only the stop at that node
+    // (ClearedCrossingHolds.Apply), never the runway elsewhere. Kept whole by LoadRoute's Fail and its
+    // rollback [RTE-29], emptied by StopGuidance and the rollout reset.
+    private List<Navigation.ClearedCrossing> _clearedCrossings = new();
+    // The crossings the LoadRoute call in progress was asked to clear, re-keyed with the clearance rows;
+    // AdoptRoute's pass applies them and records what it cleared in _clearedCrossings.
+    private List<Navigation.ClearedCrossing> _clearRequests = new();
+    // A recalculation's "Runway X is a stop again." (ClearedCrossingHolds.DroppedOnRecalculation), for its
+    // "Route changed" callout; "" when none, and after every load.
+    private string _clearedCrossingDropNote = "";
 
     // Paired-runway crossing double-Continue (VATSIM gap analysis 2026-08-31, P7):
     // set when a Continue past a crossing found ANOTHER runway-crossing hold-short
@@ -964,9 +975,9 @@ public partial class TaxiGuidanceManager : IDisposable
     private bool _backtrackDeparture = false;
     private bool _backtrackDepApproachAnnounced = false; // "approaching runway end" one-shot
     // Non-null while a Progressive Taxi leg is active. Drives the terminal
-    // "progressive hold" end-state + announcement and suppresses the auto
-    // hold-short on a cleared crossing. Cleared on every LoadRoute (set fresh
-    // below) and StopGuidance.
+    // "progressive hold" end-state + announcement; an "after crossing runway" leg's
+    // crossing is cleared through _clearedCrossings, like any other. Cleared on every
+    // LoadRoute (set fresh below) and StopGuidance.
     private Navigation.ProgressiveTerminator? _progressiveTerminator;
     // The aircraft's wingspan, metres, for how far before a taxiway a "hold short of taxiway" stop
     // goes (TaxiwayHoldPlacement.SetbackMetres); 0 = unknown, which takes the default span, never a
@@ -1744,6 +1755,14 @@ public partial class TaxiGuidanceManager : IDisposable
     /// its one standstill utterance after StartGuidance, exactly like <see cref="LastRouteReachWarning"/>.
     /// </summary>
     public string? LastRouteStartWarning { get; private set; }
+
+    /// <summary>
+    /// What the last loaded route could not clear of the crossings the pilot entered (a runway it does not
+    /// cross, or crosses only somewhere else: <see cref="Navigation.ClearedCrossingHolds.WarningFor"/>), or "".
+    /// Set by each load, never by a recalculation; it rides in <see cref="LastRouteSummary"/> and
+    /// <see cref="LastRouteStartWarning"/>.
+    /// </summary>
+    public string LastClearedCrossingWarning { get; private set; } = "";
 
     public TaxiRoute? CurrentRoute => _route;
     public TaxiGraph? CurrentGraph => _graph;
@@ -4672,6 +4691,8 @@ public partial class TaxiGuidanceManager : IDisposable
         _lastGroundSpeedKts = 0;
         _hasLineupTarget = false;
         _progressiveTerminator = null;
+        // A crossing cleared on the route just stopped is never cleared on the next one.
+        _clearedCrossings = new List<Navigation.ClearedCrossing>();
         _lineupAnnouncedAligned = false;
         _lineupStubActive = false;
         _lineupHugeCrossTrackSince = DateTime.MinValue;

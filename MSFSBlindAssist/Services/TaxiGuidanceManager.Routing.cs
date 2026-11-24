@@ -54,9 +54,9 @@ public partial class TaxiGuidanceManager
         // the first junction with the named taxiway after the chosen row.
         Dictionary<int, string>? userTaxiwayHoldShorts = null,
         // Non-null for Progressive Taxi legs. Carries the terminal end-state
-        // type/target; drives the progressive-hold end announcement and (for
-        // AfterCrossingRunway) suppresses the auto hold-short on the cleared
-        // crossing. Task 4 consumes this for the terminal state machine.
+        // type/target; drives the progressive-hold end announcement. An
+        // AfterCrossingRunway leg's crossing is cleared through clearedCrossings.
+        // Task 4 consumes this for the terminal state machine.
         Navigation.ProgressiveTerminator? progressiveTerminator = null,
         // When true (Taxi planner "CAT III / low-visibility hold" checkbox), a
         // runway-destination route holds at the CAT III / ILS hold-short (further
@@ -136,7 +136,11 @@ public partial class TaxiGuidanceManager
         // The planner's per-row Turn picks: sequence index -> the side ATC named for the turn onto
         // that row's taxiway. Applied to the route once it is built (TurnPickApplier); null or empty
         // leaves the route exactly as the router built it.
-        Dictionary<int, TurnSide>? userTurnPicks = null)
+        Dictionary<int, TurnSide>? userTurnPicks = null,
+        // The runway crossings the pilot is cleared for, each at one place (ClearedCrossingHolds.Apply):
+        // cleared on the route as picked, after the automatic pass has placed every stop [HLD-4], and
+        // said when one cannot be (LastClearedCrossingWarning). Null or empty clears nothing.
+        IReadOnlyList<Navigation.ClearedCrossing>? clearedCrossings = null)
     {
         lock (_stateLock)
         {
@@ -160,6 +164,9 @@ public partial class TaxiGuidanceManager
         var priorUserTaxiwayHoldShorts = _userTaxiwayHoldShorts;
         var priorUserHoldingPointHoldShorts = _userHoldingPointHoldShorts;
         var priorTurnBlockedNodes = _turnBlockedNodes;
+        var priorClearedCrossings = _clearedCrossings;
+        var priorClearRequests = _clearRequests;
+        var priorClearedCrossingWarning = LastClearedCrossingWarning;
         var priorPreferIlsHold = _preferIlsHold;
         var priorBacktrackDeparture = _backtrackDeparture;
         var priorBacktrackDepApproachAnnounced = _backtrackDepApproachAnnounced;
@@ -192,6 +199,10 @@ public partial class TaxiGuidanceManager
             _userTaxiwayHoldShorts = priorUserTaxiwayHoldShorts;
             _userHoldingPointHoldShorts = priorUserHoldingPointHoldShorts;
             _turnBlockedNodes = priorTurnBlockedNodes;
+            // The crossings cleared on the route being flown stay cleared when a Calculate is refused.
+            _clearedCrossings = priorClearedCrossings;
+            _clearRequests = priorClearRequests;
+            LastClearedCrossingWarning = priorClearedCrossingWarning;
             _preferIlsHold = priorPreferIlsHold;
             _backtrackDeparture = priorBacktrackDeparture;
             _backtrackDepApproachAnnounced = priorBacktrackDepApproachAnnounced;
@@ -253,6 +264,10 @@ public partial class TaxiGuidanceManager
             // call only, re-keyed when a runway leg is dropped.
             var turnPicks = userTurnPicks != null
                 ? new Dictionary<int, TurnSide>(userTurnPicks) : null;
+            // The crossings to clear on this route, applied once by AdoptRoute's pass (a recalculation clears
+            // again only what that pass cleared, _clearedCrossings): re-keyed below with the clearance rows.
+            _clearRequests = clearedCrossings != null
+                ? new List<Navigation.ClearedCrossing>(clearedCrossings) : new List<Navigation.ClearedCrossing>();
             // A new route starts with no junction blocked; a previous route's blocks belong to it.
             _turnBlockedNodes = new HashSet<int>();
             _preferIlsHold = preferIlsHold;
@@ -422,6 +437,8 @@ public partial class TaxiGuidanceManager
                         droppedRowIndices, userHoldShortIndices, userRunwayHoldShorts?.Keys, userTaxiwayHoldShorts?.Keys,
                         userHoldingPointHoldShorts?.Keys));
                     turnPicks = ClearanceRows.Without(turnPicks, droppedRowIndices);
+                    // A crossing cleared after the skipped leg stays, with no row: it still clears its runway.
+                    _clearRequests = ClearanceRows.Without(_clearRequests, droppedRowIndices)!;
                     userHoldShortIndices = _userHoldShortIndices = ClearanceRows.Without(userHoldShortIndices, droppedRowIndices);
                     userRunwayHoldShorts = _userRunwayHoldShorts = ClearanceRows.Without(userRunwayHoldShorts, droppedRowIndices);
                     userTaxiwayHoldShorts = _userTaxiwayHoldShorts = ClearanceRows.Without(userTaxiwayHoldShorts, droppedRowIndices);
@@ -600,6 +617,7 @@ public partial class TaxiGuidanceManager
                     userHoldingPointHoldShorts = _userHoldingPointHoldShorts =
                         ClearanceRows.Without(userHoldingPointHoldShorts, leftOutRows);
                     turnPicks = ClearanceRows.Without(turnPicks, leftOutRows);
+                    _clearRequests = ClearanceRows.Without(_clearRequests, leftOutRows)!;
                     firstCleared = taxiwaySequence[0];
                     if (runwayStart == null)
                         firstTwNode = SelectFirstTaxiwayEntry(aircraftLat, aircraftLon, firstCleared, destComponentId, destinationNodeId);
@@ -1477,6 +1495,10 @@ public partial class TaxiGuidanceManager
                     holdingPointName: _holdingPointName);
                 if (!string.IsNullOrEmpty(turnPickNote))
                     summary = turnPickNote + " " + summary;
+                // A crossing the pilot was cleared for that this route could not clear, beside the Turn pick
+                // note and for the same reason: the route is not the one the pilot entered.
+                if (!string.IsNullOrEmpty(LastClearedCrossingWarning))
+                    summary = LastClearedCrossingWarning + " " + summary;
                 // Cleared taxiways left out are said up front for the same reason: the pilot heard
                 // them in the clearance and must know why the route names others.
                 if (undrivenStartNote != null)
@@ -1524,6 +1546,9 @@ public partial class TaxiGuidanceManager
                 if (!string.IsNullOrEmpty(routeStartWarning)) mustHear.Add(routeStartWarning);
                 if (undrivenStartNote != null) mustHear.Add(undrivenStartNote);
                 if (turnBackNote != null) mustHear.Add(turnBackNote);
+                // What could not be cleared: a runway the route does not cross, or a stop that stays where the
+                // pilot expects none.
+                if (!string.IsNullOrEmpty(LastClearedCrossingWarning)) mustHear.Add(LastClearedCrossingWarning);
                 // The Turn pick notes, a charted pick's "as picked" included: a Turn value left from an
                 // earlier route can turn this one, and the summary alone is cut by StartGuidance.
                 if (!string.IsNullOrEmpty(turnPickNote)) mustHear.Add(turnPickNote);
@@ -1678,14 +1703,15 @@ public partial class TaxiGuidanceManager
         double PostHighSpeedExitMinBearing,
         TaxiGraph? Graph,
         long GraphGeneration,
-        HashSet<int> TurnBlockedNodes);
+        HashSet<int> TurnBlockedNodes,
+        List<Navigation.ClearedCrossing> ClearedCrossings);
 
     private LoadRouteRollback CaptureLoadRouteRollback() => new(
         _dataProvider, _destinationNodeId, _destinationName, _icao, _originalTaxiwaySequence,
         _preferIlsHold, _backtrackDeparture, _backtrackDepApproachAnnounced, _holdingPointHoldNodeId,
         _isRunwayLineup, _progressiveTerminator, _lineupTargetLat, _lineupTargetLon,
         _lineupHeadingMag, _lineupHeadingTrue, _hasLineupTarget, _autoActivateFired,
-        _postHighSpeedExitMinBearing, _graph, _graphGeneration, _turnBlockedNodes);
+        _postHighSpeedExitMinBearing, _graph, _graphGeneration, _turnBlockedNodes, _clearedCrossings);
 
     private void RestoreLoadRouteRollback(LoadRouteRollback r)
     {
@@ -1710,6 +1736,7 @@ public partial class TaxiGuidanceManager
         _graph = r.Graph;
         _graphGeneration = r.GraphGeneration;
         _turnBlockedNodes = r.TurnBlockedNodes;
+        _clearedCrossings = r.ClearedCrossings;
     }
 
     /// <summary>
@@ -2512,9 +2539,17 @@ public partial class TaxiGuidanceManager
         var notKeptPicks = turnPicksInPlay
             ? TurnPickCarryOver.NotKept(_route, _currentSegmentIndex, newRoute, cutPicks) : new List<AppliedTurnPick>();
         bool oldRouteWrongForTurnPick = turnPickMissed || notKeptPicks.Count > 0;
+        // A crossing cleared at a stop still ahead on the route being replaced, which this route no longer
+        // reaches: keeping the old route would keep that stop cleared where this route does not stop, so the
+        // route is adopted and the pass decides (a stop at another node is a stop again, and said). A cleared
+        // stop already behind the aircraft is no reason: the same-named route is still a no-op [RTE-22].
+        // Empty without cleared crossings.
+        bool clearedStopMoves = _clearedCrossings.Any(c => c.StopNodeId != 0
+            && _route != null && _route.Segments.Skip(_currentSegmentIndex).Any(s => s.ToNode?.NodeId == c.StopNodeId)
+            && !newRoute.Segments.Any(s => s.ToNode?.NodeId == c.StopNodeId));
         if (oldRemainingVia.Count > 0 &&
             oldRemainingVia.SequenceEqual(viaNames, StringComparer.OrdinalIgnoreCase) &&
-            !oldRouteWrongForTurnPick)
+            !oldRouteWrongForTurnPick && !clearedStopMoves)
             return;
 
         // Adopting the route re-runs the auto crossing hold-shorts: truncation only restores
@@ -2617,6 +2652,10 @@ public partial class TaxiGuidanceManager
         // not honour must be heard too, not silently dropped — the pilot programmed that stop.
         string callout = RouteChangedCallout.Compose(
             viaNames, distStr, _destinationName, newRoute.RunwayEvents);
+        // A crossing cleared on the old route that this one stops at again ("Runway 04L is a stop again."),
+        // set by the pass AdoptRoute ran above; the pilot was cleared across and must hear the stop is back.
+        if (!string.IsNullOrEmpty(_clearedCrossingDropNote))
+            callout = callout + " " + _clearedCrossingDropNote;
         if (!string.IsNullOrEmpty(recalcHoldWarning))
             callout = callout + " " + recalcHoldWarning;
         if (turnPickRecalcNote.Count > 0)
@@ -3293,8 +3332,8 @@ public partial class TaxiGuidanceManager
     /// <summary>
     /// The automatic hold-short passes that must run on EVERY route the manager adopts —
     /// the automatic runway holds (every entry and crossing, and a start hold when the phase
-    /// allows one), their log line, and the Progressive Taxi strip of the crossing the pilot
-    /// is already cleared for.
+    /// allows one), their log line, and then the crossings the pilot is cleared for, each
+    /// cleared at its one place (<see cref="ClearedCrossingHolds.Apply"/>).
     ///
     /// <para>SINGLE OWNER, ON PURPOSE. These previously ran only in <c>LoadRoute</c>, so an
     /// off-route recalculation silently produced a route with no crossing hold-shorts at all.
@@ -3350,14 +3389,24 @@ public partial class TaxiGuidanceManager
         // recalculation had even happened at PHNL took a segment-cursor reset rather than a log line.
         //
         // ADOPTED, not built: this runs from AdoptRoute, below the recalculation's no-op guard,
-        // so a recalc the guard discards writes nothing. Written before the Progressive strip, so
-        // it records the holds the pass placed.
+        // so a recalc the guard discards writes nothing. Written before the crossings are cleared,
+        // so it records the holds the pass placed.
         _guidanceLog.Info(RouteRunwayCrossings.DescribeForLog(phase, destinationName, route));
 
-        // Progressive "after crossing" terminator: the pilot is cleared to cross the terminator
-        // runway, so strip the holds for it alone (a stop shared with another runway stays).
-        if (_progressiveTerminator?.ClearedCrossingRunway is string clearedRwy)
-            RouteRunwayCrossings.StripClearedCrossing(route, clearedRwy);
+        // The crossings the pilot is cleared for, each at ONE place: never by runway name alone, never
+        // carried to another crossing of that runway (ClearedCrossingHolds.Apply). The pass above has
+        // placed every stop [HLD-4]; this takes only a cleared one off, on the route as picked [TURN-1],
+        // and it stays counted down and announced. A load applies what the pilot entered, matched to a
+        // clearance row's run where it names one; a recalculation clears again only the stops the route
+        // being flown had cleared, at their nodes, and says a stop that came back.
+        var requests = recalculation ? _clearedCrossings : _clearRequests;
+        var before = _clearedCrossings;
+        var outcome = ClearedCrossingHolds.Apply(route, requests, recalculation,
+            i => _originalTaxiwaySequence is { } seq && i < seq.Count ? FindTaxiwayRunStart(route, seq, i, seq[i]) : -1);
+        _clearedCrossingDropNote = recalculation ? ClearedCrossingHolds.DroppedOnRecalculation(route, before, outcome) : "";
+        _clearedCrossings = outcome.Applied.ToList();
+        if (!recalculation) LastClearedCrossingWarning = ClearedCrossingHolds.WarningFor(outcome);
+        _guidanceLog.Info(ClearedCrossingHolds.DescribeForLog(outcome));
     }
 
     /// <summary>

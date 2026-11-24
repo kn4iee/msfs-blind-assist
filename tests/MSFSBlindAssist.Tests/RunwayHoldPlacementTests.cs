@@ -464,57 +464,6 @@ public class RunwayHoldPlacementTests
     }
 
     [Fact]
-    public void The_progressive_strip_removes_a_stop_for_the_cleared_runway_alone_and_keeps_a_shared_one()
-    {
-        var (shared, runways) = Intersection();
-        Pass(shared, runways);
-        RouteRunwayCrossings.StripClearedCrossing(shared, "09");
-        Assert.True(shared.Segments[0].IsHoldShortPoint);
-
-        var single = RouteOf(Node(1, 500, -300), Node(2, 500, -100), Node(3, 500, 0), Node(4, 500, 100));
-        Pass(single, new[] { EastWest() });
-        RouteRunwayCrossings.StripClearedCrossing(single, "27");
-        Assert.All(single.Segments, s => Assert.False(s.IsHoldShortPoint));
-
-        var started = RouteOf(Node(1, 1000, 35), Node(2, 1000, 10), Node(3, 1000, -60));
-        Pass(started, new[] { EastWest() });
-        RouteRunwayCrossings.StripClearedCrossing(started, "27");
-        Assert.Null(started.StartHoldRunway);
-    }
-
-    [Fact]
-    public void A_cleared_progressive_crossing_stops_being_announced_at_all()
-    {
-        // The strip removes the stop but used to leave the recorded event standing, so the leg's
-        // summary still said "crossing runway 09" for a runway the pilot is cleared across — and
-        // now that an unheld event is flagged, it would have read "with no hold short point for
-        // runway 09" over a deliberate clearance. The Progressive terminator already names it.
-        var single = RouteOf(Node(1, 500, -300), Node(2, 500, -100), Node(3, 500, 0), Node(4, 500, 100));
-        Pass(single, new[] { EastWest() });
-        Assert.Equal("crossing runway 09", RouteRunwayCrossings.DescribeRunwayEvents(single.RunwayEvents));
-
-        RouteRunwayCrossings.StripClearedCrossing(single, "27");
-
-        Assert.Empty(single.RunwayEvents);
-        Assert.Equal("", RouteRunwayCrossings.DescribeRunwayEvents(single.RunwayEvents));
-    }
-
-    [Fact]
-    public void Clearing_one_runway_of_a_shared_stop_leaves_the_others_event_standing()
-    {
-        // The shared stop itself survives (the other runway is not cleared), so its event must too.
-        var (shared, runways) = Intersection();
-        Pass(shared, runways);
-
-        RouteRunwayCrossings.StripClearedCrossing(shared, "09");
-
-        Assert.True(shared.Segments[0].IsHoldShortPoint);
-        var remaining = Assert.Single(shared.RunwayEvents);
-        Assert.Equal("01", remaining.Designator);
-        Assert.True(remaining.Held);
-    }
-
-    [Fact]
     public void Missing_runways_fail_loudly_and_a_missing_route_meets_nothing()
     {
         Assert.Throws<ArgumentNullException>(() =>

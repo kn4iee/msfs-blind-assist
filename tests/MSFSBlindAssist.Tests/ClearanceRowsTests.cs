@@ -81,6 +81,31 @@ public class ClearanceRowsTests
         Assert.Equal("The hold shorts set on skipped runway legs were dropped.", ClearanceRows.DroppedHoldShortsNote(2));
     }
 
+    // A crossing the pilot was cleared for is a clearance, not a stop: it stays when its row goes, with no row
+    // of its own (SeqIndex -1), so it still clears the first crossing of its runway in route order. A later one
+    // moves down with its row, and one entered with no row keeps none.
+    [Fact]
+    public void A_cleared_crossing_loses_only_its_row_when_that_row_goes()
+    {
+        var requests = new List<ClearedCrossing>
+        {
+            new("09", SeqIndex: 1),
+            new("27R", At: "B", SeqIndex: 4),
+            new("04L", AtNodeId: 77),
+        };
+
+        var rekeyed = ClearanceRows.Without(requests, new[] { 3, 1 });
+
+        Assert.Equal(new ClearedCrossing("09", SeqIndex: -1), rekeyed![0]);
+        Assert.Equal(new ClearedCrossing("27R", At: "B", SeqIndex: 2), rekeyed[1]);
+        Assert.Equal(new ClearedCrossing("04L", AtNodeId: 77), rekeyed[2]);
+        Assert.Equal(3, rekeyed.Count);
+
+        var afterLeading = ClearanceRows.Without(requests, ClearanceRows.Leading(2));
+        Assert.Equal(new[] { -1, 2, -1 }, afterLeading!.Select(c => c.SeqIndex));
+        Assert.Null(ClearanceRows.Without((List<ClearedCrossing>?)null, new[] { 0 }));
+    }
+
     [Fact]
     public void Leading_names_the_first_rows()
     {

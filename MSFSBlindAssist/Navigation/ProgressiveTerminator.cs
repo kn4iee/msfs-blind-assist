@@ -22,8 +22,8 @@ public enum ProgressiveTerminatorType
 /// <summary>
 /// Immutable descriptor of a Progressive Taxi leg's endpoint. The form resolves
 /// it to a destination graph node before calling LoadRoute; the manager keeps it
-/// to drive the terminal "progressive hold" announcement and to suppress the
-/// auto hold-short on a cleared crossing (AfterCrossingRunway only).
+/// to drive the terminal "progressive hold" announcement. An AfterCrossingRunway
+/// leg's crossing is cleared by LoadRoute's clearedCrossings (ClearedCrossingHolds).
 /// </summary>
 public sealed class ProgressiveTerminator
 {
@@ -59,8 +59,4 @@ public sealed class ProgressiveTerminator
         _ =>
             "Route ended. Hold position. Set a new route when cleared.",
     };
-
-    /// <summary>Runway designator whose auto hold-short must be suppressed (cleared crossing), or null.</summary>
-    public string? ClearedCrossingRunway =>
-        Type == ProgressiveTerminatorType.AfterCrossingRunway ? Target : null;
 }

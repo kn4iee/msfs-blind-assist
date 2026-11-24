@@ -1233,39 +1233,4 @@ public static class RouteRunwayCrossings
     /// </summary>
     private static string? LabelDesignatorFor(string? label, TaxiGraph.RunwayCenterline runway)
         => ExtractRunwayDesignators(label).FirstOrDefault(d => CenterlineHasDesignator(runway, d));
-
-    /// <summary>
-    /// Progressive Taxi "after crossing runway X": the pilot is cleared across X, so remove every stop
-    /// — including a start hold — that holds short of X ALONE. A stop shared with another runway
-    /// stays, because the other runway is not cleared.
-    ///
-    /// <para>X's recorded EVENTS go with them. The summary is built from events, not from labels, so
-    /// leaving them behind announced "crossing runway X" for a runway the pilot is cleared across —
-    /// and, once an unheld event is flagged, would have read "with no hold short point for runway X"
-    /// over a deliberate clearance. The Progressive terminator already names X. A shared stop's other
-    /// runway keeps both its stop and its event.</para>
-    /// </summary>
-    public static void StripClearedCrossing(TaxiRoute route, string clearedRunway)
-    {
-        if (route is null || string.IsNullOrWhiteSpace(clearedRunway)) return;
-        foreach (var seg in route.Segments)
-        {
-            if (seg.IsHoldShortPoint && LabelNamesOnlyRunway(seg.HoldShortRunway, clearedRunway))
-            {
-                seg.IsHoldShortPoint = false;
-                seg.HoldShortRunway = "";
-            }
-        }
-        if (LabelNamesOnlyRunway(route.StartHoldRunway, clearedRunway))
-            route.StartHoldRunway = null;
-
-        string cleared = NormalizeDesignator(clearedRunway);
-        string reciprocal = Reciprocal(cleared);
-        route.RunwayEvents?.RemoveAll(e =>
-        {
-            string d = NormalizeDesignator(e.Designator);
-            return d.Equals(cleared, StringComparison.OrdinalIgnoreCase)
-                || d.Equals(reciprocal, StringComparison.OrdinalIgnoreCase);
-        });
-    }
 }

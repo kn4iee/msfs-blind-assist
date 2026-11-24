@@ -4060,6 +4060,8 @@ public partial class TaxiGuidanceManager
         _userRunwayHoldShorts = null;
         _userTaxiwayHoldShorts = null;
         _userHoldingPointHoldShorts = null;
+        // The crossings cleared on the route just dropped go with it, like the pilot's picks above.
+        _clearedCrossings = new List<Navigation.ClearedCrossing>();
         _rolloutExit = null;
         _isLandingExitRoute = false; // no exit route — runway-end countdown
         _landingExitOffPavement = true;

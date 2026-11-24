@@ -30,6 +30,18 @@ public static class ClearanceRows
         return result;
     }
 
+    /// <summary>
+    /// The crossings the pilot was cleared for once <paramref name="removedRows"/> are gone. A clearance to cross
+    /// is not a stop on a row: one entered after a removed row stays, with no row of its own
+    /// (<see cref="ClearedCrossing.SeqIndex"/> -1), so it still clears the first crossing of its runway in route
+    /// order; a later one moves down with its row, and one with no row keeps none. Null stays null.
+    /// </summary>
+    public static List<ClearedCrossing>? Without(IReadOnlyList<ClearedCrossing>? crossings, IReadOnlyCollection<int> removedRows)
+        => crossings?.Select(c => c.SeqIndex < 0 ? c
+                : removedRows.Contains(c.SeqIndex) ? c with { SeqIndex = -1 }
+                : c with { SeqIndex = Renumber(c.SeqIndex, removedRows) })
+            .ToList();
+
     /// <summary>How many of the picks in <paramref name="pickRows"/> sit on one of
     /// <paramref name="removedRows"/>, and so go with it.</summary>
     public static int CountOn(IReadOnlyCollection<int> removedRows, params IEnumerable<int>?[] pickRows)
