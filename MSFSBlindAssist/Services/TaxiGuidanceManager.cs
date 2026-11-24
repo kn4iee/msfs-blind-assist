@@ -4701,9 +4701,10 @@ public partial class TaxiGuidanceManager : IDisposable
     /// (<see cref="ClearedCrossingHolds.RestoreStartHold"/>) or a segment's (<see cref="ClearedCrossingHolds.RestoreAt"/>),
     /// with every runway it was placed with, and says so with the distance along the route. Its crossing leaves
     /// <c>_clearedCrossings</c> (a new list: replaced, never mutated), so a recalculation never clears it again; a line
-    /// the segment jump said early gets the cursor back onto its segment; the three countdown latches start fresh, so
-    /// it is counted down and held like any stop (on the current segment the key's sentence is its first call: the
-    /// outer call would only cut it off with the same distance); a stop the aircraft holds at stages its runways
+    /// the segment jump said early gets the cursor back onto its segment; when it is the current segment or the aircraft
+    /// holds there, the three countdown latches start fresh, so it is counted down and held like any stop (while taxiing
+    /// the key's sentence is its first call: the outer call would only cut it off with the same distance), and another
+    /// stop's countdown is never touched; a stop the aircraft holds at stages its runways
     /// afresh, one Continue each [HLD-11]; the incursion watch's latch for that node is lifted, so its crossing is said
     /// after the Continue that releases it; and the line is no longer "passed". Then the window is told
     /// (<see cref="ClearedCrossingsChanged"/>). A start hold put back while taxiing is entered by the next taxiing frame,
@@ -4728,13 +4729,18 @@ public partial class TaxiGuidanceManager : IDisposable
             _currentSegmentIndex = decision.CursorIndex;
             _lastSegmentAdvanceTime = MSFSBlindAssist.Utils.SimClock.UtcNow;
         }
-        _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;
+        // Only the restored stop's own countdown starts fresh: it is the current segment (after any cursor move), or the
+        // aircraft holds there. The latches of another stop the aircraft is counting down to stay as they are, or its
+        // last call would come again and cut the key's sentence off.
+        bool ownSegment = !startHold && decision.SegmentIndex == _currentSegmentIndex;
+        if (heldHere || ownSegment)
+            _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;
         if (heldHere)
         {
             string cue = ComposeHoldEntry(startHold ? _route.StartHoldRunway : _route.Segments[decision.SegmentIndex].HoldShortRunway);
             if (startHold && LastRouteStartHoldCue != null) LastRouteStartHoldCue = cue;
         }
-        else if (!startHold && _state == TaxiGuidanceState.Taxiing && decision.SegmentIndex == _currentSegmentIndex)
+        else if (ownSegment && _state == TaxiGuidanceState.Taxiing)
         {
             _holdShortOuterAnnounced = true;
         }

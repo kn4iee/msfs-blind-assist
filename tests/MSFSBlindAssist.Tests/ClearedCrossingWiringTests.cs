@@ -408,10 +408,12 @@ public class ClearedCrossingWiringTests
     }
 
     // Putting a stop back: the start hold through RestoreStartHold, a segment's through RestoreAt; the crossing leaves
-    // _clearedCrossings as a NEW list (WithoutStop), the three countdown latches start fresh, the watch's latch for that
-    // node is lifted, the line is no longer "passed", and the window hears ClearedCrossingsChanged after the sentence.
-    // A stop the aircraft holds at asks for every runway again (its hold stages composed afresh, [HLD-11]); a line the
-    // segment jump said early puts the cursor back onto its segment, so its countdown and hold run as for any stop.
+    // _clearedCrossings as a NEW list (WithoutStop), the watch's latch for that node is lifted, the line is no longer
+    // "passed", and the window hears ClearedCrossingsChanged after the sentence. A stop the aircraft holds at asks for
+    // every runway again (its hold stages composed afresh, [HLD-11]); a line the segment jump said early puts the cursor
+    // back onto its segment, so its countdown and hold run as for any stop. Only the restored stop's OWN countdown starts
+    // fresh (it is the current segment, after any cursor move, or the aircraft holds there): resetting the latches of
+    // another stop the aircraft is counting down to would repeat that stop's last call and cut the key's sentence off.
     [Fact]
     public void Putting_a_stop_back_restores_it_and_tells_the_window()
     {
@@ -421,8 +423,12 @@ public class ClearedCrossingWiringTests
         Assert.Contains("ClearedCrossingHolds.RestoreStartHold(_route)", back);
         Assert.Contains("ClearedCrossingHolds.RestoreAt(_route, decision.SegmentIndex)", back);
         Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", back);
-        Assert.Contains("_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", back);
-        Assert.Contains("_currentSegmentIndex = decision.CursorIndex;", back);
+        Assert.Matches(@"if \(heldHere \|\| ownSegment\)\s+_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", back);
+        Assert.Single(Regex.Matches(back, @"_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;"));
+        Assert.Contains("bool ownSegment = !startHold && decision.SegmentIndex == _currentSegmentIndex;", back);
+        int moved = back.IndexOf("_currentSegmentIndex = decision.CursorIndex;", StringComparison.Ordinal);
+        int own = back.IndexOf("bool ownSegment = ", StringComparison.Ordinal);
+        Assert.True(moved >= 0 && own > moved, "the restored stop's own segment is judged after the cursor moves");
         Assert.Contains("ComposeHoldEntry(", back);
         Assert.Contains("if (_lastIncursionWarnedNodeId == stopNodeId) _lastIncursionWarnedNodeId = -1;", back);
         Assert.Contains("if (_passedClearedNodeId == stopNodeId) ForgetPassedClearedLine();", back);

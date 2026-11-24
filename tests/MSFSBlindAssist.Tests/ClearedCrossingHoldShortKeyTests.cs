@@ -262,8 +262,10 @@ public class ClearedCrossingHoldShortKeyTests
     }
 
     // A cleared start hold: standing at it, it comes back; once the aircraft has started across (moving at 2 kt, more
-    // than 10 m along, or inside the runway's clear margin, the pass's own test for a start hold) it is passed, and only
-    // reported while the line said at the start is a minute old.
+    // than 10 m along, or inside the runway's clear margin, the pass's own test for a start hold) it is past its line,
+    // and said so, whether or not its line has been said yet (an aircraft creeping in under 2 kt has not had it said):
+    // never "no runway ahead" a few metres from the runway it is crossing. Once the line said at the start is over a
+    // minute old, what is ahead is said instead.
     [Fact]
     public void A_cleared_start_hold_comes_back_until_the_aircraft_has_started_across()
     {
@@ -278,19 +280,85 @@ public class ClearedCrossingHoldShortKeyTests
         Assert.Equal(Answer.RestoreStartHold, ClearedCrossingHolds.DecideHoldShortKey(route,
             Taxiing(0, 1000, 45, groundSpeedKts: 0.0) with { Guiding = true, Aircraft = null }).Answer);
 
-        Assert.Equal(Answer.NoRunwayAhead, ClearedCrossingHolds.DecideHoldShortKey(route, Taxiing(0, 1000, 45, groundSpeedKts: 3.0)).Answer);
-        Assert.Equal(Answer.NoRunwayAhead, ClearedCrossingHolds.DecideHoldShortKey(route, Taxiing(0, 1000, 30, groundSpeedKts: 0.0)).Answer);
-        Assert.Equal(Answer.NoRunwayAhead, ClearedCrossingHolds.DecideHoldShortKey(route, Taxiing(0, 1000, 39, groundSpeedKts: 0.0)).Answer);
-        var said = ClearedCrossingHolds.DecideHoldShortKey(route,
-            Taxiing(0, 1000, 45, groundSpeedKts: 3.0, passed: new PassedLine("runway 09", start, 1.0)));
-        Assert.Equal(Answer.PastTheLine, said.Answer);
-        Assert.Equal("Past the hold line of runway 09.", InMetres(() => Said(said)));
+        foreach (var started in new[]
+                 {
+                     Taxiing(0, 1000, 45, groundSpeedKts: 3.0),   // moving
+                     Taxiing(0, 1000, 30, groundSpeedKts: 0.0),   // 15 m along, on the pavement edge
+                     Taxiing(0, 1000, 39, groundSpeedKts: 0.0),   // 6 m along, inside the clear margin only
+                     Taxiing(0, 1000, 45, groundSpeedKts: 3.0, passed: new PassedLine("runway 09", start, 1.0)),
+                     Taxiing(0, 1000, 45, groundSpeedKts: 3.0, passed: new PassedLine("runway 09", start, 60.0)),
+                 })
+        {
+            var past = ClearedCrossingHolds.DecideHoldShortKey(route, started);
+            Assert.Equal(Answer.PastTheLine, past.Answer);
+            Assert.Equal("Past the hold line of runway 09.", InMetres(() => Said(past)));
+        }
+        Assert.Equal(Answer.NoRunwayAhead, ClearedCrossingHolds.DecideHoldShortKey(route,
+            Taxiing(0, 1000, 45, groundSpeedKts: 3.0, passed: new PassedLine("runway 09", start, 61.0))).Answer);
 
         Assert.True(ClearedCrossingHolds.RestoreStartHold(route));
         var again = ClearedCrossingHolds.DecideHoldShortKey(route, Taxiing(0, 1000, 45, groundSpeedKts: 0.0));
         Assert.Equal(Answer.NextStop, again.Answer);
         Assert.Equal(-1, again.SegmentIndex);
         Assert.Equal("Next stop runway 09 in 0 metres.", InMetres(() => Said(again)));
+    }
+
+    // Just across a cleared start line, the runway being crossed is the one said, before a cleared runway further on.
+    [Fact]
+    public void Started_across_a_cleared_start_the_start_line_is_said_before_a_later_cleared_runway()
+    {
+        var runways = new[] { EastWest(), EastWest("08", "26", northM: -400) };
+        var route = RouteOf(Node(1, 1000, 45), Node(2, 1000, 0), Node(3, 1000, -60), Node(4, 1000, -300),
+            Node(5, 1000, -400), Node(6, 1000, -500));
+        Pass(route, runways);
+        Assert.Equal("runway 09", route.StartHoldRunway);
+        int later = route.Segments.FindIndex(s => s.IsHoldShortPoint);
+        Assert.True(later > 0);
+        ClearedCrossingHolds.Apply(route, new[] { new ClearedCrossing("09"), new ClearedCrossing("08") }, recalculation: false);
+        Assert.True(ClearedCrossingHolds.IsFullyCleared(route.Segments[later]));
+
+        var d = ClearedCrossingHolds.DecideHoldShortKey(route, Taxiing(0, 1000, 40, groundSpeedKts: 4.0, runways: runways));
+
+        Assert.Equal(Answer.PastTheLine, d.Answer);
+        Assert.Equal("runway 09", d.Label);
+        Assert.True(ClearedCrossingHolds.IsFullyCleared(route.Segments[later]));
+    }
+
+    // A painted hold line may hug the pavement edge (the pass accepts one clear by margin 0, an owner ruling: SC99's is
+    // 7.2 m out on a 4.0 m half-width). Within the stop tolerance of such a line the aircraft can already be on the
+    // runway: there it is past the line, by either path, and BA never asks for a stop on a runway. Short of the line, or
+    // at it off the pavement, the stop comes back.
+    [Fact]
+    public void A_line_hugging_the_pavement_is_never_put_back_once_the_aircraft_is_on_the_runway()
+    {
+        static TaxiRoute Hugging()
+        {
+            var route = RouteOf(Node(1, 500, -300), Node(2, 500, -33, TaxiNodeType.HoldShort, "runway 09"),
+                Node(3, 500, 0), Node(4, 500, 100));
+            Pass(route, Runway09());
+            ClearedCrossingHolds.Apply(route, new[] { new ClearedCrossing("09") }, recalculation: false);
+            Assert.True(ClearedCrossingHolds.IsFullyCleared(route.Segments[0]));   // the stop is the painted line, 3 m out
+            return route;
+        }
+
+        // Cleared ahead, the cursor still on the stop's segment.
+        var ahead = Hugging();
+        var onRunway = ClearedCrossingHolds.DecideHoldShortKey(ahead, Taxiing(0, 500, -28));   // 5 m past the line, 2 m onto the runway
+        Assert.Equal(Answer.PastTheLine, onRunway.Answer);
+        Assert.Equal("Past the hold line of runway 09.", InMetres(() => Said(onRunway)));
+        Assert.Equal(Answer.RestoreSegment, ClearedCrossingHolds.DecideHoldShortKey(ahead, Taxiing(0, 500, -33)).Answer);
+        Assert.Equal(Answer.RestoreSegment, ClearedCrossingHolds.DecideHoldShortKey(ahead, Taxiing(0, 500, -38)).Answer);
+
+        // Said as passed (a released shared stop, the segment jump), the aircraft rolling across the line.
+        var noted = Hugging();
+        int node = noted.Segments[0].ToNode.NodeId;
+        var across = ClearedCrossingHolds.DecideHoldShortKey(noted, Taxiing(1, 500, -28, passed: new PassedLine("runway 09", node, 2.0)));
+        Assert.Equal(Answer.PastTheLine, across.Answer);
+        Assert.Equal("Past the hold line of runway 09.", InMetres(() => Said(across)));
+        var shortOfIt = ClearedCrossingHolds.DecideHoldShortKey(noted, Taxiing(1, 500, -38, passed: new PassedLine("runway 09", node, 2.0)));
+        Assert.Equal(Answer.RestoreSegment, shortOfIt.Answer);
+        Assert.Equal(0, shortOfIt.CursorIndex);
+        Assert.False(noted.Segments[0].IsHoldShortPoint);
     }
 
     // Holding at a start hold guarding two runways, cleared for one: it comes back whole, so the hold asks for both.
