@@ -5,6 +5,7 @@
 
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace MSFSBlindAssist.Tests;
 
@@ -112,6 +113,59 @@ public class LegEndWiringTests
         Assert.True(turnPicks < loadSetback, "the setback must run after the Turn picks");
         Assert.True(loadSetback < pilotPicks, "the setback must run before the pilot's hold-short picks");
         Assert.True(recalcSetback < sanityGate, "the recalculation's setback must run before the sanity gate");
+    }
+
+    // A recalculation that keeps a Turn pick's tail ends at the stop placed at load and is never cut again
+    // (TURN-3): the end-node test alone would cut a load-time Junction stop back a second time.
+    [Fact]
+    public void A_kept_Turn_pick_tail_is_never_cut_back_again()
+    {
+        string text = RecalculationSource();
+
+        Assert.Contains("bool keepsLoadedTail = keptTailRoute != null && ReferenceEquals(newRoute, keptTailRoute);", text);
+        Assert.Matches(@"if \(!keepsLoadedTail\)\s+ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\);", text);
+        Assert.Single(Regex.Matches(text, @"ApplyLegEndSetback\("));
+    }
+
+    // A recalculation runs off the UI thread and never inserts a node [RTE-30]: both of its taxiway-hold
+    // placements, the leg end's and the pilot's own "hold short of" picks, pass allowInsert: false.
+    [Fact]
+    public void A_recalculation_never_inserts_a_node()
+    {
+        string text = RecalculationSource();
+
+        Assert.Matches(@"ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\)", text);
+        Assert.Matches(@"ApplyUserTaxiwayHoldShorts\(\s*newRoute, holdSequence, remappedTwy, allowInsert: false, rowOffset: seqOffset\)", text);
+        var calls = Regex.Matches(text, @"(ApplyLegEndSetback|ApplyUserTaxiwayHoldShorts)\([^;]*;");
+        Assert.Equal(2, calls.Count);
+        foreach (Match call in calls)
+        {
+            Assert.Contains("allowInsert: false", call.Value);
+            Assert.DoesNotContain("allowInsert: true", call.Value);
+        }
+        Assert.DoesNotContain("allowInsert: true", text);
+    }
+
+    // A taxiway stop's approach is judged over the same 25 m that captures it, mid-route (the manager's
+    // waypoint capture) and at a leg end (ProgressiveLegEnd): one value, so they cannot drift apart.
+    [Fact]
+    public void The_stop_approach_is_the_waypoint_capture_radius()
+    {
+        var field = typeof(MSFSBlindAssist.Services.TaxiGuidanceManager).GetField("WAYPOINT_CAPTURE_RADIUS_M",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.NotNull(field);
+        Assert.Equal(MSFSBlindAssist.Navigation.ProgressiveLegEnd.CaptureRadiusM, (double)field!.GetRawConstantValue()!);
+    }
+
+    // TryRecalculateRoute's body: from its declaration to the next member at class level.
+    private static string RecalculationSource()
+    {
+        string text = RoutingSource();
+        int start = text.IndexOf("private void TryRecalculateRoute(", StringComparison.Ordinal);
+        Assert.True(start >= 0, "TryRecalculateRoute not found");
+        var next = Regex.Match(text[(start + 1)..], @"\n    (private|public|internal|protected) ");
+        Assert.True(next.Success, "no member after TryRecalculateRoute");
+        return text.Substring(start, next.Index + 1);
     }
 
     private static string RoutingSource()
