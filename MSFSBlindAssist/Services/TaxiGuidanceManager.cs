@@ -2788,11 +2788,17 @@ public partial class TaxiGuidanceManager : IDisposable
             // down" for a hold ending, else close to it), and the two endings that are not a hold
             // never end while the aircraft is on or within the clear margin of a runway
             // (ProgressiveLegEnd). The runway test is asked only for such a leg.
+            //
+            // Only while still Taxiing: AdvanceToNearestSegment can enter a mid-route hold
+            // (HandleHoldShort) earlier in this same frame, and the frame carries on to here with
+            // that hold's "Slow down" latch still set. A leg end never ends a hold in progress; the
+            // hold's Continue clears the latch and the leg end is judged afresh from then on.
             var legEnd = _progressiveTerminator;
-            bool nearARunway = legEnd != null
+            bool legEndTaxiing = legEnd != null && _state == TaxiGuidanceState.Taxiing;
+            bool nearARunway = legEndTaxiing
                 && Navigation.RouteRunwayCrossings.RunwayWithinClearMargin(_graph?.RunwayCenterlines, lat, lon) != null;
             bool arrived = legEnd != null
-                ? ProgressiveLegEnd.Arrived(legEnd.Type, distToTarget, groundSpeedKts,
+                ? legEndTaxiing && ProgressiveLegEnd.Arrived(legEnd.Type, distToTarget, groundSpeedKts,
                     _holdShortSlowDownAnnounced, nearARunway)
                 : distToTarget < arrivalRadius;
 
@@ -2841,9 +2847,11 @@ public partial class TaxiGuidanceManager : IDisposable
             // runway — exactly what the block above withholds. See the
             // `announcementClearRadius` comment at the top of this method.
             //
-            // A leg with no destination keeps this backstop, but for its two endings that are not
-            // a hold (across a runway, end of the taxiway) not on or beside a runway, as above.
-            bool backstopHeldOff = legEnd != null && !ProgressiveLegEnd.EndsAtAHold(legEnd.Type) && nearARunway;
+            // A leg with no destination keeps this backstop, only while Taxiing, and for its two
+            // endings that are not a hold (across a runway, end of the taxiway) not on or beside a
+            // runway, as above.
+            bool backstopHeldOff = legEnd != null
+                && (!legEndTaxiing || (!ProgressiveLegEnd.EndsAtAHold(legEnd.Type) && nearARunway));
             if (!arrived && !_isRunwayLineup && !backstopHeldOff)
             {
                 AlongTrackToSegmentEnd(lat, lon, currentSeg,

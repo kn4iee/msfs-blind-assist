@@ -20,6 +20,19 @@ public class LegEndWiringTests
         Assert.Contains("ProgressiveLegEnd.Countdown(", text);
     }
 
+    // A leg end never ends a hold in progress. AdvanceToNearestSegment can enter a mid-route hold
+    // earlier in the same position frame, which then reaches the arrival test with that hold's
+    // "Slow down" latch still set: the arrival test and the past-the-node backstop both wait for Taxiing.
+    [Fact]
+    public void The_leg_end_is_judged_only_while_taxiing()
+    {
+        string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+
+        Assert.Contains("bool legEndTaxiing = legEnd != null && _state == TaxiGuidanceState.Taxiing;", text);
+        Assert.Contains("legEndTaxiing && ProgressiveLegEnd.Arrived(", text);
+        Assert.Contains("(!legEndTaxiing || (!ProgressiveLegEnd.EndsAtAHold(", text);
+    }
+
     private static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
