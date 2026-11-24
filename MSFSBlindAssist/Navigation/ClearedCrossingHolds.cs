@@ -252,6 +252,20 @@ public static class ClearedCrossingHolds
     public static bool CountsDownAsCleared(TaxiRouteSegment segment, bool legEndApplies, bool taxiing)
         => taxiing && !legEndApplies && IsFullyCleared(segment);
 
+    /// <summary>
+    /// Whether a Continue pressed while taxiing, before the line, clears the stop ahead (ATC often clears a crossing
+    /// while the aircraft is still rolling): only once the hold-short countdown has named it
+    /// (<paramref name="countdownSpoken"/>, any of its tiers), so a stray key never clears a runway the pilot has not
+    /// been told about; only at a hold short (<paramref name="isHoldShort"/>) whose <paramref name="label"/> names at
+    /// least one runway, never a taxiway, holding-point or end-of-taxiway stop; never on the route's last segment
+    /// (<paramref name="isFinalSegment"/>: the departure runway's own hold, the end of a leg). The press clears the first
+    /// runway the label names, through <see cref="ClearAt"/>, which can still refuse a stop shared with the pilot's own
+    /// taxiway hold; a stop guarding two runways keeps the other, which takes its own Continue ([HLD-11]).
+    /// </summary>
+    public static bool CanClearEarly(bool countdownSpoken, bool isHoldShort, string? label, bool isFinalSegment)
+        => countdownSpoken && isHoldShort && !isFinalSegment
+           && RouteRunwayCrossings.ExtractRunwayDesignators(label).Count > 0;
+
     /// <summary>The ground speed, knots, at or above which an aircraft at a cleared start has started across it.</summary>
     public const double StartCrossingMovingKts = 2.0;
 
@@ -299,6 +313,22 @@ public static class ClearedCrossingHolds
         foreach (var c in crossings)
             if (c is not null && (stopNodeId <= 0 || c.StopNodeId != stopNodeId)) kept.Add(c);
         return kept;
+    }
+
+    /// <summary>
+    /// <paramref name="crossings"/> with <paramref name="crossing"/> added: how a Continue that clears a stop before its
+    /// line records it, with its stop node, like a crossing the pilot entered. Always a NEW list, never the one given
+    /// changed (as <see cref="WithoutStop"/>); the same runway (either end) already recorded at the same stop is not added twice.
+    /// </summary>
+    public static List<ClearedCrossing> WithCrossing(IReadOnlyList<ClearedCrossing> crossings, ClearedCrossing crossing)
+    {
+        var all = new List<ClearedCrossing>();
+        if (crossings is not null)
+            foreach (var c in crossings)
+                if (c is not null) all.Add(c);
+        if (crossing is not null && !all.Any(c => c.StopNodeId == crossing.StopNodeId && SameRunway(c.Runway, crossing.Runway)))
+            all.Add(crossing);
+        return all;
     }
 
     /// <summary>The first segment at or after <paramref name="fromSegmentIndex"/> with a runway cleared at its stop, else -1.</summary>

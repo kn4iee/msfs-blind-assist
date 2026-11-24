@@ -775,4 +775,129 @@ public class ClearedCrossingHoldsTests
         Assert.True(route.Segments[after.FirstSegmentAfterDeparture].IsOffChartTurn);
         Assert.All(route.Segments, s => Assert.False(s.IsHoldShortPoint));
     }
+
+    // Continue before the line (spec 8.4): only once the countdown has named the stop, so a stray key never clears a
+    // runway the pilot has not been told about; only at a hold short whose label names a runway; never on the route's
+    // last segment, the departure runway's own hold or the end of a leg.
+    [Fact]
+    public void A_Continue_before_the_line_clears_only_a_runway_the_countdown_has_named()
+    {
+        Assert.True(ClearedCrossingHolds.CanClearEarly(true, true, "runway 22R", false));
+        Assert.False(ClearedCrossingHolds.CanClearEarly(false, true, "runway 22R", false));   // nothing counted down yet
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, true, "runway 22R", true));     // the departure hold or a leg end
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, true, "end of taxiway A", false));
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, true, "taxiway L", false));
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, false, "runway 22R", false));
+
+        Assert.True(ClearedCrossingHolds.CanClearEarly(true, true, "runway 09 and runway 01", false));
+        Assert.True(ClearedCrossingHolds.CanClearEarly(true, true, "D5, Runway 22R", false));
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, true, "holding point B3", false));
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, true, "", false));
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, true, null, false));
+    }
+
+    // What ContinuePastHoldShort does with an early press, on stops the real pass placed: the first runway the label
+    // names, cleared at that ONE stop through ClearAt, and the sentence it says, under a comma-decimal culture.
+    [Fact]
+    public void A_Continue_before_the_line_clears_the_first_runway_at_that_stop_only()
+    {
+        // A stop for one runway: cleared whole, so it is counted down and said at its line as cleared, with no stop.
+        var single = AcrossOnA();
+        var ev = Assert.Single(Pass(single, Runway09()));
+        var stop = single.Segments[0];
+        Assert.True(ClearedCrossingHolds.CanClearEarly(true, stop.IsHoldShortPoint, stop.HoldShortRunway, isFinalSegment: false));
+        string runway = RouteRunwayCrossings.ExtractRunwayDesignator(stop.HoldShortRunway)!;
+
+        Assert.True(ClearedCrossingHolds.ClearAt(single, 1, runway));
+
+        Assert.True(ClearedCrossingHolds.IsFullyCleared(stop));
+        Assert.True(ClearedCrossingHolds.CountsDownAsCleared(stop, legEndApplies: false, taxiing: true));
+        Assert.True(ev.Cleared);
+        Assert.Equal("Cleared across runway 09. No stop.", TestCulture.Run("de-DE",
+            () => ClearedCrossingCallouts.EarlyContinue(runway, stop.IsHoldShortPoint ? stop.HoldShortRunway : null)));
+        Assert.Equal("Crossing runway 09.", ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(stop.PlacedHoldLabel, stop.ClearedRunways)));
+        // Pressed again: no hold short is left there, so nothing more is cleared.
+        Assert.False(ClearedCrossingHolds.CanClearEarly(true, stop.IsHoldShortPoint, stop.HoldShortRunway, isFinalSegment: false));
+
+        // A stop guarding two runways: the first only [HLD-11]. It still holds for the other, as an ordinary hold short
+        // that one Continue at the line releases, and that Continue names both runways where they are crossed.
+        var (shared, runways) = Intersection();
+        Pass(shared, runways);
+        var both = shared.Segments[0];
+        string first = RouteRunwayCrossings.ExtractRunwayDesignator(both.HoldShortRunway)!;
+        Assert.Equal("09", first);
+
+        Assert.True(ClearedCrossingHolds.ClearAt(shared, 1, first));
+
+        Assert.True(both.IsHoldShortPoint);
+        Assert.Equal("runway 01", both.HoldShortRunway);
+        Assert.Empty(RunwayHoldStages.From(both.HoldShortRunway));
+        Assert.False(ClearedCrossingHolds.CountsDownAsCleared(both, legEndApplies: false, taxiing: true));
+        Assert.Equal(new[] { true, false }, shared.RunwayEvents.Select(e => e.Cleared));
+        Assert.Equal("Cleared across runway 09. Still holding short of runway 01.", TestCulture.Run("de-DE",
+            () => ClearedCrossingCallouts.EarlyContinue(first, both.IsHoldShortPoint ? both.HoldShortRunway : null)));
+        Assert.Equal("runway 09", ClearedCrossingHolds.ClearedPartLabel(both.PlacedHoldLabel, both.ClearedRunways));
+        Assert.Equal("Continuing. Crossing runway 09 and runway 01. ", TestCulture.Run("de-DE", () => ClearedCrossingCallouts.Continuing(
+            ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(both.PlacedHoldLabel, both.ClearedRunways)))));
+
+        // A second press before the line clears the other runway too: no stop is left, and its line names both.
+        Assert.True(ClearedCrossingHolds.CanClearEarly(true, both.IsHoldShortPoint, both.HoldShortRunway, isFinalSegment: false));
+        string second = RouteRunwayCrossings.ExtractRunwayDesignator(both.HoldShortRunway)!;
+        Assert.True(ClearedCrossingHolds.ClearAt(shared, 1, second));
+        Assert.True(ClearedCrossingHolds.IsFullyCleared(both));
+        Assert.Equal("Cleared across runway 01. No stop.", TestCulture.Run("de-DE",
+            () => ClearedCrossingCallouts.EarlyContinue(second, both.IsHoldShortPoint ? both.HoldShortRunway : null)));
+        Assert.Equal("Crossing runway 09 and runway 01.", ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(both.PlacedHoldLabel, both.ClearedRunways)));
+
+        // The Hold short key puts the stop back whole.
+        Assert.True(ClearedCrossingHolds.RestoreAt(shared, 0));
+        Assert.Equal("runway 09 and runway 01", both.HoldShortRunway);
+        Assert.Equal(new[] { "09", "01" }, RunwayHoldStages.From(both.HoldShortRunway));
+    }
+
+    // A stop shared with the pilot's own taxiway or holding-point hold names the runway, so the countdown names it, but
+    // ClearAt refuses it: the press clears nothing there, and the manager then does what the press did before.
+    [Theory]
+    [InlineData("taxiway W", "runway 09 at taxiway W")]
+    [InlineData("holding point B3", "runway 09 at holding point B3")]
+    public void A_Continue_before_a_stop_shared_with_the_pilots_own_hold_clears_nothing(string pilotLabel, string sharedLabel)
+    {
+        var route = Named(RouteOf(Node(1, 1000, 250), Node(2, 1000, 105, TaxiNodeType.HoldShort, "runway 09 at D5"),
+            Node(3, 1000, 70), Node(4, 1000, 51), Node(5, 1000, 21), Node(6, 1000, -21), Node(7, 1000, -105)), "D");
+        route.Segments[2].IsHoldShortPoint = true;
+        route.Segments[2].HoldShortRunway = pilotLabel;
+        var ev = Assert.Single(Pass(route, Runway09()));
+        var stop = route.Segments[2];
+        Assert.Equal(sharedLabel, stop.HoldShortRunway);
+        Assert.True(ClearedCrossingHolds.CanClearEarly(true, stop.IsHoldShortPoint, stop.HoldShortRunway, isFinalSegment: false));
+
+        Assert.False(ClearedCrossingHolds.ClearAt(route, 3, RouteRunwayCrossings.ExtractRunwayDesignator(stop.HoldShortRunway)!));
+
+        Assert.True(stop.IsHoldShortPoint);
+        Assert.Equal(sharedLabel, stop.HoldShortRunway);
+        Assert.Null(stop.PlacedHoldLabel);
+        Assert.Empty(stop.ClearedRunways);
+        Assert.False(ev.Cleared);
+    }
+
+    // An early press records its crossing as an entered one would be: into a NEW list (LoadRoute's Fail and rollback
+    // snapshots hold the old one), never twice for the same runway at the same stop.
+    [Fact]
+    public void A_crossing_cleared_by_Continue_is_recorded_into_a_new_list()
+    {
+        var list = new List<ClearedCrossing> { new("01", StopNodeId: 9) };
+
+        var after = ClearedCrossingHolds.WithCrossing(list, new ClearedCrossing("22R", StopNodeId: 7));
+
+        Assert.NotSame(list, after);
+        Assert.Equal(new[] { "01" }, list.Select(c => c.Runway));
+        Assert.Equal(new[] { "01", "22R" }, after.Select(c => c.Runway));
+        Assert.True(ClearedCrossingHolds.HasStop(after, 7));
+        // The same runway (either end) at the same stop is there already; another runway or another stop is another crossing.
+        Assert.Equal(2, ClearedCrossingHolds.WithCrossing(after, new ClearedCrossing("22R", StopNodeId: 7)).Count);
+        Assert.Equal(2, ClearedCrossingHolds.WithCrossing(after, new ClearedCrossing("04L", StopNodeId: 7)).Count);
+        Assert.Equal(3, ClearedCrossingHolds.WithCrossing(after, new ClearedCrossing("22R", StopNodeId: 8)).Count);
+        Assert.Equal(3, ClearedCrossingHolds.WithCrossing(after, new ClearedCrossing("09", StopNodeId: 7)).Count);
+        Assert.Single(ClearedCrossingHolds.WithCrossing(null!, new ClearedCrossing("22R", StopNodeId: 7)));
+    }
 }

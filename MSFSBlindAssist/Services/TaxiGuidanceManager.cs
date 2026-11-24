@@ -4353,8 +4353,8 @@ public partial class TaxiGuidanceManager : IDisposable
         // loud; a second Continue press inside the window is the pilot's explicit
         // "cleared across both" and clears the next crossing's stop. Never
         // automatic — an un-pressed second crossing keeps its full countdown.
-        // A press before the window opens is ignored and keeps the offer standing (it falls through to
-        // the HoldShort guard below, which returns: the aircraft is already taxiing).
+        // A press before the window opens is ignored and keeps the offer standing (the early Continue below
+        // leaves it alone, and the HoldShort guard returns: the aircraft is already taxiing).
         if (_state == TaxiGuidanceState.Taxiing && _route != null
             && _pairedCrossingSegIdx >= 0
             && Navigation.PairedCrossingHoldWindow.Accepts(
@@ -4367,11 +4367,58 @@ public partial class TaxiGuidanceManager : IDisposable
                 var pairedSeg = _route.Segments[segIdx];
                 string label = string.IsNullOrEmpty(pairedSeg.HoldShortRunway)
                     ? "the next runway" : pairedSeg.HoldShortRunway;
-                pairedSeg.IsHoldShortPoint = false;
-                pairedSeg.HoldShortRunway = "";
+                // Cleared as a Continue before the line clears a stop: the one runway the offer named, at this one stop
+                // (ClearedCrossingHolds.ClearAt), recorded with its node, so it is still counted down and said at its
+                // line, and the Hold short key can put it back. A stop ClearAt refuses (one shared with the pilot's own
+                // taxiway or holding-point hold) records nothing and is taken off as it always was.
+                if (RouteRunwayCrossings.ExtractRunwayDesignator(pairedSeg.HoldShortRunway) is string pairedRunway
+                    && pairedSeg.ToNode != null
+                    && ClearedCrossingHolds.ClearAt(_route, segIdx + 1, pairedRunway))
+                {
+                    _clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,
+                        new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId));
+                    _guidanceLog.Info($"Paired Continue: runway {pairedRunway} cleared at node {pairedSeg.ToNode.NodeId}.");
+                }
+                else
+                {
+                    pairedSeg.IsHoldShortPoint = false;
+                    pairedSeg.HoldShortRunway = "";
+                }
                 AnnounceInstruction($"Also cleared across {label}. No stop between the runways.");
             }
             return;
+        }
+
+        // Continue before the line (spec 8.4). ATC often clears a crossing while the aircraft is still rolling: once the
+        // countdown has named the stop ahead ("Hold short runway 22R in 120 metres."), a press while taxiing clears the
+        // first runway its label names, at that one stop (ClearedCrossingHolds.ClearAt), and records it, with its node,
+        // like a crossing the pilot entered, so it is said at its line and the Hold short key can put it back. A stop
+        // guarding two runways loses only that one and holds for the other, which takes its own Continue [HLD-11]; the
+        // Continue that releases it names every runway at it (ClearedPartOfReleasedStop). Before the countdown has
+        // spoken, on the route's last segment (the departure runway's own hold, the end of a leg), at a stop naming no
+        // runway, at one ClearAt refuses (shared with the pilot's own taxiway hold), and while a paired offer waits for
+        // its window to open, the press does what it always did: nothing (the HoldShort guard below returns).
+        if (_state == TaxiGuidanceState.Taxiing && _route != null
+            && _currentSegmentIndex >= 0 && _currentSegmentIndex < _route.Segments.Count
+            && !(_pairedCrossingSegIdx >= 0 && MSFSBlindAssist.Utils.SimClock.UtcNow < _pairedCrossingWindowFrom))
+        {
+            var seg = _route.Segments[_currentSegmentIndex];
+            if (ClearedCrossingHolds.CanClearEarly(
+                    _holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced,
+                    seg.IsHoldShortPoint, seg.HoldShortRunway, _currentSegmentIndex >= _route.Segments.Count - 1)
+                && RouteRunwayCrossings.ExtractRunwayDesignator(seg.HoldShortRunway) is string runway
+                && seg.ToNode != null
+                && ClearedCrossingHolds.ClearAt(_route, _currentSegmentIndex + 1, runway))
+            {
+                _clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings, new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId));
+                _guidanceLog.Info($"Continue before the line: runway {runway} cleared at node {seg.ToNode.NodeId}" +
+                                  (seg.IsHoldShortPoint ? $", still holding short of \"{seg.HoldShortRunway}\"." : ", no stop left."));
+                AnnounceInstruction(ClearedCrossingCallouts.EarlyContinue(runway, seg.IsHoldShortPoint ? seg.HoldShortRunway : null));
+                // No stop is left there: its approach calls would only repeat what was just said, so they stay latched.
+                // Its line is still said where it is passed (PassClearedLine), which starts the latches fresh.
+                if (ClearedCrossingHolds.IsFullyCleared(seg)) _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = true;
+                return;
+            }
         }
 
         if (_state != TaxiGuidanceState.HoldShort || _route == null) return;

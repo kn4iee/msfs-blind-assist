@@ -285,6 +285,75 @@ public class ClearedCrossingWiringTests
         Assert.Matches(@"//[^\n]*[Rr]eplaced, never mutated in place[^\n]*\n\s*private List<Navigation\.ClearedCrossing> _clearedCrossings = ", ManagerSource());
     }
 
+    // Continue before the line (spec 8.4): while taxiing, once the countdown has named the stop ahead (any of its three
+    // tiers spoken), a press clears the first runway its label names at that one stop, records it as an entered
+    // crossing (a NEW list), and says so. A stop left with no runway keeps the three latches set, so its approach calls
+    // never repeat what was just said; its line is still said (PassClearedLine). Tried after the paired double press and
+    // before the HoldShort guard, so a press in HoldShort is as it was; never while a paired offer waits for its window
+    // to open, a key bounce or a quick double press that was ignored before and still is.
+    [Fact]
+    public void A_Continue_before_the_line_clears_a_runway_the_countdown_has_named()
+    {
+        string cont = Member(ManagerSource(), "public void ContinuePastHoldShort(");
+
+        int paired = cont.IndexOf("Also cleared across {label}. No stop between the runways.", StringComparison.Ordinal);
+        int early = cont.IndexOf("ClearedCrossingHolds.CanClearEarly(", StringComparison.Ordinal);
+        int guard = cont.IndexOf("if (_state != TaxiGuidanceState.HoldShort || _route == null) return;", StringComparison.Ordinal);
+        Assert.True(paired >= 0 && early > paired && guard > early,
+            "the early Continue is tried after the paired double press and before the HoldShort guard");
+
+        string branch = cont[paired..guard];
+        Assert.Contains("if (_state == TaxiGuidanceState.Taxiing && _route != null", branch);
+        Assert.Contains("&& !(_pairedCrossingSegIdx >= 0 && MSFSBlindAssist.Utils.SimClock.UtcNow < _pairedCrossingWindowFrom))", branch);
+        Assert.Contains("_holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced,", branch);
+        Assert.Contains("seg.IsHoldShortPoint, seg.HoldShortRunway, _currentSegmentIndex >= _route.Segments.Count - 1)", branch);
+        Assert.Contains("RouteRunwayCrossings.ExtractRunwayDesignator(seg.HoldShortRunway) is string runway", branch);
+        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings, new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId));", branch);
+        Assert.Contains("AnnounceInstruction(ClearedCrossingCallouts.EarlyContinue(runway, seg.IsHoldShortPoint ? seg.HoldShortRunway : null));", branch);
+        Assert.Contains("if (ClearedCrossingHolds.IsFullyCleared(seg)) _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = true;", branch);
+        Assert.DoesNotContain("_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", branch);
+    }
+
+    // ClearAt can refuse even a stop whose label names the runway (one shared with the pilot's own taxiway or holding-point
+    // hold). Both Continue paths act on its answer: nothing is recorded or said unless it cleared, and otherwise the press
+    // does what it did before (early: nothing; paired: the stop taken off as it always was).
+    [Fact]
+    public void Both_Continue_paths_act_only_on_what_ClearAt_cleared()
+    {
+        string cont = Member(ManagerSource(), "public void ContinuePastHoldShort(");
+
+        // Never called for its side effect alone, its answer dropped.
+        Assert.DoesNotMatch(@"(?m)^\s*(Navigation\.)?ClearedCrossingHolds\.ClearAt\(", cont);
+
+        int earlyClear = cont.IndexOf("&& ClearedCrossingHolds.ClearAt(_route, _currentSegmentIndex + 1, runway))", StringComparison.Ordinal);
+        int earlyRecord = cont.IndexOf("new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId)", StringComparison.Ordinal);
+        int earlySaid = cont.IndexOf("ClearedCrossingCallouts.EarlyContinue(", StringComparison.Ordinal);
+        Assert.True(earlyClear >= 0 && earlyRecord > earlyClear && earlySaid > earlyClear,
+            "the early press records and speaks only inside ClearAt's yes");
+
+        int pairedClear = cont.IndexOf("&& ClearedCrossingHolds.ClearAt(_route, segIdx + 1, pairedRunway))", StringComparison.Ordinal);
+        int pairedRecord = cont.IndexOf("new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId)", StringComparison.Ordinal);
+        int pairedElse = cont.IndexOf("pairedSeg.IsHoldShortPoint = false;", StringComparison.Ordinal);
+        Assert.True(pairedClear >= 0 && pairedRecord > pairedClear && pairedElse > pairedRecord,
+            "the paired press records only inside ClearAt's yes, and takes the stop off as before otherwise");
+    }
+
+    // The paired-runway double Continue clears its stop the same way: the one runway the offer named, at that stop,
+    // recorded, so it is counted down and said at its line and the Hold short key can put it back. Its sentence is unchanged.
+    [Fact]
+    public void The_paired_double_Continue_clears_its_stop_the_same_way()
+    {
+        string cont = Member(ManagerSource(), "public void ContinuePastHoldShort(");
+
+        Assert.Contains("RouteRunwayCrossings.ExtractRunwayDesignator(pairedSeg.HoldShortRunway) is string pairedRunway", cont);
+        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,", cont);
+        Assert.Contains("AnnounceInstruction($\"Also cleared across {label}. No stop between the runways.\");", cont);
+        Assert.Single(Regex.Matches(cont, @"Also cleared across "));
+        // The offer is still made only for a stop that names one runway, never on the route's last segment.
+        Assert.Contains("for (int i = _currentSegmentIndex; i < _route.Segments.Count - 1; i++)", cont);
+        Assert.Contains("if (Navigation.RouteRunwayCrossings.ExtractRunwayDesignators(s.HoldShortRunway).Count != 1)", cont);
+    }
+
     // LoadRoute's Fail snapshot: from the first prior capture to the end of the Fail local function.
     private static string FailSnapshot(string routing)
     {
