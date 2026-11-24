@@ -893,7 +893,9 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
         // picked): the route passes no other node on B before its stop. Judged along the route, not by
         // a walk of the graph, which at a Y-shaped junction goes back up the branch the route left. The
         // whole route is read: a picked route can cross B on the charted link to its turn
-        // (LEG_PICK_LINK_CROSSES_B: KDEN "D, D8, right onto D8, hold short of WC").
+        // (LEG_PICK_LINK_CROSSES_B: KDEN "D, D8, right onto D8, hold short of WC"). EVERY node on B is
+        // classified, each with its own finding: stopping at the first would let an informational one
+        // (on the link, or inside a runway's margin) hide a later breach between the turn and the stop.
         for (int k = 0; k < n; k++)
         {
             var node = route.Segments[k].ToNode;
@@ -906,7 +908,6 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
             fs.Add(new Finding(w.Icao, code, where,
                 $"segment {k} of {n} reaches n{node.NodeId} on {lp.B}{(inMargin ? ", inside a runway's clear margin" : "")}; "
                 + $"the leg stops before n{(ahead?.node ?? -1)}"));
-            break;
         }
         if (trace)
         {
