@@ -19,8 +19,8 @@ namespace MSFSBlindAssist.Aircraft;
 ///    pulls are <c>INI_FCU_*_BUTTON</c> press flags; the flight modes are the
 ///    <c>INI_PITCH_MODE</c>/<c>INI_ROLL_MODE</c> numbers, spoken with A330 words (<see cref="A330Fma"/>,
 ///    which says which numbers are measured on this aircraft and which are not yet).
-///  * MCDU: no text export (no <c>iniAirbusMCDU_1</c> client-data area), so it is read from the pixels
-///    of a forced pop-out by a fixed-font matcher trained on this MCDU (Aircraft/A330/A330CduScreenReader).
+///  * MCDU: no text export (no <c>iniAirbusMCDU_1</c> client-data area), so it is read from the display
+///    reader's frames (<c>IA330Displays</c>, both sides, Forms/IniA330/IniA330CduForm); no pop-out, no camera.
 ///  * EFB: a Coherent HTML page (<c>iniEfbA330</c>), scraped into the shared EFB shell.
 /// </summary>
 public partial class IniA330Definition : BaseAircraftDefinition

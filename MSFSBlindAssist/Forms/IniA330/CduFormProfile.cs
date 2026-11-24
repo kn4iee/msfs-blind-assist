@@ -1,4 +1,3 @@
-using MSFSBlindAssist.Aircraft.A330;
 using MSFSBlindAssist.Aircraft.A330.Display;
 
 namespace MSFSBlindAssist.Forms.IniA330;
@@ -139,7 +138,7 @@ internal static class CduLineText
     /// <summary>A listed title's words (<see cref="SpokenTitle"/>). Pure.</summary>
     public static string Spoken(string title)
     {
-        string words = System.Text.RegularExpressions.Regex.Replace(title, "[←-↓]", " ");
+        string words = System.Text.RegularExpressions.Regex.Replace(title, "[\u2190-\u2193]", " ");
         words = System.Text.RegularExpressions.Regex.Replace(words, @"(?<!\S)[0-9]+/[0-9]+(?!\S)", " ",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant);
         return words.Trim();
@@ -159,49 +158,5 @@ internal static class CduLineText
         }
         result.Add(("Scratchpad: " + ForWindow(lines[MSFSBlindAssist.Aircraft.A330.Mcdu.A330McduLines.ScratchpadRow])).TrimEnd());
         return result;
-    }
-
-    public static string WithColour(A330CduLine line)
-    {
-        var text = line.Text;
-        if (line.Chars.Count == 0) return IniA330CduForm.Tidy(text);
-        // align every non-space character of the text with the glyph it came from ("×" reads as "><")
-        var colours = new string[text.Length];
-        int gi = 0, sub = 0;
-        for (int i = 0; i < text.Length; i++)
-        {
-            if (text[i] == ' ' || gi >= line.Chars.Count) { colours[i] = ""; continue; }
-            var c = line.Chars[gi];
-            colours[i] = c.Colour;
-            int width = c.Text == A330CduScreenReader.OverlappedMarkers ? 2 : Math.Max(1, c.Text.Length);
-            if (++sub >= width) { gi++; sub = 0; }
-        }
-        return Annotate(text, colours);
-    }
-
-    /// <param name="colours">One colour per character of <paramref name="text"/> ("" for spaces).</param>
-    internal static string Annotate(string text, string[] colours)
-    {
-        var sb = new System.Text.StringBuilder();
-        int i = 0;
-        while (i < text.Length)
-        {
-            if (text[i] == ' ') { sb.Append(' '); i++; continue; }
-            int s = i;
-            while (i < text.Length && text[i] != ' ') i++;
-            bool grey = Enumerable.Range(s, i - s).Count(k => colours[k] == CduColour.Grey) * 2 > i - s;
-            sb.Append(text, s, i - s);
-            if (grey)
-            {
-                // a run of grey words gets ONE marker, after its last word
-                int j = i;
-                while (j < text.Length && text[j] == ' ') j++;
-                int e = j;
-                while (e < text.Length && text[e] != ' ') e++;
-                bool nextGrey = e > j && Enumerable.Range(j, e - j).Count(k => colours[k] == CduColour.Grey) * 2 > e - j;
-                if (!nextGrey || j - i >= 3) sb.Append(" (unavailable)");
-            }
-        }
-        return IniA330CduForm.Tidy(sb.ToString());
     }
 }

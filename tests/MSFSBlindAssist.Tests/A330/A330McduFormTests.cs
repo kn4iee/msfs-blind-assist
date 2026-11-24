@@ -986,7 +986,7 @@ public sealed class A330McduFormTests : IDisposable
         using var rig = new Rig(A330ReplayDisplays.FromFixtures("p03_data1.json"));
         var w = rig.Window();
         w.Show();
-        Assert.Equal("Title: DATA INDEX   1/2 ←→", Items(w)[0]);
+        Assert.Equal("Title: DATA INDEX   1/2 \u2190\u2192", Items(w)[0]);
         Assert.Equal(new[] { "DATA INDEX" }, rig.Speech.All);
 
         // Page 2 of 2: the listed title line follows the counter, and nothing is said.
@@ -994,7 +994,7 @@ public sealed class A330McduFormTests : IDisposable
         rig.Displays.Show(Fixture("p03_data2.json"));
         Tick(rig, w);
         Tick(rig, w);
-        Assert.Equal("Title: DATA INDEX   2/2 ←→", Items(w)[0]);
+        Assert.Equal("Title: DATA INDEX   2/2 \u2190\u2192", Items(w)[0]);
         Assert.Single(rig.Speech.All);
         Assert.Equal(3, List(w).SelectedIndex);
 

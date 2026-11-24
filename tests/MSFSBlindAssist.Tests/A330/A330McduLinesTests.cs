@@ -111,12 +111,12 @@ public class A330McduLinesTests
     [Fact]
     public void The_spoken_title_is_its_words_without_the_slew_arrows_and_the_page_counter()
     {
-        Assert.Equal("DATA INDEX", CduLineText.Spoken("DATA INDEX   1/2 ←→"));
-        Assert.Equal("FROM          MSF773", CduLineText.Spoken("FROM          MSF773 ←→"));
-        Assert.Equal("INIT", CduLineText.Spoken("INIT        ←→"));
+        Assert.Equal("DATA INDEX", CduLineText.Spoken("DATA INDEX   1/2 \u2190\u2192"));
+        Assert.Equal("FROM          MSF773", CduLineText.Spoken("FROM          MSF773 \u2190\u2192"));
+        Assert.Equal("INIT", CduLineText.Spoken("INIT        \u2190\u2192"));
         Assert.Equal("P/N XLOAD", CduLineText.Spoken("P/N XLOAD  1/7"));   // only a counter of digits goes
         Assert.Equal("TAKE OFF RWY 26L", CduLineText.Spoken("TAKE OFF RWY 26L"));
-        Assert.Equal("", CduLineText.Spoken("↑↓"));
+        Assert.Equal("", CduLineText.Spoken("\u2191\u2193"));
 
         // On a captured page: the counter is listed on the title line and not said.
         var xload = Lines("p03_xload.json");

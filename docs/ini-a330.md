@@ -69,9 +69,8 @@ different aircraft built on the FlyByWire A32NX.
   frame without them. The slew keys are never sent past a list's top or end, silently (a press at a list's end does
   nothing, as on the other windows): the A330 counts such presses and the list then seems stuck (seen by the owner on
   ARRIVAL, 2026-11-22); a slew is judged only on a page, waiting up to 1.5 s for one. There is no AI read of the
-  MCDU. The pixel reader (`A330CduScreenReader`, `A330CduPopout`, `CduLayout`, the glyph file,
-  `tools/a330-cdu-ocr`) is still in the tree, unused by the window, until the owner has checked the new window; it
-  is described in this file's history.
+  MCDU. The pixel reader the window used before (a forced pop-out read by a trained glyph matcher, and its training
+  tool) was removed on 2026-11-23 once the owner had checked the new window; it is described in this file's history.
 * **MCDU keys:** write 1 to `INI_MCDU1_<KEY>` (the first officer's: `INI_MCDU2_<KEY>`). Verified: DIR PROG PERF INIT DATA FPLAN RADNAV
   AIRPORT MENU FUEL SEC ATC PREV NEXT, letters, digits. Slew keys verified in flight 2026-10-17:
   `UARROW` moves on to later rows (down the F-PLN, a screen down a list), `DOWN` back toward the top.
@@ -92,10 +91,8 @@ different aircraft built on the FlyByWire A32NX.
   element id — an object literal keeps the last duplicate, and a stray second `zfw` entry renamed the
   cargo slider "Zero fuel weight". Units come from the page's unit box (kg or lb), never from the
   field name.
-* **Camera restore after the MCDU pop-out** is written, read back and repeated until it holds, from
-  the UI thread: a single type+index write sent from the pop-out's pool thread was reported sent and
-  left the camera on the MCDU close-up (live 2026-10-17), which silences the cockpit ambience.
-* **Camera views (0-based):** ECAM 3, PFD/ND 6, EFB 4/5, captain MCDU 12, F/O MCDU 13, pedestal 22.
+* **Camera views (0-based):** ECAM 3, PFD/ND 6, EFB 4/5, captain MCDU 12, F/O MCDU 13, pedestal 22. (The MCDU's
+  views were the removed pixel reader's; the MCDU window moves no camera.)
 * **MSFS 2024 chocks and covers** (measured 2026-11-19, A330-200 (GE) loaded cold and dark): the
   simulator's own wheel chocks, engine covers and pitot covers (`COVER ON:0`, `:1`, `:2`) were all on
   at the start. With the engine covers on, an engine 2 start (APU bleed, IGN START, master ON) held N2

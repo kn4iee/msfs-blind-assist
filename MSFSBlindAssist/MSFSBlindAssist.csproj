@@ -104,7 +104,6 @@
          controls without it, so it must not be able to go missing from the output folder. -->
     <EmbeddedResource Include="Resources\md11_control_map.json" />
     <EmbeddedResource Include="Resources\a330_control_map.json" />
-    <EmbeddedResource Include="Resources\a330-cdu-glyphs.bin" />
   </ItemGroup>
 
   <ItemGroup>

@@ -471,14 +471,6 @@ public sealed class IniA330CduForm : Form
 
     private static DateTime Utc(long ms) => new(Math.Max(0, ms) * TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
 
-    /// <summary>Collapses the wide layout gaps between a line's left and right fields to a
-    /// readable separator, keeping single word spaces.</summary>
-    internal static string Tidy(string text)
-    {
-        var t = text.Trim();
-        return System.Text.RegularExpressions.Regex.Replace(t, " {3,}", "   ");
-    }
-
     // ---------------- keys ----------------
 
     private bool WritePressFlag(string flag)

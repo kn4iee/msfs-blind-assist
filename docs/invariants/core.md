@@ -28,9 +28,9 @@ Corrected 2026-10-09: the rule said `-r win-x64` writes a separate `win-x64\` tr
 
 ## CORE-4
 
-- `dotnet build MSFSBlindAssist.sln` builds only four of the `tools/` projects, `tools/PMDGDispatchTester`, `tools/ChangelogBuilder`, `tools/GuideBuilder` (added 2026-10-19 with the user guide, docs/user-guide.md) and `tools/LayoutBundle` (added 2026-10-31; it copies the layout files into a build). The other 18 `tools/*` projects build on their own, never as part of the solution: `a330-cdu-ocr/harness`, `Bbs757EfbProbe`, `b757-gen/PanelSweep`, `CDUTest`, `DecimalSweep`, `DistanceUnitsProbe`, `DockingProbe`, `ExitConsistencySweep`, `GsxAirplaneProbe`, `GsxOffsetProbe`, `GsxProfileProbe`, `IFlySdkProbe`, `LandingExitSweep`, `ProgressiveTaxiProbe`, `StandBridgeSweep`, `TaxiAugmentProbe`, `TaxiGuidanceProbe` and `VirtualPilot`. docs/development.md ("Build output and traps") names what each does.
+- `dotnet build MSFSBlindAssist.sln` builds only four of the `tools/` projects, `tools/PMDGDispatchTester`, `tools/ChangelogBuilder`, `tools/GuideBuilder` (added 2026-10-19 with the user guide, docs/user-guide.md) and `tools/LayoutBundle` (added 2026-10-31; it copies the layout files into a build). The other 17 `tools/*` projects build on their own, never as part of the solution: `Bbs757EfbProbe`, `b757-gen/PanelSweep`, `CDUTest`, `DecimalSweep`, `DistanceUnitsProbe`, `DockingProbe`, `ExitConsistencySweep`, `GsxAirplaneProbe`, `GsxOffsetProbe`, `GsxProfileProbe`, `IFlySdkProbe`, `LandingExitSweep`, `ProgressiveTaxiProbe`, `StandBridgeSweep`, `TaxiAugmentProbe`, `TaxiGuidanceProbe` and `VirtualPilot`. docs/development.md ("Build output and traps") names what each does.
 
-Why it matters. Fourteen of the eighteen link production sources from `MSFSBlindAssist/` with `<Compile Include>`, or reference the app project (`ExitConsistencySweep`, `VirtualPilot`); `CDUTest` links none and copies the main app's `SimConnect.dll`, `Bbs757EfbProbe` links none and copies the app's 757 EFB agent script, the A330 MCDU capture harness links none, and `DecimalSweep` links none: it reads the source files as text and the app's dependencies from its build output. A solution build never compiles them, so a change to a linked source can break one without any solution build showing it. Build the probe you rely on, after a change to a source it links.
+Why it matters. Fourteen of the seventeen link production sources from `MSFSBlindAssist/` with `<Compile Include>`, or reference the app project (`ExitConsistencySweep`, `VirtualPilot`); `CDUTest` links none and copies the main app's `SimConnect.dll`, `Bbs757EfbProbe` links none and copies the app's 757 EFB agent script, and `DecimalSweep` links none: it reads the source files as text and the app's dependencies from its build output. A solution build never compiles them, so a change to a linked source can break one without any solution build showing it. Build the probe you rely on, after a change to a source it links.
 
 Corrected 2026-10-09: the rule named only `tools/CDUTest` and probes "of its style", and CLAUDE.md listed four; 12 projects built on their own. Evidence: `ls tools/*/*.csproj` (14 projects) against the project list in `MSFSBlindAssist.sln`, which held only `PMDGDispatchTester` and `ChangelogBuilder` from `tools/`.
 
@@ -41,6 +41,8 @@ Corrected 2026-11-14: the BlueBird 757 work added two projects that build on the
 Corrected 2026-11-19: PR #349 added `tools/DecimalSweep` ([CORE-21]), which builds on its own, 17 in all. Evidence: `git ls-files 'tools/**/*.csproj'` lists 21 projects, 4 of them in `MSFSBlindAssist.sln`.
 
 Corrected 2026-11-21: the iniBuilds A330 work added `tools/a330-cdu-ocr/harness` (its MCDU capture harness, also one folder deeper), 18 in all once main's `tools/DecimalSweep` was merged with it. Evidence: `git ls-files 'tools/**/*.csproj'` lists 22 projects, 4 of them in `MSFSBlindAssist.sln`.
+
+Corrected 2026-11-23: the A330's MCDU pixel reader was removed with its training tool, `tools/a330-cdu-ocr/harness` among it (A330 plan 03, Task 7), 17 in all. Evidence: `git ls-files 'tools/**/*.csproj'` lists 21 projects, 4 of them in `MSFSBlindAssist.sln`.
 
 ## CORE-5
 
