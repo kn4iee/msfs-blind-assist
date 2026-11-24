@@ -200,6 +200,22 @@ public static class ClearedCrossingHolds
     }
 
     /// <summary>
+    /// The other half of <see cref="RemainingLabel"/>: <paramref name="placedLabel"/>'s parts (split the same way, at
+    /// <c>" and runway "</c>) whose first designator is cleared (either end), joined with <c>" and "</c>; the whole label
+    /// when every runway is cleared. Null when no part is. What a stop's cleared runways are called where the aircraft
+    /// crosses them: at a stop still holding for another runway, the Continue that releases it names this part.
+    /// </summary>
+    public static string? ClearedPartLabel(string? placedLabel, IReadOnlyCollection<string> clearedRunways)
+    {
+        if (string.IsNullOrEmpty(placedLabel) || clearedRunways is null || clearedRunways.Count == 0) return null;
+        var cleared = LabelParts(placedLabel)
+            .Where(p => RouteRunwayCrossings.ExtractRunwayDesignator(p) is string first
+                        && clearedRunways.Any(c => SameRunway(c, first)))
+            .ToList();
+        return cleared.Count > 0 ? string.Join(" and ", cleared) : null;
+    }
+
+    /// <summary>
     /// Whether a runway was cleared at the route's start hold (<see cref="TaxiRoute.StartHoldClearedRunways"/>): the
     /// start hold's counterpart of a cleared segment stop, which <see cref="NextClearedSegment"/> does not report.
     /// </summary>
@@ -234,14 +250,6 @@ public static class ClearedCrossingHolds
     /// </summary>
     public static bool CountsDownAsCleared(TaxiRouteSegment segment, bool legEndApplies, bool taxiing)
         => taxiing && !legEndApplies && IsFullyCleared(segment);
-
-    /// <summary>
-    /// Whether the route starts at a line every runway of which is cleared: the start hold's counterpart of
-    /// <see cref="IsFullyCleared"/>, judged from the label it was placed with, so a start hold still guarding a runway
-    /// is not one, even once Continue has released it (<see cref="TaxiRoute.StartHoldRunway"/> null).
-    /// </summary>
-    public static bool IsStartHoldFullyCleared(TaxiRoute route)
-        => IsStartHoldCleared(route) && RemainingLabel(route.PlacedStartHoldLabel, route.StartHoldClearedRunways) is null;
 
     /// <summary>The ground speed, knots, at or above which an aircraft at a cleared start has started across it.</summary>
     public const double StartCrossingMovingKts = 2.0;
@@ -502,6 +510,13 @@ public static class ClearedCrossingCallouts
 
     /// <summary>At the hold line of a cleared crossing.</summary>
     public static string AtTheLine(string placedLabel) => $"Crossing {placedLabel}.";
+
+    /// <summary>
+    /// A Continue's confirmation, then <paramref name="crossingLine"/> (<see cref="AtTheLine"/> for the runway cleared at
+    /// a stop that held for another), as one utterance; the confirmation exactly as it was when there is none.
+    /// </summary>
+    public static string AfterContinue(string confirmation, string? crossingLine)
+        => string.IsNullOrWhiteSpace(crossingLine) ? confirmation : $"{confirmation.TrimEnd()} {crossingLine}";
 
     /// <summary>Continue pressed early: <paramref name="clearedRunway"/> is cleared, and what still holds (null: nothing).</summary>
     public static string EarlyContinue(string clearedRunway, string? remainingLabel)

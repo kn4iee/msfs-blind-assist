@@ -14,6 +14,14 @@ public class ClearedCrossingCalloutsTests
         Assert.Equal("Runway 04L at C in 120 metres, cleared to cross.", ClearedCrossingCallouts.Approach("runway 04L at C", "120 metres", first: true));
         Assert.Equal("Runway 04L at C in 60 metres.", ClearedCrossingCallouts.Approach("runway 04L at C", "60 metres", first: false));
         Assert.Equal("Crossing runway 04L at C.", ClearedCrossingCallouts.AtTheLine("runway 04L at C"));
+        // Continue released a stop still holding for another runway: its confirmation, then the runway cleared there.
+        Assert.Equal("Continuing. Taxiway K. Crossing runway 09.",
+            ClearedCrossingCallouts.AfterContinue("Continuing. Taxiway K. ", ClearedCrossingCallouts.AtTheLine("runway 09")));
+        Assert.Equal("Continuing. Taxiway K. Next hold short of runway 28R in 300 metres. Press continue again if cleared across both. Crossing runway 06L at D5.",
+            ClearedCrossingCallouts.AfterContinue("Continuing. Taxiway K. Next hold short of runway 28R in 300 metres. Press continue again if cleared across both.",
+                ClearedCrossingCallouts.AtTheLine("runway 06L at D5")));
+        // Nothing cleared there: the confirmation exactly as it was.
+        Assert.Equal("Continuing. Taxiway K. ", ClearedCrossingCallouts.AfterContinue("Continuing. Taxiway K. ", null));
         Assert.Equal("Cleared across runway 22R. No stop.", ClearedCrossingCallouts.EarlyContinue("22R", null));
         Assert.Equal("Cleared across runway 09. Still holding short of runway 01.", ClearedCrossingCallouts.EarlyContinue("09", "runway 01"));
         Assert.Equal("Holding short of runway 04L at C. 80 metres.", ClearedCrossingCallouts.HoldRestored("runway 04L at C", "80 metres"));

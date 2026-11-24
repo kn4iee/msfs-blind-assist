@@ -187,17 +187,54 @@ public class ClearedCrossingWiringTests
         string pass = Member(ManagerSource(), "private void PassClearedLine(string label, int stopNodeId)");
 
         Assert.Contains("SpeakNow(ClearedCrossingCallouts.AtTheLine(label));", pass);
-        Assert.Contains("_lastIncursionWarnedNodeId = stopNodeId;", pass);
-        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", pass);
-        Assert.Contains("_passedClearedLabel = label;", pass);
-        Assert.Contains("_passedClearedAtUtc = MSFSBlindAssist.Utils.SimClock.UtcNow;", pass);
+        Assert.Contains("UseClearedCrossing(label, stopNodeId);", pass);
         Assert.Contains("_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", pass);
+
+        string use = Member(ManagerSource(), "private void UseClearedCrossing(string label, int stopNodeId)");
+        Assert.Contains("_lastIncursionWarnedNodeId = stopNodeId;", use);
+        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", use);
+        Assert.Contains("_passedClearedLabel = label;", use);
+        Assert.Contains("_passedClearedAtUtc = MSFSBlindAssist.Utils.SimClock.UtcNow;", use);
         Assert.Contains("PassClearedLine(ClearedCrossingHolds.LineLabel(segment.PlacedHoldLabel, segment.ClearedRunways), segment.ToNode.NodeId)",
             Member(ManagerSource(), "private void PassClearedLine(TaxiRouteSegment segment)"));
 
         // Ended with the route: cleared by StopGuidance and the rollout reset.
         Assert.Contains("_passedClearedLabel = null;", Member(ManagerSource(), "public void StopGuidance("));
         Assert.Contains("_passedClearedLabel = null;", Member(RolloutSource(), "private void EnterRunwayEndCountdown("));
+    }
+
+    // A shared stop cleared for one runway still holds for the other, its hold sentence and [HLD-11] staging as they
+    // were. The Continue that RELEASES it (after any staging press has returned) lets the aircraft across the cleared
+    // runway too, so that press names it: the cleared runways' part of the placed label (ClearedPartLabel) as
+    // "Crossing …", after the confirmation in the same utterance (AfterContinue), and the crossing is used as at a
+    // cleared line (UseClearedCrossing: used once, remembered, the watch's own line latched off). The start hold too.
+    [Fact]
+    public void The_Continue_that_releases_a_shared_stop_names_the_runway_it_was_cleared_across()
+    {
+        string manager = ManagerSource();
+        string cont = Member(manager, "public void ContinuePastHoldShort(");
+
+        int staged = cont.IndexOf("RunwayHoldStages.ComposeAdvance(cleared, next)", StringComparison.Ordinal);
+        int released = cont.IndexOf("var releasedCrossing = ClearedPartOfReleasedStop();", StringComparison.Ordinal);
+        int startSpent = cont.IndexOf("_route.StartHoldRunway = null;", StringComparison.Ordinal);
+        Assert.True(staged >= 0 && released > staged && startSpent > released,
+            "the released stop is read after the staging press returns and before the start hold is spent");
+        Assert.Contains("string? crossingLine = releasedCrossing is { } rc ? ClearedCrossingCallouts.AtTheLine(rc.Label) : null;", cont);
+        Assert.Equal(2, Regex.Matches(cont, @"AnnounceInstruction\(ClearedCrossingCallouts\.AfterContinue\(").Count);
+        int said = cont.LastIndexOf("ClearedCrossingCallouts.AfterContinue(", StringComparison.Ordinal);
+        int used = cont.IndexOf("if (releasedCrossing is { } usedCrossing) UseClearedCrossing(usedCrossing.Label, usedCrossing.StopNodeId);", StringComparison.Ordinal);
+        Assert.True(said >= 0 && used > said, "the crossing is used up after the confirmation that names it");
+
+        string part = Member(manager, "private (string Label, int StopNodeId)? ClearedPartOfReleasedStop(");
+        Assert.Contains("if (_route == null || _holdShortAtDestination) return null;", part);
+        Assert.Contains("ClearedCrossingHolds.ClearedPartLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways)", part);
+        Assert.Contains("ClearedCrossingHolds.ClearedPartLabel(held.PlacedHoldLabel, held.ClearedRunways)", part);
+
+        // The start hold released without a Continue (the adoption's start-hold skip) names its cleared part as it
+        // starts across, never drops it in silence.
+        string start = Member(manager, "private void AnnounceClearedStartCrossing(");
+        Assert.Contains("ClearedCrossingHolds.ClearedPartLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways)", start);
+        Assert.DoesNotContain("_clearedCrossings = ", start);
     }
 
     // While a cleared stop is the current segment its countdown owns its node, as for a hold short: the incursion
@@ -225,8 +262,7 @@ public class ClearedCrossingWiringTests
         Assert.Contains("ClearedCrossingHolds.HasStop(_clearedCrossings, start.NodeId)", method);
         Assert.Contains("ClearedCrossingHolds.HasStartedAcross(groundSpeedKts,", method);
         Assert.Contains("Navigation.RouteRunwayCrossings.RouteProgressMeters(_route.Segments, lat, lon)", method);
-        Assert.Contains("ClearedCrossingHolds.IsStartHoldFullyCleared(_route)", method);
-        Assert.Contains("PassClearedLine(ClearedCrossingHolds.LineLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways), start.NodeId);", method);
+        Assert.Matches(@"PassClearedLine\(ClearedCrossingHolds\.ClearedPartLabel\(_route\.PlacedStartHoldLabel, _route\.StartHoldClearedRunways\)\s+\?\? ClearedCrossingHolds\.LineLabel\(_route\.PlacedStartHoldLabel, _route\.StartHoldClearedRunways\), start\.NodeId\);", method);
     }
 
     // _clearedCrossings is REPLACED, never mutated in place: LoadRoute's Fail snapshot and the load rollback hold the

@@ -639,38 +639,61 @@ public class ClearedCrossingHoldsTests
             TestCulture.Run("de-DE", () => ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(null, new[] { "09", "01" }))));
     }
 
-    // A start hold is a cleared start (said as the aircraft starts across) only with every runway it guarded cleared:
-    // one still guarding a runway holds, and Continue releasing it (StartHoldRunway null) does not make it a cleared one.
+    // What a stop's cleared runways are called where they are crossed: each part of the label it was placed with whose
+    // first runway is cleared (either end), split as RemainingLabel splits it; null when none is.
+    [Theory]
+    [InlineData("runway 09 and runway 01", new[] { "09" }, "runway 09")]
+    [InlineData("runway 09 and runway 01", new[] { "27" }, "runway 09")]
+    [InlineData("runway 09 and runway 01", new[] { "19" }, "runway 01")]
+    [InlineData("runway 06L at D5 and runway 02", new[] { "06L" }, "runway 06L at D5")]
+    [InlineData("runway 06L at D5 and runway 02", new[] { "24R" }, "runway 06L at D5")]
+    [InlineData("runway 06L at D5 and runway 02", new[] { "20" }, "runway 02")]
+    [InlineData("runway 09 and runway 01", new[] { "09", "01" }, "runway 09 and runway 01")]
+    [InlineData("runway 15R at N", new[] { "15R" }, "runway 15R at N")]
+    [InlineData("D5, Runway 22R", new[] { "22R" }, "D5, Runway 22R")]
+    [InlineData("runway 09", new[] { "18" }, null)]
+    [InlineData("end of taxiway B", new[] { "09" }, null)]
+    [InlineData(null, new[] { "09" }, null)]
+    [InlineData("runway 09 and runway 01", new string[0], null)]
+    public void ClearedPartLabel_keeps_each_cleared_runways_part(string? placed, string[] cleared, string? expected)
+        => Assert.Equal(expected, ClearedCrossingHolds.ClearedPartLabel(placed, cleared));
+
+    // At a shared stop cleared for one runway, the label it was placed with splits into the part it still holds for
+    // and the part named when the Continue that releases it lets the aircraft across; the start hold the same.
     [Fact]
-    public void A_start_hold_is_fully_cleared_only_with_every_runway_cleared()
+    public void A_shared_stop_cleared_for_one_runway_names_that_runway_and_holds_for_the_other()
     {
-        var route = StartsHeld();
-        Pass(route, Runway09());
-        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(route));
-        Clear(route, new ClearedCrossing("09"));
-        Assert.True(ClearedCrossingHolds.IsStartHoldFullyCleared(route));
-        Assert.True(ClearedCrossingHolds.RestoreStartHold(route));
-        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(route));
+        var (route, runways) = Intersection();
+        Pass(route, runways);
+        Clear(route, new ClearedCrossing("27"));
+        var stop = route.Segments[0];
 
-        static (TaxiRoute Route, TaxiGraph.RunwayCenterline[] Runways) TwoRunwayStart()
+        Assert.Equal("runway 01", stop.HoldShortRunway);
+        Assert.Equal("runway 09", ClearedCrossingHolds.ClearedPartLabel(stop.PlacedHoldLabel, stop.ClearedRunways));
+        Assert.Equal("Continuing. Taxiway A. Crossing runway 09.", TestCulture.Run("de-DE", () => ClearedCrossingCallouts.AfterContinue(
+            "Continuing. Taxiway A. ",
+            ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.ClearedPartLabel(stop.PlacedHoldLabel, stop.ClearedRunways)!))));
+
+        // A start hold guarding both: cleared for 01 it holds for 09 and names 01; cleared for both, the whole line.
+        static TaxiRoute TwoRunwayStart(out TaxiGraph.RunwayCenterline[] both)
         {
-            var runways = new[] { EastWest("09", "27"), NorthSouth("01", "19", eastM: 1200, fromNorthM: -1500, toNorthM: 1500) };
-            return (RouteOf(Node(1, 900, 35), Node(2, 1000, 0), Node(3, 1300, 0), Node(4, 1300, -60)), runways);
+            both = new[] { EastWest("09", "27"), NorthSouth("01", "19", eastM: 1200, fromNorthM: -1500, toNorthM: 1500) };
+            return RouteOf(Node(1, 900, 35), Node(2, 1000, 0), Node(3, 1300, 0), Node(4, 1300, -60));
         }
+        var start = TwoRunwayStart(out var startRunways);
+        Pass(start, startRunways);
+        Clear(start, new ClearedCrossing("01"));
+        Assert.Equal("runway 09", start.StartHoldRunway);
+        Assert.Equal("runway 01", ClearedCrossingHolds.ClearedPartLabel(start.PlacedStartHoldLabel, start.StartHoldClearedRunways));
 
-        var (partial, partialRunways) = TwoRunwayStart();
-        Pass(partial, partialRunways);
-        Clear(partial, new ClearedCrossing("09"));
-        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(partial));
-        partial.StartHoldRunway = null;   // Continue released the hold for 01
-        Assert.False(ClearedCrossingHolds.IsStartHoldFullyCleared(partial));
-
-        var (both, bothRunways) = TwoRunwayStart();
-        Pass(both, bothRunways);
-        Clear(both, new ClearedCrossing("09"), new ClearedCrossing("01"));
-        Assert.True(ClearedCrossingHolds.IsStartHoldFullyCleared(both));
-        Assert.Equal("Crossing runway 09 and runway 01.", TestCulture.Run("de-DE",
-            () => ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(both.PlacedStartHoldLabel, both.StartHoldClearedRunways))));
+        var whole = TwoRunwayStart(out var wholeRunways);
+        Pass(whole, wholeRunways);
+        Clear(whole, new ClearedCrossing("09"), new ClearedCrossing("01"));
+        Assert.Null(whole.StartHoldRunway);
+        Assert.Equal("Crossing runway 09 and runway 01.", TestCulture.Run("de-DE", () => ClearedCrossingCallouts.AtTheLine(
+            ClearedCrossingHolds.ClearedPartLabel(whole.PlacedStartHoldLabel, whole.StartHoldClearedRunways)!)));
+        Assert.True(ClearedCrossingHolds.RestoreStartHold(whole));
+        Assert.Null(ClearedCrossingHolds.ClearedPartLabel(whole.PlacedStartHoldLabel, whole.StartHoldClearedRunways));
     }
 
     // Standing at a cleared start hold the aircraft has not started across; it has once it moves (2 kt, the manager's

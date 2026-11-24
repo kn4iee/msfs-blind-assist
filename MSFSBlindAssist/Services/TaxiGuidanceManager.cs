@@ -3754,22 +3754,58 @@ public partial class TaxiGuidanceManager : IDisposable
     private void PassClearedLine(string label, int stopNodeId)
     {
         SpeakNow(ClearedCrossingCallouts.AtTheLine(label));
+        UseClearedCrossing(label, stopNodeId);
+        _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;
+    }
+
+    /// <summary>
+    /// A cleared crossing just said where the aircraft crosses it (a cleared line, or the Continue releasing a stop that
+    /// held for another runway): the incursion watch's own "Crossing …" for that node is latched off, the crossing is
+    /// used once (a new list: <c>_clearedCrossings</c> is replaced, never mutated), and it is remembered, with when,
+    /// for the Hold short key.
+    /// </summary>
+    private void UseClearedCrossing(string label, int stopNodeId)
+    {
         _lastIncursionWarnedNodeId = stopNodeId;
         _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);
         _passedClearedLabel = label;
         _passedClearedAtUtc = MSFSBlindAssist.Utils.SimClock.UtcNow;
-        _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;
         _guidanceLog.Info($"Cleared crossing passed: \"{_passedClearedLabel}\" at node {stopNodeId}.");
     }
 
     /// <summary>
-    /// A route that starts at a line every runway of which the pilot was cleared across
-    /// (<see cref="ClearedCrossingHolds.IsStartHoldFullyCleared"/>) never holds there (StartGuidance enters a start hold
-    /// only while <see cref="TaxiRoute.StartHoldRunway"/> names a runway, [HLD-10]), and the aircraft is already at the
-    /// line, so there is nothing to count down: the crossing is said once, as the aircraft starts across
-    /// (<see cref="ClearedCrossingHolds.HasStartedAcross"/>), and used up like any other (PassClearedLine). A start hold
-    /// cleared for one runway of two held as before and was released by Continue; its cleared crossing is spent once
-    /// the aircraft is across, and not said here (a segment stop guarding a runway still is not either).
+    /// The runway the pilot was cleared across at the stop a Continue is releasing, when that stop still held for
+    /// another runway (a shared stop cleared for one of its runways): the cleared runways' part of the label it was
+    /// placed with (<see cref="ClearedCrossingHolds.ClearedPartLabel"/>), and its node. The start hold while it is
+    /// still held (segment 0, <see cref="TaxiRoute.StartHoldRunway"/> set); otherwise the stop on the segment the
+    /// cursor has just passed, where both hold entries (AdvanceSegment, AdvanceToNearestSegment's jump) leave it.
+    /// Never the destination's own hold, whose Continue is a lineup clearance. Null when nothing was cleared there.
+    /// </summary>
+    private (string Label, int StopNodeId)? ClearedPartOfReleasedStop()
+    {
+        if (_route == null || _holdShortAtDestination) return null;
+        if (_route.StartHoldRunway != null && _currentSegmentIndex == 0)
+        {
+            if (_route.Segments.Count == 0 || _route.Segments[0].FromNode is not { } start) return null;
+            string? startPart = ClearedCrossingHolds.ClearedPartLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways);
+            return startPart != null ? (startPart, start.NodeId) : null;
+        }
+        int heldIndex = _currentSegmentIndex - 1;
+        if (heldIndex < 0 || heldIndex >= _route.Segments.Count) return null;
+        var held = _route.Segments[heldIndex];
+        if (!held.IsHoldShortPoint || held.ToNode == null) return null;
+        string? part = ClearedCrossingHolds.ClearedPartLabel(held.PlacedHoldLabel, held.ClearedRunways);
+        return part != null ? (part, held.ToNode.NodeId) : null;
+    }
+
+    /// <summary>
+    /// A route that starts at a line every runway of which the pilot was cleared across never holds there
+    /// (StartGuidance enters a start hold only while <see cref="TaxiRoute.StartHoldRunway"/> names a runway, [HLD-10]),
+    /// and the aircraft is already at the line, so there is nothing to count down: the crossing is said once, as the
+    /// aircraft starts across (<see cref="ClearedCrossingHolds.HasStartedAcross"/>), and used up like any other
+    /// (PassClearedLine). A start hold cleared for one runway of two holds as before, and the Continue that releases
+    /// it names the cleared runway and uses the crossing up (ContinuePastHoldShort), so nothing is left here; one
+    /// released without a Continue (the adoption's start-hold skip) names its cleared part here, never in silence.
     /// </summary>
     private void AnnounceClearedStartCrossing(double lat, double lon, double groundSpeedKts)
     {
@@ -3780,10 +3816,9 @@ public partial class TaxiGuidanceManager : IDisposable
         if (!ClearedCrossingHolds.HasStartedAcross(groundSpeedKts,
                 Navigation.RouteRunwayCrossings.RouteProgressMeters(_route.Segments, lat, lon)))
             return;
-        if (ClearedCrossingHolds.IsStartHoldFullyCleared(_route))
-            PassClearedLine(ClearedCrossingHolds.LineLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways), start.NodeId);
-        else
-            _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, start.NodeId);
+        // The cleared runways' part of the placed label: the whole line when every runway at it is cleared.
+        PassClearedLine(ClearedCrossingHolds.ClearedPartLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways)
+                        ?? ClearedCrossingHolds.LineLabel(_route.PlacedStartHoldLabel, _route.StartHoldClearedRunways), start.NodeId);
     }
 
     /// <summary>
@@ -4378,6 +4413,12 @@ public partial class TaxiGuidanceManager : IDisposable
         // future change ever let one survive this far.
         _pendingTaxiwayAnnouncement = null;
 
+        // This press lets the aircraft go. At a stop the pilot was cleared across for one of its runways it held only
+        // for the other(s), so the cleared runway is crossed here too: a runway is never crossed in silence, so it is
+        // named after the confirmation below, in the same utterance, and used up as at a cleared line. Read here,
+        // after any staging press has returned and before the start hold is spent.
+        var releasedCrossing = ClearedPartOfReleasedStop();
+
         // Leaving a start hold: it is spent. _holdShortAtDestination is false for it, so execution
         // falls through to the ordinary resume on segment 0 below. The route-start turn cue was
         // never spoken while held (its per-frame one-shot runs only on a taxiing frame), so unless
@@ -4505,6 +4546,8 @@ public partial class TaxiGuidanceManager : IDisposable
             }
         }
 
+        // The runway cleared at the stop just released, said right after the confirmation (ClearedPartOfReleasedStop).
+        string? crossingLine = releasedCrossing is { } rc ? ClearedCrossingCallouts.AtTheLine(rc.Label) : null;
         if (_currentSegmentIndex < _route.Segments.Count)
         {
             var seg = _route.Segments[_currentSegmentIndex];
@@ -4512,14 +4555,15 @@ public partial class TaxiGuidanceManager : IDisposable
             // Update the announced-taxiway tracker so AdvanceToNearestSegment doesn't
             // redundantly re-announce the same taxiway a few frames later.
             _lastAnnouncedTaxiway = seg.TaxiwayName ?? "";
-            AnnounceInstruction(startTurnCue != null
+            AnnounceInstruction(ClearedCrossingCallouts.AfterContinue(startTurnCue != null
                 ? $"Continuing. {startTurnCue} {pairedOffer}".TrimEnd()
-                : $"Continuing. {taxiway}{pairedOffer}");
+                : $"Continuing. {taxiway}{pairedOffer}", crossingLine));
         }
         else
         {
-            AnnounceInstruction($"Continuing. {pairedOffer}");
+            AnnounceInstruction(ClearedCrossingCallouts.AfterContinue($"Continuing. {pairedOffer}", crossingLine));
         }
+        if (releasedCrossing is { } usedCrossing) UseClearedCrossing(usedCrossing.Label, usedCrossing.StopNodeId);
         } // end lock(_stateLock)
     }
 
