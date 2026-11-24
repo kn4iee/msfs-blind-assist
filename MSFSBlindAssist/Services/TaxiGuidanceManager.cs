@@ -968,6 +968,11 @@ public partial class TaxiGuidanceManager : IDisposable
     // hold-short on a cleared crossing. Cleared on every LoadRoute (set fresh
     // below) and StopGuidance.
     private Navigation.ProgressiveTerminator? _progressiveTerminator;
+    // The aircraft's wingspan, metres, for how far before a taxiway a "hold short of taxiway" stop
+    // goes (TaxiwayHoldPlacement.SetbackMetres); 0 = unknown, which takes the default span, never a
+    // zero setback. Read only while a route is built or recalculated. Cross-thread note as for
+    // TurnLeadSeconds: a single aligned double with no coupled invariant.
+    public double AircraftWingspanMetres { get; set; }
 
     // Unreachable-runway safety net (PHNL 04L 2026-06-13). When the entered
     // taxiway clearance ends on a taxiway that merely PARALLELS the runway —

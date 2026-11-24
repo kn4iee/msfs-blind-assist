@@ -3,6 +3,7 @@ using MSFSBlindAssist.Database;
 using MSFSBlindAssist.Database.Models;
 using MSFSBlindAssist.Navigation;
 using MSFSBlindAssist.Settings;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Services;
 
@@ -1050,6 +1051,13 @@ public partial class TaxiGuidanceManager
                 }
             }
 
+            // A leg that ends "hold short of taxiway" stops before the taxiway, not on its junction
+            // (TaxiwayHoldPlacement). On the route the Turn picks leave, as a pick can replace the route
+            // and move the junction [TURN-1], and before the pilot's own picks, which then see the cut
+            // route. It can end the leg at an earlier meeting with the taxiway: the local copy follows.
+            ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true);
+            destinationNodeId = _destinationNodeId;
+
             // The runway roll is the route's own start, or nothing: a pass above that rebuilt the route
             // from another node takes the far-start warning, the "Join taxiway X in N" roll and the tone's
             // aim at the start node back to an ordinary route's.
@@ -1096,13 +1104,16 @@ public partial class TaxiGuidanceManager
                         ? pickWarning : runwayHoldShortWarning + " " + pickWarning;
             }
 
-            // Taxiway-flavored picks from the same combos: stop at the first
+            // Taxiway-flavored picks from the same combos: stop before the first
             // junction with the named taxiway after the chosen row. Warnings from
-            // both flavors fold into the one note the summary carries.
+            // both flavors fold into the one note the summary carries. A stop may
+            // split a segment here (a pilot's Calculate), so the runway picks just
+            // deferred, which hold segment indices, are re-indexed with it.
             if (userTaxiwayHoldShorts != null && userTaxiwayHoldShorts.Count > 0 && taxiwaySequence != null)
             {
                 string? taxiwayHoldWarning = ApplyUserTaxiwayHoldShorts(
-                    route, taxiwaySequence, userTaxiwayHoldShorts);
+                    route, taxiwaySequence, userTaxiwayHoldShorts,
+                    allowInsert: true, deferredRunwayPicks: deferredRunwayPicks);
                 if (taxiwayHoldWarning != null)
                     runwayHoldShortWarning = runwayHoldShortWarning == null
                         ? taxiwayHoldWarning
@@ -2271,6 +2282,14 @@ public partial class TaxiGuidanceManager
         // reaching a recalculation, lives in the off-route detector in UpdatePosition).
         _lastReachabilityRefusalKey = null;
 
+        // A leg that ends "hold short of taxiway": a route that reaches the junction afresh is cut back
+        // to its stop, never on a node inserted now [RTE-30]. A kept Turn-pick tail ends at the stop placed
+        // at load and is left alone [TURN-3], also when that stop was the junction itself, which the
+        // end-node test alone would cut again. Before the gate, so it compares two cut routes.
+        bool keepsLoadedTail = keptTailRoute != null && ReferenceEquals(newRoute, keptTailRoute);
+        if (!keepsLoadedTail)
+            ApplyLegEndSetback(newRoute, _originalTaxiwaySequence, allowInsert: false);
+
         // Post-recalc sanity gate. Two failure modes are rejected here:
         //
         //  A. Length blow-up: the new route is dramatically longer than what
@@ -2407,8 +2426,10 @@ public partial class TaxiGuidanceManager
                         if (kvp.Key >= seqOffset) remappedTwy[kvp.Key - seqOffset] = kvp.Value;
                     if (remappedTwy.Count > 0)
                     {
+                        // Never a node inserted on a recalculation [RTE-30]; the rows are numbered as
+                        // loaded, so a kept Turn pick still floors the stop.
                         string? twyWarning = ApplyUserTaxiwayHoldShorts(
-                            newRoute, holdSequence, remappedTwy);
+                            newRoute, holdSequence, remappedTwy, allowInsert: false, rowOffset: seqOffset);
                         if (twyWarning != null)
                             recalcHoldWarning = recalcHoldWarning == null
                                 ? twyWarning : recalcHoldWarning + " " + twyWarning;
@@ -3593,21 +3614,29 @@ public partial class TaxiGuidanceManager
 
     /// <summary>
     /// Applies the per-row "hold short of TAXIWAY X" picks: after the chosen
-    /// row's taxiway run, guidance stops at the first junction where the route
+    /// row's taxiway run, guidance stops before the first junction where the route
     /// meets taxiway X — the segment whose end node carries an edge named X. This
-    /// covers both shapes of the instruction: the route TURNING ONTO X (the stop
-    /// lands on the segment ending at the A/X junction) and the route CROSSING X
-    /// while continuing (same junction node, route carries on past it after the
-    /// pilot's Continue). Stops AT the junction node — the same placement the
-    /// end-of-taxiway hold uses; navdata has no intermediate hold lines for
-    /// taxiway junctions to back off to.
+    /// covers both shapes of the instruction: the route TURNING ONTO X and the route
+    /// CROSSING X while continuing (the route carries on past the junction after the
+    /// pilot's Continue). The stop is set back from the junction so the whole aircraft
+    /// stays off X (<see cref="PlaceTaxiwayHoldStop"/>); a junction inside a runway's
+    /// clear margin gets no stop, and the pilot is told.
     /// Returns a spoken note naming any pick the route cannot honour, or null.
     /// </summary>
+    /// <param name="allowInsert">True on a pilot's Calculate only: the stop may be a node inserted
+    /// on the route's own edge. Never on a recalculation [RTE-30].</param>
+    /// <param name="rowOffset">Added to a row of <paramref name="taxiwaySequence"/> to number it as
+    /// loaded, the numbering of <see cref="AppliedTurnPick.RowIndex"/> (a recalculation's sequence is
+    /// a suffix of the loaded one).</param>
+    /// <param name="deferredRunwayPicks">The runway picks deferred on this route, which hold segment
+    /// indices: re-indexed when a stop splits a segment.</param>
     private string? ApplyUserTaxiwayHoldShorts(
-        TaxiRoute route, List<string> taxiwaySequence, Dictionary<int, string> userTaxiwayHoldShorts)
+        TaxiRoute route, List<string> taxiwaySequence, Dictionary<int, string> userTaxiwayHoldShorts,
+        bool allowInsert, int rowOffset = 0, List<DeferredRunwayPick>? deferredRunwayPicks = null)
     {
         if (_graph == null) return null;
         var unmatched = new List<string>();
+        var noSafeStop = new List<string>();
 
         foreach (var (seqIdx, rawTarget) in userTaxiwayHoldShorts.OrderBy(k => k.Key))
         {
@@ -3646,14 +3675,178 @@ public partial class TaxiGuidanceManager
                 continue;
             }
 
-            var hold = route.Segments[holdSeg];
+            // The junction inside a runway's clear margin: no stop there. The runway's own automatic
+            // stop still stands before that runway.
+            int stopSeg = PlaceTaxiwayHoldStop(route, holdSeg, allowInsert, seqIdx + rowOffset, deferredRunwayPicks);
+            if (stopSeg < 0)
+            {
+                noSafeStop.Add($"Note: no place to hold short of taxiway {rawTarget} clear of the runway; no stop will be called there.");
+                continue;
+            }
+
+            var hold = route.Segments[stopSeg];
             hold.IsHoldShortPoint = true;
             // User intent wins on the label — spoken as "Hold short of taxiway X".
             hold.HoldShortRunway = $"taxiway {rawTarget}";
         }
 
-        if (unmatched.Count == 0) return null;
-        return $"Note: requested hold-short(s) not on route — {string.Join("; ", unmatched)}.";
+        var notes = new List<string>();
+        if (unmatched.Count > 0)
+            notes.Add($"Note: requested hold-short(s) not on route — {string.Join("; ", unmatched)}.");
+        notes.AddRange(noSafeStop);
+        return notes.Count == 0 ? null : string.Join(" ", notes);
+    }
+
+    /// <summary>
+    /// The stop for a "hold short of taxiway" whose junction is the end node of segment
+    /// <paramref name="junctionSegmentIndex"/>, as <see cref="TaxiwayHoldPlacement.Choose"/> places it:
+    /// set back so the whole aircraft stays off the taxiway, never on or inside a runway's clear margin
+    /// nor behind a runway the route crosses, never before the turn a Turn pick on
+    /// <paramref name="rowIndex"/> told the pilot about. On a pilot's Calculate
+    /// (<paramref name="allowInsert"/>) the stop can be a node inserted on the segment's own edge,
+    /// through TaxiGraph's own mutator [RTE-30]: the segment's two halves replace it, and every Turn
+    /// pick and deferred runway pick indexed after it moves up by one. A recalculation never inserts.
+    /// Returns the index of the segment whose end node is the stop, or -1 when the junction is inside a
+    /// runway's clear margin (nothing is placed).
+    /// </summary>
+    /// <param name="rowIndex">The row of the taxiway sequence as loaded that the stop belongs to, the
+    /// numbering of <see cref="AppliedTurnPick.RowIndex"/>.</param>
+    private int PlaceTaxiwayHoldStop(TaxiRoute route, int junctionSegmentIndex, bool allowInsert, int rowIndex,
+        List<DeferredRunwayPick>? deferredRunwayPicks = null)
+    {
+        if (_graph == null) return junctionSegmentIndex;
+        var graph = _graph;
+        int junctionNodeId = route.Segments[junctionSegmentIndex].ToNode.NodeId;
+        double setbackM = TaxiwayHoldPlacement.SetbackMetres(AircraftWingspanMetres);
+        var stop = TaxiwayHoldPlacement.Choose(route.Segments, junctionSegmentIndex, setbackM, allowInsert,
+            (lat, lon) => RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, lat, lon) == null,
+            firstUsableIndex: route.TurnPicks.FirstOrDefault(p => p.RowIndex == rowIndex)?.FirstTaxiwaySegment ?? 0);
+
+        switch (stop.Kind)
+        {
+            case TaxiwayHoldPlacement.StopKind.NoSafeStop:
+                _guidanceLog.Info($"Taxiway hold: junction node {junctionNodeId} is inside a runway's clear margin; no stop placed");
+                return -1;
+            case TaxiwayHoldPlacement.StopKind.ExistingNode:
+            case TaxiwayHoldPlacement.StopKind.Junction:
+                _guidanceLog.Info($"Taxiway hold: {stop.Kind} node {route.Segments[stop.SegmentIndex].ToNode.NodeId} " +
+                                  $"for junction node {junctionNodeId}, setback {setbackM:F0} m, row {rowIndex}");
+                return stop.SegmentIndex;
+        }
+
+        // InsertOnSegment. Choose offers it only when inserting is allowed; a recalculation never inserts.
+        if (!allowInsert) return junctionSegmentIndex;
+        int m = stop.SegmentIndex;
+        var seg = route.Segments[m];
+        // The very point Choose judged clear of every runway.
+        var (lat, lon) = TaxiwayHoldPlacement.PointBeforeEnd(seg, stop.MetresBeforeSegmentEnd);
+        // It splits the nearest edge of the whole graph within reach, not necessarily this segment's:
+        // the node is used only when it lies on this segment's own edge.
+        var mid = graph.InsertHoldingPointNodeOnEdge(lat, lon, 5.0);
+        if (mid == null
+            || graph.GetEdge(seg.FromNode.NodeId, mid.NodeId) == null
+            || graph.GetEdge(mid.NodeId, seg.ToNode.NodeId) == null)
+        {
+            string what = mid == null ? "no edge within reach" : $"node {mid.NodeId} split another edge";
+            Log.Warn("Taxi", $"Taxiway hold: no stop node {stop.MetresBeforeSegmentEnd:F1} m before node {seg.ToNode.NodeId} " +
+                             $"on the segment from node {seg.FromNode.NodeId} ({what}); stopping at junction node {junctionNodeId}");
+            return junctionSegmentIndex;
+        }
+
+        var (first, second) = TaxiwayHoldPlacement.Split(seg, mid, stop.MetresBeforeSegmentEnd);
+        route.Segments[m] = first;
+        route.Segments.Insert(m + 1, second);
+        // Segment m became two: every index after it moves up, or the off-chart sentence, a missed-turn
+        // call and a kept-tail recalculation all read the wrong segment.
+        route.TurnPicks = TaxiwayHoldPlacement.ShiftPicksAfterSplit(route.TurnPicks, m);
+        // Retried after AdoptRoute, against this route.
+        if (deferredRunwayPicks != null)
+        {
+            for (int i = 0; i < deferredRunwayPicks.Count; i++)
+                if (deferredRunwayPicks[i].RunStart > m)
+                    deferredRunwayPicks[i] = deferredRunwayPicks[i] with { RunStart = deferredRunwayPicks[i].RunStart + 1 };
+        }
+        double total = 0;
+        foreach (var s in route.Segments) total += s.DistanceMeters;
+        route.TotalDistanceMeters = total;
+        _guidanceLog.Info($"Taxiway hold: node {mid.NodeId} inserted {stop.MetresBeforeSegmentEnd:F0} m before node " +
+                          $"{seg.ToNode.NodeId} for junction node {junctionNodeId}, setback {setbackM:F0} m, row {rowIndex}");
+        return m;
+    }
+
+    /// <summary>
+    /// A Progressive Taxi leg that ends "hold short of taxiway" stops before the taxiway, not on the
+    /// junction (design 8.6): the route is cut back to the stop <see cref="PlaceTaxiwayHoldStop"/>
+    /// places. Only while the route still ends at that junction (<c>_destinationNodeId</c>): a
+    /// recalculation that keeps a Turn pick's tail ends at the stop placed at load and is left alone
+    /// [TURN-3]. <c>_destinationNodeId</c> stays the junction, so a recalculation that routes afresh
+    /// reaches it and is cut back again. On a pilot's Calculate (<paramref name="allowInsert"/>) the leg
+    /// first ends at the FIRST meeting with the taxiway along the route from the last row's taxiway,
+    /// which a Turn pick on an earlier row can have moved; a meeting inside a runway's clear margin is
+    /// never the end of a leg.
+    /// </summary>
+    private void ApplyLegEndSetback(TaxiRoute route, List<string>? taxiwaySequence, bool allowInsert)
+    {
+        if (_graph == null || _progressiveTerminator is not { Type: ProgressiveTerminatorType.HoldShortTaxiway } term)
+            return;
+        bool endsAtJunction = route.Segments.Count > 0 && route.Segments[^1].ToNode.NodeId == _destinationNodeId;
+        if (!endsAtJunction) return;
+        var graph = _graph;
+
+        if (allowInsert && taxiwaySequence is { Count: > 0 })
+        {
+            string target = graph.ResolveTaxiwayName(term.Target);
+            // As ApplyUserTaxiwayHoldShorts scans: from the last row's run, the first segment ending at
+            // a node on the target, clear of every runway, until a segment already ON the target.
+            int runStart = FindTaxiwayRunStart(route, taxiwaySequence, taxiwaySequence.Count - 1, taxiwaySequence[^1]);
+            int meet = -1;
+            if (runStart >= 0)
+            {
+                for (int i = runStart; i < route.Segments.Count; i++)
+                {
+                    var seg = route.Segments[i];
+                    if (seg.TaxiwayName.Equals(target, StringComparison.OrdinalIgnoreCase)) break;
+                    if (seg.ToNode == null) continue;
+                    if (NodeTouchesTaxiway(seg.ToNode.NodeId, target)
+                        && RouteRunwayCrossings.RunwayWithinClearMargin(
+                               graph.RunwayCenterlines, seg.ToNode.Latitude, seg.ToNode.Longitude) == null)
+                    {
+                        meet = i;
+                        break;
+                    }
+                }
+            }
+            if (meet >= 0 && meet < route.Segments.Count - 1)
+            {
+                _guidanceLog.Info($"Leg end: the route meets taxiway {target} first at node {route.Segments[meet].ToNode.NodeId}, " +
+                                  $"before node {_destinationNodeId}; the leg ends there");
+                route.Segments.RemoveRange(meet + 1, route.Segments.Count - meet - 1);
+                _destinationNodeId = route.Segments[meet].ToNode.NodeId;
+            }
+        }
+
+        int stop = PlaceTaxiwayHoldStop(route, route.Segments.Count - 1, allowInsert,
+            rowIndex: (taxiwaySequence?.Count ?? 0) - 1);
+        if (stop < 0)
+        {
+            // Neither the planner nor a Turn pick ends a leg inside a runway's margin.
+            Log.Warn("Taxi", $"Leg end: taxiway {term.Target} meets the route at node {_destinationNodeId} inside a " +
+                             "runway's clear margin; the route is left as built");
+            return;
+        }
+        if (stop < route.Segments.Count - 1)
+            route.Segments.RemoveRange(stop + 1, route.Segments.Count - stop - 1);
+
+        // The floor in Choose keeps every Turn pick's turn on the route; one that is not is dropped, and logged.
+        int last = route.Segments.Count - 1;
+        foreach (var cut in route.TurnPicks.Where(q => q.FirstTaxiwaySegment > last))
+            Log.Warn("Taxi", $"Leg end: the Turn pick on row {cut.RowIndex} onto {cut.TaxiwayName} lies past the stop " +
+                             $"(segment {cut.FirstTaxiwaySegment} of {route.Segments.Count}); dropped from the route");
+        route.TurnPicks = route.TurnPicks.Where(q => q.FirstTaxiwaySegment <= last).ToList();
+
+        double total = 0;
+        foreach (var s in route.Segments) total += s.DistanceMeters;
+        route.TotalDistanceMeters = total;
     }
 
     /// <summary>

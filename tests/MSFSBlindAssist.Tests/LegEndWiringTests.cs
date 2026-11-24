@@ -48,6 +48,48 @@ public class LegEndWiringTests
         Assert.Contains("!_holdShortStopAnnounced && stopMaySpeak)", text);
     }
 
+    // A hold short of a taxiway, mid-route or at the end of a leg, stops where the pure
+    // TaxiwayHoldPlacement says (TaxiwayHoldPlacementTests), and a split re-indexes the Turn picks.
+    // The leg end is cut back only while the route still ends at the junction: a recalculation that
+    // keeps a Turn pick's tail ends at the stop placed at load and is never cut again (TURN-3).
+    [Fact]
+    public void Taxiway_holds_are_placed_through_TaxiwayHoldPlacement()
+    {
+        string text = RoutingSource();
+
+        Assert.Contains("TaxiwayHoldPlacement.Choose(", text);
+        Assert.Contains("TaxiwayHoldPlacement.ShiftPicksAfterSplit(", text);
+        Assert.Contains("ApplyLegEndSetback(", text);
+        Assert.Contains("Segments[^1].ToNode.NodeId == _destinationNodeId", text);
+    }
+
+    // The setback runs on the route the Turn picks leave (a pick can replace the route and move the
+    // junction, TURN-1) and before the pilot's own hold-short picks; a recalculation cuts its route
+    // before the sanity gate, so the gate compares two cut routes.
+    [Fact]
+    public void The_leg_end_setback_runs_after_the_Turn_picks_and_before_the_pilot_picks()
+    {
+        string text = RoutingSource();
+
+        int turnPicks = text.IndexOf("TurnPickApplier.Apply(route", StringComparison.Ordinal);
+        int loadSetback = text.IndexOf("ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true)", StringComparison.Ordinal);
+        int pilotPicks = text.IndexOf("ApplyUserHoldShorts(route, taxiwaySequence, userHoldShortIndices)", StringComparison.Ordinal);
+        int recalcSetback = text.IndexOf("ApplyLegEndSetback(newRoute, _originalTaxiwaySequence, allowInsert: false)", StringComparison.Ordinal);
+        int sanityGate = text.IndexOf("bool lengthBlowUp", StringComparison.Ordinal);
+
+        Assert.True(turnPicks >= 0, "TurnPickApplier.Apply(route not found");
+        Assert.True(loadSetback >= 0, "the load's ApplyLegEndSetback call not found");
+        Assert.True(pilotPicks >= 0, "ApplyUserHoldShorts(route, ...) not found");
+        Assert.True(recalcSetback >= 0, "the recalculation's ApplyLegEndSetback call not found");
+        Assert.True(sanityGate >= 0, "bool lengthBlowUp not found");
+        Assert.True(turnPicks < loadSetback, "the setback must run after the Turn picks");
+        Assert.True(loadSetback < pilotPicks, "the setback must run before the pilot's hold-short picks");
+        Assert.True(recalcSetback < sanityGate, "the recalculation's setback must run before the sanity gate");
+    }
+
+    private static string RoutingSource()
+        => File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.Routing.cs"));
+
     private static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
