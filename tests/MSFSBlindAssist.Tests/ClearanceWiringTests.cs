@@ -143,10 +143,24 @@ public class ClearanceWiringTests
     {
         string recalc = Member(RoutingSource(), "private void TryRecalculateRoute(");
 
-        Assert.Contains("turnsMade: TurnPickCarryOver.MadeRows(_route, _currentSegmentIndex, cutPicks));", recalc);
+        // Read at the cursor as the aircraft stands: one back while holding short (HandleHoldShort has moved it past the
+        // stop), so a turn just beyond a stop is not made while the aircraft holds short of it.
+        Assert.Contains("turnsMade: TurnPickCarryOver.MadeRows(_route,", recalc);
+        Assert.Contains("Navigation.ClearanceProgressState.CursorAsStanding(_currentSegmentIndex, holdingNow), cutPicks));", recalc);
         int settle = recalc.IndexOf("_clearanceProgress = _clearanceProgress.Settled(", StringComparison.Ordinal);
         int reset = recalc.IndexOf("_currentSegmentIndex = 0;", StringComparison.Ordinal);
         Assert.True(settle >= 0 && reset > settle, "the turns are read before the cursor restarts");
+    }
+
+    // Fix round 2: the live "turn made" reads the aircraft one segment back while holding short, as StopPassed does.
+    [Fact]
+    public void A_turn_is_judged_where_the_aircraft_stands_while_holding()
+    {
+        string progress = Member(ManagerSource(), "public Navigation.ClearanceProgress GetClearanceProgress(");
+
+        Assert.Contains("bool holding = _state == TaxiGuidanceState.HoldShort;", progress);
+        Assert.Contains("Navigation.ClearanceProgressState.IsOnTaxiwayPastStart(route.Segments, _currentSegmentIndex, holding, sequence[done])", progress);
+        Assert.DoesNotContain("route.Segments[_currentSegmentIndex].TaxiwayName", progress);
     }
 
     // Ruling 3: a leg ending "hold short of taxiway" after a Cross taxiway step keeps the meeting beyond the crossing,

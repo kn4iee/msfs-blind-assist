@@ -2630,9 +2630,12 @@ public partial class TaxiGuidanceManager
         // What the aircraft has passed on the route being replaced stays passed, and a turn made on it stays made,
         // whatever the new route holds: judged on that route and its cursor, before either is replaced and the cursor
         // restarts (GetClearanceProgress; a made turn never reads as one still to make, [TURN-3]).
+        // A turn is read at the cursor where the aircraft stands: one back while holding short, so a turn just beyond a
+        // stop is not made while the aircraft holds short of it.
         _clearanceProgress = _clearanceProgress.Settled(_route?.Segments, _currentSegmentIndex,
-            holding: _state == TaxiGuidanceState.HoldShort,
-            turnsMade: TurnPickCarryOver.MadeRows(_route, _currentSegmentIndex, cutPicks));
+            holding: holdingNow,
+            turnsMade: TurnPickCarryOver.MadeRows(_route,
+                Navigation.ClearanceProgressState.CursorAsStanding(_currentSegmentIndex, holdingNow), cutPicks));
         AdoptRoute(newRoute, _isRunwayLineup, _destinationName, lat, lon, phase: "recalc",
             userPickEvents: recalcPickEvents, recalculation: true);
         // A remapped pick that met its runway with no stop before that pass may share the stop

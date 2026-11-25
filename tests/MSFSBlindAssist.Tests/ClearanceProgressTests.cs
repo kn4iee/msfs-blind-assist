@@ -307,12 +307,12 @@ public class ClearanceProgressTests
         Assert.Empty(ClearanceProgressState.For(null).TurnsMade);
     }
 
-    // A stop with no taxiway of its own is carried over a recalculation only while the stop it was placed at is not
-    // passed, as a holding point is only while still ahead: one behind is never searched for again (an extra stop, or
-    // "the route does not cross it" on every later "Route changed", [HLD-17]). A stop on a row of its own is left to
-    // ClearanceRows.After.
+    // A stop with no taxiway of its own is dropped from a recalculation only when the stop it was placed at is KNOWN
+    // passed, so it is never searched for again (an extra stop, or "the route does not cross it" on every later
+    // "Route changed", [HLD-17]). Still ahead, held at, or never placed (a later route may meet it, and the pilot holds
+    // an ATC "hold short of X"), it is kept. A stop on a row of its own is left to ClearanceRows.After.
     [Fact]
-    public void A_stop_with_no_taxiway_is_carried_over_only_while_not_passed()
+    public void A_stop_with_no_taxiway_is_dropped_only_once_known_passed()
     {
         var stops = new List<KeyValuePair<int, string>>
         {
@@ -324,13 +324,77 @@ public class ClearanceProgressTests
             new PlacedStop(-1, ClearanceTargetKind.Taxiway, "04L", 0, 50),   // another kind: not this stop's
         });
 
-        // Short of node 30: carried. Past it: dropped. "04L" was never placed as a runway stop: dropped. Row 3 is one
-        // past a 3-row sequence: no taxiway of its own either.
-        Assert.Equal(new[] { -1, 1 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 1, holding: false).Select(s => s.Key));
-        Assert.Equal(new[] { 1 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 3, holding: false).Select(s => s.Key));
-        Assert.Equal(new[] { -1, 1, 3 }, state.CarriedOver(stops, 4, ClearanceTargetKind.Runway, Route, 1, holding: false).Select(s => s.Key));
+        // Short of node 30: still ahead, kept. "04L" was never placed as a runway stop, and row 3 is one past a 3-row
+        // sequence with no stop placed: both kept.
+        Assert.Equal(new[] { -1, 1, -1, 3 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 1, holding: false).Select(s => s.Key));
+        // Past node 30: "22R" dropped, the rest kept.
+        Assert.Equal(new[] { 1, -1, 3 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 3, holding: false).Select(s => s.Key));
         // Held at it: not yet passed.
-        Assert.Equal(new[] { -1, 1 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 2, holding: true).Select(s => s.Key));
+        Assert.Equal(new[] { -1, 1, -1, 3 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 2, holding: true).Select(s => s.Key));
+    }
+
+    // A stop never placed on any route is kept through every recalculation: the next route may meet that taxiway, and
+    // the pilot was told to hold short of it.
+    [Fact]
+    public void A_stop_with_no_taxiway_never_placed_is_kept()
+    {
+        var stops = new List<KeyValuePair<int, string>> { new(-1, "X") };
+        var state = ClearanceProgressState.For(null);
+
+        Assert.Single(state.CarriedOver(stops, 2, ClearanceTargetKind.Taxiway, Route, 4, holding: false));
+        var afterOne = state.Settled(Route, cursor: 4, holding: false);
+        Assert.Single(afterOne.CarriedOver(stops, 2, ClearanceTargetKind.Taxiway, Through(70, 80), 1, holding: false));
+    }
+
+    // Passed on route A, the stop goes into Passed when the first recalculation settles; it is not carried to route B,
+    // and at the second recalculation, judged on route B where it was never placed, Passed still drops it.
+    [Fact]
+    public void A_stop_passed_on_an_earlier_route_stays_dropped_at_a_later_recalculation()
+    {
+        var stops = new List<KeyValuePair<int, string>> { new(-1, "22R") };
+        var onA = ClearanceProgressState.For(null)
+            .WithPlaced(new[] { new PlacedStop(-1, ClearanceTargetKind.Runway, "22R", 0, 30) });
+
+        Assert.Empty(onA.CarriedOver(stops, 2, ClearanceTargetKind.Runway, Route, 3, holding: false));
+        var onB = onA.Settled(Route, cursor: 3, holding: false).WithPlaced(Array.Empty<PlacedStop>());
+        Assert.Empty(onB.CarriedOver(stops, 2, ClearanceTargetKind.Runway, Through(70, 80), 0, holding: false));
+        // Still ahead on route A instead: carried, placed on route B, and kept while still ahead there.
+        var aheadOnB = onA.Settled(Route, cursor: 1, holding: false)
+            .WithPlaced(new[] { new PlacedStop(-1, ClearanceTargetKind.Runway, "22R", 0, 80) });
+        Assert.Single(onA.CarriedOver(stops, 2, ClearanceTargetKind.Runway, Route, 1, holding: false));
+        Assert.Single(aheadOnB.CarriedOver(stops, 2, ClearanceTargetKind.Runway, Through(70, 80), 0, holding: false));
+    }
+
+    // While the aircraft holds short, HandleHoldShort has already moved the cursor onto the segment after the stop. In
+    // "Via B, hold short of taxiway A, Left onto A", held at the B/A junction, the cursor is on A's first segment: the
+    // turn onto A is NOT made, live or as remembered for a recalculation. The aircraft is judged one segment back.
+    [Fact]
+    public void A_turn_is_not_made_while_holding_short_before_it()
+    {
+        var segments = Through(10, 20, 30, 40, 50);
+        segments[0].TaxiwayName = "B";
+        segments[1].TaxiwayName = "B";   // the stop: its end node, 30, is the B/A junction
+        segments[2].TaxiwayName = "A";
+        segments[3].TaxiwayName = "A";
+
+        Assert.False(ClearanceProgressState.IsOnTaxiwayPastStart(segments, cursor: 2, holding: true, "A"));
+        Assert.True(ClearanceProgressState.IsOnTaxiwayPastStart(segments, cursor: 2, holding: false, "A"));
+        Assert.False(ClearanceProgressState.IsOnTaxiwayPastStart(segments, cursor: 0, holding: false, "B"));
+        Assert.True(ClearanceProgressState.IsOnTaxiwayPastStart(segments, cursor: 1, holding: false, "b"));
+
+        Assert.Equal(1, ClearanceProgressState.CursorAsStanding(2, holding: true));
+        Assert.Equal(2, ClearanceProgressState.CursorAsStanding(2, holding: false));
+        Assert.Equal(0, ClearanceProgressState.CursorAsStanding(0, holding: true));
+
+        // The Left onto A pick, departing B at node 30 onto A's first segment (2): Made at cursor 2, so a recalculation
+        // fired while held there must read it at the cursor as standing.
+        var route = new TaxiRoute();
+        route.TurnPicks.Add(new AppliedTurnPick
+        {
+            RowIndex = 1, Side = TurnSide.Left, TaxiwayName = "A", FirstSegmentAfterDeparture = 2, FirstTaxiwaySegment = 2,
+        });
+        Assert.Equal(new[] { 1 }, TurnPickCarryOver.MadeRows(route, 2, null));
+        Assert.Empty(TurnPickCarryOver.MadeRows(route, ClearanceProgressState.CursorAsStanding(2, holding: true), null));
     }
 
     [Fact]

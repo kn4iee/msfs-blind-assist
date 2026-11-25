@@ -120,17 +120,22 @@ public sealed record ClearanceProgressState(
     /// <summary>
     /// The stops of one kind (<paramref name="kind"/>, runway or taxiway: (row, name) pairs) a recalculation may carry
     /// over to its new route. A stop on a row of its own (0 to <paramref name="sequenceRows"/> - 1) is left to
-    /// <see cref="ClearanceRows.After"/>. A stop with no taxiway of its own is carried only while the stop it was
-    /// placed at on the route being replaced (<see cref="Placed"/>, the same kind and name, no row) is not passed, as a
-    /// holding point is carried only while still ahead: one passed, or never placed, is never searched for again, or
-    /// the new route stops there again where it meets it, or every later "Route changed" reports it [HLD-17].
+    /// <see cref="ClearanceRows.After"/>. A stop with no taxiway of its own is dropped only once it is KNOWN passed: a
+    /// stop of the same kind and name, no row, placed on the route being replaced (<see cref="Placed"/>) that the
+    /// aircraft has passed there, or one passed on an earlier route (<see cref="Passed"/>). One passed is never searched
+    /// for again, or the new route stops there again where it meets it, or every later "Route changed" reports it
+    /// [HLD-17]. One still ahead, held at, or never placed is kept: a later route may meet it, and the pilot holds an
+    /// ATC "hold short of X".
     /// </summary>
     public List<KeyValuePair<int, string>> CarriedOver(IReadOnlyList<KeyValuePair<int, string>> stops, int sequenceRows,
         ClearanceTargetKind kind, IReadOnlyList<TaxiRouteSegment>? segments, int cursor, bool holding)
-        => stops.Where(s => (s.Key >= 0 && s.Key < sequenceRows)
-                            || Placed.Any(p => p.Row < 0 && p.Kind == kind && p.Name == s.Value
-                                               && !StopPassed(segments, p.StopNodeId, cursor, holding)))
+    {
+        bool Same(PlacedStop p, string name) => p.Row < 0 && p.Kind == kind && p.Name == name;
+        return stops.Where(s => (s.Key >= 0 && s.Key < sequenceRows)
+                                || !(Placed.Any(p => Same(p, s.Value) && StopPassed(segments, p.StopNodeId, cursor, holding))
+                                     || Passed.Any(p => Same(p, s.Value))))
             .ToList();
+    }
 
     /// <summary>
     /// The report for the route being flown (<paramref name="segments"/>, the cursor on segment <paramref name="cursor"/>,
@@ -194,6 +199,26 @@ public sealed record ClearanceProgressState(
             return cursor > node || (cursor == node && !holding);
         }
         return false;
+    }
+
+    /// <summary>
+    /// The segment cursor where the aircraft stands: while it holds short (<paramref name="holding"/>), HandleHoldShort
+    /// has already moved the cursor onto the segment after the stop, so it stands one segment back (as
+    /// <see cref="StopPassed"/> reads a stop held at as not passed). Never below 0.
+    /// </summary>
+    public static int CursorAsStanding(int cursor, bool holding) => holding ? Math.Max(0, cursor - 1) : cursor;
+
+    /// <summary>
+    /// Whether the aircraft is on <paramref name="taxiway"/> (any case) past the route's first segment, judged on the
+    /// segment where it stands (<see cref="CursorAsStanding"/>): the turn onto that taxiway is then behind. A turn at the
+    /// route's first node is excluded, as <c>TurnPickCarryOver.BlocksToKeep</c> excludes it, and so is a turn just beyond
+    /// a stop the aircraft is holding short of.
+    /// </summary>
+    public static bool IsOnTaxiwayPastStart(IReadOnlyList<TaxiRouteSegment>? segments, int cursor, bool holding, string? taxiway)
+    {
+        int at = holding ? cursor - 1 : cursor;
+        return segments != null && !string.IsNullOrEmpty(taxiway) && at > 0 && at < segments.Count
+               && string.Equals(segments[at]?.TaxiwayName, taxiway, StringComparison.OrdinalIgnoreCase);
     }
 
     // The crossings the pilot entered, numbered as entered.

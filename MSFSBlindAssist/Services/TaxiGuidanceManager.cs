@@ -4860,13 +4860,14 @@ public partial class TaxiGuidanceManager : IDisposable
             int? routeDone = Navigation.ClearanceTrim.ViaStepsDoneOnRoute(firstRow, sequence.Count,
                 row => FindTaxiwayRunStart(route, suffix, row - firstRow, sequence[row]), _currentSegmentIndex);
             int done = Navigation.ClearanceTrim.ViaStepsDone(sequence, remaining, routeDone);
-            // The turn onto that row's taxiway is behind once the aircraft is on it past the route's first segment, or
-            // was made on a route a recalculation replaced (ClearanceProgressState.TurnsMade).
-            bool turnMade = _currentSegmentIndex > 0 && _currentSegmentIndex < route.Segments.Count
-                && done < sequence.Count
-                && string.Equals(route.Segments[_currentSegmentIndex].TaxiwayName, sequence[done], StringComparison.OrdinalIgnoreCase);
-            return _clearanceProgress.Report(done, turnMade, _clearedCrossings, route.Segments, _currentSegmentIndex,
-                holding: _state == TaxiGuidanceState.HoldShort);
+            // The turn onto that row's taxiway is behind once the aircraft is on it past the route's first segment, judged
+            // where it stands (one segment back while holding short: the hold has already moved the cursor past the
+            // stop, onto the taxiway it is holding short of), or was made on a route a recalculation replaced
+            // (ClearanceProgressState.TurnsMade).
+            bool holding = _state == TaxiGuidanceState.HoldShort;
+            bool turnMade = done < sequence.Count
+                && Navigation.ClearanceProgressState.IsOnTaxiwayPastStart(route.Segments, _currentSegmentIndex, holding, sequence[done]);
+            return _clearanceProgress.Report(done, turnMade, _clearedCrossings, route.Segments, _currentSegmentIndex, holding);
         }
     }
 
