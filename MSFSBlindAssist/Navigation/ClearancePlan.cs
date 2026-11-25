@@ -63,7 +63,8 @@ public sealed record ClearancePlan(
     /// node, which <c>LoadRoute</c> takes as <c>holdingPointHoldNodeId</c> and pins the route through, as the
     /// "After crossing runway" leg did, so the pilot crosses where ATC said. Null otherwise: anywhere else an "at"
     /// does not bend the route (spec 8.1), and its crossing is cleared by its node alone
-    /// (<see cref="ClearedCrossing.AtNodeId"/>).
+    /// (<see cref="ClearedCrossing.AtNodeId"/>); and null for a crossing already made, whose node is its stop behind
+    /// the aircraft (<see cref="ClearanceStep.AtNodeIsPassedStop"/>).
     /// </summary>
     public int? CrossAtHoldingPointNodeId { get; init; }
 
@@ -154,10 +155,11 @@ public static class ClearancePlanner
             }
         }
 
-        // The leg ends across a runway at a holding point: pin the route through the point, as today's leg did.
+        // The leg ends across a runway at a holding point: pin the route through the point, as today's leg did. Never
+        // through the stop node of a crossing already made (ClearanceTrim's pin): it is behind the aircraft.
         int? pinNodeId = null;
         string? pinName = null;
-        if (end == ClearanceEndKind.AcrossRunway && endStep is { AtNodeId: not 0 } across)
+        if (end == ClearanceEndKind.AcrossRunway && endStep is { AtNodeId: not 0, AtNodeIsPassedStop: false } across)
         {
             pinNodeId = across.AtNodeId;
             pinName = across.At;
@@ -222,16 +224,25 @@ public static class ClearancePlanner
         if (!hasDestination && endIndex < 0)
             return $"A leg cannot end on cross taxiway {steps[^1].Name}. Add where to hold short, or the next taxiway.";
 
-        // The same crossing entered as both: the same runway (either end) at the same place, where both name one.
-        // A Hold short of the destination runway is accepted and adds nothing, so it is never a second crossing.
-        foreach (var cross in steps)
+        // The same crossing entered as both: the same runway (either end), and the same place when both name one, or,
+        // when either names none, entered after the same Via step. A Hold short of the destination runway is accepted
+        // and adds nothing, so it is never a second crossing.
+        int[] seqIndexOf = SeqIndices(steps);
+        for (int c = 0; c < steps.Count; c++)
         {
+            var cross = steps[c];
             if (cross is not { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }) continue;
-            foreach (var hold in steps)
+            for (int h = 0; h < steps.Count; h++)
             {
-                if (hold is { Kind: ClearanceStepKind.HoldShort, TargetKind: ClearanceTargetKind.Runway }
-                    && !IsDestinationRunwayHold(hold, hasDestination, destinationRunway)
-                    && ClearanceRunways.Same(cross.Name, hold.Name) && ClearanceRunways.SamePlace(cross, hold))
+                var hold = steps[h];
+                if (hold is not { Kind: ClearanceStepKind.HoldShort, TargetKind: ClearanceTargetKind.Runway }
+                    || IsDestinationRunwayHold(hold, hasDestination, destinationRunway)
+                    || !ClearanceRunways.Same(cross.Name, hold.Name))
+                    continue;
+                bool sameCrossing = ClearanceRunways.HasPlace(cross) && ClearanceRunways.HasPlace(hold)
+                    ? ClearanceRunways.SamePlace(cross, hold)
+                    : seqIndexOf[c] == seqIndexOf[h];
+                if (sameCrossing)
                     return $"Runway {cross.Name} is entered both as a crossing and as a hold short. Remove one.";
             }
         }
@@ -324,16 +335,21 @@ public static class ClearanceTrim
     /// <item>The first <paramref name="viaStepsDone"/> Via-kind steps are dropped; then, when
     /// <paramref name="turnOntoFirstRemainingMade"/>, the first remaining Via-kind step, if a Left onto or Right onto,
     /// becomes a Via step for the same taxiway (a turn ahead, or one the aircraft is in the middle of, stays a turn).</item>
-    /// <item>A Cross runway step is matched to ONE record (in route order: <paramref name="clearedUsed"/>, then
-    /// <paramref name="putBack"/>, then <paramref name="clearedInForce"/>) by runway (either end), by its own Via-step
-    /// index (the record's <see cref="ClearedCrossing.SeqIndex"/>) and, where both have one, its place (<c>At</c>,
-    /// <c>AtNodeId</c>): used, dropped (its crossing is behind); put back, it becomes "Hold short of runway R" at the
-    /// same place; in force, kept. A record a Continue cleared (<see cref="ClearedBy.Continue"/>) never matches.</item>
-    /// <item>A Hold short step is dropped only when matched to one of <paramref name="holdsPassed"/> (the same
-    /// target, Via-step index and place).</item>
+    /// <item>A Cross runway step is matched to ONE record by runway (either end), by its own Via-step index (the
+    /// record's <see cref="ClearedCrossing.SeqIndex"/>) and, where both have one, its place (<c>At</c>, <c>AtNodeId</c>);
+    /// every step first takes a record at exactly its place, then one matching only through a missing place, each
+    /// pass in route order (<paramref name="clearedUsed"/>, <paramref name="putBack"/>, <paramref name="clearedInForce"/>).
+    /// Used, dropped (its crossing is behind); put back, it becomes "Hold short of runway R" at the same place; in
+    /// force, kept. A record a Continue cleared (<see cref="ClearedBy.Continue"/>) never matches.</item>
+    /// <item>A Hold short step is dropped only when matched, the same way, to one of <paramref name="holdsPassed"/> (the
+    /// same target, Via-step index and place).</item>
     /// <item>Every other step stays, and so does any step with no match: its state is unknown.</item>
     /// <item>The step that ends a leg with no destination (<paramref name="hasDestination"/> false), a limit said
-    /// first included, is never dropped; a put-back crossing there still becomes its hold short.</item>
+    /// first included, is never dropped. A used crossing there stays, pinned to the crossing made
+    /// (<see cref="ClearanceStep.AtNodeIsPassedStop"/>); a put-back crossing there still becomes its hold short.</item>
+    /// <item>On a leg with no destination trimming never makes a step the limit: a kept stop or crossing that would
+    /// land in front of the first remaining Via step is moved just after it, or, when that Via step ends the leg or
+    /// none remains, the last finished Via step is kept in front of it.</item>
     /// </list>
     /// </summary>
     public static List<ClearanceStep> Remaining(IReadOnlyList<ClearanceStep> steps, int viaStepsDone, bool hasDestination,
@@ -343,22 +359,20 @@ public static class ClearanceTrim
         IReadOnlyList<ClearedCrossing> putBack, IReadOnlyList<ClearanceHold> holdsPassed,
         bool turnOntoFirstRemainingMade)
     {
-        var result = new List<ClearanceStep>();
-        if (steps == null) return result;
+        if (steps == null) return new List<ClearanceStep>();
 
         int[] seqIndexOf = ClearancePlanner.SeqIndices(steps);
         int endIndex = ClearancePlanner.EndIndex(steps, hasDestination);
-        var used = new Records<ClearedCrossing>(clearedUsed);
-        var restored = new Records<ClearedCrossing>(putBack);
-        var inForce = new Records<ClearedCrossing>(clearedInForce);
-        var passed = new Records<ClearanceHold>(holdsPassed);
+        var crossings = MatchCrossings(steps, seqIndexOf, clearedUsed, putBack, clearedInForce);
+        bool[] holdPassed = MatchPassedHolds(steps, seqIndexOf, holdsPassed);
 
-        int viaDropped = 0;
+        // Each kept step with its index in steps.
+        var kept = new List<(ClearanceStep Step, int Index)>();
+        int viaDropped = 0, lastFinishedVia = -1;
         bool firstViaSeen = false;
         for (int i = 0; i < steps.Count; i++)
         {
             var step = steps[i];
-            int seq = seqIndexOf[i];
             bool isEnd = i == endIndex;
 
             if (step.IsVia)
@@ -366,40 +380,148 @@ public static class ClearanceTrim
                 if (viaDropped < viaStepsDone)
                 {
                     viaDropped++;
-                    if (!isEnd) continue;
+                    if (!isEnd)
+                    {
+                        lastFinishedVia = i;
+                        continue;
+                    }
                 }
                 if (!firstViaSeen && turnOntoFirstRemainingMade
                     && step.Kind is ClearanceStepKind.LeftOnto or ClearanceStepKind.RightOnto)
                     step = step with { Kind = ClearanceStepKind.Via };
                 firstViaSeen = true;
-                result.Add(step);
+                kept.Add((step, i));
                 continue;
             }
 
-            if (step is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway })
+            var (state, record) = crossings[i];
+            if (state == CrossingState.Used)
             {
-                if (used.Take(r => CrossingMatches(r, step, seq)))
-                {
-                    if (isEnd) result.Add(step);   // the leg ends just across it: still the end
-                    continue;
-                }
-                if (restored.Take(r => CrossingMatches(r, step, seq)))
-                {
-                    result.Add(step with { Kind = ClearanceStepKind.HoldShort });   // keeps its At, AtNodeId
-                    continue;
-                }
-                inForce.Take(r => CrossingMatches(r, step, seq));
-                result.Add(step);
+                // Behind; but the leg ends just across it, so it still says where the leg ends.
+                if (isEnd) kept.Add((PinnedToMadeCrossing(step, record!), i));
                 continue;
             }
-
-            if (step.Kind == ClearanceStepKind.HoldShort && !isEnd
-                && passed.Take(h => h.SeqIndex == seq && SameTarget(h.Step, step)))
+            if (state == CrossingState.PutBack)
+            {
+                kept.Add((step with { Kind = ClearanceStepKind.HoldShort }, i));   // keeps its At, AtNodeId
                 continue;
+            }
+            if (holdPassed[i] && !isEnd) continue;
+            kept.Add((step, i));
+        }
 
-            result.Add(step);
+        if (!hasDestination)
+            NeverMakeALimit(kept, steps, seqIndexOf, endIndex, lastFinishedVia);
+        return kept.Select(k => k.Step).ToList();
+    }
+
+    private enum CrossingState { Unknown, Used, PutBack, InForce }
+
+    // What each Cross runway step is matched to. Exact places first, for every step, then places matched only through
+    // a missing one: first-fit on a wildcard could hand a plain step the record of a step "at B4" and swap the two.
+    private static (CrossingState State, ClearedCrossing? Record)[] MatchCrossings(IReadOnlyList<ClearanceStep> steps,
+        int[] seqIndexOf, IReadOnlyList<ClearedCrossing> used, IReadOnlyList<ClearedCrossing> putBack,
+        IReadOnlyList<ClearedCrossing> inForce)
+    {
+        var result = new (CrossingState State, ClearedCrossing? Record)[steps.Count];
+        var lists = new[]
+        {
+            (State: CrossingState.Used, Records: new Records<ClearedCrossing>(used)),
+            (State: CrossingState.PutBack, Records: new Records<ClearedCrossing>(putBack)),
+            (State: CrossingState.InForce, Records: new Records<ClearedCrossing>(inForce)),
+        };
+        foreach (bool exact in new[] { true, false })
+        {
+            for (int i = 0; i < steps.Count; i++)
+            {
+                var step = steps[i];
+                if (result[i].State != CrossingState.Unknown
+                    || step is not { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway })
+                    continue;
+                int seq = seqIndexOf[i];
+                foreach (var (state, records) in lists)
+                {
+                    var record = records.Take(r => CrossingMatches(r, step, seq)
+                        && (!exact || ClearanceRunways.ExactPlace(r.At, r.AtNodeId, step.At, step.AtNodeId)));
+                    if (record == null) continue;
+                    result[i] = (state, record);
+                    break;
+                }
+            }
         }
         return result;
+    }
+
+    // Which Hold short steps are known passed, matched as the crossings are: exact places first.
+    private static bool[] MatchPassedHolds(IReadOnlyList<ClearanceStep> steps, int[] seqIndexOf,
+        IReadOnlyList<ClearanceHold> holdsPassed)
+    {
+        var result = new bool[steps.Count];
+        var records = new Records<ClearanceHold>(holdsPassed);
+        foreach (bool exact in new[] { true, false })
+        {
+            for (int i = 0; i < steps.Count; i++)
+            {
+                var step = steps[i];
+                if (result[i] || step.Kind != ClearanceStepKind.HoldShort) continue;
+                int seq = seqIndexOf[i];
+                result[i] = records.Take(h => h.SeqIndex == seq && SameTarget(h.Step, step)
+                    && (!exact || ClearanceRunways.ExactPlace(h.Step.At, h.Step.AtNodeId, step.At, step.AtNodeId))) != null;
+            }
+        }
+        return result;
+    }
+
+    // The end of a leg already crossed: kept, pinned to the crossing made (its stop node, and its place name when the
+    // record has one), so a fresh Calculate clears only that crossing, never a later crossing of the same runway the
+    // new route makes. A crossing recorded with no stop node has nothing to pin and stays as entered.
+    private static ClearanceStep PinnedToMadeCrossing(ClearanceStep step, ClearedCrossing used)
+    {
+        if (used.StopNodeId == 0) return step;
+        return step with
+        {
+            AtNodeId = used.StopNodeId,
+            At = string.IsNullOrWhiteSpace(used.At) ? step.At : used.At,
+            AtNodeIsPassedStop = true,
+        };
+    }
+
+    // Trimming never makes a step the limit (a Hold short said before any Via step ends a leg with no destination). A
+    // kept stop or runway crossing entered after a Via step now behind would land in front of the first remaining Via
+    // step: it moves to just after it (steps are placed by the route, spec 8.1, so it keeps its meaning). When that
+    // Via step ends the leg (a stop after it would end the leg instead), or none remains, the last finished Via step is
+    // kept in front of them, read as Via (the aircraft has left it); LoadRoute's route-start rules leave out a first
+    // taxiway the aircraft has left ([RTE-39]). A crossing alone is left where it is then: it is never read as a limit,
+    // and moving it after the last step would end the leg across it. Cross taxiway steps never move: after the last
+    // Via step a crossed taxiway breaks the leg end's tie, which it was not entered to do.
+    private static void NeverMakeALimit(List<(ClearanceStep Step, int Index)> kept, IReadOnlyList<ClearanceStep> steps,
+        int[] seqIndexOf, int endIndex, int lastFinishedVia)
+    {
+        int firstVia = kept.FindIndex(k => k.Step.IsVia);
+        int bound = firstVia >= 0 ? firstVia : kept.Count;
+        var strays = new List<int>();
+        for (int p = 0; p < bound; p++)
+        {
+            var (step, index) = kept[p];
+            if (index != endIndex && seqIndexOf[index] >= 0
+                && (step.Kind == ClearanceStepKind.HoldShort
+                    || step is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }))
+                strays.Add(p);
+        }
+        if (strays.Count == 0) return;
+
+        if (firstVia >= 0 && kept[firstVia].Index != endIndex)
+        {
+            var moved = strays.Select(p => kept[p]).ToList();
+            for (int s = strays.Count - 1; s >= 0; s--) kept.RemoveAt(strays[s]);
+            kept.InsertRange(firstVia - strays.Count + 1, moved);
+            return;
+        }
+
+        if (lastFinishedVia < 0 || !strays.Any(p => kept[p].Step.Kind == ClearanceStepKind.HoldShort)) return;
+        var via = steps[lastFinishedVia];
+        if (via.Kind != ClearanceStepKind.Via) via = via with { Kind = ClearanceStepKind.Via };
+        kept.Insert(strays[0], (via, lastFinishedVia));
     }
 
     // A clearance record for this Cross runway step: the same runway (either end), entered after the same Via step,
@@ -422,7 +544,7 @@ public static class ClearanceTrim
     }
 
     // A list of records each step may claim once, in order.
-    private sealed class Records<T>
+    private sealed class Records<T> where T : class
     {
         private readonly IReadOnlyList<T> _items;
         private readonly bool[] _taken;
@@ -433,15 +555,16 @@ public static class ClearanceTrim
             _taken = new bool[_items.Count];
         }
 
-        public bool Take(Func<T, bool> matches)
+        /// <summary>Claims the first unclaimed record that matches; null when none does.</summary>
+        public T? Take(Func<T, bool> matches)
         {
             for (int i = 0; i < _items.Count; i++)
             {
                 if (_taken[i] || !matches(_items[i])) continue;
                 _taken[i] = true;
-                return true;
+                return _items[i];
             }
-            return false;
+            return null;
         }
     }
 
@@ -495,5 +618,16 @@ internal static class ClearanceRunways
 
     /// <summary><see cref="SamePlace(string?, int, string?, int)"/> for two steps' "at".</summary>
     public static bool SamePlace(ClearanceStep a, ClearanceStep b) => SamePlace(a.At, a.AtNodeId, b.At, b.AtNodeId);
+
+    /// <summary>True when the step names a place: an "at" name or node.</summary>
+    public static bool HasPlace(ClearanceStep step) => !string.IsNullOrWhiteSpace(step.At) || step.AtNodeId != 0;
+
+    /// <summary>
+    /// True when both places are the same exactly: the same name (any case; none and none alike) and the same node
+    /// (0 and 0 alike). A record that matches only through a missing place is a wildcard match, taken after these.
+    /// </summary>
+    public static bool ExactPlace(string? atA, int atNodeA, string? atB, int atNodeB)
+        => atNodeA == atNodeB
+           && string.Equals((atA ?? "").Trim(), (atB ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 
 }

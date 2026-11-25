@@ -361,8 +361,8 @@ public class ClearancePlannerTests
             putBack ?? Array.Empty<ClearedCrossing>(), passed ?? Array.Empty<ClearanceHold>(), turnMade);
 
     private static ClearedCrossing Rec(string runway, int seqIndex, string? at = null, int atNodeId = 0,
-        ClearedBy origin = ClearedBy.Clearance)
-        => new(runway, At: at, AtNodeId: atNodeId, SeqIndex: seqIndex, Origin: origin);
+        ClearedBy origin = ClearedBy.Clearance, int stopNodeId = 0)
+        => new(runway, At: at, AtNodeId: atNodeId, StopNodeId: stopNodeId, SeqIndex: seqIndex, Origin: origin);
 
     [Fact]
     public void Trim_drops_the_finished_via_steps_and_what_is_known_to_be_behind()
@@ -371,9 +371,53 @@ public class ClearancePlannerTests
         // The 09 stop is known passed; the 27L crossing is still cleared ahead.
         Assert.Equal(new[] { Via("B"), CrossRwy("27L"), HoldTwy("L") },
             Trim(steps, done: 1, inForce: new[] { Rec("27L", 1) }, passed: new[] { new ClearanceHold(0, HoldRwy("09")) }));
-        // Nothing known of the 09 stop: it stays (spec 8.2: only completed steps are dropped).
-        Assert.Equal(new[] { HoldRwy("09"), Via("B"), CrossRwy("27L"), HoldTwy("L") },
+        // Nothing known of the 09 stop: it stays (spec 8.2: only completed steps are dropped), after the taxiway the
+        // aircraft is on, never in front of it where it would read as the limit.
+        Assert.Equal(new[] { Via("B"), HoldRwy("09"), CrossRwy("27L"), HoldTwy("L") },
             Trim(steps, done: 1, inForce: new[] { Rec("27L", 1) }));
+    }
+
+    [Fact]
+    public void Trim_never_makes_a_kept_stop_the_limit()
+    {
+        // The two repros: each kept stop lands after the first taxiway still ahead, and the leg still ends at L.
+        var first = Trim(new[] { Via("A"), HoldRwy("09"), Via("B"), CrossRwy("27L"), HoldTwy("L") }, done: 1);
+        Assert.Equal(new[] { Via("B"), HoldRwy("09"), CrossRwy("27L"), HoldTwy("L") }, first);
+        var firstPlan = ClearancePlanner.Build(first, hasDestination: false);
+        Assert.Equal(ClearanceEndKind.HoldShortTaxiway, firstPlan.End);
+        Assert.Equal("L", firstPlan.EndStep?.Name);
+
+        var second = Trim(new[] { Via("A"), Via("B"), HoldRwy("27"), Via("C"), HoldTwy("L") }, done: 2);
+        Assert.Equal(new[] { Via("C"), HoldRwy("27"), HoldTwy("L") }, second);
+        var secondPlan = ClearancePlanner.Build(second, hasDestination: false);
+        Assert.Equal(ClearanceEndKind.HoldShortTaxiway, secondPlan.End);
+        Assert.Equal("L", secondPlan.EndStep?.Name);
+
+        // A crossing kept ahead moves with it.
+        Assert.Equal(new[] { Via("B"), CrossRwy("04L"), HoldTwy("L") },
+            Trim(new[] { Via("A"), CrossRwy("04L"), Via("B"), HoldTwy("L") }, done: 1, inForce: new[] { Rec("04L", 0) }));
+        // With a destination there is no limit: nothing moves.
+        Assert.Equal(new[] { HoldRwy("09"), Via("B") },
+            Trim(new[] { Via("A"), HoldRwy("09"), Via("B") }, done: 1, destination: true));
+    }
+
+    [Fact]
+    public void Trim_keeps_the_last_finished_via_step_in_front_of_a_stop_it_cannot_move()
+    {
+        // The first taxiway still ahead ends the leg: a stop moved after it would end the leg instead.
+        var steps = new[] { Via("A"), HoldRwy("09"), Via("B") };
+        var kept = Trim(steps, done: 1);
+        Assert.Equal(steps, kept);
+        var plan = ClearancePlanner.Build(kept, hasDestination: false);
+        Assert.Equal(ClearanceEndKind.EndOfTaxiway, plan.End);
+        Assert.Equal("B", plan.EndStep?.Name);
+
+        // No taxiway left at all.
+        var noVia = new[] { Via("A"), HoldRwy("09"), HoldTwy("L") };
+        Assert.Equal(noVia, Trim(noVia, done: 1));
+
+        // The taxiway kept is behind the aircraft: a turn onto it is already made, so it reads as Via.
+        Assert.Equal(new[] { Via("A"), HoldRwy("09"), Via("B") }, Trim(new[] { Left("A"), HoldRwy("09"), Via("B") }, done: 1));
     }
 
     [Fact]
@@ -384,6 +428,10 @@ public class ClearancePlannerTests
         // The limit ends the leg: never dropped, whatever is reported.
         Assert.Equal(new[] { HoldPoint("C5", 7), Via("B") },
             Trim(steps, done: 1, passed: new[] { new ClearanceHold(-1, HoldPoint("C5", 7)) }));
+        // A stop kept on the way goes after the taxiway still ahead; the limit stays the end.
+        var withStop = Trim(new[] { HoldPoint("C5", 7), Via("A"), HoldRwy("09"), Via("B") }, done: 1);
+        Assert.Equal(new[] { HoldPoint("C5", 7), Via("B"), HoldRwy("09") }, withStop);
+        Assert.Equal("C5", ClearancePlanner.Build(withStop, hasDestination: false).EndStep?.Name);
     }
 
     [Fact]
@@ -469,13 +517,55 @@ public class ClearancePlannerTests
     [Fact]
     public void Trim_never_drops_the_step_that_ends_the_leg()
     {
-        // Across 04L, still on the way to the far side: the leg's end stays.
+        // Across 04L, still on the way to the far side: the leg's end stays, pinned to the crossing it made.
         var steps = new[] { Via("C"), CrossRwy("04L") };
-        Assert.Equal(steps, Trim(steps, used: new[] { Rec("04L", 0) }));
+        var kept = Trim(steps, used: new[] { Rec("04L", 0, stopNodeId: 77) });
+        Assert.Equal(new[] { Via("C"), CrossRwy("04L") with { AtNodeId = 77, AtNodeIsPassedStop = true } }, kept);
         // With a destination it is a crossing on the way, and goes once used.
-        Assert.Equal(new[] { Via("C") }, Trim(steps, destination: true, used: new[] { Rec("04L", 0) }));
+        Assert.Equal(new[] { Via("C") }, Trim(steps, destination: true, used: new[] { Rec("04L", 0, stopNodeId: 77) }));
         // A crossing put back still turns into the stop the pilot asked for.
         Assert.Equal(new[] { Via("C"), HoldRwy("04L") }, Trim(steps, putBack: new[] { Rec("04L", 0) }));
+    }
+
+    [Fact]
+    public void A_used_end_crossing_stays_pinned_to_its_place()
+    {
+        // A fresh Calculate clears only the crossing already made (its stop node), never a later one of 04L.
+        var kept = Trim(new[] { Via("C"), CrossRwy("04L") }, used: new[] { Rec("04L", 0, at: "C", stopNodeId: 77) });
+        Assert.Equal(new[] { Via("C"), CrossRwy("04L", at: "C") with { AtNodeId = 77, AtNodeIsPassedStop = true } }, kept);
+        var plan = ClearancePlanner.Build(kept, hasDestination: false);
+        Assert.Equal(ClearanceEndKind.AcrossRunway, plan.End);
+        Assert.Equal(new[] { new ClearedCrossing("04L", At: "C", AtNodeId: 77, SeqIndex: 0) }, plan.Crossings);
+        // The stop node is behind the aircraft: never a holding point to pin the route through.
+        Assert.Null(plan.CrossAtHoldingPointNodeId);
+        Assert.Null(plan.CrossAtHoldingPointName);
+        // "Cross runway 24L at B3" made: the pin replaces the holding point, which is behind too.
+        var atPoint = Trim(new[] { Via("P"), CrossRwy("24L", at: "B3", atNodeId: 42) },
+                           used: new[] { Rec("24L", 0, at: "B3", atNodeId: 42, stopNodeId: 41) });
+        Assert.Equal(41, atPoint[1].AtNodeId);
+        Assert.Null(ClearancePlanner.Build(atPoint, hasDestination: false).CrossAtHoldingPointNodeId);
+    }
+
+    [Fact]
+    public void A_crossing_put_back_and_a_later_crossing_of_the_same_runway_are_two_crossings()
+    {
+        var steps = new[] { Via("P"), CrossRwy("04L"), Via("Q"), CrossRwy("04L"), HoldTwy("L") };
+        var kept = Trim(steps, putBack: new[] { Rec("04L", 0) }, inForce: new[] { Rec("04L", 1) });
+        Assert.Equal(new[] { Via("P"), HoldRwy("04L"), Via("Q"), CrossRwy("04L"), HoldTwy("L") }, kept);
+        // Neither names a place, and they follow different taxiways: two crossings, so Calculate takes it.
+        Assert.Null(ClearancePlanner.Build(kept, hasDestination: false).Refusal);
+    }
+
+    [Fact]
+    public void Trim_matches_an_exact_place_before_a_wildcard()
+    {
+        // The plain step is the crossing in force; the one "at B4" is the one used.
+        var steps = new[] { Via("P"), CrossRwy("24L"), CrossRwy("24L", at: "B4") };
+        Assert.Equal(new[] { Via("P"), CrossRwy("24L") },
+            Trim(steps, destination: true, used: new[] { Rec("24L", 0, at: "B4") }, inForce: new[] { Rec("24L", 0) }));
+        var leg = new[] { Via("P"), CrossRwy("24L"), CrossRwy("24L", at: "B4"), HoldTwy("L") };
+        Assert.Equal(new[] { Via("P"), CrossRwy("24L"), HoldTwy("L") },
+            Trim(leg, used: new[] { Rec("24L", 0, at: "B4") }, inForce: new[] { Rec("24L", 0) }));
     }
 
     [Fact]

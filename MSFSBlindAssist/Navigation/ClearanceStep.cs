@@ -8,10 +8,13 @@ public enum ClearanceStepKind { Via, LeftOnto, RightOnto, Cross, HoldShort }
 
 public enum ClearanceTargetKind { Taxiway, Runway, HoldingPoint }
 
+// AtNodeId is a holding point's node, the place a crossing is cleared at, which ClearancePlanner also pins a leg
+// ending across the runway through; AtNodeIsPassedStop marks it instead as the stop node of a crossing already made
+// (ClearanceTrim keeps a used end crossing pinned to its place): matched, never pinned through.
 public sealed record ClearanceStep(
     ClearanceStepKind Kind, ClearanceTargetKind TargetKind, string Name,
     int NodeId = 0, string HoldingPointKind = "", bool FromSign = false,
-    string? At = null, int AtNodeId = 0)
+    string? At = null, int AtNodeId = 0, bool AtNodeIsPassedStop = false)
 {
     /// <summary>True for the steps that name a taxiway to follow (Via, Left onto, Right onto).</summary>
     public bool IsVia => Kind is ClearanceStepKind.Via or ClearanceStepKind.LeftOnto or ClearanceStepKind.RightOnto;
