@@ -406,14 +406,52 @@ public class ClearedCrossingHoldsTests
     [Fact]
     public void A_holding_point_before_two_crossings_of_its_runway_is_the_first_ones()
     {
-        // TwoCrossings: a point before the first crossing; the first crossing lies between it and the second.
-        var route = TwoCrossings();
+        // TwoCrossings with a point (node 10) 150 m before the first stop; the first crossing lies between it and the
+        // second.
+        var route = RouteOf(Node(1, 500, -400), Node(10, 500, -250), Node(2, 500, -100), Node(3, 500, 0), Node(4, 500, 100),
+            Node(5, 900, 300), Node(6, 900, 100), Node(7, 900, 0), Node(8, 900, -100));
         var events = Pass(route, Runway09());
+        Assert.Equal(new[] { 2, 6 }, events.Select(e => e.StopNodeIndex));
 
-        var outcome = Clear(route, new ClearedCrossing("09", At: "B3", AtNodeId: 1));
+        var outcome = Clear(route, new ClearedCrossing("09", At: "B3", AtNodeId: 10));
 
         Assert.Equal(new[] { true, false }, events.Select(e => e.Cleared));
         Assert.Equal(2, Assert.Single(outcome.Applied).StopNodeId);
+    }
+
+    // The point is that crossing's only within 200 m of its stop along the route: a point further back, or one at
+    // another stub of the same runway that the route passes on a parallel taxiway, is somewhere else (spec 8.1: that
+    // crossing is not cleared; spec 5, the fourth anti-goal).
+    [Fact]
+    public void A_holding_point_more_than_200_m_before_the_stop_is_not_that_crossings()
+    {
+        var route = Named(RouteOf(Node(1, 500, -600), Node(2, 500, -400),
+            Node(3, 500, -105, TaxiNodeType.HoldShort, "runway 09 at A5"), Node(4, 500, -51), Node(5, 500, 0),
+            Node(6, 500, 100)), "A");
+        var ev = Assert.Single(Pass(route, Runway09()));
+        Assert.Equal(2, ev.StopNodeIndex);
+
+        var outcome = Clear(route, new ClearedCrossing("09", At: "B3", AtNodeId: 2));
+
+        Assert.Empty(outcome.Applied);
+        Assert.Equal("B3", Assert.Single(outcome.Elsewhere).At);
+        Assert.False(ev.Cleared);
+    }
+
+    [Fact]
+    public void A_holding_point_at_another_stub_of_the_same_runway_is_not_that_crossings()
+    {
+        // East along a parallel taxiway 300 m south of 09/27, past the point at the stub at east 200 (node 2), and up
+        // the stub at east 900 across the runway.
+        var route = RouteOf(Node(1, 0, -300), Node(2, 200, -300), Node(3, 900, -300), Node(4, 900, -105),
+            Node(5, 900, 0), Node(6, 900, 100));
+        var ev = Assert.Single(Pass(route, Runway09()));
+
+        var outcome = Clear(route, new ClearedCrossing("09", At: "B3", AtNodeId: 2));
+
+        Assert.Empty(outcome.Applied);
+        Assert.Equal("B3", Assert.Single(outcome.Elsewhere).At);
+        Assert.False(ev.Cleared);
     }
 
     // A holding point's node is the one place there is: it is matched over the whole route before its name is, so a

@@ -75,8 +75,9 @@ public static class ClearedCrossingHolds
     /// request is about the crossing in front of the aircraft, never a later one: the first of them, or with a place
     /// the first whose route from its stop node to where it reaches the runway (both included) passes <c>AtNodeId</c> (a
     /// holding point the route is pinned through can lie between the scenery line the pass stopped at and the
-    /// runway), or that is the first crossing after <c>AtNodeId</c> with no other runway event between (a CAT II/III
-    /// point further out than the stop), tried over the whole list before any name; else the first whose event location
+    /// runway), or whose stop lies at most <c>HoldingPointBeforeStopMaxMetres</c> along the route after
+    /// <c>AtNodeId</c> with no other runway event between (a CAT II/III point further out than the stop), tried over the
+    /// whole list before any name; else the first whose event location
     /// or stop segment's taxiway is <c>At</c> (a crossing with no stop: its location). With
     /// <paramref name="runStartSegmentOf"/> and a <c>SeqIndex</c>, those the route reaches at or after
     /// that taxiway step's first segment are tried first: the reach, not the stop, which can be set back onto the
@@ -928,11 +929,18 @@ public static class ClearedCrossingHolds
         return null;
     }
 
+    /// <summary>
+    /// How far along the route before a crossing's stop a holding point may lie and still be that crossing's place (a
+    /// CAT II/III line further out than the CAT I line the pass stopped at). Further back, or at another stub of the
+    /// same runway the route passes on a parallel taxiway, it is somewhere else, and that crossing is not cleared.
+    /// </summary>
+    public const double HoldingPointBeforeStopMaxMetres = 200.0;
+
     // Whether node nodeId is this crossing's place: on the route from the event's stop to where the route reaches the
     // runway, both included (a holding point the route is pinned through can sit between the scenery line the pass
-    // stopped at and the runway), or further out than the stop (a CAT II/III point) with no other runway event between
-    // it and the stop, so the first crossing after the point is the one it leads to. A crossing with no stop (passed, or
-    // none placed) is matched by its place name only.
+    // stopped at and the runway), or further out than the stop (a CAT II/III point) by at most
+    // HoldingPointBeforeStopMaxMetres along the route, with no other runway event between it and the stop. A crossing
+    // with no stop (passed, or none placed) is matched by its place name only.
     private static bool OnApproach(TaxiRoute route, TaxiRouteRunwayEvent e, int nodeId, IReadOnlyList<TaxiRouteRunwayEvent> allEvents)
     {
         if (e.StopNodeIndex < 0 || nodeId == 0) return false;
@@ -943,9 +951,19 @@ public static class ClearedCrossingHolds
             if (node is null) return false;
             if (node.NodeId != nodeId) continue;
             if (k >= e.StopNodeIndex) return true;
-            if (!allEvents.Any(o => o != null && !ReferenceEquals(o, e) && Between(o, k, e.StopNodeIndex))) return true;
+            if (RouteMetres(route, k, e.StopNodeIndex) <= HoldingPointBeforeStopMaxMetres
+                && !allEvents.Any(o => o != null && !ReferenceEquals(o, e) && Between(o, k, e.StopNodeIndex)))
+                return true;
         }
         return false;
+    }
+
+    // Along the route from route node from to route node to (from <= to): segments from to to - 1.
+    private static double RouteMetres(TaxiRoute route, int from, int to)
+    {
+        double metres = 0.0;
+        for (int i = Math.Max(0, from); i < to && i < route.Segments.Count; i++) metres += SegmentLength(route.Segments[i]);
+        return metres;
     }
 
     // Another runway event lies between route nodes from (included) and to (excluded): its stop or its reach.
