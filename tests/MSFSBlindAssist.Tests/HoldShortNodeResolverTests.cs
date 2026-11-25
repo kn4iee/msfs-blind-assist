@@ -192,6 +192,76 @@ public class HoldShortNodeResolverTests
         Assert.NotEqual(plain.NodeId, result.NodeId);
     }
 
+    // --- A limit said alone: the near side's hold lines, one per approach -------
+
+    // A parallel taxiway P 200 m west from along 400 to 2,500, with connector A at along 700 and connector B at along
+    // 2,500 running onto the runway. A carries a CAT II/III line at 140 m and the runway's line at 120 m; B's line sits at
+    // 105 m, nearer the runway than any line on A, 2 km down the runway.
+    private static TaxiGraph TwoApproaches() => TaxiGraph.Build(new List<TaxiPath>
+    {
+        Edge(400, 200, "", 700, 200, "", "P"),
+        Edge(700, 200, "", 2500, 200, "", "P"),
+        Edge(700, 200, "", 700, 140, "IHS", "A"),
+        Edge(700, 140, "IHS", 700, 120, "HS", "A"),
+        Edge(700, 120, "HS", 700, 0, "", "A"),
+        Edge(2500, 200, "", 2500, 105, "HS", "B"),
+        Edge(2500, 105, "HS", 2500, 0, "", "B"),
+    }, new List<ParkingSpot>(), new List<StartPosition>());
+
+    [Fact]
+    public void A_limit_said_alone_takes_the_hold_line_the_aircraft_reaches_first()
+    {
+        var runway = MakeRunway();
+        var graph = TwoApproaches();
+        var start = NodeNear(graph, 400, 200);
+        double lat = LatN(400), lon = LonW(205);
+
+        var candidates = HoldShortNodeResolver.NearSideHoldCandidates(graph, runway, lat, lon, aircraftHeadingMag: 0);
+
+        // One line per approach: the runway's own line on A (not its CAT II/III line further out), and B's.
+        Assert.Equal(new[] { NodeNear(graph, 700, 120).NodeId, NodeNear(graph, 2500, 105).NodeId }.OrderBy(id => id),
+            candidates.OrderBy(id => id));
+        var distances = new TaxiRouter(graph).ComputeGraphDistancesFrom(start.NodeId);
+        int chosen = ClearanceLegEnd.NearestAhead(candidates, distances,
+            id => ClearanceLegEnd.NeedsReversal(graph, start.NodeId, id, headingTrue: 0));
+        Assert.Equal(NodeNear(graph, 700, 120).NodeId, chosen);
+        // With no taxiway to anchor on, the tiered pick is the line nearest the runway, 2 km down it.
+        Assert.Equal(NodeNear(graph, 2500, 105).NodeId,
+            HoldShortNodeResolver.ResolveNearSide(graph, runway, lat, lon, 0, lastTaxiway: null)!.NodeId);
+    }
+
+    [Fact]
+    public void A_line_behind_the_aircraft_ranks_after_one_ahead()
+    {
+        var graph = TwoApproaches();
+        // Past connector A on P, going north: A's line needs a turn round; B's is ahead.
+        var start = NodeNear(graph, 2500, 200);
+        var candidates = HoldShortNodeResolver.NearSideHoldCandidates(graph, MakeRunway(), LatN(2400), LonW(205), 0);
+        var distances = new TaxiRouter(graph).ComputeGraphDistancesFrom(start.NodeId);
+
+        int chosen = ClearanceLegEnd.NearestAhead(candidates, distances,
+            id => ClearanceLegEnd.NeedsReversal(graph, start.NodeId, id, headingTrue: 0));
+
+        Assert.Equal(NodeNear(graph, 2500, 105).NodeId, chosen);
+    }
+
+    [Fact]
+    public void An_approach_with_no_scenery_line_offers_its_last_node_before_the_runway()
+    {
+        // Connector C at along 1,000 with plain nodes at 150 and 110 m (the setback is 100 m) and one at 40 m.
+        var graph = TaxiGraph.Build(new List<TaxiPath>
+        {
+            Edge(400, 200, "", 1000, 200, "", "P"),
+            Edge(1000, 200, "", 1000, 150, "", "C"),
+            Edge(1000, 150, "", 1000, 110, "", "C"),
+            Edge(1000, 110, "", 1000, 40, "", "C"),
+        }, new List<ParkingSpot>(), new List<StartPosition>());
+
+        var candidates = HoldShortNodeResolver.NearSideHoldCandidates(graph, MakeRunway(), LatN(400), LonW(205), 0);
+
+        Assert.Equal(new[] { NodeNear(graph, 1000, 110).NodeId }, candidates);
+    }
+
     // A limit said alone ("hold short of runway 09", no taxiway step): no cleared taxiway, so tiers 4 and 5 decide,
     // and a node on an UNNAMED connector is never taken for one on the cleared taxiway.
     [Fact]

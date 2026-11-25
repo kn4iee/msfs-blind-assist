@@ -4487,8 +4487,10 @@ public class TaxiAssistForm : Form
     /// <see cref="ProgressiveTerminator"/> guidance announces it by, then routed by the same <c>LoadRoute</c> as a
     /// destination, with every stop, crossing and Turn pick the steps carry, and said in the same one utterance.
     /// <list type="bullet">
-    /// <item>Hold short of a runway: the hold point on the aircraft's side (<see cref="ResolveHoldShortRunwayNode"/>),
-    /// anchored on the last Via taxiway when there is one.</item>
+    /// <item>Hold short of a runway: the hold point on the aircraft's side, anchored on the last Via taxiway
+    /// (<see cref="ResolveHoldShortRunwayNode"/>); with none (a limit said alone), the first of the near side's hold
+    /// lines the aircraft reaches (<see cref="HoldShortNodeResolver.NearSideHoldCandidates"/>, then
+    /// <see cref="ClearanceLegEnd.NearestAhead"/>).</item>
     /// <item>Hold short of a taxiway: where the last Via taxiway meets it (with none, any node of it in the aircraft's
     /// component), never inside a runway's margin; narrowed to the meetings beyond a taxiway crossed after the last
     /// Via step (<see cref="ClearanceRouteChecks.BeyondTheCrossing"/>), then the nearest by taxi distance the
@@ -4497,9 +4499,10 @@ public class TaxiAssistForm : Form
     /// <item>Hold at a named holding point: its node, when the aircraft can reach it.</item>
     /// <item>Across a runway: the far side, at the step's "at" (a holding point the route is pinned through, as the
     /// "After crossing runway" leg did, or a taxiway); for a crossing already made, the far side of THAT crossing, never
-    /// the far side from where the aircraft now is, which once across lies back over the runway.</item>
+    /// the far side from where the aircraft now is, which once across lies back over the runway
+    /// (<see cref="ClearanceLegEnd.JudgeMadeCrossing"/>; a pin with no side is refused).</item>
     /// <item>End of the last taxiway: along its own edges, the way the aircraft travels on it
-    /// (<see cref="ClearanceLegEnd.EndOfTaxiway"/>). A Left onto or Right onto on the last Via step re-resolves this
+    /// (<see cref="ClearanceLegEnd.EntryOntoTaxiway"/>, <see cref="ClearanceLegEnd.EndOfTaxiway"/>). A Left onto or Right onto on the last Via step re-resolves this
     /// end, and a taxiway hold short's, inside LoadRoute (<c>TurnPickApplier</c>); the turn word plays no part here.</item>
     /// </list>
     /// An end that cannot be found is refused, never guessed: "Could not find … Check your entry.", or why an end
@@ -4533,9 +4536,14 @@ public class TaxiAssistForm : Form
         // A fresh router: its BlockedNodes is empty (TURN-1).
         IReadOnlyDictionary<int, double> Distances()
             => distances ??= new TaxiRouter(graph).ComputeGraphDistancesFrom(startNode.NodeId);
-        bool NeedsReversal(int nodeId) => ClearanceLegEnd.NeedsReversal(graph, startNode.NodeId, nodeId, headingTrue);
-        List<int> NodesOf(string taxiway) => graph.GetNodesOnTaxiway(taxiway)
-            .Where(id => graph.Nodes.TryGetValue(id, out var n) && n.ComponentId == component).ToList();
+        // Each answer is a route search: asked once per node.
+        var reversals = new Dictionary<int, bool>();
+        bool NeedsReversal(int nodeId)
+        {
+            if (!reversals.TryGetValue(nodeId, out bool reversal))
+                reversals[nodeId] = reversal = ClearanceLegEnd.NeedsReversal(graph, startNode.NodeId, nodeId, headingTrue);
+            return reversal;
+        }
 
         int destNode = -1;
         ProgressiveTerminator term;
@@ -4557,7 +4565,18 @@ public class TaxiAssistForm : Form
                 // does not truncate the route, so routing to the far-side node would carry the leg across the runway
                 // before the terminal announcement.)
                 runwayTarget = endStep.Name;
-                destNode = ResolveHoldShortRunwayNode(runwayTarget, lastVia)?.NodeId ?? -1;
+                if (lastVia != null)
+                {
+                    destNode = ResolveHoldShortRunwayNode(runwayTarget, lastVia)?.NodeId ?? -1;
+                }
+                else if (_crossRunwayMap.TryGetValue($"Runway {runwayTarget}", out var holdRwy))
+                {
+                    // A limit said alone (spec 8.1, "limit only"): the first of the runway's hold lines on the near
+                    // side the aircraft reaches, never the one nearest the runway anywhere along it.
+                    destNode = ClearanceLegEnd.NearestAhead(
+                        HoldShortNodeResolver.NearSideHoldCandidates(graph, holdRwy, _aircraftLat, _aircraftLon, _aircraftHeading),
+                        Distances(), NeedsReversal);
+                }
                 term = new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortRunway, runwayTarget);
                 break;
             }
@@ -4614,22 +4633,27 @@ public class TaxiAssistForm : Form
                 {
                     // The crossing is already made (the step list kept it as the end, pinned to its stop): just across
                     // it is the far side of THAT stop. Never pinned back through the stop, which is behind the aircraft.
+                    // The pin is its stop, or, for one made with no stop, where the route reached the runway.
                     var stop = graph.Nodes.TryGetValue(endStep.AtNodeId, out var stopNode) ? stopNode : null;
                     if (stop != null)
                     {
                         var frame = RunwayFrame.For(crossRwy, _aircraftLat);
-                        double stopSide = frame.SignedCrossTrack(stop.Latitude, stop.Longitude);
                         bool aircraftClear = RouteRunwayCrossings.RunwayWithinClearMargin(
                             graph.RunwayCenterlines, _aircraftLat, _aircraftLon) == null;
-                        if (ClearanceLegEnd.IsAlreadyAcross(stopSide,
-                                frame.SignedCrossTrack(_aircraftLat, _aircraftLon), aircraftClear))
+                        var judged = ClearanceLegEnd.JudgeMadeCrossing(frame.SignedCrossTrack(stop.Latitude, stop.Longitude),
+                            HoldShortNodeResolver.TrueHalfWidthMetres(crossRwy),
+                            frame.SignedCrossTrack(_aircraftLat, _aircraftLon), aircraftClear);
+                        if (judged.End == ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)
                         {
                             RefuseCalculate(ClearanceLegEnd.AlreadyAcross(runwayTarget));
                             return;
                         }
-                        destNode = RunwayCrossingResolver.FindAcross(graph, crossRwy, stop.NodeId)?.FarNodeId
-                                   ?? FindFarSideRunwayNode(crossRwy, farSideSign: -Math.Sign(stopSide))?.NodeId
-                                   ?? -1;
+                        // A pin with no side (on the runway's pavement) leaves destNode unset: refused below, never
+                        // sent back over the runway.
+                        if (judged.End == ClearanceLegEnd.MadeCrossingEnd.FarSide)
+                            destNode = RunwayCrossingResolver.FindAcross(graph, crossRwy, stop.NodeId)?.FarNodeId
+                                       ?? FindFarSideRunwayNode(crossRwy, farSideSign: judged.FarSideSign)?.NodeId
+                                       ?? -1;
                     }
                     break;
                 }
@@ -4653,20 +4677,14 @@ public class TaxiAssistForm : Form
             {
                 term = new ProgressiveTerminator(ProgressiveTerminatorType.EndOfTaxiway, "");
                 if (lastVia == null) break;
-                // Where the aircraft joins it: from the taxiway before it, where the two meet; else (or with no such
-                // meeting) the nearest of its nodes. The way it travels on it: its heading when on it, else the way it
-                // comes to the join.
-                int entry = sequence.Count >= 2
-                    ? ClearanceLegEnd.NearestAhead(graph.FindTaxiwayIntersectionNodes(sequence[^2], lastVia, component),
-                        Distances(), NeedsReversal)
-                    : -1;
-                if (entry < 0) entry = ClearanceLegEnd.NearestAhead(NodesOf(lastVia), Distances(), NeedsReversal);
-                if (entry < 0 || !graph.Nodes.TryGetValue(entry, out var entryNode)) break;
-                double travel = TaxiGraph.FastDistanceMeters(_aircraftLat, _aircraftLon, entryNode.Latitude,
-                                    entryNode.Longitude) < ClearanceLegEnd.ArmDirectionMetres
-                    ? headingTrue
-                    : NavigationCalculator.CalculateBearing(_aircraftLat, _aircraftLon, entryNode.Latitude, entryNode.Longitude);
-                var end = ClearanceLegEnd.EndOfTaxiway(graph, entry, lastVia, travel, _aircraftLat, _aircraftLon);
+                // Where the aircraft joins it and the way it goes on it: the junction with the taxiway before it, only
+                // when the aircraft need not turn round for it and is not on the last taxiway already; else its node
+                // nearest ahead, the way the aircraft is heading.
+                var entry = ClearanceLegEnd.EntryOntoTaxiway(graph, lastVia, sequence.Count >= 2 ? sequence[^2] : null,
+                    component, Distances(), NeedsReversal, _aircraftLat, _aircraftLon, headingTrue);
+                if (entry.NodeId < 0) break;
+                var end = ClearanceLegEnd.EndOfTaxiway(graph, entry.NodeId, lastVia, entry.TravelBearingTrue,
+                    _aircraftLat, _aircraftLon);
                 destNode = end.EndNodeId;
                 if (destNode < 0 && end.ArmEndNodeId >= 0)
                     besideRunway = ProgressiveLegEnd.NoEndClearOfARunway(lastVia);

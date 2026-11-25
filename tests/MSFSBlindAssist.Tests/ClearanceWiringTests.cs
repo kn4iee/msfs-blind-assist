@@ -224,7 +224,13 @@ public class ClearanceWiringTests
         Assert.Contains("ClearanceLegEnd.NodesOnTaxiway(", leg);
         Assert.Contains("graph.FindNearestNodeInDirection(", leg);
         Assert.DoesNotContain("FindTaxiwayEndNodeClearOfRunways(", leg);
-        // A crossing already made ends just across THAT crossing, or is refused with the reason.
+        // Fix round 1: a limit said alone ends at the first near-side hold line reached; the end of the last taxiway is
+        // entered ahead of the aircraft (ClearanceLegEndTests, HoldShortNodeResolverTests).
+        Assert.Contains("HoldShortNodeResolver.NearSideHoldCandidates(", leg);
+        Assert.Contains("ClearanceLegEnd.EntryOntoTaxiway(", leg);
+        // A crossing already made ends just across THAT crossing, or is refused with the reason; one whose pin has no
+        // side (made with no stop, pinned on the pavement) is refused, never sent back over the runway.
+        Assert.Contains("ClearanceLegEnd.JudgeMadeCrossing(", leg);
         Assert.Contains("RunwayCrossingResolver.FindAcross(graph, crossRwy, stop.NodeId)", leg);
         Assert.Contains("ClearanceLegEnd.AlreadyAcross(runwayTarget)", leg);
         Assert.Contains("ProgressiveLegEnd.NoHoldShortClearOfARunway(taxiwayTarget, lastVia)", leg);

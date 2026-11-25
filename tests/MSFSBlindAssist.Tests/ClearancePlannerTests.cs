@@ -614,6 +614,22 @@ public class ClearancePlannerTests
         Assert.Null(ClearancePlanner.Build(atPoint, hasDestination: false).CrossAtHoldingPointNodeId);
     }
 
+    // A crossing made with no stop of its own (#355's decision 3) is pinned by the node where the route reached the
+    // runway, so a fresh Calculate never takes the stale step for a second crossing of that runway.
+    [Fact]
+    public void A_used_end_crossing_with_no_stop_is_pinned_where_the_route_reached_the_runway()
+    {
+        var steps = new[] { Via("P"), CrossRwy("24L", at: "P") };
+        var kept = Trim(steps, used: new[] { Rec("24L", 0, at: "P") with { ReachNodeId = 58 } });
+
+        Assert.Equal(new[] { Via("P"), CrossRwy("24L", at: "P") with { AtNodeId = 58, AtNodeIsPassedStop = true } }, kept);
+        var plan = ClearancePlanner.Build(kept, hasDestination: false);
+        Assert.Null(plan.CrossAtHoldingPointNodeId);
+        Assert.Equal(new[] { new ClearedCrossing("24L", At: "P", AtNodeId: 58, SeqIndex: 0) }, plan.Crossings);
+        // Neither a stop nor a reach recorded: nothing to pin it by, it stays as entered.
+        Assert.Equal(steps, Trim(steps, used: new[] { Rec("24L", 0, at: "P") }));
+    }
+
     [Fact]
     public void A_crossing_put_back_and_a_later_crossing_of_the_same_runway_are_two_crossings()
     {

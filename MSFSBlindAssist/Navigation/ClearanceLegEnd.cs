@@ -201,16 +201,100 @@ public static class ClearanceLegEnd
     private static bool ClearOfRunways(TaxiGraph graph, TaxiNode node)
         => RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, node.Latitude, node.Longitude) == null;
 
-    /// <summary>
-    /// Whether an aircraft whose leg ends just across a runway it has already crossed (the end step pinned to the
-    /// crossing made, <see cref="ClearanceStep.AtNodeIsPassedStop"/>) is across it: on the other side from that
-    /// crossing's stop (signed cross-tracks, metres) and clear of every runway's margin. Its leg's end is then reached,
-    /// and a route "just across the runway" from there would only turn it round. A stop with no side is never judged.
-    /// </summary>
-    public static bool IsAlreadyAcross(double stopSignedCrossTrack, double aircraftSignedCrossTrack, bool aircraftClearOfRunways)
-        => aircraftClearOfRunways && stopSignedCrossTrack != 0.0
-           && Math.Sign(aircraftSignedCrossTrack) == -Math.Sign(stopSignedCrossTrack);
+    /// <summary>Where the aircraft joins the last taxiway of a leg that ends at its end, and the way it travels on it.</summary>
+    public readonly record struct TaxiwayEntry(int NodeId, double TravelBearingTrue);
 
-    /// <summary>The Calculate refusal for <see cref="IsAlreadyAcross"/>.</summary>
+    /// <summary>
+    /// The entry and the direction <see cref="EndOfTaxiway"/> takes for <paramref name="taxiway"/>, the last Via
+    /// taxiway. Joining it from <paramref name="previousTaxiway"/> (the Via taxiway before it), the aircraft not yet on
+    /// it: their junction nearest by taxi distance (<see cref="NearestAhead"/>), with the bearing from the aircraft to it
+    /// as the way it comes (its heading within <see cref="ArmDirectionMetres"/> of it), but only when the aircraft need
+    /// not turn round for it. Otherwise, and whenever the aircraft is on the taxiway already
+    /// (<see cref="IsOnTaxiway"/>: "A, P" still listed with A behind, "A, C, A", a finished Via kept in front of a stop),
+    /// its node nearest ahead in <paramref name="componentId"/>, with the aircraft's own heading as the way: a junction
+    /// behind taken as the entry made the bearing back to it the way on, and the leg ran back past it. -1 when the
+    /// taxiway has no node in the component.
+    /// </summary>
+    public static TaxiwayEntry EntryOntoTaxiway(TaxiGraph graph, string taxiway, string? previousTaxiway, int componentId,
+        IReadOnlyDictionary<int, double> taxiMetresFromStart, Func<int, bool> needsReversal,
+        double aircraftLat, double aircraftLon, double headingTrue)
+    {
+        if (graph == null || string.IsNullOrWhiteSpace(taxiway)) return new TaxiwayEntry(-1, headingTrue);
+        if (!string.IsNullOrWhiteSpace(previousTaxiway) && !IsOnTaxiway(graph, taxiway, aircraftLat, aircraftLon))
+        {
+            int junction = NearestAhead(graph.FindTaxiwayIntersectionNodes(previousTaxiway, taxiway, componentId),
+                taxiMetresFromStart, needsReversal);
+            if (junction >= 0 && !needsReversal(junction) && graph.Nodes.TryGetValue(junction, out var node))
+            {
+                double toJunction = TaxiGraph.FastDistanceMeters(aircraftLat, aircraftLon, node.Latitude, node.Longitude);
+                double comes = toJunction < ArmDirectionMetres
+                    ? headingTrue
+                    : NavigationCalculator.CalculateBearing(aircraftLat, aircraftLon, node.Latitude, node.Longitude);
+                return new TaxiwayEntry(junction, comes);
+            }
+        }
+        var onTaxiway = graph.GetNodesOnTaxiway(taxiway)
+            .Where(id => graph.Nodes.TryGetValue(id, out var n) && n.ComponentId == componentId)
+            .ToList();
+        return new TaxiwayEntry(NearestAhead(onTaxiway, taxiMetresFromStart, needsReversal), headingTrue);
+    }
+
+    /// <summary>
+    /// Whether the position is on <paramref name="taxiway"/>: within <see cref="PavementTolerance.ForWidthFeet"/> (the
+    /// off-route test's own tolerance) of one of its edges.
+    /// </summary>
+    public static bool IsOnTaxiway(TaxiGraph graph, string taxiway, double lat, double lon)
+    {
+        if (graph == null || string.IsNullOrWhiteSpace(taxiway)) return false;
+        foreach (int id in graph.GetNodesOnTaxiway(taxiway))
+        {
+            if (!graph.Nodes.TryGetValue(id, out var a) || !graph.Adjacency.TryGetValue(id, out var edges)) continue;
+            foreach (var edge in edges)
+            {
+                if (!OnTaxiway(edge, taxiway) || !graph.Nodes.TryGetValue(edge.ToNodeId, out var b)) continue;
+                double off = GuidanceGeometry.PerpendicularDistanceToSegmentMeters(lat, lon,
+                    a.Latitude, a.Longitude, b.Latitude, b.Longitude);
+                if (off <= PavementTolerance.ForWidthFeet(edge.WidthFeet)) return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>How a leg that ends just across a runway it has already crossed ends.</summary>
+    public enum MadeCrossingEnd
+    {
+        /// <summary>The aircraft is across and clear of every runway: the leg's end is reached; refused, said.</summary>
+        AlreadyAcross,
+        /// <summary>Route on to the far side, the side away from the crossing's pin (<see cref="MadeCrossingJudgement.FarSideSign"/>).</summary>
+        FarSide,
+        /// <summary>The pin has no side to go by (it lies on the runway's pavement): refused, never guessed.</summary>
+        Unknown,
+    }
+
+    /// <summary>What <see cref="JudgeMadeCrossing"/> decides, with the far side's cross-track sign for <see cref="MadeCrossingEnd.FarSide"/> (0 otherwise).</summary>
+    public readonly record struct MadeCrossingJudgement(MadeCrossingEnd End, int FarSideSign);
+
+    /// <summary>
+    /// How a leg ends whose last step is a crossing already made (pinned by <c>ClearanceTrim</c>,
+    /// <see cref="ClearanceStep.AtNodeIsPassedStop"/>): to its stop, or, for a crossing made with no stop, to where the
+    /// route reached the runway. Signed cross-tracks in metres. The pin's side is the near side only when it lies off the
+    /// pavement (<paramref name="runwayHalfWidthMetres"/> or more from the centreline); a pin on the pavement has none.
+    /// The aircraft clear of every runway (<paramref name="aircraftClearOfRunways"/>) and on the other side, or with no
+    /// side to compare, is already across. Otherwise a pin with a side sends the leg to the far side of THAT crossing,
+    /// never the far side judged from the aircraft, which, once it is off the far edge, lies back over the runway; a pin
+    /// with none is refused.
+    /// </summary>
+    public static MadeCrossingJudgement JudgeMadeCrossing(double pinCrossTrack, double runwayHalfWidthMetres,
+        double aircraftCrossTrack, bool aircraftClearOfRunways)
+    {
+        int nearSide = Math.Abs(pinCrossTrack) >= runwayHalfWidthMetres ? Math.Sign(pinCrossTrack) : 0;
+        if (aircraftClearOfRunways && (nearSide == 0 || Math.Sign(aircraftCrossTrack) == -nearSide))
+            return new MadeCrossingJudgement(MadeCrossingEnd.AlreadyAcross, 0);
+        return nearSide == 0
+            ? new MadeCrossingJudgement(MadeCrossingEnd.Unknown, 0)
+            : new MadeCrossingJudgement(MadeCrossingEnd.FarSide, -nearSide);
+    }
+
+    /// <summary>The Calculate refusal for <see cref="MadeCrossingEnd.AlreadyAcross"/>.</summary>
     public static string AlreadyAcross(string runway) => $"You are already across runway {runway.Trim()}. Add the next step.";
 }
