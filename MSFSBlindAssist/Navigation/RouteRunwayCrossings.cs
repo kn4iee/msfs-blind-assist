@@ -97,8 +97,11 @@ public static class RouteRunwayCrossings
 
     /// <summary>
     /// True when the label names at least one runway and every runway it names is
-    /// <paramref name="designator"/>'s pavement (either end). A stop shared with another runway is
-    /// not "only" this runway's, so clearing this runway must not remove it.
+    /// <paramref name="designator"/>'s pavement (either end): a stop that holds for that runway alone,
+    /// not one shared with another runway. The multi-runway counterpart of
+    /// <c>TaxiGuidanceManager.RunwayDesignatorsMatch</c>, which reads a label's first runway only; nothing
+    /// in the app calls it today (a cleared crossing takes one runway off a shared stop's label instead,
+    /// <see cref="ClearedCrossingHolds.ClearAt"/>), and RunwayEventDescriptionTests pins it.
     /// </summary>
     public static bool LabelNamesOnlyRunway(string? holdShortLabel, string designator)
     {

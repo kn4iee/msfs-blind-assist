@@ -699,8 +699,8 @@ If the route started behind you and you have been holding at its start, the cont
 ATC often clears you across a runway while you are still rolling toward it. You do not have to stop first. Once BA has started counting you down to a runway hold line (*"Hold short runway 22R in 120 metres."*), press **Input Y**. You hear *"Cleared across runway 22R. No stop."*, and BA lets you roll across. It still names the runway at the hold line: *"Crossing runway 22R."* See [Crossings you are cleared for](#cleared-crossings).
 
 - Before BA has started counting you down, Input Y does nothing, so a key pressed by accident never clears a runway you have not been told about.
-- At a stop that guards two runways, one press clears only the first: *"Cleared across runway 09. Still holding short of runway 01."* BA still stops you at the line for runway 01. When ATC clears you for it, press Continue, and you hear *"Continuing. Crossing runway 09 and runway 01."*, then the taxiway, as you move off.
-- It never works at the last stop of your route: the hold for your departure runway, or the end of a Progressive Taxi leg. There, stop and press Continue as usual.
+- At a stop that guards two runways, one press clears only the first: *"Cleared across runway 09. Still holding short of runway 01."* If ATC has cleared you across runway 01 as well, press Input Y again: *"Cleared across runway 01. No stop."*, one press per runway. Otherwise BA still stops you at the line for runway 01; when ATC clears you for it, press Continue, and you hear *"Continuing. Crossing runway 09 and runway 01."*, then the taxiway, as you move off.
+- It never works at the last stop of your route: the hold for your departure runway, or the end of a Progressive Taxi leg. At the departure runway, stop and press Continue as usual; at the end of a Progressive leg, stop and plan the next leg.
 - If the hold line is also a hold short you set yourself (a taxiway, a holding point or the end of a taxiway you asked to hold short of, at the same place), the press does nothing, and you hear nothing: your own stop stays.
 - Pressed by mistake? Press Input Alt+Y to put the stop back (see [Holding short after all](#holding-short-after-all)).
 
@@ -712,7 +712,7 @@ ATC can take a crossing back while you are on your way to the runway: *"Hold sho
 - *"Past the hold line of runway 04L at C."* You are already past the line, or on the runway. Nothing changes: BA never asks you to stop on a runway. Tell ATC where you are.
 - When no runway ahead is cleared, it tells you the next stop of any kind and changes nothing: *"Next stop runway 27 in 300 metres."*, *"Next stop taxiway L in 120 metres."*, or *"No runway ahead on this route."* With no route, you hear *"No taxi route."*
 
-Input Alt+Y never clears a runway: only Continue does, or **After crossing runway** when you plan a Progressive Taxi leg. Pressed a second time, it just names the stop it put back.
+Input Alt+Y never clears a runway: only Continue does, or **After crossing runway** when you plan a Progressive Taxi leg. Pressed again, it puts back the next runway you are cleared across, if there is one, or tells you what is ahead.
 
 ### One stop that guards two runways {#one-stop-that-guards-two-runways}
 
