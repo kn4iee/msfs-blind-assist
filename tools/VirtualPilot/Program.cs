@@ -15,8 +15,11 @@ using MSFSBlindAssist.Settings;
 // entered with no hold short, route changes while following the tone, and so on.
 //
 //   dotnet run --project tools/VirtualPilot -p:Platform=x64 -c Release -- <mode> [options]
-//     mode: landings | taxi | all | wrongturn | departures | traffic | turnpicks | legends | fetchosm
+//     mode: landings | taxi | all | wrongturn | departures | traffic | turnpicks | legends | crossthenhold | fetchosm
 //     --airports N          busiest N airports by taxi-path count (default 100)
+//     --clear-first-crossing  taxi, turnpicks: every flight is flown again with the first runway its route
+//                           crosses cleared (LoadRoute's clearedCrossings), and checked: no stop there, the
+//                           crossing counted down and named at its line, every other stop still made
 //     --icao A,B,C          explicit airport list (overrides --airports)
 //     --shard i/n           run only airports i, i+n, i+2n … (for parallel processes)
 //     --taxi-per-airport K  gate→runway and exit→gate routes per airport (default 6)
@@ -83,6 +86,10 @@ string? depTraceFilter = null;
 // The `legends` mode: one row per leg flown, and its CSV (<out>.legends.csv).
 var legendRows = new List<LegendRow>();
 StreamWriter? legendCsv = null;
+// --clear-first-crossing: the hold-short stops (their route nodes) of the flight FlyTaxi flew last, which its
+// cleared twin is compared with, and that twin's own record.
+List<int>? lastFlightHoldNodes = null;
+XcFlight? lastFlightXc = null;
 #endif
 
 if (opt.Trace != null) { captureLog = true; RunTrace(opt.Trace); return 0; }
@@ -96,6 +103,11 @@ if (opt.Mode == "legends")
 {
     legendCsv = new StreamWriter(Path.ChangeExtension(opt.Out, ".legends.csv")) { AutoFlush = true };
     legendCsv.WriteLine(LegendRow.Header);
+}
+if (opt.Mode == "crossthenhold")
+{
+    legendCsv = new StreamWriter(Path.ChangeExtension(opt.Out, ".crossthenhold.csv")) { AutoFlush = true };
+    legendCsv.WriteLine(LegendRow.CrossHeader);
 }
 #endif
 int ai = 0;
@@ -118,6 +130,7 @@ foreach (var icao in airports)
         if (opt.Mode is "traffic") RunTraffic(w);
         if (opt.Mode is "turnpicks") RunTurnPicks(w);
         if (opt.Mode is "legends") RunLegEnds(w);
+        if (opt.Mode is "crossthenhold") RunCrossThenHold(w);
 #endif
     }
     catch (Exception ex) { Add(new Finding(icao, "HARNESS_EXCEPTION", "", ex.ToString().Split('\n')[0])); }
@@ -128,6 +141,7 @@ foreach (var icao in airports)
 outFile.WriteLine();
 #if !OLDAPP
 if (opt.Mode == "legends") { LegendSummary(outFile); legendCsv?.Dispose(); }
+if (opt.Mode == "crossthenhold") { CrossSummary(outFile); legendCsv?.Dispose(); }
 #endif
 outFile.WriteLine($"# landings={landings} taxis={taxis}");
 foreach (var kv in counts) outFile.WriteLine($"# {kv.Key,-28} {kv.Value}");
@@ -431,10 +445,104 @@ void RunTaxis(World w)
     foreach (var (plan, _) in PlanTaxis(w))
     {
         Codes("TAXI", w.Icao, plan.Describe, FlyTaxi(w, plan, withClearance: false, trace: false));
+#if !OLDAPP
+        if (opt.ClearFirstCrossing) FlyClearedFirstCrossing(w, plan, withClearance: false, "TAXI_XC", plan.Describe);
+#endif
         Codes("TAXI_CLR", w.Icao, plan.Describe, FlyTaxi(w, plan, withClearance: true, trace: false));
+#if !OLDAPP
+        if (opt.ClearFirstCrossing) FlyClearedFirstCrossing(w, plan, withClearance: true, "TAXI_CLR_XC", plan.Describe);
+#endif
         taxis += 2;
     }
 }
+
+#if !OLDAPP
+// ── Cleared crossings (--clear-first-crossing) ───────────────────────────────
+// The flight FlyTaxi has just flown, flown again with the first runway its route crosses cleared: loaded once,
+// the first crossing read from the route's runway events, and loaded again with clearedCrossings: [that runway],
+// as the planner hands a crossing the pilot was cleared for. Its own CODES line (kind + "_XC") and an XC| line
+// in the results; compared with the flight just flown, whose stops every other runway must still have.
+void FlyClearedFirstCrossing(World w, TaxiPlan plan, bool withClearance, string kind, string key)
+{
+    plan.XcBaseHoldNodes = lastFlightHoldNodes == null ? null : new List<int>(lastFlightHoldNodes);
+    plan.ClearFirstCrossing = true;
+    try
+    {
+        var fs = FlyTaxi(w, plan, withClearance, trace: false);
+        if (lastFlightXc is not { } xc) return;   // no runway crossed (counted as "~xc no runway crossed"), or not traced
+        taxis++;
+        counts["~xc " + xc.Outcome] = counts.TryGetValue("~xc " + xc.Outcome, out int c) ? c + 1 : 1;
+        resultsWriter?.WriteLine($"XC|{kind}|{w.Icao}|{key}|{xc.ResultFields()}");
+        if (depTraceFilter != null) { Console.WriteLine("XC " + xc.ResultFields()); foreach (var f in fs) Console.WriteLine("FINDING " + f); }
+        Codes(kind, w.Icao, key, fs);
+    }
+    finally { plan.ClearFirstCrossing = false; plan.ClearedCrossings = null; plan.XcBaseHoldNodes = null; }
+}
+
+/// <summary>An edge clear of every runway's clear margin, sampled every 5 m, both ends included.</summary>
+static bool EdgeClearOfRunways(TaxiGraph g, TaxiNode a, TaxiNode b)
+{
+    int n = Math.Max(1, (int)Math.Ceiling(Geo.Dist(a.Latitude, a.Longitude, b.Latitude, b.Longitude) / 5));
+    for (int k = 0; k <= n; k++)
+        if (!ClearOfRunwaysAt(g, a.Latitude + (b.Latitude - a.Latitude) * k / n, a.Longitude + (b.Longitude - a.Longitude) * k / n)) return false;
+    return true;
+}
+
+/// <summary>The first runway the route crosses, not already passed, in route order (where the route reaches it).</summary>
+static TaxiRouteRunwayEvent? FirstCrossing(TaxiRoute route)
+    => route.RunwayEvents.Where(e => e.Kind == RunwayEventKind.Crossing && !e.Passed)
+            .OrderBy(e => e.ReachNodeIndex < 0 ? int.MaxValue : e.ReachNodeIndex).FirstOrDefault();
+
+/// <summary>
+/// An excursion off a picked route before its turn and before a stop (a harness construction, not the app's "long
+/// detour" refusal, which the pick outcome DETOUR and its TURN_DETOUR line record): from a junction on the route at least 100 m
+/// from its start and 60 m before <paramref name="beforeSegment"/> (the earlier of the pick's departure and the
+/// stop's segment), the branch leaving the route 45 to 135 degrees off its way on, followed straightest (no bend
+/// over 60 degrees) over nodes the route never uses, no hold line and clear of every runway, until it is 120 m long
+/// and 60 m from the route (at most 300 m). The pilot drives it as the miss flight drives the charted way, then
+/// holds that heading; guidance answers with a route change, which keeps the pick's tail.
+/// </summary>
+static (List<TaxiNode> path, (double lat, double lon) at)? ExcursionBefore(TaxiGraph g, TaxiRoute route, int beforeSegment)
+{
+    var onRoute = new HashSet<int>(route.Segments.Select(s => s.ToNode.NodeId)) { route.Segments[0].FromNode.NodeId };
+    var cum = new double[route.Segments.Count + 1];
+    for (int i = 0; i < route.Segments.Count; i++) cum[i + 1] = cum[i] + route.Segments[i].DistanceMeters;
+    if (beforeSegment < 2 || beforeSegment > route.Segments.Count) return null;
+    double FromRoute(TaxiNode n) => route.Segments.Min(s => Geo.LateralToSegmentM(n.Latitude, n.Longitude,
+        s.FromNode.Latitude, s.FromNode.Longitude, s.ToNode.Latitude, s.ToNode.Longitude));
+    for (int i = beforeSegment - 2; i >= 0; i--)
+    {
+        if (cum[i + 1] < 100 || cum[beforeSegment] - cum[i + 1] < 60) continue;
+        var jn = route.Segments[i].ToNode;
+        double onWay = route.Segments[i + 1].BearingDegrees;
+        if (!g.Adjacency.TryGetValue(jn.NodeId, out var edges)) continue;
+        foreach (var e in edges.Where(e => !onRoute.Contains(e.ToNodeId))
+                               .OrderBy(e => Math.Abs(Math.Abs(Geo.Norm(e.BearingDegrees - onWay)) - 90)).ThenBy(e => e.ToNodeId))
+        {
+            double off = Math.Abs(Geo.Norm(e.BearingDegrees - onWay));
+            if (off < 45 || off > 135) continue;
+            var path = new List<TaxiNode>(); var seen = new HashSet<int> { jn.NodeId };
+            int cur = e.ToNodeId; double len = e.DistanceMeters, brg = e.BearingDegrees; bool ok = true;
+            TaxiNode prevNode = jn;
+            while (true)
+            {
+                if (len > 300 || !g.Nodes.TryGetValue(cur, out var cn) || onRoute.Contains(cur) || !seen.Add(cur)
+                    || cn.Type is TaxiNodeType.HoldShort or TaxiNodeType.ILSHoldShort || !EdgeClearOfRunways(g, prevNode, cn))
+                { ok = false; break; }
+                path.Add(cn); prevNode = cn;
+                if (len >= 120 && FromRoute(cn) >= 60) break;
+                var next = g.Adjacency.TryGetValue(cur, out var nx)
+                    ? nx.Where(x => !seen.Contains(x.ToNodeId)).OrderBy(x => Math.Abs(Geo.Norm(x.BearingDegrees - brg))).ThenBy(x => x.ToNodeId).FirstOrDefault()
+                    : null;
+                if (next == null || Math.Abs(Geo.Norm(next.BearingDegrees - brg)) > 60) { ok = false; break; }
+                len += next.DistanceMeters; brg = next.BearingDegrees; cur = next.ToNodeId;
+            }
+            if (ok) return (path, (jn.Latitude, jn.Longitude));
+        }
+    }
+    return null;
+}
+#endif
 
 #if !OLDAPP
 // ── Turn picks ───────────────────────────────────────────────────────────────
@@ -461,6 +569,7 @@ void RunTurnPicks(World w)
         if (baseRoute == null) { plan.FixedSeq = null; continue; }   // the clearance itself is refused: nothing to compare a pick with
         string key = plan.Describe + " via " + string.Join(",", seq);
         Codes("TURN_BASE", w.Icao, key, FlyTaxi(w, plan, withClearance: false, trace: false)); taxis++;
+        if (opt.ClearFirstCrossing) FlyClearedFirstCrossing(w, plan, withClearance: false, "TURN_BASE_XC", key);
         for (int row = 0; row < seq.Count; row++)
         {
             int met = 0;
@@ -506,10 +615,34 @@ void RunTurnPicks(World w)
                 {
                     fs.AddRange(FlyTaxi(w, plan, withClearance: false, trace: false)); taxis++;
                     Codes("TURN_" + outcome, w.Icao, pk, fs);
+                    if (opt.ClearFirstCrossing)
+                    {
+                        FlyClearedFirstCrossing(w, plan, withClearance: false, "TURN_" + outcome + "_XC", pk);
+                        // The kept-tail recalculation: an excursion off the route before the turn and before the cleared
+                        // stop, flown with nothing cleared and then cleared; the stop is either in the kept tail (at or
+                        // after the turn's departure node) or on the stretch the recalculation builds afresh.
+                        // Read from the picked route as loaded (clearing moves no stop), not from the cleared flight,
+                        // which a --trace filter can skip.
+                        if (FirstCrossing(route!) is { Held: true, StopNodeIndex: > 0 } fc)
+                        {
+                            int stopSeg = fc.StopNodeIndex - 1;
+                            bool inTail = stopSeg >= applied!.FirstSegmentAfterDeparture;
+                            if (ExcursionBefore(w.Graph, route!, Math.Min(stopSeg, applied.FirstSegmentAfterDeparture)) is { } dt)
+                            {
+                                string dk = pk + (inTail ? " ## excursion, cleared stop in the kept tail" : " ## excursion, cleared stop before the turn");
+                                plan.DivertPath = dt.path; plan.DivertAt = dt.at; plan.DivertIsExcursion = true;
+                                Codes("TURN_EXCURSION", w.Icao, dk, FlyTaxi(w, plan, withClearance: false, trace: false)); taxis++;
+                                FlyClearedFirstCrossing(w, plan, withClearance: false, "TURN_EXCURSION_XC", dk);
+                                plan.DivertPath = null; plan.DivertIsExcursion = false;
+                            }
+                            else counts["~xc excursion: no junction before the turn"] = counts.TryGetValue("~xc excursion: no junction before the turn", out int nd) ? nd + 1 : 1;
+                        }
+                    }
                     if (ChartedWayAt(route!, baseRoute, applied!) is { } dv)
                     {
                         plan.DivertPath = dv.path; plan.DivertAt = dv.at;
                         Codes("TURN_MISS", w.Icao, pk, FlyTaxi(w, plan, withClearance: false, trace: false)); taxis++;
+                        if (opt.ClearFirstCrossing) FlyClearedFirstCrossing(w, plan, withClearance: false, "TURN_MISS_XC", pk);
                         plan.DivertPath = null;
                     }
                 }
@@ -645,21 +778,7 @@ void RunLegEnds(World w)
     int seed = 41; foreach (char ch in w.Icao) seed = seed * 31 + ch;
     var rnd = new Random(seed);
     var original = new HashSet<int>(g.Nodes.Keys);
-    // Every ordered pair of named taxiways sharing a node, with the nodes they share.
-    var pairNodes = new SortedDictionary<string, List<int>>(StringComparer.Ordinal);
-    foreach (var (id, edges) in g.Adjacency)
-    {
-        var names = edges.Select(e => e.TaxiwayName).Where(n => !string.IsNullOrWhiteSpace(n))
-                         .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        foreach (var a in names)
-            foreach (var b in names)
-                if (!a.Equals(b, StringComparison.OrdinalIgnoreCase))
-                {
-                    string k = a + "\u0001" + b;
-                    if (!pairNodes.TryGetValue(k, out var l)) pairNodes[k] = l = new List<int>();
-                    l.Add(id);
-                }
-    }
+    var pairNodes = TaxiwayPairNodes(g);
     var order = pairNodes.Keys.Select(k => (key: k, r: rnd.Next())).OrderBy(x => x.r).ThenBy(x => x.key, StringComparer.Ordinal)
                               .Select(x => x.key).ToList();
     int plain = 0, turns = 0;
@@ -668,9 +787,7 @@ void RunLegEnds(World w)
         if (plain >= opt.TaxiPerAirport && turns >= opt.TaxiPerAirport) break;
         var ab = key.Split('\u0001');
         string a = ab[0], b = ab[1];
-        var junctions = new HashSet<int>();
-        foreach (int comp in pairNodes[key].Select(n => g.Nodes.TryGetValue(n, out var nn) ? nn.ComponentId : -1).Distinct())
-            foreach (int j in g.FindTaxiwayIntersectionNodes(a, b, comp)) junctions.Add(j);
+        var junctions = PairJunctions(g, pairNodes, key, a, b);
         if (junctions.Count == 0) continue;   // they meet only inside a runway's clear margin
         if (plain < opt.TaxiPerAirport && PlainLegStart(w, a, b, junctions, original, rnd) is { } pl)
         {
@@ -689,6 +806,35 @@ void RunLegEnds(World w)
     }
 }
 
+/// <summary>Every ordered pair of named taxiways sharing a node ("A\u0001B"), with the nodes they share.</summary>
+static SortedDictionary<string, List<int>> TaxiwayPairNodes(TaxiGraph g)
+{
+    var pairNodes = new SortedDictionary<string, List<int>>(StringComparer.Ordinal);
+    foreach (var (id, edges) in g.Adjacency)
+    {
+        var names = edges.Select(e => e.TaxiwayName).Where(n => !string.IsNullOrWhiteSpace(n))
+                         .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var a in names)
+            foreach (var b in names)
+                if (!a.Equals(b, StringComparison.OrdinalIgnoreCase))
+                {
+                    string k = a + "\u0001" + b;
+                    if (!pairNodes.TryGetValue(k, out var l)) pairNodes[k] = l = new List<int>();
+                    l.Add(id);
+                }
+    }
+    return pairNodes;
+}
+
+/// <summary>Where A meets B clear of every runway's margin, in every component they share a node in (FindTaxiwayIntersectionNodes).</summary>
+static HashSet<int> PairJunctions(TaxiGraph g, SortedDictionary<string, List<int>> pairNodes, string key, string a, string b)
+{
+    var junctions = new HashSet<int>();
+    foreach (int comp in pairNodes[key].Select(n => g.Nodes.TryGetValue(n, out var nn) ? nn.ComponentId : -1).Distinct())
+        foreach (int j in g.FindTaxiwayIntersectionNodes(a, b, comp)) junctions.Add(j);
+    return junctions;
+}
+
 void FlyAndRecordLeg(World w, LegPlan lp)
 {
     var fs = new List<Finding>();
@@ -703,8 +849,154 @@ void FlyAndRecordLeg(World w, LegPlan lp)
         return;
     }
     legendRows.Add(row);
-    legendCsv?.WriteLine(row.Csv());
-    Codes("LEGEND", w.Icao, lp.Describe(), fs);
+    legendCsv?.WriteLine(lp.Kind == "cross" ? row.CsvCross() : row.Csv());
+    Codes(lp.Kind == "cross" ? "CROSSHOLD" : "LEGEND", w.Icao, lp.Describe(), fs);
+}
+
+// ── Cross then hold: "cross runway R, hold short of taxiway B" ─────────────────
+// Stage 1's final review: the KCLE shape (P across runway 24L, then hold short of L), where B meets the route just
+// past a runway R the route crosses. Per airport, up to K pairs (A, B), in a seeded order, where the way along A to
+// the A/B junction the form picks crosses R and R's far pavement edge is 150 m or less before that junction: a start
+// on A 150 to 1,200 m before the junction (clear of every runway, facing it), whose route as the form loads it
+// ("via A", no destination, hold short of taxiway B, wingspan 36 m) crosses R first. It is flown with that crossing
+// cleared (clearedCrossings: [R]) and measured as a `legends` leg is, plus: HoldShort entered at R's stop, the
+// "Crossing runway R" line, the "… cleared to cross." countdown, and where the stop for B lies against R.
+void RunCrossThenHold(World w)
+{
+    var g = w.Graph;
+    int seed = 43; foreach (char ch in w.Icao) seed = seed * 31 + ch;
+    var rnd = new Random(seed);
+    var original = new HashSet<int>(g.Nodes.Keys);
+    var pairNodes = TaxiwayPairNodes(g);
+    var order = pairNodes.Keys.Select(k => (key: k, r: rnd.Next())).OrderBy(x => x.r).ThenBy(x => x.key, StringComparer.Ordinal)
+                              .Select(x => x.key).ToList();
+    int legs = 0;
+    foreach (var key in order)
+    {
+        if (legs >= opt.TaxiPerAirport) break;
+        var ab = key.Split('\u0001');
+        string a = ab[0], b = ab[1];
+        var junctions = PairJunctions(g, pairNodes, key, a, b);
+        if (junctions.Count == 0) continue;
+        if (CrossLegStart(w, a, b, junctions, original, rnd) is not { } lp) continue;
+        legs++;
+        FlyAndRecordLeg(w, lp);
+    }
+}
+
+/// <summary>
+/// A cross-then-hold leg's start: a node on A 150 to 1,200 m along A before the nearest A/B junction, a usable start
+/// (UsableLegStart), whose way along A to that junction crosses one runway's pavement and no other, the far edge 150 m
+/// or less before the junction, where the form picks that junction, and whose route as loaded crosses that runway first
+/// (ProbeCrossLeg). Up to 40 candidates in a seeded order, the pair skipped unless an edge of A within 450 m of a
+/// junction touches runway pavement.
+/// </summary>
+LegPlan? CrossLegStart(World w, string a, string b, HashSet<int> junctions, HashSet<int> original, Random rnd)
+{
+    var g = w.Graph;
+    var (dist, toward) = AlongTaxiway(g, junctions, a, blocked: -1, maxM: 1300);
+    bool nearRunway = dist.Where(kv => kv.Value <= 450 && toward.ContainsKey(kv.Key))
+                          .Any(kv => RunwayAlong(g, new List<int> { kv.Key, toward[kv.Key] }).R != null);
+    if (!nearRunway) return null;
+    var cands = dist.Where(kv => kv.Value >= 150 && kv.Value <= 1200 && original.Contains(kv.Key))
+                    .Select(kv => kv.Key).OrderBy(x => x).ToList();
+    int probes = 0;
+    for (int tries = 0; tries < 40 && probes < 4 && cands.Count > 0; tries++)
+    {
+        int i = rnd.Next(cands.Count); int id = cands[i]; cands.RemoveAt(i);
+        if (!UsableLegStart(g, id)) continue;
+        var chain = new List<int> { id };
+        for (int c = id, guard = 0; !junctions.Contains(c) && guard < 100000; guard++) { c = toward[c]; chain.Add(c); }
+        var (r, far, total, other) = RunwayAlong(g, chain);
+        if (r == null || other || double.IsNaN(far) || total - far > 150) continue;
+        int jn = chain[^1];
+        var sn = g.Nodes[id];
+        if (FormLegEnd(g, sn.Latitude, sn.Longitude, a, b) != jn) continue;
+        var nx = g.Nodes[toward[id]];
+        var lp = new LegPlan
+        {
+            Icao = w.Icao, Kind = "cross", A = a, B = b, StartNode = id, Dest = jn, AlongM = dist[id],
+            Lat = sn.Latitude, Lon = sn.Longitude, Hdg = TaxiPlan.Bearing(sn.Latitude, sn.Longitude, nx.Latitude, nx.Longitude),
+            Seq = new List<string> { a }, ClearRunway = r.Name1, CrossRunway = r, EdgeToJunctionM = total - far,
+        };
+        probes++;
+        if (ProbeCrossLeg(w, lp)) return lp;
+    }
+    return null;
+}
+
+/// <summary>The leg loaded as the form loads it with nothing cleared: its route must cross the runway first. Records whether it stopped for it.</summary>
+bool ProbeCrossLeg(World w, LegPlan lp)
+{
+    var m = new TaxiGuidanceManager(new Cap(() => simNow));
+    try
+    {
+        m.AircraftWingspanMetres = 36;
+        string? err = m.LoadRoute(provider, w.Icao, lp.Lat, lp.Lon, lp.Hdg, lp.Dest, $"hold short of taxiway {lp.B}",
+            new List<string>(lp.Seq), null,
+            destinationHeading: null, destinationThresholdLat: null, destinationThresholdLon: null, destinationHeadingTrue: null,
+            isRunwayDestination: false, prebuiltGraph: w.Graph, announceSummary: true,
+            progressiveTerminator: new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortTaxiway, lp.B));
+        if (err != null || m.CurrentRoute is not { Segments.Count: > 0 } r) return false;
+        var first = FirstCrossing(r);
+        if (first == null || !XcFlight.NamesRunway("runway " + first.Designator, lp.ClearRunway!)) return false;
+        lp.RunwayHeldAtLoad = first.Held;
+        return true;
+    }
+    finally { try { m.StopGuidance(); m.Dispose(); } catch { } }
+}
+
+/// <summary>
+/// Runway pavement along a chain of nodes, sampled every 2 m: the first runway entered, the metres along the chain to
+/// the last point on its pavement (its far edge, NaN when none), the chain's length, and whether the way meets any
+/// other runway's pavement, or that runway's again after leaving it.
+/// </summary>
+static (TaxiGraph.RunwayCenterline? R, double FarEdgeM, double TotalM, bool Other) RunwayAlong(TaxiGraph g, List<int> chain)
+{
+    TaxiGraph.RunwayCenterline? r = null; double far = double.NaN, total = 0; bool left = false, other = false;
+    for (int i = 0; i + 1 < chain.Count; i++)
+    {
+        if (!g.Nodes.TryGetValue(chain[i], out var p) || !g.Nodes.TryGetValue(chain[i + 1], out var q)) break;
+        double len = Geo.Dist(p.Latitude, p.Longitude, q.Latitude, q.Longitude);
+        int n = Math.Max(1, (int)Math.Ceiling(len / 2));
+        for (int k = i == 0 ? 0 : 1; k <= n; k++)
+        {
+            double f = (double)k / n;
+            var under = RouteRunwayCrossings.RunwayUnder(g.RunwayCenterlines,
+                p.Latitude + (q.Latitude - p.Latitude) * f, p.Longitude + (q.Longitude - p.Longitude) * f);
+            if (under == null) { if (r != null) left = true; continue; }
+            r ??= under;
+            if (!ReferenceEquals(under, r) || left) other = true;
+            else far = total + len * f;
+        }
+        total += len;
+    }
+    return (r, far, total, other);
+}
+
+void CrossSummary(TextWriter? file)
+{
+    void Line(string s) { Console.WriteLine(s); file?.WriteLine("# " + s); }
+    var rows = legendRows;
+    if (rows.Count == 0) { Line("cross then hold: no legs"); return; }
+    var ended = rows.Where(r => r.Ended).ToList();
+    var stand = ended.Select(r => r.StandM).Where(x => !double.IsNaN(x)).OrderBy(x => x).ToList();
+    var past = rows.Select(r => r.StopPastEdgeM).Where(x => !double.IsNaN(x)).OrderBy(x => x).ToList();
+    Line(string.Create(CultureInfo.InvariantCulture,
+        $"cross then hold: {rows.Count} legs; runway stopped for with nothing cleared {rows.Count(r => r.RunwayHeldAtLoad)}; "
+        + $"cleared {string.Join(", ", rows.GroupBy(r => r.XcOutcome).OrderBy(gr => gr.Key, StringComparer.Ordinal).Select(gr => $"{gr.Key} {gr.Count()}"))}"));
+    Line(string.Create(CultureInfo.InvariantCulture,
+        $"held at the runway {rows.Count(r => r.HeldAtRunway > 0)}; \"Crossing runway\" lines 0/1/2+: {rows.Count(r => r.CrossingLines == 0)}/"
+        + $"{rows.Count(r => r.CrossingLines == 1)}/{rows.Count(r => r.CrossingLines > 1)}; said before its segment {rows.Count(r => r.CrossingEarly > 0)}; "
+        + $"\"cleared to cross\" said {rows.Count(r => r.ClearedApproach > 0)}"));
+    Line(string.Create(CultureInfo.InvariantCulture,
+        $"ended {ended.Count} ({100.0 * ended.Count / rows.Count:F1} %), at or past the junction {ended.Count(r => r.EndM <= 0 || r.StandM <= 0)}, "
+        + $"standstill before the junction min {(stand.Count > 0 ? stand[0] : double.NaN):F1} m median {MedianOf(stand):F1} m; "
+        + $"LEG_ENDED_ON_RUNWAY {rows.Sum(r => r.EndedOnRunway)}"));
+    Line(string.Create(CultureInfo.InvariantCulture,
+        $"stop for B: before the runway {rows.Count(r => r.StopBeforeRunway)}, clear of every runway's margin {rows.Count(r => r.StopClearOfMargin)}, "
+        + $"its 25 m approach clear {rows.Count(r => r.Approach25Clear)}; past the runway's far edge min {(past.Count > 0 ? past[0] : double.NaN):F1} m "
+        + $"median {MedianOf(past):F1} m"));
 }
 
 /// <summary>A plain leg: a node on A 250 to 600 m along A from the nearest junction, facing it.</summary>
@@ -830,10 +1122,12 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
             destinationHeading: null, destinationThresholdLat: null, destinationThresholdLon: null, destinationHeadingTrue: null,
             isRunwayDestination: false, prebuiltGraph: g, announceSummary: true,
             progressiveTerminator: new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortTaxiway, lp.B),
-            userTurnPicks: lp.Pick is { } pickSide ? new Dictionary<int, TurnSide> { [1] = pickSide } : null);
+            userTurnPicks: lp.Pick is { } pickSide ? new Dictionary<int, TurnSide> { [1] = pickSide } : null,
+            clearedCrossings: lp.ClearRunway is { } clearRwy ? new[] { new ClearedCrossing(clearRwy) } : null);
         string said = ((mgr.LastRouteSummary ?? "") + " " + (StartWarning(mgr) ?? "")).Trim();
         var route = mgr.CurrentRoute;
         if (trace) Console.WriteLine($"LOAD {err ?? "ok"}: {said}");
+        row.Runway = lp.ClearRunway ?? ""; row.EdgeToJunctionM = lp.EdgeToJunctionM; row.RunwayHeldAtLoad = lp.RunwayHeldAtLoad;
         if (err != null || route == null || route.Segments.Count == 0)
         {
             row.Outcome = lp.Pick == null ? "" : "LOAD_FAILED";
@@ -931,9 +1225,59 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
                     Console.WriteLine($"  NEAR n{id}: {string.Join(", ", es.Select(e => $"{(e.TaxiwayName.Length > 0 ? e.TaxiwayName : "(unnamed)")}->n{e.ToNodeId} {e.DistanceMeters:F0} m"))}");
         }
 
+        // crossthenhold: the crossing as cleared at load, and where the stop for B lies against that runway: the metres
+        // along the route from the runway's far pavement edge to the stop (NaN, StopBeforeRunway, when the route never
+        // reaches its pavement), the stop clear of every runway's margin, and the 25 m before it clear too.
+        XcFlight? xc = null;
+        if (lp.ClearRunway is { } crossed && lp.CrossRunway is { } crossR)
+        {
+            xc = XcFlight.Setup(route, crossed);
+            row.XcOutcome = xc.Outcome;
+            var shape = RunwayShape.For(crossR);
+            var stopNode = route.Segments[^1].ToNode;
+            double back = 0, pastEdge = double.NaN;
+            for (int k = n - 1; k >= 0 && double.IsNaN(pastEdge); k--)
+            {
+                var sg = route.Segments[k];
+                int steps = Math.Max(1, (int)Math.Ceiling(sg.DistanceMeters / 1.0));
+                for (int q = 0; q <= steps; q++)
+                {
+                    double f = (double)q / steps;   // from the segment's end back to its start
+                    double la = sg.ToNode.Latitude + (sg.FromNode.Latitude - sg.ToNode.Latitude) * f;
+                    double lo = sg.ToNode.Longitude + (sg.FromNode.Longitude - sg.ToNode.Longitude) * f;
+                    if (shape.Contains(la, lo, 0.0)) { pastEdge = back + sg.DistanceMeters * f; break; }
+                }
+                back += sg.DistanceMeters;
+            }
+            row.StopPastEdgeM = pastEdge;
+            row.StopBeforeRunway = double.IsNaN(pastEdge);
+            row.StopClearOfMargin = ClearOfRunwaysAt(g, stopNode.Latitude, stopNode.Longitude);
+            bool approachClear = true; double walked = 0;
+            for (int k = n - 1; k >= 0 && walked < 25 && approachClear; k--)
+            {
+                var sg = route.Segments[k];
+                for (double m0 = 0; m0 <= sg.DistanceMeters && walked + m0 <= 25; m0 += 1.0)
+                {
+                    double f = sg.DistanceMeters < 1e-6 ? 0 : m0 / sg.DistanceMeters;
+                    if (!ClearOfRunwaysAt(g, sg.ToNode.Latitude + (sg.FromNode.Latitude - sg.ToNode.Latitude) * f,
+                                             sg.ToNode.Longitude + (sg.FromNode.Longitude - sg.ToNode.Longitude) * f)) { approachClear = false; break; }
+                }
+                walked += sg.DistanceMeters;
+            }
+            row.Approach25Clear = approachClear;
+            if (trace)
+            {
+                Console.WriteLine($"  CLEARED runway {crossed}: {xc.Outcome}, stop n{xc.StopNode?.NodeId} \"{xc.Label}\"; with nothing cleared it {(lp.RunwayHeldAtLoad ? "stopped" : "did not stop")} for it");
+                Console.WriteLine($"  STOP for {lp.B} n{stopNode.NodeId}: {(row.StopBeforeRunway ? "before the runway" : $"{pastEdge:F1} m past its far edge")}, clear of every margin {row.StopClearOfMargin}, 25 m approach clear {approachClear}");
+            }
+        }
+        var legPrevState = mgr.State;
+
         mgr.StartGuidance(settings);
         var cue = mgr.ConsumeStartHoldCue();
         if (trace && cue != null) Console.WriteLine($"  START-HOLD {cue}");
+        if (xc?.StopNode != null && mgr.State == TaxiGuidanceState.HoldShort && route.Segments[0].FromNode.NodeId == xc.StopNode.NodeId) row.HeldAtRunway++;
+        legPrevState = mgr.State;
         double lat = lp.Lat, lon = lp.Lon, hdg = lp.Hdg, gs = 0, t = 0, holdWait = 0, still = 0;
         var pilot = new PilotModel(hdg, 0);
         bool braking = false;
@@ -947,9 +1291,20 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
             if (st != TaxiGuidanceState.HoldShort) mgr.UpdatePosition(lat, lon, hdg, 0.0, gs);
             st = mgr.State;
             float pan = mgr.SteeringToneForHarness.ObservedPan;
+            if (xc?.StopNode != null)
+            {
+                // A hold entered at the cleared runway's stop: the stop segment's end node (HoldShort leaves the cursor past it).
+                if (st == TaxiGuidanceState.HoldShort && legPrevState != TaxiGuidanceState.HoldShort
+                    && mgr.CurrentRoute is { } rNow && mgr.SegmentIndexForHarness is int si && si > 0 && si - 1 < rNow.Segments.Count
+                    && rNow.Segments[si - 1].ToNode.NodeId == xc.StopNode.NodeId)
+                    row.HeldAtRunway++;
+                xc.Track(mgr.CurrentRoute, lat, lon);
+            }
+            legPrevState = st;
             foreach (var s in cap.TakeNew())
             {
                 if (trace) Console.WriteLine($"  {t,6:F1}s SPEAK {s}");
+                xc?.Hear(s, lat, lon, mgr.CurrentRoute, mgr.SegmentIndexForHarness);
                 string said1 = s.TrimEnd();
                 if (said1.EndsWith("Stop.", StringComparison.Ordinal) || said1.Contains(" Stop. ", StringComparison.Ordinal)) braking = true;
                 if (s.Contains(countdownLead, StringComparison.OrdinalIgnoreCase))
@@ -1012,6 +1367,28 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
             string at = aheadNow is { } ah2 ? $"{SignedMetresToEnd(ah2.line, lat, lon):F0} m before the junction n{ah2.node}" : "no junction found";
             row.Note = $"not ended after {t:F0} s: {at}, {gs:F1} kt, state {mgr.State}{(braking ? ", braked on Stop." : "")}";
             fs.Add(new Finding(w.Icao, "LEG_NOT_ENDED", where, row.Note));
+        }
+        if (xc != null)
+        {
+            row.CrossingLines = xc.Line; row.CrossingEarly = xc.Early; row.ClearedApproach = xc.ApproachBeforeLine;
+            row.EndedOnRunway = fs.Count(f => f.Code == "LEG_ENDED_ON_RUNWAY");
+            string at = $"runway {xc.Runway} at n{xc.StopNode?.NodeId} (\"{xc.Label}\", {xc.Outcome})";
+            if (xc.Outcome is "NOT_APPLIED")
+                fs.Add(new Finding(w.Icao, "XC_NOT_APPLIED", where, $"runway {xc.Runway}: the load cleared no crossing"));
+            if (xc.Outcome is "CLEARED" or "START" && row.HeldAtRunway > 0 && !xc.Moved)
+                fs.Add(new Finding(w.Icao, "XC_HELD_AT_CLEARED_CROSSING", where, $"{at}: entered HoldShort there {row.HeldAtRunway} time(s)"));
+            fs.AddRange(XcRecalcFindings(w, where, xc, at));
+            if (xc.StopNode != null && xc.Line != 1 && !xc.Moved)
+                fs.Add(new Finding(w.Icao, xc.Line == 0 ? (xc.Reached ? "XC_LINE_NOT_SAID" : "XC_STOP_NOT_REACHED") : "XC_LINE_SAID_TWICE", where,
+                    $"{at}: {xc.Line} \"Crossing runway {xc.Runway}\" line(s) within 100 m of the stop"));
+            if (xc.Outcome == "CLEARED" && xc.Line > 0 && xc.ApproachBeforeLine == 0 && !xc.Moved)
+                fs.Add(new Finding(w.Icao, "XC_APPROACH_NOT_SAID", where, $"{at}: the line \"{xc.LineText}\" came with no \"… cleared to cross.\" before it (stop segment {xc.StopSegmentM:F0} m)"));
+            if (xc.Early > 0)
+                fs.Add(new Finding(w.Icao, "XC_CROSSING_SAID_BEFORE_ITS_SEGMENT", where, $"{at}: \"{xc.EarlyText}\" said before guidance reached the stop's segment, then the line \"{xc.LineText}\""));
+            if (row.StopBeforeRunway || !row.StopClearOfMargin)
+                fs.Add(new Finding(w.Icao, row.StopBeforeRunway ? "XC_B_STOP_BEFORE_RUNWAY" : "XC_B_STOP_IN_RUNWAY_MARGIN", where,
+                    $"the stop for {lp.B} at n{route.Segments[^1].ToNode.NodeId}: {(row.StopBeforeRunway ? "the route ends before runway " + xc.Runway : "inside a runway's clear margin")}"));
+            if (trace) Console.WriteLine("  XC " + xc.ResultFields());
         }
         if (trace)
             Console.WriteLine($"  RESULT ended={row.Ended} t={row.Seconds:F1} s end {row.EndM:F1} m standstill {row.StandM:F1} m before the junction; {row.Countdown} countdown line(s)");
@@ -1547,6 +1924,17 @@ void RunTrace(string spec)
         if (Environment.GetEnvironmentVariable("VP_ALLLOG") == "1") foreach (var l in logSink) Console.WriteLine("LOG " + l);
         return;
     }
+    if (parts.Length >= 3 && parts[1].Equals("crosshold", StringComparison.OrdinalIgnoreCase))
+    {
+        // --trace ICAO:crosshold:<text in the leg's description>  (e.g. "via P cross runway 24L hold short of L")
+        //   every crossthenhold leg of the airport is flown as the run flies it; only the matching ones are printed
+        depTraceFilter = string.Join(":", parts.Skip(2));
+        RunCrossThenHold(w);
+        Console.WriteLine(LegendRow.CrossHeader);
+        foreach (var r in legendRows) Console.WriteLine(r.CsvCross());
+        if (Environment.GetEnvironmentVariable("VP_ALLLOG") == "1") foreach (var l in logSink) Console.WriteLine("LOG " + l);
+        return;
+    }
 #endif
     if (parts.Length >= 3 && parts[1].Equals("any", StringComparison.OrdinalIgnoreCase))
     {
@@ -1600,7 +1988,18 @@ void RunTrace(string spec)
         Console.WriteLine($"{plans.Count} plans; #{n}: {plan?.Describe}");
         if (plan == null) { Console.WriteLine("no plan"); return; }
         bool clr = parts.Length > 3 && parts[3] == "clearance";
+#if !OLDAPP
+        if (opt.ClearFirstCrossing)
+        {
+            // The flight with nothing cleared first, untraced, to compare the cleared one's other stops with.
+            FlyTaxi(w, plan, clr, trace: false);
+            plan.XcBaseHoldNodes = lastFlightHoldNodes; plan.ClearFirstCrossing = true;
+        }
+#endif
         foreach (var f in FlyTaxi(w, plan, clr, trace: true)) Console.WriteLine("FINDING " + f);
+#if !OLDAPP
+        if (lastFlightXc is { } xcT) Console.WriteLine("XC " + xcT.ResultFields());
+#endif
         if (Environment.GetEnvironmentVariable("VP_ALLLOG") == "1") foreach (var l in logSink) Console.WriteLine("LOG " + l);
         return;
     }
@@ -1965,10 +2364,14 @@ List<Finding> FlyLanding(World w, Runway rwy, List<LandingExit> exits, LandingEx
 List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
 {
     var found = new List<Finding>();
+#if !OLDAPP
+    lastFlightHoldNodes = null; lastFlightXc = null;
+#endif
     if (plan == null) return found;
     string where = plan.Describe + (withClearance ? " [clearance]" : "");
 #if !OLDAPP
     if (plan.FixedSeq != null) where += plan.PickSuffix();
+    if (plan.ClearFirstCrossing) where += " [first crossing cleared]";
 #endif
     if (depTraceFilter != null)
     {
@@ -2025,7 +2428,35 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             }
             else probe.Dispose();
         }
+#if !OLDAPP
+        var seqAsGiven = seq == null ? null : new List<string>(seq);   // LoadRoute edits the list it is handed
+#endif
         string? err = plan.Load(mgr, provider, w, seq);
+#if !OLDAPP
+        // --clear-first-crossing: the first runway this route crosses is known only once it is loaded, so it is
+        // loaded once, the first crossing not already passed is read from its runway events (route order: where
+        // the route reaches the runway), and it is loaded again, on a fresh manager, with that crossing cleared.
+        XcFlight? xc = null;
+        if (plan.ClearFirstCrossing && err == null && mgr.RouteForHarness is { } firstLoad)
+        {
+            var first = FirstCrossing(firstLoad);
+            if (first == null)
+            {
+                counts["~xc no runway crossed"] = counts.TryGetValue("~xc no runway crossed", out int nc) ? nc + 1 : 1;
+                if (trace) Console.WriteLine("=== no runway crossing on this route: nothing to clear");
+                return found;
+            }
+            plan.ClearedCrossings = new[] { new ClearedCrossing(first.Designator) };
+            try { mgr.StopGuidance(); mgr.Dispose(); } catch { }
+            cap.TakeNew();
+            mgr = new TaxiGuidanceManager(cap);
+            err = plan.Load(mgr, provider, w, seqAsGiven == null ? null : new List<string>(seqAsGiven));
+            xc = err == null && mgr.RouteForHarness is { } clearedLoad
+                ? XcFlight.Setup(clearedLoad, first.Designator)
+                : new XcFlight { Runway = first.Designator, Outcome = "LOAD_REFUSED", Flown = true };
+            lastFlightXc = xc;
+        }
+#endif
         var route = mgr.RouteForHarness;
         if (err != null || route == null)
         {
@@ -2084,6 +2515,21 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             Console.WriteLine($"  expected lineup along {plan.ExpectLineupAlongM:F0} m; entry stub:");
             foreach (var (sla, slo) in stubT) Console.WriteLine($"     along {lg.Along(sla, slo),6:F0} lateral {lg.Lateral(sla, slo),5:F0}");
         }
+        if (trace && xc != null)
+        {
+            Console.WriteLine($"  CLEARED runway {xc.Runway}: {xc.Outcome}, stop node index {xc.StopNodeIndex} n{xc.StopNode?.NodeId}, line \"{xc.Label}\""
+                + (mgr.LastClearedCrossingWarning.Length > 0 ? $"; warning \"{mgr.LastClearedCrossingWarning}\"" : ""));
+            foreach (var ev in route.RunwayEvents)
+                Console.WriteLine($"    event {ev.Kind} {ev.Designator} held={ev.Held} passed={ev.Passed} cleared={ev.Cleared} stop={ev.StopNodeIndex} reach={ev.ReachNodeIndex} at {ev.Location}");
+        }
+        // Each hold-short stop by its route node: the stop segment's end node (the start node for a start hold).
+        var holdNodes = new List<int>();
+        int HoldNodeNow()
+        {
+            if (mgr.RouteForHarness is not { Segments.Count: > 0 } r) return -1;
+            int i = mgr.SegmentIndexForHarness;
+            return i <= 0 ? r.Segments[0].FromNode.NodeId : i - 1 < r.Segments.Count ? r.Segments[i - 1].ToNode.NodeId : -1;
+        }
 #endif
         mgr.StartGuidance(settings);
         var cue = mgr.ConsumeStartHoldCue();
@@ -2104,6 +2550,9 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
         var stops = new List<HoldStop>();
         string lastHoldSpeech = cue ?? "";
         if (prev == TaxiGuidanceState.HoldShort) stops.Add(new HoldStop(0, plan.StartLat, plan.StartLon, cue ?? "", 0));
+#if !OLDAPP
+        if (prev == TaxiGuidanceState.HoldShort) holdNodes.Add(HoldNodeNow());
+#endif
         bool lineupChecked = false, reachedLineup = false;
         var paintCross = new List<(double odo, double lat, double lon)>();   // each painted runway-hold line crossed
 #if !OLDAPP
@@ -2121,7 +2570,7 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             legLengthM = legPick.OffChartLengthMeters; legOpensTheRoute = legPick.FirstSegmentAfterDeparture == 0;
             legMid = ((legSeg.FromNode.Latitude + legSeg.ToNode.Latitude) / 2, (legSeg.FromNode.Longitude + legSeg.ToNode.Longitude) / 2);
         }
-        var divert = plan.DivertPath; int divertIdx = 0; double divertStartOdo = -1; bool diverting = false, diverted = false;
+        var divert = plan.DivertPath; int divertIdx = 0; double divertStartOdo = -1; bool diverting = false, diverted = false, excursionPastEnd = false;
 #endif
         while (t < budget)
         {
@@ -2134,6 +2583,9 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             {
                 stateLog.Add($"{t:F0}s {prev}->{st}");
                 if (st == TaxiGuidanceState.HoldShort) stops.Add(newStop = new HoldStop(odo, lat, lon, "", t));
+#if !OLDAPP
+                if (st == TaxiGuidanceState.HoldShort) holdNodes.Add(HoldNodeNow());
+#endif
                 if (st == TaxiGuidanceState.LiningUp || st == TaxiGuidanceState.BacktrackDeparture) reachedLineup = true;
                 if ((st == TaxiGuidanceState.LiningUp || st == TaxiGuidanceState.BacktrackDeparture) && plan.ExpectHoldNodeId is int hn && !lineupChecked)
                 {
@@ -2155,6 +2607,14 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             if (Burst() && saidNow.Count >= 2 && t > 0.15) Console.WriteLine($"BURST {w.Icao} {plan.Describe} t={t:F1}: {string.Join(" | ", saidNow)}");
             if (!dirContraReported && DirectionContradiction(saidNow, pan) is { } dcT)
             { dirContraReported = true; found.Add(new Finding(w.Icao, "SPOKEN_DIRECTION_CONTRADICTS", where, $"t={t:F0}s: {dcT}")); }
+#if !OLDAPP
+            if (xc != null)
+            {
+                int before = xc.Recalcs.Count;
+                xc.Track(mgr.RouteForHarness, lat, lon);
+                if (trace && xc.Recalcs.Count > before) Console.WriteLine($"  {t,6:F1}s CLEARED-CROSSING ON THE NEW ROUTE: {xc.Recalcs[^1]}");
+            }
+#endif
             foreach (var a in saidNow)
             {
                 if (a.Contains("Hold short", StringComparison.OrdinalIgnoreCase) || a.Contains("Hold position", StringComparison.OrdinalIgnoreCase)) lastHoldSpeech = a;
@@ -2165,6 +2625,16 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                 if (a.Contains("was missed", StringComparison.OrdinalIgnoreCase)) pickSaidMissed = true;
                 if (a.Contains("could not be kept", StringComparison.OrdinalIgnoreCase)) pickSaidNotKept = true;
                 if (a.Contains("Off-chart leg", StringComparison.OrdinalIgnoreCase)) legSaid = true;
+                // A cleared crossing's line is where the runway is met with no stop: it stands in for the stop the
+                // runway-entry checks below look for (a line never said leaves the entry unheld, as it should). A
+                // shared stop still holds for its other runway, and that stop is the one the entry uses.
+                bool firstLine = xc != null && xc.Hear(a, lat, lon, mgr.RouteForHarness, mgr.SegmentIndexForHarness);
+                if (firstLine && t < 0.5) xc!.LineAtGuidanceStart = true;   // passed as guidance started: nothing to count down
+                if (firstLine && xc!.Outcome is "CLEARED" or "START")
+                {
+                    stops.Add(new HoldStop(odo, lat, lon, a, t));
+                    lastHoldOdo = odo;
+                }
 #endif
                 if (a.Contains("Lined up", StringComparison.OrdinalIgnoreCase)) linedUp = true;
                 if (a.Contains("off route", StringComparison.OrdinalIgnoreCase) && a.Contains("Warning", StringComparison.OrdinalIgnoreCase) && route != null)
@@ -2223,13 +2693,33 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             // The miss flight: at the junction the pilot takes the charted way (as FlyWrongTurn drives a
             // branch), until guidance answers with a new route or 150 m have gone by; then the tone again.
             if (divert != null && !diverted && !diverting && st == TaxiGuidanceState.Taxiing
-                && Geo.Dist(lat, lon, plan.DivertAt.lat, plan.DivertAt.lon) < 5) { diverting = true; divertStartOdo = odo; }
-            if (diverting && (routeChangedSaid || odo - divertStartOdo > 150 || divertIdx >= divert!.Count || st != TaxiGuidanceState.Taxiing))
-            { diverting = false; diverted = true; pilot = new PilotModel(hdg, gs); }
+                && Geo.Dist(lat, lon, plan.DivertAt.lat, plan.DivertAt.lon) < 5)
+            {
+                diverting = true; divertStartOdo = odo;
+                if (trace) Console.WriteLine($"  {t,6:F1}s DIVERT along {string.Join(" ", divert.Select(n => "n" + n.NodeId))}");
+            }
+            // An excursion also ends before it would take the aircraft within a runway's clear margin (30 m ahead):
+            // a pilot off on an excursion never drives onto a runway, and the flight measures the route change.
+            if (diverting && (routeChangedSaid || odo - divertStartOdo > (plan.DivertIsExcursion ? 300 : 150) || divertIdx >= divert!.Count || st != TaxiGuidanceState.Taxiing
+                              || plan.DivertIsExcursion && Geo.Move(lat, lon, hdg, 30) is var (aLa, aLo) && !ClearOfRunwaysAt(w.Graph, aLa, aLo)))
+            {
+                diverting = false; diverted = true; pilot = new PilotModel(hdg, gs);
+                if (trace) Console.WriteLine($"  {t,6:F1}s DIVERT ends after {odo - divertStartOdo:F0} m{(routeChangedSaid ? ", the route changed" : "")}");
+            }
             if (diverting)
             {
-                while (divertIdx < divert!.Count - 1 && Geo.Dist(lat, lon, divert[divertIdx].Latitude, divert[divertIdx].Longitude) < 6) divertIdx++;
-                double dErr = Geo.Norm(TaxiPlanBearing(lat, lon, divert[divertIdx]) - hdg);
+                // An excursion aims at the first node of its path 25 m or more away (at 10 kt and 12 degrees a second
+                // the turn radius is about 24 m, so a nearer node is circled, never reached) and holds its heading once
+                // past the end, where the miss flight keeps steering at the last node: the excursion's job is to stay
+                // off the route until guidance re-routes.
+                if (plan.DivertIsExcursion)
+                {
+                    while (divertIdx < divert!.Count && Geo.Dist(lat, lon, divert[divertIdx].Latitude, divert[divertIdx].Longitude) < 25) divertIdx++;
+                    if (divertIdx >= divert.Count) { excursionPastEnd = true; divertIdx = divert.Count - 1; }
+                }
+                else
+                    while (divertIdx < divert!.Count - 1 && Geo.Dist(lat, lon, divert[divertIdx].Latitude, divert[divertIdx].Longitude) < 6) divertIdx++;
+                double dErr = excursionPastEnd ? 0 : Geo.Norm(TaxiPlanBearing(lat, lon, divert[divertIdx]) - hdg);
                 hdg = (hdg + Math.Clamp(dErr, -12 * 0.1, 12 * 0.1) + 360) % 360;
                 gs += Math.Clamp(10 - gs, -0.4, 0.15);
             }
@@ -2353,17 +2843,101 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             if (legMaxOff > 12)
                 found.Add(new Finding(w.Icao, "OFFCHART_LEG_OFF_PAVEMENT", where, $"{legMaxOff:F0} m beyond the nearest taxi edge on the off-chart leg, {legOffWhere}"));
         }
+        else if (plan.DivertPath != null && plan.DivertIsExcursion)
+        {
+            // An excursion off the route before the picked turn: guidance answers it with a route that keeps the
+            // pick (the kept tail), never with "was missed" or "could not be kept".
+            if (!diverted && !diverting) found.Add(new Finding(w.Icao, "XC_EXCURSION_NOT_FLOWN", where, "the pilot never came to the junction the excursion leaves from"));
+            else if (!routeChangedSaid) found.Add(new Finding(w.Icao, "XC_EXCURSION_NO_REROUTE", where, "left the route before the turn; guidance never changed the route"));
+            else if (pickSaidMissed || pickSaidNotKept)
+                found.Add(new Finding(w.Icao, "XC_EXCURSION_PICK_LOST", where, $"left the route before the turn; \"{(pickSaidMissed ? "was missed" : "could not be kept")}\" said"));
+        }
         else if (plan.DivertPath != null)
             found.Add(!diverted && !diverting ? new Finding(w.Icao, "TURN_MISS_NOT_FLOWN", where, "the pilot never came to the junction to take the charted way")
                 : !routeChangedSaid ? new Finding(w.Icao, "TURN_MISS_NO_REROUTE", where, "took the charted way; guidance never changed the route")
                 : !pickSaidMissed && !pickSaidNotKept ? new Finding(w.Icao, "TURN_MISS_NOT_SAID", where, "took the charted way; the route changed with no word about the picked turn")
                 : new Finding(w.Icao, pickSaidMissed ? "TURN_MISS_SAID_MISSED" : "TURN_MISS_SAID_NOT_KEPT", where, "took the charted way; the route change said so"));
+
+        lastFlightHoldNodes = holdNodes;
+        if (xc != null) found.AddRange(XcFindings(w, where, xc, holdNodes, plan.XcBaseHoldNodes, done));
 #endif
     }
     catch (Exception ex) { found.Add(new Finding(w.Icao, "TAXI_EXCEPTION", where, ex.GetType().Name + ": " + ex.Message)); }
     finally { try { mgr.StopGuidance(); mgr.Dispose(); } catch { } }
     return found;
 }
+
+#if !OLDAPP
+/// <summary>
+/// What a flight with its first crossing cleared did there (XC_ codes, docs/virtual-pilot.md): no stop at a fully
+/// cleared crossing; its line said once, within 100 m of the stop, after a countdown that said "cleared to cross";
+/// every other stop of the same flight with nothing cleared still made, in the same order; and every route change
+/// before the stop either cleared it again at the same node or, where the new route stops for that runway
+/// elsewhere, said so ("is a stop again"), never carrying the clearance to another crossing.
+/// </summary>
+static List<Finding> XcFindings(World w, string where, XcFlight xc, List<int> holdNodes, List<int>? baseHoldNodes, bool done)
+{
+    var fs = new List<Finding>();
+    int stopId = xc.StopNode?.NodeId ?? -1;
+    string at = $"runway {xc.Runway} at n{stopId} (\"{xc.Label}\", {xc.Outcome})";
+    xc.HeldAt = holdNodes.Count(n => n == stopId);
+    if (baseHoldNodes != null)
+    {
+        xc.BaseHeldAt = baseHoldNodes.Count(n => n == stopId);
+        var baseOther = baseHoldNodes.Where(n => n != stopId).ToList();
+        var nowOther = holdNodes.Where(n => n != stopId).ToList();
+        xc.OtherStopsSame = baseOther.SequenceEqual(nowOther);
+        if (xc.OtherStopsSame == false)
+            fs.Add(new Finding(w.Icao, "XC_OTHER_STOPS_DIFFER", where,
+                $"{at}: with nothing cleared the other stops were [{string.Join(" ", baseOther.Select(n => "n" + n))}], now [{string.Join(" ", nowOther.Select(n => "n" + n))}]"));
+    }
+    switch (xc.Outcome)
+    {
+        case "LOAD_REFUSED": return fs;   // the flight's own TAXI_ROUTE_REFUSED / CLEARANCE_ROUTE_FAILED says why
+        case "NOT_APPLIED": fs.Add(new Finding(w.Icao, "XC_NOT_APPLIED", where, $"runway {xc.Runway}: the load cleared no crossing")); return fs;
+        case "NO_STOP": return fs;
+    }
+    // Once a route change has left the crossing no longer cleared at its node (Moved), nothing more is due there: the
+    // route change's own finding (XC_RECALC_*) says what became of it.
+    bool fully = xc.Outcome is "CLEARED" or "START";
+    if (fully && xc.HeldAt > 0 && !xc.Moved)
+        fs.Add(new Finding(w.Icao, "XC_HELD_AT_CLEARED_CROSSING", where, $"{at}: entered HoldShort there {xc.HeldAt} time(s)"));
+    if (xc.Line == 0 && xc.Reached && !xc.Moved)
+        fs.Add(new Finding(w.Icao, "XC_LINE_NOT_SAID", where, $"{at}: came within 30 m of the stop and no \"Crossing runway {xc.Runway}\" within 100 m of it{(done ? "" : " (the flight did not arrive)")}"));
+    else if (xc.Line == 0 && !xc.Moved)
+        fs.Add(new Finding(w.Icao, "XC_STOP_NOT_REACHED", where, $"{at}: never within 30 m of the stop; route changes [{string.Join(",", xc.Recalcs)}]"));
+    if (xc.Line > 1)
+        fs.Add(new Finding(w.Icao, "XC_LINE_SAID_TWICE", where, $"{at}: {xc.Line} lines within 100 m of the stop"));
+    if (xc.Outcome == "CLEARED" && xc.Line > 0 && xc.ApproachBeforeLine == 0 && !xc.LineAtGuidanceStart)
+        fs.Add(new Finding(w.Icao, "XC_APPROACH_NOT_SAID", where,
+            $"{at}: the line \"{xc.LineText}\" came with no \"… cleared to cross.\" before it (stop segment {xc.StopSegmentM:F0} m)"));
+    if (xc.Early > 0)
+        fs.Add(new Finding(w.Icao, "XC_CROSSING_SAID_BEFORE_ITS_SEGMENT", where,
+            $"{at}: \"{xc.EarlyText}\" said before guidance reached the stop's segment (the incursion watch's on-route line), then the line \"{xc.LineText}\""));
+    fs.AddRange(XcRecalcFindings(w, where, xc, at));
+    return fs;
+}
+
+/// <summary>Each kind of route change a flight with a cleared crossing saw before its stop, as an XC_ finding.</summary>
+static IEnumerable<Finding> XcRecalcFindings(World w, string where, XcFlight xc, string at)
+{
+    foreach (var r in xc.Recalcs.Distinct())
+    {
+        string what = r.Replace("+tail", "");
+        string code = what switch
+        {
+            "KEPT" => r.EndsWith("+tail") ? "XC_KEPT_TAIL_KEPT" : "XC_RECALC_KEPT",
+            "BACK_AT_SAME_STOP" => "XC_RECALC_STOP_BACK",
+            "CLEARED_ELSEWHERE" => "XC_RECALC_CLEARED_ELSEWHERE",
+            "STOP_ELSEWHERE" => xc.StopAgainSaid ? "XC_RECALC_STOP_MOVED_SAID" : "XC_RECALC_STOP_MOVED_UNSAID",
+            "ENTRY_STOP_ELSEWHERE" => "XC_RECALC_ENTRY_STOP",
+            "CROSSED_WITHOUT_STOP" => "XC_RECALC_CROSSED_WITHOUT_STOP",
+            _ => "XC_RECALC_NOT_CROSSED",
+        };
+        yield return new Finding(w.Icao, code, where, $"{at}: a route change before the stop: {r}");
+    }
+}
+#endif
 
 static string Name(LandingExit e) => e.TaxiwayName.Length > 0 ? e.TaxiwayName : $"node{e.NodeId}";
 /// <summary>The direction a spoken steering line commands: -1 left, +1 right, 0 none/unclear.</summary>
@@ -2465,6 +3039,10 @@ sealed class Options
     public string Mode = "all"; public int Airports = 100; public List<string>? Icaos;
     public (int i, int n)? Shard; public int TaxiPerAirport = 6; public string Out = ""; public string? Trace;
     public string? Sim, Db;
+#if !OLDAPP
+    /// <summary>--clear-first-crossing (taxi, turnpicks): each flight is flown a second time with the first runway its route crosses cleared.</summary>
+    public bool ClearFirstCrossing;
+#endif
     public static Options? Parse(string[] a)
     {
         if (a.Length == 0) { Console.WriteLine("usage: VirtualPilot landings|taxi|all [options] (see source header)"); return null; }
@@ -2481,6 +3059,9 @@ sealed class Options
                 case "--trace": o.Trace = a[++i]; break;
                 case "--sim": o.Sim = a[++i]; break;
                 case "--db": o.Db = a[++i]; break;
+#if !OLDAPP
+                case "--clear-first-crossing": o.ClearFirstCrossing = true; break;
+#endif
                 default: Console.WriteLine($"unknown option {a[i]}"); return null;
             }
         }
@@ -2818,7 +3399,15 @@ sealed class TaxiPlan
     public string PickSuffix() => " via " + string.Join(",", FixedSeq ?? new())
         + (TurnPicks is { Count: > 0 } tp && FixedSeq != null
             ? " turn " + string.Join(",", tp.OrderBy(kv => kv.Key).Select(kv => $"{kv.Value} onto {(kv.Key < FixedSeq.Count ? FixedSeq[kv.Key] : "?")}")) : "")
-        + (DivertPath != null ? " [takes the charted way]" : "");
+        + (DivertPath != null ? (DivertIsExcursion ? " [leaves the route before the turn]" : " [takes the charted way]") : "");
+    // Cleared crossings as the planner hands them to LoadRoute (clearedCrossings:). With ClearFirstCrossing
+    // (--clear-first-crossing) FlyTaxi loads once, reads the first runway the route crosses and reloads with that
+    // crossing cleared; XcBaseHoldNodes are the stops the same flight made with nothing cleared, to compare with.
+    // DivertIsExcursion: the divert is an excursion off the route BEFORE a picked turn, which a kept-tail recalculation
+    // answers, not the charted way taken at the turn (the miss flight).
+    public IReadOnlyList<ClearedCrossing>? ClearedCrossings;
+    public bool ClearFirstCrossing, DivertIsExcursion;
+    public List<int>? XcBaseHoldNodes;
 #endif
 
     /// <summary>A departure from a named (OSM) holding point ("HP") or a runway intersection ("IX"), as the form loads it.</summary>
@@ -2915,7 +3504,7 @@ sealed class TaxiPlan
                 destinationHeadingTrue: rwy.Heading, isRunwayDestination: true, prebuiltGraph: wo.Graph, announceSummary: true);
 #else
                 destinationHeadingTrue: rwy.Heading, isRunwayDestination: true, prebuiltGraph: wo.Graph, announceSummary: true,
-                userTurnPicks: tp.TurnPicks);
+                userTurnPicks: tp.TurnPicks, clearedCrossings: tp.ClearedCrossings);
 #endif
         return tp;
     }
@@ -2976,7 +3565,7 @@ sealed class TaxiPlan
 #if OLDAPP
                 seq, prebuiltGraph: wo.Graph, announceSummary: true);
 #else
-                seq, prebuiltGraph: wo.Graph, announceSummary: true, userTurnPicks: tp.TurnPicks);
+                seq, prebuiltGraph: wo.Graph, announceSummary: true, userTurnPicks: tp.TurnPicks, clearedCrossings: tp.ClearedCrossings);
 #endif
         return tp;
     }
@@ -3123,9 +3712,18 @@ sealed class LegPlan
     public double Lat, Lon, Hdg, AlongM;
     public List<string> Seq = new();
     public TurnSide? Pick;
-    public string Describe() => Kind == "turn"
-        ? $"via {Z},{A} turn {Pick} onto {A} hold short of {B} from n{StartNode} ({AlongM:F0} m along {Z} before n{M})"
-        : $"via {A} hold short of {B} from n{StartNode} ({AlongM:F0} m along {A} before the junction)";
+    // crossthenhold: the runway the way along A crosses before the B junction, cleared at load (clearedCrossings),
+    // how far before the junction its far pavement edge is, and whether the route stopped for it with nothing cleared.
+    public string? ClearRunway;
+    public TaxiGraph.RunwayCenterline? CrossRunway;
+    public double EdgeToJunctionM = double.NaN;
+    public bool RunwayHeldAtLoad;
+    public string Describe() => Kind switch
+    {
+        "turn" => $"via {Z},{A} turn {Pick} onto {A} hold short of {B} from n{StartNode} ({AlongM:F0} m along {Z} before n{M})",
+        "cross" => $"via {A} cross runway {ClearRunway} hold short of {B} from n{StartNode} ({AlongM:F0} m along {A} before the junction, the runway's far edge {EdgeToJunctionM:F0} m before it)",
+        _ => $"via {A} hold short of {B} from n{StartNode} ({AlongM:F0} m along {A} before the junction)",
+    };
 }
 
 /// <summary>One `legends` leg as flown: a CSV row. Metres are along the route to the B junction ahead of the stop.</summary>
@@ -3155,10 +3753,187 @@ sealed class LegendRow
         I(Countdown), Tiers, I(Recalcs), I(Junction), I(HarnessJunction), I(FormDest), Note,
     }.Select(Quote));
 
+    // crossthenhold: the runway crossed and cleared, and what the pilot heard and did there; where the stop for B lies
+    // against that runway (metres along the route past its pavement's far edge; before it, NaN and StopBeforeRunway).
+    public string Runway = "", XcOutcome = "";
+    public double EdgeToJunctionM = double.NaN, StopPastEdgeM = double.NaN;
+    public int HeldAtRunway, CrossingLines, CrossingEarly, ClearedApproach, EndedOnRunway;
+    public bool RunwayHeldAtLoad, StopBeforeRunway, StopClearOfMargin, Approach25Clear;
+
+    public const string CrossHeader = "icao,a,b,runway,runway_edge_m_before_junction,runway_held_with_nothing_cleared,cleared,"
+        + "held_at_runway,crossing_lines,crossing_said_before_its_segment,cleared_to_cross_calls,ended,seconds_to_end,"
+        + "end_m_before_junction,standstill_m_before_junction,stop_m_before_junction_at_load,stop_m_past_runway_edge,"
+        + "stop_before_runway,stop_clear_of_every_margin,stop_approach_25m_clear,leg_ended_on_runway,countdown_tiers,"
+        + "route_changes,start_m_to_junction,junction_node,note";
+
+    public string CsvCross() => string.Join(",", new[]
+    {
+        Icao, A, B, Runway, F(EdgeToJunctionM), B01(RunwayHeldAtLoad), XcOutcome,
+        I(HeldAtRunway), I(CrossingLines), I(CrossingEarly), I(ClearedApproach), B01(Ended), F(Seconds),
+        F(EndM), F(StandM), F(SetbackM), F(StopPastEdgeM),
+        B01(StopBeforeRunway), B01(StopClearOfMargin), B01(Approach25Clear), I(EndedOnRunway), Tiers,
+        I(Recalcs), F(StartM), I(Junction), Note,
+    }.Select(Quote));
+
+    private static string B01(bool b) => b ? "1" : "0";
     private static string F(double v) => double.IsNaN(v) ? "" : v.ToString("F1", CultureInfo.InvariantCulture);
     private static string I(int v) => v.ToString(CultureInfo.InvariantCulture);
     private static string Quote(string s) => s.Contains(',') || s.Contains('"') ? "\"" + s.Replace("\"", "\"\"") + "\"" : s;
 }
+
+#if !OLDAPP
+/// <summary>
+/// One flight with a runway crossing cleared (LoadRoute's clearedCrossings): where the crossing was cleared, as
+/// the route was loaded, and what the pilot heard and did there. The stop is the cleared event's
+/// (<see cref="TaxiRouteRunwayEvent.StopNodeIndex"/>): CLEARED, no longer a hold short; START, the route's start
+/// hold; SHARED, a stop that still holds for another runway ([HLD-11]); NO_STOP, a crossing with no stop to clear;
+/// NOT_APPLIED, nothing on the route was cleared.
+/// </summary>
+sealed class XcFlight
+{
+    public string Runway = "", Outcome = "", Label = "", LineText = "";
+    public TaxiNode? StopNode;
+    public int StopNodeIndex = -1;
+    /// <summary>The stop segment's length (NaN for a start hold): shorter than the 25 m capture radius, it can be passed with no countdown.</summary>
+    public double StopSegmentM = double.NaN;
+    public bool Flown, Reached, StopAgainSaid, LineAtGuidanceStart;
+    /// <summary>With a Turn pick that changed the route: whether the stop lies at or after its departure (in the kept tail). Null without one.</summary>
+    public bool? StopAfterPick;
+    /// <summary>
+    /// Lines naming the runway: "Crossing runway …" said once the segment cursor is past the stop's segment, within
+    /// 100 m of it (the line); said while the cursor is still before it (Early: the incursion watch's own line for
+    /// an on-route hold node within 40 m that is not yet the countdown's); further away (Elsewhere); the countdown's
+    /// "… cleared to cross." (Approach, and before the line); HoldShort entered at the stop.
+    /// </summary>
+    public int Line, Early, CrossingElsewhere, Approach, ApproachBeforeLine, HeldAt;
+    public string EarlyText = "";
+    public double LineAtM = double.NaN;
+    /// <summary>
+    /// Each route change before the aircraft reached the stop: KEPT (cleared again at the same node), BACK_AT_SAME_STOP,
+    /// CLEARED_ELSEWHERE (another crossing of the runway cleared), STOP_ELSEWHERE (a crossing of it held at another
+    /// node), ENTRY_STOP_ELSEWHERE (the route now enters it, held), CROSSED_WITHOUT_STOP, NOT_CROSSED; "+tail" when
+    /// the new route kept a Turn pick's tail.
+    /// </summary>
+    public readonly List<string> Recalcs = new();
+    private object? _routeSeen;
+
+    /// <summary>
+    /// A route change before the stop left this crossing no longer cleared at its node (anything but KEPT): from then on
+    /// no line is due there, and what is heard about the runway belongs to the route's new stop for it.
+    /// </summary>
+    public bool Moved => Recalcs.Count > 0 && !Recalcs[^1].StartsWith("KEPT", StringComparison.Ordinal);
+
+    // "Crossing runway 04L at C." and a scenery hold name's "Crossing H1, Runway 34C."; one naming no runway
+    // ("Crossing taxiway E9.") is left out by NamesRunway.
+    private static readonly System.Text.RegularExpressions.Regex CrossingLine = new(@"\bCrossing ([^.]+)\.");
+
+    /// <summary>The crossing as loaded: the cleared event's stop node, the label its line is said with, and what kind of stop it was.</summary>
+    public static XcFlight Setup(TaxiRoute route, string runway)
+    {
+        var xc = new XcFlight { Runway = runway, Flown = true, _routeSeen = route };
+        var ev = route.RunwayEvents.FirstOrDefault(e => e.Kind == RunwayEventKind.Crossing && e.Cleared);
+        if (ev == null) { xc.Outcome = "NOT_APPLIED"; return xc; }
+        int si = ev.StopNodeIndex;
+        xc.StopNodeIndex = si;
+        if (si < 0 || si > route.Segments.Count) { xc.Outcome = "NO_STOP"; return xc; }
+        if (si == 0)
+        {
+            xc.StopNode = route.Segments[0].FromNode;
+            xc.Label = ClearedCrossingHolds.LineLabel(route.PlacedStartHoldLabel, route.StartHoldClearedRunways);
+            xc.Outcome = route.StartHoldRunway != null ? "SHARED" : "START";
+        }
+        else
+        {
+            var seg = route.Segments[si - 1];
+            xc.StopNode = seg.ToNode;
+            xc.StopSegmentM = seg.DistanceMeters;
+            // A Turn pick that changed the route and departs at or before the stop: the stop is in the tail a
+            // recalculation before the pick keeps (TurnPickCarryOver.TailFrom); otherwise it is rebuilt.
+            if (route.TurnPicks.Any(p => p.ChangedRoute))
+                xc.StopAfterPick = route.TurnPicks.Any(p => p.ChangedRoute && si - 1 >= p.FirstSegmentAfterDeparture);
+            xc.Label = ClearedCrossingHolds.LineLabel(seg.PlacedHoldLabel, seg.ClearedRunways);
+            xc.Outcome = seg.IsHoldShortPoint ? "SHARED" : "CLEARED";
+        }
+        return xc;
+    }
+
+    /// <summary>Whether <paramref name="text"/> names <paramref name="runway"/>, either end.</summary>
+    public static bool NamesRunway(string text, string runway)
+    {
+        string r = RouteRunwayCrossings.NormalizeDesignator(runway), rr = RouteRunwayCrossings.Reciprocal(runway);
+        return RouteRunwayCrossings.ExtractRunwayDesignators(text)
+            .Any(d => d.Equals(r, StringComparison.OrdinalIgnoreCase) || d.Equals(rr, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// An utterance heard with the aircraft at (lat, lon), guidance on <paramref name="segmentIndex"/> of
+    /// <paramref name="route"/>. True for the first line said at the stop.
+    /// </summary>
+    public bool Hear(string a, double lat, double lon, TaxiRoute? route, int segmentIndex)
+    {
+        if (StopNode == null) return false;
+        if (a.Contains("is a stop again", StringComparison.OrdinalIgnoreCase) && NamesRunway(a, Runway)) StopAgainSaid = true;
+        if (Moved) return false;
+        double d = Geo.Dist(lat, lon, StopNode.Latitude, StopNode.Longitude);
+        bool first = false;
+        if (a.Contains("cleared to cross", StringComparison.OrdinalIgnoreCase) && NamesRunway(a, Runway))
+        {
+            Approach++;
+            if (Line == 0) ApproachBeforeLine++;
+        }
+        // The stop's segment on the route flown now (a route change renumbers it); none for a start hold, whose line
+        // is told from the watch's by its words: the watch names the hold node ("runway 16L at A10A"), the line the
+        // label the start hold was placed with ("runway 16L").
+        int stopSeg = route?.Segments.FindIndex(s => s.ToNode.NodeId == StopNode.NodeId) ?? -1;
+        foreach (System.Text.RegularExpressions.Match m in CrossingLine.Matches(a))
+        {
+            if (!NamesRunway(m.Groups[1].Value, Runway)) continue;
+            if (d > 100) { CrossingElsewhere++; continue; }
+            if (Line == 0 && (stopSeg >= 0 ? segmentIndex <= stopSeg
+                                           : Outcome == "START" && !m.Groups[1].Value.Equals(Label, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (++Early == 1) EarlyText = a.Trim();
+                continue;
+            }
+            if (++Line == 1) { first = true; LineAtM = d; LineText = a.Trim(); }
+        }
+        return first;
+    }
+
+    /// <summary>Every frame: whether the aircraft has come to the stop, and what each route change before it did with the crossing.</summary>
+    public void Track(TaxiRoute? route, double lat, double lon)
+    {
+        if (StopNode == null) return;
+        if (Geo.Dist(lat, lon, StopNode.Latitude, StopNode.Longitude) < 30) Reached = true;
+        if (route == null || ReferenceEquals(route, _routeSeen)) return;
+        _routeSeen = route;
+        if (Line > 0 || Reached) return;
+        int k = route.Segments.FindIndex(s => s.ToNode.NodeId == StopNode.NodeId);
+        bool Named(TaxiRouteRunwayEvent e) => NamesRunway("runway " + e.Designator, Runway);
+        bool Mine(TaxiRouteRunwayEvent e) => e.Kind == RunwayEventKind.Crossing && Named(e);
+        string what = k >= 0 && route.Segments[k].ClearedRunways.Count > 0 ? "KEPT"
+            : k >= 0 && route.Segments[k].IsHoldShortPoint ? "BACK_AT_SAME_STOP"
+            : route.RunwayEvents.Any(e => Mine(e) && e.Cleared) ? "CLEARED_ELSEWHERE"
+            : route.RunwayEvents.Any(e => Mine(e) && e.Held && !e.Passed) ? "STOP_ELSEWHERE"
+            : route.RunwayEvents.Any(e => e.Kind != RunwayEventKind.Crossing && Named(e) && e.Held && !e.Passed) ? "ENTRY_STOP_ELSEWHERE"
+            : route.RunwayEvents.Any(e => Mine(e) && !e.Passed) ? "CROSSED_WITHOUT_STOP"
+            : "NOT_CROSSED";
+        Recalcs.Add(what + (route.TurnPicks.Count > 0 ? "+tail" : ""));
+    }
+
+    /// <summary>Against the same flight with nothing cleared: its stops at this node (-1 not known), and whether every other stop is the same.</summary>
+    public int BaseHeldAt = -1;
+    public bool? OtherStopsSame;
+
+    /// <summary>The XC| results line's fields after the kind, airport and key.</summary>
+    public string ResultFields()
+        => string.Join("|", Outcome, Runway, StopNode == null ? "-" : "n" + StopNode.NodeId, $"held={HeldAt}", $"line={Line}",
+            $"approach={ApproachBeforeLine}", $"early={Early}", $"elsewhere={CrossingElsewhere}", $"reached={(Reached ? 1 : 0)}",
+            $"line_at_start={(LineAtGuidanceStart ? 1 : 0)}", $"stop_after_pick={(StopAfterPick is bool sp ? (sp ? "1" : "0") : "-")}", $"stop_seg_m={(double.IsNaN(StopSegmentM) ? "-" : StopSegmentM.ToString("F0", CultureInfo.InvariantCulture))}",
+            $"base_held={BaseHeldAt}", $"other_stops={(OtherStopsSame is bool b ? (b ? "same" : "differ") : "-")}",
+            $"recalcs={string.Join(",", Recalcs)}", $"stop_again_said={(StopAgainSaid ? 1 : 0)}", Label, LineText);
+}
+#endif
 
 /// <summary>Simulated AI aircraft for the traffic mode.</summary>
 sealed class SimTraffic

@@ -49,11 +49,13 @@ tools/VirtualPilot/bin/x64/Release/net10.0-windows/VirtualPilot.exe <mode> [opti
 | `departures` | per runway end: named (OSM) holding-point departures (`HP`, flown free and on a clearance), intersection departures (`IX`), full-length backtracks where the runway list would say "(backtrack required)" (`BT`); per airport: gate → gate taxis across the field (`G2G`) and ATC clearances with explicit "hold short of runway X" instructions (`HSCLR`) — each also voiced as a written and a spoken-NATO clearance and fed to the SayIntentions import's own parser (`CLR_*`) |
 | `turnpicks` | per taxi plan, the clearance a controller would give, then, for every row and both sides, the Turn pick a pilot could set on that row: each is loaded as the planner loads it and what became of it is recorded (already made, charted, off-chart leg, or refused and why); a pick that changes the route is flown following the tone, and flown once more with the pilot taking the charted way at the junction instead. `turn_report.py runs/NAME` summarises it |
 | `legends` | Progressive Taxi legs that end "hold short of taxiway B", loaded as the form loads them (the junction first by taxi distance, wingspan 36 m). Per airport, up to K pairs (A, B), in a seeded order: "via A" from a node on A 250 to 600 m before the nearest junction, facing it; and, where A meets B on both sides of a T at M where taxiway Z joins A, "via Z, A" from Z 150 to 400 m before M with the Turn on A set Left, then Right. The pilot brakes on any line ending "Stop."; the flight ends at a standstill after the leg has ended. Where the leg ended and where the aircraft stood are measured by the harness, along the route and on over the graph to the junction the app holds short of (its destination node, read by reflection). One row per leg in `<out>.legends.csv` (with the countdown lines heard, the last segment's length and taxiway, and the heading against it when the leg ended); the share ended and the standstill distances are printed and written into the findings footer |
+| `crossthenhold` | Progressive Taxi legs "cross runway R, hold short of taxiway B" (the KCLE shape: P across 24L, then L): per airport, up to K pairs (A, B) in a seeded order where the way along A to the A/B junction the form picks crosses one runway R whose far pavement edge is 150 m or less before the junction. The start is a node on A 150 to 1,200 m before the junction, facing it, whose route as the form loads it ("via A", no destination, hold short of taxiway B, wingspan 36 m) crosses R first; the leg is flown with that crossing cleared (`clearedCrossings: [R]`) and measured as a `legends` leg, plus: HoldShort entered at R's stop, the "Crossing runway R" line, the "… cleared to cross." countdown, and where the stop for B lies against R (metres past its far edge, clear of every runway's margin, its 25 m approach clear). One row per leg in `<out>.crossthenhold.csv`; the summary is printed and written into the findings footer |
 | `fetchosm` | downloads the raw Overpass answer for each airport into `runs/_osm/ICAO.json` (one polite request at a time — Overpass rate-limits hard, expect ~1 airport a minute). Every mode then builds the app's OWN OSM-augmented graph from that snapshot (names, holding points); `VP_NOOSM=1` flies plain navdata, `VP_OSMDIR` points elsewhere. The snapshot pins the data so a before/after run measures the code, not OSM churn |
 
 Options: `--airports N` (busiest by taxi-path count, default 100), `--icao A,B`, `--shard i/n`
 (run n processes in parallel — the hooks are process-global, so parallelise by process, never by
-thread), `--taxi-per-airport K`, `--out file`, and
+thread), `--taxi-per-airport K`, `--out file`, `--clear-first-crossing` (`taxi` and `turnpicks`: every
+flight is flown again with the first runway its route crosses cleared, below), and
 `--trace ICAO:RWY:EXIT[:straight]` / `--trace ICAO:taxi:N[:clearance]` for one scenario frame by
 frame (speech, state changes, routes, the harness's view of the runway frame).
 
@@ -83,7 +85,11 @@ junction instead. The KBOS incident of 2026-11-14 is
 `KBOS:pick:42.363953,-71.006981,170:33L:H,C=L`. `ICAO:legend:<text>` flies every `legends` leg of the
 airport as the run does (a stop can insert a node into the shared graph, so a leg depends on the ones
 before it) and prints the matching ones frame by frame, with the graph two edges around the stop
-(e.g. `KDTW:legend:turn Right onto Y hold short of V`). `VP_SHOWCLR=1` prints the voiced
+(e.g. `KDTW:legend:turn Right onto Y hold short of V`); `ICAO:crosshold:<text>` does the same for
+`crossthenhold` (e.g. `KCLE:crosshold:via S cross runway 06R hold short of L`). With
+`--clear-first-crossing`, `ICAO:taxi:N` flies the plan with nothing cleared first, untraced, then traces it
+cleared; in `ICAO:any:` and `ICAO:turn:` a cleared flight's description ends "[first crossing cleared]" and a
+detour flight's pick reads "[detours before the turn]". `VP_SHOWCLR=1` prints the voiced
 clearances, `VP_STUBSTATS=1` the destination entry-stub length and hold label of every departure.
 
 ### A/B against a frozen build
@@ -153,6 +159,14 @@ decelerating speed (Normal/End exits 18 kt at the junction, High-speed 35 kt).
 | `LEGEND_PICK_NOT_FIRST_JUNCTION`, `LEG_PASSES_B_JUNCTION`, `LEG_PICK_LINK_CROSSES_B`, `LEG_PASSES_B_IN_RUNWAY_MARGIN` | the route passes a node on B before its stop: between a pick that changed the route and the stop; without such a pick; on the charted link to the picked turn, before it; at a node inside a runway's clear margin, which the app skips by design (the leg then holds short of a later meeting) | high. Judged along the route, not by a walk of the graph, which at a Y-shaped junction goes back up the branch the route left (EGLL A9E); every node on B is classified, each with its own finding, so an informational one cannot hide a later breach |
 | `LEG_NOT_ENDED`, `LEG_AT_OR_PAST_JUNCTION`, `LEG_ROUTE_REFUSED`, `LEG_JUNCTION_NOT_FOUND`, `LEG_APP_JUNCTION_UNREAD` | no `ProgressiveHold` before the time budget, or 15 s stopped after "Stop." with nothing held; ended or stood at or past the junction; the load refused; no node on B within 400 m of the stop; the app's junction (`_destinationNodeId`) could not be read, so the harness's own pick was measured to | medium: the pilot model brakes on every "Stop.", also a runway hold's |
 | `LEG_ENDED_ON_RUNWAY` | a `legends` leg ended, or its countdown said "Slow down" or "Stop", with the aircraft on runway pavement (`RouteRunwayCrossings.RunwayUnder`, no margin) | high: a leg never ends on a runway, and BA never asks for a stop on one (spec 8.5, 8.8) |
+| `XC_HELD_AT_CLEARED_CROSSING`, `XC_NOT_APPLIED` | a flight with a crossing cleared (`--clear-first-crossing`, `crossthenhold`) entered HoldShort at that crossing's stop, which no longer holds for any runway; the load cleared nothing | high |
+| `XC_LINE_NOT_SAID`, `XC_LINE_SAID_TWICE`, `XC_STOP_NOT_REACHED` | the aircraft came within 30 m of the cleared stop and no "Crossing runway R" was said within 100 m of it once guidance was past the stop's segment; more than one was; the flight never came within 30 m of it (a route change took it elsewhere) | high for the first two |
+| `XC_APPROACH_NOT_SAID` | a fully cleared stop's line came with no "… cleared to cross." countdown before it, not counting a line passed as guidance started | medium: a stop segment shorter than the 25 m capture radius can be passed before any tier is due |
+| `XC_CROSSING_SAID_BEFORE_ITS_SEGMENT` | "Crossing runway R" said while guidance was still on a segment before the stop's: the incursion watch's own line for an on-route hold node within 40 m that is not yet the countdown's, which stage 1's build already speaks before an ordinary hold short | information |
+| `XC_OTHER_STOPS_DIFFER` | the hold-short stops other than the cleared one are not the same, in the same order, as the same flight's with nothing cleared | high |
+| `XC_RECALC_KEPT`, `XC_KEPT_TAIL_KEPT`, `XC_RECALC_STOP_BACK`, `XC_RECALC_CLEARED_ELSEWHERE`, `XC_RECALC_STOP_MOVED_SAID` / `_UNSAID`, `XC_RECALC_ENTRY_STOP`, `XC_RECALC_CROSSED_WITHOUT_STOP`, `XC_RECALC_NOT_CROSSED` | a route change before the cleared stop: the new route clears it again at the same node (with a Turn pick's kept tail: `KEPT_TAIL`); a stop again at that node; the runway cleared at another crossing; a crossing of the runway held at another node, said ("Runway R is a stop again.") or not; the new route enters the runway instead, with a stop; crosses it with no stop (which the route change must say, HLD-17); no longer meets it | `STOP_BACK`, `CLEARED_ELSEWHERE` and `_UNSAID` high; the rest information |
+| `XC_DETOUR_NOT_FLOWN`, `XC_DETOUR_NO_REROUTE`, `XC_DETOUR_PICK_LOST` | the detour flight (below): the pilot never reached the junction it leaves from; left the route and guidance never changed it; the route change said the pick was missed or could not be kept | medium: the detour is the harness's construction |
+| `XC_B_STOP_BEFORE_RUNWAY`, `XC_B_STOP_IN_RUNWAY_MARGIN` | `crossthenhold`: the stop for B lies before R (the route never reaches R's pavement), or inside a runway's clear margin | high |
 
 ## Findings of the first run (2026-09-18, 100 busiest fs2020 airports)
 
@@ -585,3 +599,90 @@ Every other row of the CSV, and every CODES line, is as at the stage's end.
   refused (no such turn 20, does not lead there 36). The refusals were not traced one by one.
 - The junction is the app's own (`_destinationNodeId`, read by reflection): the harness's walk from
   the stop picked another node in 19 legs, all refused picks whose stop sits at a fork before the turn.
+
+## Cleared crossings (2026-11-25, 2024 navdata, plain navdata)
+
+Stage 2 of the Taxi UI Redesign: a runway crossing the pilot was cleared for (`LoadRoute(...,
+clearedCrossings:)`, `ClearedCrossingHolds`) loses its stop but is still counted down ("Runway 17L at C11 in 40
+metres, cleared to cross."), named at its line ("Crossing runway 17L at C11."), clearable early by Continue and
+put back by the Hold short key. All runs: `--sim fs2024`, `VP_NOOSM=1`, the 40 busiest airports, 3 plans each.
+
+**Nothing else moved.** Stage 1's end (`678c943ad`) against stage 2's (`a89c3babf`), the same harness in both,
+modes `taxi wrongturn turnpicks rwystop missedexit`: 3,404 scenarios in both runs, none only in one; 4,941 result
+lines and 1,036 finding lines, not one different. The harness below, without its new option, flies those five
+modes to the same lines again, and `legends` to the same 235 rows, codes and findings as stage 1's final run.
+
+**`--clear-first-crossing`** (`taxi`, `turnpicks`). After each flight, the same plan is loaded once, the first
+crossing not already passed is read from the route's `RunwayEvents` (route order: where the route reaches the
+runway), and the plan is loaded again on a fresh manager with `clearedCrossings: [that runway]`, as the planner
+hands it over. That flight has its own CODES kind (`TAXI_XC`, `TURN_CHARTED_XC`, …) and an `XC|` results line, and
+is compared with the flight just flown with nothing cleared. A plan whose route crosses no runway is not flown
+again. The flights with nothing cleared are byte-identical to a run without the option. For the kept-tail
+recalculation, every pick that changed the route also gets an **excursion** (`TURN_EXCURSION`, then
+`TURN_EXCURSION_XC`): from a junction at least 100 m into the route and 60 m before both the turn and the cleared
+stop, the pilot drives a branch off the route (45 to 135 degrees off, 120 m long and 60 m away from the route, clear
+of every runway) and holds that heading until guidance re-routes. The stop is then either in the kept tail (at or
+after the turn's departure) or on the stretch the recalculation builds afresh.
+
+| | flights | held at the cleared crossing | its line said once | "… cleared to cross." before the line | other stops as with nothing cleared |
+|---|---|---|---|---|---|
+| `taxi` (shortest route and clearance) | 92 | 0 | 90 of 90 | 76 of 76 | 92 |
+| `turnpicks` (no pick, charted, off-chart, miss) | 224 | 0 | 212 of 213 | 197 of 197 | 224 |
+| `turnpicks` excursions | 48 | 0 | 39 of 39 | 39 of 39 | 48 |
+
+Every first crossing cleared was a single-runway stop (352) or the route's start hold (12); none was a stop shared
+with another runway. "Its line said once" counts the flights that reached the stop with the crossing still cleared
+there (a route change can move it, below). The countdown's "cleared to cross" is counted where a countdown is due:
+not at a start hold, and not where the line was passed as guidance started (18 flights; at UUWW and KNZY the two come
+in one utterance, "Runway 01 at M1 in 0 metres, cleared to cross. Crossing runway 01 at M1."). The one flight with
+more than one line is a miss flight (ZSPD Gate 77, "left onto P1", taking the charted way), whose charted way
+passes the cleared stop off the route: the line, then "Crossing runway 35R at P1." again 0.1 s and 10 s later from
+the incursion watch, which the line latches off only for the stop's own node (the same flight with nothing cleared
+hears the watch's line before its countdown and again after its Continue).
+
+**Route changes before the cleared stop.** 34 recalculations kept a Turn pick's tail. 24 of them, all after an
+excursion, cleared the stop again at its node: all 11 with the stop in the kept tail, and 13 whose stop lay on the
+stretch rebuilt before the turn but came back at the same node. The other 10 kept the tail with the stop before the
+turn, and the rebuilt stretch met the runway at another stop (KPHL, 6), not at all (WMKK, 2) or with no stop (OEJN,
+2). 13 more (miss
+flights, no tail) cleared it again at its node. 22 flights lost the clearance in all: those 10, 8 where the pick was
+missed or "could not be kept" so no tail was kept, and 4 with no pick (KLAX, KPHL). The new route stops for that
+runway at another node and says so, "Runway 09L is a stop again." (16); no longer meets it (3: WMKK twice, OMDB);
+crosses it with no stop, said "with no hold short point for runway 34C" (2, OEJN, below); or now
+enters it at B17 with a stop and a countdown, but no "is a stop again", which `DroppedOnRecalculation` says only for
+a crossing (1, KLAX, a miss flight). No route change brought a stop back at the cleared node, cleared another
+crossing of the runway, or moved a crossing's stop without a word.
+
+**Cross then hold** (`crossthenhold`, stage 1's final review: KCLE, P across 24L, then hold short of L): 50 legs
+at 18 airports, the runway's far edge 18 to 149 m (median 101) before the B junction. With nothing cleared, every
+route stopped for the runway first. Cleared: 38 at a stop, 12 at the start hold. No leg entered HoldShort at the
+runway; every leg said its "Crossing runway" line exactly once, and all 38 counted down said "cleared to cross"
+first; every leg ended (none at or past the junction, standstill 4.9 to 78.2 m before it, median 52.0 m);
+`LEG_ENDED_ON_RUNWAY` 0. Every stop for B lies past the runway, 16.8 to 113.8 m (median 63.6) beyond its far
+pavement edge, and clear of every runway's margin. KCLE "via S, hold short of L": "Runway 24L in 30 metres, cleared
+to cross.", "Crossing runway 24L.", "Hold short taxiway L in 55 metres. Slow down.", "Hold short of taxiway L. Set a
+new route when cleared.", the aircraft at rest 56 m before L. Four shards give the same 50 rows as one process.
+
+**Measured, left as it is:**
+
+- **"Crossing runway X" before the countdown.** In 94 of the 364 flights (and 4 of the 50 legs) the incursion
+  watch says "Crossing runway 17L at C11." while guidance is still on the segment before the stop's, about 40 m
+  out, and the line follows: "Crossing runway 17L at C11." / "Runway 17L at C11 in 40 metres, cleared to cross." /
+  "Crossing runway 17L at C11." (LTFM). Stage 1's build says the same watch line before an ordinary hold:
+  "Crossing runway 17L at C11." then "Hold short runway 17L at C11 in 40 metres. Slow down." The watch skips only
+  the countdown's own node, the current segment's end, and the stop segments are short (20 to 40 m).
+- **A recalculation that the no-op guard drops is adopted when the cleared stop is not on the new route** (the
+  RTE-22 amendment). KPHL and KLAX: an early recalculation as the pilot model leaves the stand, discarded with
+  nothing cleared, is adopted cleared; the new route meets the runway at another stop and says "Runway 09L is a stop
+  again." (KPHL, 6 picked flights and 2 plain) or ends a crossing-on-the-runway artefact (KLAX: the flight with
+  nothing cleared stops on 25L's pavement at H8; cleared, the new route crosses once at H9).
+- **Eleven `crossthenhold` stops are the B junction itself**, all where the runway's far edge is 65 m or less
+  before it, as stage 1 placed KLSV "via A, hold short of F": no setback point had its 25 m approach clear of the
+  margin.
+  In four (LTFM "H1, G6A", KLSV "A, B", EDDF "M11, R7", KDTW "V, Z": the edge 18 to 33 m out) even the junction's
+  25 m approach crosses the margin, and the aircraft stood 4.9 to 18.4 m before the junction; with a 36 m wingspan
+  the nose can be on B.
+- The excursion is the harness's construction: 12 of 48 never reached their junction, 3 got no route change, 3
+  heard "could not be kept" (12, 4 and 3 with nothing cleared). At OEJN Parking 137 the recalculations were refused
+  for 38 s ("heads backwards") and the route finally adopted crosses 34C with no stop, said "with no hold short
+  point for runway 34C", before the pilot model drives onto it (`RUNWAY_ENTERED_UNHELD`, with nothing cleared too).
