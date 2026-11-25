@@ -14,9 +14,10 @@ namespace MSFSBlindAssist.Navigation;
 ///
 /// <para>The stages are read from the LABEL rather than carried as a second list on the route. The
 /// label is already the one place the merge is recorded, it survives every route mutation that
-/// preserves the stop (including <c>StripClearedCrossing</c>, which removes the stop outright when
-/// the cleared runway is the only one it names), and deriving them keeps the new state to a single
-/// index in the manager.</para>
+/// preserves the stop (a runway the pilot is cleared across comes off it through
+/// <see cref="ClearedCrossingHolds.ClearAt"/>, which keeps the label it was placed with and lifts the
+/// stop only when no runway is left), and deriving them keeps the new state to a single index in the
+/// manager.</para>
 ///
 /// <para>Measured frequency: 0 of 2,518 sampled fs2024 routes produced a start hold naming more than
 /// one runway, and shared segment stops are likewise rare — so this is real but uncommon, and the

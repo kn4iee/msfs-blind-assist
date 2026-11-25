@@ -31,8 +31,8 @@ public static class RouteRunwayCrossings
     // graph. Digits-only, this pattern read none of them — ExtractRunwayDesignator returned null,
     // ComposeCrossingLabel took its "names no runway" branch and prefixed an already-prefixed
     // label a second time, and live 3KS4 and RJSSE spoke "Stop. Hold short of runway N at
-    // runway N."; LabelNamesOnlyRunway was false for every such label, so StripClearedCrossing
-    // could never clear a Progressive Taxi crossing of one. The numeric branch is FIRST so a
+    // runway N.", and a crossing of one could never be cleared: ClearedCrossingHolds reads the
+    // runway a stop guards through this same pattern. The numeric branch is FIRST so a
     // designator that could match both is read as the number, and each compass alternative ends
     // at a word boundary so ordinary prose ("runway North side") is not a designator.
     // CultureInvariant beside IgnoreCase, as [SIC-11] requires of SayIntentions' regexes: tr-TR

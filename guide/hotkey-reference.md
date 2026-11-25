@@ -124,7 +124,7 @@ What each one includes (per tank, centre of gravity) depends on the aircraft; se
 
 ### Output: taxi {#output-taxi}
 
-- **Output Y** — Taxi status: current taxiway, next turn, distance to go (see [Taxi Guidance](taxi-guidance.md)).
+- **Output Y** — Taxi status: current taxiway, next turn, next stop (and for a runway, whether you are cleared across it), distance to go (see [Taxi Guidance](taxi-guidance.md#checking-where-you-are)).
 - **Output Ctrl+Y** — Repeat the last taxi instruction.
 
 ### Output: flying aids {#output-flying-aids}
@@ -180,7 +180,8 @@ Each opens a window where you type a value, with the related mode buttons. The b
 ### Input: taxi, GSX and SayIntentions {#input-taxi-gsx-and-sayintentions}
 
 - **Input Shift+Y** — Open the [Taxi Planner](taxi-guidance.md#taxi-planner).
-- **Input Y** — Continue past the hold-short point you are holding at.
+- **Input Y** — Continue past the hold-short point you are holding at, or, once BA has counted you down to a runway hold line, clear that runway before you reach it (see [Continue before the line](taxi-guidance.md#continue-before-the-line)).
+- **Input Alt+Y** — Hold short of the next cleared runway: put back the stop at the next runway you are cleared across, or hear that you are past its hold line, or what the next stop is (see [Holding short after all](taxi-guidance.md#holding-short-after-all)).
 - **Input Ctrl+Y** — Stop taxi guidance.
 - **Input Alt+G** — Open the Access GSX window.
 - **Input Ctrl+Shift+Y** — Build a taxi route from the last SayIntentions taxi clearance.

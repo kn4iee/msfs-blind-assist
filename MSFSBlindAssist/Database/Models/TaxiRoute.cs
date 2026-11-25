@@ -159,7 +159,10 @@ public sealed class TaxiRouteRunwayEvent
     public RunwayEventKind Kind { get; init; }
     /// <summary>The designator announced for it (the pilot's own on the destination strip).</summary>
     public string Designator { get; init; } = "";
-    /// <summary>Whether a stop was placed for it (false: passed already, no stop point, or cleared).</summary>
+    /// <summary>
+    /// Whether a stop was placed for it (false: passed already, or no stop point). A crossing the pilot is cleared
+    /// across keeps this, and is marked <see cref="Cleared"/>.
+    /// </summary>
     public bool Held { get; set; }
     /// <summary>
     /// Not held because the aircraft is already past the stop, or already on this runway — as opposed to
