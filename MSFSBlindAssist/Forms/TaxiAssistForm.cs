@@ -466,8 +466,9 @@ public class TaxiAssistForm : Form
         int controlX = 15;
         int controlWidth = 370;
 
-        // Access keys (each letter on one control only, so Alt+letter reaches it at once;
-        // a shared letter makes Windows cycle, which is jarring for blind users):
+        // Access keys (each letter on one control only: Windows Forms does not cycle a shared
+        // letter, it takes the first match after the focused control, so a shared letter can
+        // press the wrong button; ClearanceStepEntryTests pins one control per letter):
         //   Alt+A  Airport (ICAO)                  Alt+T  Destination type
         //   Alt+G  Gate search                     Alt+E  Destination (D&estination)
         //   Alt+F  Show fitting only               Alt+O  Hide occupied stands
@@ -480,7 +481,8 @@ public class TaxiAssistForm : Form
         //          Cross, Hold short of) and put focus in the name box, from anywhere in the
         //          window (ProcessCmdKey): no control may take these five letters
         //   Alt+Y  Fill from SayIntentions         Alt+C  Calculate Route
-        //   Alt+S  Stop Guidance (shared with "Last route &summary", so Alt+S cycles the two)
+        //   Alt+S  Stop Guidance                   Alt+N  Last route summary ("(&N)": no letter
+        //          of its own words is free, and it once shared S, which stopped guidance)
         //
         // Tab order (top to bottom, explicit TabIndex below; a label with an access key sits
         // immediately before its control, or the key lands on whatever follows its number):
@@ -821,6 +823,17 @@ public class TaxiAssistForm : Form
             AccessibleDescription = "Optional: where ATC cleared you to cross the runway, a taxiway or a holding point such as P1. Lists only those that cross the runway chosen in the name box. Leave at (none) to cross where the route first meets the runway."
         };
         cmbStepAt.KeyDown += OnStepBoxKeyDown;
+        // Its holding points come from the same online fetch as the name box's, which can land after the list was
+        // filled. Refreshed (keeping the pick) just before the list opens, and when focus arrives if the points have
+        // just been found: arrowing a DropDownList never raises DropDown, and a refill on every focus would lose the
+        // pilot's place.
+        cmbStepAt.DropDown += (s, e) => RefreshStepAtList(keepSelection: true);
+        cmbStepAt.Enter += (s, e) =>
+        {
+            if (_graph == null || _namedHoldingPointsResolved) return;
+            ResolveNamedHoldingPoints();
+            if (_namedHoldingPointsResolved) RefreshStepAtList(keepSelection: true);
+        };
 
         btnAddStep = new Button
         {
@@ -872,7 +885,7 @@ public class TaxiAssistForm : Form
             AccessibleName = "Clear Steps",
             AccessibleDescription = "Remove every step from the clearance."
         };
-        btnClearSteps.Click += (s, e) => ClearSteps();
+        btnClearSteps.Click += (s, e) => OnClearStepsClicked();
 
         // The panel that holds the step block, where the taxiway rows used to be. Its height
         // follows the "At" line (UpdateLayout, LayoutStepBlock).
@@ -955,7 +968,9 @@ public class TaxiAssistForm : Form
         // from TaxiGuidanceManager.LastRouteSummary.
         lblRouteSummary = new Label
         {
-            Text = "Last route &summary:",
+            // Alt+N, never S: "&Stop Guidance" holds S, and a shared key takes the first match after
+            // the focused control, so reaching for the summary stopped guidance.
+            Text = "Last route summary (&N):",
             Location = new System.Drawing.Point(labelX, y),
             Width = controlWidth,
             Height = 20,
@@ -1076,11 +1091,13 @@ public class TaxiAssistForm : Form
 
     /// <summary>The Alt+letter step kinds (Alt+V, Alt+L, Alt+R, Alt+X, Alt+H): pick the kind and put focus
     /// in the name box, from anywhere in the window. Handled here, before any mnemonic, so no control's
-    /// access key can take these letters.</summary>
+    /// access key can take these letters. Letter keys only: Alt with a function or number-pad key (an Alt
+    /// code typed in the Airport box) is never a kind key.</summary>
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
-        if ((keyData & Keys.Modifiers) == Keys.Alt
-            && ClearanceStepEntry.KindForAccessKey((char)(keyData & Keys.KeyCode)) is ClearanceStepKind kind)
+        Keys key = keyData & Keys.KeyCode;
+        if ((keyData & Keys.Modifiers) == Keys.Alt && key >= Keys.A && key <= Keys.Z
+            && ClearanceStepEntry.KindForAccessKey((char)key) is ClearanceStepKind kind)
         {
             SelectStepKind(kind, focusName: true);
             return true;
@@ -3676,10 +3693,13 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Shows the "At" box only for a Cross step with a runway chosen, and fills it: "(none)" (the first crossing the
     /// route makes), then the taxiways that cross that runway, then the painted holding points from which it can be
-    /// crossed on the aircraft's side (never one read from a sign, [HLD-18]). A new runway starts at "(none)".
+    /// crossed on the aircraft's side (never one read from a sign, [HLD-18]). A new runway starts at "(none)";
+    /// <paramref name="keepSelection"/> (the box's own refresh when focus arrives or its list opens) keeps the pick by
+    /// its label when it is still offered.
     /// </summary>
-    private void RefreshStepAtList()
+    private void RefreshStepAtList(bool keepSelection = false)
     {
+        string? previous = keepSelection ? cmbStepAt.SelectedItem?.ToString() : null;
         Runway? runway = null;
         bool show = SelectedStepKind() == ClearanceStepKind.Cross
             && cmbStepName.SelectedItem is ClearanceNameLists.Item { Kind: ClearanceTargetKind.Runway } picked
@@ -3705,7 +3725,8 @@ public class TaxiAssistForm : Form
                     if (_crossAtHoldPoints.TryAdd(label, hp))
                         cmbStepAt.Items.Add(label);
                 }
-                cmbStepAt.SelectedIndex = 0;
+                int kept = previous == null ? -1 : cmbStepAt.Items.IndexOf(previous);
+                cmbStepAt.SelectedIndex = kept >= 0 ? kept : 0;
             }
         }
         finally { cmbStepAt.EndUpdate(); }
@@ -3753,7 +3774,7 @@ public class TaxiAssistForm : Form
         string? refusal = ClearanceStepEntry.Refusal(name);
         if (refusal != null)
         {
-            _announcer.AnnounceImmediate(refusal);
+            SpeakStepBlockNow(refusal);
             return;
         }
 
@@ -3786,13 +3807,14 @@ public class TaxiAssistForm : Form
     /// Speaks the added step. With focus staying in the name box it interrupts whatever the screen reader says of the
     /// refilled list. When focus is moving there (Add Step pressed on the button, Enter in the kind or "At" box), the
     /// screen reader first names the box, and a focus change cancels speech already sent: the sentence follows that,
-    /// queued, a moment later.
+    /// queued, a moment later. Anything the step block says at once, and Calculate, drops a sentence still waiting,
+    /// so it is never heard out of order or after the Calculate utterance ([HLD-17], [SI-22]).
     /// </summary>
     private void SpeakStepAdded(string sentence, bool afterFocusMove)
     {
         if (!afterFocusMove)
         {
-            _announcer.AnnounceImmediate(sentence);
+            SpeakStepBlockNow(sentence);
             return;
         }
         _pendingStepSpeech = sentence;
@@ -3811,31 +3833,61 @@ public class TaxiAssistForm : Form
         _stepSpeechTimer.Start();
     }
 
-    /// <summary>Remove Step (the button, or Delete in the Clearance list): removes the selected step, or the last
-    /// one when none is selected. Speaks nothing (the screen reader reads the list); refused out loud only when the
-    /// list is empty.</summary>
+    /// <summary>Drops a step sentence still waiting to be spoken (see <see cref="SpeakStepAdded"/>).</summary>
+    private void CancelPendingStepSpeech()
+    {
+        _stepSpeechTimer?.Stop();
+        _pendingStepSpeech = null;
+    }
+
+    /// <summary>Speaks at once for the step block (a step added, a refusal, a removal), dropping any step sentence
+    /// still waiting, so the two are never heard out of order.</summary>
+    private void SpeakStepBlockNow(string text)
+    {
+        CancelPendingStepSpeech();
+        _announcer.AnnounceImmediate(text);
+    }
+
+    /// <summary>Remove Step (the button or Alt+M, or Delete in the Clearance list): removes the selected step, or the
+    /// last one when none is selected; refused out loud when the list is empty. From the Clearance list it speaks
+    /// nothing (the screen reader reads the step now in its place); from anywhere else, where the button's access key
+    /// clicks it without moving focus and the reader says nothing of the change, it says once which step went:
+    /// "Removed step 3: cross runway 24L." ([CORE-7]).</summary>
     private void RemoveStep()
     {
         if (_steps.Count == 0)
         {
-            _announcer.AnnounceImmediate(ClearanceStepEntry.NoStepToRemove);
+            SpeakStepBlockNow(ClearanceStepEntry.NoStepToRemove);
             return;
         }
+        bool fromList = lstClearance.Focused;
         int index = lstClearance.SelectedIndex >= 0 && lstClearance.SelectedIndex < _steps.Count
             ? lstClearance.SelectedIndex
             : _steps.Count - 1;
+        var removed = _steps[index];
         _steps.RemoveAt(index);
         lstClearance.Items.RemoveAt(index);
         // Deleting from the list keeps the pilot's place there, on the step that took its place; from the button,
         // nothing stays selected, so the next Remove Step takes the last step again.
-        lstClearance.SelectedIndex = lstClearance.Focused && lstClearance.Items.Count > 0
+        lstClearance.SelectedIndex = fromList && lstClearance.Items.Count > 0
             ? Math.Min(index, lstClearance.Items.Count - 1)
             : -1;
         RefreshStepNameList();
+        if (!fromList) SpeakStepBlockNow(ClearanceStepEntry.Removed(removed, index + 1));
+    }
+
+    /// <summary>Clear Steps (the button or Alt+Z): empties the list. Alt+Z clicks the button from anywhere without
+    /// moving focus, a key away from Alt+X, so outside the Clearance list it says so once: "Steps cleared."
+    /// ([CORE-7]).</summary>
+    private void OnClearStepsClicked()
+    {
+        bool fromList = lstClearance.Focused;
+        ClearSteps();
+        if (!fromList) SpeakStepBlockNow(ClearanceStepEntry.StepsCleared);
     }
 
     /// <summary>Empties the step list (Clear Steps, a SayIntentions fill, an airport change), the kind back on Via
-    /// and the name box refilled. Speaks nothing.</summary>
+    /// and the name box refilled. Speaks nothing: Clear Steps speaks for itself (<see cref="OnClearStepsClicked"/>).</summary>
     private void ClearSteps()
     {
         _steps.Clear();
@@ -4089,6 +4141,10 @@ public class TaxiAssistForm : Form
 
     private void OnCalculateClicked(object? sender, EventArgs e)
     {
+        // A step sentence still waiting (a step added a moment ago) must not land after the one Calculate utterance
+        // ([HLD-17], [SI-22]): the clearance it confirms is in what Calculate says.
+        CancelPendingStepSpeech();
+
         if (_graph == null)
         {
             const string noAirport = "No airport loaded. Enter an ICAO code first.";

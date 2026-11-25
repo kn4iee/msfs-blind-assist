@@ -22,13 +22,27 @@ public static class ClearanceStepEntry
     /// <summary>Spoken when Remove Step (or Delete in the Clearance list) finds no step to remove.</summary>
     public const string NoStepToRemove = "No step to remove.";
 
+    /// <summary>Spoken when Clear Steps is pressed by its button or access key (focus not in the Clearance list).</summary>
+    public const string StepsCleared = "Steps cleared.";
+
+    /// <summary>Spoken when Remove Step is pressed by its button or access key (focus not in the Clearance list):
+    /// "Removed step 3: cross runway 24L." <paramref name="number"/> is the step's place before it was removed.</summary>
+    public static string Removed(ClearanceStep step, int number)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        string spoken = step.Spoken(number);
+        return "Removed " + char.ToLowerInvariant(spoken[0]) + spoken.Substring(1);
+    }
+
     /// <summary>The kind at a list index; Via for an index the list does not have (nothing selected).</summary>
     public static ClearanceStepKind KindAt(int index)
         => index >= 0 && index < KindItems.Count ? (ClearanceStepKind)index : ClearanceStepKind.Via;
 
     /// <summary>The kind an Alt+letter picks from anywhere in the window: V via, L left onto, R right onto,
-    /// X cross, H hold short of. Null for any other letter.</summary>
-    public static ClearanceStepKind? KindForAccessKey(char letter) => char.ToUpperInvariant(letter) switch
+    /// X cross, H hold short of; null for anything else. Takes the KEY CODE of the letter, which is its upper-case
+    /// character: never upper-cased here, as the codes of F3, F7, F9, NumPad8 and Separator read as the lower-case
+    /// r, v, x, h and l.</summary>
+    public static ClearanceStepKind? KindForAccessKey(char letter) => letter switch
     {
         'V' => ClearanceStepKind.Via,
         'L' => ClearanceStepKind.LeftOnto,

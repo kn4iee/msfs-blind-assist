@@ -44,7 +44,6 @@ public class ClearanceStepEntryTests
     [InlineData('R', ClearanceStepKind.RightOnto)]
     [InlineData('X', ClearanceStepKind.Cross)]
     [InlineData('H', ClearanceStepKind.HoldShort)]
-    [InlineData('x', ClearanceStepKind.Cross)]
     public void Each_kind_has_its_own_access_key(char letter, ClearanceStepKind kind)
         => Assert.Equal(kind, ClearanceStepEntry.KindForAccessKey(letter));
 
@@ -56,6 +55,18 @@ public class ClearanceStepEntryTests
     [InlineData('3')]
     public void Other_letters_pick_no_kind(char letter)
         => Assert.Null(ClearanceStepEntry.KindForAccessKey(letter));
+
+    // The window hands over a key code: F3 (0x72), F7 (0x76), F9 (0x78), NumPad8 (0x68) and Separator (0x6C) read as
+    // the lower-case letters r, v, x, h and l. Alt with one of those must pick no kind (Alt+NumPad8 is typing an Alt
+    // code in the Airport box); only the key codes of the letters A to Z are kind keys.
+    [Theory]
+    [InlineData('r')]
+    [InlineData('v')]
+    [InlineData('x')]
+    [InlineData('h')]
+    [InlineData('l')]
+    public void A_function_or_number_pad_key_picks_no_kind(char keyCodeAsChar)
+        => Assert.Null(ClearanceStepEntry.KindForAccessKey(keyCodeAsChar));
 
     [Theory]
     [InlineData(ClearanceStepKind.Via, "Taxi&way:", "Taxiway")]
@@ -79,10 +90,28 @@ public class ClearanceStepEntryTests
         Assert.Null(ClearanceStepEntry.Refusal(Taxiway("B")));
     }
 
-    // Remove Step on an empty list is the window's only other refusal; the screen reader reads the list otherwise.
+    // Remove Step on an empty list is refused out loud.
     [Fact]
     public void Remove_step_on_an_empty_list_says_so()
         => Assert.Equal("No step to remove.", ClearanceStepEntry.NoStepToRemove);
+
+    // Remove Step and Clear Steps pressed by their buttons or access keys (focus not in the Clearance list) confirm once:
+    // the button's access key clicks it without moving focus, so the screen reader says nothing of the change.
+    [Fact]
+    public void A_removed_step_is_said_with_its_number_and_sentence()
+    {
+        var cross = new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "24L");
+        var at = new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "24L", At: "P");
+        var left = new ClearanceStep(ClearanceStepKind.LeftOnto, ClearanceTargetKind.Taxiway, "C");
+
+        Assert.Equal("Removed step 3: cross runway 24L.", TestCulture.Run("de-DE", () => ClearanceStepEntry.Removed(cross, 3)));
+        Assert.Equal("Removed step 12: cross runway 24L at P.", TestCulture.Run("sv-SE", () => ClearanceStepEntry.Removed(at, 12)));
+        Assert.Equal("Removed step 1: left onto C.", TestCulture.Run("de-DE", () => ClearanceStepEntry.Removed(left, 1)));
+    }
+
+    [Fact]
+    public void Clearing_the_steps_is_said()
+        => Assert.Equal("Steps cleared.", ClearanceStepEntry.StepsCleared);
 
     [Theory]
     [InlineData(ClearanceStepKind.Via, "Via B")]
@@ -210,5 +239,19 @@ public class ClearanceStepEntryTests
         string form = FormSource();
         Assert.Contains("Text = \"CAT &3 / low-visibility hold (LVP)\"", form);
         Assert.Contains("AccessibleName = \"CAT three, low visibility hold\"", form);
+    }
+
+    // A shared letter does not cycle between its controls: Windows Forms takes the first match after the focused
+    // control, so "Last route summary" sharing S with Stop Guidance (always enabled) stopped guidance from almost
+    // anywhere. Every access key in the window belongs to one control, Stop Guidance alone has S, the summary N.
+    [Fact]
+    public void Every_access_key_in_the_window_belongs_to_one_control()
+    {
+        var shared = AccessKeys().GroupBy(k => k).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        Assert.Empty(shared);
+
+        string form = FormSource();
+        Assert.Contains("Text = \"&Stop Guidance\"", form);
+        Assert.Contains("Text = \"Last route summary (&N):\"", form);
     }
 }
