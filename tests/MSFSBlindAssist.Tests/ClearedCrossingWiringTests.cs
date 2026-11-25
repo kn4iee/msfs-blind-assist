@@ -112,14 +112,16 @@ public class ClearedCrossingWiringTests
         Assert.Matches(@"!oldRouteWrongForTurnPick && !clearedStopMoves\)\s+return;", recalc);
     }
 
-    // The form's "After crossing runway" clears that runway at the place the pilot named, and only there.
+    // The form's "After crossing runway" clears that runway at the place the pilot named, and only there: a taxiway by
+    // its name, a holding point by its node and its name, so a stop whose label names the point matches and one the
+    // route does not cross there is said by name.
     [Fact]
     public void The_after_crossing_leg_asks_for_its_crossing_at_its_place()
     {
         string form = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Forms", "TaxiAssistForm.cs"));
 
         Assert.Contains("crossAtTaxiwayName = crossAt;", form);
-        Assert.Contains("new ClearedCrossing(runwayTarget, At: crossAtTaxiwayName, AtNodeId: crossAtHold?.NodeId ?? 0)", form);
+        Assert.Contains("new ClearedCrossing(runwayTarget, At: crossAtHold?.Name ?? crossAtTaxiwayName, AtNodeId: crossAtHold?.NodeId ?? 0)", form);
         Assert.Matches(@"userTurnPicks: progTurnPicks\.Count > 0 \? progTurnPicks : null,\s+(//[^\n]*\n\s+)*clearedCrossings: ", form);
     }
 

@@ -4821,7 +4821,7 @@ public class TaxiAssistForm : Form
             // through on its way across (see LoadRoute's holdingPointHoldNodeId).
             NamedHoldingPoint? crossAtHold = null;
             // "Cross runway X at <taxiway>": where the crossing is cleared (the taxiway branch only; a holding
-            // point's label is not a taxiway, and the point clears by its node).
+            // point's label is not a taxiway, and the point clears by its node and its own name).
             string? crossAtTaxiwayName = null;
             var progRwyHoldShorts = GetUserRunwayHoldShorts();
 
@@ -5005,8 +5005,10 @@ public class TaxiAssistForm : Form
                 userTurnPicks: progTurnPicks.Count > 0 ? progTurnPicks : null,
                 // "After crossing runway": the pilot is cleared across that runway at that place, and only
                 // there; the manager clears its stop after placing every stop, and says one it cannot clear.
+                // A holding point goes by its node and its name: the stop's label can name it ("runway 29 at
+                // B3"), and a crossing that is not there is said by that name.
                 clearedCrossings: term.Type == ProgressiveTerminatorType.AfterCrossingRunway
-                    ? new[] { new ClearedCrossing(runwayTarget, At: crossAtTaxiwayName, AtNodeId: crossAtHold?.NodeId ?? 0) }
+                    ? new[] { new ClearedCrossing(runwayTarget, At: crossAtHold?.Name ?? crossAtTaxiwayName, AtNodeId: crossAtHold?.NodeId ?? 0) }
                     : null);
 
             if (progError != null)
