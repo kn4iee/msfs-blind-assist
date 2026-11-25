@@ -3677,7 +3677,8 @@ public partial class TaxiGuidanceManager : IDisposable
         // "Slow down." and "Stop." are unconditional — fire regardless of current
         // speed so the pilot always gets the directive, even at very low taxi speeds.
         const double ktsToFps = 1852.0 * 3.28084 / 3600.0;
-        double outerDistFt    = Math.Clamp(_lastGroundSpeedKts * ktsToFps * 15.0, 300.0, 600.0);
+        // The outer tier is the one formula the Hold short key also judges a stop it puts back by.
+        double outerDistFt    = ClearedCrossingHolds.OuterCountdownFt(_lastGroundSpeedKts);
         double slowDownDistFt = Math.Clamp(_lastGroundSpeedKts * ktsToFps *  8.0, 150.0, 400.0);
         double stopDistFt     = Math.Clamp(_lastGroundSpeedKts * ktsToFps *  4.0,  50.0, 200.0);
 
@@ -4732,8 +4733,9 @@ public partial class TaxiGuidanceManager : IDisposable
     /// with every runway it was placed with, and says so with the distance along the route. Its crossing leaves
     /// <c>_clearedCrossings</c> (a new list: replaced, never mutated), so a recalculation never clears it again; a line
     /// the segment jump said early gets the cursor back onto its segment; when it is the current segment or the aircraft
-    /// holds there, the three countdown latches start fresh, so it is counted down and held like any stop (while taxiing
-    /// the key's sentence is its first call: the outer call would only cut it off with the same distance), and another
+    /// holds there, the three countdown latches start fresh, so it is counted down and held like any stop (while taxiing,
+    /// within the outer call's distance, the key's sentence is its first call: the outer call would only cut it off with
+    /// the same distance; further out the outer call still comes, <see cref="ClearedCrossingHolds.RestoreSaysOuterCall"/>), and another
     /// stop's countdown is never touched; a stop the aircraft holds at stages its runways
     /// afresh, one Continue each [HLD-11]; the incursion watch's latch for that node is lifted, so its crossing is said
     /// after the Continue that releases it; and the line is no longer "passed". Then the window is told which crossings
@@ -4773,8 +4775,11 @@ public partial class TaxiGuidanceManager : IDisposable
             string cue = ComposeHoldEntry(startHold ? _route.StartHoldRunway : _route.Segments[decision.SegmentIndex].HoldShortRunway);
             if (startHold && LastRouteStartHoldCue != null) LastRouteStartHoldCue = cue;
         }
-        else if (ownSegment && _state == TaxiGuidanceState.Taxiing)
+        else if (ownSegment && _state == TaxiGuidanceState.Taxiing
+                 && ClearedCrossingHolds.RestoreSaysOuterCall(decision.Metres, _lastGroundSpeedKts))
         {
+            // Inside the outer call's distance the key's sentence is that call; further out the outer call still comes
+            // as the heads-up, so the first call is never "Slow down".
             _holdShortOuterAnnounced = true;
         }
         if (_lastIncursionWarnedNodeId == stopNodeId) _lastIncursionWarnedNodeId = -1;

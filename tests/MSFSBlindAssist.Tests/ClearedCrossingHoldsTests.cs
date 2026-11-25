@@ -662,6 +662,89 @@ public class ClearedCrossingHoldsTests
         Assert.All(route.RunwayEvents, e => Assert.False(e.Cleared));
     }
 
+    // A pilot's runway pick retried after the clearing (RetryDeferredRunwayPicks runs after the pass that clears) can
+    // share a cleared stop and add its own runway to the label. Putting the stop back keeps that runway, so [HLD-11]
+    // stages it and the line names it: every part of the label the stop was placed with, then each part the stop's label
+    // carries now that the placed one lacks, split as RemainingLabel splits it (at " and runway ", by its first runway,
+    // either end).
+    [Theory]
+    [InlineData("runway 09", "runway 01", "runway 09 and runway 01")]
+    [InlineData("runway 09 and runway 01", "runway 01", "runway 09 and runway 01")]
+    [InlineData("runway 09 and runway 01", "runway 01 and runway 18", "runway 09 and runway 01 and runway 18")]
+    [InlineData("runway 09 and runway 01", "runway 19 and runway 18", "runway 09 and runway 01 and runway 18")]
+    [InlineData("runway 09", "runway 27", "runway 09")]
+    [InlineData("runway 06L at D5 and runway 02", "runway 02 and runway 06R", "runway 06L at D5 and runway 02 and runway 06R")]
+    [InlineData("runway 09", "", "runway 09")]
+    [InlineData("runway 09", null, "runway 09")]
+    [InlineData(null, "runway 01", "runway 01")]
+    [InlineData(null, null, null)]
+    public void RestoredLabel_keeps_a_runway_a_later_pick_added(string? placed, string? current, string? expected)
+        => Assert.Equal(expected, ClearedCrossingHolds.RestoredLabel(placed, current));
+
+    [Fact]
+    public void Restoring_a_stop_a_later_pick_shares_asks_for_every_runway()
+    {
+        // Cleared whole, then a pick's stop placed there as PlaceHold places one at a stop that is no hold short.
+        var route = AcrossOnA();
+        Pass(route, Runway09());
+        Clear(route, new ClearedCrossing("09"));
+        var stop = route.Segments[0];
+        stop.IsHoldShortPoint = true;
+        stop.HoldShortRunway = "runway 01";
+
+        Assert.True(ClearedCrossingHolds.RestoreAt(route, 0));
+
+        Assert.Equal("runway 09 and runway 01", stop.HoldShortRunway);
+        Assert.Equal(new[] { "09", "01" }, RunwayHoldStages.From(stop.HoldShortRunway));
+        Assert.Equal("Crossing runway 09 and runway 01.", TestCulture.Run("de-DE",
+            () => ClearedCrossingCallouts.AtTheLine(ClearedCrossingHolds.LineLabel(stop.HoldShortRunway, stop.ClearedRunways))));
+
+        // A shared stop cleared for one runway, a pick's runway added as PlaceHold shares a hold short.
+        var (shared, runways) = Intersection();
+        Pass(shared, runways);
+        Clear(shared, new ClearedCrossing("09"));
+        var both = shared.Segments[0];
+        both.HoldShortRunway = RouteRunwayCrossings.ComposeSharedLabel(both.HoldShortRunway, "18")!;
+        Assert.Equal("runway 01 and runway 18", both.HoldShortRunway);
+
+        Assert.True(ClearedCrossingHolds.RestoreAt(shared, 0));
+
+        Assert.Equal("runway 09 and runway 01 and runway 18", both.HoldShortRunway);
+        Assert.Equal(new[] { "09", "01", "18" }, RunwayHoldStages.From(both.HoldShortRunway));
+
+        // A start hold, the same.
+        var start = StartsHeld();
+        Pass(start, Runway09());
+        Clear(start, new ClearedCrossing("09"));
+        Assert.Null(start.StartHoldRunway);
+        start.StartHoldRunway = "runway 01";
+
+        Assert.True(ClearedCrossingHolds.RestoreStartHold(start));
+
+        Assert.Equal("runway 09 and runway 01", start.StartHoldRunway);
+    }
+
+    // A stop the Hold short key puts back on the current segment while taxiing: its sentence stands for the countdown's
+    // outer call only within that call's distance (the one formula the countdown uses: 15 s at the ground speed, 300 ft
+    // to 600 ft), where the outer call would cut it off with the same distance; further out the outer call still comes,
+    // as the heads-up, and the first call is never "Slow down".
+    [Theory]
+    [InlineData(0.0, 300.0)]
+    [InlineData(5.0, 300.0)]
+    [InlineData(15.0, 379.8)]
+    [InlineData(30.0, 600.0)]
+    public void The_outer_countdown_call_is_fifteen_seconds_out_between_300_and_600_feet(double kts, double feet)
+        => Assert.Equal(feet, ClearedCrossingHolds.OuterCountdownFt(kts), 1);
+
+    [Theory]
+    [InlineData(80.0, 0.0, true)]     // 262 ft: inside the 300 ft floor
+    [InlineData(92.0, 0.0, false)]    // 302 ft
+    [InlineData(150.0, 25.0, true)]   // 492 ft: inside 25 kt's 633 ft, capped to 600
+    [InlineData(185.0, 25.0, false)]  // 607 ft
+    [InlineData(300.0, 5.0, false)]
+    public void A_stop_put_back_latches_the_outer_call_only_within_its_distance(double metres, double kts, bool latched)
+        => Assert.Equal(latched, ClearedCrossingHolds.RestoreSaysOuterCall(metres, kts));
+
     [Fact]
     public void ClearAt_refuses_a_stop_off_the_route_or_one_already_cleared()
     {

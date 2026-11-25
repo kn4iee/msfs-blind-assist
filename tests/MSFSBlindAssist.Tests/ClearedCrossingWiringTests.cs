@@ -157,6 +157,8 @@ public class ClearedCrossingWiringTests
         int first = countdown.IndexOf("bool firstCall = ", StringComparison.Ordinal);
         int latch = countdown.IndexOf("if (distFeet < stopDistFt)", StringComparison.Ordinal);
         Assert.True(first >= 0 && latch > first, "firstCall must be read before the tiers are latched");
+        // The outer call's distance is the ONE formula the Hold short key judges its restore by.
+        Assert.Contains("double outerDistFt    = ClearedCrossingHolds.OuterCountdownFt(_lastGroundSpeedKts);", countdown);
     }
 
     // [STR-5] The advance never passes a cleared line in silence: AdvanceSegment (the waypoint capture and the
@@ -433,6 +435,9 @@ public class ClearedCrossingWiringTests
         int moved = back.IndexOf("_currentSegmentIndex = decision.CursorIndex;", StringComparison.Ordinal);
         int own = back.IndexOf("bool ownSegment = ", StringComparison.Ordinal);
         Assert.True(moved >= 0 && own > moved, "the restored stop's own segment is judged after the cursor moves");
+        // While taxiing the key's sentence stands for the outer call only within that call's distance; further out the
+        // outer call still comes as the heads-up (the first call is never "Slow down").
+        Assert.Matches(@"else if \(ownSegment && _state == TaxiGuidanceState\.Taxiing\s+&& ClearedCrossingHolds\.RestoreSaysOuterCall\(decision\.Metres, _lastGroundSpeedKts\)\)\s+\{\s+(//[^\n]*\n\s+)*_holdShortOuterAnnounced = true;", back);
         Assert.Contains("ComposeHoldEntry(", back);
         Assert.Contains("if (_lastIncursionWarnedNodeId == stopNodeId) _lastIncursionWarnedNodeId = -1;", back);
         Assert.Contains("if (_passedClearedNodeId == stopNodeId) ForgetPassedClearedLine();", back);

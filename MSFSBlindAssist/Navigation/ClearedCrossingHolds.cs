@@ -198,8 +198,9 @@ public static class ClearedCrossingHolds
     }
 
     /// <summary>
-    /// Puts back every runway cleared at segment <paramref name="segmentIndex"/>'s stop: its placed label, a hold
-    /// short again, and its events no longer cleared. False when nothing was cleared there.
+    /// Puts back every runway cleared at segment <paramref name="segmentIndex"/>'s stop: its placed label, with any
+    /// runway a later pick added to the stop kept (<see cref="RestoredLabel"/>), a hold short again, and its events no
+    /// longer cleared. False when nothing was cleared there.
     /// </summary>
     public static bool RestoreAt(TaxiRoute route, int segmentIndex)
     {
@@ -207,7 +208,7 @@ public static class ClearedCrossingHolds
         var segment = route.Segments[segmentIndex];
         if (segment.ClearedRunways.Count == 0) return false;
 
-        segment.HoldShortRunway = segment.PlacedHoldLabel;
+        segment.HoldShortRunway = RestoredLabel(segment.PlacedHoldLabel, segment.IsHoldShortPoint ? segment.HoldShortRunway : null);
         segment.IsHoldShortPoint = true;
         segment.ClearedRunways.Clear();
         segment.PlacedHoldLabel = null;
@@ -215,6 +216,58 @@ public static class ClearedCrossingHolds
             if (e != null && e.StopNodeIndex == segmentIndex + 1) e.Cleared = false;
         return true;
     }
+
+    /// <summary>
+    /// The label a stop is put back with: every part of <paramref name="placedLabel"/>, the label it was placed with,
+    /// then each part <paramref name="currentLabel"/> carries that the placed label lacks, joined with <c>" and "</c>.
+    /// A pilot's runway pick retried after the clearing (RetryDeferredRunwayPicks runs after the pass that clears) can
+    /// share a cleared stop and add its own runway to it; the restore keeps that runway, so it is still staged, one
+    /// Continue each ([HLD-11]), and said at the line. Split as <see cref="RemainingLabel"/> splits, at
+    /// <c>" and runway "</c>: a part naming a runway is lacked when no placed part names that runway first (either end), a
+    /// part naming none when no placed part reads the same. The placed label alone when the current one adds nothing
+    /// (a stop partly cleared carries only placed parts); the current one when nothing was placed.
+    /// </summary>
+    public static string? RestoredLabel(string? placedLabel, string? currentLabel)
+    {
+        if (string.IsNullOrWhiteSpace(placedLabel)) return string.IsNullOrWhiteSpace(currentLabel) ? placedLabel : currentLabel;
+        if (string.IsNullOrWhiteSpace(currentLabel)) return placedLabel;
+
+        var placedParts = LabelParts(placedLabel);
+        var added = new List<string>();
+        foreach (string part in LabelParts(currentLabel))
+        {
+            if (string.IsNullOrWhiteSpace(part)) continue;
+            bool lacked = RouteRunwayCrossings.ExtractRunwayDesignator(part) is string first
+                ? !placedParts.Any(p => RouteRunwayCrossings.ExtractRunwayDesignator(p) is string placedFirst && SameRunway(placedFirst, first))
+                : !placedParts.Any(p => string.Equals(p.Trim(), part.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (lacked) added.Add(part.Trim());
+        }
+        return added.Count == 0 ? placedLabel : placedLabel + " and " + string.Join(" and ", added);
+    }
+
+    // Knots to feet per second.
+    private const double KtsToFps = 1852.0 * 3.28084 / 3600.0;
+    private const double MetresToFeet = 3.28084;
+
+    /// <summary>
+    /// The hold-short countdown's outer call (the heads-up), in feet from the stop: 15 s at
+    /// <paramref name="groundSpeedKts"/>, never under 300 ft nor over 600 ft. The ONE formula: the countdown's own
+    /// tier (TaxiGuidanceManager's CheckHoldShortCountdown) and the Hold short key's restore
+    /// (<see cref="RestoreSaysOuterCall"/>) both use it.
+    /// </summary>
+    public static double OuterCountdownFt(double groundSpeedKts)
+        => Math.Clamp(groundSpeedKts * KtsToFps * 15.0, 300.0, 600.0);
+
+    /// <summary>
+    /// Whether the Hold short key's sentence for a stop it puts back on the current segment while taxiing stands for that
+    /// stop's outer countdown call (so the outer call is latched): only within the outer call's distance
+    /// (<see cref="OuterCountdownFt"/>), where that call would only cut the sentence off with the same distance.
+    /// Further out the outer call still comes, as the heads-up, and the countdown's first call is never "Slow down".
+    /// <paramref name="stopDistanceM"/> is the key's own distance to the stop, unit-native (straight to the current
+    /// segment's end).
+    /// </summary>
+    public static bool RestoreSaysOuterCall(double stopDistanceM, double groundSpeedKts)
+        => stopDistanceM * MetresToFeet < OuterCountdownFt(groundSpeedKts);
 
     /// <summary>
     /// <paramref name="placedLabel"/> with each cleared runway's part removed: the label is split at
@@ -260,13 +313,13 @@ public static class ClearedCrossingHolds
         => route is not null && route.StartHoldClearedRunways.Count > 0;
 
     /// <summary>
-    /// Puts back every runway cleared at the start hold: its placed label, and its events (stop node 0) no longer
-    /// cleared. False when nothing was cleared there.
+    /// Puts back every runway cleared at the start hold: its placed label, with any runway a later pick added kept
+    /// (<see cref="RestoredLabel"/>), and its events (stop node 0) no longer cleared. False when nothing was cleared there.
     /// </summary>
     public static bool RestoreStartHold(TaxiRoute route)
     {
         if (!IsStartHoldCleared(route)) return false;
-        route.StartHoldRunway = route.PlacedStartHoldLabel;
+        route.StartHoldRunway = RestoredLabel(route.PlacedStartHoldLabel, route.StartHoldRunway);
         route.StartHoldClearedRunways.Clear();
         route.PlacedStartHoldLabel = null;
         MarkCleared(route, 0, runway: null, cleared: false);
