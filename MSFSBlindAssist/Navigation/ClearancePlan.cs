@@ -95,7 +95,7 @@ public static class ClearancePlanner
         var crossings = new List<ClearedCrossing>();
         var toCross = new List<string>();
         // Per step: the index in the sequence of the last Via-kind step at or before it (-1: none).
-        var seqIndexOf = new int[steps.Count];
+        int[] seqIndexOf = SeqIndices(steps);
 
         for (int i = 0; i < steps.Count; i++)
         {
@@ -106,61 +106,29 @@ public static class ClearancePlanner
                 if (step.Kind == ClearanceStepKind.LeftOnto) picks[sequence.Count] = TurnSide.Left;
                 else if (step.Kind == ClearanceStepKind.RightOnto) picks[sequence.Count] = TurnSide.Right;
                 sequence.Add(step.Name);
-                seqIndexOf[i] = sequence.Count - 1;
                 continue;
             }
 
-            int seqIndex = sequence.Count - 1;
-            seqIndexOf[i] = seqIndex;
             if (step.Kind != ClearanceStepKind.Cross) continue;
             if (step.TargetKind == ClearanceTargetKind.Taxiway)
                 toCross.Add(step.Name);
             else if (step.TargetKind == ClearanceTargetKind.Runway)
                 // Looked for from the taxiway it was entered after.
-                crossings.Add(new ClearedCrossing(step.Name, step.At, step.AtNodeId, SeqIndex: seqIndex));
+                crossings.Add(new ClearedCrossing(step.Name, step.At, step.AtNodeId, SeqIndex: seqIndexOf[i]));
         }
 
         // How the leg ends.
-        ClearanceEndKind end = ClearanceEndKind.EndOfTaxiway;
-        int endIndex = -1;
-        if (hasDestination)
-        {
-            end = ClearanceEndKind.Destination;
-        }
-        else if (steps.Count > 0)
-        {
-            int limit = -1;
-            for (int i = 0; i < steps.Count && !steps[i].IsVia; i++)
-            {
-                if (steps[i].Kind == ClearanceStepKind.HoldShort) { limit = i; break; }
-            }
-            if (limit < 0 && steps[^1].Kind == ClearanceStepKind.HoldShort)
-                limit = steps.Count - 1;
-
-            var last = steps[^1];
-            if (limit >= 0)
-            {
-                endIndex = limit;
-                end = steps[limit].TargetKind switch
-                {
-                    ClearanceTargetKind.Runway => ClearanceEndKind.HoldShortRunway,
-                    ClearanceTargetKind.Taxiway => ClearanceEndKind.HoldShortTaxiway,
-                    _ => ClearanceEndKind.HoldAtNamedPoint,
-                };
-            }
-            else if (last.Kind == ClearanceStepKind.Cross && last.TargetKind == ClearanceTargetKind.Runway)
-            {
-                endIndex = steps.Count - 1;
-                end = ClearanceEndKind.AcrossRunway;
-            }
-            else if (last.IsVia)
-            {
-                endIndex = steps.Count - 1;
-                end = ClearanceEndKind.EndOfTaxiway;
-            }
-            // Otherwise the last step is Cross taxiway: refused below, with no end step.
-        }
+        int endIndex = EndIndex(steps, hasDestination);
         ClearanceStep? endStep = endIndex >= 0 ? steps[endIndex] : null;
+        ClearanceEndKind end = hasDestination ? ClearanceEndKind.Destination : endStep switch
+        {
+            { Kind: ClearanceStepKind.HoldShort, TargetKind: ClearanceTargetKind.Runway } => ClearanceEndKind.HoldShortRunway,
+            { Kind: ClearanceStepKind.HoldShort, TargetKind: ClearanceTargetKind.Taxiway } => ClearanceEndKind.HoldShortTaxiway,
+            { Kind: ClearanceStepKind.HoldShort } => ClearanceEndKind.HoldAtNamedPoint,
+            { Kind: ClearanceStepKind.Cross } => ClearanceEndKind.AcrossRunway,
+            // A Via-kind last step; or no end at all (no steps, or a last step Cross taxiway), refused below.
+            _ => ClearanceEndKind.EndOfTaxiway,
+        };
 
         // The stops on the way.
         var holds = new List<ClearanceHold>();
@@ -168,9 +136,8 @@ public static class ClearancePlanner
         {
             var step = steps[i];
             if (step.Kind != ClearanceStepKind.HoldShort || i == endIndex) continue;
-            if (hasDestination && step.TargetKind == ClearanceTargetKind.Runway
-                && !string.IsNullOrWhiteSpace(destinationRunway) && ClearanceRunways.Same(step.Name, destinationRunway))
-                continue;   // "Hold short of" the departure runway, as the built-in ATC says it: already the end.
+            // "Hold short of" the departure runway, as the built-in ATC says it: already the end, adds nothing.
+            if (IsDestinationRunwayHold(step, hasDestination, destinationRunway)) continue;
             holds.Add(new ClearanceHold(seqIndexOf[i], step));
         }
 
@@ -197,7 +164,7 @@ public static class ClearancePlanner
         }
 
         return new ClearancePlan(sequence, holds, crossings, picks, toCross, end, endStep,
-                                 Refusal(steps, hasDestination, endIndex))
+                                 Refusal(steps, hasDestination, destinationRunway, endIndex))
         {
             LegEndCrossedTaxiways = legEndCrossed,
             CrossAtHoldingPointNodeId = pinNodeId,
@@ -205,23 +172,66 @@ public static class ClearancePlanner
         };
     }
 
+    /// <summary>
+    /// Per step, the index in the taxiway sequence of the last Via-kind step at or before it: a Via-kind step's own
+    /// index, any other step's <see cref="ClearanceHold.SeqIndex"/> (-1 when no Via-kind step comes before it).
+    /// </summary>
+    internal static int[] SeqIndices(IReadOnlyList<ClearanceStep> steps)
+    {
+        var seqIndexOf = new int[steps.Count];
+        int seq = -1;
+        for (int i = 0; i < steps.Count; i++)
+        {
+            if (steps[i].IsVia) seq++;
+            seqIndexOf[i] = seq;
+        }
+        return seqIndexOf;
+    }
+
+    /// <summary>
+    /// The index of the step that ends a leg with no destination: the limit, the first Hold short step entered
+    /// before any Via-kind step; else the last step, when it is a Hold short, a Cross runway or a Via-kind step.
+    /// -1 with a destination, with no steps, or when the last step is Cross taxiway (a leg with no end).
+    /// </summary>
+    internal static int EndIndex(IReadOnlyList<ClearanceStep> steps, bool hasDestination)
+    {
+        if (hasDestination || steps.Count == 0) return -1;
+        for (int i = 0; i < steps.Count && !steps[i].IsVia; i++)
+        {
+            if (steps[i].Kind == ClearanceStepKind.HoldShort) return i;
+        }
+        var last = steps[^1];
+        bool ends = last.Kind == ClearanceStepKind.HoldShort || last.IsVia
+                    || last is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway };
+        return ends ? steps.Count - 1 : -1;
+    }
+
+    /// <summary>A Hold short step naming the destination runway (either end): accepted, and adds nothing.</summary>
+    private static bool IsDestinationRunwayHold(ClearanceStep step, bool hasDestination, string? destinationRunway)
+        => hasDestination && step is { Kind: ClearanceStepKind.HoldShort, TargetKind: ClearanceTargetKind.Runway }
+           && !string.IsNullOrWhiteSpace(destinationRunway) && ClearanceRunways.Same(step.Name, destinationRunway);
+
     /// <summary>The first reason Calculate must refuse, in the brief's order; null when none applies.</summary>
-    private static string? Refusal(IReadOnlyList<ClearanceStep> steps, bool hasDestination, int endIndex)
+    private static string? Refusal(IReadOnlyList<ClearanceStep> steps, bool hasDestination, string? destinationRunway,
+                                   int endIndex)
     {
         if (steps.Count == 0 && !hasDestination)
             return "Enter a step, or choose a destination.";
 
-        if (!hasDestination && steps.Count > 0
-            && steps[^1] is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Taxiway } lastCross)
-            return $"A leg cannot end on cross taxiway {lastCross.Name}. Add where to hold short, or the next taxiway.";
+        // A leg with no destination and no end: its last step is Cross taxiway and no limit was said first.
+        if (!hasDestination && endIndex < 0)
+            return $"A leg cannot end on cross taxiway {steps[^1].Name}. Add where to hold short, or the next taxiway.";
 
+        // The same crossing entered as both: the same runway (either end) at the same place, where both name one.
+        // A Hold short of the destination runway is accepted and adds nothing, so it is never a second crossing.
         foreach (var cross in steps)
         {
             if (cross is not { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }) continue;
             foreach (var hold in steps)
             {
                 if (hold is { Kind: ClearanceStepKind.HoldShort, TargetKind: ClearanceTargetKind.Runway }
-                    && ClearanceRunways.Same(cross.Name, hold.Name))
+                    && !IsDestinationRunwayHold(hold, hasDestination, destinationRunway)
+                    && ClearanceRunways.Same(cross.Name, hold.Name) && ClearanceRunways.SamePlace(cross, hold))
                     return $"Runway {cross.Name} is entered both as a crossing and as a hold short. Remove one.";
             }
         }
@@ -300,67 +310,139 @@ public static class ClearanceRouteChecks
 }
 
 /// <summary>
-/// The step list trimmed to what is still ahead while a route is active (spec 8.2): finished Via steps go, runway
-/// steps whose runway is behind go, a crossing put back becomes a hold short, and a turn already made reads as Via
-/// so a later Calculate never judges it again from the aircraft's heading ([TURN-3]).
+/// The step list trimmed to what is still ahead while a route is active (spec 8.2: only completed steps are dropped;
+/// a step whose state cannot be known stays). Finished Via steps go; a Cross runway or Hold short step goes only when
+/// guidance's records say it is behind; a crossing put back becomes a hold short at its place; a turn already made
+/// reads as Via, so a later Calculate never judges it again from the aircraft's heading ([TURN-3]). Judged from
+/// RECORDS, never runway names: one runway can be cleared at two places, or crossed twice.
 /// </summary>
 public static class ClearanceTrim
 {
     /// <summary>
-    /// The steps still ahead. The first <paramref name="viaStepsDone"/> Via-kind steps are dropped with every step
-    /// before the last of them. Then, when <paramref name="turnOntoFirstRemainingMade"/>, the first remaining Via-kind
-    /// step, if a Left onto or Right onto, becomes a Via step for the same taxiway (a turn ahead, or one the aircraft
-    /// is in the middle of, stays a turn). Of what remains, runways compared after
-    /// <see cref="RouteRunwayCrossings.NormalizeDesignator"/>, either end: a Cross runway step whose runway is not in
-    /// <paramref name="runwaysAhead"/> is dropped (crossed); one ahead but not in <paramref name="clearedAhead"/>
-    /// becomes a Hold short step for that runway (its stop was put back); a Hold short runway step whose runway is
-    /// not ahead is dropped. Every other step stays.
+    /// The steps still ahead, from <paramref name="steps"/> as last calculated (the numbering the records carry).
+    /// <list type="bullet">
+    /// <item>The first <paramref name="viaStepsDone"/> Via-kind steps are dropped; then, when
+    /// <paramref name="turnOntoFirstRemainingMade"/>, the first remaining Via-kind step, if a Left onto or Right onto,
+    /// becomes a Via step for the same taxiway (a turn ahead, or one the aircraft is in the middle of, stays a turn).</item>
+    /// <item>A Cross runway step is matched to ONE record (in route order: <paramref name="clearedUsed"/>, then
+    /// <paramref name="putBack"/>, then <paramref name="clearedInForce"/>) by runway (either end), by its own Via-step
+    /// index (the record's <see cref="ClearedCrossing.SeqIndex"/>) and, where both have one, its place (<c>At</c>,
+    /// <c>AtNodeId</c>): used, dropped (its crossing is behind); put back, it becomes "Hold short of runway R" at the
+    /// same place; in force, kept. A record a Continue cleared (<see cref="ClearedBy.Continue"/>) never matches.</item>
+    /// <item>A Hold short step is dropped only when matched to one of <paramref name="holdsPassed"/> (the same
+    /// target, Via-step index and place).</item>
+    /// <item>Every other step stays, and so does any step with no match: its state is unknown.</item>
+    /// <item>The step that ends a leg with no destination (<paramref name="hasDestination"/> false), a limit said
+    /// first included, is never dropped; a put-back crossing there still becomes its hold short.</item>
+    /// </list>
     /// </summary>
-    public static List<ClearanceStep> Remaining(IReadOnlyList<ClearanceStep> steps, int viaStepsDone,
-        IReadOnlySet<string> runwaysAhead, IReadOnlySet<string> clearedAhead, bool turnOntoFirstRemainingMade)
+    public static List<ClearanceStep> Remaining(IReadOnlyList<ClearanceStep> steps, int viaStepsDone, bool hasDestination,
+        // Tasks 3 and 7 supply these four lists from guidance (cleared crossings in force, used at their line, put back
+        // by the Hold short key, and the pilot's own stops already passed), numbered as the plan they were loaded from.
+        IReadOnlyList<ClearedCrossing> clearedInForce, IReadOnlyList<ClearedCrossing> clearedUsed,
+        IReadOnlyList<ClearedCrossing> putBack, IReadOnlyList<ClearanceHold> holdsPassed,
+        bool turnOntoFirstRemainingMade)
     {
         var result = new List<ClearanceStep>();
         if (steps == null) return result;
 
-        int start = 0, dropped = 0;
-        for (int i = 0; i < steps.Count && dropped < viaStepsDone; i++)
-        {
-            if (!steps[i].IsVia) continue;
-            dropped++;
-            start = i + 1;
-        }
+        int[] seqIndexOf = ClearancePlanner.SeqIndices(steps);
+        int endIndex = ClearancePlanner.EndIndex(steps, hasDestination);
+        var used = new Records<ClearedCrossing>(clearedUsed);
+        var restored = new Records<ClearedCrossing>(putBack);
+        var inForce = new Records<ClearedCrossing>(clearedInForce);
+        var passed = new Records<ClearanceHold>(holdsPassed);
 
-        var rest = new List<ClearanceStep>();
-        for (int i = start; i < steps.Count; i++) rest.Add(steps[i]);
-
-        if (turnOntoFirstRemainingMade)
+        int viaDropped = 0;
+        bool firstViaSeen = false;
+        for (int i = 0; i < steps.Count; i++)
         {
-            int firstVia = rest.FindIndex(s => s.IsVia);
-            if (firstVia >= 0 && rest[firstVia].Kind is ClearanceStepKind.LeftOnto or ClearanceStepKind.RightOnto)
-                rest[firstVia] = rest[firstVia] with { Kind = ClearanceStepKind.Via };
-        }
+            var step = steps[i];
+            int seq = seqIndexOf[i];
+            bool isEnd = i == endIndex;
 
-        var ahead = ClearanceRunways.NormalizedSet(runwaysAhead);
-        var cleared = ClearanceRunways.NormalizedSet(clearedAhead);
-        foreach (var step in rest)
-        {
-            if (step.TargetKind == ClearanceTargetKind.Runway && step.Kind == ClearanceStepKind.Cross)
+            if (step.IsVia)
             {
-                if (!ClearanceRunways.In(ahead, step.Name)) continue;
-                if (!ClearanceRunways.In(cleared, step.Name))
+                if (viaDropped < viaStepsDone)
                 {
-                    result.Add(step with { Kind = ClearanceStepKind.HoldShort, At = null, AtNodeId = 0 });
-                    continue;
+                    viaDropped++;
+                    if (!isEnd) continue;
                 }
-            }
-            else if (step.TargetKind == ClearanceTargetKind.Runway && step.Kind == ClearanceStepKind.HoldShort
-                     && !ClearanceRunways.In(ahead, step.Name))
-            {
+                if (!firstViaSeen && turnOntoFirstRemainingMade
+                    && step.Kind is ClearanceStepKind.LeftOnto or ClearanceStepKind.RightOnto)
+                    step = step with { Kind = ClearanceStepKind.Via };
+                firstViaSeen = true;
+                result.Add(step);
                 continue;
             }
+
+            if (step is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway })
+            {
+                if (used.Take(r => CrossingMatches(r, step, seq)))
+                {
+                    if (isEnd) result.Add(step);   // the leg ends just across it: still the end
+                    continue;
+                }
+                if (restored.Take(r => CrossingMatches(r, step, seq)))
+                {
+                    result.Add(step with { Kind = ClearanceStepKind.HoldShort });   // keeps its At, AtNodeId
+                    continue;
+                }
+                inForce.Take(r => CrossingMatches(r, step, seq));
+                result.Add(step);
+                continue;
+            }
+
+            if (step.Kind == ClearanceStepKind.HoldShort && !isEnd
+                && passed.Take(h => h.SeqIndex == seq && SameTarget(h.Step, step)))
+                continue;
+
             result.Add(step);
         }
         return result;
+    }
+
+    // A clearance record for this Cross runway step: the same runway (either end), entered after the same Via step,
+    // at the same place where both name one. Continue-cleared records stand for no step.
+    private static bool CrossingMatches(ClearedCrossing record, ClearanceStep step, int seqIndex)
+        => record.Origin == ClearedBy.Clearance && record.SeqIndex == seqIndex
+           && ClearanceRunways.Same(record.Runway, step.Name)
+           && ClearanceRunways.SamePlace(record.At, record.AtNodeId, step.At, step.AtNodeId);
+
+    // The same Hold short target: kind, name (a runway by either end), a holding point's node, and place.
+    private static bool SameTarget(ClearanceStep a, ClearanceStep b)
+    {
+        if (a.Kind != ClearanceStepKind.HoldShort || a.TargetKind != b.TargetKind) return false;
+        bool sameName = a.TargetKind == ClearanceTargetKind.Runway
+            ? ClearanceRunways.Same(a.Name, b.Name)
+            : string.Equals(a.Name.Trim(), b.Name.Trim(), StringComparison.OrdinalIgnoreCase);
+        if (!sameName) return false;
+        if (a.NodeId != 0 && b.NodeId != 0 && a.NodeId != b.NodeId) return false;
+        return ClearanceRunways.SamePlace(a, b);
+    }
+
+    // A list of records each step may claim once, in order.
+    private sealed class Records<T>
+    {
+        private readonly IReadOnlyList<T> _items;
+        private readonly bool[] _taken;
+
+        public Records(IReadOnlyList<T>? items)
+        {
+            _items = items ?? Array.Empty<T>();
+            _taken = new bool[_items.Count];
+        }
+
+        public bool Take(Func<T, bool> matches)
+        {
+            for (int i = 0; i < _items.Count; i++)
+            {
+                if (_taken[i] || !matches(_items[i])) continue;
+                _taken[i] = true;
+                return true;
+            }
+            return false;
+        }
     }
 
     /// <summary>
@@ -398,23 +480,20 @@ internal static class ClearanceRunways
         return na == nb || Normalize(RouteRunwayCrossings.Reciprocal(na)) == nb;
     }
 
-    public static HashSet<string> NormalizedSet(IReadOnlySet<string>? names)
+    /// <summary>
+    /// True unless the two places are known to differ: compared only where both have one, the node
+    /// (<c>AtNodeId</c>, a holding point) and the name (<c>At</c>, any case). No place matches any place.
+    /// </summary>
+    public static bool SamePlace(string? atA, int atNodeA, string? atB, int atNodeB)
     {
-        var set = new HashSet<string>(StringComparer.Ordinal);
-        if (names == null) return set;
-        foreach (string name in names)
-        {
-            string n = Normalize(name);
-            if (n.Length > 0) set.Add(n);
-        }
-        return set;
+        if (atNodeA != 0 && atNodeB != 0 && atNodeA != atNodeB) return false;
+        if (!string.IsNullOrWhiteSpace(atA) && !string.IsNullOrWhiteSpace(atB)
+            && !string.Equals(atA.Trim(), atB.Trim(), StringComparison.OrdinalIgnoreCase))
+            return false;
+        return true;
     }
 
-    /// <summary>True when the runway <paramref name="name"/> (either end) is in a <see cref="NormalizedSet"/>.</summary>
-    public static bool In(HashSet<string> normalized, string? name)
-    {
-        string n = Normalize(name);
-        if (n.Length == 0) return false;
-        return normalized.Contains(n) || normalized.Contains(Normalize(RouteRunwayCrossings.Reciprocal(n)));
-    }
+    /// <summary><see cref="SamePlace(string?, int, string?, int)"/> for two steps' "at".</summary>
+    public static bool SamePlace(ClearanceStep a, ClearanceStep b) => SamePlace(a.At, a.AtNodeId, b.At, b.AtNodeId);
+
 }
