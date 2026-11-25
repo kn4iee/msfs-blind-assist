@@ -20,6 +20,10 @@ using MSFSBlindAssist.Settings;
 //     --clear-first-crossing  taxi, turnpicks: every flight is flown again with the first runway its route
 //                           crosses cleared (LoadRoute's clearedCrossings), and checked: no stop there, the
 //                           crossing counted down and named at its line, every other stop still made
+//     --crossing-keys       taxi, turnpicks: every flight is flown three times more at its first crossing:
+//                           Continue right after the first countdown call (no stop, its line once); cleared,
+//                           the Hold short key right after the first "cleared to cross" (a stop there, never
+//                           on a runway); cleared, the Hold short key just past the line ("Past the hold line")
 //     --icao A,B,C          explicit airport list (overrides --airports)
 //     --shard i/n           run only airports i, i+n, i+2n … (for parallel processes)
 //     --taxi-per-airport K  gate→runway and exit→gate routes per airport (default 6)
@@ -90,6 +94,8 @@ StreamWriter? legendCsv = null;
 // cleared twin is compared with, and that twin's own record.
 List<int>? lastFlightHoldNodes = null;
 XcFlight? lastFlightXc = null;
+// --crossing-keys: the key flight FlyTaxi flew last.
+KeyFlight? lastFlightKeys = null;
 #endif
 
 if (opt.Trace != null) { captureLog = true; RunTrace(opt.Trace); return 0; }
@@ -447,14 +453,47 @@ void RunTaxis(World w)
         Codes("TAXI", w.Icao, plan.Describe, FlyTaxi(w, plan, withClearance: false, trace: false));
 #if !OLDAPP
         if (opt.ClearFirstCrossing) FlyClearedFirstCrossing(w, plan, withClearance: false, "TAXI_XC", plan.Describe);
+        if (opt.CrossingKeys) FlyCrossingKeys(w, plan, withClearance: false, "TAXI", plan.Describe);
 #endif
         Codes("TAXI_CLR", w.Icao, plan.Describe, FlyTaxi(w, plan, withClearance: true, trace: false));
 #if !OLDAPP
         if (opt.ClearFirstCrossing) FlyClearedFirstCrossing(w, plan, withClearance: true, "TAXI_CLR_XC", plan.Describe);
+        if (opt.CrossingKeys) FlyCrossingKeys(w, plan, withClearance: true, "TAXI_CLR", plan.Describe);
 #endif
         taxis += 2;
     }
 }
+
+#if !OLDAPP
+// ── The crossing keys (--crossing-keys) ──────────────────────────────────────
+// The flight FlyTaxi has just flown, flown three times more at its first crossing (KeyFlight): EARLY, nothing cleared,
+// Continue (Input Y) pressed right after the first countdown call for that stop; HOLD, the crossing cleared at load (as
+// --clear-first-crossing), the Hold short key (Input Alt+Y) pressed right after the first "… cleared to cross."; PAST,
+// cleared, the key pressed just past the line. Each its own CODES kind (kind + "_KEY_" + variant) and KEYS| line; a
+// plan whose first crossing the variant cannot be flown at is counted ("~keys VARIANT skipped: why"), not flown.
+void FlyCrossingKeys(World w, TaxiPlan plan, bool withClearance, string kind, string key)
+{
+    foreach (string variant in new[] { KeyFlight.Early, KeyFlight.Hold, KeyFlight.Past })
+    {
+        plan.KeyVariant = variant;
+        plan.ClearFirstCrossing = variant != KeyFlight.Early;
+        try
+        {
+            var fs = FlyTaxi(w, plan, withClearance, trace: false);
+            if (lastFlightKeys is not { } kf) continue;   // not traced
+            if (kf.Skip.Length == 0 && !kf.Flown) kf.Skip = "not flown";   // the clearance's own probe found no route
+            string ckey = "~keys " + variant + " " + (kf.Skip.Length > 0 ? "skipped: " + kf.Skip : kf.Outcome(fs));
+            counts[ckey] = counts.TryGetValue(ckey, out int c) ? c + 1 : 1;
+            if (kf.Skip.Length > 0) continue;
+            taxis++;
+            resultsWriter?.WriteLine($"KEYS|{kind}_KEY_{variant}|{w.Icao}|{key}|{kf.ResultFields()}");
+            if (depTraceFilter != null) { Console.WriteLine("KEYS " + kf.ResultFields()); foreach (var f in fs) Console.WriteLine("FINDING " + f); }
+            Codes($"{kind}_KEY_{variant}", w.Icao, key, fs);
+        }
+        finally { plan.KeyVariant = null; plan.ClearFirstCrossing = false; plan.ClearedCrossings = null; plan.XcBaseHoldNodes = null; }
+    }
+}
+#endif
 
 #if !OLDAPP
 // ── Cleared crossings (--clear-first-crossing) ───────────────────────────────
@@ -570,6 +609,7 @@ void RunTurnPicks(World w)
         string key = plan.Describe + " via " + string.Join(",", seq);
         Codes("TURN_BASE", w.Icao, key, FlyTaxi(w, plan, withClearance: false, trace: false)); taxis++;
         if (opt.ClearFirstCrossing) FlyClearedFirstCrossing(w, plan, withClearance: false, "TURN_BASE_XC", key);
+        if (opt.CrossingKeys) FlyCrossingKeys(w, plan, withClearance: false, "TURN_BASE", key);
         for (int row = 0; row < seq.Count; row++)
         {
             int met = 0;
@@ -638,6 +678,8 @@ void RunTurnPicks(World w)
                             else counts["~xc excursion: no junction before the turn"] = counts.TryGetValue("~xc excursion: no junction before the turn", out int nd) ? nd + 1 : 1;
                         }
                     }
+                    // After the cleared flights, which compare with the stops of the flight just before them.
+                    if (opt.CrossingKeys) FlyCrossingKeys(w, plan, withClearance: false, "TURN_" + outcome, pk);
                     if (ChartedWayAt(route!, baseRoute, applied!) is { } dv)
                     {
                         plan.DivertPath = dv.path; plan.DivertAt = dv.at;
@@ -2365,19 +2407,25 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
 {
     var found = new List<Finding>();
 #if !OLDAPP
-    lastFlightHoldNodes = null; lastFlightXc = null;
+    lastFlightHoldNodes = null; lastFlightXc = null; lastFlightKeys = null;
 #endif
     if (plan == null) return found;
     string where = plan.Describe + (withClearance ? " [clearance]" : "");
 #if !OLDAPP
     if (plan.FixedSeq != null) where += plan.PickSuffix();
     if (plan.ClearFirstCrossing) where += " [first crossing cleared]";
+    if (plan.KeyVariant != null) where += $" [{KeyFlight.Describe(plan.KeyVariant)}]";
 #endif
     if (depTraceFilter != null)
     {
         if (!where.Contains(depTraceFilter, StringComparison.OrdinalIgnoreCase)) return found;
         trace = true; Console.WriteLine("=== " + where);
     }
+#if !OLDAPP
+    // --crossing-keys: what this flight presses, where, and what came of it.
+    KeyFlight? keys = plan.KeyVariant == null ? null : new KeyFlight { Variant = plan.KeyVariant };
+    lastFlightKeys = keys;
+#endif
     var cap = new Cap(() => simNow);
     var mgr = new TaxiGuidanceManager(cap);
     try
@@ -2442,7 +2490,8 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             var first = FirstCrossing(firstLoad);
             if (first == null)
             {
-                counts["~xc no runway crossed"] = counts.TryGetValue("~xc no runway crossed", out int nc) ? nc + 1 : 1;
+                if (keys != null) keys.Skip = "no runway crossed";
+                else counts["~xc no runway crossed"] = counts.TryGetValue("~xc no runway crossed", out int nc) ? nc + 1 : 1;
                 if (trace) Console.WriteLine("=== no runway crossing on this route: nothing to clear");
                 return found;
             }
@@ -2455,11 +2504,37 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                 ? XcFlight.Setup(clearedLoad, first.Designator)
                 : new XcFlight { Runway = first.Designator, Outcome = "LOAD_REFUSED", Flown = true };
             lastFlightXc = xc;
+            // The Hold short key flights need a stop the clearing took off whole, counted down as cleared: not a start
+            // hold (no approach to count down), not a shared stop (it still holds for its other runway).
+            if (keys != null && xc.Outcome != "CLEARED")
+            {
+                keys.Skip = "first crossing " + xc.Outcome;
+                if (trace) Console.WriteLine($"=== first crossing {xc.Outcome}: no key flight");
+                return found;
+            }
+            if (keys != null) keys.SetStop(xc);
+        }
+        // Continue before the line needs the first crossing held by a stop of its own on a segment, for that runway
+        // alone (a shared stop keeps its other runway, [HLD-11]), that is not the pilot's own hold, and not on the
+        // route's last segment (CanClearEarly).
+        if (keys is { Variant: KeyFlight.Early } && err == null && mgr.RouteForHarness is { } earlyLoad)
+        {
+            string? why = KeyFlight.SetEarlyStop(keys, earlyLoad);
+            if (why != null)
+            {
+                keys.Skip = why;
+                if (trace) Console.WriteLine($"=== {why}: no key flight");
+                return found;
+            }
         }
 #endif
         var route = mgr.RouteForHarness;
         if (err != null || route == null)
         {
+#if !OLDAPP
+            // The same refusal is the plain flight's finding already: a key flight is not flown.
+            if (keys != null) { keys.Skip = "route refused"; return found; }
+#endif
             // The Taxi form's own refusals (announceSummary: true, as the form loads) — honest
             // "no route from here" answers, recorded so they can be read, not flown.
             found.Add(new Finding(w.Icao, withClearance ? "CLEARANCE_ROUTE_FAILED" : "TAXI_ROUTE_REFUSED", where, err ?? "no route"));
@@ -2571,6 +2646,7 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             legMid = ((legSeg.FromNode.Latitude + legSeg.ToNode.Latitude) / 2, (legSeg.FromNode.Longitude + legSeg.ToNode.Longitude) / 2);
         }
         var divert = plan.DivertPath; int divertIdx = 0; double divertStartOdo = -1; bool diverting = false, diverted = false, excursionPastEnd = false;
+        if (keys != null) keys.Flown = true;
 #endif
         while (t < budget)
         {
@@ -2614,6 +2690,7 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                 xc.Track(mgr.RouteForHarness, lat, lon);
                 if (trace && xc.Recalcs.Count > before) Console.WriteLine($"  {t,6:F1}s CLEARED-CROSSING ON THE NEW ROUTE: {xc.Recalcs[^1]}");
             }
+            if (keys?.Xc is { } kTrack && !ReferenceEquals(kTrack, xc)) kTrack.Track(mgr.RouteForHarness, lat, lon);
 #endif
             foreach (var a in saidNow)
             {
@@ -2630,7 +2707,10 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                 // shared stop still holds for its other runway, and that stop is the one the entry uses.
                 bool firstLine = xc != null && xc.Hear(a, lat, lon, mgr.RouteForHarness, mgr.SegmentIndexForHarness);
                 if (firstLine && t < 0.5) xc!.LineAtGuidanceStart = true;   // passed as guidance started: nothing to count down
-                if (firstLine && xc!.Outcome is "CLEARED" or "START")
+                // A key flight: the stop put back by the Hold short key is a stop again, and its hold is the entry's
+                // stop, not the line after its Continue; the stop Continue cleared early has its line stand in for it.
+                bool keyLine = keys?.Xc is { } kx && !ReferenceEquals(kx, xc) && kx.Hear(a, lat, lon, mgr.RouteForHarness, mgr.SegmentIndexForHarness);
+                if ((firstLine && (xc!.Outcome is "CLEARED" or "START") && !(keys is { Variant: KeyFlight.Hold, Restored: true })) || keyLine)
                 {
                     stops.Add(new HoldStop(odo, lat, lon, a, t));
                     lastHoldOdo = odo;
@@ -2650,6 +2730,22 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                 }
             }
             if (newStop != null) newStop.Text = lastHoldSpeech;
+#if !OLDAPP
+            // --crossing-keys: the key, pressed once while taxiing, in the frame of what triggers it, right after it was
+            // said. Its answer is heard on the next frame like any other line (put back into the capture).
+            if (keys is { Pressed: false } && st == TaxiGuidanceState.Taxiing && mgr.RouteForHarness is { } keyRoute
+                && keys.Triggered(saidNow, keyRoute, mgr.SegmentIndexForHarness, lat, lon))
+            {
+                keys.Press(t, lat, lon, keyRoute, w.Graph);
+                if (keys.Variant == KeyFlight.Early) mgr.ContinuePastHoldShort();
+                else mgr.HoldShortOfNextClearedRunway();
+                var answer = cap.TakeNew();
+                keys.Answer = string.Join(" ", answer).Trim();
+                keys.Restored = keys.Answer.Contains("Holding short of", StringComparison.Ordinal);
+                foreach (var s in answer) cap.Announce(s);
+                if (trace) Console.WriteLine($"  {t,6:F1}s KEY {keys.Variant}: \"{keys.Answer}\" ({keys.PressNote()})");
+            }
+#endif
             if (linedUp && !lineupPlaceChecked && plan.Rwy != null && plan.ExpectLineupAlongM is double xa)
             {
                 lineupPlaceChecked = true;
@@ -2665,6 +2761,11 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                     holdOnRunwayReported = true;
                     found.Add(new Finding(w.Icao, "HOLD_STOP_ON_RUNWAY_PAVEMENT", where, $"stopped for a hold short at t={t:F0}s standing on runway {hr0.Name1}/{hr0.Name2} ({lat:F6},{lon:F6})"));
                 }
+#if !OLDAPP
+                // A key flight's hold at its stop, any frame of it on runway pavement (the key never puts a stop back there).
+                if (keys != null && HoldNodeNow() == keys.StopNodeId && TaxiGuidanceHarnessBridge.RunwayUnder(w.Graph, lat, lon) is { } kr)
+                    keys.HeldOnRunway ??= $"{kr.Name1}/{kr.Name2} at t={t:F0}s ({lat:F6},{lon:F6})";
+#endif
                 lastHoldOdo = odo;
                 if (gs < 0.3) { holdWait += 0.1; if (holdWait > 2) { mgr.ContinuePastHoldShort(); holdWait = 0; } }
             }
@@ -2859,7 +2960,10 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                 : new Finding(w.Icao, pickSaidMissed ? "TURN_MISS_SAID_MISSED" : "TURN_MISS_SAID_NOT_KEPT", where, "took the charted way; the route change said so"));
 
         lastFlightHoldNodes = holdNodes;
-        if (xc != null) found.AddRange(XcFindings(w, where, xc, holdNodes, plan.XcBaseHoldNodes, done));
+        // A key flight is judged by what its key was pressed for, not by a cleared flight's expectations (the Hold short
+        // key puts the stop back, so it is held there and its line is the watch's after the Continue).
+        if (xc != null && keys == null) found.AddRange(XcFindings(w, where, xc, holdNodes, plan.XcBaseHoldNodes, done));
+        if (keys != null) found.AddRange(KeyFindings(w, where, keys, holdNodes, done));
 #endif
     }
     catch (Exception ex) { found.Add(new Finding(w.Icao, "TAXI_EXCEPTION", where, ex.GetType().Name + ": " + ex.Message)); }
@@ -2915,6 +3019,50 @@ static List<Finding> XcFindings(World w, string where, XcFlight xc, List<int> ho
         fs.Add(new Finding(w.Icao, "XC_CROSSING_SAID_BEFORE_ITS_SEGMENT", where,
             $"{at}: \"{xc.EarlyText}\" said before guidance reached the stop's segment (the incursion watch's on-route line), then the line \"{xc.LineText}\""));
     fs.AddRange(XcRecalcFindings(w, where, xc, at));
+    return fs;
+}
+
+/// <summary>
+/// What a --crossing-keys flight did at its first crossing (KEY_ codes, docs/virtual-pilot.md). EARLY: Continue pressed
+/// right after the first countdown call cleared it ("Cleared across runway R. No stop."), no HoldShort there, and its
+/// "Crossing …" line said once at the line. HOLD: the Hold short key pressed right after the first "… cleared to
+/// cross." put the stop back ("Holding short of …"), HoldShort was entered there, and never with the aircraft on runway
+/// pavement. PAST: the key pressed just past the line said "Past the hold line of …" and no HoldShort followed there.
+/// A flight whose trigger never came says so (_NOT_PRESSED), with nothing else judged.
+/// </summary>
+static List<Finding> KeyFindings(World w, string where, KeyFlight k, List<int> holdNodes, bool done)
+{
+    var fs = new List<Finding>();
+    k.HeldAt = holdNodes.Count(n => n == k.StopNodeId);
+    string at = $"runway {k.Runway} at n{k.StopNodeId} (\"{k.Label}\")";
+    string notArrived = done ? "" : " (the flight did not arrive)";
+    void Flag(string code, string detail) => fs.Add(new Finding(w.Icao, code, where, $"{at}: {detail}"));
+    switch (k.Variant)
+    {
+        case KeyFlight.Early:
+            if (!k.Pressed) { Flag("KEY_EARLY_NOT_PRESSED", "no countdown call for the stop heard on its segment" + notArrived); break; }
+            if (!k.Answer.Contains("Cleared across runway", StringComparison.Ordinal) || !k.Answer.Contains("No stop.", StringComparison.Ordinal))
+                Flag("KEY_EARLY_NOT_CLEARED", $"Continue {k.PressNote()} answered \"{k.Answer}\"");
+            if (k.HeldAt > 0) Flag("KEY_EARLY_HELD_AT_STOP", $"entered HoldShort there {k.HeldAt} time(s) after Continue {k.PressNote()}");
+            if (k.Xc is { } x && !x.Moved)
+            {
+                if (x.Line == 0 && x.Reached) Flag("KEY_EARLY_LINE_NOT_SAID", $"came within 30 m of the stop and no \"Crossing runway {k.Runway}\" within 100 m of it{notArrived}");
+                if (x.Line > 1) Flag("KEY_EARLY_LINE_SAID_TWICE", $"{x.Line} lines within 100 m of the stop");
+            }
+            break;
+        case KeyFlight.Hold:
+            if (!k.Pressed) { Flag("KEY_HOLD_NOT_PRESSED", "no \"… cleared to cross.\" heard for it" + notArrived); break; }
+            if (!k.Restored) { Flag("KEY_HOLD_NOT_RESTORED", $"the key {k.PressNote()} answered \"{k.Answer}\""); break; }
+            if (k.HeldAt == 0) Flag("KEY_HOLD_NOT_HELD_AT_STOP", $"the stop put back {k.PressNote()} was never held{notArrived}");
+            if (k.HeldOnRunway is { } on) Flag("KEY_HOLD_ON_RUNWAY_PAVEMENT", $"held at the stop put back on runway {on}");
+            break;
+        case KeyFlight.Past:
+            if (!k.Pressed) { Flag("KEY_PAST_NOT_PRESSED", $"never more than {RouteRunwayCrossings.StopPassedToleranceMetres:F0} m past the stop along the route" + notArrived); break; }
+            if (!k.Answer.Contains("Past the hold line of", StringComparison.Ordinal))
+                Flag("KEY_PAST_NOT_SAID", $"the key {k.PressNote()} answered \"{k.Answer}\"");
+            if (k.HeldAt > 0) Flag("KEY_PAST_HELD_AT_STOP", $"entered HoldShort there {k.HeldAt} time(s) after the key {k.PressNote()}");
+            break;
+    }
     return fs;
 }
 
@@ -3042,6 +3190,8 @@ sealed class Options
 #if !OLDAPP
     /// <summary>--clear-first-crossing (taxi, turnpicks): each flight is flown a second time with the first runway its route crosses cleared.</summary>
     public bool ClearFirstCrossing;
+    /// <summary>--crossing-keys (taxi, turnpicks): each flight is flown three times more, pressing Continue or the Hold short key at its first crossing (FlyCrossingKeys).</summary>
+    public bool CrossingKeys;
 #endif
     public static Options? Parse(string[] a)
     {
@@ -3061,6 +3211,7 @@ sealed class Options
                 case "--db": o.Db = a[++i]; break;
 #if !OLDAPP
                 case "--clear-first-crossing": o.ClearFirstCrossing = true; break;
+                case "--crossing-keys": o.CrossingKeys = true; break;
 #endif
                 default: Console.WriteLine($"unknown option {a[i]}"); return null;
             }
@@ -3408,6 +3559,8 @@ sealed class TaxiPlan
     public IReadOnlyList<ClearedCrossing>? ClearedCrossings;
     public bool ClearFirstCrossing, DivertIsExcursion;
     public List<int>? XcBaseHoldNodes;
+    // --crossing-keys: which key the flight presses at its first crossing (KeyFlight.Early / Hold / Past), null for none.
+    public string? KeyVariant;
 #endif
 
     /// <summary>A departure from a named (OSM) holding point ("HP") or a runway intersection ("IX"), as the form loads it.</summary>
@@ -3857,6 +4010,20 @@ sealed class XcFlight
         return xc;
     }
 
+    /// <summary>
+    /// A crossing held by its own stop on segment <c>stopNodeIndex - 1</c>, nothing cleared at load: the --crossing-keys
+    /// Continue flight, which clears it early, counts its lines with it (<see cref="Hear"/>, <see cref="Track"/>).
+    /// </summary>
+    public static XcFlight ForHeldStop(TaxiRoute route, string runway, int stopNodeIndex)
+    {
+        var seg = route.Segments[stopNodeIndex - 1];
+        return new XcFlight
+        {
+            Runway = runway, Flown = true, _routeSeen = route, Outcome = "HELD", StopNodeIndex = stopNodeIndex,
+            StopNode = seg.ToNode, StopSegmentM = seg.DistanceMeters, Label = seg.HoldShortRunway ?? "",
+        };
+    }
+
     /// <summary>Whether <paramref name="text"/> names <paramref name="runway"/>, either end.</summary>
     public static bool NamesRunway(string text, string runway)
     {
@@ -3932,6 +4099,116 @@ sealed class XcFlight
             $"line_at_start={(LineAtGuidanceStart ? 1 : 0)}", $"stop_after_pick={(StopAfterPick is bool sp ? (sp ? "1" : "0") : "-")}", $"stop_seg_m={(double.IsNaN(StopSegmentM) ? "-" : StopSegmentM.ToString("F0", CultureInfo.InvariantCulture))}",
             $"base_held={BaseHeldAt}", $"other_stops={(OtherStopsSame is bool b ? (b ? "same" : "differ") : "-")}",
             $"recalcs={string.Join(",", Recalcs)}", $"stop_again_said={(StopAgainSaid ? 1 : 0)}", Label, LineText);
+}
+
+/// <summary>
+/// One --crossing-keys flight: the key it presses at its first crossing (<see cref="Variant"/>), what triggers the
+/// press, where the aircraft was, what the key answered, and what followed at the stop. EARLY: nothing cleared,
+/// Continue (Input Y, ContinuePastHoldShort) right after the first countdown call for the stop, heard while guidance is
+/// on the stop's segment. HOLD: the crossing cleared at load, the Hold short key (Input Alt+Y,
+/// HoldShortOfNextClearedRunway) right after the first "… cleared to cross." naming the runway. PAST: cleared, the
+/// Hold short key at the first frame more than RouteRunwayCrossings.StopPassedToleranceMetres (10 m) beyond the stop
+/// node along the route: just past the line as the key itself judges it (within that, off the runway's pavement, the
+/// aircraft is still at the line and the key puts the stop back, by design).
+/// </summary>
+sealed class KeyFlight
+{
+    public const string Early = "EARLY", Hold = "HOLD", Past = "PAST";
+
+    public string Variant = "", Runway = "", Label = "", Answer = "", Skip = "";
+    public int StopNodeId = -1;
+    public bool Flown, Pressed, Restored;
+    public double PressT = double.NaN, ToStopM = double.NaN, PastM = double.NaN;
+    public bool PressOnRunway;
+    /// <summary>The runway and moment of the first frame held at the stop on runway pavement; null when never.</summary>
+    public string? HeldOnRunway;
+    public int HeldAt;
+    /// <summary>The stop's lines: the load's cleared crossing (HOLD, PAST), or the held stop's own (EARLY, <see cref="XcFlight.ForHeldStop"/>).</summary>
+    public XcFlight? Xc;
+
+    // "Hold short runway 22R in 120 metres." / "… in 400 feet. Slow down.": the countdown's own words for a stop.
+    private static readonly System.Text.RegularExpressions.Regex CountdownCall = new(@"\bHold short (.+?) in \d");
+
+    /// <summary>How the flight's description names the key it presses.</summary>
+    public static string Describe(string variant) => variant switch
+    {
+        Early => "Continue after the first countdown call",
+        Hold => "Hold short key after the first cleared-to-cross call",
+        _ => "Hold short key just past the line",
+    };
+
+    /// <summary>The stop of a crossing cleared at load (HOLD, PAST).</summary>
+    public void SetStop(XcFlight xc)
+    {
+        Runway = xc.Runway; StopNodeId = xc.StopNode?.NodeId ?? -1; Label = xc.Label; Xc = xc;
+    }
+
+    /// <summary>
+    /// EARLY's stop: the route's first crossing not already passed, in route order, held by a stop of its own on a
+    /// segment, for that runway alone, that is not the pilot's own hold and not on the route's last segment. Null when
+    /// set; else why the flight is not flown.
+    /// </summary>
+    public static string? SetEarlyStop(KeyFlight k, TaxiRoute route)
+    {
+        var ev = route.RunwayEvents.Where(e => e.Kind == RunwayEventKind.Crossing && !e.Passed)
+                      .OrderBy(e => e.ReachNodeIndex < 0 ? int.MaxValue : e.ReachNodeIndex).FirstOrDefault();
+        if (ev == null) return "no runway crossed";
+        if (!ev.Held || ev.StopNodeIndex <= 0 || ev.StopNodeIndex > route.Segments.Count) return "first crossing has no stop on a segment";
+        int seg = ev.StopNodeIndex - 1;
+        var s = route.Segments[seg];
+        if (seg == route.Segments.Count - 1) return "first crossing's stop on the last segment";
+        if (!s.IsHoldShortPoint) return "first crossing's stop is no hold short";
+        if (RouteRunwayCrossings.ExtractRunwayDesignators(s.HoldShortRunway).Count != 1) return "first crossing's stop is shared";
+        if (!ClearedCrossingHolds.CanClearLabel(s.HoldShortRunway, ev.Designator)) return "first crossing's stop is the pilot's own";
+        k.Runway = ev.Designator; k.StopNodeId = s.ToNode.NodeId; k.Label = s.HoldShortRunway ?? "";
+        k.Xc = XcFlight.ForHeldStop(route, ev.Designator, ev.StopNodeIndex);
+        return null;
+    }
+
+    /// <summary>Whether this frame triggers the press: what was just said, guidance's segment, and where the aircraft is.</summary>
+    public bool Triggered(List<string> saidNow, TaxiRoute route, int segmentIndex, double lat, double lon)
+    {
+        int stopSeg = route.Segments.FindIndex(s => s.ToNode.NodeId == StopNodeId);
+        if (stopSeg < 0) return false;
+        switch (Variant)
+        {
+            case Early:
+                return segmentIndex == stopSeg && saidNow.Any(a => CountdownCall.Matches(a).Any(m => XcFlight.NamesRunway(m.Groups[1].Value, Runway)));
+            case Hold:
+                return saidNow.Any(a => a.Contains("cleared to cross", StringComparison.OrdinalIgnoreCase) && XcFlight.NamesRunway(a, Runway));
+            default:
+                return ClearedCrossingHolds.MetresPastStop(route, stopSeg + 1, lat, lon) is double past
+                       && past > RouteRunwayCrossings.StopPassedToleranceMetres;
+        }
+    }
+
+    /// <summary>Where the aircraft is as the key is pressed: straight to the stop node, along the route past it, on a runway's pavement.</summary>
+    public void Press(double t, double lat, double lon, TaxiRoute route, TaxiGraph graph)
+    {
+        Pressed = true; PressT = t;
+        int stopSeg = route.Segments.FindIndex(s => s.ToNode.NodeId == StopNodeId);
+        if (stopSeg >= 0)
+        {
+            var node = route.Segments[stopSeg].ToNode;
+            ToStopM = Geo.Dist(lat, lon, node.Latitude, node.Longitude);
+            PastM = ClearedCrossingHolds.MetresPastStop(route, stopSeg + 1, lat, lon) ?? double.NaN;
+        }
+        PressOnRunway = TaxiGuidanceHarnessBridge.RunwayUnder(graph, lat, lon) != null;
+    }
+
+    public string PressNote() => string.Create(CultureInfo.InvariantCulture,
+        $"pressed at t={PressT:F1}s, {ToStopM:F0} m from the stop node, {PastM:F1} m past it along the route{(PressOnRunway ? ", on runway pavement" : "")}");
+
+    /// <summary>The flight's outcome for the counts: "ok", or the first KEY_ code it was given.</summary>
+    public string Outcome(List<Finding> fs)
+        => fs.Select(f => f.Code).Where(c => c.StartsWith("KEY_", StringComparison.Ordinal)).OrderBy(c => c, StringComparer.Ordinal).FirstOrDefault() ?? "ok";
+
+    /// <summary>The KEYS| results line's fields after the kind, airport and key.</summary>
+    public string ResultFields() => string.Join("|", Variant, Runway, "n" + StopNodeId, $"pressed={(Pressed ? 1 : 0)}",
+        string.Create(CultureInfo.InvariantCulture, $"t={PressT:F1}"), string.Create(CultureInfo.InvariantCulture, $"to_stop_m={ToStopM:F0}"),
+        string.Create(CultureInfo.InvariantCulture, $"past_m={PastM:F1}"), $"on_runway={(PressOnRunway ? 1 : 0)}", $"restored={(Restored ? 1 : 0)}",
+        $"held={HeldAt}", $"held_on_runway={(HeldOnRunway != null ? 1 : 0)}", $"line={Xc?.Line ?? 0}", $"early={Xc?.Early ?? 0}",
+        $"reached={(Xc?.Reached == true ? 1 : 0)}", Label, Answer);
 }
 #endif
 

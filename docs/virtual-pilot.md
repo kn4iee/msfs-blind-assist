@@ -55,7 +55,9 @@ tools/VirtualPilot/bin/x64/Release/net10.0-windows/VirtualPilot.exe <mode> [opti
 Options: `--airports N` (busiest by taxi-path count, default 100), `--icao A,B`, `--shard i/n`
 (run n processes in parallel — the hooks are process-global, so parallelise by process, never by
 thread), `--taxi-per-airport K`, `--out file`, `--clear-first-crossing` (`taxi` and `turnpicks`: every
-flight is flown again with the first runway its route crosses cleared, below), and
+flight is flown again with the first runway its route crosses cleared, below), `--crossing-keys` (`taxi` and
+`turnpicks`: every flight is flown three times more, pressing Continue or the Hold short key at its first crossing,
+below, "Crossing keys"), and
 `--trace ICAO:RWY:EXIT[:straight]` / `--trace ICAO:taxi:N[:clearance]` for one scenario frame by
 frame (speech, state changes, routes, the harness's view of the runway frame).
 
@@ -89,7 +91,10 @@ before it) and prints the matching ones frame by frame, with the graph two edges
 `crossthenhold` (e.g. `KCLE:crosshold:via S cross runway 06R hold short of L`). With
 `--clear-first-crossing`, `ICAO:taxi:N` flies the plan with nothing cleared first, untraced, then traces it
 cleared; in `ICAO:any:` and `ICAO:turn:` a cleared flight's description ends "[first crossing cleared]" and an
-excursion flight's pick reads "[leaves the route before the turn]". `VP_SHOWCLR=1` prints the voiced
+excursion flight's pick reads "[leaves the route before the turn]". With `--crossing-keys` a key flight's description
+ends "[Continue after the first countdown call]", "[Hold short key after the first cleared-to-cross call]" or "[Hold
+short key just past the line]" (the last two after "[first crossing cleared]"), and its trace prints the press ("KEY
+EARLY: …") and its `KEYS` line. `VP_SHOWCLR=1` prints the voiced
 clearances, `VP_STUBSTATS=1` the destination entry-stub length and hold label of every departure.
 
 ### A/B against a frozen build
@@ -167,6 +172,10 @@ decelerating speed (Normal/End exits 18 kt at the junction, High-speed 35 kt).
 | `XC_RECALC_KEPT`, `XC_KEPT_TAIL_KEPT`, `XC_RECALC_STOP_BACK`, `XC_RECALC_CLEARED_ELSEWHERE`, `XC_RECALC_STOP_MOVED_SAID` / `_UNSAID`, `XC_RECALC_ENTRY_STOP`, `XC_RECALC_CROSSED_WITHOUT_STOP`, `XC_RECALC_NOT_CROSSED` | a route change before the cleared stop: the new route clears it again at the same node (with a Turn pick's kept tail: `KEPT_TAIL`); a stop again at that node; the runway cleared at another crossing; a crossing of the runway held at another node, said ("Runway R is a stop again.") or not; the new route enters the runway instead, with a stop; crosses it with no stop (which the route change must say, HLD-17); no longer meets it | `STOP_BACK`, `CLEARED_ELSEWHERE` and `_UNSAID` high; the rest information |
 | `XC_EXCURSION_NOT_FLOWN`, `XC_EXCURSION_NO_REROUTE`, `XC_EXCURSION_PICK_LOST` | the excursion flight (below): the pilot never reached the junction it leaves from; left the route and guidance never changed it; the route change said the pick was missed or could not be kept | medium: the excursion is the harness's construction (not the pick outcome DETOUR, the app's "long detour" refusal, whose CODES lines are `TURN_DETOUR`) |
 | `XC_B_STOP_BEFORE_RUNWAY`, `XC_B_STOP_IN_RUNWAY_MARGIN` | `crossthenhold`: the stop for B lies before R (the route never reaches R's pavement), or inside a runway's clear margin | high |
+| `KEY_EARLY_NOT_CLEARED`, `KEY_EARLY_HELD_AT_STOP`, `KEY_EARLY_LINE_NOT_SAID`, `KEY_EARLY_LINE_SAID_TWICE` | `--crossing-keys`, Continue right after the first countdown call: the press did not answer "Cleared across runway R. No stop."; HoldShort was entered at that stop anyway; no "Crossing runway R" within 100 m of the stop once guidance was past its segment, or more than one | high |
+| `KEY_HOLD_NOT_RESTORED`, `KEY_HOLD_NOT_HELD_AT_STOP`, `KEY_HOLD_ON_RUNWAY_PAVEMENT` | the crossing cleared, the Hold short key right after the first "… cleared to cross.": it did not answer "Holding short of …"; the stop put back was never held; held there with the aircraft on runway pavement (`RunwayUnder`, no margin, any frame of that hold) | high |
+| `KEY_PAST_NOT_SAID`, `KEY_PAST_HELD_AT_STOP` | the crossing cleared, the Hold short key just past the line: it did not answer "Past the hold line of …"; HoldShort was entered at that stop after it | high |
+| `KEY_EARLY_NOT_PRESSED`, `KEY_HOLD_NOT_PRESSED`, `KEY_PAST_NOT_PRESSED` | the press never came: no countdown call for the stop heard while taxiing on its segment, no "cleared to cross" for it, never more than 10 m past it; nothing else of that flight is judged | information: the stop entered in the frame of its first call, a line passed as guidance started, or a route change before the stop |
 
 ## Findings of the first run (2026-09-18, 100 busiest fs2020 airports)
 
@@ -692,3 +701,57 @@ new route when cleared.", the aircraft at rest 56 m before L. Four shards give t
   heard "could not be kept" (12, 4 and 3 with nothing cleared). At OEJN Parking 137 the recalculations were refused
   for 38 s ("heads backwards") and the route finally adopted crosses 34C with no stop, said "with no hold short
   point for runway 34C", before the pilot model drives onto it (`RUNWAY_ENTERED_UNHELD`, with nothing cleared too).
+
+## Crossing keys (2026-11-25, 2024 navdata, plain navdata)
+
+Stage 2's final review: Continue before the line and the Hold short key had no integration measurement.
+**`--crossing-keys`** (`taxi`, `turnpicks`: the plain flights, the Turn pick base, and every pick that changed the
+route, each after its `--clear-first-crossing` flights) flies every plan three times more at its first crossing (the
+first not already passed, in route order, as `--clear-first-crossing` reads it), each with its own CODES kind
+(`TAXI_KEY_EARLY`, `TURN_CHARTED_KEY_HOLD`, …) and a `KEYS|` results line (where the aircraft was at the press, the
+key's answer, the holds at that stop, its lines). The key's answer is put back into the capture, so the next frame
+hears it like any other line.
+
+- **EARLY**: nothing cleared; Continue (Input Y, `ContinuePastHoldShort`) in the frame the first countdown call for
+  that stop is heard ("Hold short runway 22R in 120 metres."), guidance taxiing on the stop's segment. Flown where the
+  stop is the crossing's own, on a segment, for that runway alone, not the pilot's own hold and not on the route's last
+  segment (what `CanClearEarly` allows). Expected: "Cleared across runway 22R. No stop.", no HoldShort there, and its
+  "Crossing runway 22R." said once, at the line.
+- **HOLD**: the crossing cleared at load (as `--clear-first-crossing`); the Hold short key (Input Alt+Y,
+  `HoldShortOfNextClearedRunway`) in the frame of the first "… cleared to cross." naming the runway. Flown where the
+  clearing took a stop off whole (not a start hold, not a shared stop). Expected: "Holding short of …", HoldShort
+  entered at that stop, never with the aircraft on runway pavement.
+- **PAST**: cleared as for HOLD; the key at the first frame the aircraft is more than `StopPassedToleranceMetres`
+  (10 m) beyond the stop node along the route (`ClearedCrossingHolds.MetresPastStop`): just past the line as the key
+  itself judges it. Within that, off the runway's pavement, the aircraft is still at the line and the key puts the stop
+  back, by design (`ClearedCrossingHoldShortKeyTests`). Expected: "Past the hold line of …", no HoldShort there.
+
+All runs: `--sim fs2024`, `VP_NOOSM=1`, `--airports 40 --taxi-per-airport 3`, `taxi` and `turnpicks` one process each.
+The flights with no key (236 `taxi` and 3,339 `turnpicks` result lines, 88 and 388 finding lines) are the same, line
+for line, as a run without the option.
+
+| | key flights (29 airports) | pressed | answered | held at that stop | its line | where pressed |
+|---|---|---|---|---|---|---|
+| EARLY | 220 | 195 | 195 "Cleared across runway R. No stop." | 0 | said once, at the line, in 195 of 195 | 28 to 116 m from the stop node (median 56) |
+| HOLD | 220 | 211 | 211 "Holding short of R. N metres." | 211, none on runway pavement | | 0 to 116 m from the stop node (median 53) |
+| PAST | 220 | 214 | 214 "Past the hold line of R." | 0 | | 10.0 to 17.8 m past the stop node (median 10.4), none on runway pavement |
+
+`taxi` flew 87 of each (261), `turnpicks` 133 (399). Not flown: the plans whose route crosses no runway (287 per
+variant), whose first crossing is a start hold (10 per variant), and in `taxi` 4 clearance flights whose probe found no
+route and 1 refused route (per variant). No `KEY_` finding but the not-pressed ones:
+
+- **EARLY, 25 not pressed.** In 23 the stop was entered with no countdown call heard while taxiing on its segment
+  (in the frame its first call came, or with none), so there was no rolling approach to press in: a stop segment
+  shorter than the 25 m capture radius ("Stop. Hold short of runway 09L.
+  Press continue when cleared. Hold short runway 09L in 20 metres. Stop.", KPHL N; 15 m at OMDB) or an exit route
+  starting at the stop (KSLC Q, KNZY F, KMIA S, KLSV E, OEJN H1, OETF C, UUWW M1). In 2 (KPHL) a route change before
+  the stop took the route off it.
+- **HOLD, 9.** 3 routes start at the cleared line, said as guidance starts with nothing to count down (KSLC, OEJN,
+  OETF); in 6 the [RTE-22]-exception recalculation moved the cleared stop before it was reached and said "Runway 09L is
+  a stop again." (KPHL 4, KLAX 2; "Measured, left as it is" above).
+- **PAST, 6.** The same 6 route changes.
+
+In 58 of the 195 EARLY flights the incursion watch also said "Crossing runway R" before the countdown (above). At
+UUWW (exit M1 → Parking 82) the HOLD key came in the first frame, with "Runway 01 at M1 in 0 metres, cleared to
+cross. Crossing runway 01 at M1.": the aircraft stood at the line, off the runway, so the key put the stop back
+("Holding short of runway 01 at M1. 0 metres.") and it held there.
