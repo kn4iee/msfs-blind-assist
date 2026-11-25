@@ -614,19 +614,23 @@ public class ClearancePlannerTests
         Assert.Null(ClearancePlanner.Build(atPoint, hasDestination: false).CrossAtHoldingPointNodeId);
     }
 
-    // A crossing made with no stop of its own (#355's decision 3) is pinned by the node where the route reached the
-    // runway, so a fresh Calculate never takes the stale step for a second crossing of that runway.
+    // A crossing made with no stop of its own (#355's decision 3) is pinned by its NEAR side, the node before the
+    // runway: where the route reached the runway can be the first node beyond it when one edge jumps across, and a pin
+    // there read the far side as the near one and sent the leg back over. A fresh Calculate never takes the stale step
+    // for a second crossing of that runway.
     [Fact]
-    public void A_used_end_crossing_with_no_stop_is_pinned_where_the_route_reached_the_runway()
+    public void A_used_end_crossing_with_no_stop_is_pinned_on_its_near_side()
     {
         var steps = new[] { Via("P"), CrossRwy("24L", at: "P") };
-        var kept = Trim(steps, used: new[] { Rec("24L", 0, at: "P") with { ReachNodeId = 58 } });
+        var kept = Trim(steps, used: new[] { Rec("24L", 0, at: "P") with { ReachNodeId = 58, NearNodeId = 57 } });
 
-        Assert.Equal(new[] { Via("P"), CrossRwy("24L", at: "P") with { AtNodeId = 58, AtNodeIsPassedStop = true } }, kept);
+        Assert.Equal(new[] { Via("P"), CrossRwy("24L", at: "P") with { AtNodeId = 57, AtNodeIsPassedStop = true } }, kept);
         var plan = ClearancePlanner.Build(kept, hasDestination: false);
         Assert.Null(plan.CrossAtHoldingPointNodeId);
-        Assert.Equal(new[] { new ClearedCrossing("24L", At: "P", AtNodeId: 58, SeqIndex: 0) }, plan.Crossings);
-        // Neither a stop nor a reach recorded: nothing to pin it by, it stays as entered.
+        Assert.Equal(new[] { new ClearedCrossing("24L", At: "P", AtNodeId: 57, SeqIndex: 0) }, plan.Crossings);
+        // No node before the runway (the route started on its pavement): the reach, on the pavement, which has no side.
+        Assert.Equal(58, Trim(steps, used: new[] { Rec("24L", 0, at: "P") with { ReachNodeId = 58 } })[1].AtNodeId);
+        // Neither: nothing to pin it by, it stays as entered.
         Assert.Equal(steps, Trim(steps, used: new[] { Rec("24L", 0, at: "P") }));
     }
 

@@ -521,13 +521,17 @@ public static class ClearanceTrim
 
     // The end of a leg already crossed: kept, pinned to the crossing made (its stop node, and its place name when the
     // record has one), so a fresh Calculate clears only that crossing, never a later crossing of the same runway the
-    // new route makes. A crossing made with no stop of its own (#355's decision 3) is pinned by the node where the route
-    // reached the runway (ReachNodeId): left as entered, its far side would be judged from where the aircraft now is,
-    // which once across lies back over the runway, and the stale step would clear that return crossing. One recorded
-    // with neither has nothing to pin and stays as entered.
+    // new route makes. A crossing made with no stop of its own (#355's decision 3) is pinned by its NEAR side, the node
+    // before the runway (NearNodeId): left as entered, its far side would be judged from where the aircraft now is,
+    // which once across lies back over the runway, and the stale step would clear that return crossing; pinned where
+    // the route reached the runway, a reach beyond it (one edge jumping across) read the far side as the near one. With
+    // no node before it (the route started on the runway's pavement), the reach, on the pavement, which has no side:
+    // the window refuses that leg rather than guess. One recorded with none has nothing to pin and stays as entered.
     private static ClearanceStep PinnedToMadeCrossing(ClearanceStep step, ClearedCrossing used)
     {
-        int pin = used.StopNodeId != 0 ? used.StopNodeId : used.ReachNodeId;
+        int pin = used.StopNodeId != 0 ? used.StopNodeId
+            : used.NearNodeId != 0 ? used.NearNodeId
+            : used.ReachNodeId;
         if (pin == 0) return step;
         return step with
         {

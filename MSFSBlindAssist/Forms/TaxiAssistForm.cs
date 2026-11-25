@@ -4633,27 +4633,30 @@ public class TaxiAssistForm : Form
                 {
                     // The crossing is already made (the step list kept it as the end, pinned to its stop): just across
                     // it is the far side of THAT stop. Never pinned back through the stop, which is behind the aircraft.
-                    // The pin is its stop, or, for one made with no stop, where the route reached the runway.
+                    // The pin is its stop, or, for one made with no stop, the node before the runway (its near side).
                     var stop = graph.Nodes.TryGetValue(endStep.AtNodeId, out var stopNode) ? stopNode : null;
                     if (stop != null)
                     {
-                        var frame = RunwayFrame.For(crossRwy, _aircraftLat);
+                        // Judged on the runway as the crossing classifier saw it (RunwayShape, [HLD-7]).
+                        var centerline = RouteRunwayCrossings.FindCenterlineForDesignator(graph.RunwayCenterlines, runwayTarget);
                         bool aircraftClear = RouteRunwayCrossings.RunwayWithinClearMargin(
                             graph.RunwayCenterlines, _aircraftLat, _aircraftLon) == null;
-                        var judged = ClearanceLegEnd.JudgeMadeCrossing(frame.SignedCrossTrack(stop.Latitude, stop.Longitude),
-                            HoldShortNodeResolver.TrueHalfWidthMetres(crossRwy),
-                            frame.SignedCrossTrack(_aircraftLat, _aircraftLon), aircraftClear);
-                        if (judged.End == ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)
+                        var judged = ClearanceLegEnd.JudgeMadeCrossing(centerline == null ? null : RunwayShape.For(centerline),
+                            stop.Latitude, stop.Longitude, _aircraftLat, _aircraftLon, aircraftClear);
+                        if (judged == ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)
                         {
                             RefuseCalculate(ClearanceLegEnd.AlreadyAcross(runwayTarget));
                             return;
                         }
                         // A pin with no side (on the runway's pavement) leaves destNode unset: refused below, never
-                        // sent back over the runway.
-                        if (judged.End == ClearanceLegEnd.MadeCrossingEnd.FarSide)
+                        // sent back over the runway. Else the far side of THAT crossing, away from the pin.
+                        if (judged == ClearanceLegEnd.MadeCrossingEnd.FarSide)
+                        {
+                            int farSide = -Math.Sign(RunwayFrame.For(crossRwy, _aircraftLat).SignedCrossTrack(stop.Latitude, stop.Longitude));
                             destNode = RunwayCrossingResolver.FindAcross(graph, crossRwy, stop.NodeId)?.FarNodeId
-                                       ?? FindFarSideRunwayNode(crossRwy, farSideSign: judged.FarSideSign)?.NodeId
+                                       ?? FindFarSideRunwayNode(crossRwy, farSideSign: farSide)?.NodeId
                                        ?? -1;
+                        }
                     }
                     break;
                 }

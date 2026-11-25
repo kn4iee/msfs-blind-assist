@@ -264,22 +264,45 @@ public class ClearanceLegEndTests
 
     // ---- a crossing already made ----
 
+    // 09/27 along north 0 (pavement 30 m either side). Metres north of its centreline, at east 500.
     [Theory]
-    // Pinned to its stop (off the pavement, 100 m on one side):
-    [InlineData(100.0, -150.0, true, ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross, 0)]   // across, clear of it
-    [InlineData(100.0, -20.0, false, ClearanceLegEnd.MadeCrossingEnd.FarSide, -1)]        // still crossing: on across
-    [InlineData(100.0, 50.0, true, ClearanceLegEnd.MadeCrossingEnd.FarSide, -1)]          // still on the near side
-    // Pinned where the route reached the runway, on its pavement (a crossing with no stop): no side to go by.
-    [InlineData(5.0, -35.0, false, ClearanceLegEnd.MadeCrossingEnd.Unknown, 0)]           // off the far edge, in the margin
-    [InlineData(5.0, -150.0, true, ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross, 0)]     // clear of the runway
-    [InlineData(0.0, 10.0, false, ClearanceLegEnd.MadeCrossingEnd.Unknown, 0)]            // on the pavement
+    // Pinned to its stop, 100 m south:
+    [InlineData(-100.0, 150.0, true, ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)]   // across, clear of it
+    [InlineData(-100.0, 20.0, false, ClearanceLegEnd.MadeCrossingEnd.FarSide)]         // still crossing: on across
+    [InlineData(-100.0, -50.0, true, ClearanceLegEnd.MadeCrossingEnd.FarSide)]         // still on the near side
+    // The review's jump: one edge from 60 m south to 60 m north, no stop, the aircraft now 150 m north and clear. Pinned
+    // on its near side (the node before the runway), it is across; the far-side reach as a pin read north as the near
+    // side and sent the leg back over.
+    [InlineData(-60.0, 150.0, true, ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)]
+    // A pin on the pavement (the route started on it, so its reach is the only node): no side to go by, even one 29 m
+    // north that a runway table's half-width could read as off it.
+    [InlineData(29.0, 35.0, false, ClearanceLegEnd.MadeCrossingEnd.Unknown)]
+    [InlineData(0.0, 10.0, false, ClearanceLegEnd.MadeCrossingEnd.Unknown)]            // exactly on the centreline
+    [InlineData(0.0, 150.0, true, ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)]      // and the aircraft clear: refused
     public void A_made_crossing_is_judged_from_the_side_of_its_pin_and_never_sent_back_over(
-        double pinCrossTrack, double aircraftCrossTrack, bool aircraftClear, ClearanceLegEnd.MadeCrossingEnd end, int farSide)
+        double pinNorthM, double aircraftNorthM, bool aircraftClear, ClearanceLegEnd.MadeCrossingEnd end)
     {
-        var judged = ClearanceLegEnd.JudgeMadeCrossing(pinCrossTrack, runwayHalfWidthMetres: 30.0, aircraftCrossTrack, aircraftClear);
+        var shape = RunwayShape.For(RunwayFixture.EastWest());
 
-        Assert.Equal(end, judged.End);
-        Assert.Equal(farSide, judged.FarSideSign);
+        var judged = ClearanceLegEnd.JudgeMadeCrossing(shape, RunwayFixture.Lat(pinNorthM), RunwayFixture.Lon(500),
+            RunwayFixture.Lat(aircraftNorthM), RunwayFixture.Lon(500), aircraftClear);
+
+        Assert.Equal(end, judged);
+    }
+
+    // The review's other reversal: the node nearest ahead is the taxiway's own last node, so its one arm walks back.
+    [Fact]
+    public void At_a_taxiway_end_the_aircraft_is_heading_off_the_leg_ends_there()
+    {
+        var g = Build(Path("P", 0, 0, 300, 0), Path("P", 300, 0, 600, 0));
+        int east = NodeAt(g, 600, 0);
+        double acLat = RunwayFixture.Lat(0), acLon = RunwayFixture.Lon(550);
+
+        var end = ClearanceLegEnd.EndOfTaxiway(g, east, "P", 90, acLat, acLon);
+
+        Assert.Equal(east, end.EndNodeId);
+        // Heading back along it, the lone arm is the way on.
+        Assert.Equal(NodeAt(g, 0, 0), ClearanceLegEnd.EndOfTaxiway(g, east, "P", 270, acLat, acLon).EndNodeId);
     }
 
     [Fact]

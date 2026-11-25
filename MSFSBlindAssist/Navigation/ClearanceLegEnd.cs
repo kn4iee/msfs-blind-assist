@@ -95,7 +95,9 @@ public static class ClearanceLegEnd
     /// The end of <paramref name="taxiway"/> for a leg that ends there, from where the aircraft is on it or joins it
     /// (<paramref name="entryNodeId"/>), found along the taxiway's OWN edges, never the node of that name farthest away
     /// in a straight line. Each arm leaving the entry on the taxiway is walked to its end, taking the straightest way
-    /// on where the taxiway forks and never a node twice. The arm is the only one; else the one leaving within
+    /// on where the taxiway forks and never a node twice. An entry that is the taxiway's own end, with the way of travel
+    /// pointing off it (its one arm more than <see cref="ReversalDegrees"/> from it), is the end itself. The arm is
+    /// otherwise the only one; else the one leaving within
     /// <see cref="StraightOnDegrees"/> of <paramref name="travelBearingTrue"/>, the way the aircraft travels (its
     /// heading when on the taxiway, the way it comes when joining it), when exactly one does; else the arm whose end
     /// lies farthest from the aircraft. A taxiway that runs onto a runway ends at its last node clear of it.
@@ -115,6 +117,16 @@ public static class ClearanceLegEnd
             arms.Add(WalkArm(graph, entryNodeId, edge.ToNodeId, taxiway));
         }
         if (arms.Count == 0) return new TaxiwayEnd(-1, -1);
+
+        // The entry is the taxiway's own end and the aircraft is heading off it (its one arm needs a reversal): the leg
+        // ends there, never back along the whole taxiway behind the aircraft.
+        if (arms.Count == 1
+            && Math.Abs(TaxiGraph.NormalizeAngle(ArmDirection(graph, arms[0]) - travelBearingTrue)) > ReversalDegrees)
+        {
+            return graph.Nodes.TryGetValue(entryNodeId, out var entry) && ClearOfRunways(graph, entry)
+                ? new TaxiwayEnd(entryNodeId, entryNodeId)
+                : new TaxiwayEnd(-1, entryNodeId);
+        }
 
         var arm = ChooseArm(graph, arms, travelBearingTrue, aircraftLat, aircraftLon);
         for (int i = arm.Count - 1; i >= 1; i--)
@@ -265,34 +277,35 @@ public static class ClearanceLegEnd
     {
         /// <summary>The aircraft is across and clear of every runway: the leg's end is reached; refused, said.</summary>
         AlreadyAcross,
-        /// <summary>Route on to the far side, the side away from the crossing's pin (<see cref="MadeCrossingJudgement.FarSideSign"/>).</summary>
+        /// <summary>Route on to the far side: the side away from the crossing's pin.</summary>
         FarSide,
         /// <summary>The pin has no side to go by (it lies on the runway's pavement): refused, never guessed.</summary>
         Unknown,
     }
 
-    /// <summary>What <see cref="JudgeMadeCrossing"/> decides, with the far side's cross-track sign for <see cref="MadeCrossingEnd.FarSide"/> (0 otherwise).</summary>
-    public readonly record struct MadeCrossingJudgement(MadeCrossingEnd End, int FarSideSign);
-
     /// <summary>
     /// How a leg ends whose last step is a crossing already made (pinned by <c>ClearanceTrim</c>,
-    /// <see cref="ClearanceStep.AtNodeIsPassedStop"/>): to its stop, or, for a crossing made with no stop, to where the
-    /// route reached the runway. Signed cross-tracks in metres. The pin's side is the near side only when it lies off the
-    /// pavement (<paramref name="runwayHalfWidthMetres"/> or more from the centreline); a pin on the pavement has none.
-    /// The aircraft clear of every runway (<paramref name="aircraftClearOfRunways"/>) and on the other side, or with no
-    /// side to compare, is already across. Otherwise a pin with a side sends the leg to the far side of THAT crossing,
+    /// <see cref="ClearanceStep.AtNodeIsPassedStop"/>): to its stop, or, for a crossing made with no stop, to the node
+    /// before the runway (its near side; the reach only when the route started on the pavement). Judged on
+    /// <paramref name="shape"/>, the runway as the crossing classifier saw it: the pin's side is the near side only when
+    /// the pin lies off the pavement there (<see cref="RunwayShape.ContainsAlongLateral"/> with no margin, the
+    /// classifier's own test; a runway table's half-width can differ); a pin on it has none. The aircraft clear of every
+    /// runway (<paramref name="aircraftClearOfRunways"/>) and on the other side, or with no side to compare, is already
+    /// across. Otherwise a pin with a side sends the leg to the far side of THAT crossing, the side away from the pin,
     /// never the far side judged from the aircraft, which, once it is off the far edge, lies back over the runway; a pin
-    /// with none is refused.
+    /// with none is refused. No shape for the runway (null, or degenerate): no side to go by either.
     /// </summary>
-    public static MadeCrossingJudgement JudgeMadeCrossing(double pinCrossTrack, double runwayHalfWidthMetres,
-        double aircraftCrossTrack, bool aircraftClearOfRunways)
+    public static MadeCrossingEnd JudgeMadeCrossing(RunwayShape? shape, double pinLat, double pinLon,
+        double aircraftLat, double aircraftLon, bool aircraftClearOfRunways)
     {
-        int nearSide = Math.Abs(pinCrossTrack) >= runwayHalfWidthMetres ? Math.Sign(pinCrossTrack) : 0;
-        if (aircraftClearOfRunways && (nearSide == 0 || Math.Sign(aircraftCrossTrack) == -nearSide))
-            return new MadeCrossingJudgement(MadeCrossingEnd.AlreadyAcross, 0);
-        return nearSide == 0
-            ? new MadeCrossingJudgement(MadeCrossingEnd.Unknown, 0)
-            : new MadeCrossingJudgement(MadeCrossingEnd.FarSide, -nearSide);
+        if (shape == null || shape.IsDegenerate)
+            return aircraftClearOfRunways ? MadeCrossingEnd.AlreadyAcross : MadeCrossingEnd.Unknown;
+        var (pinAlong, pinLateral) = shape.Project(pinLat, pinLon);
+        int nearSide = shape.ContainsAlongLateral(pinAlong, pinLateral, 0.0) ? 0 : Math.Sign(pinLateral);
+        int aircraftSide = Math.Sign(shape.Project(aircraftLat, aircraftLon).Lateral);
+        if (aircraftClearOfRunways && (nearSide == 0 || aircraftSide == -nearSide))
+            return MadeCrossingEnd.AlreadyAcross;
+        return nearSide == 0 ? MadeCrossingEnd.Unknown : MadeCrossingEnd.FarSide;
     }
 
     /// <summary>The Calculate refusal for <see cref="MadeCrossingEnd.AlreadyAcross"/>.</summary>

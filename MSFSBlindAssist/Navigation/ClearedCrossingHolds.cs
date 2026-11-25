@@ -19,10 +19,14 @@ public enum ClearedBy
 /// <paramref name="Origin"/> is who cleared it (a crossing entered and one a Continue cleared both carry
 /// <c>SeqIndex</c> -1), kept through a recalculation. <paramref name="ReachNodeId"/> is the node where the route
 /// reaches the runway, recorded when it is applied (0: not recorded), by which a crossing with no stop is used up
-/// once the aircraft is past it (<see cref="ClearedCrossingHolds.WithoutPassedNoStop"/>).
+/// once the aircraft is past it (<see cref="ClearedCrossingHolds.WithoutPassedNoStop"/>). <paramref name="NearNodeId"/>,
+/// for a crossing with no stop, is the route node before it (the last node clear of the runway, its near side), recorded
+/// when it is applied (0: not recorded, or none: the route started on the runway): the step list pins a crossing made
+/// with no stop there (<c>ClearanceTrim</c>), never at the reach, which lies on the FAR side when one edge jumps across
+/// the runway.
 /// </summary>
 public sealed record ClearedCrossing(string Runway, string? At = null, int AtNodeId = 0, int StopNodeId = 0, int SeqIndex = -1,
-                                     ClearedBy Origin = ClearedBy.Clearance, int ReachNodeId = 0);
+                                     ClearedBy Origin = ClearedBy.Clearance, int ReachNodeId = 0, int NearNodeId = 0);
 
 /// <summary>
 /// What <c>TaxiGuidanceManager.ClearedCrossingsChanged</c> carries: every crossing the Hold short key put back as a stop,
@@ -156,7 +160,14 @@ public static class ClearedCrossingHolds
             else if (HasNoStop(match))
             {
                 match.Cleared = true;
-                applied.Add(request with { StopNodeId = 0, ReachNodeId = StopNode(route, match.ReachNodeIndex)?.NodeId ?? 0 });
+                // The reach, by which it is used up once passed, and the node before it, its near side, by which the
+                // step list pins it once made (the reach is beyond the runway when one edge jumps across it).
+                applied.Add(request with
+                {
+                    StopNodeId = 0,
+                    ReachNodeId = StopNode(route, match.ReachNodeIndex)?.NodeId ?? 0,
+                    NearNodeId = StopNode(route, match.ReachNodeIndex - 1)?.NodeId ?? 0,
+                });
             }
             // Else passed, or held by the pilot's own stop: nothing cleared, in neither list, and no other crossing tried.
         }

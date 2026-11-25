@@ -220,6 +220,28 @@ public class ClearedCrossingHoldsTests
         Assert.Equal(new[] { false, true }, laterEvents.Select(e => e.Cleared));
     }
 
+    // A crossing cleared with no stop records the node before the runway, its near side: where the route reaches the
+    // runway can lie on the FAR side when one edge jumps across it (the classifier's reach is then the first clear
+    // node beyond), and a crossing made must never be judged from there.
+    [Fact]
+    public void A_crossing_with_no_stop_records_the_node_before_the_runway()
+    {
+        // One edge from 35 m south (off the pavement, inside the margin) to 60 m north of 09/27, loaded from its first
+        // node: no stop.
+        var route = RouteOf(Node(1, 500, -35), Node(2, 500, 60), Node(3, 500, 150));
+        var ev = Assert.Single(Pass(route, Runway09(), aircraft: new AircraftPosition(Lat(-35), Lon(500))));
+        Assert.False(ev.Held);
+        Assert.False(ev.Passed);
+        Assert.Equal(1, ev.ReachNodeIndex);
+
+        var applied = Assert.Single(Clear(route, new ClearedCrossing("09")).Applied);
+
+        Assert.True(ev.Cleared);
+        Assert.Equal(0, applied.StopNodeId);
+        Assert.Equal(2, applied.ReachNodeId);   // the far side
+        Assert.Equal(1, applied.NearNodeId);    // the node before the runway
+    }
+
     [Fact]
     public void At_a_stop_guarding_two_runways_only_the_named_one_is_cleared()
     {
