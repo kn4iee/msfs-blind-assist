@@ -358,6 +358,89 @@ public class ClearedCrossingHoldsTests
         Assert.Equal("Cleared crossings: applied=(none) notOnRoute=(none) elsewhere=09@B3", ClearedCrossingHolds.DescribeForLog(missed));
     }
 
+    // A CAT II/III holding point lies further out than the line the pass stops at: "cross runway 09 at B3" names a point
+    // the route passes BEFORE the stop. It is that crossing's when no other runway lies between the point and the stop;
+    // before, only the stretch from the stop to the runway matched, and the pilot heard "not crossed at B3".
+    private static TaxiRoute AtA5WithCatIiPoint() => Named(RouteOf(Node(1, 500, -400), Node(2, 500, -250),
+        Node(3, 500, -105, TaxiNodeType.HoldShort, "runway 09 at A5"), Node(4, 500, -51), Node(5, 500, 0), Node(6, 500, 100)), "A");
+
+    [Fact]
+    public void A_holding_point_further_out_than_the_stop_clears_the_crossing_it_leads_to()
+    {
+        var route = AtA5WithCatIiPoint();
+        var ev = Assert.Single(Pass(route, Runway09()));
+        Assert.Equal(2, ev.StopNodeIndex);
+
+        var outcome = Clear(route, new ClearedCrossing("09", At: "B3", AtNodeId: 2));
+
+        Assert.False(route.Segments[1].IsHoldShortPoint);
+        Assert.True(ev.Cleared);
+        Assert.Equal(3, Assert.Single(outcome.Applied).StopNodeId);
+        AssertNothingReported(outcome);
+    }
+
+    [Fact]
+    public void A_holding_point_further_out_with_another_runway_between_is_not_that_crossings()
+    {
+        // Northbound on A: 08/26 at 600 m south, then 09/27. The point (node 2) lies before 08/26: it is 08/26's.
+        TaxiRoute Build() => Named(RouteOf(Node(1, 500, -900), Node(2, 500, -800), Node(3, 500, -700), Node(4, 500, -600),
+            Node(5, 500, -500), Node(6, 500, -300), Node(7, 500, -105), Node(8, 500, 0), Node(9, 500, 100)), "A");
+        var runways = new[] { EastWest("08", "26", northM: -600), Runway09()[0] };
+
+        var route = Build();
+        var events = Pass(route, runways);
+        Assert.Equal(2, events.Count);
+        var outcome = Clear(route, new ClearedCrossing("09", At: "B3", AtNodeId: 2));
+        Assert.Empty(outcome.Applied);
+        Assert.Equal("B3", Assert.Single(outcome.Elsewhere).At);
+        Assert.All(events, e => Assert.False(e.Cleared));
+
+        var other = Build();
+        var otherEvents = Pass(other, runways);
+        var cleared = Clear(other, new ClearedCrossing("08", At: "B3", AtNodeId: 2));
+        Assert.Single(cleared.Applied);
+        Assert.Equal(new[] { true, false }, otherEvents.Select(e => e.Cleared));
+        AssertNothingReported(cleared);
+    }
+
+    [Fact]
+    public void A_holding_point_before_two_crossings_of_its_runway_is_the_first_ones()
+    {
+        // TwoCrossings: a point before the first crossing; the first crossing lies between it and the second.
+        var route = TwoCrossings();
+        var events = Pass(route, Runway09());
+
+        var outcome = Clear(route, new ClearedCrossing("09", At: "B3", AtNodeId: 1));
+
+        Assert.Equal(new[] { true, false }, events.Select(e => e.Cleared));
+        Assert.Equal(2, Assert.Single(outcome.Applied).StopNodeId);
+    }
+
+    // A holding point's node is the one place there is: it is matched over the whole route before its name is, so a
+    // name an earlier crossing happens to carry never takes the request from the crossing at the point.
+    [Fact]
+    public void A_holding_points_node_is_matched_before_its_name()
+    {
+        var route = TwoCrossings();
+        for (int i = 0; i < route.Segments.Count; i++) route.Segments[i].TaxiwayName = i < 3 ? "P" : "Q";
+        var events = Pass(route, Runway09());
+        Assert.Equal(new[] { 1, 5 }, events.Select(e => e.StopNodeIndex));
+
+        // "P" is the first crossing's stop taxiway; node 7 is where the route reaches 09 the second time.
+        var outcome = Clear(route, new ClearedCrossing("09", At: "P", AtNodeId: 7));
+
+        Assert.Equal(new[] { false, true }, events.Select(e => e.Cleared));
+        Assert.True(route.Segments[0].IsHoldShortPoint);
+        Assert.Equal(6, Assert.Single(outcome.Applied).StopNodeId);
+
+        // With no node on the route, the name still finds it.
+        var byName = TwoCrossings();
+        for (int i = 0; i < byName.Segments.Count; i++) byName.Segments[i].TaxiwayName = i < 3 ? "P" : "Q";
+        var byNameEvents = Pass(byName, Runway09());
+        Clear(byName, new ClearedCrossing("09", At: "P", AtNodeId: 99));
+        Assert.Equal(new[] { true, false }, byNameEvents.Select(e => e.Cleared));
+    }
+
     // A runway crossed twice. The request goes to the first crossing, in route order, that matches its place, passed
     // and pilot-held ones included; one that cannot be cleared there (the pilot's own hold shares its stop, or the
     // aircraft is already past it) keeps the request: nothing is cleared and nothing said, and it is never passed on to

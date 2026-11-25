@@ -73,10 +73,12 @@ public static class ClearedCrossingHolds
     /// order (where the route reaches the runway, <see cref="TaxiRouteRunwayEvent.ReachNodeIndex"/>) from EVERY
     /// crossing of the runway not yet cleared, passed ones and ones held by the pilot's own stop included, so a bare
     /// request is about the crossing in front of the aircraft, never a later one: the first of them, or with a place
-    /// the first whose event location or stop segment's taxiway is <c>At</c> (a crossing with no stop: its location),
-    /// or whose route from its stop node to where it reaches the runway (both included) passes <c>AtNodeId</c> (a
+    /// the first whose route from its stop node to where it reaches the runway (both included) passes <c>AtNodeId</c> (a
     /// holding point the route is pinned through can lie between the scenery line the pass stopped at and the
-    /// runway). With <paramref name="runStartSegmentOf"/> and a <c>SeqIndex</c>, those the route reaches at or after
+    /// runway), or that is the first crossing after <c>AtNodeId</c> with no other runway event between (a CAT II/III
+    /// point further out than the stop), tried over the whole list before any name; else the first whose event location
+    /// or stop segment's taxiway is <c>At</c> (a crossing with no stop: its location). With
+    /// <paramref name="runStartSegmentOf"/> and a <c>SeqIndex</c>, those the route reaches at or after
     /// that taxiway step's first segment are tried first: the reach, not the stop, which can be set back onto the
     /// taxiway before (the binding a pilot's runway pick uses). The match is cleared when it is a candidate, or marked
     /// cleared when it is a crossing with no stop (#355's decision 3: neither held nor passed), so it is not said as
@@ -127,14 +129,20 @@ public static class ClearedCrossingHolds
                 .Where(e => !e.Cleared)
                 .OrderBy(e => e.ReachNodeIndex < 0 ? int.MaxValue : e.ReachNodeIndex)
                 .ToList();
-            TaxiRouteRunwayEvent? match = null;
+            List<TaxiRouteRunwayEvent>? onRun = null;
             if (runStartSegmentOf != null && request.SeqIndex >= 0)
             {
                 int runStart = runStartSegmentOf(request.SeqIndex);
                 if (runStart >= 0)
-                    match = FirstMatch(route, ordered.Where(e => e.ReachNodeIndex >= runStart), request);
+                    onRun = ordered.Where(e => e.ReachNodeIndex >= runStart).ToList();
             }
-            match ??= FirstMatch(route, ordered, request);
+            // A holding point's node is the one place there is: matched over the whole list before any name is.
+            TaxiRouteRunwayEvent? match = null;
+            if (request.AtNodeId != 0)
+                match = (onRun is null ? null : FirstMatch(route, onRun, request, events, byNode: true))
+                        ?? FirstMatch(route, ordered, request, events, byNode: true);
+            match ??= (onRun is null ? null : FirstMatch(route, onRun, request, events, byNode: false))
+                      ?? FirstMatch(route, ordered, request, events, byNode: false);
 
             if (match is null)
             {
@@ -899,34 +907,51 @@ public static class ClearedCrossingHolds
     // #355's decision 3: a crossing the route makes with no stop of its own, still ahead and not yet cleared.
     private static bool HasNoStop(TaxiRouteRunwayEvent e) => !e.Held && !e.Passed && !e.Cleared;
 
-    private static TaxiRouteRunwayEvent? FirstMatch(TaxiRoute route, IEnumerable<TaxiRouteRunwayEvent> crossings, ClearedCrossing request)
+    // The first crossing, in the order given, at the request's place: by its node (byNode), else by its name; a request
+    // with neither is about the first crossing. A request with a node is matched by node over the whole list first
+    // (Apply), so a name an earlier crossing carries never takes it from the crossing at the point.
+    private static TaxiRouteRunwayEvent? FirstMatch(TaxiRoute route, IEnumerable<TaxiRouteRunwayEvent> crossings, ClearedCrossing request,
+                                                    IReadOnlyList<TaxiRouteRunwayEvent> allEvents, bool byNode)
     {
         bool hasAt = !string.IsNullOrWhiteSpace(request.At);
         foreach (var e in crossings)
         {
+            if (byNode)
+            {
+                if (OnApproach(route, e, request.AtNodeId, allEvents)) return e;
+                continue;
+            }
             if (!hasAt && request.AtNodeId == 0) return e;
             if (hasAt && (SamePlace(e.Location, request.At!) || SamePlace(StopTaxiway(route, e.StopNodeIndex), request.At!)))
                 return e;
-            if (request.AtNodeId != 0 && OnApproach(route, e, request.AtNodeId)) return e;
         }
         return null;
     }
 
-    // Whether node nodeId lies on the route from the event's stop to where the route reaches the runway, both included:
-    // a holding point the route is pinned through can sit between the scenery line the pass stopped at and the runway.
-    // A crossing with no stop (passed, or none placed) is matched by its place name only.
-    private static bool OnApproach(TaxiRoute route, TaxiRouteRunwayEvent e, int nodeId)
+    // Whether node nodeId is this crossing's place: on the route from the event's stop to where the route reaches the
+    // runway, both included (a holding point the route is pinned through can sit between the scenery line the pass
+    // stopped at and the runway), or further out than the stop (a CAT II/III point) with no other runway event between
+    // it and the stop, so the first crossing after the point is the one it leads to. A crossing with no stop (passed, or
+    // none placed) is matched by its place name only.
+    private static bool OnApproach(TaxiRoute route, TaxiRouteRunwayEvent e, int nodeId, IReadOnlyList<TaxiRouteRunwayEvent> allEvents)
     {
-        if (e.StopNodeIndex < 0) return false;
+        if (e.StopNodeIndex < 0 || nodeId == 0) return false;
         int last = Math.Max(e.StopNodeIndex, e.ReachNodeIndex);
-        for (int k = e.StopNodeIndex; k <= last; k++)
+        for (int k = 0; k <= last; k++)
         {
             var node = StopNode(route, k);
             if (node is null) return false;
-            if (node.NodeId == nodeId) return true;
+            if (node.NodeId != nodeId) continue;
+            if (k >= e.StopNodeIndex) return true;
+            if (!allEvents.Any(o => o != null && !ReferenceEquals(o, e) && Between(o, k, e.StopNodeIndex))) return true;
         }
         return false;
     }
+
+    // Another runway event lies between route nodes from (included) and to (excluded): its stop or its reach.
+    private static bool Between(TaxiRouteRunwayEvent other, int from, int to)
+        => (other.StopNodeIndex >= from && other.StopNodeIndex < to)
+           || (other.ReachNodeIndex >= from && other.ReachNodeIndex < to);
 
     private static ClearedCrossing ClearMatch(TaxiRoute route, TaxiRouteRunwayEvent match, ClearedCrossing request)
     {
