@@ -809,7 +809,17 @@ public partial class TaxiGuidanceManager
             }
         }
 
-        return $"{taxiway}{nextTurn}, {distStr} to {_destinationName}.";
+        // The next stop of any kind (the Hold short key's finder), the route's last segment left out: the sentence's end
+        // already names it. A cleared crossing is named as one, so the pilot hears BA will not stop there.
+        string stopClause = "";
+        var aircraftNow = _positionInitialized
+            ? new ClearedCrossingHolds.HoldShortKeyAircraft(_lastLat, _lastLon, _lastGroundSpeedKts)
+            : (ClearedCrossingHolds.HoldShortKeyAircraft?)null;
+        if (ClearedCrossingHolds.FindNextStop(_route, _currentSegmentIndex, aircraftNow, _graph?.RunwayCenterlines,
+                _destinationName, leaveOutLast: true, includeCleared: true, skipStart: false) is { } nextStop)
+            stopClause = ClearedCrossingCallouts.StatusClause(nextStop.Label, FormatDistance(nextStop.Metres), nextStop.Cleared);
+
+        return $"{taxiway}{nextTurn}{stopClause}, {distStr} to {_destinationName}.";
         } // end lock(_stateLock)
     }
 

@@ -478,6 +478,26 @@ public class ClearedCrossingWiringTests
         return next.Success ? text.Substring(start, next.Index + 1) : text[start..];
     }
 
+    // The taxi status readout (Output Y) names the next stop of any kind through the Hold short key's own finder, the
+    // route's last segment left out (the sentence's end names it), worded by ClearedCrossingCallouts.StatusClause.
+    [Fact]
+    public void The_taxi_status_names_the_next_stop_through_the_keys_finder()
+    {
+        string announcements = ServicesSource("TaxiGuidanceManager.Announcements.cs");
+        string status = Member(announcements, "public string GetStatusAnnouncement(");
+
+        Assert.Contains("ClearedCrossingCallouts.StatusClause(", status);
+        Assert.Contains("ClearedCrossingHolds.FindNextStop(_route,", status);
+        Assert.Contains("leaveOutLast: true", status);
+        Assert.Contains("FormatDistance(nextStop.Metres)", status);
+        Assert.Contains("return $\"{taxiway}{nextTurn}{stopClause}, {distStr} to {_destinationName}.\";", status);
+        // The key's "Next stop" answer is the same finder's (the key itself calls DecideHoldShortKey).
+        Assert.Contains("FindNextStop(route, cursor, aircraft,", Member(ClearedHoldsSource(), "public static HoldShortKeyDecision DecideHoldShortKey("));
+    }
+
+    private static string ClearedHoldsSource()
+        => File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Navigation", "ClearedCrossingHolds.cs"));
+
     private static string RoutingSource() => ServicesSource("TaxiGuidanceManager.Routing.cs");
     private static string ManagerSource() => ServicesSource("TaxiGuidanceManager.cs");
     private static string RolloutSource() => ServicesSource("TaxiGuidanceManager.Rollout.cs");

@@ -472,13 +472,9 @@ public static class ClearedCrossingHolds
             return new HoldShortKeyDecision(HoldShortKeyAnswer.PastTheLine, line.Label.Trim());
 
         // The next stop of any kind.
-        if (!state.Holding && cursor == 0 && !string.IsNullOrWhiteSpace(route.StartHoldRunway))
-            return new HoldShortKeyDecision(HoldShortKeyAnswer.NextStop, route.StartHoldRunway.Trim(), -1,
-                MetresToStart(route, aircraft), cursor);
-        for (int i = cursor; i < segments.Count; i++)
-            if (segments[i].IsHoldShortPoint)
-                return new HoldShortKeyDecision(HoldShortKeyAnswer.NextStop, StopName(route, i, state.DestinationName), i,
-                    MetresToStop(route, cursor, i, aircraft), cursor);
+        if (FindNextStop(route, cursor, aircraft, state.Runways, state.DestinationName, leaveOutLast: false,
+                includeCleared: false, skipStart: state.Holding) is { } stop)
+            return new HoldShortKeyDecision(HoldShortKeyAnswer.NextStop, stop.Label, stop.SegmentIndex, stop.Metres, cursor);
         if (atDestination)
         {
             int last = segments.Count - 1;
@@ -486,6 +482,47 @@ public static class ClearedCrossingHolds
                 MetresToStop(route, cursor, last, aircraft), cursor);
         }
         return new HoldShortKeyDecision(HoldShortKeyAnswer.NoRunwayAhead);
+    }
+
+    /// <summary>The next stop ahead as one sentence needs it: its label, its segment (-1: the start hold), the metres to it, and whether it is a cleared crossing.</summary>
+    public readonly record struct NextStopInfo(string Label, int SegmentIndex, double Metres, bool Cleared);
+
+    /// <summary>
+    /// The next stop ahead of segment <paramref name="cursor"/>, the ONE finder behind the Hold short key's "Next stop"
+    /// answer and the taxi status readout, so both name the same stop. In order: the start hold while the cursor is at
+    /// the start (<paramref name="skipStart"/> false): a held one by its current label; with
+    /// <paramref name="includeCleared"/>, one cleared for every runway and not yet started across
+    /// (<see cref="StartedAcross"/>) by its placed label, cleared; then the first segment from the cursor that is a hold
+    /// short of any kind (a partially cleared one by its CURRENT label, not cleared) or, with
+    /// <paramref name="includeCleared"/>, a fully cleared crossing (its placed label, cleared). The route's last
+    /// segment is left out with <paramref name="leaveOutLast"/> (the status sentence's end names it). Metres run as the
+    /// status readout measures: straight to the end of the current segment, then the segments after it. Pure.
+    /// </summary>
+    public static NextStopInfo? FindNextStop(TaxiRoute? route, int cursor, HoldShortKeyAircraft? aircraft,
+                                             IReadOnlyList<TaxiGraph.RunwayCenterline>? runways, string? destinationName,
+                                             bool leaveOutLast, bool includeCleared, bool skipStart)
+    {
+        if (route is null || route.Segments.Count == 0) return null;
+        var segments = route.Segments;
+        cursor = Math.Clamp(cursor, 0, segments.Count);
+        if (!skipStart && cursor == 0)
+        {
+            if (!string.IsNullOrWhiteSpace(route.StartHoldRunway))
+                return new NextStopInfo(route.StartHoldRunway.Trim(), -1, MetresToStart(route, aircraft), false);
+            if (includeCleared && IsStartHoldCleared(route) && !StartedAcross(route, aircraft, runways))
+                return new NextStopInfo(LineLabel(route.PlacedStartHoldLabel, route.StartHoldClearedRunways), -1,
+                    MetresToStart(route, aircraft), true);
+        }
+        int end = leaveOutLast ? segments.Count - 1 : segments.Count;
+        for (int i = cursor; i < end; i++)
+        {
+            if (segments[i].IsHoldShortPoint)
+                return new NextStopInfo(StopName(route, i, destinationName), i, MetresToStop(route, cursor, i, aircraft), false);
+            if (includeCleared && IsFullyCleared(segments[i]))
+                return new NextStopInfo(LineLabel(segments[i].PlacedHoldLabel, segments[i].ClearedRunways), i,
+                    MetresToStop(route, cursor, i, aircraft), true);
+        }
+        return null;
     }
 
     /// <summary>
