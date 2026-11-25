@@ -598,12 +598,13 @@ public class ClearancePlannerTests
     [Fact]
     public void A_used_end_crossing_stays_pinned_to_its_place()
     {
-        // A fresh Calculate clears only the crossing already made (its stop node), never a later one of 04L.
+        // The leg still ends just across the crossing already made (its stop node); a fresh Calculate clears nothing for
+        // it, so never a later crossing of 04L either.
         var kept = Trim(new[] { Via("C"), CrossRwy("04L") }, used: new[] { Rec("04L", 0, at: "C", stopNodeId: 77) });
         Assert.Equal(new[] { Via("C"), CrossRwy("04L", at: "C") with { AtNodeId = 77, AtNodeIsPassedStop = true } }, kept);
         var plan = ClearancePlanner.Build(kept, hasDestination: false);
         Assert.Equal(ClearanceEndKind.AcrossRunway, plan.End);
-        Assert.Equal(new[] { new ClearedCrossing("04L", At: "C", AtNodeId: 77, SeqIndex: 0) }, plan.Crossings);
+        Assert.Empty(plan.Crossings);
         // The stop node is behind the aircraft: never a holding point to pin the route through.
         Assert.Null(plan.CrossAtHoldingPointNodeId);
         Assert.Null(plan.CrossAtHoldingPointName);
@@ -627,7 +628,7 @@ public class ClearancePlannerTests
         Assert.Equal(new[] { Via("P"), CrossRwy("24L", at: "P") with { AtNodeId = 57, AtNodeIsPassedStop = true } }, kept);
         var plan = ClearancePlanner.Build(kept, hasDestination: false);
         Assert.Null(plan.CrossAtHoldingPointNodeId);
-        Assert.Equal(new[] { new ClearedCrossing("24L", At: "P", AtNodeId: 57, SeqIndex: 0) }, plan.Crossings);
+        Assert.Empty(plan.Crossings);
         Assert.False(kept[1].AtNodeIsReach);
         // No node before the runway on the route (it started on the pavement, or the aircraft itself was the last clear
         // point and the route's first node lies beyond the runway): the reach, marked as one. Its side is never trusted.
@@ -636,6 +637,41 @@ public class ClearancePlannerTests
             reachOnly[1]);
         // Neither: nothing to pin it by, it stays as entered.
         Assert.Equal(steps, Trim(steps, used: new[] { Rec("24L", 0, at: "P") }));
+    }
+
+    // Ruling 4 (Task 6 re-review): a crossing already made only says where the leg ends. It is never cleared again, by
+    // its stop, its near side or its reach, so a fresh Calculate can never clear a crossing of that runway the new
+    // route makes ("crossed a second time"); a crossing still to make next to it is cleared as entered.
+    [Fact]
+    public void A_crossing_already_made_is_never_cleared_again()
+    {
+        var byStop = CrossRwy("04L", at: "C") with { AtNodeId = 77, AtNodeIsPassedStop = true };
+        var byReach = CrossRwy("24L") with { AtNodeId = 58, AtNodeIsPassedStop = true, AtNodeIsReach = true };
+        var reachOnlyFlag = CrossRwy("24L") with { AtNodeId = 58, AtNodeIsReach = true };
+
+        Assert.Empty(Leg(Via("C"), byStop).Crossings);
+        Assert.Empty(Leg(Via("P"), byReach).Crossings);
+        Assert.Empty(Leg(Via("P"), reachOnlyFlag).Crossings);
+        Assert.Equal(ClearanceEndKind.AcrossRunway, Leg(Via("C"), byStop).End);
+        Assert.Empty(To(null, Via("C"), byStop, Via("D")).Crossings);
+
+        var mixed = To(null, Via("C"), byStop, Via("D"), CrossRwy("09"));
+        Assert.Equal(new[] { new ClearedCrossing("09", SeqIndex: 1) }, mixed.Crossings);
+    }
+
+    // Ruling 4: once the pilot adds a step after it, a crossing already made no longer ends the list: it is completed
+    // and goes. Only a made crossing that some step follows; one still ending the list, or a crossing still to make, stays.
+    [Fact]
+    public void A_made_crossing_some_step_follows_is_completed()
+    {
+        var made = CrossRwy("04L") with { AtNodeId = 77, AtNodeIsPassedStop = true };
+        var reach = CrossRwy("24L") with { AtNodeId = 58, AtNodeIsPassedStop = true, AtNodeIsReach = true };
+
+        Assert.Empty(ClearanceTrim.CompletedCrossings(new[] { Via("C"), made }));
+        Assert.Equal(new[] { 1 }, ClearanceTrim.CompletedCrossings(new[] { Via("C"), made, HoldRwy("04R") }));
+        Assert.Equal(new[] { 1 }, ClearanceTrim.CompletedCrossings(new[] { Via("P"), reach, HoldTwy("L") }));
+        Assert.Empty(ClearanceTrim.CompletedCrossings(new[] { Via("C"), CrossRwy("04L"), HoldRwy("04R") }));
+        Assert.Empty(ClearanceTrim.CompletedCrossings(Array.Empty<ClearanceStep>()));
     }
 
     [Fact]

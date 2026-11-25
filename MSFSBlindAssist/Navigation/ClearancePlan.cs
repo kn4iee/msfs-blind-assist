@@ -29,8 +29,9 @@ public sealed record ClearanceHold(int SeqIndex, ClearanceStep Step);
 /// kept twice ([RTE-10], [RTE-33]).</item>
 /// <item><see cref="Holds"/>: the stops on the way (a destination runway held short of is not one: guidance already
 /// holds there; nor is the step that ends a leg with no destination, <see cref="EndStep"/>).</item>
-/// <item><see cref="Crossings"/>: one <see cref="ClearedCrossing"/> per Cross runway step, the only thing besides
-/// Continue that clears a runway ([CLR-1]).</item>
+/// <item><see cref="Crossings"/>: one <see cref="ClearedCrossing"/> per Cross runway step still to make, the only thing
+/// besides Continue that clears a runway ([CLR-1]); never one for a crossing already made
+/// (<see cref="ClearanceTrim.IsMadeCrossing"/>).</item>
 /// <item><see cref="TurnPicks"/>: PR #355's picks, keyed by the Via step's index in <see cref="TaxiwaySequence"/>;
 /// they reach guidance only as <c>LoadRoute</c>'s <c>userTurnPicks</c> ([TURN-1]).</item>
 /// <item><see cref="TaxiwaysToCross"/>: every Cross taxiway step, in step order, for
@@ -113,8 +114,9 @@ public static class ClearancePlanner
             if (step.Kind != ClearanceStepKind.Cross) continue;
             if (step.TargetKind == ClearanceTargetKind.Taxiway)
                 toCross.Add(step.Name);
-            else if (step.TargetKind == ClearanceTargetKind.Runway)
-                // Looked for from the taxiway it was entered after.
+            else if (step.TargetKind == ClearanceTargetKind.Runway && !ClearanceTrim.IsMadeCrossing(step))
+                // Looked for from the taxiway it was entered after. A crossing already made (pinned by the trim) only
+                // says where the leg ends: never cleared again, so no crossing the new route makes is cleared by it.
                 crossings.Add(new ClearedCrossing(step.Name, step.At, step.AtNodeId, SeqIndex: seqIndexOf[i]));
         }
 
@@ -462,6 +464,28 @@ public static class ClearanceTrim
         return kept.Select(k => k.Step).ToList();
     }
 
+    /// <summary>
+    /// True for a Cross step the trim pinned to a crossing already made (<see cref="ClearanceStep.AtNodeIsPassedStop"/>,
+    /// <see cref="ClearanceStep.AtNodeIsReach"/>): it only says where a leg with no destination ends, and is never a
+    /// crossing to clear (<see cref="ClearancePlanner.Build"/>).
+    /// </summary>
+    public static bool IsMadeCrossing(ClearanceStep step)
+        => step is { Kind: ClearanceStepKind.Cross } && (step.AtNodeIsPassedStop || step.AtNodeIsReach);
+
+    /// <summary>
+    /// The places in <paramref name="steps"/> of each crossing already made (<see cref="IsMadeCrossing"/>) that some
+    /// step follows: it no longer ends the list, so it is completed and goes (a step the pilot added after it, or one
+    /// they had added before the trim pinned it). Ascending; empty when none.
+    /// </summary>
+    public static IReadOnlyList<int> CompletedCrossings(IReadOnlyList<ClearanceStep> steps)
+    {
+        var completed = new List<int>();
+        if (steps == null) return completed;
+        for (int i = 0; i < steps.Count - 1; i++)
+            if (IsMadeCrossing(steps[i])) completed.Add(i);
+        return completed;
+    }
+
     private enum CrossingState { Unknown, Used, PutBack, InForce }
 
     // What each Cross runway step is matched to. Exact places first, for every step, then places matched only through
@@ -520,11 +544,13 @@ public static class ClearanceTrim
     }
 
     // The end of a leg already crossed: kept, pinned to the crossing made (its stop node, and its place name when the
-    // record has one), so a fresh Calculate clears only that crossing, never a later crossing of the same runway the
-    // new route makes. A crossing made with no stop of its own (#355's decision 3) is pinned by its NEAR side, the node
-    // before the runway (NearNodeId): left as entered, its far side would be judged from where the aircraft now is,
-    // which once across lies back over the runway, and the stale step would clear that return crossing; pinned where
-    // the route reached the runway, a reach beyond it (one edge jumping across) read the far side as the near one. With
+    // record has one), so a fresh Calculate ends the leg just across THAT crossing and clears nothing for it
+    // (IsMadeCrossing), never a later crossing of the same runway the new route makes; once a step follows it, it is
+    // completed and goes (CompletedCrossings). A crossing made with no stop of its own (#355's decision 3) is pinned by
+    // its NEAR side, the node before the runway (NearNodeId): left as entered, its far side would be judged from where
+    // the aircraft now is, which once across lies back over the runway, and the stale step would clear that return
+    // crossing; pinned where the route reached the runway, a reach beyond it (one edge jumping across) read the far
+    // side as the near one. With
     // no node before it on the route (the route started on the runway's pavement, or the aircraft itself was the last
     // clear point and the route's first node lies beyond the runway), the reach, marked as one (AtNodeIsReach): it can
     // lie on either side, so its side is never trusted and the window refuses that leg rather than guess. One recorded
