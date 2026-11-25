@@ -674,8 +674,9 @@ new route when cleared.", the aircraft at rest 56 m before L. Four shards give t
 - **A recalculation that the no-op guard drops is adopted when the cleared stop is not on the new route** (the
   RTE-22 amendment). KPHL and KLAX: an early recalculation as the pilot model leaves the stand, discarded with
   nothing cleared, is adopted cleared; the new route meets the runway at another stop and says "Runway 09L is a stop
-  again." (KPHL, 6 picked flights and 2 plain) or ends a crossing-on-the-runway artefact (KLAX: the flight with
-  nothing cleared stops on 25L's pavement at H8; cleared, the new route crosses once at H9).
+  again." (KPHL, 6 picked flights; its 2 plain flights adopt the same recalculation with nothing cleared too) or ends
+  a crossing-on-the-runway artefact (KLAX, 2: the flight with nothing cleared stops on 25L's pavement at H8; cleared,
+  the new route crosses once at H9).
 - **Eleven `crossthenhold` stops are the B junction itself**, all where the runway's far edge is 65 m or less
   before it, as stage 1 placed KLSV "via A, hold short of F": no setback point had its 25 m approach clear of the
   margin.
