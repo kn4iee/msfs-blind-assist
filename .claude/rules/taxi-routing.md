@@ -34,6 +34,8 @@ paths:
   - "tests/MSFSBlindAssist.Tests/**/*OffChartLeg*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*KbosHcJunction*.cs"
   - "MSFSBlindAssist/Navigation/TurnPick*.cs"
+  - "MSFSBlindAssist/Navigation/Clearance*.cs"
+  - "tests/MSFSBlindAssist.Tests/Clearance*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*TurnPick*.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.Announcements.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.MathUtils.cs"
