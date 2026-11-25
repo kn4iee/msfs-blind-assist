@@ -183,21 +183,6 @@ internal static class TurnPickCarryOver
     /// How far the aircraft's heading may be from the picked taxiway's segment to count as on it.
     public const double OnPickedTaxiwayMaxHeadingDeg = 45.0;
 
-    /// Row picks from the planner's rows: a row with no taxiway is skipped and does not consume an index.
-    /// turnIndex: 0 Automatic, 1 Left, 2 Right.
-    public static Dictionary<int, TurnSide> FromRows(IReadOnlyList<(bool HasTaxiway, int TurnIndex)> rows)
-    {
-        var picks = new Dictionary<int, TurnSide>();
-        int index = 0;
-        foreach (var (hasTaxiway, turnIndex) in rows)
-        {
-            if (!hasTaxiway) continue;
-            if (turnIndex == 1) picks[index] = TurnSide.Left;
-            else if (turnIndex == 2) picks[index] = TurnSide.Right;
-            index++;
-        }
-        return picks;
-    }
-
+    // The picks come from the step list's Left onto and Right onto steps (ClearancePlanner.Build, TurnPicks).
     // Re-keying the picks when rows leave the sequence is ClearanceRows.Without, shared with the hold-short picks.
 }

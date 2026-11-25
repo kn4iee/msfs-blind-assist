@@ -2,7 +2,7 @@
 // ClearedCrossingHolds (ClearedCrossingHoldsTests). TaxiGuidanceManager has no test harness [VP-1], so this
 // pins from the source that the manager clears through it inside the one pass that places runway stops, keeps
 // the crossings cleared on the route being flown whole through a refused load, a rollback, a stop and the
-// rollout reset, and that the form's "After crossing runway" leg asks for its crossing this way.
+// rollout reset, and that the form's Cross runway steps ask for their crossings this way.
 
 using System;
 using System.IO;
@@ -112,17 +112,18 @@ public class ClearedCrossingWiringTests
         Assert.Matches(@"!oldRouteWrongForTurnPick && !clearedStopMoves\)\s+return;", recalc);
     }
 
-    // The form's "After crossing runway" clears that runway at the place the pilot named, and only there: a taxiway by
-    // its name, a holding point by its node and its name, so a stop whose label names the point matches and one the
-    // route does not cross there is said by name.
+    // A Cross runway step clears that runway at the place the pilot named, and only there: a taxiway by its name, a
+    // holding point by its node and its name (ClearanceStepEntry.Build, ClearancePlanner.Build: unit-tested), so a
+    // stop whose label names the point matches and one the route does not cross there is said by name. Both Calculate
+    // calls, with a destination and without, hand the plan's crossings to LoadRoute, the leg's own end among them.
     [Fact]
-    public void The_after_crossing_leg_asks_for_its_crossing_at_its_place()
+    public void A_cross_step_asks_for_its_crossing_at_its_place()
     {
         string form = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Forms", "TaxiAssistForm.cs"));
 
-        Assert.Contains("crossAtTaxiwayName = crossAt;", form);
-        Assert.Contains("new ClearedCrossing(runwayTarget, At: crossAtHold?.Name ?? crossAtTaxiwayName, AtNodeId: crossAtHold?.NodeId ?? 0)", form);
-        Assert.Matches(@"userTurnPicks: progTurnPicks\.Count > 0 \? progTurnPicks : null,\s+(//[^\n]*\n\s+)*clearedCrossings: ", form);
+        Assert.Equal(2, Regex.Matches(form, @"clearedCrossings: plan\.Crossings\.Count > 0 \? plan\.Crossings : null").Count);
+        Assert.Equal(2, Regex.Matches(form, @"userTurnPicks: PlanTurnPicks\(plan\),\s+(//[^\n]*\n\s+)*clearedCrossings: ").Count);
+        Assert.DoesNotContain("new ClearedCrossing(", form);
     }
 
     // A runway is never crossed in silence: a cleared crossing is counted down like a stop and said at its line.

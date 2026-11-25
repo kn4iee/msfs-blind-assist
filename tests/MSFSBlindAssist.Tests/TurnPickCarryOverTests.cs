@@ -262,14 +262,6 @@ public class TurnPickCarryOverTests
         Assert.Empty(TurnPickCarryOver.Rebase(route.TurnPicks, pick, without!));
     }
 
-    [Fact]
-    public void From_rows_skips_rows_without_a_taxiway()
-    {
-        var picks = TurnPickCarryOver.FromRows(new[] { (true, 0), (false, 1), (true, 2), (true, 1) });
-
-        Assert.Equal(new Dictionary<int, TurnSide> { [1] = TurnSide.Right, [2] = TurnSide.Left }, picks);
-    }
-
     // A skipped runway leg re-keys the Turn picks through the one row helper every pick kind uses.
     [Fact]
     public void Without_rows_re_keys_and_drops_the_removed_rows_own_picks()

@@ -180,6 +180,85 @@ public class ClearanceWiringTests
         Assert.Contains("ResolveProgressiveEnd(ctx.Graph, v, ctx.Sequence[row], stepBlocked, ctx.Terminator, ctx.LegEndCrossedTaxiways)", applier);
     }
 
+    // Task 6: Calculate builds every route from ONE plan, refused for every destination type after the position is
+    // refreshed [RTE-21] and before anything is looked up [RTE-29]; the row readers are gone.
+    [Fact]
+    public void Calculate_builds_every_route_from_the_plan()
+    {
+        string form = FormSource();
+        string calculate = Member(form, "private void OnCalculateClicked(");
+
+        int refresh = calculate.IndexOf("_simConnectManager?.LastKnownPosition is { } pos", StringComparison.Ordinal);
+        int build = calculate.IndexOf("ClearancePlanner.Build(_steps, hasDestination, PlanDestinationRunway(hasDestination))", StringComparison.Ordinal);
+        int refusal = calculate.IndexOf("RefuseCalculate(plan.Refusal);", StringComparison.Ordinal);
+        int noDestination = calculate.IndexOf("CalculateLegWithNoDestination(plan);", StringComparison.Ordinal);
+        int destination = calculate.IndexOf("\"Please select a destination.\"", StringComparison.Ordinal);
+        Assert.True(refresh >= 0 && build > refresh, "the plan is built after the position is refreshed");
+        Assert.True(refusal > build && noDestination > refusal && destination > noDestination,
+            "the plan's refusal is checked for every destination type before either path");
+
+        foreach (string reader in new[] { "GetSelectedTaxiwayNames", "GetUserHoldShortIndices", "GetUserRunwayHoldShorts",
+                     "GetUserTaxiwayHoldShorts", "GetUserHoldingPointHoldShorts", "GetUserTurnPicks", "CurrentPlan()" })
+            Assert.DoesNotContain(reader, form);
+        // Both LoadRoute calls take the plan's sequence, stops and picks, the wingspan set just before each.
+        Assert.Equal(2, Regex.Matches(form, @"plan\.TaxiwaySequence\.Count > 0 \? plan\.TaxiwaySequence\.ToList\(\) : null").Count);
+        Assert.Equal(2, Regex.Matches(form, @"userHoldingPointHoldShorts: PlanStops\(plan, ClearanceTargetKind\.HoldingPoint,").Count);
+        Assert.Equal(2, Regex.Matches(form, @"_guidanceManager\.AircraftWingspanMetres = _aircraftWingspan \* 0\.3048;\r?\n\s+string\? error = _guidanceManager\.LoadRoute\(").Count);
+    }
+
+    // Rulings 1 to 3: a leg with no destination ends where the plan says. The Cross taxiway tie-breaker reaches the
+    // form's junction choice and LoadRoute's own scan; a leg ending across a runway at a holding point is pinned
+    // through it from the plan; the end lookups are the direction-aware ones (ClearanceLegEndTests); both stage-1
+    // refusal sentences and "Could not find … Check your entry." stay, and every refusal keeps a pending import summary.
+    [Fact]
+    public void A_leg_with_no_destination_ends_where_the_plan_says()
+    {
+        string leg = Member(FormSource(), "private void CalculateLegWithNoDestination(");
+
+        Assert.Contains("ClearanceRouteChecks.BeyondTheCrossing(candidates, Distances(), crossingNodes)", leg);
+        Assert.Contains("legEndCrossedTaxiways: plan.LegEndCrossedTaxiways.Count > 0 ? plan.LegEndCrossedTaxiways : null", leg);
+        Assert.Contains("holdingPointHoldNodeId: plan.CrossAtHoldingPointNodeId,", leg);
+        Assert.Contains("holdingPointName: plan.CrossAtHoldingPointName,", leg);
+        Assert.Contains("ClearanceLegEnd.NearestAhead(", leg);
+        Assert.Contains("ClearanceLegEnd.EndOfTaxiway(", leg);
+        Assert.Contains("ClearanceLegEnd.NodesOnTaxiway(", leg);
+        Assert.Contains("graph.FindNearestNodeInDirection(", leg);
+        Assert.DoesNotContain("FindTaxiwayEndNodeClearOfRunways(", leg);
+        // A crossing already made ends just across THAT crossing, or is refused with the reason.
+        Assert.Contains("RunwayCrossingResolver.FindAcross(graph, crossRwy, stop.NodeId)", leg);
+        Assert.Contains("ClearanceLegEnd.AlreadyAcross(runwayTarget)", leg);
+        Assert.Contains("ProgressiveLegEnd.NoHoldShortClearOfARunway(taxiwayTarget, lastVia)", leg);
+        Assert.Contains("ProgressiveLegEnd.NoEndClearOfARunway(lastVia)", leg);
+        Assert.Contains("$\"Could not find {what} from {from}. Check your entry.\"", leg);
+        Assert.DoesNotContain("_announcer.", leg);
+        Assert.Contains("SpeakCalculateUtterance(plan);", leg);
+    }
+
+    // [HLD-17], [SI-22]: everything said at Calculate is ONE utterance, warnings first: the clearance's checks straight
+    // after the route's own warnings, the start-hold sentence last. Both paths speak through it.
+    [Fact]
+    public void Calculate_speaks_once_with_the_clearance_checks_after_the_route_warnings()
+    {
+        string form = FormSource();
+        string speak = Member(form, "private void SpeakCalculateUtterance(");
+
+        int imported = speak.IndexOf("_importSummary?.Invoke(true)", StringComparison.Ordinal);
+        int warnings = speak.IndexOf("parts.Add(_guidanceManager.LastRouteStartWarning);", StringComparison.Ordinal);
+        int checks = speak.IndexOf("parts.AddRange(_guidanceManager.CheckClearance(plan));", StringComparison.Ordinal);
+        int unmapped = speak.IndexOf("ConsumeUnmappedStartWarning()", StringComparison.Ordinal);
+        int turnCue = speak.IndexOf("ConsumeInitialTurnCue()", StringComparison.Ordinal);
+        int startHold = speak.IndexOf("ConsumeStartHoldCue()", StringComparison.Ordinal);
+        Assert.True(imported >= 0 && warnings > imported && checks > warnings && unmapped > checks
+                    && turnCue > unmapped && startHold > turnCue, "the parts are in order");
+        Assert.Single(Regex.Matches(speak, @"_announcer\.AnnounceImmediate\("));
+        Assert.Single(Regex.Matches(Member(form, "private void OnCalculateClicked("), @"SpeakCalculateUtterance\("));
+        Assert.DoesNotContain("progParts", form);
+        Assert.DoesNotContain("standstillParts", form);
+    }
+
+    private static string FormSource()
+        => File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Forms", "TaxiAssistForm.cs"));
+
     // LoadRoute's Fail snapshot: from the first prior capture to the end of the Fail local function.
     private static string FailSnapshot(string routing)
     {

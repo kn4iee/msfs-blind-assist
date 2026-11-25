@@ -155,8 +155,9 @@ public static class HoldShortNodeResolver
     public static TaxiNode? ResolveNearSide(
         TaxiGraph graph, Runway runway,
         double aircraftLat, double aircraftLon, double aircraftHeadingMag,
-        string lastTaxiway)
+        string? lastTaxiway)
     {
+        // No cleared taxiway (a limit said alone, "hold short of runway 24"): tiers 1-3 have nothing to anchor on.
         var frame = RunwayFrame.For(runway, aircraftLat);
 
         double legacyMinLateralM = LegacySetbackMetres(runway);
@@ -205,7 +206,7 @@ public static class HoldShortNodeResolver
             return true;
         }
 
-        bool OnLastTaxiway(TaxiNode node) => node.TaxiwayNames.Contains(lastTaxiway);
+        bool OnLastTaxiway(TaxiNode node) => lastTaxiway != null && node.TaxiwayNames.Contains(lastTaxiway);
 
         // The target runway's two designators, for the HoldShortName gate
         // (normalized — an unpadded RunwayID "9" must match a padded "09").
@@ -271,7 +272,7 @@ public static class HoldShortNodeResolver
             // line inside the along window can't hijack the route sideways.
             var tier2 = ClosestToRunway(designated.Where(d =>
                 Math.Abs(d.along - bestOnTwAlong) <= HS_JUNCTION_ALONG_M &&
-                ConnectsToTaxiway(graph, d.node.NodeId, lastTaxiway, HS_STUB_MAX_HOPS)));
+                ConnectsToTaxiway(graph, d.node.NodeId, lastTaxiway!, HS_STUB_MAX_HOPS)));
             if (tier2 != null) return tier2;
 
             // Tier 3: plain node on the cleared taxiway (legacy behaviour).

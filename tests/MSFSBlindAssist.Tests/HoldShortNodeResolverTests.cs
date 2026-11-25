@@ -192,6 +192,28 @@ public class HoldShortNodeResolverTests
         Assert.NotEqual(plain.NodeId, result.NodeId);
     }
 
+    // A limit said alone ("hold short of runway 09", no taxiway step): no cleared taxiway, so tiers 4 and 5 decide,
+    // and a node on an UNNAMED connector is never taken for one on the cleared taxiway.
+    [Fact]
+    public void ResolveNearSide_with_no_cleared_taxiway_ranks_as_tiers_four_and_five()
+    {
+        var runway = MakeRunway();
+        var paths = new List<TaxiPath>
+        {
+            Edge(AC_ALONG, 105, "", AC_ALONG, 110, "HS", "R"),
+            Edge(AC_ALONG, 110, "", AC_ALONG + 200, 95, "", ""),
+        };
+        var graph = TaxiGraph.Build(paths, new List<ParkingSpot>(), new List<StartPosition>());
+        var hs = NodeNear(graph, AC_ALONG, 110);
+        hs.HoldShortName = "runway 09";
+
+        var result = HoldShortNodeResolver.ResolveNearSide(
+            graph, runway, LatN(AC_ALONG), LonW(AC_LATERAL), 0, lastTaxiway: null);
+
+        Assert.NotNull(result);
+        Assert.Equal(hs.NodeId, result!.NodeId);
+    }
+
     [Fact]
     public void ResolveNearSide_tier5_prefers_the_nearby_plain_node_over_a_designated_node_far_down_the_runway()
     {
