@@ -822,7 +822,7 @@ public class ClaudeContextBudgetTests
         ["the same name, other code: the rule means a framework method, an enum value, a record parameter or a folder "
             + "the declaration index does not see"] = new[]
         {
-            "A380C-3 SendAsync", "TRF-3 IdentityKey", "HLD-11 HoldShort", "SUR-22 HoldShort",
+            "A380C-3 SendAsync", "TRF-3 IdentityKey",
             "FOA-1 FirstOfficer", "FOA-3 FirstOfficer",
         },
     };
