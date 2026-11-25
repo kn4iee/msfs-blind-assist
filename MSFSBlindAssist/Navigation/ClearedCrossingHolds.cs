@@ -21,9 +21,10 @@ public enum ClearedBy
 /// reaches the runway, recorded when it is applied (0: not recorded), by which a crossing with no stop is used up
 /// once the aircraft is past it (<see cref="ClearedCrossingHolds.WithoutPassedNoStop"/>). <paramref name="NearNodeId"/>,
 /// for a crossing with no stop, is the route node before it (the last node clear of the runway, its near side), recorded
-/// when it is applied (0: not recorded, or none: the route started on the runway): the step list pins a crossing made
-/// with no stop there (<c>ClearanceTrim</c>), never at the reach, which lies on the FAR side when one edge jumps across
-/// the runway.
+/// when it is applied (0: not recorded, or the route has none: it started on the runway, or the aircraft itself was the
+/// last clear point before it): the step list pins a crossing made with no stop there (<c>ClearanceTrim</c>), never at
+/// the reach, which lies on the FAR side when one edge jumps across the runway (or the aircraft's hop to the route's
+/// first node does).
 /// </summary>
 public sealed record ClearedCrossing(string Runway, string? At = null, int AtNodeId = 0, int StopNodeId = 0, int SeqIndex = -1,
                                      ClearedBy Origin = ClearedBy.Clearance, int ReachNodeId = 0, int NearNodeId = 0);

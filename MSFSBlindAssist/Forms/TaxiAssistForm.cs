@@ -4633,7 +4633,8 @@ public class TaxiAssistForm : Form
                 {
                     // The crossing is already made (the step list kept it as the end, pinned to its stop): just across
                     // it is the far side of THAT stop. Never pinned back through the stop, which is behind the aircraft.
-                    // The pin is its stop, or, for one made with no stop, the node before the runway (its near side).
+                    // The pin is its stop, or, for one made with no stop, the node before the runway (its near side); with
+                    // none before it on the route, the reach (AtNodeIsReach), whose side is never trusted: refused.
                     var stop = graph.Nodes.TryGetValue(endStep.AtNodeId, out var stopNode) ? stopNode : null;
                     if (stop != null)
                     {
@@ -4642,7 +4643,8 @@ public class TaxiAssistForm : Form
                         bool aircraftClear = RouteRunwayCrossings.RunwayWithinClearMargin(
                             graph.RunwayCenterlines, _aircraftLat, _aircraftLon) == null;
                         var judged = ClearanceLegEnd.JudgeMadeCrossing(centerline == null ? null : RunwayShape.For(centerline),
-                            stop.Latitude, stop.Longitude, _aircraftLat, _aircraftLon, aircraftClear);
+                            stop.Latitude, stop.Longitude, _aircraftLat, _aircraftLon, aircraftClear,
+                            pinIsReach: endStep.AtNodeIsReach);
                         if (judged == ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)
                         {
                             RefuseCalculate(ClearanceLegEnd.AlreadyAcross(runwayTarget));
@@ -4687,7 +4689,7 @@ public class TaxiAssistForm : Form
                     component, Distances(), NeedsReversal, _aircraftLat, _aircraftLon, headingTrue);
                 if (entry.NodeId < 0) break;
                 var end = ClearanceLegEnd.EndOfTaxiway(graph, entry.NodeId, lastVia, entry.TravelBearingTrue,
-                    _aircraftLat, _aircraftLon);
+                    _aircraftLat, _aircraftLon, entry.AircraftOnTaxiway);
                 destNode = end.EndNodeId;
                 if (destNode < 0 && end.ArmEndNodeId >= 0)
                     besideRunway = ProgressiveLegEnd.NoEndClearOfARunway(lastVia);

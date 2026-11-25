@@ -220,6 +220,7 @@ public class ClearanceLegEndTests
 
         Assert.Equal(NodeAt(g, 300, 0), entry.NodeId);
         Assert.Equal(90.0, entry.TravelBearingTrue);
+        Assert.True(entry.AircraftOnTaxiway);
         Assert.Equal(NodeAt(g, 600, 0), ClearanceLegEnd.EndOfTaxiway(g, entry.NodeId, "P", entry.TravelBearingTrue, acLat, acLon).EndNodeId);
         // What it did: from the junction behind, "straight on" back west.
         Assert.Equal(NodeAt(g, -300, 0), ClearanceLegEnd.EndOfTaxiway(g, NodeAt(g, 0, 0), "P", 270, acLat, acLon).EndNodeId);
@@ -234,6 +235,7 @@ public class ClearanceLegEndTests
 
         Assert.Equal(NodeAt(g, 0, 0), entry.NodeId);
         Assert.Equal(0.0, entry.TravelBearingTrue, 1);
+        Assert.False(entry.AircraftOnTaxiway);
         Assert.Equal(NodeAt(g, 600, 0), ClearanceLegEnd.EndOfTaxiway(g, entry.NodeId, "P", entry.TravelBearingTrue,
             RunwayFixture.Lat(-200), RunwayFixture.Lon(0)).EndNodeId);
     }
@@ -247,9 +249,10 @@ public class ClearanceLegEndTests
 
         var entry = Entry(g, NodeAt(g, 0, 300), 0, 150, heading: 0);
 
-        // Every node of P is behind: the nearest of them, and the aircraft's own heading as the way.
+        // Every node of P is behind: the nearest of them, and the aircraft's own heading as the way; a join, not yet on P.
         Assert.Equal(NodeAt(g, 0, 0), entry.NodeId);
         Assert.Equal(0.0, entry.TravelBearingTrue);
+        Assert.False(entry.AircraftOnTaxiway);
     }
 
     [Fact]
@@ -285,12 +288,52 @@ public class ClearanceLegEndTests
         var shape = RunwayShape.For(RunwayFixture.EastWest());
 
         var judged = ClearanceLegEnd.JudgeMadeCrossing(shape, RunwayFixture.Lat(pinNorthM), RunwayFixture.Lon(500),
-            RunwayFixture.Lat(aircraftNorthM), RunwayFixture.Lon(500), aircraftClear);
+            RunwayFixture.Lat(aircraftNorthM), RunwayFixture.Lon(500), aircraftClear, pinIsReach: false);
 
         Assert.Equal(end, judged);
     }
 
+    // The re-review's case: the aircraft itself was the last clear point before 09/27 (35 m south, inside the margin)
+    // and the route's first node lies 60 m north of it, so the crossing has no stop and no node before it on the route:
+    // its pin is the reach, BEYOND the runway. Read as a side, it sent the leg back over; a reach-only pin is trusted
+    // only on the pavement, so Calculate refuses.
+    [Fact]
+    public void A_crossing_jumped_from_the_aircraft_is_refused_never_sent_back()
+    {
+        var route = RunwayFixture.RouteOf(RunwayFixture.Node(1, 500, 60), RunwayFixture.Node(2, 500, 150));
+        var ev = Assert.Single(RunwayFixture.Pass(route, new[] { RunwayFixture.EastWest() },
+            aircraft: new RouteRunwayCrossings.AircraftPosition(RunwayFixture.Lat(-35), RunwayFixture.Lon(500))));
+        Assert.False(ev.Held);
+        Assert.Equal(0, ev.ReachNodeIndex);
+        var applied = Assert.Single(ClearedCrossingHolds.Apply(route, new[] { new ClearedCrossing("09", SeqIndex: 0) },
+            recalculation: false).Applied);
+        Assert.Equal(1, applied.ReachNodeId);
+        Assert.Equal(0, applied.NearNodeId);
+
+        var steps = new[]
+        {
+            new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, "P"),
+            new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "09"),
+        };
+        var pin = ClearanceTrim.Remaining(steps, 0, hasDestination: false, Array.Empty<ClearedCrossing>(),
+            new[] { applied }, Array.Empty<ClearedCrossing>(), Array.Empty<ClearanceHold>(), false)[1];
+        Assert.Equal(1, pin.AtNodeId);
+        Assert.True(pin.AtNodeIsPassedStop);
+        Assert.True(pin.AtNodeIsReach);
+
+        var shape = RunwayShape.For(RunwayFixture.EastWest());
+        double pinLat = RunwayFixture.Lat(60), lon = RunwayFixture.Lon(500);
+        Assert.Equal(ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross, ClearanceLegEnd.JudgeMadeCrossing(shape, pinLat, lon,
+            RunwayFixture.Lat(150), lon, aircraftClearOfRunways: true, pinIsReach: true));
+        Assert.Equal(ClearanceLegEnd.MadeCrossingEnd.Unknown, ClearanceLegEnd.JudgeMadeCrossing(shape, pinLat, lon,
+            RunwayFixture.Lat(35), lon, aircraftClearOfRunways: false, pinIsReach: true));
+        // Trusted as a side, the far-side reach read north as the near side.
+        Assert.Equal(ClearanceLegEnd.MadeCrossingEnd.FarSide, ClearanceLegEnd.JudgeMadeCrossing(shape, pinLat, lon,
+            RunwayFixture.Lat(35), lon, aircraftClearOfRunways: false, pinIsReach: false));
+    }
+
     // The review's other reversal: the node nearest ahead is the taxiway's own last node, so its one arm walks back.
+    // Only with the aircraft on the taxiway, where its heading is the real way it travels.
     [Fact]
     public void At_a_taxiway_end_the_aircraft_is_heading_off_the_leg_ends_there()
     {
@@ -298,11 +341,37 @@ public class ClearanceLegEndTests
         int east = NodeAt(g, 600, 0);
         double acLat = RunwayFixture.Lat(0), acLon = RunwayFixture.Lon(550);
 
-        var end = ClearanceLegEnd.EndOfTaxiway(g, east, "P", 90, acLat, acLon);
+        var end = ClearanceLegEnd.EndOfTaxiway(g, east, "P", 90, acLat, acLon, aircraftOnTaxiway: true);
 
         Assert.Equal(east, end.EndNodeId);
         // Heading back along it, the lone arm is the way on.
-        Assert.Equal(NodeAt(g, 0, 0), ClearanceLegEnd.EndOfTaxiway(g, east, "P", 270, acLat, acLon).EndNodeId);
+        Assert.Equal(NodeAt(g, 0, 0),
+            ClearanceLegEnd.EndOfTaxiway(g, east, "P", 270, acLat, acLon, aircraftOnTaxiway: true).EndNodeId);
+    }
+
+    // The re-review's case: "via A, B" from an apron north of A, B starting at A and running north. The way the
+    // aircraft comes is only the bearing to the A/B junction (about 200 deg), B leaves it at 0 deg: a turn, never a
+    // reversal, so the leg runs to B's end.
+    [Fact]
+    public void A_turn_at_a_junction_is_never_read_as_a_reversal()
+    {
+        var g = Build(Path("A", -300, 0, 0, 0), Path("A", 0, 0, 100, 0), Path("A", 100, 0, 300, 0),
+            Path("S", 100, 300, 100, 0), Path("B", 0, 0, 0, 600));
+        int start = NodeAt(g, 100, 300);
+        double acLat = RunwayFixture.Lat(290), acLon = RunwayFixture.Lon(100);
+        var distances = new TaxiRouter(g).ComputeGraphDistancesFrom(start);
+
+        var entry = ClearanceLegEnd.EntryOntoTaxiway(g, "B", previousTaxiway: "A", g.Nodes[start].ComponentId, distances,
+            id => ClearanceLegEnd.NeedsReversal(g, start, id, 180), acLat, acLon, headingTrue: 180);
+
+        Assert.Equal(NodeAt(g, 0, 0), entry.NodeId);
+        Assert.False(entry.AircraftOnTaxiway);
+        Assert.InRange(entry.TravelBearingTrue, 190.0, 210.0);
+        Assert.Equal(NodeAt(g, 0, 600), ClearanceLegEnd.EndOfTaxiway(g, entry.NodeId, "B", entry.TravelBearingTrue,
+            acLat, acLon, entry.AircraftOnTaxiway).EndNodeId);
+        // Read as the aircraft's own heading on B, it ended the leg at the junction and B was never taxied.
+        Assert.Equal(NodeAt(g, 0, 0), ClearanceLegEnd.EndOfTaxiway(g, entry.NodeId, "B", entry.TravelBearingTrue,
+            acLat, acLon, aircraftOnTaxiway: true).EndNodeId);
     }
 
     [Fact]

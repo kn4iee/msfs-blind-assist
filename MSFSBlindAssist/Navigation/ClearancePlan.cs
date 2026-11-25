@@ -525,10 +525,13 @@ public static class ClearanceTrim
     // before the runway (NearNodeId): left as entered, its far side would be judged from where the aircraft now is,
     // which once across lies back over the runway, and the stale step would clear that return crossing; pinned where
     // the route reached the runway, a reach beyond it (one edge jumping across) read the far side as the near one. With
-    // no node before it (the route started on the runway's pavement), the reach, on the pavement, which has no side:
-    // the window refuses that leg rather than guess. One recorded with none has nothing to pin and stays as entered.
+    // no node before it on the route (the route started on the runway's pavement, or the aircraft itself was the last
+    // clear point and the route's first node lies beyond the runway), the reach, marked as one (AtNodeIsReach): it can
+    // lie on either side, so its side is never trusted and the window refuses that leg rather than guess. One recorded
+    // with none has nothing to pin and stays as entered.
     private static ClearanceStep PinnedToMadeCrossing(ClearanceStep step, ClearedCrossing used)
     {
+        bool reachOnly = used.StopNodeId == 0 && used.NearNodeId == 0;
         int pin = used.StopNodeId != 0 ? used.StopNodeId
             : used.NearNodeId != 0 ? used.NearNodeId
             : used.ReachNodeId;
@@ -536,6 +539,7 @@ public static class ClearanceTrim
         return step with
         {
             AtNodeId = pin,
+            AtNodeIsReach = reachOnly,
             At = string.IsNullOrWhiteSpace(used.At) ? step.At : used.At,
             AtNodeIsPassedStop = true,
         };

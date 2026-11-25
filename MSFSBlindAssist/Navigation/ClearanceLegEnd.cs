@@ -95,15 +95,16 @@ public static class ClearanceLegEnd
     /// The end of <paramref name="taxiway"/> for a leg that ends there, from where the aircraft is on it or joins it
     /// (<paramref name="entryNodeId"/>), found along the taxiway's OWN edges, never the node of that name farthest away
     /// in a straight line. Each arm leaving the entry on the taxiway is walked to its end, taking the straightest way
-    /// on where the taxiway forks and never a node twice. An entry that is the taxiway's own end, with the way of travel
-    /// pointing off it (its one arm more than <see cref="ReversalDegrees"/> from it), is the end itself. The arm is
-    /// otherwise the only one; else the one leaving within
+    /// on where the taxiway forks and never a node twice. With the aircraft on the taxiway
+    /// (<paramref name="aircraftOnTaxiway"/>, <see cref="TaxiwayEntry.AircraftOnTaxiway"/>), an entry that is the
+    /// taxiway's own end, with its heading pointing off it (its one arm more than <see cref="ReversalDegrees"/> from it),
+    /// is the end itself. The arm is otherwise the only one; else the one leaving within
     /// <see cref="StraightOnDegrees"/> of <paramref name="travelBearingTrue"/>, the way the aircraft travels (its
     /// heading when on the taxiway, the way it comes when joining it), when exactly one does; else the arm whose end
     /// lies farthest from the aircraft. A taxiway that runs onto a runway ends at its last node clear of it.
     /// </summary>
     public static TaxiwayEnd EndOfTaxiway(TaxiGraph graph, int entryNodeId, string taxiway, double travelBearingTrue,
-        double aircraftLat, double aircraftLon)
+        double aircraftLat, double aircraftLon, bool aircraftOnTaxiway = false)
     {
         if (graph == null || string.IsNullOrWhiteSpace(taxiway) || !graph.Nodes.ContainsKey(entryNodeId)
             || !graph.Adjacency.TryGetValue(entryNodeId, out var edges))
@@ -118,9 +119,10 @@ public static class ClearanceLegEnd
         }
         if (arms.Count == 0) return new TaxiwayEnd(-1, -1);
 
-        // The entry is the taxiway's own end and the aircraft is heading off it (its one arm needs a reversal): the leg
-        // ends there, never back along the whole taxiway behind the aircraft.
-        if (arms.Count == 1
+        // The aircraft is on the taxiway at its own end and heading off it (its one arm needs a reversal): the leg ends
+        // there, never back along the whole taxiway behind the aircraft. Only on it, where the heading is the real way of
+        // travel: a junction entry's bearing is a straight-line estimate and a turn onto the arm can take any angle.
+        if (aircraftOnTaxiway && arms.Count == 1
             && Math.Abs(TaxiGraph.NormalizeAngle(ArmDirection(graph, arms[0]) - travelBearingTrue)) > ReversalDegrees)
         {
             return graph.Nodes.TryGetValue(entryNodeId, out var entry) && ClearOfRunways(graph, entry)
@@ -213,8 +215,13 @@ public static class ClearanceLegEnd
     private static bool ClearOfRunways(TaxiGraph graph, TaxiNode node)
         => RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, node.Latitude, node.Longitude) == null;
 
-    /// <summary>Where the aircraft joins the last taxiway of a leg that ends at its end, and the way it travels on it.</summary>
-    public readonly record struct TaxiwayEntry(int NodeId, double TravelBearingTrue);
+    /// <summary>
+    /// Where the aircraft joins the last taxiway of a leg that ends at its end, and the way it travels on it.
+    /// <paramref name="AircraftOnTaxiway"/>: the entry is the taxiway's node nearest ahead with the aircraft already on
+    /// it, so <paramref name="TravelBearingTrue"/> is its own heading, the real way it travels; false for a junction
+    /// entry (the bearing to the junction, a straight-line estimate) and for a join before the aircraft is on it.
+    /// </summary>
+    public readonly record struct TaxiwayEntry(int NodeId, double TravelBearingTrue, bool AircraftOnTaxiway = false);
 
     /// <summary>
     /// The entry and the direction <see cref="EndOfTaxiway"/> takes for <paramref name="taxiway"/>, the last Via
@@ -232,7 +239,8 @@ public static class ClearanceLegEnd
         double aircraftLat, double aircraftLon, double headingTrue)
     {
         if (graph == null || string.IsNullOrWhiteSpace(taxiway)) return new TaxiwayEntry(-1, headingTrue);
-        if (!string.IsNullOrWhiteSpace(previousTaxiway) && !IsOnTaxiway(graph, taxiway, aircraftLat, aircraftLon))
+        bool onIt = IsOnTaxiway(graph, taxiway, aircraftLat, aircraftLon);
+        if (!string.IsNullOrWhiteSpace(previousTaxiway) && !onIt)
         {
             int junction = NearestAhead(graph.FindTaxiwayIntersectionNodes(previousTaxiway, taxiway, componentId),
                 taxiMetresFromStart, needsReversal);
@@ -248,7 +256,7 @@ public static class ClearanceLegEnd
         var onTaxiway = graph.GetNodesOnTaxiway(taxiway)
             .Where(id => graph.Nodes.TryGetValue(id, out var n) && n.ComponentId == componentId)
             .ToList();
-        return new TaxiwayEntry(NearestAhead(onTaxiway, taxiMetresFromStart, needsReversal), headingTrue);
+        return new TaxiwayEntry(NearestAhead(onTaxiway, taxiMetresFromStart, needsReversal), headingTrue, onIt);
     }
 
     /// <summary>
@@ -286,22 +294,24 @@ public static class ClearanceLegEnd
     /// <summary>
     /// How a leg ends whose last step is a crossing already made (pinned by <c>ClearanceTrim</c>,
     /// <see cref="ClearanceStep.AtNodeIsPassedStop"/>): to its stop, or, for a crossing made with no stop, to the node
-    /// before the runway (its near side; the reach only when the route started on the pavement). Judged on
-    /// <paramref name="shape"/>, the runway as the crossing classifier saw it: the pin's side is the near side only when
-    /// the pin lies off the pavement there (<see cref="RunwayShape.ContainsAlongLateral"/> with no margin, the
-    /// classifier's own test; a runway table's half-width can differ); a pin on it has none. The aircraft clear of every
-    /// runway (<paramref name="aircraftClearOfRunways"/>) and on the other side, or with no side to compare, is already
-    /// across. Otherwise a pin with a side sends the leg to the far side of THAT crossing, the side away from the pin,
-    /// never the far side judged from the aircraft, which, once it is off the far edge, lies back over the runway; a pin
-    /// with none is refused. No shape for the runway (null, or degenerate): no side to go by either.
+    /// before the runway (its near side). A pin that is where the route reached the runway, there being no node before
+    /// it on the route (<paramref name="pinIsReach"/>, <see cref="ClearanceStep.AtNodeIsReach"/>), can lie on either side
+    /// (beyond the runway when the aircraft's own hop to the route's first node jumped across it), so its side is never
+    /// trusted. Judged on <paramref name="shape"/>, the runway as the crossing classifier saw it: the pin's side is the
+    /// near side only when the pin lies off the pavement there (<see cref="RunwayShape.ContainsAlongLateral"/> with no
+    /// margin, the classifier's own test; a runway table's half-width can differ); a pin on it has none. The aircraft
+    /// clear of every runway (<paramref name="aircraftClearOfRunways"/>) and on the other side, or with no side to
+    /// compare, is already across. Otherwise a pin with a side sends the leg to the far side of THAT crossing, the side
+    /// away from the pin, never the far side judged from the aircraft, which, once it is off the far edge, lies back over
+    /// the runway; a pin with none is refused. No shape for the runway (null, or degenerate): no side to go by either.
     /// </summary>
     public static MadeCrossingEnd JudgeMadeCrossing(RunwayShape? shape, double pinLat, double pinLon,
-        double aircraftLat, double aircraftLon, bool aircraftClearOfRunways)
+        double aircraftLat, double aircraftLon, bool aircraftClearOfRunways, bool pinIsReach)
     {
         if (shape == null || shape.IsDegenerate)
             return aircraftClearOfRunways ? MadeCrossingEnd.AlreadyAcross : MadeCrossingEnd.Unknown;
         var (pinAlong, pinLateral) = shape.Project(pinLat, pinLon);
-        int nearSide = shape.ContainsAlongLateral(pinAlong, pinLateral, 0.0) ? 0 : Math.Sign(pinLateral);
+        int nearSide = pinIsReach || shape.ContainsAlongLateral(pinAlong, pinLateral, 0.0) ? 0 : Math.Sign(pinLateral);
         int aircraftSide = Math.Sign(shape.Project(aircraftLat, aircraftLon).Lateral);
         if (aircraftClearOfRunways && (nearSide == 0 || aircraftSide == -nearSide))
             return MadeCrossingEnd.AlreadyAcross;

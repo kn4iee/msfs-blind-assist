@@ -628,8 +628,12 @@ public class ClearancePlannerTests
         var plan = ClearancePlanner.Build(kept, hasDestination: false);
         Assert.Null(plan.CrossAtHoldingPointNodeId);
         Assert.Equal(new[] { new ClearedCrossing("24L", At: "P", AtNodeId: 57, SeqIndex: 0) }, plan.Crossings);
-        // No node before the runway (the route started on its pavement): the reach, on the pavement, which has no side.
-        Assert.Equal(58, Trim(steps, used: new[] { Rec("24L", 0, at: "P") with { ReachNodeId = 58 } })[1].AtNodeId);
+        Assert.False(kept[1].AtNodeIsReach);
+        // No node before the runway on the route (it started on the pavement, or the aircraft itself was the last clear
+        // point and the route's first node lies beyond the runway): the reach, marked as one. Its side is never trusted.
+        var reachOnly = Trim(steps, used: new[] { Rec("24L", 0, at: "P") with { ReachNodeId = 58 } });
+        Assert.Equal(CrossRwy("24L", at: "P") with { AtNodeId = 58, AtNodeIsPassedStop = true, AtNodeIsReach = true },
+            reachOnly[1]);
         // Neither: nothing to pin it by, it stays as entered.
         Assert.Equal(steps, Trim(steps, used: new[] { Rec("24L", 0, at: "P") }));
     }
