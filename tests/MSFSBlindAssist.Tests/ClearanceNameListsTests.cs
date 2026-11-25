@@ -68,6 +68,14 @@ public class ClearanceNameListsTests
     }
 
     [Fact]
+    public void A_crossing_entered_first_lists_the_runways_then_every_taxiway_alphabetically()
+    {
+        var items = ClearanceNameLists.CrossTargets(new[] { "09", "15R" }, Crossing, Array.Empty<string>(), new[] { "P", "A", "C" }, Array.Empty<ClearanceStep>());
+        Assert.Equal(new[] { "09", "15R", "A", "C", "P" }, Labels(items));
+        Assert.Equal(ClearanceTargetKind.Taxiway, items[2].Kind);
+    }
+
+    [Fact]
     public void Holding_points_are_merged_with_taxiways_and_marked()
     {
         var items = ClearanceNameLists.HoldTargets(new[] { "09" }, Crossing, new[] { "L", "L3" },

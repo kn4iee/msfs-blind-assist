@@ -37,7 +37,8 @@ public static class ClearanceNameLists
     {
         var items = RunwayItems(runwayIds, taxiwaysCrossingRunway, steps);
         // No nearest list here: before any Via step the taxiways are simply alphabetical.
-        items.AddRange(Taxiways(Array.Empty<string>(), connectedToLastVia, allTaxiways, steps));
+        var alphabetical = allTaxiways.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        items.AddRange(Taxiways(alphabetical, connectedToLastVia, allTaxiways, steps));
         return items;
     }
 
