@@ -100,7 +100,7 @@ public class LegEndWiringTests
         string text = RoutingSource();
 
         int turnPicks = text.IndexOf("TurnPickApplier.Apply(route", StringComparison.Ordinal);
-        int loadSetback = text.IndexOf("ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true)", StringComparison.Ordinal);
+        int loadSetback = text.IndexOf("ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways)", StringComparison.Ordinal);
         int pilotPicks = text.IndexOf("ApplyUserHoldShorts(route, taxiwaySequence, userHoldShortIndices)", StringComparison.Ordinal);
         int recalcSetback = text.IndexOf("ApplyLegEndSetback(newRoute, _originalTaxiwaySequence, allowInsert: false)", StringComparison.Ordinal);
         int sanityGate = text.IndexOf("bool lengthBlowUp", StringComparison.Ordinal);
@@ -135,7 +135,7 @@ public class LegEndWiringTests
         string text = RecalculationSource();
 
         Assert.Matches(@"ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\)", text);
-        Assert.Matches(@"ApplyUserTaxiwayHoldShorts\(\s*newRoute, holdSequence, remappedTwy, allowInsert: false, rowOffset: seqOffset\)", text);
+        Assert.Matches(@"ApplyUserTaxiwayHoldShorts\(\s*newRoute, holdSequence, remappedTwy, allowInsert: false, rowOffset: seqOffset,\s+placedStops: recalcPlacedStops\)", text);
         var calls = Regex.Matches(text, @"(ApplyLegEndSetback|ApplyUserTaxiwayHoldShorts)\([^;]*;");
         Assert.Equal(2, calls.Count);
         foreach (Match call in calls)

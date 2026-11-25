@@ -112,4 +112,99 @@ public class ClearanceRowsTests
         Assert.Equal(new[] { 0, 1, 2 }, ClearanceRows.Leading(3));
         Assert.Empty(ClearanceRows.Leading(0));
     }
+
+    // ---- stops as lists: any number per taxiway, and stops with no taxiway of their own ----
+
+    private static List<KeyValuePair<int, string>> Stops(params (int Row, string Name)[] stops)
+        => stops.Select(s => new KeyValuePair<int, string>(s.Row, s.Name)).ToList();
+
+    // Two stops after the same taxiway both move with it; a stop with no taxiway of its own (-1) never moves and never
+    // goes; one on a removed row goes with it.
+    [Fact]
+    public void Stops_in_a_list_move_with_their_rows_and_a_stop_with_no_row_stays()
+    {
+        var stops = Stops((2, "22R"), (2, "B"), (-1, "04L"), (1, "09"), (4, "C"));
+
+        var kept = ClearanceRows.Without(stops, new[] { 1 });
+
+        Assert.Equal(Stops((1, "22R"), (1, "B"), (-1, "04L"), (3, "C")), kept);
+        Assert.Null(ClearanceRows.Without((List<KeyValuePair<int, string>>?)null, new[] { 0 }));
+    }
+
+    [Fact]
+    public void RowsOf_names_the_rows_stops_sit_on_never_a_stop_with_no_row()
+    {
+        Assert.Equal(new[] { 2, 2, 0 }, ClearanceRows.RowsOf(Stops((2, "22R"), (-1, "04L"), (2, "B"), (0, "C"))));
+        Assert.Null(ClearanceRows.RowsOf((List<KeyValuePair<int, string>>?)null));
+
+        // A stop with no row neither goes with a removed row nor keeps a first taxiway from being left out.
+        Assert.Equal(1, ClearanceRows.CountOn(new[] { 0 }, ClearanceRows.RowsOf(Stops((-1, "04L"), (0, "C")))));
+        Assert.True(UndrivenClearanceStart.PicksAllow(1, ClearanceRows.RowsOf(Stops((-1, "04L"), (1, "C")))));
+    }
+
+    // A recalculation numbers the stops on the remaining rows from the first of them: one behind the aircraft goes,
+    // one with no row of its own stays with none, and several on one row all stay.
+    [Fact]
+    public void After_keeps_the_stops_on_rows_still_ahead_renumbered_and_every_stop_with_no_row()
+    {
+        var stops = Stops((0, "A1"), (-1, "04L"), (2, "22R"), (2, "B"), (3, "C"));
+
+        Assert.Equal(Stops((-1, "04L"), (0, "22R"), (0, "B"), (1, "C")), ClearanceRows.After(stops, 2));
+        Assert.Equal(stops, ClearanceRows.After(stops, 0));
+    }
+
+    // ---- the numbering the window calculated in ----
+
+    [Fact]
+    public void AsEntered_puts_the_rows_route_loading_left_out_back_into_the_numbering()
+    {
+        // Rows 1 and 3 of 0..4 left out: rows 0, 1, 2 now are rows 0, 2, 4 as entered.
+        var numbering = ClearanceNumbering.For(null).Removing(new[] { 3, 1 });
+
+        Assert.Equal(new[] { 0, 2, 4 }, new[] { 0, 1, 2 }.Select(numbering.AsEntered));
+        Assert.Equal(-1, numbering.AsEntered(-1));
+        Assert.Equal(new[] { 1, 3 }, numbering.RemovedRows);
+    }
+
+    // A runway leg is skipped first (in the numbering as entered), then the first taxiways never driven (in the
+    // numbering left after that): both are put back as entered.
+    [Fact]
+    public void Removals_in_two_passes_are_both_numbered_as_entered()
+    {
+        // Entered: E7, 25 (a runway leg), E8, D6, C. After the runway leg: E7, E8, D6, C; after two undriven: D6, C.
+        var numbering = ClearanceNumbering.For(null).Removing(new[] { 1 }).Removing(ClearanceRows.Leading(2));
+
+        Assert.Equal(new[] { 0, 1, 2 }, numbering.RemovedRows);
+        Assert.Equal(3, numbering.AsEntered(0));
+        Assert.Equal(4, numbering.AsEntered(1));
+    }
+
+    // A crossing keeps the Via step it was entered after; one whose row was left out, which routing holds with no row
+    // (-1), gets that row back from the crossings as entered, unless two entered alike say different rows.
+    [Fact]
+    public void A_crossing_is_numbered_as_entered_even_when_its_row_was_left_out()
+    {
+        var entered = new List<ClearedCrossing>
+        {
+            new("09", SeqIndex: 0),
+            new("27R", At: "B", SeqIndex: 3),
+            new("04L"),
+        };
+        var numbering = ClearanceNumbering.For(entered).Removing(ClearanceRows.Leading(1));
+
+        Assert.Equal(new ClearedCrossing("09", StopNodeId: 5, SeqIndex: 0),
+            numbering.AsEntered(new ClearedCrossing("09", StopNodeId: 5, SeqIndex: -1)));
+        Assert.Equal(new ClearedCrossing("27R", At: "B", SeqIndex: 3),
+            numbering.AsEntered(new ClearedCrossing("27R", At: "B", SeqIndex: 2)));
+        Assert.Equal(new ClearedCrossing("04L", StopNodeId: 8),
+            numbering.AsEntered(new ClearedCrossing("04L", StopNodeId: 8)));
+        // A Continue's crossing stands for no step: left as it is.
+        var byContinue = new ClearedCrossing("09", StopNodeId: 5, Origin: ClearedBy.Continue);
+        Assert.Equal(byContinue, numbering.AsEntered(byContinue));
+
+        // Entered twice alike, once with no row and once on the row left out: which is which cannot be told.
+        var twice = ClearanceNumbering.For(new List<ClearedCrossing> { new("09"), new("09", SeqIndex: 0) })
+            .Removing(ClearanceRows.Leading(1));
+        Assert.Equal(-1, twice.AsEntered(new ClearedCrossing("09", SeqIndex: -1)).SeqIndex);
+    }
 }

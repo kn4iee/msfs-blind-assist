@@ -391,6 +391,40 @@ public class TurnPickApplierTests
         Assert.Equal(Node(g, En), Nodes(res.Route).Last());
     }
 
+    // "Left onto B, cross C, hold short of X1": X1 meets B at En and again at Ef, and C crosses B between them at Ex.
+    // The meeting ATC meant is the one beyond C (ClearanceRouteChecks.BeyondTheCrossing, spec 8.1); the walk along the
+    // picked taxiway keeps it rather than the nearest. With no crossed taxiway, the nearest as always.
+    [Fact]
+    public void Hold_short_of_taxiway_after_a_crossed_taxiway_takes_the_meeting_beyond_it()
+    {
+        var ex = P(375, 0);
+        var g = Graph(new List<TaxiPath>
+        {
+            Path("A", ANorth, J),
+            Path("B", J, Wm), Path("B", Wm, Wn),
+            Path("B", J, Em), Path("B", Em, En), Path("B", En, ex), Path("B", ex, Ef),
+            Path("X1", En, P(300, -50)), Path("X1", Ef, P(450, -50)),
+            Path("C", P(375, 50), ex), Path("C", ex, P(375, -50)),
+        });
+        var r0 = Route(g, ANorth, Wm, AB);
+        var ctx = Ctx(g, AB, Wm, heading: 180,
+            terminator: new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortTaxiway, "X1"));
+
+        var nearest = TurnPickApplier.Apply(r0, Picks((1, TurnSide.Left)), ctx);
+        Assert.Equal(Node(g, En), nearest.DestinationNodeId);
+
+        var beyond = TurnPickApplier.Apply(Route(g, ANorth, Wm, AB), Picks((1, TurnSide.Left)),
+            ctx with { LegEndCrossedTaxiways = new[] { "C" } });
+        Assert.Empty(beyond.Refusals);
+        Assert.Equal(Node(g, Ef), beyond.DestinationNodeId);
+        Assert.Equal(Node(g, Ef), Nodes(beyond.Route).Last());
+
+        // A crossed taxiway the walk never reaches leaves the nearest meeting.
+        var never = TurnPickApplier.Apply(Route(g, ANorth, Wm, AB), Picks((1, TurnSide.Left)),
+            ctx with { LegEndCrossedTaxiways = new[] { "Q" } });
+        Assert.Equal(Node(g, En), never.DestinationNodeId);
+    }
+
     [Fact]
     public void A_pick_that_throws_is_refused_and_later_picks_still_run()
     {

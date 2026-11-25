@@ -319,6 +319,52 @@ public static class ClearanceRouteChecks
         }
         return beyond.Count > 0 ? beyond : candidates;
     }
+
+    /// <summary>
+    /// Where the route first meets <paramref name="target"/> from segment <paramref name="fromSegment"/> on (a taxiway
+    /// run): the index of the first segment whose end node touches it (<paramref name="nodeTouchesTaxiway"/>, node id and
+    /// name) and is clear of every runway (<paramref name="clearOfRunways"/>), scanning until a segment already ON it,
+    /// which is never a meeting ("hold short of X" from pavement on X is a mismatch). -1 when there is none.
+    ///
+    /// <para>With <paramref name="crossedTaxiways"/> (a leg's <see cref="ClearancePlan.LegEndCrossedTaxiways"/>), the
+    /// first such meeting after the route has crossed one of them: a segment on it, or one ending at a node that
+    /// touches it, strictly before the meeting (<see cref="BeyondTheCrossing"/>'s rule, along the route).
+    /// <paramref name="beyondCrossing"/> says so. With no meeting beyond, or a route that never crosses one, the first
+    /// meeting stands: the tie-breaker never leaves a leg with no end, and never bends the route.</para>
+    /// </summary>
+    public static int LegEndMeeting(IReadOnlyList<TaxiRouteSegment> segments, int fromSegment, string target,
+        IReadOnlyList<string>? crossedTaxiways, Func<int, string, bool> nodeTouchesTaxiway, Func<TaxiNode, bool> clearOfRunways,
+        out bool beyondCrossing)
+    {
+        beyondCrossing = false;
+        if (segments == null || string.IsNullOrWhiteSpace(target)) return -1;
+        bool breaksTie = crossedTaxiways is { Count: > 0 };
+        bool crossed = false;
+        int first = -1;
+        for (int i = Math.Max(0, fromSegment); i < segments.Count; i++)
+        {
+            var seg = segments[i];
+            if (seg == null) continue;
+            if (string.Equals(seg.TaxiwayName, target, StringComparison.OrdinalIgnoreCase)) break;
+            if (breaksTie && crossedTaxiways!.Any(c => string.Equals(seg.TaxiwayName, c, StringComparison.OrdinalIgnoreCase)))
+                crossed = true;
+            if (seg.ToNode == null) continue;
+            if (nodeTouchesTaxiway(seg.ToNode.NodeId, target) && clearOfRunways(seg.ToNode))
+            {
+                if (!breaksTie) return i;
+                if (crossed)
+                {
+                    beyondCrossing = true;
+                    return i;
+                }
+                if (first < 0) first = i;
+            }
+            // Its end node is the crossing: a meeting AT it is not beyond it, one after it is.
+            if (breaksTie && crossedTaxiways!.Any(c => nodeTouchesTaxiway(seg.ToNode.NodeId, c)))
+                crossed = true;
+        }
+        return first;
+    }
 }
 
 /// <summary>

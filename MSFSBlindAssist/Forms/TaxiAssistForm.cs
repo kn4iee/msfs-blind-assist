@@ -4994,7 +4994,7 @@ public class TaxiAssistForm : Form
                 destinationHeadingTrue: null,
                 isRunwayDestination: false,
                 prebuiltGraph: _graph,
-                userRunwayHoldShorts: progRwyHoldShorts.Count > 0 ? progRwyHoldShorts : null,
+                userRunwayHoldShorts: progRwyHoldShorts.Count > 0 ? progRwyHoldShorts.ToList() : null,
                 progressiveTerminator: term,
                 // Crossing at a named holding point: pin the route THROUGH that painted
                 // line (same pin a named-holding-point departure uses), so the pilot
@@ -5206,8 +5206,8 @@ public class TaxiAssistForm : Form
             thresholdLat, thresholdLon, destHeadingTrue,
             isRunwayDest,
             prebuiltGraph: _graph,
-            userRunwayHoldShorts: userRunwayHoldShorts.Count > 0 ? userRunwayHoldShorts : null,
-            userTaxiwayHoldShorts: userTaxiwayHoldShorts.Count > 0 ? userTaxiwayHoldShorts : null,
+            userRunwayHoldShorts: userRunwayHoldShorts.Count > 0 ? userRunwayHoldShorts.ToList() : null,
+            userTaxiwayHoldShorts: userTaxiwayHoldShorts.Count > 0 ? userTaxiwayHoldShorts.ToList() : null,
             preferIlsHold: isRunwayDest && chkCatIiiHold.Checked,
             fullLengthBacktrack: backtrackActive,
             // Pin the route through the chosen painted hold line, not just its runway entry
@@ -5219,7 +5219,7 @@ public class TaxiAssistForm : Form
             // pilot picked — spoken only when the stop node IS that point's node.
             holdingPointName: holdingPointEntry?.TaxiwayName,
             intersectionDeparture: intersection != null,
-            userHoldingPointHoldShorts: userHoldingPointHoldShorts.Count > 0 ? userHoldingPointHoldShorts : null,
+            userHoldingPointHoldShorts: userHoldingPointHoldShorts.Count > 0 ? userHoldingPointHoldShorts.ToList() : null,
             userTurnPicks: mainTurnPicks.Count > 0 ? mainTurnPicks : null);
 
         if (error != null)

@@ -359,6 +359,62 @@ public class ClearancePlannerTests
         Assert.Equal(new[] { 5, 9 }, ClearanceRouteChecks.BeyondTheCrossing(candidates, distances, new[] { 8 }));
     }
 
+    // ---- LegEndMeeting: where the route meets the taxiway a leg ends short of ----
+
+    // Along A: node 3 meets C, node 4 meets B (the taxiway crossed), node 6 meets C again.
+    private static readonly TaxiRouteSegment[] AlongA = { Seg("A", 2), Seg("A", 3), Seg("A", 4), Seg("A", 5), Seg("A", 6), Seg("A", 7) };
+
+    private static bool Touches(int node, string name)
+        => (name == "C" && (node == 3 || node == 6)) || (name == "B" && node == 4);
+
+    [Fact]
+    public void A_leg_end_is_the_first_meeting_along_the_route()
+    {
+        Assert.Equal(1, ClearanceRouteChecks.LegEndMeeting(AlongA, 0, "C", null, Touches, _ => true, out bool beyond));
+        Assert.False(beyond);
+        // From a later run, the first meeting from there.
+        Assert.Equal(4, ClearanceRouteChecks.LegEndMeeting(AlongA, 2, "C", null, Touches, _ => true, out _));
+        // One inside a runway's margin is never a leg end.
+        Assert.Equal(4, ClearanceRouteChecks.LegEndMeeting(AlongA, 0, "C", null, Touches, n => n.NodeId != 3, out _));
+        // None at all.
+        Assert.Equal(-1, ClearanceRouteChecks.LegEndMeeting(AlongA, 0, "D", null, Touches, _ => true, out _));
+    }
+
+    // "Via A, cross B, hold short of C": the meeting before B is not the one ATC meant (spec 8.1), so the scan keeps
+    // the tie-breaker the form applied (BeyondTheCrossing) instead of cutting the leg back to the first meeting.
+    [Fact]
+    public void A_crossed_taxiway_keeps_the_leg_end_beyond_the_crossing()
+    {
+        Assert.Equal(4, ClearanceRouteChecks.LegEndMeeting(AlongA, 0, "C", new[] { "B" }, Touches, _ => true, out bool beyond));
+        Assert.True(beyond);
+        // Crossed on the route itself: a segment on B.
+        var onB = new[] { Seg("A", 2), Seg("A", 3), Seg("B", 10), Seg("A", 6) };
+        Assert.Equal(3, ClearanceRouteChecks.LegEndMeeting(onB, 0, "C", new[] { "b" }, Touches, _ => true, out beyond));
+        Assert.True(beyond);
+    }
+
+    // The tie-breaker never leaves a leg with no end: no meeting beyond the crossing, or a route that never crosses it,
+    // keeps the first meeting. A meeting AT the crossing node is not beyond it.
+    [Fact]
+    public void With_no_meeting_beyond_the_crossing_the_first_meeting_stands()
+    {
+        Assert.Equal(1, ClearanceRouteChecks.LegEndMeeting(AlongA, 0, "C", new[] { "E" }, Touches, _ => true, out bool beyond));
+        Assert.False(beyond);
+        Assert.Equal(1, ClearanceRouteChecks.LegEndMeeting(AlongA.Take(4).ToArray(), 0, "C", new[] { "B" }, Touches, _ => true, out beyond));
+        Assert.False(beyond);
+        bool AtTheCrossing(int node, string name) => (name == "C" && node == 3) || (name == "B" && node == 3);
+        Assert.Equal(1, ClearanceRouteChecks.LegEndMeeting(AlongA, 0, "C", new[] { "B" }, AtTheCrossing, _ => true, out beyond));
+        Assert.False(beyond);
+    }
+
+    // A segment already ON the taxiway ends the scan: "hold short of C" from a route driving C is a mismatch.
+    [Fact]
+    public void The_scan_stops_on_the_taxiway_itself()
+    {
+        var ontoC = new[] { Seg("A", 2), Seg("C", 3), Seg("A", 6) };
+        Assert.Equal(-1, ClearanceRouteChecks.LegEndMeeting(ontoC, 0, "c", null, Touches, _ => true, out _));
+    }
+
     // ---- ClearanceTrim ----
 
     /// <summary>

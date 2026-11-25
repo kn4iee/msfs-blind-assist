@@ -27,7 +27,10 @@ internal sealed record TurnPickContext(
     // the aircraft's runway (RouteRunwayStart, RTE-37): the node nearest the aircraft there can be a
     // parallel taxiway across the infield.
     bool KeepRouteStart = false,
-    Action<string>? Log = null);
+    Action<string>? Log = null,
+    // A leg with no destination that ends "hold short of taxiway" after Cross taxiway steps
+    // (ClearancePlan.LegEndCrossedTaxiways): a re-resolved end is the first meeting beyond one of them.
+    IReadOnlyList<string>? LegEndCrossedTaxiways = null);
 
 /// <summary>
 /// Applies the planner's Turn picks to a route already built the ordinary way: a pick the route
@@ -450,7 +453,7 @@ internal static class TurnPickApplier
         bool lastRow = row == ctx.Sequence.Count - 1;
         if (lastRow && ctx.Terminator is { Type: ProgressiveTerminatorType.EndOfTaxiway or ProgressiveTerminatorType.HoldShortTaxiway })
         {
-            end = ResolveProgressiveEnd(ctx.Graph, v, ctx.Sequence[row], stepBlocked, ctx.Terminator);
+            end = ResolveProgressiveEnd(ctx.Graph, v, ctx.Sequence[row], stepBlocked, ctx.Terminator, ctx.LegEndCrossedTaxiways);
             if (end == 0) return (null, Failure.Remainder);
         }
 
@@ -610,10 +613,18 @@ internal static class TurnPickApplier
     /// margin (RouteRunwayCrossings.RunwayWithinClearMargin), the rule the form's own lookups keep: a
     /// leg never ends on or beside a runway, picked turn or not. The walk itself still passes through
     /// such nodes. 0 when there is none.
+    /// With <paramref name="crossedTaxiways"/> (Cross taxiway steps after the last Via step), a HoldShortTaxiway end is
+    /// the nearest meeting whose walk from v passed a node touching one of them before reaching it, the meeting
+    /// ClearanceRouteChecks.BeyondTheCrossing chose; with none beyond, the nearest as before.
     private static int ResolveProgressiveEnd(TaxiGraph graph, int v, string name, HashSet<int> blocked,
-        ProgressiveTerminator terminator)
+        ProgressiveTerminator terminator, IReadOnlyList<string>? crossedTaxiways = null)
     {
+        bool TouchesCrossed(int n) => crossedTaxiways is { Count: > 0 } && graph.Adjacency.TryGetValue(n, out var es)
+            && es.Any(e => crossedTaxiways.Any(c => Named(e.TaxiwayName, c)));
+
         var dist = new Dictionary<int, double> { [v] = 0 };
+        // Whether the walk to a node passed a crossed taxiway before reaching it, along the walk's own path.
+        var crossedBefore = new Dictionary<int, bool> { [v] = false };
         var done = new HashSet<int>();
         var queue = new PriorityQueue<int, double>();
         queue.Enqueue(v, 0);
@@ -631,6 +642,7 @@ internal static class TurnPickApplier
                 if (d < dist.GetValueOrDefault(e.ToNodeId, double.MaxValue))
                 {
                     dist[e.ToNodeId] = d;
+                    crossedBefore[e.ToNodeId] = crossedBefore[n] || TouchesCrossed(n);
                     queue.Enqueue(e.ToNodeId, d);
                 }
             }
@@ -642,11 +654,16 @@ internal static class TurnPickApplier
         if (terminator.Type == ProgressiveTerminatorType.EndOfTaxiway)
             return order.Where(ClearOfRunways).OrderByDescending(n => dist[n]).ThenBy(n => n).FirstOrDefault();
 
+        int nearest = 0;
         foreach (int n in order)   // settled nearest first
-            if (ClearOfRunways(n) && graph.Adjacency.TryGetValue(n, out var edges)
-                && edges.Any(e => Named(e.TaxiwayName, terminator.Target)))
-                return n;
-        return 0;
+        {
+            if (!ClearOfRunways(n) || !graph.Adjacency.TryGetValue(n, out var edges)
+                || !edges.Any(e => Named(e.TaxiwayName, terminator.Target)))
+                continue;
+            if (crossedTaxiways is not { Count: > 0 } || crossedBefore[n]) return n;
+            if (nearest == 0) nearest = n;
+        }
+        return nearest;
     }
 
     private static string Counts(IEnumerable<string> items)

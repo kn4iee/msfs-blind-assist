@@ -4066,6 +4066,7 @@ public partial class TaxiGuidanceManager
         _passedClearedNodeId = 0;
         _passedClearedAtUtc = DateTime.MinValue;
         _passedClearedCrossings = Array.Empty<Navigation.ClearedCrossing>();
+        _clearanceProgress = Navigation.ClearanceProgressState.Empty;
         _rolloutExit = null;
         _isLandingExitRoute = false; // no exit route — runway-end countdown
         _landingExitOffPavement = true;

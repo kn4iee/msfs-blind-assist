@@ -39,20 +39,20 @@ public partial class TaxiGuidanceManager
         // at touchdown, because it emits its own touchdown-specific callout and
         // we don't want three announcements fighting for audio during rollout.
         bool announceSummary = true,
-        // User-explicit runway hold-shorts from the form: maps taxiway-sequence
-        // index → runway designator. After taxiway[seqIdx], guidance holds before
-        // the route enters or crosses that runway (ApplyUserRunwayHoldShorts). The
-        // automatic runway hold pass still runs on top, so most users never need
-        // this; it's the explicit override for ATC clearances where the pilot
-        // wants to confirm the SPECIFIC runway named.
-        Dictionary<int, string>? userRunwayHoldShorts = null,
-        // Taxiway-flavored twin of userRunwayHoldShorts (per-row "Hold short of"
-        // combo picks that are a taxiway entry): sequence index → taxiway name
-        // to stop short of after that row's taxiway. "Taxi via A, hold short of
-        // taxiway B" — the standard post-landing instruction at KATL/OMDB/VHHH-
-        // class fields (VATSIM gap analysis 2026-08-31, P2). Guidance stops at
-        // the first junction with the named taxiway after the chosen row.
-        Dictionary<int, string>? userTaxiwayHoldShorts = null,
+        // User-explicit runway hold-shorts from the form: (taxiway-sequence index,
+        // runway designator) pairs, any number per index. After taxiway[seqIdx], guidance
+        // holds before the route enters or crosses that runway (ApplyUserRunwayHoldShorts);
+        // an index of -1, or one past the sequence, is a stop with no taxiway of its own,
+        // looked for along the whole route. The automatic runway hold pass still runs on
+        // top, so most users never need this; it's the explicit override for ATC clearances
+        // where the pilot wants to confirm the SPECIFIC runway named.
+        IReadOnlyList<KeyValuePair<int, string>>? userRunwayHoldShorts = null,
+        // Taxiway-flavored twin of userRunwayHoldShorts: (sequence index, taxiway name)
+        // pairs, a stop short of that taxiway after that row's taxiway. "Taxi via A, hold
+        // short of taxiway B" — the standard post-landing instruction at KATL/OMDB/VHHH-
+        // class fields (VATSIM gap analysis 2026-08-31, P2). Guidance stops at the first
+        // junction with the named taxiway after the chosen row.
+        IReadOnlyList<KeyValuePair<int, string>>? userTaxiwayHoldShorts = null,
         // Non-null for Progressive Taxi legs. Carries the terminal end-state
         // type/target; drives the progressive-hold end announcement. An
         // AfterCrossingRunway leg's crossing is cleared through clearedCrossings.
@@ -128,11 +128,11 @@ public partial class TaxiGuidanceManager
         // for another: VirtualPilot 2026-09-24 moved 135 intersection departures (LTFM A4 → A3B)
         // when it did. Full-length departures only.
         bool intersectionDeparture = false,
-        // Holding-point flavour of the per-row "Hold short of" picks: sequence index ->
-        // the named holding point to stop at after that row's taxiway ("taxi via L, hold
-        // short of L2", LOWW 2026-11-14). The stop goes on the segment ending at the
-        // point's own node; a point the route does not pass is reported, never guessed.
-        Dictionary<int, Navigation.HoldingPointHoldShort>? userHoldingPointHoldShorts = null,
+        // Holding-point flavour of the same stops: (sequence index, the named holding point
+        // to stop at after that row's taxiway) pairs ("taxi via L, hold short of L2", LOWW
+        // 2026-11-14). The stop goes on the segment ending at the point's own node; a point
+        // the route does not pass is reported, never guessed.
+        IReadOnlyList<KeyValuePair<int, Navigation.HoldingPointHoldShort>>? userHoldingPointHoldShorts = null,
         // The planner's per-row Turn picks: sequence index -> the side ATC named for the turn onto
         // that row's taxiway. Applied to the route once it is built (TurnPickApplier); null or empty
         // leaves the route exactly as the router built it.
@@ -140,7 +140,12 @@ public partial class TaxiGuidanceManager
         // The runway crossings the pilot is cleared for, each at one place (ClearedCrossingHolds.Apply):
         // cleared on the route as picked, after the automatic pass has placed every stop [HLD-4], and
         // said when one cannot be (LastClearedCrossingWarning). Null or empty clears nothing.
-        IReadOnlyList<Navigation.ClearedCrossing>? clearedCrossings = null)
+        IReadOnlyList<Navigation.ClearedCrossing>? clearedCrossings = null,
+        // A leg with no destination that ends "hold short of taxiway" after Cross taxiway steps
+        // (ClearancePlan.LegEndCrossedTaxiways): the leg end's meet scan (ApplyLegEndSetback) and a Turn
+        // pick's end re-resolution keep the meeting beyond the crossed taxiway, the one the form chose
+        // (ClearanceRouteChecks.BeyondTheCrossing), never cutting the leg back to an earlier one.
+        IReadOnlyList<string>? legEndCrossedTaxiways = null)
     {
         lock (_stateLock)
         {
@@ -167,6 +172,7 @@ public partial class TaxiGuidanceManager
         var priorClearedCrossings = _clearedCrossings;
         var priorClearRequests = _clearRequests;
         var priorClearedCrossingWarning = LastClearedCrossingWarning;
+        var priorClearanceProgress = _clearanceProgress;
         var priorPreferIlsHold = _preferIlsHold;
         var priorBacktrackDeparture = _backtrackDeparture;
         var priorBacktrackDepApproachAnnounced = _backtrackDepApproachAnnounced;
@@ -203,6 +209,8 @@ public partial class TaxiGuidanceManager
             _clearedCrossings = priorClearedCrossings;
             _clearRequests = priorClearRequests;
             LastClearedCrossingWarning = priorClearedCrossingWarning;
+            // So is what the window's step list is trimmed by: the progress on the route still being flown.
+            _clearanceProgress = priorClearanceProgress;
             _preferIlsHold = priorPreferIlsHold;
             _backtrackDeparture = priorBacktrackDeparture;
             _backtrackDepApproachAnnounced = priorBacktrackDepApproachAnnounced;
@@ -254,12 +262,11 @@ public partial class TaxiGuidanceManager
             // collections after this call returns.
             _userHoldShortIndices = userHoldShortIndices != null
                 ? new List<int>(userHoldShortIndices) : null;
-            _userRunwayHoldShorts = userRunwayHoldShorts != null
-                ? new Dictionary<int, string>(userRunwayHoldShorts) : null;
-            _userTaxiwayHoldShorts = userTaxiwayHoldShorts != null
-                ? new Dictionary<int, string>(userTaxiwayHoldShorts) : null;
-            _userHoldingPointHoldShorts = userHoldingPointHoldShorts != null
-                ? new Dictionary<int, Navigation.HoldingPointHoldShort>(userHoldingPointHoldShorts) : null;
+            _userRunwayHoldShorts = userRunwayHoldShorts?.ToList();
+            _userTaxiwayHoldShorts = userTaxiwayHoldShorts?.ToList();
+            _userHoldingPointHoldShorts = userHoldingPointHoldShorts?.ToList();
+            // The progress the window trims its step list by starts afresh, numbered as this clearance was entered.
+            _clearanceProgress = Navigation.ClearanceProgressState.For(clearedCrossings);
             // The Turn picks are applied once, below, and never again (TURN-3): a private copy for this
             // call only, re-keyed when a runway leg is dropped.
             var turnPicks = userTurnPicks != null
@@ -394,6 +401,8 @@ public partial class TaxiGuidanceManager
                 for (int i = 0; i < taxiwaySequence.Count; i++)
                     taxiwaySequence[i] = _graph.ResolveTaxiwayName(taxiwaySequence[i]);
             }
+            // The taxiways a leg's end is beyond, by the same names (a private copy, like the sequence).
+            legEndCrossedTaxiways = legEndCrossedTaxiways?.Select(_graph.ResolveTaxiwayName).ToList();
 
             // ── Runway-as-taxiway leg refusal (VATSIM gap analysis 2026-08-31, P3) ──
             // A real clearance can use an inactive runway as a taxi leg ("taxi Delta,
@@ -434,8 +443,10 @@ public partial class TaxiGuidanceManager
                 if (droppedRowIndices != null)
                 {
                     skippedLegHoldShortNote = ClearanceRows.DroppedHoldShortsNote(ClearanceRows.CountOn(
-                        droppedRowIndices, userHoldShortIndices, userRunwayHoldShorts?.Keys, userTaxiwayHoldShorts?.Keys,
-                        userHoldingPointHoldShorts?.Keys));
+                        droppedRowIndices, userHoldShortIndices, ClearanceRows.RowsOf(userRunwayHoldShorts),
+                        ClearanceRows.RowsOf(userTaxiwayHoldShorts), ClearanceRows.RowsOf(userHoldingPointHoldShorts)));
+                    // The window's step list keeps those rows: what is reported back is numbered with them.
+                    _clearanceProgress = _clearanceProgress.WithRowsLeftOut(droppedRowIndices);
                     turnPicks = ClearanceRows.Without(turnPicks, droppedRowIndices);
                     // A crossing cleared after the skipped leg stays, with no row: it still clears its runway.
                     _clearRequests = ClearanceRows.Without(_clearRequests, droppedRowIndices)!;
@@ -588,9 +599,10 @@ public partial class TaxiGuidanceManager
                     router, clearanceEntry.NodeId, destinationNodeId, taxiwaySequence, isRunwayDestination, out var settled,
                     fullClearanceRoute: runwayStart != null ? runwayStartRoute : null);
                 bool leaveOut = undriven > 0
+                    // A stop with no taxiway of its own sits on no row, so it never keeps a first taxiway in.
                     && UndrivenClearanceStart.PicksAllow(
-                        undriven, userHoldShortIndices, userRunwayHoldShorts?.Keys, userTaxiwayHoldShorts?.Keys,
-                        userHoldingPointHoldShorts?.Keys)
+                        undriven, userHoldShortIndices, ClearanceRows.RowsOf(userRunwayHoldShorts),
+                        ClearanceRows.RowsOf(userTaxiwayHoldShorts), ClearanceRows.RowsOf(userHoldingPointHoldShorts))
                     // A Turn pick on the first taxiway that stays names the turn from one that would go.
                     && UndrivenClearanceStart.TurnPicksAllow(undriven, turnPicks?.Keys)
                     // A runway start keeps its own rule: the route taken must not come back onto the runway.
@@ -618,6 +630,7 @@ public partial class TaxiGuidanceManager
                         ClearanceRows.Without(userHoldingPointHoldShorts, leftOutRows);
                     turnPicks = ClearanceRows.Without(turnPicks, leftOutRows);
                     _clearRequests = ClearanceRows.Without(_clearRequests, leftOutRows)!;
+                    _clearanceProgress = _clearanceProgress.WithRowsLeftOut(leftOutRows);
                     firstCleared = taxiwaySequence[0];
                     if (runwayStart == null)
                         firstTwNode = SelectFirstTaxiwayEntry(aircraftLat, aircraftLon, firstCleared, destComponentId, destinationNodeId);
@@ -1051,7 +1064,8 @@ public partial class TaxiGuidanceManager
                         // on the aircraft's runway (RTE-37): the node nearest the aircraft there can be
                         // the parallel taxiway across the infield.
                         KeepRouteStart: RouteReachability.IsOffDestinationNetwork(reachability) || runwayStartNodeId != 0,
-                        Log: m => _guidanceLog.Info(m)));   // the applier's lines start "Turn pick row ..."
+                        Log: m => _guidanceLog.Info(m),   // the applier's lines start "Turn pick row ..."
+                        LegEndCrossedTaxiways: legEndCrossedTaxiways));
                     if (!ReferenceEquals(turnPickResult.Route, route))
                     {
                         route = turnPickResult.Route;
@@ -1072,8 +1086,9 @@ public partial class TaxiGuidanceManager
             // A leg that ends "hold short of taxiway" stops before the taxiway, not on its junction
             // (TaxiwayHoldPlacement). On the route the Turn picks leave, as a pick can replace the route
             // and move the junction [TURN-1], and before the pilot's own picks, which then see the cut
-            // route. It can end the leg at an earlier meeting with the taxiway: the local copy follows.
-            ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true);
+            // route. It can end the leg at an earlier meeting with the taxiway, never one before a taxiway the pilot
+            // entered as crossed first: the local copy follows.
+            ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways);
             destinationNodeId = _destinationNodeId;
 
             // The runway roll is the route's own start, or nothing: a pass above that rebuilt the route
@@ -1112,11 +1127,16 @@ public partial class TaxiGuidanceManager
             // Each honoured pick's own recorded event, merged back in by AdoptRoute after the
             // automatic pass has reset the list (PR #238 deferred finding §7).
             var userPickEvents = new List<TaxiRouteRunwayEvent>();
-            if (userRunwayHoldShorts != null && userRunwayHoldShorts.Count > 0 && taxiwaySequence != null)
+            // Where each of the pilot's stops was placed, so the window can be told which are passed
+            // (GetClearanceProgress). A stop with no taxiway of its own needs no sequence: with none it is
+            // looked for along the whole route.
+            var placedStops = new List<Navigation.PlacedStop>();
+            var stopSequence = taxiwaySequence ?? new List<string>();
+            if (userRunwayHoldShorts != null && userRunwayHoldShorts.Count > 0)
             {
                 string? pickWarning = ApplyUserRunwayHoldShorts(
-                    route, taxiwaySequence, userRunwayHoldShorts,
-                    aircraftLat, aircraftLon, userPickEvents, deferredRunwayPicks);
+                    route, stopSequence, userRunwayHoldShorts,
+                    aircraftLat, aircraftLon, userPickEvents, deferredRunwayPicks, placedStops: placedStops);
                 if (pickWarning != null)
                     runwayHoldShortWarning = runwayHoldShortWarning == null
                         ? pickWarning : runwayHoldShortWarning + " " + pickWarning;
@@ -1128,11 +1148,12 @@ public partial class TaxiGuidanceManager
             // split a segment here (a pilot's Calculate), so the runway picks just
             // deferred, which hold segment indices, are re-indexed with it, and so are
             // the honoured picks' events, which hold their stop's node index.
-            if (userTaxiwayHoldShorts != null && userTaxiwayHoldShorts.Count > 0 && taxiwaySequence != null)
+            if (userTaxiwayHoldShorts != null && userTaxiwayHoldShorts.Count > 0)
             {
                 string? taxiwayHoldWarning = ApplyUserTaxiwayHoldShorts(
-                    route, taxiwaySequence, userTaxiwayHoldShorts,
-                    allowInsert: true, deferredRunwayPicks: deferredRunwayPicks, userPickEvents: userPickEvents);
+                    route, stopSequence, userTaxiwayHoldShorts,
+                    allowInsert: true, deferredRunwayPicks: deferredRunwayPicks, userPickEvents: userPickEvents,
+                    placedStops: placedStops);
                 if (taxiwayHoldWarning != null)
                     runwayHoldShortWarning = runwayHoldShortWarning == null
                         ? taxiwayHoldWarning
@@ -1143,10 +1164,10 @@ public partial class TaxiGuidanceManager
             // the chosen row. Same note as the other flavours when one is not on the route.
             // The ones that found their stop are kept: TruncateToHoldShort below can cut it off.
             var placedPointPicks = new List<Navigation.HoldingPointHoldShort>();
-            if (userHoldingPointHoldShorts != null && userHoldingPointHoldShorts.Count > 0 && taxiwaySequence != null)
+            if (userHoldingPointHoldShorts != null && userHoldingPointHoldShorts.Count > 0)
             {
                 string? pointHoldWarning = ApplyUserHoldingPointHoldShorts(
-                    route, taxiwaySequence, userHoldingPointHoldShorts, placedPointPicks);
+                    route, stopSequence, userHoldingPointHoldShorts, placedPointPicks, placedStops);
                 if (pointHoldWarning != null)
                     runwayHoldShortWarning = runwayHoldShortWarning == null
                         ? pointHoldWarning
@@ -1335,10 +1356,11 @@ public partial class TaxiGuidanceManager
             // the stop it has just placed for a runway in front of theirs; only then is a pick that
             // still has no stop warned about.
             string? deferredPickWarning = RetryDeferredRunwayPicks(
-                route, deferredRunwayPicks, aircraftLat, aircraftLon);
+                route, deferredRunwayPicks, aircraftLat, aircraftLon, placedStops);
             if (deferredPickWarning != null)
                 runwayHoldShortWarning = runwayHoldShortWarning == null
                     ? deferredPickWarning : runwayHoldShortWarning + " " + deferredPickWarning;
+            _clearanceProgress = _clearanceProgress.WithPlaced(placedStops);
 
             // Cleared on every LoadRoute, set or not, so it can never describe a previous
             // route (the taxi-route import calculates several times per import).
@@ -1708,14 +1730,16 @@ public partial class TaxiGuidanceManager
         TaxiGraph? Graph,
         long GraphGeneration,
         HashSet<int> TurnBlockedNodes,
-        List<Navigation.ClearedCrossing> ClearedCrossings);
+        List<Navigation.ClearedCrossing> ClearedCrossings,
+        Navigation.ClearanceProgressState ClearanceProgress);
 
     private LoadRouteRollback CaptureLoadRouteRollback() => new(
         _dataProvider, _destinationNodeId, _destinationName, _icao, _originalTaxiwaySequence,
         _preferIlsHold, _backtrackDeparture, _backtrackDepApproachAnnounced, _holdingPointHoldNodeId,
         _isRunwayLineup, _progressiveTerminator, _lineupTargetLat, _lineupTargetLon,
         _lineupHeadingMag, _lineupHeadingTrue, _hasLineupTarget, _autoActivateFired,
-        _postHighSpeedExitMinBearing, _graph, _graphGeneration, _turnBlockedNodes, _clearedCrossings);
+        _postHighSpeedExitMinBearing, _graph, _graphGeneration, _turnBlockedNodes, _clearedCrossings,
+        _clearanceProgress);
 
     private void RestoreLoadRouteRollback(LoadRouteRollback r)
     {
@@ -1741,6 +1765,7 @@ public partial class TaxiGuidanceManager
         _graphGeneration = r.GraphGeneration;
         _turnBlockedNodes = r.TurnBlockedNodes;
         _clearedCrossings = r.ClearedCrossings;
+        _clearanceProgress = r.ClearanceProgress;
     }
 
     /// <summary>
@@ -2432,45 +2457,44 @@ public partial class TaxiGuidanceManager
                 ? _originalTaxiwaySequence.Count - remainingSequence.Count : keptTailRow;
             holdSequence = _originalTaxiwaySequence.Skip(Math.Max(0, Math.Min(trimStart, keptTailRow))).ToList();
         }
-        if (holdSequence is { Count: > 0 } && _originalTaxiwaySequence != null)
+        // A stop with no taxiway of its own (-1) is kept as -1 and looked for along the whole new route, also when no
+        // cleared taxiway remains to follow (every row is then behind); the others follow their rows as before.
+        bool sequenceRemains = holdSequence is { Count: > 0 } && _originalTaxiwaySequence != null
+                               && _originalTaxiwaySequence.Count >= holdSequence.Count;
+        int seqOffset = sequenceRemains ? _originalTaxiwaySequence!.Count - holdSequence!.Count : 0;
+        int rowsBehind = sequenceRemains ? seqOffset : int.MaxValue;
+        holdSequence = sequenceRemains ? holdSequence! : new List<string>();
+        // Where each of the pilot's stops lands on the new route, recorded once it is adopted (GetClearanceProgress).
+        var recalcPlacedStops = new List<Navigation.PlacedStop>();
+        if (sequenceRemains && _userHoldShortIndices is { Count: > 0 })
         {
-            int seqOffset = _originalTaxiwaySequence.Count - holdSequence.Count;
-            if (seqOffset >= 0)
+            var remappedIdx = new List<int>();
+            foreach (int idx in _userHoldShortIndices)
+                if (idx >= seqOffset) remappedIdx.Add(idx - seqOffset);
+            if (remappedIdx.Count > 0)
+                ApplyUserHoldShorts(newRoute, holdSequence, remappedIdx);
+        }
+        if (_userRunwayHoldShorts is { Count: > 0 })
+        {
+            var remappedRwy = ClearanceRows.After(_userRunwayHoldShorts, rowsBehind);
+            if (remappedRwy.Count > 0)
+                recalcHoldWarning = ApplyUserRunwayHoldShorts(
+                    newRoute, holdSequence, remappedRwy,
+                    lat, lon, recalcPickEvents, recalcDeferredPicks, rowOffset: seqOffset, placedStops: recalcPlacedStops);
+        }
+        if (_userTaxiwayHoldShorts is { Count: > 0 })
+        {
+            var remappedTwy = ClearanceRows.After(_userTaxiwayHoldShorts, rowsBehind);
+            if (remappedTwy.Count > 0)
             {
-                if (_userHoldShortIndices is { Count: > 0 })
-                {
-                    var remappedIdx = new List<int>();
-                    foreach (int idx in _userHoldShortIndices)
-                        if (idx >= seqOffset) remappedIdx.Add(idx - seqOffset);
-                    if (remappedIdx.Count > 0)
-                        ApplyUserHoldShorts(newRoute, holdSequence, remappedIdx);
-                }
-                if (_userRunwayHoldShorts is { Count: > 0 })
-                {
-                    var remappedRwy = new Dictionary<int, string>();
-                    foreach (var kvp in _userRunwayHoldShorts)
-                        if (kvp.Key >= seqOffset) remappedRwy[kvp.Key - seqOffset] = kvp.Value;
-                    if (remappedRwy.Count > 0)
-                        recalcHoldWarning = ApplyUserRunwayHoldShorts(
-                            newRoute, holdSequence, remappedRwy,
-                            lat, lon, recalcPickEvents, recalcDeferredPicks);
-                }
-                if (_userTaxiwayHoldShorts is { Count: > 0 })
-                {
-                    var remappedTwy = new Dictionary<int, string>();
-                    foreach (var kvp in _userTaxiwayHoldShorts)
-                        if (kvp.Key >= seqOffset) remappedTwy[kvp.Key - seqOffset] = kvp.Value;
-                    if (remappedTwy.Count > 0)
-                    {
-                        // Never a node inserted on a recalculation [RTE-30]; the rows are numbered as
-                        // loaded, so a kept Turn pick still floors the stop.
-                        string? twyWarning = ApplyUserTaxiwayHoldShorts(
-                            newRoute, holdSequence, remappedTwy, allowInsert: false, rowOffset: seqOffset);
-                        if (twyWarning != null)
-                            recalcHoldWarning = recalcHoldWarning == null
-                                ? twyWarning : recalcHoldWarning + " " + twyWarning;
-                    }
-                }
+                // Never a node inserted on a recalculation [RTE-30]; the rows are numbered as
+                // loaded, so a kept Turn pick still floors the stop.
+                string? twyWarning = ApplyUserTaxiwayHoldShorts(
+                    newRoute, holdSequence, remappedTwy, allowInsert: false, rowOffset: seqOffset,
+                    placedStops: recalcPlacedStops);
+                if (twyWarning != null)
+                    recalcHoldWarning = recalcHoldWarning == null
+                        ? twyWarning : recalcHoldWarning + " " + twyWarning;
             }
         }
 
@@ -2491,11 +2515,17 @@ public partial class TaxiGuidanceManager
         {
             var lostPoints = new List<string>();
             var pointNotes = new List<string>();
-            foreach (var pick in _userHoldingPointHoldShorts.OrderBy(k => k.Key).Select(k => k.Value))
+            foreach (var (row, pick) in _userHoldingPointHoldShorts.OrderBy(k => k.Key))
             {
                 if (!pick.IsStillAhead(_route?.Segments, _currentSegmentIndex)) continue;
                 if (pick.Place(newRoute.Segments))
+                {
                     recalcPlacedPoints.Add(pick);
+                    // Numbered as loaded (the points are not remapped); one past the sequence has no row.
+                    recalcPlacedStops.Add(new Navigation.PlacedStop(
+                        row >= 0 && row < (_originalTaxiwaySequence?.Count ?? 0) ? row : -1,
+                        Navigation.ClearanceTargetKind.HoldingPoint, pick.Name, pick.NodeId, pick.NodeId));
+                }
                 else if (pick.StartsRoute(newRoute.Segments))
                     pointNotes.Add(pick.StartsRouteNote);
                 else
@@ -2590,11 +2620,16 @@ public partial class TaxiGuidanceManager
             _hasJoinedRoute = false;
             _minPerpWhileUnjoinedM = double.MaxValue;
         }
+        // What the aircraft has passed on the route being replaced stays passed, whatever the new route holds: judged
+        // on that route and its cursor, before either is replaced (GetClearanceProgress).
+        _clearanceProgress = _clearanceProgress.Settled(_route?.Segments, _currentSegmentIndex,
+            holding: _state == TaxiGuidanceState.HoldShort);
         AdoptRoute(newRoute, _isRunwayLineup, _destinationName, lat, lon, phase: "recalc",
             userPickEvents: recalcPickEvents, recalculation: true);
         // A remapped pick that met its runway with no stop before that pass may share the stop
         // it has just placed for a runway in front of it (RetryDeferredRunwayPicks).
-        string? recalcDeferredWarning = RetryDeferredRunwayPicks(newRoute, recalcDeferredPicks, lat, lon);
+        string? recalcDeferredWarning = RetryDeferredRunwayPicks(newRoute, recalcDeferredPicks, lat, lon, recalcPlacedStops);
+        _clearanceProgress = _clearanceProgress.WithPlaced(recalcPlacedStops);
         if (recalcDeferredWarning != null)
             recalcHoldWarning = recalcHoldWarning == null
                 ? recalcDeferredWarning : recalcHoldWarning + " " + recalcDeferredWarning;
@@ -3426,7 +3461,7 @@ public partial class TaxiGuidanceManager
     /// automatic pass ran — retried once that pass has placed its own stops.
     /// </summary>
     private sealed record DeferredRunwayPick(
-        TaxiGraph.RunwayCenterline Runway, string RunwayId, int RunStart, string TaxiwayName);
+        TaxiGraph.RunwayCenterline Runway, string RunwayId, int RunStart, string TaxiwayName, int Row = -1);
 
     /// <summary>
     /// THE route-adoption seam: every route the manager takes on becomes the live route HERE,
@@ -3488,41 +3523,46 @@ public partial class TaxiGuidanceManager
     }
 
     /// <summary>
-    /// Honors the pilot's explicit "Hold short of runway X" pickers from the form. For each
-    /// (sequenceIndex → runway) pair the pick binds to the matching run of segments tagged with that
+    /// Honors the pilot's explicit "Hold short of runway X" stops. For each (sequenceIndex, runway)
+    /// pair (several may share an index) the stop binds to the matching run of segments tagged with that
     /// taxiway (first run, counting repeats — KSFO D keeps its name across 10R/28L) and is honoured
-    /// when the route enters or crosses X at or after that run's start. The hold is placed by the same
-    /// resolver as the automatic pass and labelled as the pilot typed it
+    /// when the route enters or crosses X at or after that run's start. A stop with no taxiway of its
+    /// own (an index outside the sequence), or whose taxiway is not on the route, is looked for from the
+    /// route's start; one that finds nothing from its run start is tried once more from there. The hold
+    /// is placed by the same resolver as the automatic pass and labelled as the pilot typed it
     /// (<see cref="RouteRunwayCrossings.ApplyUserRunwayHold"/>).
     ///
     /// Returns a warning string when one or more picks could not be set — the runway is not in the
-    /// airport data, or the taxiway or runway is not on the route — or null when every pick was
+    /// airport data, or the route does not cross it — or null when every pick was
     /// honoured. A pick that meets its runway but finds no stop is NOT warned about here: it goes to
     /// <paramref name="deferred"/>, because a runway just in front of it (intersecting or close
     /// parallel runways) gets its stop from the automatic pass that runs AFTER this, and the pick
     /// then shares it. Warning at this point said "no safe place to hold short" for a pick that the
     /// finished route holds perfectly well (review finding on PR #238, 2026-09-15).
     /// </summary>
+    /// <param name="rowOffset">Added to a row of <paramref name="taxiwaySequence"/> to number it as loaded (a
+    /// recalculation's sequence is a suffix of the loaded one), for <paramref name="placedStops"/>.</param>
+    /// <param name="placedStops">Receives where each honoured stop was placed.</param>
     private string? ApplyUserRunwayHoldShorts(
         TaxiRoute route,
         List<string> taxiwaySequence,
-        Dictionary<int, string> userRunwayHoldShorts,
+        IReadOnlyList<KeyValuePair<int, string>> userRunwayHoldShorts,
         double aircraftLat,
         double aircraftLon,
         List<TaxiRouteRunwayEvent> placedEvents,
-        List<DeferredRunwayPick> deferred)
+        List<DeferredRunwayPick> deferred,
+        int rowOffset = 0,
+        List<Navigation.PlacedStop>? placedStops = null)
     {
         if (_graph == null) return null;
 
         var unmatched = new List<string>();
 
-        foreach (var kvp in userRunwayHoldShorts)
+        foreach (var (seqIdx, runwayId) in userRunwayHoldShorts)
         {
-            int seqIdx = kvp.Key;
-            string runwayId = kvp.Value;
-
-            if (seqIdx < 0 || seqIdx >= taxiwaySequence.Count) continue;
-            string taxiwayName = taxiwaySequence[seqIdx];
+            bool ownRow = seqIdx >= 0 && seqIdx < taxiwaySequence.Count;
+            string? taxiwayName = ownRow ? taxiwaySequence[seqIdx] : null;
+            int row = ownRow ? seqIdx + rowOffset : -1;
 
             // The user types ONE of two reciprocal designators ("10R" / "28L") but both name the
             // same physical pavement, so the route is classified against that one runway: a pick
@@ -3539,36 +3579,60 @@ public partial class TaxiGuidanceManager
             // For duplicate-taxiway clearances ("via N, hold short 15R, N, hold short 22R, N" —
             // KBOS style), each sequence entry refers to a distinct run of that taxiway in the
             // route; scanning from the START of the run (not the end) finds crossings INTERNAL to
-            // the named taxiway (KSFO D over 10R/28L keeps its name on both sides).
-            int runStart = FindTaxiwayRunStart(route, taxiwaySequence, seqIdx, taxiwayName);
-            if (runStart < 0)
+            // the named taxiway (KSFO D over 10R/28L keeps its name on both sides). With no taxiway
+            // of its own, or one the route does not drive, the whole route.
+            int runStart = ownRow ? FindTaxiwayRunStart(route, taxiwaySequence, seqIdx, taxiwayName!) : -1;
+            int searchFrom = Math.Max(0, runStart);
+            var result = RouteRunwayCrossings.ApplyUserRunwayHold(
+                route, targetRwy, _graph.RunwayCenterlines, runwayId, searchFrom,
+                placed: out var placedEvent,
+                aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon));
+            if (result == RouteRunwayCrossings.UserRunwayHoldResult.NotOnRoute && searchFrom > 0)
             {
-                unmatched.Add($"runway {runwayId} (taxiway {taxiwayName} not on route)");
-                continue;
+                // Not after its own taxiway: once more from the route's start.
+                searchFrom = 0;
+                result = RouteRunwayCrossings.ApplyUserRunwayHold(
+                    route, targetRwy, _graph.RunwayCenterlines, runwayId, searchFrom,
+                    placed: out placedEvent,
+                    aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon));
             }
 
-            switch (RouteRunwayCrossings.ApplyUserRunwayHold(
-                        route, targetRwy, _graph.RunwayCenterlines, runwayId, runStart,
-                        placed: out var placedEvent,
-                        aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon)))
+            switch (result)
             {
                 // The pick's own event, merged back in after the automatic pass RESETS the list —
                 // without it a pick on the destination strip, whose arrival that pass skips, was
                 // named nowhere at all (PR #238 deferred finding §7).
                 case RouteRunwayCrossings.UserRunwayHoldResult.Held when placedEvent != null:
                     placedEvents.Add(placedEvent);
+                    placedStops?.Add(PlacedRunwayStop(route, row, runwayId, placedEvent.StopNodeIndex));
                     break;
                 case RouteRunwayCrossings.UserRunwayHoldResult.NotOnRoute:
-                    unmatched.Add($"runway {runwayId} (route does not cross it after taxiway {taxiwayName})");
+                    unmatched.Add($"runway {runwayId} (the route does not cross it)");
                     break;
                 case RouteRunwayCrossings.UserRunwayHoldResult.NotHeld:
-                    deferred.Add(new DeferredRunwayPick(targetRwy, runwayId, runStart, taxiwayName));
+                    // Named after its taxiway only when it was found along that taxiway's own run.
+                    deferred.Add(new DeferredRunwayPick(targetRwy, runwayId, searchFrom,
+                        runStart >= 0 && searchFrom == runStart ? taxiwayName! : "", row));
                     break;
             }
         }
 
         if (unmatched.Count == 0) return null;
         return $"Note: requested hold-short(s) could not be set — {string.Join("; ", unmatched)}.";
+    }
+
+    /// <summary>
+    /// A runway stop placed at route node <paramref name="stopNodeIndex"/> (0: the start hold; segment n - 1's end
+    /// node for n), recorded by its node: a node inserted later never moves it. Node 0 (never passed) when not recorded.
+    /// </summary>
+    private static Navigation.PlacedStop PlacedRunwayStop(TaxiRoute route, int row, string runwayId, int stopNodeIndex)
+    {
+        int nodeId = 0;
+        if (stopNodeIndex == 0 && route.Segments.Count > 0)
+            nodeId = route.Segments[0].FromNode?.NodeId ?? 0;
+        else if (stopNodeIndex >= 1 && stopNodeIndex - 1 < route.Segments.Count)
+            nodeId = route.Segments[stopNodeIndex - 1].ToNode?.NodeId ?? 0;
+        return new Navigation.PlacedStop(row, Navigation.ClearanceTargetKind.Runway, runwayId, 0, nodeId);
     }
 
     /// <summary>
@@ -3579,7 +3643,7 @@ public partial class TaxiGuidanceManager
     /// </summary>
     private string? RetryDeferredRunwayPicks(
         TaxiRoute route, List<DeferredRunwayPick> deferred,
-        double aircraftLat, double aircraftLon)
+        double aircraftLat, double aircraftLon, List<Navigation.PlacedStop>? placedStops = null)
     {
         if (_graph == null || deferred.Count == 0) return null;
         var unheld = new List<string>();
@@ -3590,9 +3654,15 @@ public partial class TaxiGuidanceManager
                 placed: out var placedEvent,
                 aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon));
             if (result == RouteRunwayCrossings.UserRunwayHoldResult.Held && placedEvent != null)
+            {
                 RouteRunwayCrossings.MergeUserPickEvents(route, new[] { placedEvent });
+                placedStops?.Add(PlacedRunwayStop(route, pick.Row, pick.RunwayId, placedEvent.StopNodeIndex));
+            }
             else if (result != RouteRunwayCrossings.UserRunwayHoldResult.Held)
-                unheld.Add($"runway {pick.RunwayId} (no safe place to hold short after taxiway {pick.TaxiwayName})");
+                // A stop found along the whole route, not its own taxiway's run, names no taxiway.
+                unheld.Add(pick.TaxiwayName.Length > 0
+                    ? $"runway {pick.RunwayId} (no safe place to hold short after taxiway {pick.TaxiwayName})"
+                    : $"runway {pick.RunwayId} (no safe place to hold short)");
         }
         if (unheld.Count == 0) return null;
         return $"Note: requested hold-short(s) could not be set — {string.Join("; ", unheld)}.";
@@ -3675,12 +3745,15 @@ public partial class TaxiGuidanceManager
     }
 
     /// <summary>
-    /// Applies the per-row "hold short of TAXIWAY X" picks: after the chosen
+    /// Applies the "hold short of TAXIWAY X" stops, (row, X) pairs, several to a row: after the chosen
     /// row's taxiway run, guidance stops before the first junction where the route
-    /// meets taxiway X — the segment whose end node carries an edge named X. This
+    /// meets taxiway X — the segment whose end node carries an edge named X
+    /// (<see cref="ClearanceRouteChecks.LegEndMeeting"/>). This
     /// covers both shapes of the instruction: the route TURNING ONTO X and the route
     /// CROSSING X while continuing (the route carries on past the junction after the
-    /// pilot's Continue). The stop is set back from the junction so the whole aircraft
+    /// pilot's Continue). A stop with no taxiway of its own (a row outside the sequence), or whose
+    /// taxiway is not on the route, is looked for from the route's start; one that meets nothing after its
+    /// run start is tried once more from there. The stop is set back from the junction so the whole aircraft
     /// stays off X (<see cref="PlaceTaxiwayHoldStop"/>); a junction inside a runway's
     /// clear margin gets no stop, and the pilot is told.
     /// Returns a spoken note naming any pick the route cannot honour, or null.
@@ -3694,10 +3767,11 @@ public partial class TaxiGuidanceManager
     /// indices: re-indexed when a stop splits a segment.</param>
     /// <param name="userPickEvents">The honoured runway picks' events, built before this runs, which hold
     /// their stop's node index (<see cref="TaxiRouteRunwayEvent.StopNodeIndex"/>): re-indexed with them.</param>
+    /// <param name="placedStops">Receives where each honoured stop was placed.</param>
     private string? ApplyUserTaxiwayHoldShorts(
-        TaxiRoute route, List<string> taxiwaySequence, Dictionary<int, string> userTaxiwayHoldShorts,
+        TaxiRoute route, List<string> taxiwaySequence, IReadOnlyList<KeyValuePair<int, string>> userTaxiwayHoldShorts,
         bool allowInsert, int rowOffset = 0, List<DeferredRunwayPick>? deferredRunwayPicks = null,
-        List<TaxiRouteRunwayEvent>? userPickEvents = null)
+        List<TaxiRouteRunwayEvent>? userPickEvents = null, List<Navigation.PlacedStop>? placedStops = null)
     {
         if (_graph == null) return null;
         var unmatched = new List<string>();
@@ -3705,45 +3779,34 @@ public partial class TaxiGuidanceManager
 
         foreach (var (seqIdx, rawTarget) in userTaxiwayHoldShorts.OrderBy(k => k.Key))
         {
-            if (seqIdx < 0 || seqIdx >= taxiwaySequence.Count) continue;
-            string rowTaxiway = taxiwaySequence[seqIdx];
+            bool ownRow = seqIdx >= 0 && seqIdx < taxiwaySequence.Count;
             string target = _graph.ResolveTaxiwayName(rawTarget);
-
-            int runStart = FindTaxiwayRunStart(route, taxiwaySequence, seqIdx, rowTaxiway);
-            if (runStart < 0)
-            {
-                unmatched.Add($"taxiway {rawTarget} (taxiway {rowTaxiway} not on route)");
-                continue;
-            }
 
             // Forward scan from the run start for the first segment whose END
             // node touches the target taxiway. Segments already ON the target
             // don't count — "hold short of X" from a row on X is a mismatch the
-            // pilot should hear about, not a stop at an arbitrary X node.
-            int holdSeg = -1;
-            for (int i = runStart; i < route.Segments.Count; i++)
-            {
-                var seg = route.Segments[i];
-                if (seg.TaxiwayName.Equals(target, StringComparison.OrdinalIgnoreCase))
-                    break; // reached pavement ON the target without a junction hit — stop scanning
-                if (seg.ToNode == null) continue;
-                if (NodeTouchesTaxiway(seg.ToNode.NodeId, target))
-                {
-                    holdSeg = i;
-                    break;
-                }
-            }
+            // pilot should hear about, not a stop at an arbitrary X node. With no
+            // taxiway of its own, or one the route does not drive, or no meeting after
+            // it, from the route's start.
+            int runStart = ownRow ? FindTaxiwayRunStart(route, taxiwaySequence, seqIdx, taxiwaySequence[seqIdx]) : -1;
+            int holdSeg = runStart >= 0
+                ? ClearanceRouteChecks.LegEndMeeting(route.Segments, runStart, target, null, NodeTouchesTaxiway, _ => true, out _)
+                : -1;
+            bool onOwnRun = holdSeg >= 0;
+            if (holdSeg < 0 && runStart != 0)
+                holdSeg = ClearanceRouteChecks.LegEndMeeting(route.Segments, 0, target, null, NodeTouchesTaxiway, _ => true, out _);
 
             if (holdSeg < 0)
             {
-                unmatched.Add($"taxiway {rawTarget} (route does not meet it after taxiway {rowTaxiway})");
+                unmatched.Add($"taxiway {rawTarget} (the route does not meet it)");
                 continue;
             }
 
             // The junction inside a runway's clear margin, or reached over one within the capture radius:
-            // no stop there. The runway's own automatic stop still stands before that runway.
-            int stopSeg = PlaceTaxiwayHoldStop(route, holdSeg, allowInsert, seqIdx + rowOffset, deferredRunwayPicks,
-                userPickEvents);
+            // no stop there. The runway's own automatic stop still stands before that runway. A stop found
+            // off its own taxiway's run is floored by no Turn pick of that row.
+            int stopSeg = PlaceTaxiwayHoldStop(route, holdSeg, allowInsert, onOwnRun ? seqIdx + rowOffset : -1,
+                deferredRunwayPicks, userPickEvents);
             if (stopSeg < 0)
             {
                 noSafeStop.Add($"Note: no place to hold short of taxiway {rawTarget} clear of the runway; no stop will be called there.");
@@ -3754,6 +3817,8 @@ public partial class TaxiGuidanceManager
             hold.IsHoldShortPoint = true;
             // User intent wins on the label — spoken as "Hold short of taxiway X".
             hold.HoldShortRunway = $"taxiway {rawTarget}";
+            placedStops?.Add(new Navigation.PlacedStop(ownRow ? seqIdx + rowOffset : -1,
+                Navigation.ClearanceTargetKind.Taxiway, rawTarget, 0, hold.ToNode?.NodeId ?? 0));
         }
 
         var notes = new List<string>();
@@ -3855,9 +3920,13 @@ public partial class TaxiGuidanceManager
     /// reaches it and is cut back again. On a pilot's Calculate (<paramref name="allowInsert"/>) the leg
     /// first ends at the FIRST meeting with the taxiway along the route from the last row's taxiway,
     /// which a Turn pick on an earlier row can have moved; a meeting inside a runway's clear margin is
-    /// never the end of a leg.
+    /// never the end of a leg. With <paramref name="crossedTaxiways"/> (Cross taxiway steps after the last
+    /// Via step), the first meeting beyond the crossed taxiway (<see cref="ClearanceRouteChecks.LegEndMeeting"/>):
+    /// the form's tie-breaker chose it (<see cref="ClearanceRouteChecks.BeyondTheCrossing"/>), and the meeting
+    /// before the crossing is not the one ATC meant.
     /// </summary>
-    private void ApplyLegEndSetback(TaxiRoute route, List<string>? taxiwaySequence, bool allowInsert)
+    private void ApplyLegEndSetback(TaxiRoute route, List<string>? taxiwaySequence, bool allowInsert,
+        IReadOnlyList<string>? crossedTaxiways = null)
     {
         if (_graph == null || _progressiveTerminator is not { Type: ProgressiveTerminatorType.HoldShortTaxiway } term)
             return;
@@ -3871,23 +3940,14 @@ public partial class TaxiGuidanceManager
             // As ApplyUserTaxiwayHoldShorts scans: from the last row's run, the first segment ending at
             // a node on the target, clear of every runway, until a segment already ON the target.
             int runStart = FindTaxiwayRunStart(route, taxiwaySequence, taxiwaySequence.Count - 1, taxiwaySequence[^1]);
-            int meet = -1;
-            if (runStart >= 0)
-            {
-                for (int i = runStart; i < route.Segments.Count; i++)
-                {
-                    var seg = route.Segments[i];
-                    if (seg.TaxiwayName.Equals(target, StringComparison.OrdinalIgnoreCase)) break;
-                    if (seg.ToNode == null) continue;
-                    if (NodeTouchesTaxiway(seg.ToNode.NodeId, target)
-                        && RouteRunwayCrossings.RunwayWithinClearMargin(
-                               graph.RunwayCenterlines, seg.ToNode.Latitude, seg.ToNode.Longitude) == null)
-                    {
-                        meet = i;
-                        break;
-                    }
-                }
-            }
+            bool beyondCrossing = false;
+            int meet = runStart < 0 ? -1 : ClearanceRouteChecks.LegEndMeeting(route.Segments, runStart, target,
+                crossedTaxiways, NodeTouchesTaxiway,
+                node => RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, node.Latitude, node.Longitude) == null,
+                out beyondCrossing);
+            if (crossedTaxiways is { Count: > 0 } && meet >= 0)
+                _guidanceLog.Info($"Leg end: crossing {string.Join(",", crossedTaxiways)} first; the meeting at node " +
+                                  $"{route.Segments[meet].ToNode.NodeId} is {(beyondCrossing ? "beyond it" : "the first, none lies beyond it")}");
             if (meet >= 0 && meet < route.Segments.Count - 1)
             {
                 _guidanceLog.Info($"Leg end: the route meets taxiway {target} first at node {route.Segments[meet].ToNode.NodeId}, " +
@@ -3924,35 +3984,40 @@ public partial class TaxiGuidanceManager
     }
 
     /// <summary>
-    /// Applies the per-row "hold short of HOLDING POINT X" picks: after the chosen row's
-    /// taxiway run starts, guidance stops where the route reaches the point's own node
-    /// (<see cref="Navigation.HoldingPointHoldShort.Place"/>). A row whose taxiway never made
-    /// it onto the route is searched from the route's start instead: the point is a place,
+    /// Applies the "hold short of HOLDING POINT X" stops, (row, point) pairs, several to a row: after the
+    /// chosen row's taxiway run starts, guidance stops where the route reaches the point's own node
+    /// (<see cref="Navigation.HoldingPointHoldShort.Place"/>). A stop with no taxiway of its own (a row
+    /// outside the sequence), a row whose taxiway never made it onto the route, and one the route does not
+    /// pass after its run start are searched from the route's start instead: the point is a place,
     /// and the pilot asked to stop there whichever leg reaches it.
     /// Returns a spoken note naming any pick the route does not pass, or null. A route that
     /// STARTS at the point has nothing to stop on either, and says that instead: the aircraft
     /// is at the point or just short of it, not somewhere the route never goes.
     /// </summary>
     /// <param name="placed">Receives every pick that found its stop.</param>
+    /// <param name="placedStops">Receives where each of those was placed, numbered by row.</param>
     private static string? ApplyUserHoldingPointHoldShorts(
         TaxiRoute route, List<string> taxiwaySequence,
-        Dictionary<int, Navigation.HoldingPointHoldShort> userHoldingPointHoldShorts,
-        List<Navigation.HoldingPointHoldShort> placed)
+        IReadOnlyList<KeyValuePair<int, Navigation.HoldingPointHoldShort>> userHoldingPointHoldShorts,
+        List<Navigation.HoldingPointHoldShort> placed, List<Navigation.PlacedStop>? placedStops = null)
     {
         var unmatched = new List<string>();
         var notes = new List<string>();
 
         foreach (var (seqIdx, pick) in userHoldingPointHoldShorts.OrderBy(k => k.Key))
         {
-            if (seqIdx < 0 || seqIdx >= taxiwaySequence.Count) continue;
-            string rowTaxiway = taxiwaySequence[seqIdx];
-            int runStart = FindTaxiwayRunStart(route, taxiwaySequence, seqIdx, rowTaxiway);
-            if (pick.Place(route.Segments, Math.Max(0, runStart)))
+            bool ownRow = seqIdx >= 0 && seqIdx < taxiwaySequence.Count;
+            int runStart = ownRow ? FindTaxiwayRunStart(route, taxiwaySequence, seqIdx, taxiwaySequence[seqIdx]) : -1;
+            if (pick.Place(route.Segments, Math.Max(0, runStart)) || (runStart > 0 && pick.Place(route.Segments, 0)))
+            {
                 placed.Add(pick);
+                placedStops?.Add(new Navigation.PlacedStop(ownRow ? seqIdx : -1,
+                    Navigation.ClearanceTargetKind.HoldingPoint, pick.Name, pick.NodeId, pick.NodeId));
+            }
             else if (pick.StartsRoute(route.Segments))
                 notes.Add(pick.StartsRouteNote);
             else
-                unmatched.Add($"{pick.Label} (route does not pass it after taxiway {rowTaxiway})");
+                unmatched.Add($"{pick.Label} (the route does not pass it)");
         }
 
         if (unmatched.Count > 0)

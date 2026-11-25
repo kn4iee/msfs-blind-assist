@@ -3586,7 +3586,12 @@ sealed class TaxiPlan
         };
         int dest = e.NodeId; int? holdNode = kind == "HP" ? e.HoldNodeId : null; string? holdName = kind == "HP" ? e.TaxiwayName : null;
         tp.LoadFn = (m, p, wo, seq) => m.LoadRoute(p, wo.Icao, gate.Latitude, gate.Longitude, hdg, dest, $"Runway {rwy.RunwayID}",
+#if !OLDAPP
+            // The app takes the stops as (row, runway) pairs; a frozen build still takes the dictionary.
+            seq, userRunwayHoldShorts: tp.HoldPicks?.ToList(), destinationHeading: rwy.HeadingMag, destinationThresholdLat: thLat, destinationThresholdLon: thLon,
+#else
             seq, userRunwayHoldShorts: tp.HoldPicks, destinationHeading: rwy.HeadingMag, destinationThresholdLat: thLat, destinationThresholdLon: thLon,
+#endif
             destinationHeadingTrue: rwy.Heading, isRunwayDestination: true, prebuiltGraph: wo.Graph, announceSummary: true,
 #if MAINAPP
             holdingPointHoldNodeId: holdNode);
@@ -3652,7 +3657,11 @@ sealed class TaxiPlan
             StartLat = gate.Latitude, StartLon = gate.Longitude, StartHeading = hdg, DestRunway = rwy.RunwayID, Rwy = rwy,
         };
         tp.LoadFn = (m, p, wo, seq) => m.LoadRoute(p, wo.Icao, gate.Latitude, gate.Longitude, hdg, dest, $"Runway {rwy.RunwayID}",
+#if !OLDAPP
+                seq, userRunwayHoldShorts: tp.HoldPicks?.ToList(), destinationHeading: rwy.HeadingMag, destinationThresholdLat: lineupLat, destinationThresholdLon: lineupLon,
+#else
                 seq, userRunwayHoldShorts: tp.HoldPicks, destinationHeading: rwy.HeadingMag, destinationThresholdLat: lineupLat, destinationThresholdLon: lineupLon,
+#endif
 #if OLDAPP
                 destinationHeadingTrue: rwy.Heading, isRunwayDestination: true, prebuiltGraph: wo.Graph, announceSummary: true);
 #else

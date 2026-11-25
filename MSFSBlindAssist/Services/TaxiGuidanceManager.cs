@@ -246,12 +246,19 @@ public partial class TaxiGuidanceManager : IDisposable
     // recalc silently dropped every user-picked hold-short (they were LoadRoute
     // parameters only).
     private List<int>? _userHoldShortIndices;
-    private Dictionary<int, string>? _userRunwayHoldShorts;
-    private Dictionary<int, string>? _userTaxiwayHoldShorts;
-    // The holding-point flavour of the same per-row picks ("hold short of holding point L2"):
-    // sequence index -> the point. Kept so a recalculation can put a stop that is still ahead
+    // The stops on the way, as (sequence index, target) pairs: any number per taxiway, and a stop with no
+    // taxiway of its own (index -1, or one past the sequence) searched along the whole route.
+    private IReadOnlyList<KeyValuePair<int, string>>? _userRunwayHoldShorts;
+    private IReadOnlyList<KeyValuePair<int, string>>? _userTaxiwayHoldShorts;
+    // The holding-point flavour of the same stops ("hold short of holding point L2"):
+    // (sequence index, the point). Kept so a recalculation can put a stop that is still ahead
     // back onto the new route (HoldingPointHoldShort.IsStillAhead).
-    private Dictionary<int, Navigation.HoldingPointHoldShort>? _userHoldingPointHoldShorts;
+    private IReadOnlyList<KeyValuePair<int, Navigation.HoldingPointHoldShort>>? _userHoldingPointHoldShorts;
+    // What GetClearanceProgress reports from (Navigation.ClearanceProgressState): the clearance's numbering as the
+    // window entered it (the rows LoadRoute left out), the crossings it entered that were used or put back, and the
+    // pilot's own stops placed and passed. Started afresh by each LoadRoute, kept whole by its Fail snapshot and its
+    // rollback [RTE-29], emptied by StopGuidance and the rollout reset. Replaced, never mutated.
+    private Navigation.ClearanceProgressState _clearanceProgress = Navigation.ClearanceProgressState.Empty;
     // Junction nodes a made Turn pick keeps out of later recalculations of this route, so none
     // can route back through the junction the pilot turned away from. Empty for a fresh route.
     private HashSet<int> _turnBlockedNodes = new();
@@ -3791,6 +3798,8 @@ public partial class TaxiGuidanceManager : IDisposable
         _lastIncursionWarnedNodeId = stopNodeId;
         _passedClearedCrossings = ClearedCrossingHolds.AtStop(_clearedCrossings, stopNodeId);
         _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);
+        // Used: the window's step list drops a crossing made (GetClearanceProgress).
+        _clearanceProgress = _clearanceProgress.WithUsed(_passedClearedCrossings);
         _passedClearedLabel = label;
         _passedClearedNodeId = stopNodeId;
         _passedClearedAtUtc = MSFSBlindAssist.Utils.SimClock.UtcNow;
@@ -3821,6 +3830,15 @@ public partial class TaxiGuidanceManager : IDisposable
         if (_route == null || _clearedCrossings.Count == 0) return;
         if (ClearedCrossingHolds.WithoutPassedNoStop(_clearedCrossings, _route, _currentSegmentIndex) is { } kept)
         {
+            // The ones gone are used, as one at its line is: kept is the list less those, in order, the same records.
+            var used = new List<ClearedCrossing>();
+            int k = 0;
+            foreach (var c in _clearedCrossings)
+            {
+                if (k < kept.Count && ReferenceEquals(kept[k], c)) k++;
+                else if (c is not null) used.Add(c);
+            }
+            _clearanceProgress = _clearanceProgress.WithUsed(used);
             _clearedCrossings = kept;
             _guidanceLog.Info($"Cleared crossing with no stop passed at segment {_currentSegmentIndex}.");
         }
@@ -4757,6 +4775,8 @@ public partial class TaxiGuidanceManager : IDisposable
         // list, and, for a line the segment jump said early, from the crossings used up there before it is forgotten.
         var restoredCrossings = ClearedCrossingHolds.RestoredCrossings(_clearedCrossings, stopNodeId, _passedClearedNodeId, _passedClearedCrossings);
         _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);
+        // Put back, no longer used, until a Continue clears that stop again or the aircraft passes it (GetClearanceProgress).
+        _clearanceProgress = _clearanceProgress.WithPutBack(restoredCrossings, stopNodeId);
         bool heldHere = _state == TaxiGuidanceState.HoldShort
             && (startHold ? _currentSegmentIndex == 0 : decision.SegmentIndex == _currentSegmentIndex - 1);
         if (!heldHere && decision.CursorIndex >= 0 && decision.CursorIndex != _currentSegmentIndex)
@@ -4789,6 +4809,53 @@ public partial class TaxiGuidanceManager : IDisposable
 
         AnnounceInstruction(ClearedCrossingCallouts.HoldRestored(decision.Label, FormatDistance(decision.Metres)));
         ClearedCrossingsChanged?.Invoke(this, new ClearedCrossingsChangedEventArgs(restoredCrossings));
+    }
+
+    /// <summary>
+    /// The checks on the route being flown for the clearance <paramref name="plan"/> it was calculated from
+    /// (<see cref="Navigation.ClearanceRouteChecks.Warnings"/>: a Cross taxiway step the route never meets), spoken by
+    /// the Taxi Guidance window with its Calculate sentence. Empty when there is no route.
+    /// </summary>
+    public IReadOnlyList<string> CheckClearance(Navigation.ClearancePlan plan)
+    {
+        lock (_stateLock)
+        {
+            if (_route == null || plan == null) return Array.Empty<string>();
+            return Navigation.ClearanceRouteChecks.Warnings(_route.Segments, plan, NodeTouchesTaxiway);
+        }
+    }
+
+    /// <summary>
+    /// How far along the clearance the window last calculated the aircraft is, for
+    /// <see cref="Navigation.ClearanceTrim.Remaining"/>, numbered as that step list was
+    /// (<see cref="Navigation.ClearanceProgressState.Report"/>): the Via steps behind (from the aircraft's last
+    /// position, <see cref="Navigation.ClearanceTrim.ViaStepsDone"/> over the sequence as loaded), the crossings it
+    /// entered still in force, used or put back, the pilot's own stops passed, and whether the turn onto the first
+    /// remaining taxiway is made: the aircraft is on that taxiway past the route's first segment (a turn at the
+    /// first node is excluded, as <c>TurnPickCarryOver.BlocksToKeep</c> excludes it). Nothing when there is no route.
+    /// Call it after marshalling to the UI thread, never inside a guidance event's handler: it takes the lock.
+    /// </summary>
+    public Navigation.ClearanceProgress GetClearanceProgress()
+    {
+        lock (_stateLock)
+        {
+            if (_route == null || _route.Segments.Count == 0) return Navigation.ClearanceProgress.None;
+
+            var sequence = _originalTaxiwaySequence ?? new List<string>();
+            List<string>? remaining = null;
+            if (_positionInitialized && sequence.Count > 0)
+            {
+                int? component = _graph != null && _graph.Nodes.TryGetValue(_destinationNodeId, out var destination)
+                    ? destination.ComponentId : null;
+                (remaining, _) = FindRemainingSequenceByPosition(_lastLat, _lastLon, component);
+            }
+            int done = Navigation.ClearanceTrim.ViaStepsDone(sequence, remaining);
+            bool turnMade = _currentSegmentIndex > 0 && _currentSegmentIndex < _route.Segments.Count
+                && done < sequence.Count
+                && string.Equals(_route.Segments[_currentSegmentIndex].TaxiwayName, sequence[done], StringComparison.OrdinalIgnoreCase);
+            return _clearanceProgress.Report(done, turnMade, _clearedCrossings, _route.Segments, _currentSegmentIndex,
+                holding: _state == TaxiGuidanceState.HoldShort);
+        }
     }
 
     private void HandleArrival()
@@ -5044,6 +5111,8 @@ public partial class TaxiGuidanceManager : IDisposable
         _passedClearedNodeId = 0;
         _passedClearedAtUtc = DateTime.MinValue;
         _passedClearedCrossings = Array.Empty<Navigation.ClearedCrossing>();
+        // Nothing of the clearance just flown is progress on the next one.
+        _clearanceProgress = Navigation.ClearanceProgressState.Empty;
         _lineupAnnouncedAligned = false;
         _lineupStubActive = false;
         _lineupHugeCrossTrackSince = DateTime.MinValue;
