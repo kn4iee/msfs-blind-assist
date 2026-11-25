@@ -198,6 +198,18 @@ public class ClearancePlannerTests
     }
 
     [Fact]
+    public void A_crossing_said_before_any_taxiway_is_the_same_crossing_as_one_after_the_first()
+    {
+        // Before any Via step the whole route is searched; after the first, from its start: the same crossing.
+        const string expected = "Runway 04L is entered both as a crossing and as a hold short. Remove one.";
+        Assert.Equal(expected, To(null, HoldRwy("04L"), Via("A"), CrossRwy("04L")).Refusal);
+        Assert.Equal(expected, Leg(CrossRwy("04L"), Via("A"), HoldRwy("04L")).Refusal);
+        Assert.Equal(expected, Leg(HoldRwy("04L"), Via("A"), CrossRwy("04L")).Refusal);
+        // After two different taxiways, two crossings.
+        Assert.Null(Leg(Via("P"), HoldRwy("04L"), Via("Q"), CrossRwy("04L"), HoldTwy("L")).Refusal);
+    }
+
+    [Fact]
     public void A_limit_said_first_lets_a_leg_end_after_a_crossed_taxiway()
     {
         // Spec 8.1: "taxi to holding point C5 via A, cross B" ends at C5, never on the crossing.

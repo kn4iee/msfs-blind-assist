@@ -225,8 +225,9 @@ public static class ClearancePlanner
             return $"A leg cannot end on cross taxiway {steps[^1].Name}. Add where to hold short, or the next taxiway.";
 
         // The same crossing entered as both: the same runway (either end), and the same place when both name one, or,
-        // when either names none, entered after the same Via step. A Hold short of the destination runway is accepted
-        // and adds nothing, so it is never a second crossing.
+        // when either names none, entered after the same Via step, counting a step before any Via step as after the
+        // first (searched over the whole route, it finds what a step searched from the first Via step finds). A Hold
+        // short of the destination runway is accepted and adds nothing, so it is never a second crossing.
         int[] seqIndexOf = SeqIndices(steps);
         for (int c = 0; c < steps.Count; c++)
         {
@@ -241,7 +242,7 @@ public static class ClearancePlanner
                     continue;
                 bool sameCrossing = ClearanceRunways.HasPlace(cross) && ClearanceRunways.HasPlace(hold)
                     ? ClearanceRunways.SamePlace(cross, hold)
-                    : seqIndexOf[c] == seqIndexOf[h];
+                    : Math.Max(seqIndexOf[c], 0) == Math.Max(seqIndexOf[h], 0);
                 if (sameCrossing)
                     return $"Runway {cross.Name} is entered both as a crossing and as a hold short. Remove one.";
             }
