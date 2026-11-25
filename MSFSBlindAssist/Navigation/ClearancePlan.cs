@@ -407,8 +407,31 @@ public static class ClearanceTrim
         IReadOnlyList<ClearedCrossing> clearedInForce, IReadOnlyList<ClearedCrossing> clearedUsed,
         IReadOnlyList<ClearedCrossing> putBack, IReadOnlyList<ClearanceHold> holdsPassed,
         bool turnOntoFirstRemainingMade)
+        => Kept(steps, viaStepsDone, hasDestination, clearedInForce, clearedUsed, putBack, holdsPassed,
+                turnOntoFirstRemainingMade).Select(k => k.Step).ToList();
+
+    /// <summary>
+    /// The steps still ahead, as the overload without <paramref name="origins"/> returns them, and for each step
+    /// returned its index in <paramref name="steps"/> (<paramref name="origins"/>), so the window can
+    /// keep the pilot's edits made since it calculated (<see cref="KeepingEdits"/>).
+    /// </summary>
+    public static List<ClearanceStep> Remaining(IReadOnlyList<ClearanceStep> steps, int viaStepsDone, bool hasDestination,
+        IReadOnlyList<ClearedCrossing> clearedInForce, IReadOnlyList<ClearedCrossing> clearedUsed,
+        IReadOnlyList<ClearedCrossing> putBack, IReadOnlyList<ClearanceHold> holdsPassed,
+        bool turnOntoFirstRemainingMade, out List<int> origins)
     {
-        if (steps == null) return new List<ClearanceStep>();
+        var kept = Kept(steps, viaStepsDone, hasDestination, clearedInForce, clearedUsed, putBack, holdsPassed,
+                        turnOntoFirstRemainingMade);
+        origins = kept.Select(k => k.Index).ToList();
+        return kept.Select(k => k.Step).ToList();
+    }
+
+    // Each step still ahead with its index in steps.
+    private static List<(ClearanceStep Step, int Index)> Kept(IReadOnlyList<ClearanceStep> steps, int viaStepsDone,
+        bool hasDestination, IReadOnlyList<ClearedCrossing> clearedInForce, IReadOnlyList<ClearedCrossing> clearedUsed,
+        IReadOnlyList<ClearedCrossing> putBack, IReadOnlyList<ClearanceHold> holdsPassed, bool turnOntoFirstRemainingMade)
+    {
+        if (steps == null) return new List<(ClearanceStep Step, int Index)>();
 
         int[] seqIndexOf = ClearancePlanner.SeqIndices(steps);
         int endIndex = ClearancePlanner.EndIndex(steps, hasDestination);
@@ -452,7 +475,7 @@ public static class ClearanceTrim
             }
             if (state == CrossingState.PutBack)
             {
-                kept.Add((step with { Kind = ClearanceStepKind.HoldShort }, i));   // keeps its At, AtNodeId
+                kept.Add((AsHoldShort(step), i));
                 continue;
             }
             if (holdPassed[i] && !isEnd) continue;
@@ -461,7 +484,98 @@ public static class ClearanceTrim
 
         if (!hasDestination)
             NeverMakeALimit(kept, steps, seqIndexOf, endIndex, lastFinishedVia);
-        return kept.Select(k => k.Step).ToList();
+        return kept;
+    }
+
+    /// <summary>A crossing put back by the Hold short key, as the step list shows it: "Hold short of runway R" at the
+    /// same place (its <c>At</c> and <c>AtNodeId</c> kept), so a later Calculate does not clear it again (spec 8.8).</summary>
+    public static ClearanceStep AsHoldShort(ClearanceStep step) => step with { Kind = ClearanceStepKind.HoldShort };
+
+    /// <summary>
+    /// The window's list after a trim, keeping what the pilot did since the last Calculate: the
+    /// <paramref name="trimmed"/> steps (from the list as last calculated; <paramref name="trimmedOrigins"/>, their
+    /// indexes in it) less those the pilot removed since (<paramref name="removed"/>, indexes in the same list), then
+    /// the steps the pilot added since, in their order (those of <paramref name="shown"/> whose
+    /// <paramref name="shownOrigins"/> is -1). A step the trim changed (a turn made, a crossing put back or pinned) is
+    /// shown as the trim has it. Returns the list and each step's origin (-1 for one added since).
+    /// </summary>
+    public static (List<ClearanceStep> Steps, List<int> Origins) KeepingEdits(IReadOnlyList<ClearanceStep> trimmed,
+        IReadOnlyList<int> trimmedOrigins, IReadOnlyList<ClearanceStep> shown, IReadOnlyList<int> shownOrigins,
+        IReadOnlySet<int> removed)
+    {
+        var steps = new List<ClearanceStep>();
+        var origins = new List<int>();
+        for (int i = 0; i < trimmed.Count && i < trimmedOrigins.Count; i++)
+        {
+            if (removed.Contains(trimmedOrigins[i])) continue;
+            steps.Add(trimmed[i]);
+            origins.Add(trimmedOrigins[i]);
+        }
+        for (int i = 0; i < shown.Count && i < shownOrigins.Count; i++)
+        {
+            if (shownOrigins[i] >= 0) continue;
+            steps.Add(shown[i]);
+            origins.Add(-1);
+        }
+        return (steps, origins);
+    }
+
+    /// <summary>
+    /// The Cross runway steps of <paramref name="steps"/> (the list as last calculated) that one press of the Hold
+    /// short key put back (<paramref name="restored"/>, <c>ClearedCrossingsChangedEventArgs.Restored</c>, as guidance
+    /// numbers them), by RECORD, never by runway name (spec 8.8). Each crossing the pilot entered is found in
+    /// <paramref name="progress"/>'s put-back list (numbered as entered: guidance may have left rows out) by everything
+    /// but its Via index; every step is then matched to its record as <c>Remaining</c> matches it (its matcher, against
+    /// the whole of the progress), and only those matched to a crossing of this press are returned.
+    /// A crossing a Continue cleared stands for no step; one gone from the put-back list by the time the window looks
+    /// (passed, or cleared again) is not followed. Ascending.
+    /// </summary>
+    public static IReadOnlyList<int> PutBackSteps(IReadOnlyList<ClearanceStep> steps, IReadOnlyList<ClearedCrossing> restored,
+        ClearanceProgress progress)
+    {
+        var result = new List<int>();
+        if (steps == null || restored == null || progress == null) return result;
+
+        var pool = new Records<ClearedCrossing>(progress.PutBack);
+        var thisPress = new List<ClearedCrossing>();
+        foreach (var r in restored)
+        {
+            if (r is null || r.Origin != ClearedBy.Clearance) continue;
+            var entered = pool.Take(p => p with { SeqIndex = 0 } == r with { SeqIndex = 0 });
+            if (entered != null) thisPress.Add(entered);
+        }
+        if (thisPress.Count == 0) return result;
+
+        var crossings = MatchCrossings(steps, ClearancePlanner.SeqIndices(steps), progress.ClearedUsed, progress.PutBack,
+                                       progress.ClearedInForce);
+        for (int i = 0; i < steps.Count; i++)
+        {
+            var (state, record) = crossings[i];
+            if (state == CrossingState.PutBack && thisPress.Any(c => ReferenceEquals(c, record)))
+                result.Add(i);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// <paramref name="shown"/> with each Cross runway step whose origin (<paramref name="shownOrigins"/>, its index in
+    /// the list as last calculated) is in <paramref name="putBackOrigins"/> shown as its hold short
+    /// (<see cref="AsHoldShort"/>). Every other step, a step added since and one already changed among them, is left as
+    /// it is. A new list.
+    /// </summary>
+    public static List<ClearanceStep> FollowingPutBack(IReadOnlyList<ClearanceStep> shown, IReadOnlyList<int> shownOrigins,
+        IReadOnlyCollection<int> putBackOrigins)
+    {
+        var result = new List<ClearanceStep>(shown.Count);
+        for (int i = 0; i < shown.Count; i++)
+        {
+            var step = shown[i];
+            bool putBack = i < shownOrigins.Count && shownOrigins[i] >= 0 && putBackOrigins.Contains(shownOrigins[i])
+                           && step is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }
+                           && !IsMadeCrossing(step);
+            result.Add(putBack ? AsHoldShort(step) : step);
+        }
+        return result;
     }
 
     /// <summary>

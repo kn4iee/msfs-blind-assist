@@ -34,6 +34,19 @@ public static class ClearanceStepEntry
         return "Removed " + char.ToLowerInvariant(spoken[0]) + spoken.Substring(1);
     }
 
+    /// <summary>
+    /// What Remove Step says once ([CORE-7]): from the Clearance list (<paramref name="fromList"/>) nothing while a step
+    /// remains, as the screen reader reads the step now in its place; from anywhere else which step went
+    /// (<see cref="Removed"/>); and whenever the list is left empty (<paramref name="listNowEmpty"/>)
+    /// <see cref="StepsCleared"/>, as an empty list gives the reader nothing to say. Null: say nothing.
+    /// </summary>
+    public static string? RemovalSentence(ClearanceStep removed, int number, bool fromList, bool listNowEmpty)
+    {
+        if (fromList) return listNowEmpty ? StepsCleared : null;
+        string sentence = Removed(removed, number);
+        return listNowEmpty ? sentence + " " + StepsCleared : sentence;
+    }
+
     /// <summary>The kind at a list index; Via for an index the list does not have (nothing selected).</summary>
     public static ClearanceStepKind KindAt(int index)
         => index >= 0 && index < KindItems.Count ? (ClearanceStepKind)index : ClearanceStepKind.Via;

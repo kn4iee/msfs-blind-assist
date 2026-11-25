@@ -930,6 +930,9 @@ public partial class MainForm
 
         taxiAssistForm.Show();
         taxiAssistForm.BringToFront();
+        // The Airport box the first time; then the step kind list with a route live (its list trimmed to what is
+        // still ahead), else the destination type (spec 8.2).
+        taxiAssistForm.FocusForOpening();
     }
 
     /// <summary>

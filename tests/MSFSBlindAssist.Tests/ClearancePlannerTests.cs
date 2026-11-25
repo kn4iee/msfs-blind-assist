@@ -722,4 +722,101 @@ public class ClearancePlannerTests
         Assert.Equal(0, ClearanceTrim.ViaStepsDone(new[] { "A", "C", "A" }, new[] { "A" }));
         Assert.Equal(0, ClearanceTrim.ViaStepsDone(new[] { "A", "C", "A", "D" }, new[] { "a", "D" }));
     }
+
+    // ---- The window's list: trimmed from the list as last calculated, keeping the pilot's edits (Task 7) ----
+
+    [Fact]
+    public void Trim_says_where_each_step_still_ahead_came_from()
+    {
+        var steps = new[] { Via("A"), HoldRwy("09"), Via("B"), CrossRwy("27L"), HoldTwy("L") };
+        var kept = ClearanceTrim.Remaining(steps, 1, false, new[] { Rec("27L", 1) }, Array.Empty<ClearedCrossing>(),
+            Array.Empty<ClearedCrossing>(), Array.Empty<ClearanceHold>(), false, out var origins);
+        // The 09 stop moved after B (never the limit): each step keeps its place in the list as calculated.
+        Assert.Equal(new[] { Via("B"), HoldRwy("09"), CrossRwy("27L"), HoldTwy("L") }, kept);
+        Assert.Equal(new[] { 2, 1, 3, 4 }, origins);
+
+        // The last finished Via step kept in front of a stop it cannot move, read as Via: its own place.
+        var kept2 = ClearanceTrim.Remaining(new[] { Left("A"), HoldRwy("09"), Via("B") }, 1, false,
+            Array.Empty<ClearedCrossing>(), Array.Empty<ClearedCrossing>(), Array.Empty<ClearedCrossing>(),
+            Array.Empty<ClearanceHold>(), false, out var origins2);
+        Assert.Equal(new[] { Via("A"), HoldRwy("09"), Via("B") }, kept2);
+        Assert.Equal(new[] { 0, 1, 2 }, origins2);
+    }
+
+    [Fact]
+    public void A_trim_keeps_the_steps_added_since_and_never_brings_back_one_removed()
+    {
+        var trimmed = new[] { Via("B"), HoldRwy("09"), CrossRwy("27L"), HoldTwy("L") };
+        var trimmedOrigins = new[] { 2, 1, 3, 4 };
+        // Shown: the list as calculated, then a step the pilot added (-1).
+        var shown = new[] { Via("A"), HoldRwy("09"), Via("B"), CrossRwy("27L"), HoldTwy("L"), Via("M") };
+        var shownOrigins = new[] { 0, 1, 2, 3, 4, -1 };
+
+        var (steps, origins) = ClearanceTrim.KeepingEdits(trimmed, trimmedOrigins, shown, shownOrigins, new HashSet<int>());
+        Assert.Equal(new[] { Via("B"), HoldRwy("09"), CrossRwy("27L"), HoldTwy("L"), Via("M") }, steps);
+        Assert.Equal(new[] { 2, 1, 3, 4, -1 }, origins);
+
+        // The pilot removed the 27L crossing since: it stays removed, whatever the trim keeps.
+        var (without, withoutOrigins) = ClearanceTrim.KeepingEdits(trimmed, trimmedOrigins,
+            new[] { Via("A"), HoldRwy("09"), Via("B"), HoldTwy("L") }, new[] { 0, 1, 2, 4 }, new HashSet<int> { 3 });
+        Assert.Equal(new[] { Via("B"), HoldRwy("09"), HoldTwy("L") }, without);
+        Assert.Equal(new[] { 2, 1, 4 }, withoutOrigins);
+
+        // A step the trim changed (a turn made, a crossing put back) is shown as the trim has it.
+        var (turned, _) = ClearanceTrim.KeepingEdits(new[] { Via("C"), HoldRwy("27") }, new[] { 1, 2 },
+            new[] { Via("H"), Left("C"), HoldRwy("27") }, new[] { 0, 1, 2 }, new HashSet<int>());
+        Assert.Equal(new[] { Via("C"), HoldRwy("27") }, turned);
+    }
+
+    [Fact]
+    public void A_crossing_put_back_is_found_by_its_record_numbered_as_entered()
+    {
+        // The window's list: route loading left out A (never driven), so guidance numbers P's row 0, the window 1.
+        var steps = new[] { Via("A"), Via("P"), CrossRwy("04L"), HoldTwy("L") };
+        var restored = new[] { Rec("04L", 0, stopNodeId: 41) };
+        var progress = Progress(putBack: new[] { Rec("04L", 1, stopNodeId: 41) });
+        Assert.Equal(new[] { 2 }, ClearanceTrim.PutBackSteps(steps, restored, progress));
+
+        // Matched by runway name alone it would be the wrong step: the record says which.
+        var twoPlaces = new[] { Via("P"), CrossRwy("24L", at: "P"), Via("Q"), CrossRwy("24L", at: "Q"), HoldTwy("L") };
+        var atQ = Rec("24L", 1, at: "Q", stopNodeId: 51);
+        var both = Progress(putBack: new[] { atQ }, inForce: new[] { Rec("24L", 0, at: "P", stopNodeId: 41) });
+        Assert.Equal(new[] { 3 }, ClearanceTrim.PutBackSteps(twoPlaces, new[] { atQ }, both));
+    }
+
+    [Fact]
+    public void Only_the_crossings_this_press_put_back_are_followed()
+    {
+        var steps = new[] { Via("P"), CrossRwy("24L", at: "P"), Via("Q"), CrossRwy("09"), HoldTwy("L") };
+        var earlier = Rec("24L", 0, at: "P", stopNodeId: 41);
+        var now = Rec("09", 1, stopNodeId: 51);
+        var progress = Progress(putBack: new[] { earlier, now });
+        Assert.Equal(new[] { 3 }, ClearanceTrim.PutBackSteps(steps, new[] { now }, progress));
+
+        // A Continue's crossing stands for no step, even at a stop shared with one the pilot entered.
+        var continued = Rec("27", -1, origin: ClearedBy.Continue, stopNodeId: 51);
+        Assert.Equal(new[] { 3 }, ClearanceTrim.PutBackSteps(steps, new[] { continued, now }, progress));
+        Assert.Empty(ClearanceTrim.PutBackSteps(steps, new[] { continued }, progress));
+
+        // Gone from the put-back list by the time the window looks (passed, or cleared again): nothing to follow.
+        Assert.Empty(ClearanceTrim.PutBackSteps(steps, new[] { now }, Progress(used: new[] { now })));
+    }
+
+    [Fact]
+    public void A_crossing_put_back_becomes_a_hold_short_at_its_place()
+    {
+        var shown = new[] { Via("P"), CrossRwy("24L", at: "P"), Via("Q"), CrossRwy("24L", at: "Q"), Via("M") };
+        var origins = new[] { 0, 1, 2, 3, -1 };
+        Assert.Equal(new[] { Via("P"), HoldRwyAt("24L", "P"), Via("Q"), CrossRwy("24L", at: "Q"), Via("M") },
+            ClearanceTrim.FollowingPutBack(shown, origins, new[] { 1 }));
+        // Only a Cross runway step still shown is changed: one the pilot removed, or already changed, is left alone.
+        Assert.Equal(shown, ClearanceTrim.FollowingPutBack(shown, origins, new[] { 0, 4 }));
+        Assert.Equal(new[] { Via("P"), HoldRwyAt("24L", "P") },
+            ClearanceTrim.FollowingPutBack(new[] { Via("P"), HoldRwyAt("24L", "P") }, new[] { 0, 1 }, new[] { 1 }));
+    }
+
+    private static ClearanceProgress Progress(ClearedCrossing[]? inForce = null, ClearedCrossing[]? used = null,
+        ClearedCrossing[]? putBack = null)
+        => new(0, inForce ?? Array.Empty<ClearedCrossing>(), used ?? Array.Empty<ClearedCrossing>(),
+            putBack ?? Array.Empty<ClearedCrossing>(), Array.Empty<ClearanceHold>(), false);
 }

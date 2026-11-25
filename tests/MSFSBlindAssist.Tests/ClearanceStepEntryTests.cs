@@ -113,6 +113,23 @@ public class ClearanceStepEntryTests
     public void Clearing_the_steps_is_said()
         => Assert.Equal("Steps cleared.", ClearanceStepEntry.StepsCleared);
 
+    // Task 7 ruling 5 ([CORE-7]): a removal that leaves the list empty says "Steps cleared." whatever the focus, as an
+    // empty list gives the screen reader nothing to say; from the Clearance list a removal that leaves a step says
+    // nothing (the reader reads the step now in its place); from anywhere else it says which step went.
+    [Fact]
+    public void A_removal_says_once_what_the_screen_reader_cannot()
+    {
+        var cross = new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "24L", At: "P");
+
+        Assert.Null(ClearanceStepEntry.RemovalSentence(cross, 2, fromList: true, listNowEmpty: false));
+        Assert.Equal("Steps cleared.",
+            TestCulture.Run("de-DE", () => ClearanceStepEntry.RemovalSentence(cross, 1, fromList: true, listNowEmpty: true)));
+        Assert.Equal("Removed step 2: cross runway 24L at P.",
+            TestCulture.Run("sv-SE", () => ClearanceStepEntry.RemovalSentence(cross, 2, fromList: false, listNowEmpty: false)));
+        Assert.Equal("Removed step 1: cross runway 24L at P. Steps cleared.",
+            TestCulture.Run("de-DE", () => ClearanceStepEntry.RemovalSentence(cross, 1, fromList: false, listNowEmpty: true)));
+    }
+
     [Theory]
     [InlineData(ClearanceStepKind.Via, "Via B")]
     [InlineData(ClearanceStepKind.LeftOnto, "Left onto B")]

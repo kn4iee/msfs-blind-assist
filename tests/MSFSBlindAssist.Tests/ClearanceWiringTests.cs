@@ -262,6 +262,125 @@ public class ClearanceWiringTests
         Assert.DoesNotContain("standstillParts", form);
     }
 
+    // Task 7: the window empties its step list when a leg is over and, while a route is live, shows only what is still
+    // ahead (trimmed from the list as last calculated, never an already-trimmed one), and the list follows the Hold
+    // short key. Spec 8.2 and 8.8; Review Focus 2, 7 and 8.
+    [Fact]
+    public void The_window_empties_and_trims_its_step_list()
+    {
+        string form = FormSource();
+
+        Assert.Contains("StateChanged +=", form);
+        Assert.Contains("ClearedCrossingsChanged +=", form);
+        Assert.Contains("ClearanceTrim.Remaining(", form);
+        Assert.Contains("TurnOntoFirstRemainingMade", form);
+        Assert.Contains("FocusForOpening", form);
+        Assert.Contains("plan.TurnPicks", form);
+        Assert.DoesNotContain("GetUserTurnPicks", form);
+        Assert.DoesNotContain("cmbFirstTurn", form);
+        Assert.Contains("ClearSteps()", Member(form, "private void ResetRouteShapingControls("));
+        string dialogs = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "MainForm.Dialogs.cs"));
+        string open = Member(dialogs, "private void OpenTaxiForm(");
+        int show = open.IndexOf("taxiAssistForm.Show();", StringComparison.Ordinal);
+        int focus = open.IndexOf("taxiAssistForm.FocusForOpening();", StringComparison.Ordinal);
+        Assert.True(show >= 0 && focus > show, "OpenTaxiForm sets the focus after Show()");
+
+        // Trimmed from the list as last calculated, with GetClearanceProgress's lists passed straight in.
+        string trim = Member(form, "private void TrimStepsToWhatIsAhead(");
+        Assert.Contains("ClearanceTrim.Remaining(_calculatedSteps, progress.ViaStepsDone, _calculatedWithDestination,", trim);
+        Assert.Contains("progress.ClearedInForce, progress.ClearedUsed, progress.PutBack, progress.HoldsPassed,", trim);
+        Assert.Contains("progress.TurnOntoFirstRemainingMade, out var origins)", trim);
+        Assert.Contains("ClearanceTrim.KeepingEdits(", trim);
+        Assert.Contains("_guidanceManager.HasLiveRoute", trim);
+        Assert.Contains("TrimStepsToWhatIsAhead()", Member(form, "public void FocusForOpening("));
+        // Both successful Calculates record the list they used, after guidance has started.
+        Assert.Equal(2, Regex.Matches(form, @"StartGuidance\([^;]*\);\r?\n\s+RecordCalculatedSteps\(hasDestination: (true|false)\);").Count);
+    }
+
+    // [A380C-6]: both guidance events arrive on the manager's thread under _stateLock; the window marshals with
+    // BeginInvoke inside try/catch(InvalidOperationException), never Invoke, and reads the progress only after
+    // marshalling. Subscribed once in the constructor, unsubscribed on dispose.
+    [Fact]
+    public void The_window_marshals_guidance_events_and_unsubscribes()
+    {
+        string form = FormSource();
+        string safe = Member(form, "private void SafeBeginInvoke(");
+        Assert.Contains("BeginInvoke(action)", safe);
+        Assert.Contains("catch (InvalidOperationException)", safe);
+
+        foreach (string handler in new[] { "private void OnGuidanceStateChanged(", "private void OnClearedCrossingsChanged(" })
+        {
+            string body = Member(form, handler);
+            Assert.Contains("SafeBeginInvoke(", body);
+            Assert.DoesNotContain(".Invoke(", body);
+            Assert.DoesNotContain("GetClearanceProgress", body);
+            // The generation is taken when the action is queued.
+            Assert.Contains("Volatile.Read(ref _calculateGeneration)", body);
+        }
+        Assert.Contains("_guidanceManager.GetClearanceProgress()", Member(form, "private void FollowPutBackCrossings("));
+        Assert.Contains("ClearanceTrim.PutBackSteps(", Member(form, "private void FollowPutBackCrossings("));
+
+        string ctor = Member(form, "public TaxiAssistForm(");
+        Assert.Contains("_guidanceManager.StateChanged += OnGuidanceStateChanged;", ctor);
+        Assert.Contains("_guidanceManager.ClearedCrossingsChanged += OnClearedCrossingsChanged;", ctor);
+        string dispose = Member(form, "protected override void Dispose(");
+        Assert.Contains("_guidanceManager.StateChanged -= OnGuidanceStateChanged;", dispose);
+        Assert.Contains("_guidanceManager.ClearedCrossingsChanged -= OnClearedCrossingsChanged;", dispose);
+    }
+
+    // Spec 8.2: emptied when guidance is stopped and when another airport is loaded, never by a same-airport reload (the
+    // GSX gate list arriving); a removal or a trim that leaves the list empty is said; an append drops a crossing
+    // already made (ruling 4); an emptying from the fill or an airport change drops a step sentence still waiting.
+    [Fact]
+    public void The_list_is_emptied_where_a_leg_ends_and_kept_on_a_same_airport_reload()
+    {
+        string form = FormSource();
+
+        Assert.Contains("ClearSteps();", Member(form, "private void OnStopClicked("));
+        string load = Member(form, "private async Task LoadAirportDataCoreAsync(");
+        Assert.Contains("bool sameAirport = icao.Equals(_currentIcao, StringComparison.OrdinalIgnoreCase);", load);
+        Assert.Contains("if (sameAirport) RefreshStepNameList();", load);
+        Assert.Contains("else ClearSteps();", load);
+        Assert.Contains("CancelPendingStepSpeech();", Member(form, "private void ClearSteps("));
+        Assert.Contains("_calculatedSteps = null;", Member(form, "private void ClearSteps("));
+        Assert.Contains("ClearanceTrim.CompletedCrossings(", Member(form, "private void DropCompletedCrossings("));
+        Assert.Contains("DropCompletedCrossings();", Member(form, "private void AppendStep(ClearanceStep step, bool speak, bool speakAfterFocusMove)"));
+        Assert.Contains("ClearanceStepEntry.RemovalSentence(", Member(form, "private void RemoveStep("));
+        Assert.Contains("ClearanceStepEntry.StepsCleared", Member(form, "private void OnClearStepsClicked("));
+        Assert.Contains("LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)",
+            Member(form, "private void EmptyStepsAfterLeg("));
+    }
+
+    // Spec 8.2: where focus lands when the window opens.
+    [Fact]
+    public void Focus_on_opening_follows_whether_a_route_is_live()
+    {
+        Assert.Equal(Forms.TaxiAssistForm.OpeningFocusTarget.Airport, Forms.TaxiAssistForm.OpeningFocus(firstShow: true, routeLive: true));
+        Assert.Equal(Forms.TaxiAssistForm.OpeningFocusTarget.Airport, Forms.TaxiAssistForm.OpeningFocus(firstShow: true, routeLive: false));
+        Assert.Equal(Forms.TaxiAssistForm.OpeningFocusTarget.StepKind, Forms.TaxiAssistForm.OpeningFocus(firstShow: false, routeLive: true));
+        Assert.Equal(Forms.TaxiAssistForm.OpeningFocusTarget.DestinationType, Forms.TaxiAssistForm.OpeningFocus(firstShow: false, routeLive: false));
+    }
+
+    // Spec 8.2: the list is emptied when the aircraft arrives, when guidance stops and when a leg with no destination
+    // ends; never mid-leg. A queued emptying is skipped when a Calculate has built a list since (its generation), and
+    // when the list holds no leg calculated from it (steps entered after the last leg ended, or before any Calculate:
+    // a taxi-in clearance typed during the landing rollout is for the leg to come).
+    [Fact]
+    public void A_leg_end_empties_only_the_list_it_was_calculated_from()
+    {
+        foreach (var state in new[] { Services.TaxiGuidanceState.Arrived, Services.TaxiGuidanceState.Inactive,
+                     Services.TaxiGuidanceState.ProgressiveHold })
+            Assert.True(Forms.TaxiAssistForm.EndsTheLeg(state));
+        foreach (var state in new[] { Services.TaxiGuidanceState.RouteLoaded, Services.TaxiGuidanceState.Taxiing,
+                     Services.TaxiGuidanceState.HoldShort, Services.TaxiGuidanceState.LiningUp,
+                     Services.TaxiGuidanceState.LandingRollout })
+            Assert.False(Forms.TaxiAssistForm.EndsTheLeg(state));
+
+        Assert.True(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: true));
+        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 4, listHoldsCalculatedLeg: true));
+        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: false));
+    }
+
     private static string FormSource()
         => File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Forms", "TaxiAssistForm.cs"));
 

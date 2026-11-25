@@ -184,6 +184,22 @@ public class TaxiAssistForm : Form
     private Button btnRemoveStep = null!;
     private Button btnClearSteps = null!;
     private readonly List<ClearanceStep> _steps = new();
+    // What the list is trimmed from while a route is live (spec 8.2): the steps the last successful Calculate used, as
+    // it used them (guidance's progress counts Via steps and numbers crossings by THIS list, so a trim always starts from
+    // it, never from a list already trimmed), and whether that Calculate had a destination. Null when the list holds no
+    // leg being flown: none calculated yet, or emptied since (Clear Steps, the fill, an airport change, a leg's end).
+    private List<ClearanceStep>? _calculatedSteps;
+    private bool _calculatedWithDestination;
+    // For each step in _steps, its index in _calculatedSteps; -1 for a step added since. And the indexes of the
+    // calculated steps the pilot removed since (Remove Step, a made crossing dropped by an append): a trim never brings
+    // one back.
+    private readonly List<int> _stepOrigins = new();
+    private readonly HashSet<int> _removedOrigins = new();
+    // Bumped by every successful Calculate. A guidance event queues its action with the number it saw, and the action
+    // is skipped when a Calculate has built a list since: a late leg end never empties the list of the leg just set.
+    private int _calculateGeneration;
+    // How many times the window has been shown (FocusForOpening: the Airport box the first time only).
+    private int _timesShown;
     // Whether the "At" box is shown (a Cross step with a runway chosen). A field, not
     // cmbStepAt.Visible, which also reads false whenever the form itself is hidden.
     private bool _stepAtShown;
@@ -399,6 +415,11 @@ public class TaxiAssistForm : Form
         _dockingManager = dockingManager;
         _importFromSayIntentions = importFromSayIntentions;
         InitializeFormControls();
+
+        // The step list follows guidance (spec 8.2, 8.8): emptied when its leg ends, a crossing the Hold short key puts
+        // back shown as its hold short. Form-scoped: unsubscribed in Dispose.
+        _guidanceManager.StateChanged += OnGuidanceStateChanged;
+        _guidanceManager.ClearedCrossingsChanged += OnClearedCrossingsChanged;
     }
 
     /// <summary>
@@ -1107,7 +1128,12 @@ public class TaxiAssistForm : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _stepSpeechTimer?.Dispose();
+        if (disposing)
+        {
+            _guidanceManager.StateChanged -= OnGuidanceStateChanged;
+            _guidanceManager.ClearedCrossingsChanged -= OnClearedCrossingsChanged;
+            _stepSpeechTimer?.Dispose();
+        }
         base.Dispose(disposing);
     }
 
@@ -2043,13 +2069,17 @@ public class TaxiAssistForm : Form
         // The previous airport's runways and holding points go BEFORE the step list is
         // emptied (it refills the name box from them), so a failed load below lists none of
         // the old airport's names. The steps named the old airport's taxiways and runways:
-        // they go too, as the taxiway rows did.
+        // they go too, silently, as the taxiway rows did (spec 8.2). A same-airport reload
+        // (the GSX gate list arriving) keeps them: the clearance is still this airport's, and
+        // the name box is emptied only until the new graph refills it below.
+        bool sameAirport = icao.Equals(_currentIcao, StringComparison.OrdinalIgnoreCase);
         _airportRunwayIds = new List<string>();
         _crossRunwayMap.Clear();
         _crossAtHoldPoints.Clear();
         _namedHoldingPoints = new List<NamedHoldingPoint>();
         _namedHoldingPointsResolved = false;
-        ClearSteps();
+        if (sameAirport) RefreshStepNameList();
+        else ClearSteps();
 
         cmbDestination.Items.Clear();
 
@@ -2918,6 +2948,7 @@ public class TaxiAssistForm : Form
     {
         base.OnVisibleChanged(e);
         if (!Visible || IsDisposed) return;
+        _timesShown++;
 
         try
         {
@@ -3796,11 +3827,33 @@ public class TaxiAssistForm : Form
     private void AppendStep(ClearanceStep step, bool speak, bool speakAfterFocusMove)
     {
         _steps.Add(step);
+        _stepOrigins.Add(-1);   // added since the last Calculate
         lstClearance.Items.Add(step.Sentence());
+        // A crossing already made that ended the list is completed now that a step follows it (ruling 4): it goes,
+        // before the step is numbered.
+        DropCompletedCrossings();
         // No stale pick: Remove Step with nothing selected takes the last step, the one just added.
         lstClearance.SelectedIndex = -1;
         RefreshStepNameList();
         if (speak) SpeakStepAdded(step.Spoken(_steps.Count), speakAfterFocusMove);
+    }
+
+    /// <summary>
+    /// Drops each crossing already made that some step now follows (<see cref="ClearanceTrim.CompletedCrossings"/>): it
+    /// said only where the leg ended, and a fresh Calculate must never take it for a crossing (ruling 4). Kept out of
+    /// every later trim. Speaks nothing: the step added, or the window opening, is what the pilot hears.
+    /// </summary>
+    private void DropCompletedCrossings()
+    {
+        var completed = ClearanceTrim.CompletedCrossings(_steps);
+        for (int c = completed.Count - 1; c >= 0; c--)
+        {
+            int i = completed[c];
+            if (_stepOrigins[i] >= 0) _removedOrigins.Add(_stepOrigins[i]);
+            _steps.RemoveAt(i);
+            _stepOrigins.RemoveAt(i);
+            lstClearance.Items.RemoveAt(i);
+        }
     }
 
     /// <summary>
@@ -3850,9 +3903,11 @@ public class TaxiAssistForm : Form
 
     /// <summary>Remove Step (the button or Alt+M, or Delete in the Clearance list): removes the selected step, or the
     /// last one when none is selected; refused out loud when the list is empty. From the Clearance list it speaks
-    /// nothing (the screen reader reads the step now in its place); from anywhere else, where the button's access key
-    /// clicks it without moving focus and the reader says nothing of the change, it says once which step went:
-    /// "Removed step 3: cross runway 24L." ([CORE-7]).</summary>
+    /// nothing while a step remains (the screen reader reads the step now in its place); from anywhere else, where the
+    /// button's access key clicks it without moving focus and the reader says nothing of the change, it says once which
+    /// step went: "Removed step 3: cross runway 24L."; and a removal that leaves the list empty says "Steps cleared."
+    /// whatever the focus, as an empty list gives the reader nothing to say ([CORE-7],
+    /// <see cref="ClearanceStepEntry.RemovalSentence"/>). A step of the leg calculated stays out of every later trim.</summary>
     private void RemoveStep()
     {
         if (_steps.Count == 0)
@@ -3865,7 +3920,9 @@ public class TaxiAssistForm : Form
             ? lstClearance.SelectedIndex
             : _steps.Count - 1;
         var removed = _steps[index];
+        if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);
         _steps.RemoveAt(index);
+        _stepOrigins.RemoveAt(index);
         lstClearance.Items.RemoveAt(index);
         // Deleting from the list keeps the pilot's place there, on the step that took its place; from the button,
         // nothing stays selected, so the next Remove Step takes the last step again.
@@ -3873,27 +3930,205 @@ public class TaxiAssistForm : Form
             ? Math.Min(index, lstClearance.Items.Count - 1)
             : -1;
         RefreshStepNameList();
-        if (!fromList) SpeakStepBlockNow(ClearanceStepEntry.Removed(removed, index + 1));
+        string? sentence = ClearanceStepEntry.RemovalSentence(removed, index + 1, fromList, listNowEmpty: _steps.Count == 0);
+        if (sentence != null) SpeakStepBlockNow(sentence);
     }
 
-    /// <summary>Clear Steps (the button or Alt+Z): empties the list. Alt+Z clicks the button from anywhere without
-    /// moving focus, a key away from Alt+X, so outside the Clearance list it says so once: "Steps cleared."
-    /// ([CORE-7]).</summary>
+    /// <summary>Clear Steps (the button or Alt+Z): empties the list and says so once: "Steps cleared." Alt+Z clicks the
+    /// button from anywhere without moving focus, a key away from Alt+X, and from inside the Clearance list an empty
+    /// list gives the screen reader nothing to say, so it is said whatever the focus ([CORE-7]).</summary>
     private void OnClearStepsClicked()
     {
-        bool fromList = lstClearance.Focused;
         ClearSteps();
-        if (!fromList) SpeakStepBlockNow(ClearanceStepEntry.StepsCleared);
+        SpeakStepBlockNow(ClearanceStepEntry.StepsCleared);
     }
 
-    /// <summary>Empties the step list (Clear Steps, a SayIntentions fill, an airport change), the kind back on Via
-    /// and the name box refilled. Speaks nothing: Clear Steps speaks for itself (<see cref="OnClearStepsClicked"/>).</summary>
+    /// <summary>Empties the step list (Clear Steps, a SayIntentions fill, an airport change, Stop Guidance, the end of
+    /// the leg it was calculated for), the kind back on Via and the name box refilled; the list then holds no leg being
+    /// flown (<see cref="_calculatedSteps"/>), and a step sentence still waiting is dropped, as it names a step that is
+    /// gone. Speaks nothing: Clear Steps speaks for itself (<see cref="OnClearStepsClicked"/>).</summary>
     private void ClearSteps()
     {
+        CancelPendingStepSpeech();
         _steps.Clear();
+        _stepOrigins.Clear();
+        _removedOrigins.Clear();
+        _calculatedSteps = null;
         lstClearance.Items.Clear();
         SetStepKindSilently(ClearanceStepKind.Via);
         RefreshStepNameList();
+    }
+
+    // ---- The list follows guidance: focus on opening, emptying, trimming, the Hold short key (Task 7) ----------
+
+    /// <summary>Where focus lands when the window opens (spec 8.2).</summary>
+    internal enum OpeningFocusTarget { Airport, StepKind, DestinationType }
+
+    /// <summary>
+    /// The Airport box the first time the window is shown; after that the step kind list when a route is live (the pilot
+    /// adds the new instruction), else the destination type, so the pilot always hears whether a destination is set.
+    /// </summary>
+    internal static OpeningFocusTarget OpeningFocus(bool firstShow, bool routeLive)
+        => firstShow ? OpeningFocusTarget.Airport
+            : routeLive ? OpeningFocusTarget.StepKind
+            : OpeningFocusTarget.DestinationType;
+
+    /// <summary>The guidance states that end the leg a step list was calculated for: the aircraft arrives, guidance
+    /// stops, or a leg with no destination ends (spec 8.2).</summary>
+    internal static bool EndsTheLeg(TaxiGuidanceState state)
+        => state is TaxiGuidanceState.Arrived or TaxiGuidanceState.Inactive or TaxiGuidanceState.ProgressiveHold;
+
+    /// <summary>
+    /// Whether a leg end queued with <paramref name="generationQueued"/> empties the list now: only when no Calculate
+    /// has built a list since (<paramref name="generationNow"/> unchanged), and only when the list holds the leg it was
+    /// calculated for (<paramref name="listHoldsCalculatedLeg"/>). Steps entered after the last leg ended, or before any
+    /// Calculate (a taxi-in clearance typed during the landing rollout), are for the leg to come and stay.
+    /// </summary>
+    internal static bool LegEndEmptiesList(int generationQueued, int generationNow, bool listHoldsCalculatedLeg)
+        => generationQueued == generationNow && listHoldsCalculatedLeg;
+
+    /// <summary>
+    /// Called by MainForm after <c>Show()</c>: puts focus where spec 8.2 says (<see cref="OpeningFocus"/>), and with a
+    /// route live first trims the list to what is still ahead (<see cref="TrimStepsToWhatIsAhead"/>).
+    /// </summary>
+    public void FocusForOpening()
+    {
+        bool routeLive = _guidanceManager.HasLiveRoute;
+        var target = OpeningFocus(firstShow: _timesShown <= 1, routeLive);
+        if (target == OpeningFocusTarget.StepKind) TrimStepsToWhatIsAhead();
+        Control control = target switch
+        {
+            OpeningFocusTarget.Airport => txtAirport,
+            OpeningFocusTarget.StepKind => cmbStepKind,
+            _ => cmbDestType,
+        };
+        // ActiveControl too, so the form's own activation, which restores the control focused last, lands here.
+        ActiveControl = control;
+        control.Focus();
+    }
+
+    /// <summary>
+    /// While a route is live, the list shows only what is still ahead (spec 8.2): <see cref="ClearanceTrim.Remaining"/>
+    /// from the list as last calculated (<see cref="_calculatedSteps"/>, the numbering guidance's progress uses), never
+    /// from one already trimmed, with <c>GetClearanceProgress</c>'s lists passed straight in; then the pilot's edits since
+    /// are kept (<see cref="ClearanceTrim.KeepingEdits"/>) and a made crossing a step now follows goes. A turn already
+    /// made reads as Via (TurnOntoFirstRemainingMade, the made turns remembered across a recalculation included), so a
+    /// later Calculate never judges it again from the aircraft's heading. With "A, C, A" the progress counts no Via step
+    /// done, so nothing still ahead is dropped. A trim that leaves the list empty says "Steps cleared." once, after the
+    /// screen reader has named the box focus moves to. Nothing to trim when the list holds no leg calculated from it.
+    /// </summary>
+    private void TrimStepsToWhatIsAhead()
+    {
+        if (_calculatedSteps == null || !_guidanceManager.HasLiveRoute) return;
+        var progress = _guidanceManager.GetClearanceProgress();
+        var trimmed = ClearanceTrim.Remaining(_calculatedSteps, progress.ViaStepsDone, _calculatedWithDestination,
+            progress.ClearedInForce, progress.ClearedUsed, progress.PutBack, progress.HoldsPassed,
+            progress.TurnOntoFirstRemainingMade, out var origins);
+        var (steps, stepOrigins) = ClearanceTrim.KeepingEdits(trimmed, origins, _steps, _stepOrigins, _removedOrigins);
+
+        bool hadSteps = _steps.Count > 0;
+        bool changed = !steps.SequenceEqual(_steps) || !stepOrigins.SequenceEqual(_stepOrigins);
+        if (!changed) return;
+        ShowSteps(steps, stepOrigins);
+        DropCompletedCrossings();
+        RefreshStepNameList();
+        if (hadSteps && _steps.Count == 0) SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true);
+    }
+
+    /// <summary>Replaces the list and the Clearance list's items with <paramref name="steps"/> and their origins.</summary>
+    private void ShowSteps(IReadOnlyList<ClearanceStep> steps, IReadOnlyList<int> origins)
+    {
+        _steps.Clear();
+        _steps.AddRange(steps);
+        _stepOrigins.Clear();
+        _stepOrigins.AddRange(origins);
+        lstClearance.BeginUpdate();
+        try
+        {
+            lstClearance.Items.Clear();
+            foreach (var step in _steps) lstClearance.Items.Add(step.Sentence());
+            lstClearance.SelectedIndex = -1;
+        }
+        finally { lstClearance.EndUpdate(); }
+    }
+
+    /// <summary>
+    /// A successful Calculate used the list as it stands: it is the list later trims start from, numbered afresh (every
+    /// step its own origin), with whether the clearance had a destination (the trim's leg end depends on it). Bumps the
+    /// generation, so a leg end queued before this Calculate never empties the list it just used.
+    /// </summary>
+    private void RecordCalculatedSteps(bool hasDestination)
+    {
+        _calculatedSteps = _steps.ToList();
+        _calculatedWithDestination = hasDestination;
+        _stepOrigins.Clear();
+        _stepOrigins.AddRange(Enumerable.Range(0, _steps.Count));
+        _removedOrigins.Clear();
+        Volatile.Write(ref _calculateGeneration, _calculateGeneration + 1);
+    }
+
+    /// <summary>
+    /// <see cref="TaxiGuidanceManager.StateChanged"/>, raised under the manager's lock on its own thread: a state that
+    /// ends the leg (<see cref="EndsTheLeg"/>) queues the emptying on the UI thread with the generation seen now, never
+    /// waiting for it ([A380C-6]).
+    /// </summary>
+    private void OnGuidanceStateChanged(object? sender, TaxiGuidanceState state)
+    {
+        if (!EndsTheLeg(state)) return;
+        int generation = Volatile.Read(ref _calculateGeneration);
+        SafeBeginInvoke(() => EmptyStepsAfterLeg(generation));
+    }
+
+    /// <summary>The leg the list was calculated for is over: emptied, silently (the manager speaks the arrival, the
+    /// stop or the leg's end), unless a Calculate has built a list since or the list holds no calculated leg
+    /// (<see cref="LegEndEmptiesList"/>). The KBOS route back over 04L came from an entry that outlived its leg.</summary>
+    private void EmptyStepsAfterLeg(int generation)
+    {
+        if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)) return;
+        ClearSteps();
+    }
+
+    /// <summary>
+    /// <see cref="TaxiGuidanceManager.ClearedCrossingsChanged"/>: the Hold short key put back a stop the pilot was
+    /// cleared across. Raised under the manager's lock on the key's thread, so the window queues its answer with the
+    /// crossings put back and the generation seen now ([A380C-6]); the progress is read only after marshalling.
+    /// </summary>
+    private void OnClearedCrossingsChanged(object? sender, ClearedCrossingsChangedEventArgs e)
+    {
+        var restored = e.Restored;
+        int generation = Volatile.Read(ref _calculateGeneration);
+        SafeBeginInvoke(() => FollowPutBackCrossings(restored, generation));
+    }
+
+    /// <summary>
+    /// The step list follows the Hold short key (spec 8.8): the Cross step of each crossing put back becomes "Hold short
+    /// of runway R" at its place, so a later Calculate does not clear it again. Matched by RECORD (runway, Via step and
+    /// place, as the trim matches), never by runway name, through the progress numbered as the list was calculated
+    /// (<see cref="ClearanceTrim.PutBackSteps"/>); a crossing a Continue cleared has no step. Nothing else in the list
+    /// moves, and nothing is said: the key's own sentence is what the pilot hears. Skipped when a Calculate has run since.
+    /// </summary>
+    private void FollowPutBackCrossings(IReadOnlyList<ClearedCrossing> restored, int generation)
+    {
+        if (IsDisposed || generation != _calculateGeneration || _calculatedSteps == null) return;
+        var progress = _guidanceManager.GetClearanceProgress();
+        var putBack = ClearanceTrim.PutBackSteps(_calculatedSteps, restored, progress);
+        if (putBack.Count == 0) return;
+        var steps = ClearanceTrim.FollowingPutBack(_steps, _stepOrigins, putBack);
+        for (int i = 0; i < steps.Count; i++)
+        {
+            if (steps[i] == _steps[i]) continue;
+            _steps[i] = steps[i];
+            lstClearance.Items[i] = steps[i].Sentence();
+        }
+    }
+
+    /// <summary>Queues <paramref name="action"/> on the UI thread without waiting ([A380C-6]): BeginInvoke inside
+    /// try/catch, as a handle check alone races its destruction (ObjectDisposedException is an
+    /// InvalidOperationException).</summary>
+    private void SafeBeginInvoke(Action action)
+    {
+        try { if (IsHandleCreated) BeginInvoke(action); }
+        catch (InvalidOperationException) { }
     }
 
     /// <summary>Lays out the step block inside its panel, with the "At" line only when shown; returns its height.</summary>
@@ -4426,6 +4661,7 @@ public class TaxiAssistForm : Form
         CheckGateOccupancy(isRunwayDest, thresholdLat, thresholdLon);
 
         _guidanceManager.StartGuidance(settings);
+        RecordCalculatedSteps(hasDestination: true);
 
         // The departure this runway route lines up for, said in the one Calculate utterance below.
         string rwyLabel = destName.StartsWith("Runway ", StringComparison.OrdinalIgnoreCase)
@@ -4770,6 +5006,7 @@ public class TaxiAssistForm : Form
         txtRouteSummary.Text = _guidanceManager.LastRouteSummary;
         lblStatus.Text = "Route loaded. Guidance active.";
         _guidanceManager.StartGuidance(SettingsManager.Current);
+        RecordCalculatedSteps(hasDestination: false);
         SpeakCalculateUtterance(plan);
     }
 
@@ -5290,6 +5527,8 @@ public class TaxiAssistForm : Form
     private void OnStopClicked(object? sender, EventArgs e)
     {
         _guidanceManager.StopGuidance();
+        // The leg is over (spec 8.2): its steps go, silently; "Taxi guidance stopped." says what happened.
+        ClearSteps();
         _dockingManager?.SetDestinationGate(null);
         _announcer.Announce("Taxi guidance stopped.");
         lblStatus.Text = "Guidance stopped.";
