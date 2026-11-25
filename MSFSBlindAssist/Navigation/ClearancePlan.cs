@@ -634,6 +634,40 @@ public static class ClearanceTrim
         }
         return done;
     }
+
+    /// <summary>
+    /// <see cref="ViaStepsDone(IReadOnlyList{string}, IReadOnlyList{string}?)"/> from the position, capped by the route
+    /// being flown (<paramref name="doneOnRoute"/>, <see cref="ViaStepsDoneOnRoute"/>): the position finds the LAST
+    /// cleared taxiway within 50 m, which can be one the route only passes near (a later taxiway crossing an earlier
+    /// one, a stand beside it), and a step still ahead is never done. With no route to go by (null), the position alone.
+    /// </summary>
+    public static int ViaStepsDone(IReadOnlyList<string> originalSequence, IReadOnlyList<string>? remainingSequence,
+        int? doneOnRoute)
+    {
+        int byPosition = ViaStepsDone(originalSequence, remainingSequence);
+        return doneOnRoute is int onRoute ? Math.Min(byPosition, Math.Max(0, onRoute)) : byPosition;
+    }
+
+    /// <summary>
+    /// How many rows of a sequence of <paramref name="rowCount"/> rows are behind on the route being flown: the route was
+    /// built from row <paramref name="firstRow"/> on (0 for a route loaded from the whole sequence; the first row still
+    /// ahead for a recalculated one), so the rows before it are behind, and each later row is behind once the NEXT row's
+    /// run starts at or before the segment cursor (<paramref name="runStartOf"/>: a row's first segment on the route, -1
+    /// when the route does not drive it, which ends the count). Null when the route was built from no sequence of its
+    /// own (<paramref name="firstRow"/> outside the rows): it gives nothing to go by.
+    /// </summary>
+    public static int? ViaStepsDoneOnRoute(int firstRow, int rowCount, Func<int, int> runStartOf, int cursor)
+    {
+        if (firstRow < 0 || firstRow >= rowCount) return null;
+        int done = firstRow;
+        for (int row = firstRow + 1; row < rowCount; row++)
+        {
+            int start = runStartOf(row);
+            if (start < 0 || start > cursor) break;
+            done = row;
+        }
+        return done;
+    }
 }
 
 /// <summary>Runway designator comparisons for the step list: normalized, either end of the runway.</summary>

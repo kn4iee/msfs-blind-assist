@@ -1360,7 +1360,8 @@ public partial class TaxiGuidanceManager
             if (deferredPickWarning != null)
                 runwayHoldShortWarning = runwayHoldShortWarning == null
                     ? deferredPickWarning : runwayHoldShortWarning + " " + deferredPickWarning;
-            _clearanceProgress = _clearanceProgress.WithPlaced(placedStops);
+            // The route was built from the whole sequence as it stands (rows numbered from 0), or from none.
+            _clearanceProgress = _clearanceProgress.WithPlaced(placedStops) with { RouteFirstRow = taxiwaySequence is { Count: > 0 } ? 0 : -1 };
 
             // Cleared on every LoadRoute, set or not, so it can never describe a previous
             // route (the taxi-route import calculates several times per import).
@@ -2458,12 +2459,16 @@ public partial class TaxiGuidanceManager
             holdSequence = _originalTaxiwaySequence.Skip(Math.Max(0, Math.Min(trimStart, keptTailRow))).ToList();
         }
         // A stop with no taxiway of its own (-1) is kept as -1 and looked for along the whole new route, also when no
-        // cleared taxiway remains to follow (every row is then behind); the others follow their rows as before.
+        // cleared taxiway remains to follow (every row is then behind), but only while the stop it was placed at on the
+        // route being replaced is not passed (as a holding point is carried only while still ahead): one behind is
+        // never searched for again [HLD-17]. The others follow their rows as before.
         bool sequenceRemains = holdSequence is { Count: > 0 } && _originalTaxiwaySequence != null
                                && _originalTaxiwaySequence.Count >= holdSequence.Count;
         int seqOffset = sequenceRemains ? _originalTaxiwaySequence!.Count - holdSequence!.Count : 0;
         int rowsBehind = sequenceRemains ? seqOffset : int.MaxValue;
         holdSequence = sequenceRemains ? holdSequence! : new List<string>();
+        int loadedRows = _originalTaxiwaySequence?.Count ?? 0;
+        bool holdingNow = _state == TaxiGuidanceState.HoldShort;
         // Where each of the pilot's stops lands on the new route, recorded once it is adopted (GetClearanceProgress).
         var recalcPlacedStops = new List<Navigation.PlacedStop>();
         if (sequenceRemains && _userHoldShortIndices is { Count: > 0 })
@@ -2476,7 +2481,8 @@ public partial class TaxiGuidanceManager
         }
         if (_userRunwayHoldShorts is { Count: > 0 })
         {
-            var remappedRwy = ClearanceRows.After(_userRunwayHoldShorts, rowsBehind);
+            var remappedRwy = ClearanceRows.After(_clearanceProgress.CarriedOver(_userRunwayHoldShorts, loadedRows,
+                Navigation.ClearanceTargetKind.Runway, _route?.Segments, _currentSegmentIndex, holdingNow), rowsBehind);
             if (remappedRwy.Count > 0)
                 recalcHoldWarning = ApplyUserRunwayHoldShorts(
                     newRoute, holdSequence, remappedRwy,
@@ -2484,7 +2490,8 @@ public partial class TaxiGuidanceManager
         }
         if (_userTaxiwayHoldShorts is { Count: > 0 })
         {
-            var remappedTwy = ClearanceRows.After(_userTaxiwayHoldShorts, rowsBehind);
+            var remappedTwy = ClearanceRows.After(_clearanceProgress.CarriedOver(_userTaxiwayHoldShorts, loadedRows,
+                Navigation.ClearanceTargetKind.Taxiway, _route?.Segments, _currentSegmentIndex, holdingNow), rowsBehind);
             if (remappedTwy.Count > 0)
             {
                 // Never a node inserted on a recalculation [RTE-30]; the rows are numbered as
@@ -2620,16 +2627,19 @@ public partial class TaxiGuidanceManager
             _hasJoinedRoute = false;
             _minPerpWhileUnjoinedM = double.MaxValue;
         }
-        // What the aircraft has passed on the route being replaced stays passed, whatever the new route holds: judged
-        // on that route and its cursor, before either is replaced (GetClearanceProgress).
+        // What the aircraft has passed on the route being replaced stays passed, and a turn made on it stays made,
+        // whatever the new route holds: judged on that route and its cursor, before either is replaced and the cursor
+        // restarts (GetClearanceProgress; a made turn never reads as one still to make, [TURN-3]).
         _clearanceProgress = _clearanceProgress.Settled(_route?.Segments, _currentSegmentIndex,
-            holding: _state == TaxiGuidanceState.HoldShort);
+            holding: _state == TaxiGuidanceState.HoldShort,
+            turnsMade: TurnPickCarryOver.MadeRows(_route, _currentSegmentIndex, cutPicks));
         AdoptRoute(newRoute, _isRunwayLineup, _destinationName, lat, lon, phase: "recalc",
             userPickEvents: recalcPickEvents, recalculation: true);
         // A remapped pick that met its runway with no stop before that pass may share the stop
         // it has just placed for a runway in front of it (RetryDeferredRunwayPicks).
         string? recalcDeferredWarning = RetryDeferredRunwayPicks(newRoute, recalcDeferredPicks, lat, lon, recalcPlacedStops);
-        _clearanceProgress = _clearanceProgress.WithPlaced(recalcPlacedStops);
+        // The new route was built from the rows still ahead (holdSequence, from seqOffset), or from no sequence.
+        _clearanceProgress = _clearanceProgress.WithPlaced(recalcPlacedStops) with { RouteFirstRow = sequenceRemains ? seqOffset : -1 };
         if (recalcDeferredWarning != null)
             recalcHoldWarning = recalcHoldWarning == null
                 ? recalcDeferredWarning : recalcHoldWarning + " " + recalcDeferredWarning;

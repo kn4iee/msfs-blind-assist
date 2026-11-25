@@ -95,6 +95,24 @@ internal static class TurnPickCarryOver
         return (nodeIds, pairs);
     }
 
+    /// The rows whose turn is made on this route at this index: picks Made (bar a turn at the route's first node while
+    /// the index is still on segment 0, as BlocksToKeep reads it) and those in madeByCut (MadeByCut). A recalculation
+    /// restarts the index on its new route, so these are remembered for the step list's trim (ClearanceProgressState),
+    /// which never shows a turn already made as one still to make [TURN-3]. Ascending, each row once.
+    public static List<int> MadeRows(TaxiRoute? route, int currentSegmentIndex,
+        IReadOnlyCollection<AppliedTurnPick>? madeByCut)
+    {
+        var rows = new SortedSet<int>();
+        if (route != null)
+            foreach (var p in route.TurnPicks)
+                if (PhaseOf(p, currentSegmentIndex) == TurnPickPhase.Made
+                    && !(p.FirstTaxiwaySegment == 0 && currentSegmentIndex == 0))
+                    rows.Add(p.RowIndex);
+        if (madeByCut != null)
+            foreach (var p in madeByCut) rows.Add(p.RowIndex);
+        return rows.ToList();
+    }
+
     /// Picks InTurn at this index (to be reported as missed), in row order.
     public static List<AppliedTurnPick> Missed(TaxiRoute? route, int currentSegmentIndex)
         => route == null

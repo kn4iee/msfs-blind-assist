@@ -247,6 +247,92 @@ public class ClearanceProgressTests
         Assert.Equal(0, Assert.Single(after.Holds).SeqIndex);
     }
 
+    // ---- fix round 1: progress follows the route ----
+
+    // "Via B, A, C", where C crosses B before the B to A turn. Passing that junction on B the position finds C within
+    // 50 m and reads B and A as done; the route's own cursor has not reached A's run, so nothing is. Rows are done only
+    // once the NEXT row's run starts at or before the cursor.
+    [Fact]
+    public void Via_steps_still_ahead_on_the_route_are_never_done()
+    {
+        string[] sequence = { "B", "A", "C" };
+        // On the route: B from segment 0, A from 5, C from 7 (C's junction with B, at segment 2's end, is no run of C).
+        int RunStart(int row) => row switch { 0 => 0, 1 => 5, 2 => 7, _ => -1 };
+        int byPosition = ClearanceTrim.ViaStepsDone(sequence, new[] { "C" });
+        Assert.Equal(2, byPosition);
+
+        Assert.Equal(0, ClearanceTrim.ViaStepsDoneOnRoute(0, sequence.Length, RunStart, cursor: 3));
+        Assert.Equal(0, ClearanceTrim.ViaStepsDone(sequence, new[] { "C" }, doneOnRoute: 0));
+        Assert.Equal(1, ClearanceTrim.ViaStepsDoneOnRoute(0, sequence.Length, RunStart, cursor: 5));
+        Assert.Equal(2, ClearanceTrim.ViaStepsDoneOnRoute(0, sequence.Length, RunStart, cursor: 7));
+        // The cap never adds what the position does not know: a repeated taxiway still trims nothing.
+        Assert.Equal(0, ClearanceTrim.ViaStepsDone(new[] { "A", "C", "A" }, new[] { "A" }, doneOnRoute: 2));
+
+        var steps = sequence.Select(n => new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, n)).ToList();
+        var remaining = ClearanceTrim.Remaining(steps, ClearanceTrim.ViaStepsDone(sequence, new[] { "C" }, doneOnRoute: 0),
+            hasDestination: true, Array.Empty<ClearedCrossing>(), Array.Empty<ClearedCrossing>(),
+            Array.Empty<ClearedCrossing>(), Array.Empty<ClearanceHold>(), false);
+        Assert.Equal(new[] { "Via B", "Via A", "Via C" }, remaining.Select(s => s.Sentence()));
+    }
+
+    // A recalculated route is built from the rows still ahead (its first row); rows before it were behind when it was
+    // built. A row the route does not drive ends the count; with no sequence of its own the route gives nothing to go
+    // by, and the position alone decides.
+    [Fact]
+    public void A_recalculated_route_counts_from_its_first_row()
+    {
+        int RunStart(int row) => row switch { 2 => 0, 3 => 4, _ => -1 };
+
+        Assert.Equal(2, ClearanceTrim.ViaStepsDoneOnRoute(2, 4, RunStart, cursor: 1));
+        Assert.Equal(3, ClearanceTrim.ViaStepsDoneOnRoute(2, 4, RunStart, cursor: 4));
+        Assert.Equal(0, ClearanceTrim.ViaStepsDoneOnRoute(0, 4, RunStart, cursor: 9));
+        Assert.Null(ClearanceTrim.ViaStepsDoneOnRoute(-1, 4, RunStart, cursor: 9));
+        Assert.Null(ClearanceTrim.ViaStepsDoneOnRoute(4, 4, RunStart, cursor: 9));
+        Assert.Equal(2, ClearanceTrim.ViaStepsDone(new[] { "A", "B", "C" }, new[] { "C" }, doneOnRoute: null));
+    }
+
+    // A recalculation restarts the cursor, so the turn onto a taxiway the aircraft is already on would read as a turn
+    // still to make, and a Calculate would judge it again from the heading [TURN-3]. The turns made on the route being
+    // replaced are remembered by row, through every later recalculation, until the next load.
+    [Fact]
+    public void A_turn_made_before_a_recalculation_stays_made()
+    {
+        var state = ClearanceProgressState.For(null).Settled(Route, cursor: 3, holding: false, turnsMade: new[] { 1 });
+
+        Assert.True(state.Report(1, turnOntoItMade: false, Array.Empty<ClearedCrossing>(), Route, 0, false).TurnOntoFirstRemainingMade);
+        Assert.False(state.Report(2, turnOntoItMade: false, Array.Empty<ClearedCrossing>(), Route, 0, false).TurnOntoFirstRemainingMade);
+
+        var again = state.Settled(Route, cursor: 0, holding: false, turnsMade: new[] { 2 });
+        Assert.Equal(new[] { 1, 2 }, again.TurnsMade);
+        Assert.Empty(ClearanceProgressState.For(null).TurnsMade);
+    }
+
+    // A stop with no taxiway of its own is carried over a recalculation only while the stop it was placed at is not
+    // passed, as a holding point is only while still ahead: one behind is never searched for again (an extra stop, or
+    // "the route does not cross it" on every later "Route changed", [HLD-17]). A stop on a row of its own is left to
+    // ClearanceRows.After.
+    [Fact]
+    public void A_stop_with_no_taxiway_is_carried_over_only_while_not_passed()
+    {
+        var stops = new List<KeyValuePair<int, string>>
+        {
+            new(-1, "22R"), new(1, "09"), new(-1, "04L"), new(3, "27"),
+        };
+        var state = ClearanceProgressState.For(null).WithPlaced(new[]
+        {
+            new PlacedStop(-1, ClearanceTargetKind.Runway, "22R", 0, 30),
+            new PlacedStop(-1, ClearanceTargetKind.Taxiway, "04L", 0, 50),   // another kind: not this stop's
+        });
+
+        // Short of node 30: carried. Past it: dropped. "04L" was never placed as a runway stop: dropped. Row 3 is one
+        // past a 3-row sequence: no taxiway of its own either.
+        Assert.Equal(new[] { -1, 1 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 1, holding: false).Select(s => s.Key));
+        Assert.Equal(new[] { 1 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 3, holding: false).Select(s => s.Key));
+        Assert.Equal(new[] { -1, 1, 3 }, state.CarriedOver(stops, 4, ClearanceTargetKind.Runway, Route, 1, holding: false).Select(s => s.Key));
+        // Held at it: not yet passed.
+        Assert.Equal(new[] { -1, 1 }, state.CarriedOver(stops, 3, ClearanceTargetKind.Runway, Route, 2, holding: true).Select(s => s.Key));
+    }
+
     [Fact]
     public void None_reports_nothing()
     {

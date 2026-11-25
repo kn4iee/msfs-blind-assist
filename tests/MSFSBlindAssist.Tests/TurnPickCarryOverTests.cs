@@ -114,6 +114,28 @@ public class TurnPickCarryOverTests
         Assert.Equal(new HashSet<int> { 3 }, TurnPickCarryOver.BlocksToKeep(route, 0, new HashSet<int> { 3 }));
     }
 
+    // A recalculation restarts the segment index on the new route, so the turns already made on the route being
+    // replaced are remembered by row (ClearanceProgressState.TurnsMade): those Made at this index, and those made by a
+    // corner cut. One still ahead or in the turn is not made; nor is a turn at the route's first node before the
+    // index has left segment 0, as BlocksToKeep reads it.
+    [Fact]
+    public void The_rows_of_turns_made_are_those_made_at_this_index_or_by_a_corner_cut()
+    {
+        var made = Pick(row: 1, afterDeparture: 2, firstTaxiway: 3);
+        var inTurn = Pick(row: 2, afterDeparture: 6, firstTaxiway: 8);
+        var cut = Pick(row: 3, afterDeparture: 12, firstTaxiway: 13);
+        var route = RouteWith(made, inTurn, cut);
+
+        Assert.Equal(new[] { 1, 3 }, TurnPickCarryOver.MadeRows(route, 7, new[] { cut }));
+        Assert.Equal(new[] { 1 }, TurnPickCarryOver.MadeRows(route, 7, null));
+        Assert.Empty(TurnPickCarryOver.MadeRows(route, 0, null));
+        Assert.Empty(TurnPickCarryOver.MadeRows(null, 7, null));
+
+        var atStart = RouteWith(Pick(row: 0, afterDeparture: 0, firstTaxiway: 0));
+        Assert.Empty(TurnPickCarryOver.MadeRows(atStart, 0, null));
+        Assert.Equal(new[] { 0 }, TurnPickCarryOver.MadeRows(atStart, 1, null));
+    }
+
     [Fact]
     public void A_corner_cut_onto_the_picked_taxiway_is_the_turn_made_not_missed()
     {

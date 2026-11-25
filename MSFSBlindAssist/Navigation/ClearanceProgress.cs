@@ -58,6 +58,20 @@ public sealed record ClearanceProgressState(
     public static readonly ClearanceProgressState Empty = new(ClearanceNumbering.None, Array.Empty<ClearedCrossing>(),
         Array.Empty<ClearedCrossing>(), Array.Empty<PlacedStop>(), Array.Empty<PlacedStop>());
 
+    /// <summary>
+    /// The rows (as loaded) whose Turn pick was made on a route a recalculation replaced: the recalculation restarts the
+    /// segment cursor, so the turn onto a taxiway the aircraft is already on is remembered here, never read as a turn
+    /// still to make [TURN-3]. Ascending, each once.
+    /// </summary>
+    public IReadOnlyList<int> TurnsMade { get; init; } = Array.Empty<int>();
+
+    /// <summary>
+    /// The row (as loaded) the route being flown was built from: 0 for a route loaded from the whole sequence, the
+    /// first row still ahead for a recalculated one, -1 for a route built from no sequence (nothing on it to count
+    /// Via steps by: <see cref="ClearanceTrim.ViaStepsDoneOnRoute"/>).
+    /// </summary>
+    public int RouteFirstRow { get; init; } = -1;
+
     /// <summary>A clearance just loaded, with the crossings as entered; nothing used, put back or placed yet.</summary>
     public static ClearanceProgressState For(IReadOnlyList<ClearedCrossing>? enteredCrossings)
         => Empty with { Numbering = ClearanceNumbering.For(enteredCrossings) };
@@ -89,16 +103,34 @@ public sealed record ClearanceProgressState(
     /// <summary>
     /// Before a recalculated route replaces the one being flown (<paramref name="segments"/>, cursor
     /// <paramref name="cursor"/>): a stop placed on it that is passed stays passed, a crossing put back whose stop is
-    /// passed has been made (used), and the stops placed on it go: the new route records its own.
+    /// passed has been made (used), the turns made on it (<paramref name="turnsMade"/>, rows as loaded,
+    /// <c>TurnPickCarryOver.MadeRows</c>) stay made, and the stops placed on it go: the new route records its own.
     /// </summary>
-    public ClearanceProgressState Settled(IReadOnlyList<TaxiRouteSegment>? segments, int cursor, bool holding)
+    public ClearanceProgressState Settled(IReadOnlyList<TaxiRouteSegment>? segments, int cursor, bool holding,
+        IEnumerable<int>? turnsMade = null)
         => this with
         {
             Passed = Passed.Concat(Placed.Where(p => StopPassed(segments, p.StopNodeId, cursor, holding))).ToList(),
             Used = Used.Concat(PutBack.Where(c => StopPassed(segments, c.StopNodeId, cursor, holding))).ToList(),
             PutBack = PutBack.Where(c => !StopPassed(segments, c.StopNodeId, cursor, holding)).ToList(),
             Placed = Array.Empty<PlacedStop>(),
+            TurnsMade = TurnsMade.Concat(turnsMade ?? Array.Empty<int>()).Distinct().OrderBy(r => r).ToList(),
         };
+
+    /// <summary>
+    /// The stops of one kind (<paramref name="kind"/>, runway or taxiway: (row, name) pairs) a recalculation may carry
+    /// over to its new route. A stop on a row of its own (0 to <paramref name="sequenceRows"/> - 1) is left to
+    /// <see cref="ClearanceRows.After"/>. A stop with no taxiway of its own is carried only while the stop it was
+    /// placed at on the route being replaced (<see cref="Placed"/>, the same kind and name, no row) is not passed, as a
+    /// holding point is carried only while still ahead: one passed, or never placed, is never searched for again, or
+    /// the new route stops there again where it meets it, or every later "Route changed" reports it [HLD-17].
+    /// </summary>
+    public List<KeyValuePair<int, string>> CarriedOver(IReadOnlyList<KeyValuePair<int, string>> stops, int sequenceRows,
+        ClearanceTargetKind kind, IReadOnlyList<TaxiRouteSegment>? segments, int cursor, bool holding)
+        => stops.Where(s => (s.Key >= 0 && s.Key < sequenceRows)
+                            || Placed.Any(p => p.Row < 0 && p.Kind == kind && p.Name == s.Value
+                                               && !StopPassed(segments, p.StopNodeId, cursor, holding)))
+            .ToList();
 
     /// <summary>
     /// The report for the route being flown (<paramref name="segments"/>, the cursor on segment <paramref name="cursor"/>,
@@ -108,8 +140,9 @@ public sealed record ClearanceProgressState(
     /// <item><paramref name="viaStepsDoneOnRoute"/> is <see cref="ClearanceTrim.ViaStepsDone"/> over the sequence as the
     /// route has it (rows removed); numbered as entered, every removed row before the aircraft's is done too. 0 stays 0:
     /// nothing known done trims nothing, a first taxiway left out as never driven included.</item>
-    /// <item><paramref name="turnOntoItMade"/> is about the first remaining row as the route has it, and stands only while
-    /// that is the first remaining Via step as entered.</item>
+    /// <item><paramref name="turnOntoItMade"/> is about the first remaining row as the route has it (or that row is in
+    /// <see cref="TurnsMade"/>, made before a recalculation), and stands only while that is the first remaining Via step
+    /// as entered.</item>
     /// <item><paramref name="clearedNow"/> are the crossings cleared on the route now (the manager's
     /// <c>_clearedCrossings</c>, any origin). A crossing put back is reported put back until a crossing at its stop is
     /// cleared again (then in force) or the aircraft has passed its stop (then used).</item>
@@ -120,7 +153,8 @@ public sealed record ClearanceProgressState(
         IReadOnlyList<TaxiRouteSegment>? segments, int cursor, bool holding)
     {
         int done = viaStepsDoneOnRoute > 0 ? Numbering.AsEntered(viaStepsDoneOnRoute) : 0;
-        bool turnMade = turnOntoItMade && Numbering.AsEntered(Math.Max(0, viaStepsDoneOnRoute)) == done;
+        bool turnMade = (turnOntoItMade || TurnsMade.Contains(Math.Max(0, viaStepsDoneOnRoute)))
+                        && Numbering.AsEntered(Math.Max(0, viaStepsDoneOnRoute)) == done;
 
         clearedNow ??= Array.Empty<ClearedCrossing>();
         var inForce = clearedNow.Where(c => c is not null).ToList();

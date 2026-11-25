@@ -97,21 +97,56 @@ public class ClearanceWiringTests
         string recalc = Member(RoutingSource(), "private void TryRecalculateRoute(");
         int settle = recalc.IndexOf("_clearanceProgress = _clearanceProgress.Settled(", StringComparison.Ordinal);
         int adopt = recalc.IndexOf("AdoptRoute(newRoute,", StringComparison.Ordinal);
-        int placed = recalc.IndexOf("_clearanceProgress = _clearanceProgress.WithPlaced(recalcPlacedStops);", StringComparison.Ordinal);
+        int placed = recalc.IndexOf("_clearanceProgress = _clearanceProgress.WithPlaced(recalcPlacedStops)", StringComparison.Ordinal);
         Assert.True(settle >= 0 && adopt > settle, "settled before the recalculated route is adopted");
         Assert.True(placed > adopt, "the recalculated route's stops recorded once it is adopted");
     }
 
     // A recalculation keeps a stop with no row of its own (-1) as -1, with no cleared taxiway left to follow too (every
-    // row behind); one on a row behind the aircraft goes.
+    // row behind), but only while the stop it was placed at on the route being replaced is not passed
+    // (ClearanceProgressState.CarriedOver, tested in ClearanceProgressTests); one on a row behind the aircraft goes.
     [Fact]
-    public void A_recalculation_keeps_a_stop_with_no_row()
+    public void A_recalculation_keeps_a_stop_with_no_row_only_while_it_is_not_passed()
     {
         string recalc = Member(RoutingSource(), "private void TryRecalculateRoute(");
 
         Assert.Contains("int rowsBehind = sequenceRemains ? seqOffset : int.MaxValue;", recalc);
-        Assert.Contains("var remappedRwy = ClearanceRows.After(_userRunwayHoldShorts, rowsBehind);", recalc);
-        Assert.Contains("var remappedTwy = ClearanceRows.After(_userTaxiwayHoldShorts, rowsBehind);", recalc);
+        Assert.Contains("var remappedRwy = ClearanceRows.After(_clearanceProgress.CarriedOver(_userRunwayHoldShorts, loadedRows,", recalc);
+        Assert.Contains("var remappedTwy = ClearanceRows.After(_clearanceProgress.CarriedOver(_userTaxiwayHoldShorts, loadedRows,", recalc);
+        Assert.Contains("_route?.Segments, _currentSegmentIndex, holdingNow), rowsBehind);", recalc);
+    }
+
+    // Fix round 1: the Via steps done are capped by the live route's own cursor (a row is done only once the next row's
+    // run starts at or before it), from the row the live route was built from; the position decides alone only when
+    // the route has no sequence of its own to go by.
+    [Fact]
+    public void Via_steps_done_are_capped_by_the_route_cursor()
+    {
+        string progress = Member(ManagerSource(), "public Navigation.ClearanceProgress GetClearanceProgress(");
+
+        Assert.Contains("Navigation.ClearanceTrim.ViaStepsDoneOnRoute(firstRow, sequence.Count,", progress);
+        Assert.Contains("FindTaxiwayRunStart(route, suffix, row - firstRow, sequence[row])", progress);
+        Assert.Contains("_currentSegmentIndex)", progress);
+        Assert.Contains("Navigation.ClearanceTrim.ViaStepsDone(sequence, remaining, routeDone)", progress);
+
+        string routing = RoutingSource();
+        Assert.Contains("_clearanceProgress = _clearanceProgress.WithPlaced(placedStops) with { RouteFirstRow = taxiwaySequence is { Count: > 0 } ? 0 : -1 };",
+            Member(routing, "public string? LoadRoute("));
+        Assert.Contains("_clearanceProgress = _clearanceProgress.WithPlaced(recalcPlacedStops) with { RouteFirstRow = sequenceRemains ? seqOffset : -1 };",
+            Member(routing, "private void TryRecalculateRoute("));
+    }
+
+    // Fix round 1: the turns made on the route a recalculation replaces (Made at its cursor, or made by a corner cut)
+    // are remembered before the cursor restarts, so the window never reads a made turn as one still to make [TURN-3].
+    [Fact]
+    public void Turns_made_are_remembered_across_a_recalculation()
+    {
+        string recalc = Member(RoutingSource(), "private void TryRecalculateRoute(");
+
+        Assert.Contains("turnsMade: TurnPickCarryOver.MadeRows(_route, _currentSegmentIndex, cutPicks));", recalc);
+        int settle = recalc.IndexOf("_clearanceProgress = _clearanceProgress.Settled(", StringComparison.Ordinal);
+        int reset = recalc.IndexOf("_currentSegmentIndex = 0;", StringComparison.Ordinal);
+        Assert.True(settle >= 0 && reset > settle, "the turns are read before the cursor restarts");
     }
 
     // Ruling 3: a leg ending "hold short of taxiway" after a Cross taxiway step keeps the meeting beyond the crossing,
