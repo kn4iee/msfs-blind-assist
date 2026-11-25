@@ -1056,6 +1056,90 @@ public class ClearedCrossingHoldsTests
     public void CanClearLabel_refuses_a_stop_shared_with_the_pilots_own_hold(string? label, string runway, bool expected)
         => Assert.Equal(expected, ClearedCrossingHolds.CanClearLabel(label, runway));
 
+    // Stage 3 maps each cleared crossing to a Cross step: an entry says who cleared it (a crossing the pilot entered, or
+    // a Continue), and where the route reaches its runway, which is how one with no stop of its own is used up.
+    [Fact]
+    public void A_crossing_records_who_cleared_it_and_where_the_route_reaches_its_runway()
+    {
+        Assert.Equal(ClearedBy.Clearance, new ClearedCrossing("09").Origin);
+        Assert.Equal(0, new ClearedCrossing("09").ReachNodeId);
+
+        // A stop: its node, and the node where the route reaches the runway (route node 2, node id 3).
+        var route = AcrossOnA();
+        Assert.Equal(2, Assert.Single(Pass(route, Runway09())).ReachNodeIndex);
+        var applied = Assert.Single(Clear(route, new ClearedCrossing("09")).Applied);
+        Assert.Equal((2, 3, ClearedBy.Clearance), (applied.StopNodeId, applied.ReachNodeId, applied.Origin));
+
+        // No stop of its own (#355's decision 3): node 0, and the node where the route reaches the runway.
+        var noStop = StartsHeld();
+        var ev = Assert.Single(Pass(noStop, Runway09(), aircraft: new AircraftPosition(Lat(35), Lon(1000))));
+        var unheld = Assert.Single(Clear(noStop, new ClearedCrossing("09")).Applied);
+        Assert.Equal(0, unheld.StopNodeId);
+        Assert.Equal(noStop.Segments[ev.ReachNodeIndex - 1].ToNode.NodeId, unheld.ReachNodeId);
+
+        // A recalculation keeps who cleared it: a crossing a Continue cleared is still a Continue's.
+        var again = AcrossOnA();
+        Pass(again, Runway09());
+        var byContinue = new ClearedCrossing("09", StopNodeId: 2, Origin: ClearedBy.Continue);
+        var kept = Assert.Single(ClearedCrossingHolds.Apply(again, new[] { byContinue }, recalculation: true).Applied);
+        Assert.Equal((2, 3, ClearedBy.Continue), (kept.StopNodeId, kept.ReachNodeId, kept.Origin));
+    }
+
+    // A crossing with no stop (node 0) is never "at" a line, so WithoutStop never uses it: it is used once the segment
+    // cursor has passed where the route reaches its runway, into a NEW list; null while nothing is to go.
+    [Fact]
+    public void A_crossing_with_no_stop_is_used_once_the_cursor_passes_where_the_route_reaches_its_runway()
+    {
+        var route = StartsHeld();
+        var ev = Assert.Single(Pass(route, Runway09(), aircraft: new AircraftPosition(Lat(35), Lon(1000))));
+        int reach = ev.ReachNodeIndex;
+        Assert.True(reach >= 1);
+        int reachNodeId = route.Segments[reach - 1].ToNode.NodeId;
+        var list = new List<ClearedCrossing>
+        {
+            new("09", ReachNodeId: reachNodeId), new("01", StopNodeId: 9), new("18"), new("36", ReachNodeId: 999),
+        };
+
+        Assert.Null(ClearedCrossingHolds.WithoutPassedNoStop(list, route, reach - 1));
+
+        var after = ClearedCrossingHolds.WithoutPassedNoStop(list, route, reach);
+
+        Assert.NotNull(after);
+        Assert.NotSame(list, after);
+        Assert.Equal(4, list.Count);
+        // A stop's crossing waits for its line; one whose reach is unknown or not on this route stays.
+        Assert.Equal(new[] { "01", "18", "36" }, after!.Select(c => c.Runway));
+        Assert.Null(ClearedCrossingHolds.WithoutPassedNoStop(after, route, route.Segments.Count));
+        Assert.Null(ClearedCrossingHolds.WithoutPassedNoStop(new List<ClearedCrossing>(), route, reach));
+    }
+
+    // The Hold short key's restore tells the window which crossings it put back: those still recorded at that stop, and,
+    // for a stop whose line was said as passed (the segment jump says one early), those used up there.
+    [Fact]
+    public void A_restore_names_every_crossing_it_put_back()
+    {
+        var list = new List<ClearedCrossing>
+        {
+            new("09", StopNodeId: 7), new("01", StopNodeId: 7, Origin: ClearedBy.Continue), new("04", StopNodeId: 9), new("18"),
+        };
+
+        var at7 = ClearedCrossingHolds.AtStop(list, 7);
+        Assert.NotSame(list, at7);
+        Assert.Equal(new[] { ("09", ClearedBy.Clearance), ("01", ClearedBy.Continue) }, at7.Select(c => (c.Runway, c.Origin)));
+        Assert.Empty(ClearedCrossingHolds.AtStop(list, 0));
+        Assert.Empty(ClearedCrossingHolds.AtStop(list, 8));
+
+        var used = new[] { new ClearedCrossing("22R", StopNodeId: 5, Origin: ClearedBy.Continue) };
+        Assert.Equal(new[] { "04" }, ClearedCrossingHolds.RestoredCrossings(list, 9, passedNodeId: 5, used).Select(c => c.Runway));
+        Assert.Equal(new[] { "22R" }, ClearedCrossingHolds.RestoredCrossings(list, 5, passedNodeId: 5, used).Select(c => c.Runway));
+        Assert.Empty(ClearedCrossingHolds.RestoredCrossings(list, 5, passedNodeId: 0, used));
+        Assert.Empty(ClearedCrossingHolds.RestoredCrossings(list, 5, passedNodeId: 5, null));
+
+        var args = new ClearedCrossingsChangedEventArgs(at7);
+        Assert.Equal(at7, args.Restored);
+        Assert.Empty(new ClearedCrossingsChangedEventArgs(null!).Restored);
+    }
+
     // An early press records its crossing as an entered one would be: into a NEW list (LoadRoute's Fail and rollback
     // snapshots hold the old one), never twice for the same runway at the same stop.
     [Fact]

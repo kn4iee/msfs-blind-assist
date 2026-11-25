@@ -310,7 +310,9 @@ public class ClearedCrossingWiringTests
         Assert.Contains("_holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced,", branch);
         Assert.Contains("seg.IsHoldShortPoint, seg.HoldShortRunway, _currentSegmentIndex >= _route.Segments.Count - 1)", branch);
         Assert.Contains("RouteRunwayCrossings.ExtractRunwayDesignator(seg.HoldShortRunway) is string runway", branch);
-        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings, new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId));", branch);
+        // Recorded as a Continue's, never as a crossing the pilot entered (stage 3 maps only those to a Cross step).
+        Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,", branch);
+        Assert.Contains("new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId, Origin: ClearedBy.Continue));", branch);
         Assert.Contains("AnnounceInstruction(ClearedCrossingCallouts.EarlyContinue(runway, seg.IsHoldShortPoint ? seg.HoldShortRunway : null));", branch);
         Assert.Contains("if (ClearedCrossingHolds.IsFullyCleared(seg)) _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = true;", branch);
         Assert.DoesNotContain("_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", branch);
@@ -329,13 +331,13 @@ public class ClearedCrossingWiringTests
         Assert.DoesNotMatch(@"(?m)^\s*(Navigation\.)?ClearedCrossingHolds\.ClearAt\(", cont);
 
         int earlyClear = cont.IndexOf("&& ClearedCrossingHolds.ClearAt(_route, _currentSegmentIndex + 1, runway))", StringComparison.Ordinal);
-        int earlyRecord = cont.IndexOf("new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId)", StringComparison.Ordinal);
+        int earlyRecord = cont.IndexOf("new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId, Origin: ClearedBy.Continue)", StringComparison.Ordinal);
         int earlySaid = cont.IndexOf("ClearedCrossingCallouts.EarlyContinue(", StringComparison.Ordinal);
         Assert.True(earlyClear >= 0 && earlyRecord > earlyClear && earlySaid > earlyClear,
             "the early press records and speaks only inside ClearAt's yes");
 
         int pairedClear = cont.IndexOf("&& ClearedCrossingHolds.ClearAt(_route, segIdx + 1, pairedRunway))", StringComparison.Ordinal);
-        int pairedRecord = cont.IndexOf("new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId)", StringComparison.Ordinal);
+        int pairedRecord = cont.IndexOf("new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId, Origin: ClearedBy.Continue)", StringComparison.Ordinal);
         Assert.True(pairedClear >= 0 && pairedRecord > pairedClear, "the paired press records only inside ClearAt's yes");
         // The paired sentence is said inside that yes block too (no closing brace at the block's own indentation before it).
         Assert.Matches(@"ClearAt\(_route, segIdx \+ 1, pairedRunway\)\)\s*\{(?:(?!\n {16}\})[\s\S])*AnnounceInstruction\(\$""Also cleared across \{label\}\. No stop between the runways\.""\);", cont);
@@ -435,9 +437,46 @@ public class ClearedCrossingWiringTests
         Assert.Contains("if (_lastIncursionWarnedNodeId == stopNodeId) _lastIncursionWarnedNodeId = -1;", back);
         Assert.Contains("if (_passedClearedNodeId == stopNodeId) ForgetPassedClearedLine();", back);
         int said = back.IndexOf("AnnounceInstruction(ClearedCrossingCallouts.HoldRestored(decision.Label, FormatDistance(decision.Metres)));", StringComparison.Ordinal);
-        int told = back.IndexOf("ClearedCrossingsChanged?.Invoke(this, EventArgs.Empty);", StringComparison.Ordinal);
+        int told = back.IndexOf("ClearedCrossingsChanged?.Invoke(this, new ClearedCrossingsChangedEventArgs(restoredCrossings));", StringComparison.Ordinal);
         Assert.True(said >= 0 && told > said, "the window is told after the sentence");
-        Assert.Contains("public event EventHandler? ClearedCrossingsChanged;", manager);
+        Assert.Contains("public event EventHandler<ClearedCrossingsChangedEventArgs>? ClearedCrossingsChanged;", manager);
+
+        // It is told WHICH crossings came back (each with its stop node and who cleared it), read before the stop's
+        // entries leave the list and before the passed line is forgotten.
+        int restored = back.IndexOf("var restoredCrossings = ClearedCrossingHolds.RestoredCrossings(_clearedCrossings, stopNodeId, _passedClearedNodeId, _passedClearedCrossings);", StringComparison.Ordinal);
+        int removed = back.IndexOf("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", StringComparison.Ordinal);
+        int forgotten = back.IndexOf("if (_passedClearedNodeId == stopNodeId) ForgetPassedClearedLine();", StringComparison.Ordinal);
+        Assert.True(restored >= 0 && removed > restored && forgotten > restored, "the restored crossings are read before they are removed or forgotten");
+
+        // Raised under the state lock: its doc says so, and that a subscriber marshals to its own thread without blocking.
+        int eventAt = manager.IndexOf("public event EventHandler<ClearedCrossingsChangedEventArgs>? ClearedCrossingsChanged;", StringComparison.Ordinal);
+        string doc = manager[manager.LastIndexOf("/// <summary>", eventAt, StringComparison.Ordinal)..eventAt];
+        Assert.Contains("_stateLock", doc);
+        Assert.Contains("marshal", doc);
+    }
+
+    // The crossings used at a line are remembered with it, so the key can name them if it puts that stop back; they go
+    // wherever the line is forgotten. A crossing with no stop is used once the cursor passes where the route reaches its
+    // runway, checked each taxiing frame after the cursor moves (no allocation while there is none).
+    [Fact]
+    public void The_crossings_used_at_a_line_are_remembered_and_one_with_no_stop_is_used_once_passed()
+    {
+        string manager = ManagerSource();
+
+        string use = Member(manager, "private void UseClearedCrossing(string label, int stopNodeId)");
+        int kept = use.IndexOf("_passedClearedCrossings = ClearedCrossingHolds.AtStop(_clearedCrossings, stopNodeId);", StringComparison.Ordinal);
+        int dropped = use.IndexOf("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", StringComparison.Ordinal);
+        Assert.True(kept >= 0 && dropped > kept, "the crossings used at the line are kept before they leave the list");
+        Assert.Contains("_passedClearedCrossings = ", Member(manager, "private void ForgetPassedClearedLine("));
+        Assert.Contains("_passedClearedCrossings = ", Member(manager, "public void StopGuidance("));
+        Assert.Contains("_passedClearedCrossings = ", Member(RolloutSource(), "private void EnterRunwayEndCountdown("));
+
+        string frame = Member(manager, "private void UpdatePositionFrame(");
+        int advance = frame.IndexOf("AdvanceToNearestSegment(lat, lon, headingTrue);", StringComparison.Ordinal);
+        int noStop = frame.IndexOf("UseNoStopCrossingsPassed();", StringComparison.Ordinal);
+        Assert.True(advance >= 0 && noStop > advance, "a crossing with no stop is judged after the cursor moves");
+        string method = Member(manager, "private void UseNoStopCrossingsPassed(");
+        Assert.Contains("ClearedCrossingHolds.WithoutPassedNoStop(_clearedCrossings, _route, _currentSegmentIndex) is { } kept", method);
     }
 
     // The line just passed is remembered with its node, so the key can judge it from the route geometry; it ends with

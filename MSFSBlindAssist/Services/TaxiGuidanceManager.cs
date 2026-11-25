@@ -269,6 +269,10 @@ public partial class TaxiGuidanceManager : IDisposable
     private string? _passedClearedLabel;
     private int _passedClearedNodeId;
     private DateTime _passedClearedAtUtc = DateTime.MinValue;
+    // The crossings used up at that line (ClearedCrossingHolds.AtStop, taken as they leave _clearedCrossings), so the key
+    // can tell the window which crossings it put back (ClearedCrossingsChanged) when it puts that stop back. Forgotten
+    // with the line.
+    private IReadOnlyList<Navigation.ClearedCrossing> _passedClearedCrossings = Array.Empty<Navigation.ClearedCrossing>();
     // The crossings the LoadRoute call in progress was asked to clear, re-keyed with the clearance rows;
     // AdoptRoute's pass applies them and records what it cleared in _clearedCrossings.
     private List<Navigation.ClearedCrossing> _clearRequests = new();
@@ -2250,10 +2254,14 @@ public partial class TaxiGuidanceManager : IDisposable
 
     /// <summary>
     /// Raised when the Hold short key puts back a stop the pilot was cleared across
-    /// (<see cref="HoldShortOfNextClearedRunway"/>), so a window that shows the route's crossings can follow. Raised
-    /// under the state lock after the key's sentence, like <see cref="StateChanged"/>.
+    /// (<see cref="HoldShortOfNextClearedRunway"/>), so a window that shows the route's crossings can follow: the
+    /// arguments carry every crossing put back as it was recorded (<see cref="ClearedCrossingsChangedEventArgs.Restored"/>:
+    /// its runway, place, stop node and who cleared it, <see cref="ClearedBy"/>), so it can be told from another crossing
+    /// of the same runway. Raised after the key's sentence while <c>_stateLock</c> is held, like
+    /// <see cref="StateChanged"/>, on whatever thread pressed the key: a subscriber marshals to its own thread without
+    /// blocking (BeginInvoke, never Invoke, which would wait on a thread that can itself be waiting for that lock).
     /// </summary>
-    public event EventHandler? ClearedCrossingsChanged;
+    public event EventHandler<ClearedCrossingsChangedEventArgs>? ClearedCrossingsChanged;
 
     public TaxiGuidanceManager(ScreenReaderAnnouncer announcer)
     {
@@ -2703,6 +2711,9 @@ public partial class TaxiGuidanceManager : IDisposable
 
         // Find the best matching segment (current or ahead)
         AdvanceToNearestSegment(lat, lon, headingTrue);
+
+        // A cleared crossing with no stop of its own is used once the cursor is past where it reaches the runway.
+        UseNoStopCrossingsPassed();
 
         if (_currentSegmentIndex >= _route.Segments.Count)
         {
@@ -3777,6 +3788,7 @@ public partial class TaxiGuidanceManager : IDisposable
     private void UseClearedCrossing(string label, int stopNodeId)
     {
         _lastIncursionWarnedNodeId = stopNodeId;
+        _passedClearedCrossings = ClearedCrossingHolds.AtStop(_clearedCrossings, stopNodeId);
         _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);
         _passedClearedLabel = label;
         _passedClearedNodeId = stopNodeId;
@@ -3794,6 +3806,23 @@ public partial class TaxiGuidanceManager : IDisposable
         _passedClearedLabel = null;
         _passedClearedNodeId = 0;
         _passedClearedAtUtc = DateTime.MinValue;
+        _passedClearedCrossings = Array.Empty<ClearedCrossing>();
+    }
+
+    /// <summary>
+    /// A crossing with no stop of its own (#355's decision 3) is never at a line, so <see cref="UseClearedCrossing"/>
+    /// never uses it: it is used up here once the segment cursor reaches where the route reaches its runway
+    /// (<see cref="ClearedCrossingHolds.WithoutPassedNoStop"/>, a new list: replaced, never mutated). Asked on every
+    /// taxiing frame after the cursor moves; allocates nothing while there is none to use.
+    /// </summary>
+    private void UseNoStopCrossingsPassed()
+    {
+        if (_route == null || _clearedCrossings.Count == 0) return;
+        if (ClearedCrossingHolds.WithoutPassedNoStop(_clearedCrossings, _route, _currentSegmentIndex) is { } kept)
+        {
+            _clearedCrossings = kept;
+            _guidanceLog.Info($"Cleared crossing with no stop passed at segment {_currentSegmentIndex}.");
+        }
     }
 
     /// <summary>
@@ -4400,7 +4429,7 @@ public partial class TaxiGuidanceManager : IDisposable
                     && ClearedCrossingHolds.ClearAt(_route, segIdx + 1, pairedRunway))
                 {
                     _clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,
-                        new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId));
+                        new ClearedCrossing(pairedRunway, StopNodeId: pairedSeg.ToNode.NodeId, Origin: ClearedBy.Continue));
                     _guidanceLog.Info($"Paired Continue: runway {pairedRunway} cleared at node {pairedSeg.ToNode.NodeId}.");
                     AnnounceInstruction($"Also cleared across {label}. No stop between the runways.");
                 }
@@ -4431,7 +4460,8 @@ public partial class TaxiGuidanceManager : IDisposable
                 && seg.ToNode != null
                 && ClearedCrossingHolds.ClearAt(_route, _currentSegmentIndex + 1, runway))
             {
-                _clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings, new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId));
+                _clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,
+                    new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId, Origin: ClearedBy.Continue));
                 _guidanceLog.Info($"Continue before the line: runway {runway} cleared at node {seg.ToNode.NodeId}" +
                                   (seg.IsHoldShortPoint ? $", still holding short of \"{seg.HoldShortRunway}\"." : ", no stop left."));
                 AnnounceInstruction(ClearedCrossingCallouts.EarlyContinue(runway, seg.IsHoldShortPoint ? seg.HoldShortRunway : null));
@@ -4706,8 +4736,8 @@ public partial class TaxiGuidanceManager : IDisposable
     /// the key's sentence is its first call: the outer call would only cut it off with the same distance), and another
     /// stop's countdown is never touched; a stop the aircraft holds at stages its runways
     /// afresh, one Continue each [HLD-11]; the incursion watch's latch for that node is lifted, so its crossing is said
-    /// after the Continue that releases it; and the line is no longer "passed". Then the window is told
-    /// (<see cref="ClearedCrossingsChanged"/>). A start hold put back while taxiing is entered by the next taxiing frame,
+    /// after the Continue that releases it; and the line is no longer "passed". Then the window is told which crossings
+    /// came back (<see cref="ClearedCrossingsChanged"/>). A start hold put back while taxiing is entered by the next taxiing frame,
     /// with the pass's own tests, as for a route adopted while guidance runs.
     /// </summary>
     private void PutClearedStopBack(ClearedCrossingHolds.HoldShortKeyDecision decision)
@@ -4721,6 +4751,9 @@ public partial class TaxiGuidanceManager : IDisposable
             : ClearedCrossingHolds.RestoreAt(_route, decision.SegmentIndex);
         if (!restored) return;
 
+        // Which crossings came back, as recorded (stop node, who cleared it), for the window: read before they leave the
+        // list, and, for a line the segment jump said early, from the crossings used up there before it is forgotten.
+        var restoredCrossings = ClearedCrossingHolds.RestoredCrossings(_clearedCrossings, stopNodeId, _passedClearedNodeId, _passedClearedCrossings);
         _clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);
         bool heldHere = _state == TaxiGuidanceState.HoldShort
             && (startHold ? _currentSegmentIndex == 0 : decision.SegmentIndex == _currentSegmentIndex - 1);
@@ -4750,7 +4783,7 @@ public partial class TaxiGuidanceManager : IDisposable
                           $"cursor {_currentSegmentIndex}{(heldHere ? ", held here" : "")}.");
 
         AnnounceInstruction(ClearedCrossingCallouts.HoldRestored(decision.Label, FormatDistance(decision.Metres)));
-        ClearedCrossingsChanged?.Invoke(this, EventArgs.Empty);
+        ClearedCrossingsChanged?.Invoke(this, new ClearedCrossingsChangedEventArgs(restoredCrossings));
     }
 
     private void HandleArrival()
@@ -5005,6 +5038,7 @@ public partial class TaxiGuidanceManager : IDisposable
         _passedClearedLabel = null;
         _passedClearedNodeId = 0;
         _passedClearedAtUtc = DateTime.MinValue;
+        _passedClearedCrossings = Array.Empty<Navigation.ClearedCrossing>();
         _lineupAnnouncedAligned = false;
         _lineupStubActive = false;
         _lineupHugeCrossTrackSince = DateTime.MinValue;

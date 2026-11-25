@@ -2,13 +2,41 @@ using MSFSBlindAssist.Database.Models;
 
 namespace MSFSBlindAssist.Navigation;
 
+/// <summary>Who cleared a runway crossing: a crossing the pilot entered (a Cross step, the clearance), or the Continue key.</summary>
+public enum ClearedBy
+{
+    /// <summary>A crossing the pilot entered: a Cross step, or the "After crossing runway" leg.</summary>
+    Clearance,
+    /// <summary>A Continue pressed before the line, or the paired double Continue: no Cross step stands for it.</summary>
+    Continue,
+}
+
 /// <summary>
 /// A runway crossing the pilot was cleared for, as entered: the runway, and where (<paramref name="At"/>, a
 /// taxiway or holding-point name, or <paramref name="AtNodeId"/>, a node). <paramref name="StopNodeId"/> is the
 /// node of the stop it cleared, recorded when it is applied (0: not yet, or a crossing with no stop), which a
 /// recalculation matches on. <paramref name="SeqIndex"/> is the taxiway step the crossing was entered after, -1 for none.
+/// <paramref name="Origin"/> is who cleared it (a crossing entered and one a Continue cleared both carry
+/// <c>SeqIndex</c> -1), kept through a recalculation. <paramref name="ReachNodeId"/> is the node where the route
+/// reaches the runway, recorded when it is applied (0: not recorded), by which a crossing with no stop is used up
+/// once the aircraft is past it (<see cref="ClearedCrossingHolds.WithoutPassedNoStop"/>).
 /// </summary>
-public sealed record ClearedCrossing(string Runway, string? At = null, int AtNodeId = 0, int StopNodeId = 0, int SeqIndex = -1);
+public sealed record ClearedCrossing(string Runway, string? At = null, int AtNodeId = 0, int StopNodeId = 0, int SeqIndex = -1,
+                                     ClearedBy Origin = ClearedBy.Clearance, int ReachNodeId = 0);
+
+/// <summary>
+/// What <c>TaxiGuidanceManager.ClearedCrossingsChanged</c> carries: every crossing the Hold short key put back as a stop,
+/// as it was recorded (its runway, place, stop node and who cleared it): one for a stop guarding one runway, one per
+/// cleared runway at a shared stop. Empty only for a stop whose record was already gone.
+/// </summary>
+public sealed class ClearedCrossingsChangedEventArgs : EventArgs
+{
+    public ClearedCrossingsChangedEventArgs(IReadOnlyList<ClearedCrossing> restored)
+        => Restored = restored ?? Array.Empty<ClearedCrossing>();
+
+    /// <summary>The crossings put back, in the order they were recorded.</summary>
+    public IReadOnlyList<ClearedCrossing> Restored { get; }
+}
 
 /// <summary>
 /// Clears ONE runway crossing at ONE place, and puts it back. The automatic pass still places a stop before every
@@ -119,7 +147,7 @@ public static class ClearedCrossingHolds
             else if (HasNoStop(match))
             {
                 match.Cleared = true;
-                applied.Add(request with { StopNodeId = 0 });
+                applied.Add(request with { StopNodeId = 0, ReachNodeId = StopNode(route, match.ReachNodeIndex)?.NodeId ?? 0 });
             }
             // Else passed, or held by the pilot's own stop: nothing cleared, in neither list, and no other crossing tried.
         }
@@ -321,6 +349,73 @@ public static class ClearedCrossingHolds
         foreach (var c in crossings)
             if (c is not null && (stopNodeId <= 0 || c.StopNodeId != stopNodeId)) kept.Add(c);
         return kept;
+    }
+
+    /// <summary>
+    /// The crossings in <paramref name="crossings"/> cleared at the stop on node <paramref name="stopNodeId"/>, in a NEW
+    /// list, in the order recorded. Never for node 0, which a crossing with no stop records.
+    /// </summary>
+    public static List<ClearedCrossing> AtStop(IReadOnlyList<ClearedCrossing> crossings, int stopNodeId)
+    {
+        var at = new List<ClearedCrossing>();
+        if (crossings is null || stopNodeId <= 0) return at;
+        foreach (var c in crossings)
+            if (c is not null && c.StopNodeId == stopNodeId) at.Add(c);
+        return at;
+    }
+
+    /// <summary>
+    /// What the Hold short key put back at the stop on node <paramref name="stopNodeId"/>, for the window
+    /// (<see cref="ClearedCrossingsChangedEventArgs"/>): the crossings still recorded there (<see cref="AtStop"/>), and,
+    /// when that stop's line was the one said as passed (<paramref name="passedNodeId"/>; the segment jump says one up
+    /// to ~100 m early), the crossings used up there (<paramref name="usedAtPassedLine"/>). A NEW list.
+    /// </summary>
+    public static List<ClearedCrossing> RestoredCrossings(IReadOnlyList<ClearedCrossing> recorded, int stopNodeId,
+                                                          int passedNodeId, IReadOnlyList<ClearedCrossing>? usedAtPassedLine)
+    {
+        var restored = AtStop(recorded, stopNodeId);
+        if (stopNodeId > 0 && passedNodeId == stopNodeId && usedAtPassedLine is not null)
+            foreach (var c in usedAtPassedLine)
+                if (c is not null && c.StopNodeId == stopNodeId) restored.Add(c);
+        return restored;
+    }
+
+    /// <summary>
+    /// <paramref name="crossings"/> without each crossing with no stop of its own (stop node 0, #355's decision 3) that
+    /// the aircraft is past: the segment cursor <paramref name="cursor"/> has reached the route node where the route
+    /// reaches its runway (<see cref="ClearedCrossing.ReachNodeId"/>). A crossing with no stop is never at a line, so
+    /// <see cref="WithoutStop"/> never uses it; this does, once. A NEW list when one goes (the manager's list is replaced,
+    /// never mutated); null when none does, without allocating: asked on taxiing frames. A crossing whose reach was not
+    /// recorded, or is not a node of this route, stays.
+    /// </summary>
+    public static List<ClearedCrossing>? WithoutPassedNoStop(IReadOnlyList<ClearedCrossing> crossings, TaxiRoute route, int cursor)
+    {
+        if (crossings is null || route is null || route.Segments.Count == 0) return null;
+        List<ClearedCrossing>? kept = null;
+        for (int i = 0; i < crossings.Count; i++)
+        {
+            var c = crossings[i];
+            bool passed = c is { StopNodeId: 0, ReachNodeId: > 0 } && RouteNodeIndex(route, c.ReachNodeId) is int reach && reach <= cursor;
+            if (passed && kept is null)
+            {
+                kept = new List<ClearedCrossing>(crossings.Count);
+                for (int j = 0; j < i; j++) if (crossings[j] is not null) kept.Add(crossings[j]);
+            }
+            else if (!passed && kept is not null && c is not null)
+            {
+                kept.Add(c);
+            }
+        }
+        return kept;
+    }
+
+    // The first route node index (0: the start, n: segment n - 1's end) whose node is nodeId; null when none is.
+    private static int? RouteNodeIndex(TaxiRoute route, int nodeId)
+    {
+        if (route.Segments[0].FromNode?.NodeId == nodeId) return 0;
+        for (int i = 0; i < route.Segments.Count; i++)
+            if (route.Segments[i].ToNode?.NodeId == nodeId) return i + 1;
+        return null;
     }
 
     /// <summary>
@@ -783,8 +878,9 @@ public static class ClearedCrossingHolds
     private static ClearedCrossing ClearMatch(TaxiRoute route, TaxiRouteRunwayEvent match, ClearedCrossing request)
     {
         int stopNodeId = StopNode(route, match.StopNodeIndex)?.NodeId ?? 0;
+        int reachNodeId = StopNode(route, match.ReachNodeIndex)?.NodeId ?? 0;
         ClearAt(route, match.StopNodeIndex, match.Designator);
-        return request with { StopNodeId = stopNodeId };
+        return request with { StopNodeId = stopNodeId, ReachNodeId = reachNodeId };
     }
 
     // The events at that stop for that runway (either end); every event at it when runway is null.
