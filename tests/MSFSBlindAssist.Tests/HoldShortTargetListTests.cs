@@ -96,8 +96,9 @@ public class HoldShortTargetListTests
     }
 
     // OMDB: "taxi via K, hold short of KK". KK is a red sign beside K, in no painted-line
-    // source. A route row offers it among the taxiways like any holding point, the caveat in
-    // its label, and the pick stops on the segment that ends at its node like a painted one.
+    // source. The Hold short of list offers it among the taxiways like any holding point, the
+    // caveat in its label, and the pick stops on the segment that ends at its node like a
+    // painted one. Which points that list offers: ClearanceNameListsTests.
     [Fact]
     public void Merge_OffersASignReadPointAmongTheTaxiways_AndItsPickPlacesAStop()
     {
@@ -121,19 +122,6 @@ public class HoldShortTargetListTests
         Assert.True(pick.Place(route));
         Assert.Equal(new[] { false, true, false }, route.Select(s => s.IsHoldShortPoint).ToArray());
         Assert.Equal("holding point KK", route[1].HoldShortRunway);
-    }
-
-    // Which points a route ROW's "Hold short of" list offers is decided here, not in the form:
-    // every one, sign-read points included ([HLD-18] since 2026-11-24). Until then the row list
-    // left them out, and KK could only be reached through Progressive Taxi.
-    [Fact]
-    public void RowPoints_OffersSignReadPointsBesideThePaintedOnes()
-    {
-        var l2 = Point("L2");
-        var kk = Point("KK", NamedHoldingPointResolver.SignKind);
-
-        Assert.Equal(new[] { l2, kk }, HoldShortTargetList.RowPoints(new[] { l2, kk }));
-        Assert.Empty(HoldShortTargetList.RowPoints(null));
     }
 
     [Fact]

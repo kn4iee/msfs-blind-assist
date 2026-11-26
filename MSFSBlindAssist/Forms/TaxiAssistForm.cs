@@ -2977,12 +2977,6 @@ public class TaxiAssistForm : Form
         cmbDestination.Visible = !isProgressive;
 
         PopulateDestinations();
-
-        // A holding point read from a sign may only end a leg with no destination ([HLD-18]),
-        // so the Hold short of list offers one only for Progressive Taxi: refilled when the
-        // type changes, keeping the pick when it is still offered.
-        if (SelectedStepKind() == ClearanceStepKind.HoldShort)
-            RefreshStepNameList(keepSelection: true);
         UpdateLayout();
 
         // Announce "no deicing areas" immediately after populating so the user
@@ -3519,8 +3513,8 @@ public class TaxiAssistForm : Form
     /// label and accessible name. Nothing is selected, so Enter never adds a name the pilot did not choose, except on
     /// an empty list for a Via kind: the nearest taxiway in the direction the aircraft faces, as the first-taxiway box
     /// did. <paramref name="keepSelection"/> keeps the pick by its label and kind when it is still listed (a late
-    /// holding-point fetch, a destination type change). A holding point read from a sign is listed only for
-    /// Progressive Taxi ([HLD-18]). While a step is being changed the names are those offered after the steps before it
+    /// holding-point fetch). A holding point read from a sign is listed for every destination type ([HLD-18] since
+    /// 2026-11-24). While a step is being changed the names are those offered after the steps before it
     /// (<see cref="StepsBeforeEntry"/>), the accessible name says which step, and nothing is preselected. Refreshes the
     /// "At" box after.
     /// </summary>
@@ -3602,8 +3596,7 @@ public class TaxiAssistForm : Form
             case ClearanceStepKind.HoldShort:
                 if (!_namedHoldingPointsResolved)
                     ResolveNamedHoldingPoints();
-                return ClearanceNameLists.HoldTargets(_airportRunwayIds, TaxiwaysCrossing, all, _namedHoldingPoints,
-                    includeSignPoints: cmbDestType.SelectedIndex == 2, before);
+                return ClearanceNameLists.HoldTargets(_airportRunwayIds, TaxiwaysCrossing, all, _namedHoldingPoints, before);
             default:
                 IReadOnlyList<string> nearestFirst = lastVia == null
                     ? graph.GetTaxiwayNamesSortedByDistance(_aircraftLat, _aircraftLon, AircraftHeadingTrue())

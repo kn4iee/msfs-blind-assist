@@ -22,8 +22,8 @@ public sealed class NamedHoldingPoint
     /// <summary>
     /// The point was read off an X-Plane sign (<see cref="NamedHoldingPointResolver.SignKind"/>),
     /// so its position is approximate ([HLD-18]). The ONE test for it: the cross-at list and
-    /// the runway entries leave such a point out, and its label keeps saying so in the two
-    /// hold-short lists that offer it (Progressive Taxi's and a route row's).
+    /// the runway entries leave such a point out, and its label keeps saying so in the Hold
+    /// short of step's list, which offers it for every destination type.
     /// </summary>
     public bool IsFromSign => string.Equals(
         Kind?.Trim(), NamedHoldingPointResolver.SignKind, StringComparison.OrdinalIgnoreCase);

@@ -606,6 +606,21 @@ public class ClearanceWiringTests
         Assert.Contains("_changingStepIndex", Member(form, "private IReadOnlyList<ClearanceStep> StepsBeforeEntry("));
     }
 
+    // [HLD-18] since main's 2026-11-24 reversal, merged 2026-11-26: the Hold short of list hands every resolved point to
+    // ClearanceNameLists, sign-read ones included, whatever the destination type, so the list no longer follows the type.
+    // Runway entries and the At box still leave sign points out (GetHoldingPointsCrossingRunway).
+    [Fact]
+    public void The_Hold_short_of_list_offers_sign_read_points_for_every_destination_type()
+    {
+        string form = FormSource();
+        string items = Member(form, "private List<ClearanceNameLists.Item> StepNameItems(");
+        Assert.Contains("ClearanceNameLists.HoldTargets(_airportRunwayIds, TaxiwaysCrossing, all, _namedHoldingPoints, before)", items);
+        Assert.DoesNotContain("includeSignPoints", form);
+        Assert.DoesNotContain("IsFromSign", items);
+        Assert.Contains("|| p.IsFromSign;",
+            Member(form, "private List<(NamedHoldingPoint Point, RunwayCrossingResolver.Crossing Crossing)> GetHoldingPointsCrossingRunway("));
+    }
+
     // Stage 4, D3 and D4: Add Step (its button, Alt+D, Enter in a step box) replaces the step being changed and reads it
     // back with its own number. A replacement that says what the step said keeps the old record and its origin (a made
     // crossing's pin, a put-back hold short's place); anything else is a new step, its old origin kept out of every trim.

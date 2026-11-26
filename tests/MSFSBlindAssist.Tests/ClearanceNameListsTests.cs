@@ -79,7 +79,7 @@ public class ClearanceNameListsTests
     public void Holding_points_are_merged_with_taxiways_and_marked()
     {
         var items = ClearanceNameLists.HoldTargets(new[] { "09" }, Crossing, new[] { "L", "L3" },
-            new[] { Point("L2") }, false, new[] { Via("L") });
+            new[] { Point("L2") }, new[] { Via("L") });
         Assert.Equal(new[] { "09", "L", "L2 (holding point)", "L3" }, Labels(items));
         Assert.Equal(ClearanceTargetKind.Runway, items[0].Kind);
         Assert.Equal(ClearanceTargetKind.Taxiway, items[1].Kind);
@@ -88,14 +88,21 @@ public class ClearanceNameListsTests
         Assert.NotNull(items[2].HoldingPoint);
     }
 
+    // [HLD-18] since main's 2026-11-24 reversal, merged into the step list 2026-11-26 (OMDB "taxi via K, hold short of
+    // KK"; KK is a red sign beside K, in no painted-line source): the Hold short of list offers a sign-read point for
+    // every destination type, among the taxiways with its caveat, never filtered out. Until then it was listed only for
+    // Progressive Taxi; this fails if that filter comes back.
     [Fact]
-    public void Sign_read_points_are_listed_only_when_asked_for()
+    public void Sign_read_points_are_listed_beside_the_painted_ones_for_every_destination()
     {
-        var points = new[] { Point("L2"), Point("S1", NamedHoldingPointResolver.SignKind) };
-        var without = ClearanceNameLists.HoldTargets(new string[0], Crossing, new[] { "L" }, points, false, new ClearanceStep[0]);
-        Assert.DoesNotContain(without, i => i.Name == "S1");
+        var points = new[] { Point("L2"), Point("KK", NamedHoldingPointResolver.SignKind) };
+        var items = ClearanceNameLists.HoldTargets(new[] { "12L" }, Crossing, new[] { "K", "L" }, points, new[] { Via("K") });
 
-        var with = ClearanceNameLists.HoldTargets(new string[0], Crossing, new[] { "L" }, points, true, new ClearanceStep[0]);
-        Assert.Contains(with, i => i.Name == "S1" && i.Kind == ClearanceTargetKind.HoldingPoint);
+        Assert.Equal(new[] { "12L", "K", "KK (holding point, from sign, approximate)", "L", "L2 (holding point)" },
+            Labels(items));
+        var kk = items[2];
+        Assert.Equal(ClearanceTargetKind.HoldingPoint, kk.Kind);
+        Assert.Equal("KK", kk.Name);
+        Assert.True(kk.HoldingPoint!.IsFromSign);
     }
 }

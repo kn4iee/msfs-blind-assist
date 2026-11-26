@@ -42,15 +42,14 @@ public static class ClearanceNameLists
         return items;
     }
 
-    /// <summary>Runways as for a crossing, then the taxiways and holding points merged ([HLD-23]). A holding
-    /// point read from a sign is offered only when <paramref name="includeSignPoints"/> ([HLD-18]).</summary>
+    /// <summary>Runways as for a crossing, then the taxiways and holding points merged ([HLD-23]). Every point is
+    /// offered, one read from a sign included, for every destination type and anywhere in the list ([HLD-18] since
+    /// 2026-11-24; OMDB "taxi via K, hold short of KK"), its label saying it is approximate.</summary>
     public static List<Item> HoldTargets(IReadOnlyList<string> runwayIds, Func<string, IReadOnlyList<string>> taxiwaysCrossingRunway,
-        IReadOnlyList<string> allTaxiways, IReadOnlyList<NamedHoldingPoint> holdingPoints, bool includeSignPoints,
-        IReadOnlyList<ClearanceStep> steps)
+        IReadOnlyList<string> allTaxiways, IReadOnlyList<NamedHoldingPoint> holdingPoints, IReadOnlyList<ClearanceStep> steps)
     {
         var items = RunwayItems(runwayIds, taxiwaysCrossingRunway, steps);
-        var points = includeSignPoints ? holdingPoints : holdingPoints.Where(p => !p.IsFromSign).ToList();
-        foreach (var entry in HoldShortTargetList.Merge(allTaxiways, points))
+        foreach (var entry in HoldShortTargetList.Merge(allTaxiways, holdingPoints))
         {
             items.Add(entry.HoldingPoint == null
                 ? new Item(entry.Label, ClearanceTargetKind.Taxiway, entry.Name)

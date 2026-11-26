@@ -250,12 +250,8 @@ public static class ClearancePlanner
             }
         }
 
-        // [HLD-18]: a holding point read from a sign may only end a leg with no destination.
-        for (int i = 0; i < steps.Count; i++)
-        {
-            if (steps[i].FromSign && i != endIndex)
-                return $"{steps[i].Name} is read from a sign and can only end a leg.";
-        }
+        // A holding point read from a sign is a stop like a painted one, anywhere in the list ([HLD-18] since
+        // 2026-11-24): it is never refused for where it stands.
         return null;
     }
 

@@ -212,7 +212,7 @@ Where a step applies is decided by your route, not by its place in the list. BA 
 - **A runway.** BA already stops you before every runway your route crosses or enters, so this is optional, but it makes sure the stop is exactly the one ATC named, labelled the way you chose it. "Hold short of" your own departure runway, as the built-in MSFS ATC says it, is accepted and adds nothing: BA already holds you there.
 - **A taxiway or a holding point.** See the next section.
 
-In Progressive Taxi, where the online data has no name for a line ATC uses, the list can also offer one from the scenery's own signs, marked *"(holding point, from sign, approximate)"*: BA stops you at the sign's position, which may not be exactly on a painted line. Such a point can only end the leg. Entered anywhere else, Calculate says, for example, *"KK is read from a sign and can only end a leg."*
+Where the online data has no name for a line ATC uses, the list can also offer one read from a sign beside the taxiway, marked *"(holding point, from sign, approximate)"*, such as KK beside taxiway K at Dubai, for "taxi via K, hold short of KK". These appear in every Hold short of list, whatever the destination type, and you can enter one anywhere in the Clearance list, as a stop on the way or as the end of a Progressive Taxi leg. BA stops you at the sign's position, which may not be exactly on a painted line. They are never offered for a runway entry (see [Holding points in the Runway entry list](#depart-from-named-holding-point)) or in a crossing's At box (see [Cross and the At box](#taxi-step-cross)).
 
 ### Holding short of a taxiway or a holding point {#hold-short-after-the-first-taxiway}
 
@@ -697,7 +697,6 @@ If Calculate fails, BA tells you why and puts the same reason in the summary box
 - *"Enter a step, or choose a destination."* Progressive Taxi with an empty Clearance list.
 - *"A leg cannot end on cross taxiway B. Add where to hold short, or the next taxiway."* A Progressive leg's last step is a Cross taxiway step.
 - *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* The same crossing is in the list twice, once as Cross and once as Hold short of, at the step numbers given (when the two steps use the runway's two ends, both are named, such as *"runway 24L/06R"*). Remove the one ATC did not say.
-- *"KK is read from a sign and can only end a leg."* A holding point read from a scenery sign is anywhere but the end of a Progressive leg.
 - *"You are already across runway 24L. Add the next step."* Your Progressive leg ends across a runway you have already crossed. Add the steps ATC gave you next.
 - *"Could not tell which side of runway 24L you are on. Add the next step."* The same, but BA cannot tell which side you are on now: the crossing began on the runway itself or right at its edge, the point BA kept for it lies on the runway's pavement in the airport's data, or the data has no usable outline for that runway. Add the steps ATC gave you next.
 - *"Could not find taxiway D from C. Check your entry."*, *"Cannot taxi to VIKAS from your position. Check your entry."* and the reasons in [Progressive Taxi](#taxi-progressive): BA could not find where your Progressive leg ends.
@@ -1078,7 +1077,6 @@ This is a reference list of every taxi guidance callout, grouped by when you hea
 | *"Enter a step, or choose a destination."* | Progressive Taxi with no steps. | Enter the clearance's steps. |
 | *"A leg cannot end on cross taxiway B. Add where to hold short, or the next taxiway."* | A Progressive leg cannot end on a Cross taxiway step. | Add the hold short or taxiway ATC gave you next. |
 | *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* | The same crossing is a Cross step and a Hold short of step, at those step numbers. | Remove the one ATC did not say. |
-| *"KK is read from a sign and can only end a leg."* | A point from a scenery sign is entered anywhere but the end of a Progressive leg. | Make it the last step, or choose another point. |
 | *"You are already across runway 24L. Add the next step."* | Your Progressive leg ends across a runway you have already crossed. | Add the steps ATC gave you next. |
 | *"Could not tell which side of runway 24L you are on. Add the next step."* | Your Progressive leg ends across a runway you have crossed, and BA cannot tell which side you are on now: the crossing began on or right at the runway, or the airport's data does not show which side its point is on. | Add the steps ATC gave you next. |
 | *"The route does not cross taxiway B."* | A Cross taxiway step your route never meets. | Check the clearance and your steps. |

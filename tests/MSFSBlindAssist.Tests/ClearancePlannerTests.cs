@@ -255,17 +255,33 @@ public class ClearancePlannerTests
         Assert.Equal(expected, Leg(Via("P"), HoldRwyAt("24L", "P"), CrossRwy("24L"), HoldTwy("L")).Refusal);
     }
 
+    // [HLD-18] since main's 2026-11-24 reversal, merged into the step list 2026-11-26: a holding point read from a sign
+    // is a stop like a painted one anywhere in the list, with a destination too, and still ends a leg as its last step.
+    // Until then Calculate refused one anywhere but the end of a leg with no destination ("KK is read from a sign and
+    // can only end a leg.").
     [Fact]
-    public void A_sign_read_point_can_only_end_a_leg()
+    public void A_sign_read_point_is_a_stop_anywhere_in_the_list()
     {
-        const string expected = "S1 is read from a sign and can only end a leg.";
-        var onTheWay = Leg(Via("A"), HoldPoint("S1", 9, fromSign: true), Via("B"));
-        Assert.Equal(expected, onTheWay.Refusal);
-        Assert.Equal(expected,
-            TestCulture.Run("de-DE", () => Leg(Via("A"), HoldPoint("S1", 9, fromSign: true), Via("B")).Refusal));
-        Assert.Null(Leg(Via("A"), HoldPoint("S1", 9, fromSign: true)).Refusal);
-        // [HLD-18]: with a destination no step ends the leg, so a sign-read point is always refused.
-        Assert.Equal(expected, To(null, Via("A"), HoldPoint("S1", 9, fromSign: true)).Refusal);
+        var kk = HoldPoint("KK", 9, fromSign: true);
+
+        var onTheWay = Leg(Via("K"), kk, Via("B"));
+        Assert.Null(onTheWay.Refusal);
+        Assert.Equal(new[] { new ClearanceHold(0, kk) }, onTheWay.Holds);
+        Assert.Equal(ClearanceEndKind.EndOfTaxiway, onTheWay.End);
+
+        var withDestination = To(null, Via("K"), kk);
+        Assert.Null(withDestination.Refusal);
+        Assert.Equal(new[] { new ClearanceHold(0, kk) }, withDestination.Holds);
+
+        var toARunway = To("30R", Via("K"), kk, Via("N"));
+        Assert.Null(toARunway.Refusal);
+        Assert.Equal(new[] { new ClearanceHold(0, kk) }, toARunway.Holds);
+
+        var legEnd = Leg(Via("K"), kk);
+        Assert.Null(legEnd.Refusal);
+        Assert.Equal(ClearanceEndKind.HoldAtNamedPoint, legEnd.End);
+        Assert.Equal(kk, legEnd.EndStep);
+        Assert.Empty(legEnd.Holds);
     }
 
     // ---- The plan fields Tasks 3 and 6 consume (controller rulings) ----
