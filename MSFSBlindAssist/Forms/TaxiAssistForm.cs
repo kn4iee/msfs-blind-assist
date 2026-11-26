@@ -200,6 +200,10 @@ public class TaxiAssistForm : Form
     // hold it, Add Step replaces it (ReplaceStepFromInputs), Escape keeps it (CancelStepChange). Anything else that changes
     // the list closes the change first, so a replacement never lands on a step that has moved. UI thread only.
     private int _changingStepIndex = -1;
+    // The "At" box's item for the place of the runway crossing being changed when no offered item names it (a crossing
+    // made at a holding point now behind the aircraft): ClearanceStepEntry.OwnPlaceLabel, rebuilt with the At list; a pick
+    // of it keeps the step's place (ClearanceStepEntry.BuildForChange). Null when there is none.
+    private string? _changingOwnAtLabel;
     // Add Step's own text, name and description, put back when a change closes (EndStepChange): kept here so the button's
     // text is written as a literal once (ClearanceStepEntryTests reads the access keys from the Text literals).
     private string _addStepText = "";
@@ -3777,14 +3781,17 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Shows the "At" box only for a Cross step with a runway chosen, and fills it: "(none)" (the first crossing the
     /// route makes), then the taxiways that cross that runway, then the painted holding points from which it can be
-    /// crossed on the aircraft's side (never one read from a sign, [HLD-18]). A new runway starts at "(none)";
-    /// <paramref name="keepSelection"/> (the box's own refresh when focus arrives or its list opens) keeps the pick by
-    /// its label when it is still offered.
+    /// crossed on the aircraft's side (never one read from a sign, [HLD-18]). While a runway crossing is being changed
+    /// with its own runway chosen, its own place follows when none of those names it
+    /// (<see cref="ClearanceStepEntry.OwnPlaceLabel"/>): a crossing made at a holding point now behind the aircraft keeps
+    /// its place and pin. A new runway starts at "(none)"; <paramref name="keepSelection"/> (the box's own refresh when
+    /// focus arrives or its list opens) keeps the pick by its label when it is still offered.
     /// </summary>
     private void RefreshStepAtList(bool keepSelection = false)
     {
         string? previous = keepSelection ? cmbStepAt.SelectedItem?.ToString() : null;
         Runway? runway = null;
+        string? pickedRunway = (cmbStepName.SelectedItem as ClearanceNameLists.Item)?.Name;
         bool show = SelectedStepKind() == ClearanceStepKind.Cross
             && cmbStepName.SelectedItem is ClearanceNameLists.Item { Kind: ClearanceTargetKind.Runway } picked
             && _crossRunwayMap.TryGetValue($"Runway {picked.Name}", out runway);
@@ -3794,6 +3801,7 @@ public class TaxiAssistForm : Form
         {
             cmbStepAt.Items.Clear();
             _crossAtHoldPoints.Clear();
+            _changingOwnAtLabel = null;
             if (show && runway != null)
             {
                 cmbStepAt.Items.Add(ClearanceStepEntry.NoAtPlace);
@@ -3808,6 +3816,20 @@ public class TaxiAssistForm : Form
                     string label = hp.Name + CrossAtHoldPointSuffix;
                     if (_crossAtHoldPoints.TryAdd(label, hp))
                         cmbStepAt.Items.Add(label);
+                }
+
+                // The place of the crossing being changed, when nothing above names it (judged on the items as listed).
+                if (_changingStepIndex >= 0 && _changingStepIndex < _steps.Count)
+                {
+                    var changing = _steps[_changingStepIndex];
+                    string? ownLabel = ClearanceStepEntry.OwnPlaceLabel(changing, pickedRunway, placeOffered: IndexOfStepAtFor(changing) >= 0,
+                        ClearanceStepEntry.PlaceIsHoldingPoint(changing, _graph?.GetAllTaxiwayNames() ?? new List<string>(),
+                            _namedHoldingPoints.Select(p => p.Name)));
+                    if (ownLabel != null && !cmbStepAt.Items.Contains(ownLabel))
+                    {
+                        cmbStepAt.Items.Add(ownLabel);
+                        _changingOwnAtLabel = ownLabel;
+                    }
                 }
                 int kept = previous == null ? -1 : cmbStepAt.Items.IndexOf(previous);
                 cmbStepAt.SelectedIndex = kept >= 0 ? kept : 0;
@@ -3878,12 +3900,27 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>The step the boxes make with <paramref name="name"/> chosen: the kind, the name and, for a runway
-    /// crossing, the "At" pick (a holding point by its node).</summary>
+    /// crossing, the "At" pick (a holding point by its node). While a step is being changed, its own place picked in the
+    /// "At" box keeps that step's place (<see cref="ClearanceStepEntry.BuildForChange"/>).</summary>
     private ClearanceStep StepFromBoxes(ClearanceNameLists.Item name)
     {
         string? atLabel = _stepAtShown ? cmbStepAt.SelectedItem?.ToString() : null;
         NamedHoldingPoint? atPoint = atLabel != null && _crossAtHoldPoints.TryGetValue(atLabel, out var point) ? point : null;
-        return ClearanceStepEntry.Build(SelectedStepKind(), name, atLabel, atPoint);
+        return _changingStepIndex >= 0 && _changingStepIndex < _steps.Count
+            ? ClearanceStepEntry.BuildForChange(SelectedStepKind(), name, atLabel, atPoint, _steps[_changingStepIndex], _changingOwnAtLabel)
+            : ClearanceStepEntry.Build(SelectedStepKind(), name, atLabel, atPoint);
+    }
+
+    /// <summary>The step the boxes make for the step being changed, and whether it says what that step says
+    /// (<see cref="ClearanceStepEntry.SameAsEntered"/>): Replace keeps the old record then, and Calculate goes ahead. Null
+    /// (and not the same) with no name chosen or no change open. The one comparison both use.</summary>
+    private (ClearanceStep? Rebuilt, bool Same) RebuildStepBeingChanged()
+    {
+        if (_changingStepIndex < 0 || _changingStepIndex >= _steps.Count
+            || cmbStepName.SelectedItem is not ClearanceNameLists.Item name)
+            return (null, false);
+        var rebuilt = StepFromBoxes(name);
+        return (rebuilt, ClearanceStepEntry.SameAsEntered(_steps[_changingStepIndex], rebuilt));
     }
 
     /// <summary>Enter on a selected step in the Clearance list changes it in place (<see cref="BeginStepChange"/>);
@@ -3908,7 +3945,8 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Starts changing step <paramref name="index"/> in place (Enter on it in the Clearance list): the step boxes are
     /// loaded kind, then name (listed after the steps before it, <see cref="StepsBeforeEntry"/>), then, for a runway
-    /// crossing, "At" ("(none)" when it names no place); a name or place no longer offered is left unselected. Add Step
+    /// crossing, "At" ("(none)" when it names no place; its own place, listed for the change, when no offered item names
+    /// it, so a made crossing keeps its pin); a name no longer offered is left unselected. Add Step
     /// reads "Replace step N" and focus goes to the name box, whose accessible name says "changing step N", so the screen
     /// reader says it there and nothing is spoken here ([CORE-7]). Enter on another step while one is being changed
     /// starts that one instead, the first kept as it was.
@@ -3933,41 +3971,24 @@ public class TaxiAssistForm : Form
         cmbStepName.Focus();
     }
 
-    /// <summary>The name box's item for <paramref name="step"/>: by its target kind and name, a holding point by its
-    /// node (by its name when its node is no longer listed); -1 when it is not offered.</summary>
+    /// <summary>The name box's item for <paramref name="step"/> (<see cref="ClearanceStepEntry.NameItemMatches"/>: by
+    /// its target kind and name, a holding point by its node only); -1 when it is no longer offered, so Replace says
+    /// "Choose a name first." rather than move the step.</summary>
     private int IndexOfStepNameFor(ClearanceStep step)
-    {
-        if (step.TargetKind == ClearanceTargetKind.HoldingPoint)
-        {
-            int byNode = step.NodeId == 0 ? -1 : IndexOfStepName(i => i.Kind == ClearanceTargetKind.HoldingPoint
-                && i.HoldingPoint?.NodeId == step.NodeId);
-            if (byNode >= 0) return byNode;
-        }
-        return IndexOfStepName(i => i.Kind == step.TargetKind
-            && string.Equals(i.Name, step.Name, StringComparison.OrdinalIgnoreCase));
-    }
+        => IndexOfStepName(i => ClearanceStepEntry.NameItemMatches(i, step));
 
-    /// <summary>The "At" box's item for a runway crossing: "(none)" when the step names no place; a taxiway by its label;
-    /// a holding point by its name (labelled with <see cref="CrossAtHoldPointSuffix"/>) or its node. A step pinned to a
-    /// holding point's node never matches a taxiway of the same name. -1 when the place is no longer offered.</summary>
+    /// <summary>The "At" box's item for a runway crossing: "(none)" when the step names no place; else an item a pick of
+    /// which rebuilds the same place (<see cref="ClearanceStepEntry.AtItemMatches"/>), or the step's own place listed for
+    /// the change (<see cref="_changingOwnAtLabel"/>; only ever set for the step being changed). -1 when none names it.</summary>
     private int IndexOfStepAtFor(ClearanceStep step)
     {
         if (string.IsNullOrEmpty(step.At)) return cmbStepAt.Items.IndexOf(ClearanceStepEntry.NoAtPlace);
-        bool pinnedToPoint = step.AtNodeId != 0 && !step.AtNodeIsPassedStop && !step.AtNodeIsReach;
         for (int i = 0; i < cmbStepAt.Items.Count; i++)
         {
             string label = cmbStepAt.Items[i]?.ToString() ?? "";
-            if (label == ClearanceStepEntry.NoAtPlace) continue;
-            if (_crossAtHoldPoints.TryGetValue(label, out var point))
-            {
-                if (string.Equals(point.Name, step.At, StringComparison.OrdinalIgnoreCase)
-                    || (step.AtNodeId != 0 && point.NodeId == step.AtNodeId))
-                    return i;
-            }
-            else if (!pinnedToPoint && string.Equals(label, step.At, StringComparison.OrdinalIgnoreCase))
-            {
-                return i;
-            }
+            if (label == _changingOwnAtLabel) return i;
+            _crossAtHoldPoints.TryGetValue(label, out var point);
+            if (ClearanceStepEntry.AtItemMatches(label, point, step)) return i;
         }
         return -1;
     }
@@ -3989,16 +4010,15 @@ public class TaxiAssistForm : Form
             return;
         }
 
-        var name = cmbStepName.SelectedItem as ClearanceNameLists.Item;
-        string? refusal = ClearanceStepEntry.Refusal(name);
+        string? refusal = ClearanceStepEntry.Refusal(cmbStepName.SelectedItem as ClearanceNameLists.Item);
         if (refusal != null)
         {
             SpeakStepBlockNow(refusal);
             return;
         }
 
-        var rebuilt = StepFromBoxes(name!);
-        if (!ClearanceStepEntry.SameAsEntered(_steps[index], rebuilt))
+        var (rebuilt, same) = RebuildStepBeingChanged();
+        if (!same && rebuilt != null)
         {
             if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);
             _steps[index] = rebuilt;
@@ -4041,6 +4061,7 @@ public class TaxiAssistForm : Form
     private void EndStepChange()
     {
         _changingStepIndex = -1;
+        _changingOwnAtLabel = null;
         btnAddStep.Text = _addStepText;
         btnAddStep.AccessibleName = _addStepName;
         btnAddStep.AccessibleDescription = _addStepDescription;
@@ -4640,10 +4661,7 @@ public class TaxiAssistForm : Form
         // which would close the change itself and lose what the pilot was entering.
         if (_changingStepIndex >= 0)
         {
-            var rebuilt = cmbStepName.SelectedItem is ClearanceNameLists.Item picked ? StepFromBoxes(picked) : null;
-            bool same = rebuilt != null && _changingStepIndex < _steps.Count
-                && ClearanceStepEntry.SameAsEntered(_steps[_changingStepIndex], rebuilt);
-            if (!same)
+            if (!RebuildStepBeingChanged().Same)
             {
                 RefuseCalculate(ClearanceStepEntry.StillChanging(_changingStepIndex + 1));
                 return;

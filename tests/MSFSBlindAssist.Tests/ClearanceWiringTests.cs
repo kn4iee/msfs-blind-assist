@@ -523,11 +523,43 @@ public class ClearanceWiringTests
         // The name box says which step it is changing, whatever kind is picked while the change is open.
         Assert.Contains("ClearanceStepEntry.NameBoxAccessibleName(kind, _changingStepIndex + 1)",
             Member(form, "private void RefreshStepNameList("));
-        // A holding point is found by its node, an At holding point by its label or node.
-        Assert.Contains("i.HoldingPoint?.NodeId == step.NodeId", Member(form, "private int IndexOfStepNameFor("));
+        // The name item and the At item are found by the pure matchers (ClearanceStepEntryTests): a holding point by its
+        // node only, an At item only when picking it rebuilds the same place, or the step's own place (fix round 1).
+        string nameFor = Member(form, "private int IndexOfStepNameFor(");
+        Assert.Contains("IndexOfStepName(i => ClearanceStepEntry.NameItemMatches(i, step))", nameFor);
+        Assert.DoesNotContain("string.Equals(i.Name", nameFor);
         string atFor = Member(form, "private int IndexOfStepAtFor(");
-        Assert.Contains("_crossAtHoldPoints.TryGetValue(label, out var point)", atFor);
-        Assert.Contains("point.NodeId == step.AtNodeId", atFor);
+        Assert.Contains("if (label == _changingOwnAtLabel) return i;", atFor);
+        Assert.Contains("ClearanceStepEntry.AtItemMatches(label, point, step)", atFor);
+    }
+
+    // Task 2 fix round 1 (Review Focus 3): a crossing made at a holding point now behind the aircraft is never offered its
+    // place again, and the boxes rebuilt it with none: the pin went and the next Calculate cleared the crossing back. While
+    // a runway Cross step is being changed and its own place is not offered, the At box lists that place (for the step's
+    // runway only), the change loads with it selected, and picking it rebuilds the step with its old place, so Replace
+    // keeps the old record. Replace and Calculate's refusal compare through ONE helper.
+    [Fact]
+    public void The_At_box_lists_the_own_place_of_the_step_being_changed()
+    {
+        string form = FormSource();
+        string at = Member(form, "private void RefreshStepAtList(");
+        int cleared = at.IndexOf("_changingOwnAtLabel = null;", StringComparison.Ordinal);
+        int points = at.IndexOf("_crossAtHoldPoints.TryAdd(label, hp)", StringComparison.Ordinal);
+        int own = at.IndexOf("ClearanceStepEntry.OwnPlaceLabel(changing, pickedRunway, placeOffered: IndexOfStepAtFor(changing) >= 0,", StringComparison.Ordinal);
+        int added = at.IndexOf("_changingOwnAtLabel = ownLabel;", StringComparison.Ordinal);
+        int kept = at.IndexOf("int kept = previous == null ? -1 : cmbStepAt.Items.IndexOf(previous);", StringComparison.Ordinal);
+        Assert.True(cleared >= 0 && points > cleared && own > points && added > own && kept > added,
+            "the own place is judged after the offered places are listed, and kept by a refill");
+        Assert.Contains("ClearanceStepEntry.PlaceIsHoldingPoint(changing,", at);
+        Assert.Contains("_changingOwnAtLabel = null;", Member(form, "private void EndStepChange("));
+
+        Assert.Contains("ClearanceStepEntry.BuildForChange(SelectedStepKind(), name, atLabel, atPoint, _steps[_changingStepIndex], _changingOwnAtLabel)",
+            Member(form, "private ClearanceStep StepFromBoxes("));
+
+        // One rebuild-and-compare for Replace and for Calculate's refusal.
+        Assert.Single(Regex.Matches(form, @"ClearanceStepEntry\.SameAsEntered\("));
+        Assert.Contains("ClearanceStepEntry.SameAsEntered(_steps[_changingStepIndex], rebuilt)",
+            Member(form, "private (ClearanceStep? Rebuilt, bool Same) RebuildStepBeingChanged("));
     }
 
     // Stage 4, D2: while a step is being changed the name box lists from the steps BEFORE it (its step above, its last
@@ -565,8 +597,9 @@ public class ClearanceWiringTests
         Assert.True(open >= 0 && replace > open && append > replace, "an open change is replaced, never appended");
 
         string body = Member(form, "private void ReplaceStepFromInputs(");
-        int refusal = body.IndexOf("ClearanceStepEntry.Refusal(name)", StringComparison.Ordinal);
-        int same = body.IndexOf("ClearanceStepEntry.SameAsEntered(_steps[index], rebuilt)", StringComparison.Ordinal);
+        int refusal = body.IndexOf("ClearanceStepEntry.Refusal(cmbStepName.SelectedItem as ClearanceNameLists.Item)", StringComparison.Ordinal);
+        int same = body.IndexOf("var (rebuilt, same) = RebuildStepBeingChanged();", StringComparison.Ordinal);
+        Assert.Contains("if (!same && rebuilt != null)", body);
         int removed = body.IndexOf("if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);", StringComparison.Ordinal);
         int written = body.IndexOf("_steps[index] = rebuilt;", StringComparison.Ordinal);
         int origin = body.IndexOf("_stepOrigins[index] = -1;", StringComparison.Ordinal);
@@ -652,7 +685,7 @@ public class ClearanceWiringTests
     {
         string calculate = Member(FormSource(), "private void OnCalculateClicked(");
         int open = calculate.IndexOf("if (_changingStepIndex >= 0)", StringComparison.Ordinal);
-        int same = calculate.IndexOf("ClearanceStepEntry.SameAsEntered(", StringComparison.Ordinal);
+        int same = calculate.IndexOf("if (!RebuildStepBeingChanged().Same)", StringComparison.Ordinal);
         int refuse = calculate.IndexOf("RefuseCalculate(ClearanceStepEntry.StillChanging(_changingStepIndex + 1));", StringComparison.Ordinal);
         int closed = calculate.IndexOf("CancelStepChange(false);", StringComparison.Ordinal);
         int trim = calculate.IndexOf("TrimStepsToWhatIsAhead();", StringComparison.Ordinal);

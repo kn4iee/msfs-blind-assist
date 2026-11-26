@@ -103,8 +103,8 @@ public static class ClearanceStepEntry
     public static string ReplaceButtonName(int number)
         => "Replace step " + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>Spoken when the window is left, or another step asked for, with step <paramref name="number"/>
-    /// still being changed.</summary>
+    /// <summary>Spoken when Calculate is pressed with step <paramref name="number"/> still being changed and the boxes
+    /// holding something other than that step (Calculate refuses and changes nothing).</summary>
     public static string StillChanging(int number)
         => "Step " + number.ToString(System.Globalization.CultureInfo.InvariantCulture)
            + " is still being changed. Press Enter to replace it, or Escape to keep it.";
@@ -127,6 +127,93 @@ public static class ClearanceStepEntry
                 || string.Equals(entered.At ?? "", rebuilt.At ?? "", StringComparison.OrdinalIgnoreCase))
             && (entered.TargetKind != ClearanceTargetKind.HoldingPoint || entered.NodeId == rebuilt.NodeId);
     }
+
+    /// <summary>
+    /// Whether a name box item is the name of <paramref name="step"/>, the step being changed: a holding point by its node
+    /// only (a point of the same name at another node is another place, and a pick of it would move the hold with the
+    /// same read-back); anything else by its kind and name (ordinal, case ignored).
+    /// </summary>
+    public static bool NameItemMatches(ClearanceNameLists.Item item, ClearanceStep step)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(step);
+        if (item.Kind != step.TargetKind) return false;
+        if (step.TargetKind == ClearanceTargetKind.HoldingPoint)
+            return step.NodeId != 0 && item.HoldingPoint?.NodeId == step.NodeId;
+        return string.Equals(item.Name, step.Name, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether an "At" box item names the place of <paramref name="step"/>, a runway crossing being changed: only when
+    /// a pick of it rebuilds the same place (<see cref="SameAsEntered"/>): a holding point (<paramref name="point"/>, the
+    /// box's point for the label) by its name; a taxiway by its label, unless the step is pinned to a holding point's node
+    /// (a taxiway of the same name is another place). Never <see cref="NoAtPlace"/>.
+    /// </summary>
+    public static bool AtItemMatches(string label, NamedHoldingPoint? point, ClearanceStep step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        if (string.IsNullOrEmpty(step.At) || string.IsNullOrEmpty(label) || label == NoAtPlace) return false;
+        if (point != null) return string.Equals(point.Name, step.At, StringComparison.OrdinalIgnoreCase);
+        return !PinnedToHoldingPoint(step) && string.Equals(label, step.At, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a runway crossing's place (<see cref="ClearanceStep.At"/>) is a holding point: pinned to one's node, or,
+    /// for a crossing already made (its node then the stop it passed), named like one of the airport's holding points
+    /// (<paramref name="holdingPointNames"/>) and like none of its taxiways (<paramref name="taxiwayNames"/>).
+    /// </summary>
+    public static bool PlaceIsHoldingPoint(ClearanceStep step, IEnumerable<string> taxiwayNames, IEnumerable<string> holdingPointNames)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        if (string.IsNullOrEmpty(step.At)) return false;
+        if (PinnedToHoldingPoint(step)) return true;
+        return !taxiwayNames.Any(n => string.Equals(n, step.At, StringComparison.OrdinalIgnoreCase))
+            && holdingPointNames.Any(n => string.Equals(n, step.At, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The "At" box's item for the place of <paramref name="changing"/>, the runway crossing being changed, when no item
+    /// offered names it (<paramref name="placeOffered"/> false): the box lists only the places on the aircraft's side,
+    /// so a crossing made at a holding point now behind the aircraft is never offered its place again, and rebuilt with
+    /// none it would lose its pin and clear the crossing back at the next Calculate. Labelled as the box labels a place:
+    /// the taxiway's name, or the holding point's with <see cref="HoldShortTargetList.HoldingPointSuffix"/>. Null when
+    /// nothing is added: not a runway crossing, no place, another runway chosen in the name box
+    /// (<paramref name="chosenRunway"/>), or the place offered.
+    /// </summary>
+    public static string? OwnPlaceLabel(ClearanceStep changing, string? chosenRunway, bool placeOffered, bool placeIsHoldingPoint)
+    {
+        ArgumentNullException.ThrowIfNull(changing);
+        if (placeOffered || changing is not { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }
+            || string.IsNullOrWhiteSpace(changing.At)
+            || !string.Equals(chosenRunway, changing.Name, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return placeIsHoldingPoint ? changing.At + HoldShortTargetList.HoldingPointSuffix : changing.At;
+    }
+
+    /// <summary>
+    /// The step the boxes make while <paramref name="changing"/> is being changed: as <see cref="Build"/>, except that
+    /// its own place (<paramref name="ownPlaceLabel"/>, from <see cref="OwnPlaceLabel"/>) picked in the "At" box with the
+    /// same runway rebuilds the crossing with the old step's place (its At and AtNodeId), so <see cref="SameAsEntered"/>
+    /// holds and the window keeps the old record, with its pins and origin.
+    /// </summary>
+    public static ClearanceStep BuildForChange(ClearanceStepKind kind, ClearanceNameLists.Item name, string? atLabel,
+        NamedHoldingPoint? atPoint, ClearanceStep changing, string? ownPlaceLabel)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(changing);
+        if (ownPlaceLabel != null && atLabel == ownPlaceLabel && kind == ClearanceStepKind.Cross
+            && name.Kind == ClearanceTargetKind.Runway
+            && changing is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }
+            && string.Equals(name.Name, changing.Name, StringComparison.OrdinalIgnoreCase))
+            return new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, name.Name,
+                At: changing.At, AtNodeId: changing.AtNodeId);
+        return Build(kind, name, atLabel, atPoint);
+    }
+
+    // A crossing cleared at a holding point carries its node; a crossing already made carries the stop it passed (or
+    // the reach) there instead.
+    private static bool PinnedToHoldingPoint(ClearanceStep step)
+        => step.AtNodeId != 0 && !step.AtNodeIsPassedStop && !step.AtNodeIsReach;
 
     /// <summary>The name box's accessible description for a kind.</summary>
     public static string NameBoxDescription(ClearanceStepKind kind) => kind switch

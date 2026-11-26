@@ -65,6 +65,113 @@ public class ClearanceStepEntryTests
             ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), "P")));
     }
 
+    // A crossing already made, pinned by the trim (ClearanceTrim's PinnedToMadeCrossing): its place, holding point B3, its
+    // node the stop it passed.
+    private static readonly ClearanceStep MadeAtB3 = new(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "24L",
+        At: "B3", AtNodeId: 9, AtNodeIsPassedStop: true);
+
+    // Task 2 fix round 1 (Review Focus 3): once across, the At box lists only holding points on the aircraft's side, so a
+    // crossing made at B3 is never offered B3 again; without its own place the boxes rebuilt "Cross runway 24L" with no
+    // place, the pin was lost, and the next Calculate cleared the crossing back. While the step is being changed and the
+    // name box still holds its runway, the box lists the step's own place, labelled as the box labels it.
+    [Fact]
+    public void OwnPlaceLabel_lists_the_place_of_the_step_being_changed_when_it_is_not_offered()
+    {
+        Assert.Equal("B3 (holding point)", ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, "24L", placeOffered: false, placeIsHoldingPoint: true));
+        Assert.Equal("B3", ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, "24l", placeOffered: false, placeIsHoldingPoint: false));
+        // Offered already, another runway chosen, no place, not a runway crossing: nothing added.
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, "24L", placeOffered: true, placeIsHoldingPoint: true));
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, "06", placeOffered: false, placeIsHoldingPoint: true));
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, null, placeOffered: false, placeIsHoldingPoint: true));
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(MadeAtB3 with { At = null }, "24L", placeOffered: false, placeIsHoldingPoint: false));
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "24L",
+            At: "B3", AtNodeId: 9), "24L", placeOffered: false, placeIsHoldingPoint: true));
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Taxiway, "24L"),
+            "24L", placeOffered: false, placeIsHoldingPoint: false));
+    }
+
+    [Fact]
+    public void Picking_the_steps_own_place_rebuilds_it_with_its_place_so_the_record_is_kept()
+    {
+        string own = ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, "24L", placeOffered: false, placeIsHoldingPoint: true)!;
+        var rebuilt = ClearanceStepEntry.BuildForChange(ClearanceStepKind.Cross, Runway("24L"), own, null, MadeAtB3, own);
+        Assert.Equal("B3", rebuilt.At);
+        Assert.Equal(9, rebuilt.AtNodeId);
+        Assert.True(ClearanceStepEntry.SameAsEntered(MadeAtB3, rebuilt));
+        // The plain build of the same picks, what the window did before: the place is lost.
+        Assert.False(ClearanceStepEntry.SameAsEntered(MadeAtB3, ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), null)));
+
+        // Any other pick builds as Add Step does.
+        Assert.Equal(ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), "C"),
+            ClearanceStepEntry.BuildForChange(ClearanceStepKind.Cross, Runway("24L"), "C", null, MadeAtB3, own));
+        Assert.Equal(ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), ClearanceStepEntry.NoAtPlace),
+            ClearanceStepEntry.BuildForChange(ClearanceStepKind.Cross, Runway("24L"), ClearanceStepEntry.NoAtPlace, null, MadeAtB3, own));
+        Assert.Equal(ClearanceStepEntry.Build(ClearanceStepKind.Via, Taxiway("D")),
+            ClearanceStepEntry.BuildForChange(ClearanceStepKind.Via, Taxiway("D"), null, null, MadeAtB3, own));
+        // Another runway never keeps the old step's place (the box offers that place only for the step's own runway).
+        var otherRunway = ClearanceStepEntry.BuildForChange(ClearanceStepKind.Cross, Runway("06"), own, null, MadeAtB3, own);
+        Assert.Equal("06", otherRunway.Name);
+        Assert.Equal(0, otherRunway.AtNodeId);
+        // No own place listed: as Add Step.
+        Assert.Equal(ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), null),
+            ClearanceStepEntry.BuildForChange(ClearanceStepKind.Cross, Runway("24L"), null, null, MadeAtB3, null));
+    }
+
+    [Fact]
+    public void A_crossings_place_is_a_holding_point_when_pinned_to_one_or_named_only_like_one()
+    {
+        string[] taxiways = { "B", "B3", "C" };
+        string[] points = { "B3", "K2" };
+        // Pinned to a holding point's node.
+        Assert.True(ClearanceStepEntry.PlaceIsHoldingPoint(
+            new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "24L", At: "B3", AtNodeId: 4), taxiways, points));
+        // A crossing made: its node is the stop passed, so the name decides; a taxiway's name stays a taxiway.
+        Assert.True(ClearanceStepEntry.PlaceIsHoldingPoint(MadeAtB3 with { At = "k2" }, taxiways, points));
+        Assert.False(ClearanceStepEntry.PlaceIsHoldingPoint(MadeAtB3, taxiways, points));
+        Assert.False(ClearanceStepEntry.PlaceIsHoldingPoint(MadeAtB3 with { At = "C" }, taxiways, points));
+        Assert.False(ClearanceStepEntry.PlaceIsHoldingPoint(MadeAtB3 with { At = null }, taxiways, points));
+    }
+
+    // Task 2 fix round 1 (spec): a name no longer offered is left unselected. A holding point is found by its node only,
+    // never by its name: a point of the same name at another node would move the hold with the same read-back.
+    [Fact]
+    public void A_steps_name_item_is_a_holding_point_by_its_node_only()
+    {
+        var atNode7 = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort,
+            new ClearanceNameLists.Item("L2 (holding point)", ClearanceTargetKind.HoldingPoint, "L2", Point("L2", 7)));
+        Assert.True(ClearanceStepEntry.NameItemMatches(
+            new ClearanceNameLists.Item("L2 (holding point)", ClearanceTargetKind.HoldingPoint, "L2", Point("L2", 7)), atNode7));
+        Assert.False(ClearanceStepEntry.NameItemMatches(
+            new ClearanceNameLists.Item("L2 (holding point)", ClearanceTargetKind.HoldingPoint, "L2", Point("L2", 8)), atNode7));
+        Assert.True(ClearanceStepEntry.NameItemMatches(
+            new ClearanceNameLists.Item("L2A (holding point)", ClearanceTargetKind.HoldingPoint, "L2A", Point("L2A", 7)), atNode7));
+        Assert.False(ClearanceStepEntry.NameItemMatches(Taxiway("L2"), atNode7));
+
+        var viaC = ClearanceStepEntry.Build(ClearanceStepKind.Via, Taxiway("C"));
+        Assert.True(ClearanceStepEntry.NameItemMatches(Taxiway("c"), viaC));
+        Assert.False(ClearanceStepEntry.NameItemMatches(Runway("C"), viaC));
+        Assert.True(ClearanceStepEntry.NameItemMatches(Runway("24L"),
+            ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("24L"))));
+    }
+
+    // An "At" item names the step's place only when picking it rebuilds the same place (SameAsEntered holds): a holding
+    // point by its name, a taxiway by its label unless the step is pinned to a holding point's node.
+    [Fact]
+    public void An_At_item_names_the_steps_place_only_when_picking_it_rebuilds_the_same_place()
+    {
+        var atTaxiwayB3 = ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), "B3");
+        var atPointB3 = ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), "B3 (holding point)", Point("B3", 4));
+        Assert.True(ClearanceStepEntry.AtItemMatches("b3", null, atTaxiwayB3));
+        Assert.False(ClearanceStepEntry.AtItemMatches("B3", null, atPointB3));
+        Assert.True(ClearanceStepEntry.AtItemMatches("B3 (holding point)", Point("B3", 4), atPointB3));
+        // The same node renamed is another place: picking it would rebuild another name.
+        Assert.False(ClearanceStepEntry.AtItemMatches("B3A (holding point)", Point("B3A", 4), atPointB3));
+        // A crossing made at B3: its node is the stop passed, so a taxiway B3 still names it.
+        Assert.True(ClearanceStepEntry.AtItemMatches("B3", null, MadeAtB3));
+        Assert.True(ClearanceStepEntry.AtItemMatches("B3 (holding point)", Point("B3", 12), MadeAtB3));
+        Assert.False(ClearanceStepEntry.AtItemMatches(ClearanceStepEntry.NoAtPlace, null, MadeAtB3));
+    }
+
     [Fact]
     public void Replace_texts()
     {
