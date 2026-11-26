@@ -4847,11 +4847,15 @@ public partial class TaxiGuidanceManager : IDisposable
     /// <summary>
     /// How far along the clearance the window last calculated the aircraft is, for
     /// <see cref="Navigation.ClearanceTrim.Remaining"/>, numbered as that step list was
-    /// (<see cref="Navigation.ClearanceProgressState.Report"/>): the Via steps behind (from the aircraft's last
-    /// position, <see cref="Navigation.ClearanceTrim.ViaStepsDone"/> over the sequence as loaded), the crossings it
-    /// entered still in force, used or put back, the pilot's own stops passed, and whether the turn onto the first
-    /// remaining taxiway is made: the aircraft is on that taxiway past the route's first segment (a turn at the
-    /// first node is excluded, as <c>TurnPickCarryOver.BlocksToKeep</c> excludes it). Nothing when there is no route.
+    /// (<see cref="Navigation.ClearanceProgressState.Report"/>): the Via steps behind
+    /// (<see cref="Navigation.ClearanceTrim.ViaStepsDone"/> over the sequence as loaded: counted on the route by its segment
+    /// cursor, <see cref="Navigation.ClearanceTrim.ViaStepsDoneOnRoute"/>, from the row the route was built from; for a route
+    /// built from the whole sequence that count alone, so a repeated taxiway ("A, C, A") is counted too; for a recalculated
+    /// one the lower of it and the aircraft's last position; with no sequence of its own, the position alone), the
+    /// crossings it entered still in force, used or put back, the pilot's own stops passed, and whether the turn onto the
+    /// first remaining taxiway is made: the aircraft is on that taxiway past the route's first segment, judged where it
+    /// stands (one segment back while holding short), or the turn was made on a route a recalculation replaced (a turn at
+    /// the first node is excluded, as <c>TurnPickCarryOver.BlocksToKeep</c> excludes it). Nothing when there is no route.
     /// Call it after marshalling to the UI thread, never inside a guidance event's handler: it takes the lock.
     /// </summary>
     public Navigation.ClearanceProgress GetClearanceProgress()
@@ -4873,12 +4877,14 @@ public partial class TaxiGuidanceManager : IDisposable
             // later one the route only passes near (C crossing B before the turn onto A, a stand beside C). A row is
             // done only once the next row's run starts at or before the cursor, counted from the row this route was
             // built from (a recalculated route holds the rows still ahead); the position decides alone only when the
-            // route was built from no sequence.
+            // route was built from no sequence. A route built from the whole sequence counts by its cursor alone: the
+            // position counts nothing on a repeated taxiway ("A, C, A" on the last A), and a Calculate there then looped
+            // back through C. A recalculated route's first row came from that same position lookup, so the lower stays.
             int firstRow = _clearanceProgress.RouteFirstRow;
             var suffix = firstRow >= 0 && firstRow < sequence.Count ? sequence.Skip(firstRow).ToList() : new List<string>();
             int? routeDone = Navigation.ClearanceTrim.ViaStepsDoneOnRoute(firstRow, sequence.Count,
                 row => FindTaxiwayRunStart(route, suffix, row - firstRow, sequence[row]), _currentSegmentIndex);
-            int done = Navigation.ClearanceTrim.ViaStepsDone(sequence, remaining, routeDone);
+            int done = Navigation.ClearanceTrim.ViaStepsDone(sequence, remaining, routeDone, routeFromWholeSequence: firstRow == 0);
             // The turn onto that row's taxiway is behind once the aircraft is on it past the route's first segment, judged
             // where it stands (one segment back while holding short: the hold has already moved the cursor past the
             // stop, onto the taxiway it is holding short of), or was made on a route a recalculation replaced

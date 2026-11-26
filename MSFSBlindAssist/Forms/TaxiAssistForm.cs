@@ -4030,8 +4030,10 @@ public class TaxiAssistForm : Form
     /// from one already trimmed, with <c>GetClearanceProgress</c>'s lists passed straight in; then the pilot's edits since
     /// are kept (<see cref="ClearanceTrim.KeepingEdits"/>) and a made crossing a step now follows goes. A turn already
     /// made reads as Via (TurnOntoFirstRemainingMade, the made turns remembered across a recalculation included), so a
-    /// later Calculate never judges it again from the aircraft's heading. With "A, C, A" the progress counts no Via step
-    /// done, so nothing still ahead is dropped; a crossing still ahead is kept (spec 8.3). Run when the window opens and
+    /// later Calculate never judges it again from the aircraft's heading. With "A, C, A" the Via steps done are counted on
+    /// the route by its cursor, so on the last A only that A is left; on a route recalculated from a later row the
+    /// position cannot tell the two A apart, nothing is counted done, and nothing still ahead is dropped; a crossing still
+    /// ahead is kept (spec 8.3). Run when the window opens and
     /// at the top of every Calculate, so the window left open, or come back to by Alt+Tab, never calculates from steps
     /// already finished ("Cross runway 04L" clearing 04L again for the new route, "Left onto C" judged again). Speaks
     /// nothing; returns true when it left a list that had steps empty, for the window opening to say so (Calculate's

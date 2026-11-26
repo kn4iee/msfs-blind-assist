@@ -275,6 +275,38 @@ public class ClearanceProgressTests
         Assert.Equal(new[] { "Via B", "Via A", "Via C" }, remaining.Select(s => s.Sentence()));
     }
 
+    // Final review, Important 2: "A, C, A", the aircraft on the last A. Which run of A it is on cannot be told from its
+    // position, so the position counts nothing, and the lower of the two counts trimmed nothing: a Calculate there built
+    // the route from the first A and looped back through C. A route loaded from the whole sequence (its first row 0) has
+    // its own cursor, which knows A and C are behind, and that count is used. A route recalculated from a later row was
+    // built from the rows the ambiguous position lookup said were ahead, so the lower count (0 here) stays.
+    [Fact]
+    public void A_route_from_the_whole_sequence_counts_a_repeated_taxiway_by_its_cursor()
+    {
+        string[] sequence = { "A", "C", "A" };
+        // On the route: A from segment 0, C from 3, A again from 5; the aircraft on segment 6.
+        int RunStart(int row) => row switch { 0 => 0, 1 => 3, 2 => 5, _ => -1 };
+        int? onRoute = ClearanceTrim.ViaStepsDoneOnRoute(0, sequence.Length, RunStart, cursor: 6);
+        Assert.Equal(2, onRoute);
+
+        Assert.Equal(2, ClearanceTrim.ViaStepsDone(sequence, new[] { "A" }, onRoute, routeFromWholeSequence: true));
+        Assert.Equal(0, ClearanceTrim.ViaStepsDone(sequence, new[] { "A" }, onRoute, routeFromWholeSequence: false));
+        // Such a route's cursor decides alone: a position that over-counts never adds to it, and none yet takes nothing away.
+        Assert.Equal(0, ClearanceTrim.ViaStepsDone(new[] { "B", "A", "C" }, new[] { "C" }, doneOnRoute: 0, routeFromWholeSequence: true));
+        Assert.Equal(1, ClearanceTrim.ViaStepsDone(sequence, null, doneOnRoute: 1, routeFromWholeSequence: true));
+        // A route with no sequence of its own gives no count: the position alone, as before.
+        Assert.Equal(2, ClearanceTrim.ViaStepsDone(new[] { "A", "B", "C" }, new[] { "C" }, doneOnRoute: null, routeFromWholeSequence: true));
+
+        // The list then holds the last A alone, so a Calculate builds the route along it from where the aircraft is.
+        var steps = sequence.Select(n => new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, n)).ToList();
+        var remaining = ClearanceTrim.Remaining(steps,
+            ClearanceTrim.ViaStepsDone(sequence, new[] { "A" }, onRoute, routeFromWholeSequence: true), hasDestination: true,
+            Array.Empty<ClearedCrossing>(), Array.Empty<ClearedCrossing>(), Array.Empty<ClearedCrossing>(),
+            Array.Empty<ClearanceHold>(), false);
+        Assert.Equal(new[] { "Via A" }, remaining.Select(s => s.Sentence()));
+        Assert.Equal(new[] { "A" }, ClearancePlanner.Build(remaining, hasDestination: true).TaxiwaySequence);
+    }
+
     // A recalculated route is built from the rows still ahead (its first row); rows before it were behind when it was
     // built. A row the route does not drive ends the count; with no sequence of its own the route gives nothing to go
     // by, and the position alone decides.

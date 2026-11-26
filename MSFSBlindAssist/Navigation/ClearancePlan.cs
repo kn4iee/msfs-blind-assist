@@ -828,10 +828,17 @@ public static class ClearanceTrim
     /// being flown (<paramref name="doneOnRoute"/>, <see cref="ViaStepsDoneOnRoute"/>): the position finds the LAST
     /// cleared taxiway within 50 m, which can be one the route only passes near (a later taxiway crossing an earlier
     /// one, a stand beside it), and a step still ahead is never done. With no route to go by (null), the position alone.
+    ///
+    /// <para>With <paramref name="routeFromWholeSequence"/> (the route was built from the sequence's first row, so every
+    /// row is counted on it: <c>ClearanceProgressState.RouteFirstRow</c> 0), the route's own count alone: the position
+    /// counts nothing for a repeated taxiway ("A, C, A" on the last A), and the lower of the two then trimmed nothing,
+    /// so a Calculate there looped back through C. A route recalculated from a later row (its first row taken from that
+    /// same ambiguous position lookup) keeps the lower count.</para>
     /// </summary>
     public static int ViaStepsDone(IReadOnlyList<string> originalSequence, IReadOnlyList<string>? remainingSequence,
-        int? doneOnRoute)
+        int? doneOnRoute, bool routeFromWholeSequence = false)
     {
+        if (routeFromWholeSequence && doneOnRoute is int whole) return Math.Max(0, whole);
         int byPosition = ViaStepsDone(originalSequence, remainingSequence);
         return doneOnRoute is int onRoute ? Math.Min(byPosition, Math.Max(0, onRoute)) : byPosition;
     }

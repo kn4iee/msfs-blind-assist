@@ -157,7 +157,8 @@ public class ClearanceWiringTests
         Assert.Contains("Navigation.ClearanceTrim.ViaStepsDoneOnRoute(firstRow, sequence.Count,", progress);
         Assert.Contains("FindTaxiwayRunStart(route, suffix, row - firstRow, sequence[row])", progress);
         Assert.Contains("_currentSegmentIndex)", progress);
-        Assert.Contains("Navigation.ClearanceTrim.ViaStepsDone(sequence, remaining, routeDone)", progress);
+        // Final review, Important 2: a route loaded from the whole sequence counts by its cursor alone ("A, C, A").
+        Assert.Contains("Navigation.ClearanceTrim.ViaStepsDone(sequence, remaining, routeDone, routeFromWholeSequence: firstRow == 0)", progress);
 
         string routing = RoutingSource();
         Assert.Contains("_clearanceProgress = _clearanceProgress.WithPlaced(placedStops) with { RouteFirstRow = taxiwaySequence is { Count: > 0 } ? 0 : -1 };",
