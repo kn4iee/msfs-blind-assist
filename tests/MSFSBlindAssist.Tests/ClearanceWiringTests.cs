@@ -547,7 +547,7 @@ public class ClearanceWiringTests
         int points = at.IndexOf("_crossAtHoldPoints.TryAdd(label, hp)", StringComparison.Ordinal);
         int own = at.IndexOf("ClearanceStepEntry.OwnPlaceLabel(changing, pickedRunway, placeOffered: IndexOfStepAtFor(changing) >= 0,", StringComparison.Ordinal);
         int added = at.IndexOf("_changingOwnAtLabel = ownLabel;", StringComparison.Ordinal);
-        int kept = at.IndexOf("int kept = previous == null ? -1 : cmbStepAt.Items.IndexOf(previous);", StringComparison.Ordinal);
+        int kept = at.IndexOf("cmbStepAt.SelectedIndex = ClearanceStepEntry.AtIndexAfterRefill(", StringComparison.Ordinal);
         Assert.True(cleared >= 0 && points > cleared && own > points && added > own && kept > added,
             "the own place is judged after the offered places are listed, and kept by a refill");
         Assert.Contains("ClearanceStepEntry.PlaceIsHoldingPoint(changing,", at);
@@ -560,6 +560,30 @@ public class ClearanceWiringTests
         Assert.Single(Regex.Matches(form, @"ClearanceStepEntry\.SameAsEntered\("));
         Assert.Contains("ClearanceStepEntry.SameAsEntered(_steps[_changingStepIndex], rebuilt)",
             Member(form, "private (ClearanceStep? Rebuilt, bool Same) RebuildStepBeingChanged("));
+    }
+
+    // Final review, Important 1: every refill of the At box picks its item through ONE pure rule
+    // (ClearanceStepEntry.AtIndexAfterRefill, ClearanceStepEntryTests), so a refill with no pick kept (the name box arrowed
+    // away from the runway and back, a same-airport reload's re-pick) or the own place relabelled goes back to the place
+    // of the crossing being changed, never to "(none)" with Enter then dropping the place and a made crossing's pin. The
+    // own label is read before it is cleared, and the step's place is looked up after its own label is listed.
+    [Fact]
+    public void A_refilled_At_box_goes_back_to_the_place_of_the_step_being_changed()
+    {
+        string form = FormSource();
+        Assert.Contains("cmbStepName.SelectedIndexChanged += (s, e) => { if (!_fillingStepName) RefreshStepAtList(); };", form);
+
+        string at = Member(form, "private void RefreshStepAtList(");
+        int captured = at.IndexOf("string? previousOwnLabel = _changingOwnAtLabel;", StringComparison.Ordinal);
+        int cleared = at.IndexOf("_changingOwnAtLabel = null;", StringComparison.Ordinal);
+        int added = at.IndexOf("_changingOwnAtLabel = ownLabel;", StringComparison.Ordinal);
+        int ownPlace = at.IndexOf("ownPlace = IndexOfStepAtFor(changing);", StringComparison.Ordinal);
+        int select = at.IndexOf("cmbStepAt.SelectedIndex = ClearanceStepEntry.AtIndexAfterRefill(", StringComparison.Ordinal);
+        Assert.True(captured >= 0 && cleared > captured && added > cleared && ownPlace > added && select > ownPlace,
+            "the old own label is read before it is cleared, the step's place found after its own label is listed");
+        Assert.Contains("previous, previousOwnLabel, changing, pickedRunway, ownPlace);", at);
+        Assert.Single(Regex.Matches(at, @"cmbStepAt\.SelectedIndex ="));
+        Assert.DoesNotContain("kept >= 0 ? kept : 0", at);
     }
 
     // Stage 4, D2: while a step is being changed the name box lists from the steps BEFORE it (its step above, its last
@@ -643,6 +667,27 @@ public class ClearanceWiringTests
         Assert.True(ended >= 0 && silent > ended && select > silent && focus > select, "closed, then back to the step");
         Assert.DoesNotContain("_announcer.", cancelBody);
         Assert.DoesNotContain("_steps[", cancelBody);
+    }
+
+    // Final review, minor 1: Escape in an open drop-down list closes the list, as Enter there takes the highlighted item
+    // (OnStepBoxKeyDown): it neither cancels an open change nor closes the window. The form sees the key first
+    // (KeyPreview), so it leaves the key unhandled for the list before anything else.
+    [Fact]
+    public void Escape_in_an_open_drop_down_only_closes_the_list()
+    {
+        string keys = Member(FormSource(), "private void OnFormKeyDown(");
+        int escape = keys.IndexOf("if (e.KeyCode != Keys.Escape) return;", StringComparison.Ordinal);
+        int focused = keys.IndexOf("Control? focused = ActiveControl;", StringComparison.Ordinal);
+        int walk = keys.IndexOf("while (focused is ContainerControl { ActiveControl: { } inner }) focused = inner;", StringComparison.Ordinal);
+        int dropped = keys.IndexOf("if (focused is ComboBox { DroppedDown: true }) return;", StringComparison.Ordinal);
+        int open = keys.IndexOf("if (_changingStepIndex >= 0)", StringComparison.Ordinal);
+        int close = keys.IndexOf("Close();", StringComparison.Ordinal);
+        Assert.True(escape >= 0 && focused > escape && walk > focused && dropped > walk && open > dropped && close > dropped,
+            "an open list is let close before a change is cancelled or the window closed");
+        string beforeTheList = keys[..dropped];
+        Assert.DoesNotContain("e.Handled", beforeTheList);
+        Assert.DoesNotContain("SuppressKeyPress", beforeTheList);
+        Assert.DoesNotContain("CancelStepChange(", beforeTheList);
     }
 
     // Stage 4, D7 and Review Focus 2: anything else that changes the list closes an open change first, silently, so a

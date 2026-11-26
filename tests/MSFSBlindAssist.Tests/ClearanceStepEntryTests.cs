@@ -172,6 +172,75 @@ public class ClearanceStepEntryTests
         Assert.False(ClearanceStepEntry.AtItemMatches(ClearanceStepEntry.NoAtPlace, null, MadeAtB3));
     }
 
+    // Final review, Important 1: the At box set the step's place only as the change opened. Every later refill with no
+    // pick to keep landed on "(none)": the name box arrowed away from 24L and back (how a screen reader browses a closed
+    // list), a same-airport reload's re-pick, or the step's own place relabelled. Enter then rebuilt "Cross runway 24L"
+    // with no place, a new step replaced the old one, and a made crossing lost its pin. With the step's own runway chosen
+    // the box goes back to the step's own place; another runway starts on "(none)".
+    private static readonly string[] AtBoxFor24L = { ClearanceStepEntry.NoAtPlace, "B", "C", "B3 (holding point)" };
+
+    [Fact]
+    public void A_refilled_At_box_goes_back_to_the_place_of_the_crossing_being_changed()
+    {
+        // The same runway picked again, no pick kept: the step's own place (listed for the change at 3).
+        Assert.Equal(3, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, previous: null, previousOwnLabel: "B3 (holding point)",
+            MadeAtB3, chosenRunway: "24L", ownPlaceIndex: 3));
+        Assert.Equal(3, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, MadeAtB3, "24l", 3));
+        // A crossing with no place: its place is "(none)".
+        var noPlace = MadeAtB3 with { At = null, AtNodeId = 0, AtNodeIsPassedStop = false };
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, noPlace, "24L", 0));
+        // Nothing names the place: nothing selected, as when the change opens.
+        Assert.Equal(-1, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, MadeAtB3, "24L", -1));
+        // An empty box selects nothing.
+        Assert.Equal(-1, ClearanceStepEntry.AtIndexAfterRefill(Array.Empty<string>(), null, null, MadeAtB3, "24L", 3));
+    }
+
+    [Fact]
+    public void Another_runway_or_no_runway_crossing_being_changed_starts_the_At_box_on_none()
+    {
+        string[] for06 = { ClearanceStepEntry.NoAtPlace, "B3", "D" };
+        // Another runway: "(none)", even where a taxiway there shares the step's place name.
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(for06, null, "B3 (holding point)", MadeAtB3, "06", ownPlaceIndex: 1));
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(for06, null, null, MadeAtB3, null, 1));
+        // No change open, or the step being changed is no runway crossing: "(none)", as Add Step always did.
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, null, "24L", -1));
+        var viaC = ClearanceStepEntry.Build(ClearanceStepKind.Via, Taxiway("C"));
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, viaC, "24L", 2));
+        var putBack = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "24L", At: "C", AtNodeId: 9);
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, putBack, "24L", 2));
+        // A pick still listed stays, whatever runway.
+        Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(for06, "D", null, MadeAtB3, "06", 1));
+        Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, "C", null, null, "24L", -1));
+    }
+
+    // The step's own place listed as "B3" before the holding points were known reads "B3 (holding point)" once they land
+    // (the box's refresh as focus arrives or its list opens): the pick follows the place to its new label.
+    [Fact]
+    public void The_steps_own_place_picked_follows_it_to_a_new_label()
+    {
+        Assert.Equal(3, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, previous: "B3", previousOwnLabel: "B3",
+            MadeAtB3, "24L", ownPlaceIndex: 3));
+        // Now offered as one of the box's own holding points: that item.
+        string[] offered = { ClearanceStepEntry.NoAtPlace, "B", "B3 (holding point)", "K2 (holding point)" };
+        Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(offered, "B3", "B3", MadeAtB3, "24L", 2));
+        // Even where its old label is still listed as something else: the pick was the step's own place.
+        string[] oldLabelListed = { ClearanceStepEntry.NoAtPlace, "B3", "B3 (holding point)" };
+        Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(oldLabelListed, "B3", "B3", MadeAtB3, "24L", 2));
+    }
+
+    // A pick the pilot made in the At box and still listed stays, "(none)" chosen on purpose included; one no longer
+    // listed gives way to the step's own place.
+    [Fact]
+    public void A_pick_the_pilot_made_in_the_At_box_is_kept_while_it_is_listed()
+    {
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, ClearanceStepEntry.NoAtPlace, "B3 (holding point)",
+            MadeAtB3, "24L", ownPlaceIndex: 3));
+        Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, "C", "B3 (holding point)", MadeAtB3, "24L", 3));
+        Assert.Equal(3, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, "B3 (holding point)", "B3 (holding point)",
+            MadeAtB3, "24L", 3));
+        Assert.Equal(3, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, "D", "B3 (holding point)", MadeAtB3, "24L", 3));
+    }
+
     [Fact]
     public void Replace_texts()
     {

@@ -1104,10 +1104,15 @@ public class TaxiAssistForm : Form
 
     /// <summary>Escape: with a step being changed (Enter on it in the Clearance list), keeps the step as it was and goes
     /// back to it there (<see cref="CancelStepChange"/>); with none, closes the window, as it always has. The form sees
-    /// every key first (KeyPreview), so no control takes the Escape before this.</summary>
+    /// every key first (KeyPreview), so no control takes the Escape before this. In an open drop-down list Escape only
+    /// closes the list, as Enter there takes the highlighted item (<see cref="OnStepBoxKeyDown"/>): it is left to the
+    /// list, so a change stays open and the window with it.</summary>
     private void OnFormKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.KeyCode != Keys.Escape) return;
+        Control? focused = ActiveControl;
+        while (focused is ContainerControl { ActiveControl: { } inner }) focused = inner;
+        if (focused is ComboBox { DroppedDown: true }) return;
         if (_changingStepIndex >= 0)
         {
             e.Handled = true;
@@ -3603,12 +3608,16 @@ public class TaxiAssistForm : Form
     /// crossed on the aircraft's side (never one read from a sign, [HLD-18]). While a runway crossing is being changed
     /// with its own runway chosen, its own place follows when none of those names it
     /// (<see cref="ClearanceStepEntry.OwnPlaceLabel"/>): a crossing made at a holding point now behind the aircraft keeps
-    /// its place and pin. A new runway starts at "(none)"; <paramref name="keepSelection"/> (the box's own refresh when
-    /// focus arrives or its list opens) keeps the pick by its label when it is still offered.
+    /// its place and pin. <paramref name="keepSelection"/> (the box's own refresh when focus arrives or its list opens)
+    /// keeps the pick by its label when it is still offered. Otherwise, and when that pick was the step's own place under
+    /// a label since changed, the crossing being changed gets its own place back with its own runway chosen (arrowing the
+    /// name box away and back, a re-pick after a reload); a new runway starts at "(none)"
+    /// (<see cref="ClearanceStepEntry.AtIndexAfterRefill"/>).
     /// </summary>
     private void RefreshStepAtList(bool keepSelection = false)
     {
         string? previous = keepSelection ? cmbStepAt.SelectedItem?.ToString() : null;
+        string? previousOwnLabel = _changingOwnAtLabel;
         Runway? runway = null;
         string? pickedRunway = (cmbStepName.SelectedItem as ClearanceNameLists.Item)?.Name;
         bool show = SelectedStepKind() == ClearanceStepKind.Cross
@@ -3638,9 +3647,11 @@ public class TaxiAssistForm : Form
                 }
 
                 // The place of the crossing being changed, when nothing above names it (judged on the items as listed).
+                ClearanceStep? changing = null;
+                int ownPlace = -1;
                 if (_changingStepIndex >= 0 && _changingStepIndex < _steps.Count)
                 {
-                    var changing = _steps[_changingStepIndex];
+                    changing = _steps[_changingStepIndex];
                     string? ownLabel = ClearanceStepEntry.OwnPlaceLabel(changing, pickedRunway, placeOffered: IndexOfStepAtFor(changing) >= 0,
                         ClearanceStepEntry.PlaceIsHoldingPoint(changing, _graph?.GetAllTaxiwayNames() ?? new List<string>(),
                             _namedHoldingPoints.Select(p => p.Name)));
@@ -3649,9 +3660,12 @@ public class TaxiAssistForm : Form
                         cmbStepAt.Items.Add(ownLabel);
                         _changingOwnAtLabel = ownLabel;
                     }
+                    // Read by AtIndexAfterRefill only with the step's own runway chosen.
+                    ownPlace = IndexOfStepAtFor(changing);
                 }
-                int kept = previous == null ? -1 : cmbStepAt.Items.IndexOf(previous);
-                cmbStepAt.SelectedIndex = kept >= 0 ? kept : 0;
+                var labels = cmbStepAt.Items.Cast<object>().Select(item => item?.ToString() ?? "").ToList();
+                cmbStepAt.SelectedIndex = ClearanceStepEntry.AtIndexAfterRefill(labels,
+                    previous, previousOwnLabel, changing, pickedRunway, ownPlace);
             }
         }
         finally { cmbStepAt.EndUpdate(); }

@@ -210,6 +210,33 @@ public static class ClearanceStepEntry
         return Build(kind, name, atLabel, atPoint);
     }
 
+    /// <summary>
+    /// The "At" box's item to select after a refill of <paramref name="items"/>. A pick still listed stays
+    /// (<paramref name="previous"/>, null when the refill keeps none), "(none)" chosen on purpose included. While
+    /// <paramref name="changing"/>, a runway crossing being changed, has its own runway chosen in the name box
+    /// (<paramref name="chosenRunway"/>), the step's own place (<paramref name="ownPlaceIndex"/>, -1 when nothing names
+    /// it: nothing selected, as when the change opens) is selected when no pick survives, and when the pick was that place
+    /// under the label it was listed by before (<paramref name="previousOwnLabel"/>: "B3", now "B3 (holding point)"). So
+    /// arrowing the name box away from the runway and back, or picking it again after a reload, never drops the place
+    /// (and a made crossing's pin) at the next Enter. Otherwise the first item, "(none)": another runway starts there.
+    /// -1 for an empty box.
+    /// </summary>
+    public static int AtIndexAfterRefill(IReadOnlyList<string> items, string? previous, string? previousOwnLabel,
+        ClearanceStep? changing, string? chosenRunway, int ownPlaceIndex)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count == 0) return -1;
+        int kept = -1;
+        for (int i = 0; previous != null && i < items.Count; i++)
+            if (items[i] == previous) { kept = i; break; }
+
+        bool ownRunway = changing is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }
+            && string.Equals(chosenRunway, changing.Name, StringComparison.OrdinalIgnoreCase);
+        if (!ownRunway) return kept >= 0 ? kept : 0;
+        bool pickedOwnPlace = previous != null && previous == previousOwnLabel;
+        return kept >= 0 && !pickedOwnPlace ? kept : ownPlaceIndex;
+    }
+
     // A crossing cleared at a holding point carries its node; a crossing already made carries the stop it passed (or
     // the reach) there instead.
     private static bool PinnedToHoldingPoint(ClearanceStep step)
