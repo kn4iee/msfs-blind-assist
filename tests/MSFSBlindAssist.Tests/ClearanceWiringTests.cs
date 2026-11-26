@@ -286,7 +286,7 @@ public class ClearanceWiringTests
         Assert.True(show >= 0 && focus > show, "OpenTaxiForm sets the focus after Show()");
 
         // Trimmed from the list as last calculated, with GetClearanceProgress's lists passed straight in.
-        string trim = Member(form, "private void TrimStepsToWhatIsAhead(");
+        string trim = Member(form, "private bool TrimStepsToWhatIsAhead(");
         Assert.Contains("ClearanceTrim.Remaining(_calculatedSteps, progress.ViaStepsDone, _calculatedWithDestination,", trim);
         Assert.Contains("progress.ClearedInForce, progress.ClearedUsed, progress.PutBack, progress.HoldsPassed,", trim);
         Assert.Contains("progress.TurnOntoFirstRemainingMade, out var origins)", trim);
@@ -295,6 +295,31 @@ public class ClearanceWiringTests
         Assert.Contains("TrimStepsToWhatIsAhead()", Member(form, "public void FocusForOpening("));
         // Both successful Calculates record the list they used, after guidance has started.
         Assert.Equal(2, Regex.Matches(form, @"StartGuidance\([^;]*\);\r?\n\s+RecordCalculatedSteps\(hasDestination: (true|false)\);").Count);
+    }
+
+    // Fix round 1, ruling 1: Calculate trims the finished steps first. The window can stay open, or come back by Alt+Tab,
+    // while the aircraft crosses 04L; built from the untrimmed list, "Cross runway 04L" cleared 04L again for the new
+    // route (the KBOS route back over the runway) and "Left onto C" was judged again. The trim keeps a crossing still
+    // ahead (spec 8.3), runs only with a route live and a list calculated (TrimStepsToWhatIsAhead's own guard), and says
+    // nothing at Calculate: the one Calculate utterance stays the only thing said ([HLD-17], [SI-22]).
+    [Fact]
+    public void Calculate_trims_the_finished_steps_before_it_builds_the_plan()
+    {
+        string form = FormSource();
+        string calculate = Member(form, "private void OnCalculateClicked(");
+
+        int cancel = calculate.IndexOf("CancelPendingStepSpeech();", StringComparison.Ordinal);
+        int trim = calculate.IndexOf("TrimStepsToWhatIsAhead();", StringComparison.Ordinal);
+        int build = calculate.IndexOf("ClearancePlanner.Build(_steps, hasDestination, PlanDestinationRunway(hasDestination))", StringComparison.Ordinal);
+        Assert.True(cancel >= 0 && trim > cancel && build > trim, "the list is trimmed before the plan is built from it");
+
+        string trimBody = Member(form, "private bool TrimStepsToWhatIsAhead(");
+        Assert.Contains("if (_calculatedSteps == null || !_guidanceManager.HasLiveRoute) return false;", trimBody);
+        Assert.DoesNotContain("_announcer.", trimBody);
+        Assert.DoesNotContain("SpeakStep", trimBody);
+        // Only the window opening says a trim emptied the list.
+        Assert.Contains("if (TrimStepsToWhatIsAhead()) SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true);",
+            Member(form, "public void FocusForOpening("));
     }
 
     // [A380C-6]: both guidance events arrive on the manager's thread under _stateLock; the window marshals with
@@ -362,18 +387,19 @@ public class ClearanceWiringTests
     }
 
     // Spec 8.2: the list is emptied when the aircraft arrives, when guidance stops and when a leg with no destination
-    // ends; never mid-leg. A queued emptying is skipped when a Calculate has built a list since (its generation), and
-    // when the list holds no leg calculated from it (steps entered after the last leg ended, or before any Calculate:
-    // a taxi-in clearance typed during the landing rollout is for the leg to come).
+    // ends; never mid-leg. A landing ends it too (fix round 1, ruling 2): guidance stops at departure only through
+    // take-off assist, so without it a departure list survived the flight and a departure "Cross runway 22R" cleared
+    // 22R on the taxi-in at the same airport. A queued emptying is skipped when a Calculate has built a list since (its
+    // generation), and when the list holds no leg calculated from it (steps entered after the last leg ended, or before
+    // any Calculate: a taxi-in clearance typed during the landing rollout comes after the event and is for the leg to come).
     [Fact]
     public void A_leg_end_empties_only_the_list_it_was_calculated_from()
     {
         foreach (var state in new[] { Services.TaxiGuidanceState.Arrived, Services.TaxiGuidanceState.Inactive,
-                     Services.TaxiGuidanceState.ProgressiveHold })
+                     Services.TaxiGuidanceState.ProgressiveHold, Services.TaxiGuidanceState.LandingRollout })
             Assert.True(Forms.TaxiAssistForm.EndsTheLeg(state));
         foreach (var state in new[] { Services.TaxiGuidanceState.RouteLoaded, Services.TaxiGuidanceState.Taxiing,
-                     Services.TaxiGuidanceState.HoldShort, Services.TaxiGuidanceState.LiningUp,
-                     Services.TaxiGuidanceState.LandingRollout })
+                     Services.TaxiGuidanceState.HoldShort, Services.TaxiGuidanceState.LiningUp })
             Assert.False(Forms.TaxiAssistForm.EndsTheLeg(state));
 
         Assert.True(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: true));

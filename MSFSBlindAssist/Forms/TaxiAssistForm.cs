@@ -3974,15 +3974,19 @@ public class TaxiAssistForm : Form
             : OpeningFocusTarget.DestinationType;
 
     /// <summary>The guidance states that end the leg a step list was calculated for: the aircraft arrives, guidance
-    /// stops, or a leg with no destination ends (spec 8.2).</summary>
+    /// stops, or a leg with no destination ends (spec 8.2); and a landing begins (LandingRollout): guidance stops at
+    /// departure only through take-off assist, so without it a departure list survived the flight, and a departure
+    /// "Cross runway 22R" cleared 22R on the taxi-in at the same airport.</summary>
     internal static bool EndsTheLeg(TaxiGuidanceState state)
-        => state is TaxiGuidanceState.Arrived or TaxiGuidanceState.Inactive or TaxiGuidanceState.ProgressiveHold;
+        => state is TaxiGuidanceState.Arrived or TaxiGuidanceState.Inactive or TaxiGuidanceState.ProgressiveHold
+            or TaxiGuidanceState.LandingRollout;
 
     /// <summary>
     /// Whether a leg end queued with <paramref name="generationQueued"/> empties the list now: only when no Calculate
     /// has built a list since (<paramref name="generationNow"/> unchanged), and only when the list holds the leg it was
     /// calculated for (<paramref name="listHoldsCalculatedLeg"/>). Steps entered after the last leg ended, or before any
-    /// Calculate (a taxi-in clearance typed during the landing rollout), are for the leg to come and stay.
+    /// Calculate (a taxi-in clearance typed during the landing rollout, after the landing emptied the departure's list),
+    /// are for the leg to come and stay.
     /// </summary>
     internal static bool LegEndEmptiesList(int generationQueued, int generationNow, bool listHoldsCalculatedLeg)
         => generationQueued == generationNow && listHoldsCalculatedLeg;
@@ -3995,7 +3999,11 @@ public class TaxiAssistForm : Form
     {
         bool routeLive = _guidanceManager.HasLiveRoute;
         var target = OpeningFocus(firstShow: _timesShown <= 1, routeLive);
-        if (target == OpeningFocusTarget.StepKind) TrimStepsToWhatIsAhead();
+        // A trim that leaves the list empty is said once, after the screen reader has named the box focus moves to.
+        if (target == OpeningFocusTarget.StepKind)
+        {
+            if (TrimStepsToWhatIsAhead()) SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true);
+        }
         Control control = target switch
         {
             OpeningFocusTarget.Airport => txtAirport,
@@ -4014,12 +4022,15 @@ public class TaxiAssistForm : Form
     /// are kept (<see cref="ClearanceTrim.KeepingEdits"/>) and a made crossing a step now follows goes. A turn already
     /// made reads as Via (TurnOntoFirstRemainingMade, the made turns remembered across a recalculation included), so a
     /// later Calculate never judges it again from the aircraft's heading. With "A, C, A" the progress counts no Via step
-    /// done, so nothing still ahead is dropped. A trim that leaves the list empty says "Steps cleared." once, after the
-    /// screen reader has named the box focus moves to. Nothing to trim when the list holds no leg calculated from it.
+    /// done, so nothing still ahead is dropped; a crossing still ahead is kept (spec 8.3). Run when the window opens and
+    /// at the top of every Calculate, so the window left open, or come back to by Alt+Tab, never calculates from steps
+    /// already finished ("Cross runway 04L" clearing 04L again for the new route, "Left onto C" judged again). Speaks
+    /// nothing; returns true when it left a list that had steps empty, for the window opening to say so (Calculate's
+    /// one utterance says what it does with an empty list). Nothing to trim when the list holds no leg calculated from it.
     /// </summary>
-    private void TrimStepsToWhatIsAhead()
+    private bool TrimStepsToWhatIsAhead()
     {
-        if (_calculatedSteps == null || !_guidanceManager.HasLiveRoute) return;
+        if (_calculatedSteps == null || !_guidanceManager.HasLiveRoute) return false;
         var progress = _guidanceManager.GetClearanceProgress();
         var trimmed = ClearanceTrim.Remaining(_calculatedSteps, progress.ViaStepsDone, _calculatedWithDestination,
             progress.ClearedInForce, progress.ClearedUsed, progress.PutBack, progress.HoldsPassed,
@@ -4028,11 +4039,11 @@ public class TaxiAssistForm : Form
 
         bool hadSteps = _steps.Count > 0;
         bool changed = !steps.SequenceEqual(_steps) || !stepOrigins.SequenceEqual(_stepOrigins);
-        if (!changed) return;
+        if (!changed) return false;
         ShowSteps(steps, stepOrigins);
         DropCompletedCrossings();
         RefreshStepNameList();
-        if (hadSteps && _steps.Count == 0) SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true);
+        return hadSteps && _steps.Count == 0;
     }
 
     /// <summary>Replaces the list and the Clearance list's items with <paramref name="steps"/> and their origins.</summary>
@@ -4080,7 +4091,7 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>The leg the list was calculated for is over: emptied, silently (the manager speaks the arrival, the
-    /// stop or the leg's end), unless a Calculate has built a list since or the list holds no calculated leg
+    /// stop, the leg's end or the touchdown), unless a Calculate has built a list since or the list holds no calculated leg
     /// (<see cref="LegEndEmptiesList"/>). The KBOS route back over 04L came from an entry that outlived its leg.</summary>
     private void EmptyStepsAfterLeg(int generation)
     {
@@ -4362,6 +4373,11 @@ public class TaxiAssistForm : Form
         // A step sentence still waiting (a step added a moment ago) must not land after the one Calculate utterance
         // ([HLD-17], [SI-22]): the clearance it confirms is in what Calculate says.
         CancelPendingStepSpeech();
+
+        // With a route live, the steps already finished go first (spec 8.2), silently: the window may have stayed open,
+        // or come back by Alt+Tab, while the aircraft crossed 04L, and the plan built from the untrimmed list would clear
+        // 04L again for the new route and judge a turn already made again. A crossing still ahead stays (spec 8.3).
+        TrimStepsToWhatIsAhead();
 
         if (_graph == null)
         {
