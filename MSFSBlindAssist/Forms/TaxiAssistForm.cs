@@ -1153,14 +1153,14 @@ public class TaxiAssistForm : Form
         IReadOnlyList<AppliedHoldShort> AppliedHoldShorts,
         IReadOnlyList<string> SkippedHoldShortRunways);
 
-    /// <summary>A hold-short that actually landed on a row: the runway designator
-    /// spelled the way the combo (and therefore the router) spells it, and the
-    /// taxiway whose row carries it.</summary>
+    /// <summary>A hold-short that became a step: the runway designator spelled the way
+    /// the airport's runway list (and therefore the router) spells it, and the taxiway
+    /// whose Via step it follows.</summary>
     public sealed record AppliedHoldShort(string Runway, string AfterTaxiway);
 
     /// <summary>A hold-short from the clearance, tied to the taxiway it FOLLOWS.
     /// TaxiwayIndex indexes the taxiway list passed to ApplyExternalRoute; -1 means
-    /// the clearance named no taxiway ahead of it, so no row can carry it.</summary>
+    /// the clearance named no taxiway ahead of it, so no Via step can carry it.</summary>
     public readonly record struct ExternalHoldShort(int TaxiwayIndex, string Runway);
 
     /// <summary>One destination an external clearance would accept. Callers pass the
@@ -1671,19 +1671,9 @@ public class TaxiAssistForm : Form
         return texts;
     }
 
-    /// <summary>
-    /// The texts of a "Hold short of" combo's items for the RUNWAY match, index for index:
-    /// the runways (and "(none)") are plain text; the taxiways and named holding points
-    /// listed after them are HoldShortTargetList entries and come back EMPTY. Their names
-    /// carry digits ("A12"), and a runway the airport does not list must be reported as not
-    /// found, never matched to one of them and set as that stop.
-    /// </summary>
-    internal static List<string> RunwayItemTexts(IEnumerable<object?> items)
-        => items.Select(item => item as string ?? "").ToList();
-
-    /// <summary>Index of the "Hold short of runway" entry naming this runway, or -1.
+    /// <summary>Index of the entry naming this runway in a list of the airport's runways, or -1.
     /// BOTH sides go through CleanRunway: a clearance always zero-pads ("05L") while
-    /// the combo carries the raw navdata designator, which need not ("5L"). A literal
+    /// the list carries the raw navdata designator, which need not ("5L"). A literal
     /// match silently drops the hold-short ATC just gave.</summary>
     internal static int FindRunwayItemIndex(IReadOnlyList<string> items, string? runway)
     {
@@ -1702,18 +1692,19 @@ public class TaxiAssistForm : Form
         return -1;
     }
 
-    /// <summary>Fills the route fields from an external clearance. Selection is by
-    /// EXACT combo entry — never a substring match, which for a one-character
-    /// taxiway name would hit almost any entry in the list.
+    /// <summary>Fills the route fields from an external clearance: the destination, by
+    /// EXACT combo entry (never a substring match, which for a one-character name would
+    /// hit almost any entry in the list), and the step list (<see cref="BuildImportedSteps"/>),
+    /// added silently and without moving focus.
     ///
     /// An imported route starts from a CLEAN SLATE (ResetRouteShapingControls): a
-    /// leftover intersection departure, CAT III hold or hold-short from a route the
-    /// pilot built by hand would otherwise reshape the imported one with nothing said
-    /// about it.
+    /// leftover intersection departure, CAT III hold or step from a route the pilot
+    /// built by hand would otherwise reshape the imported one with nothing said about it.
+    /// Emptying the list also leaves it holding no calculated leg, so a leg end queued
+    /// before the fill never empties the steps the fill wrote.
     ///
-    /// Each taxiway becomes a Via step and each hold-short a Hold short of runway step
-    /// straight after the taxiway it FOLLOWS in the clearance; anything that could not be
-    /// seated comes back in the outcome so the caller can say so out loud.
+    /// Anything that could not be seated comes back in the outcome so the caller can
+    /// say so out loud.
     ///
     /// This only FILLS the fields. Starting guidance is a separate call
     /// (<see cref="StartImportedRoute"/>) because the caller's summary is built from the
@@ -1740,53 +1731,71 @@ public class TaxiAssistForm : Form
         var appliedHoldShorts = new List<AppliedHoldShort>();
         var skippedHoldShorts = new List<string>();
 
-        // A hold-short the clearance hung on no taxiway at all has no taxiway to follow.
-        // Reported first because it precedes every taxiway in the clearance.
+        // An empty list is the shortest path, as "(None - calculate shortest path)" was.
+        var knownTaxiways = _graph?.GetAllTaxiwayNames() ?? new List<string>();
+        foreach (var step in BuildImportedSteps(taxiways, holdShorts, knownTaxiways, _airportRunwayIds,
+                     applied, skipped, appliedHoldShorts, skippedHoldShorts))
+            AppendStep(step, speak: false);
+
+        return new ExternalRouteOutcome(
+            destinationApplied, applied, skipped, appliedHoldShorts, skippedHoldShorts);
+    }
+
+    /// <summary>
+    /// The steps a SayIntentions fill writes (spec 8.7), in the clearance's order: a Via step for each taxiway the
+    /// airport's graph knows (exact name, as the taxiway lists match it); after it, a "Hold short of runway" step for
+    /// each hold short the clearance hung on that taxiway, in the order given, as many as it gave. A runway is looked
+    /// for among <paramref name="runwayIds"/> ALONE, never among taxiway or holding-point names ("A12" is not runway
+    /// 12), and named as the airport spells it. Skipped, and reported for the summary: a taxiway the airport lacks
+    /// with every hold short hung on it, a hold short hung on no taxiway (listed first: it precedes them all), and one
+    /// whose runway the airport lacks. Never a Cross step (a crossing is cleared only by the pilot) and never a turn
+    /// word (the clearance's are not read, as PR #355's import set every Turn list back to Automatic).
+    /// </summary>
+    internal static List<ClearanceStep> BuildImportedSteps(
+        IReadOnlyList<string> taxiways, IReadOnlyList<ExternalHoldShort> holdShorts,
+        IReadOnlyCollection<string> knownTaxiways, IReadOnlyList<string> runwayIds,
+        List<string> appliedTaxiways, List<string> skippedTaxiways,
+        List<AppliedHoldShort> appliedHoldShorts, List<string> skippedHoldShortRunways)
+    {
+        var steps = new List<ClearanceStep>();
+
         foreach (var holdShort in holdShorts)
         {
             if (holdShort.TaxiwayIndex < 0 || holdShort.TaxiwayIndex >= taxiways.Count)
-                skippedHoldShorts.Add(holdShort.Runway);
+                skippedHoldShortRunways.Add(holdShort.Runway);
         }
 
-        // Interim seating, until BuildImportedSteps replaces it: one Via step per taxiway this
-        // airport's graph knows (exact name, as the taxiway lists matched it), each followed by a
-        // Hold short of runway step for every hold-short the clearance hung on it whose runway
-        // the airport has. Runways are matched against the runway list ONLY, never a taxiway
-        // ("A12" is not runway 12). The fill never enters a crossing or a turn word: a crossing is
-        // cleared only by the pilot. An empty list is the shortest path, as "(None)" was.
-        var knownTaxiways = _graph?.GetAllTaxiwayNames() ?? new List<string>();
         for (int i = 0; i < taxiways.Count; i++)
         {
-            if (!knownTaxiways.Contains(taxiways[i], StringComparer.Ordinal)) { SkipTaxiway(i); continue; }
-
-            AppendStep(new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, taxiways[i]), speak: false);
-            applied.Add(taxiways[i]);
+            bool known = knownTaxiways.Contains(taxiways[i], StringComparer.Ordinal);
+            if (known)
+            {
+                steps.Add(new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, taxiways[i]));
+                appliedTaxiways.Add(taxiways[i]);
+            }
+            else
+            {
+                skippedTaxiways.Add(taxiways[i]);
+            }
 
             foreach (var holdShort in holdShorts)
             {
                 if (holdShort.TaxiwayIndex != i) continue;
 
-                int hsIndex = FindRunwayItemIndex(_airportRunwayIds, holdShort.Runway);
-                if (hsIndex < 0) { skippedHoldShorts.Add(holdShort.Runway); continue; }
+                int runwayIndex = known ? FindRunwayItemIndex(runwayIds, holdShort.Runway) : -1;
+                if (runwayIndex < 0)
+                {
+                    skippedHoldShortRunways.Add(holdShort.Runway);
+                    continue;
+                }
 
-                string runway = _airportRunwayIds[hsIndex];
-                AppendStep(new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, runway), speak: false);
+                string runway = runwayIds[runwayIndex];
+                steps.Add(new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, runway));
                 appliedHoldShorts.Add(new AppliedHoldShort(runway, taxiways[i]));
             }
         }
 
-        return new ExternalRouteOutcome(
-            destinationApplied, applied, skipped, appliedHoldShorts, skippedHoldShorts);
-
-        void SkipTaxiway(int taxiwayIndex)
-        {
-            skipped.Add(taxiways[taxiwayIndex]);
-            foreach (var holdShort in holdShorts)
-            {
-                if (holdShort.TaxiwayIndex == taxiwayIndex)
-                    skippedHoldShorts.Add(holdShort.Runway);
-            }
-        }
+        return steps;
     }
 
     /// <summary>The summary an in-progress import wants spoken, as a function of whether

@@ -15,12 +15,14 @@
 //      a pure function (MatchDestinationLabel) over a list the form snapshots once.
 //
 // The form itself is not constructed here (full WinForms control tree, database and
-// taxi-graph dependencies); seating behavior that needs live combos is verified in
+// taxi-graph dependencies). The steps the fill writes are built by a pure function
+// (BuildImportedSteps) and tested below; seating them in the live window is verified in
 // the sim per the PR's test plan.
 
 using MSFSBlindAssist;
 using MSFSBlindAssist.Database.Models;
 using MSFSBlindAssist.Forms;
+using MSFSBlindAssist.Navigation;
 using MSFSBlindAssist.Services.SayIntentions;
 
 namespace MSFSBlindAssist.Tests;
@@ -220,6 +222,48 @@ public class SayIntentionsExternalRouteTests
         Assert.Equal(3, mapped[1].TaxiwayIndex);
     }
 
+    // "Hold short of runways 4L and 4R": two hold shorts after ONE mention of the taxiway.
+    // Consuming repeats in order sent the second one looking for a later Alpha the clearance
+    // never said, so it was reported as unset; the step list carries both after the same Via step.
+    [Fact]
+    public void Two_hold_shorts_after_one_mention_of_a_taxiway_both_map_to_it()
+    {
+        var (taxiways, holdShorts, _) = MainForm.ParseClearanceTaxiPlan(
+            "Runway 22 taxi via Alpha, hold short of runways 4L and 4R, then Bravo", new[] { "A", "B" });
+
+        var mapped = MainForm.MapHoldShortsToTaxiways(holdShorts, taxiways);
+
+        Assert.Equal(
+            new[] { new TaxiAssistForm.ExternalHoldShort(0, "04L"), new TaxiAssistForm.ExternalHoldShort(0, "04R") },
+            mapped);
+    }
+
+    [Fact]
+    public void A_second_runway_of_one_hold_short_stays_before_a_later_mention_of_the_taxiway()
+    {
+        // Both runways follow the FIRST November; the second November comes after them.
+        var (taxiways, holdShorts, _) = MainForm.ParseClearanceTaxiPlan(
+            "Taxi to runway 22R via November, hold short of runways 15R and 33L, November, Kilo", KnownTaxiways);
+        Assert.Equal(new[] { "N", "N", "K" }, taxiways);
+
+        var mapped = MainForm.MapHoldShortsToTaxiways(holdShorts, taxiways);
+
+        Assert.Equal(new[] { 0, 0 }, mapped.Select(h => h.TaxiwayIndex));
+    }
+
+    [Fact]
+    public void Two_hold_shorts_after_one_mention_both_seat_on_the_ground_track_too()
+    {
+        // The clearance owns the hold shorts on both paths ([SI-16]); on the geometry path the
+        // track's names are what they are mapped onto.
+        var (_, holdShorts, _) = MainForm.ParseClearanceTaxiPlan(
+            "Runway 22 taxi via Alpha, hold short of runways 4L and 4R, then Bravo", new[] { "A", "B" });
+
+        var mapped = MainForm.MapHoldShortsToTaxiways(holdShorts, new[] { "D", "A", "B" });
+
+        Assert.Equal(new[] { 1, 1 }, mapped.Select(h => h.TaxiwayIndex));
+    }
+
     [Fact]
     public void A_hold_short_anchor_matches_its_taxiway_however_the_graph_spaces_it()
     {
@@ -279,25 +323,206 @@ public class SayIntentionsExternalRouteTests
         Assert.Equal(-1, TaxiAssistForm.FindRunwayItemIndex(new[] { "(none)" }, "22"));
     }
 
-    // The same combo lists taxiways and named holding points after the runways, and their
-    // names carry digits too. A runway the airport does not list (SayIntentions and the
-    // scenery often disagree by one renumbering: 12 against 11) must be reported as not
-    // found, never matched to taxiway A12 or holding point B12 and set as that stop. The
-    // combo holds runways as text and the others as entries; only the text is searched.
+    // Taxiways and named holding points carry digits too. A runway the airport does not list
+    // (SayIntentions and the scenery often disagree by one renumbering: 12 against 11) must be
+    // reported as not found, never matched to taxiway A12 or holding point B12 and set as that
+    // stop. The fill matches a hold short against the airport's RUNWAYS alone, never a list that
+    // also holds the taxiway and holding-point names.
     [Fact]
     public void A_runway_the_airport_lacks_never_matches_a_taxiway_or_holding_point()
     {
-        var items = new object[] { "(none)", "11", "29" }
-            .Concat(MSFSBlindAssist.Navigation.HoldShortTargetList.Merge(
-                new[] { "A12" },
-                new[] { new MSFSBlindAssist.Navigation.NamedHoldingPoint { Name = "B12", NodeId = 1 } }))
-            .ToList();
+        var imported = Import(
+            new[] { "A12" },
+            new[] { new TaxiAssistForm.ExternalHoldShort(0, "12"), new TaxiAssistForm.ExternalHoldShort(0, "11") },
+            knownTaxiways: new[] { "A12", "B12" },
+            runwayIds: new[] { "11", "29" });
 
-        var texts = TaxiAssistForm.RunwayItemTexts(items);
+        Assert.Equal(new[] { "Via A12", "Hold short of runway 11" }, Sentences(imported.Steps));
+        Assert.Equal(new[] { "12" }, imported.SkippedHoldShortRunways);
+    }
 
-        Assert.Equal(items.Count, texts.Count);   // indices still line up with the combo
-        Assert.Equal(-1, TaxiAssistForm.FindRunwayItemIndex(texts, "12"));
-        Assert.Equal(1, TaxiAssistForm.FindRunwayItemIndex(texts, "11"));
+    // --- BuildImportedSteps: the fill writes the step list ----------------------------
+    //
+    // Each taxiway the airport has becomes a Via step, and each hold short a "Hold short of
+    // runway" step straight after the taxiway it follows. Nothing else: a crossing is cleared
+    // only by the pilot, and the clearance's turn words are not read (PR #355's import set every
+    // Turn list back to Automatic).
+
+    private static readonly string[] AirportRunways = { "15R", "22R", "33L", "4L", "4R" };
+
+    private sealed record ImportedSteps(
+        List<ClearanceStep> Steps,
+        List<string> AppliedTaxiways,
+        List<string> SkippedTaxiways,
+        List<TaxiAssistForm.AppliedHoldShort> AppliedHoldShorts,
+        List<string> SkippedHoldShortRunways);
+
+    private static ImportedSteps Import(
+        IReadOnlyList<string> taxiways, IReadOnlyList<TaxiAssistForm.ExternalHoldShort> holdShorts,
+        string[]? knownTaxiways = null, string[]? runwayIds = null)
+    {
+        var applied = new List<string>();
+        var skipped = new List<string>();
+        var appliedHoldShorts = new List<TaxiAssistForm.AppliedHoldShort>();
+        var skippedHoldShorts = new List<string>();
+        var steps = TaxiAssistForm.BuildImportedSteps(
+            taxiways, holdShorts, knownTaxiways ?? KnownTaxiways, runwayIds ?? AirportRunways,
+            applied, skipped, appliedHoldShorts, skippedHoldShorts);
+        return new ImportedSteps(steps, applied, skipped, appliedHoldShorts, skippedHoldShorts);
+    }
+
+    /// <summary>A clearance as the import hands it to the form: parsed, then each hold short tied to its taxiway.</summary>
+    private static ImportedSteps ImportClearance(string clearance)
+    {
+        var (taxiways, holdShorts, _) = MainForm.ParseClearanceTaxiPlan(clearance, KnownTaxiways);
+        return Import(taxiways, MainForm.MapHoldShortsToTaxiways(holdShorts, taxiways));
+    }
+
+    private static string[] Sentences(IEnumerable<ClearanceStep> steps) => steps.Select(s => s.Sentence()).ToArray();
+
+    [Fact]
+    public void Two_hold_shorts_after_one_taxiway_are_both_seated()
+    {
+        var imported = Import(
+            new[] { "N" },
+            new[] { new TaxiAssistForm.ExternalHoldShort(0, "15R"), new TaxiAssistForm.ExternalHoldShort(0, "22R") });
+
+        Assert.Equal(new[] { "Via N", "Hold short of runway 15R", "Hold short of runway 22R" },
+            Sentences(imported.Steps));
+        Assert.All(imported.Steps.Skip(1), s =>
+        {
+            Assert.Equal(ClearanceStepKind.HoldShort, s.Kind);
+            Assert.Equal(ClearanceTargetKind.Runway, s.TargetKind);
+        });
+        Assert.Equal(
+            new[] { new TaxiAssistForm.AppliedHoldShort("15R", "N"), new TaxiAssistForm.AppliedHoldShort("22R", "N") },
+            imported.AppliedHoldShorts);
+        Assert.Empty(imported.SkippedHoldShortRunways);
+        Assert.Equal(new[] { "N" }, imported.AppliedTaxiways);
+    }
+
+    [Fact]
+    public void A_plural_hold_short_from_the_clearance_seats_both_runways_as_the_airport_spells_them()
+    {
+        // "Hold short of runways 4L and 4R": two hold shorts after the same taxiway, which the
+        // rows could not both carry. The clearance zero-pads (04L), the airport need not (4L):
+        // the step names the runway as the airport does.
+        var imported = ImportClearance("Runway 22 taxi via Alpha, hold short of runways 4L and 4R, then Bravo");
+
+        Assert.Equal(new[] { "Via A", "Hold short of runway 4L", "Hold short of runway 4R", "Via B" },
+            Sentences(imported.Steps));
+        Assert.Equal(
+            new[] { new TaxiAssistForm.AppliedHoldShort("4L", "A"), new TaxiAssistForm.AppliedHoldShort("4R", "A") },
+            imported.AppliedHoldShorts);
+        Assert.Empty(imported.SkippedHoldShortRunways);
+    }
+
+    [Fact]
+    public void Both_runways_of_one_hold_short_come_before_the_taxiway_said_again()
+    {
+        var imported = ImportClearance(
+            "Taxi to runway 22R via November, hold short of runways 15R and 33L, November, Kilo");
+
+        Assert.Equal(
+            new[] { "Via N", "Hold short of runway 15R", "Hold short of runway 33L", "Via N", "Via K" },
+            Sentences(imported.Steps));
+        Assert.Empty(imported.SkippedHoldShortRunways);
+    }
+
+    [Fact]
+    public void A_taxiway_repeated_across_a_hold_short_keeps_its_place_in_the_steps()
+    {
+        // KBOS: each November gets its own Via step, each hold short follows its own.
+        var imported = ImportClearance(
+            "Taxi to runway 22R via Kilo, Bravo, November, hold short of runway 15R, November, hold short of runway 33L");
+
+        Assert.Equal(
+            new[] { "Via K", "Via B", "Via N", "Hold short of runway 15R", "Via N", "Hold short of runway 33L" },
+            Sentences(imported.Steps));
+        Assert.Equal(new[] { "K", "B", "N", "N" }, imported.AppliedTaxiways);
+    }
+
+    [Fact]
+    public void An_unknown_taxiway_is_skipped_with_its_hold_shorts()
+    {
+        var imported = Import(
+            new[] { "A", "Q", "B" },
+            new[] { new TaxiAssistForm.ExternalHoldShort(1, "15R"), new TaxiAssistForm.ExternalHoldShort(2, "22R") });
+
+        Assert.Equal(new[] { "Via A", "Via B", "Hold short of runway 22R" }, Sentences(imported.Steps));
+        Assert.Equal(new[] { "A", "B" }, imported.AppliedTaxiways);
+        Assert.Equal(new[] { "Q" }, imported.SkippedTaxiways);
+        Assert.Equal(new[] { new TaxiAssistForm.AppliedHoldShort("22R", "B") }, imported.AppliedHoldShorts);
+        Assert.Equal(new[] { "15R" }, imported.SkippedHoldShortRunways);
+    }
+
+    [Fact]
+    public void A_hold_short_with_no_taxiway_is_skipped()
+    {
+        var imported = Import(
+            new[] { "A" },
+            new[]
+            {
+                new TaxiAssistForm.ExternalHoldShort(-1, "22R"),
+                new TaxiAssistForm.ExternalHoldShort(0, "15R"),
+                new TaxiAssistForm.ExternalHoldShort(5, "33L"),
+            });
+
+        Assert.Equal(new[] { "Via A", "Hold short of runway 15R" }, Sentences(imported.Steps));
+        Assert.Equal(new[] { "22R", "33L" }, imported.SkippedHoldShortRunways);
+        Assert.Equal(new[] { new TaxiAssistForm.AppliedHoldShort("15R", "A") }, imported.AppliedHoldShorts);
+    }
+
+    [Fact]
+    public void A_runway_the_airport_lacks_is_skipped()
+    {
+        var imported = Import(
+            new[] { "A", "B" },
+            new[] { new TaxiAssistForm.ExternalHoldShort(0, "31"), new TaxiAssistForm.ExternalHoldShort(1, "22L") });
+
+        Assert.Equal(new[] { "Via A", "Via B" }, Sentences(imported.Steps));
+        Assert.Equal(new[] { "31", "22L" }, imported.SkippedHoldShortRunways);
+        Assert.Empty(imported.AppliedHoldShorts);
+        Assert.Equal(new[] { "A", "B" }, imported.AppliedTaxiways);
+    }
+
+    [Fact]
+    public void An_empty_clearance_fills_no_step()
+    {
+        // The shortest path, as "(None - calculate shortest path)" was.
+        var imported = Import(Array.Empty<string>(), Array.Empty<TaxiAssistForm.ExternalHoldShort>());
+
+        Assert.Empty(imported.Steps);
+        Assert.Empty(imported.AppliedTaxiways);
+    }
+
+    [Theory]
+    [InlineData("Taxi to runway 22 via Alpha, cross runway 15R, Bravo")]
+    [InlineData("Taxi to runway 22R via Kilo, cross runways 4L and 4R, Bravo, hold short of runway 15R")]
+    [InlineData("cross-runway 4R, then continue taxi via K, N")]
+    [InlineData("Taxi to gate A9 via Alpha, Bravo, cross taxiway Charlie, Delta")]
+    [InlineData("Taxi to runway 22R via November, hold short of runway 33L, cross runway 33L, November")]
+    public void The_fill_never_enters_a_crossing(string clearance)
+    {
+        var imported = ImportClearance(clearance);
+
+        Assert.NotEmpty(imported.Steps);
+        Assert.DoesNotContain(imported.Steps, s => s.Kind == ClearanceStepKind.Cross);
+    }
+
+    [Theory]
+    [InlineData("Taxi to runway 22 via Alpha, turn left on Bravo, hold short of runway 15R")]
+    [InlineData("Taxi to gate A9 via Alpha, right onto Charlie")]
+    [InlineData("Taxi to runway 22R via Kilo, left Bravo, hold short of runway 22R, right turn onto Bravo")]
+    [InlineData("Taxi to gate A9 via left Kilo, right November")]
+    public void The_fill_never_enters_a_turn(string clearance)
+    {
+        var imported = ImportClearance(clearance);
+
+        Assert.NotEmpty(imported.Steps);
+        Assert.DoesNotContain(imported.Steps,
+            s => s.Kind is ClearanceStepKind.LeftOnto or ClearanceStepKind.RightOnto);
+        Assert.All(imported.Steps.Where(s => s.IsVia), s => Assert.Equal(ClearanceStepKind.Via, s.Kind));
     }
 
     // --- MatchDestinationLabel --------------------------------------------------------

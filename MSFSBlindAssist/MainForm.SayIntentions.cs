@@ -905,8 +905,16 @@ public partial class MainForm
 
     /// <summary>A "hold short of runway X" from the clearance, tied to the taxiway it
     /// FOLLOWS. AfterTaxiway is empty when the clearance named no taxiway ahead of
-    /// it — nothing in the form can carry that, and the pilot is told so.</summary>
-    internal readonly record struct ClearanceHoldShort(string AfterTaxiway, string Runway);
+    /// it — nothing in the form can carry that, and the pilot is told so.
+    ///
+    /// <see cref="SameMentionAsPrevious"/>: the clearance gave it after the SAME mention of
+    /// that taxiway as the hold short before it ("hold short of runways 4L and 4R"), so
+    /// <see cref="MapHoldShortsToTaxiways"/> puts it after the same taxiway, never after a
+    /// later mention of the name.</summary>
+    internal readonly record struct ClearanceHoldShort(string AfterTaxiway, string Runway)
+    {
+        public bool SameMentionAsPrevious { get; init; }
+    }
 
     private static readonly Regex ViaWord = new(
         @"\bVIA\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -920,9 +928,10 @@ public partial class MainForm
     /// a second copy of the hold-short phrasing out of this file; the two would drift.
     ///
     /// A taxiway repeated across a hold-short is KEPT ("N, hold short 15R, N" — the
-    /// KBOS pattern): the form carries one hold-short per row, so collapsing the
-    /// repeat would throw the second one away. A repeat across a plain crossing still
-    /// collapses, exactly as a single ParseTaxiways call would.
+    /// KBOS pattern): each mention becomes its own Via step, and a hold-short given after
+    /// the second belongs after that one, so collapsing the repeat would put it at the
+    /// wrong crossing. A repeat across a plain crossing still collapses, exactly as a
+    /// single ParseTaxiways call would.
     ///
     /// UnknownTaxiways carries the names the clearance gave that this airport does not
     /// have, gathered across every piece so one falling either side of a hold-short is
@@ -938,6 +947,7 @@ public partial class MainForm
 
         bool routeStarted = false;
         bool repeatAllowed = false;
+        int lastHoldShortAnchor = -1;
 
         foreach (var (text, maskedSpan) in SplitClearanceAtMaskedSpans(clearance))
         {
@@ -969,15 +979,22 @@ public partial class MainForm
             }
 
             // A span can hold short of SEVERAL runways ("runways 4L and 4R") — one
-            // ClearanceHoldShort each, all anchored to the same preceding taxiway. The
-            // form carries one hold-short per row, so the second one on the same row is
-            // reported as unset rather than dropped in silence (ApplyExternalRoute's
-            // rowTaken path), which is the honest half of a limitation the router shares.
+            // ClearanceHoldShort each, all anchored to the same preceding taxiway, and so
+            // can two spans with no taxiway between them. Each is seated: the step list
+            // takes as many Hold short steps after one Via step as the clearance gave.
+            // SameMentionAsPrevious keeps the second after that same mention, never a
+            // later one of the same name.
             var runways = SayIntentionsClearanceParser.ParseHoldShortRunways(maskedSpan);
             repeatAllowed = runways.Count > 0;
             foreach (string runway in runways)
-                holdShorts.Add(new ClearanceHoldShort(
-                    taxiways.Count > 0 ? taxiways[^1] : "", runway));
+            {
+                int anchor = taxiways.Count - 1;
+                holdShorts.Add(new ClearanceHoldShort(anchor >= 0 ? taxiways[anchor] : "", runway)
+                {
+                    SameMentionAsPrevious = anchor >= 0 && anchor == lastHoldShortAnchor,
+                });
+                lastHoldShortAnchor = anchor;
+            }
         }
 
         return (taxiways, holdShorts, unknown);
@@ -1027,10 +1044,13 @@ public partial class MainForm
 
     /// <summary>Turns each hold-short's taxiway NAME into its position in the sequence
     /// being applied. Repeats are consumed in order, so the second hold on a repeated
-    /// taxiway lands on the second row rather than back on the first. A name the
-    /// sequence does not carry maps to -1: the form reports it instead of hanging the
-    /// hold-short on whatever row happens to be last — which is also what happens to a
-    /// hold-short the clearance gave before naming any taxiway at all.
+    /// taxiway lands after its second mention rather than back on the first; a hold-short
+    /// the clearance gave after the SAME mention as the one before it
+    /// (<see cref="ClearanceHoldShort.SameMentionAsPrevious"/>, "runways 4L and 4R") takes
+    /// that one's position, whatever it is. A name the sequence does not carry maps to -1:
+    /// the form reports it instead of hanging the hold-short on whatever taxiway happens
+    /// to be last — which is also what happens to a hold-short the clearance gave before
+    /// naming any taxiway at all.
     ///
     /// Names are compared the way the REST of this import compares them
     /// (<see cref="SameTaxiwayNameSi"/>), not literally. On the geometry path this is
@@ -1048,10 +1068,15 @@ public partial class MainForm
         foreach (var holdShort in holdShorts)
         {
             int index = -1;
+            if (holdShort.SameMentionAsPrevious && mapped.Count > 0)
+            {
+                // Unset with it when that one found no taxiway: both are reported.
+                index = mapped[^1].TaxiwayIndex;
+            }
             // A hold-short with no anchor at all stays at -1 without searching: comparing
             // NORMALIZED names, an empty anchor would otherwise match any name that
             // normalizes to empty, where the old literal compare could not.
-            if (!string.IsNullOrWhiteSpace(holdShort.AfterTaxiway))
+            else if (!string.IsNullOrWhiteSpace(holdShort.AfterTaxiway))
             {
                 for (int i = searchFrom; i < taxiways.Count; i++)
                 {
