@@ -3,10 +3,12 @@ paths:
   - "MSFSBlindAssist/Navigation/TaxiGraph.cs"
   - "MSFSBlindAssist/Forms/TaxiAssistForm.cs"
   - "MSFSBlindAssist/Navigation/RunwayEntryDirection.cs"
+  - "MSFSBlindAssist/Navigation/RunwayEntryList.cs"
   - "tests/MSFSBlindAssist.Tests/**/*DepartureLineupPoint*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*FullLengthEntrance*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*RunwayEntryDirection*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*AngledRunwayEntry*.cs"
+  - "tests/MSFSBlindAssist.Tests/**/*RunwayEntryList*.cs"
 ---
 # Departure runway entry and lineup point rules
 
