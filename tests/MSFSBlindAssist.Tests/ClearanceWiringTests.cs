@@ -43,6 +43,10 @@ public class ClearanceWiringTests
 
         Assert.Contains("lock (_stateLock)", check);
         Assert.Contains("Navigation.ClearanceRouteChecks.Warnings(_route.Segments, plan, NodeTouchesTaxiway)", check);
+        // The crossings the route clears, as applied (its runway events, after AdoptRoute's pass), in route order.
+        string cleared = Member(manager, "public string DescribeClearedCrossings(");
+        Assert.Contains("lock (_stateLock)", cleared);
+        Assert.Contains("Navigation.ClearedCrossingCallouts.ClearedAtCalculate(_route.RunwayEvents)", cleared);
         Assert.Contains("lock (_stateLock)", progress);
         Assert.Contains("_positionInitialized", progress);
         Assert.Contains("FindRemainingSequenceByPosition(_lastLat, _lastLon,", progress);
@@ -311,11 +315,14 @@ public class ClearanceWiringTests
         int imported = speak.IndexOf("_importSummary?.Invoke(true)", StringComparison.Ordinal);
         int warnings = speak.IndexOf("parts.Add(_guidanceManager.LastRouteStartWarning);", StringComparison.Ordinal);
         int checks = speak.IndexOf("parts.AddRange(_guidanceManager.CheckClearance(plan));", StringComparison.Ordinal);
+        // Final review, Important 3: each crossing a Cross step cleared, after the warnings: the summary naming it is cut.
+        int cleared = speak.IndexOf("string clearedCrossings = _guidanceManager.DescribeClearedCrossings();", StringComparison.Ordinal);
+        int clearedAdded = speak.IndexOf("if (clearedCrossings.Length > 0) parts.Add(clearedCrossings);", StringComparison.Ordinal);
         int unmapped = speak.IndexOf("ConsumeUnmappedStartWarning()", StringComparison.Ordinal);
         int turnCue = speak.IndexOf("ConsumeInitialTurnCue()", StringComparison.Ordinal);
         int startHold = speak.IndexOf("ConsumeStartHoldCue()", StringComparison.Ordinal);
-        Assert.True(imported >= 0 && warnings > imported && checks > warnings && unmapped > checks
-                    && turnCue > unmapped && startHold > turnCue, "the parts are in order");
+        Assert.True(imported >= 0 && warnings > imported && checks > warnings && cleared > checks && clearedAdded > cleared
+                    && unmapped > clearedAdded && turnCue > unmapped && startHold > turnCue, "the parts are in order");
         Assert.Single(Regex.Matches(speak, @"_announcer\.AnnounceImmediate\("));
         Assert.Single(Regex.Matches(Member(form, "private void OnCalculateClicked("), @"SpeakCalculateUtterance\("));
         Assert.DoesNotContain("progParts", form);

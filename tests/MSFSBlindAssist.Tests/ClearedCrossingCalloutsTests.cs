@@ -36,6 +36,31 @@ public class ClearedCrossingCalloutsTests
         Assert.Equal("No taxi route.", ClearedCrossingCallouts.NoRoute);
     }
 
+    // Final review, Important 3: the summary that names a Cross step's crossing as cleared is queued, and StartGuidance's
+    // first callout and the standstill utterance cut it, so the pilot never heard the crossing was cleared. The one
+    // standstill utterance carries one sentence per crossing the route clears, as applied, in route order, a crossing met
+    // twice twice; a crossing not cleared and a runway entered are not among them (the summary and the warnings say those).
+    private static void ClearedAtCalculateSentences()
+    {
+        var events = new List<MSFSBlindAssist.Database.Models.TaxiRouteRunwayEvent>
+        {
+            new() { Kind = MSFSBlindAssist.Database.Models.RunwayEventKind.Crossing, Designator = "24L", Location = "P", Held = true, Cleared = true },
+            new() { Kind = MSFSBlindAssist.Database.Models.RunwayEventKind.Crossing, Designator = "22R", Location = "B", Held = true },
+            new() { Kind = MSFSBlindAssist.Database.Models.RunwayEventKind.Crossing, Designator = "9", Held = true, Cleared = true },
+            new() { Kind = MSFSBlindAssist.Database.Models.RunwayEventKind.Entry, Designator = "27", Location = "A", Held = true },
+            new() { Kind = MSFSBlindAssist.Database.Models.RunwayEventKind.Crossing, Designator = "24L", Location = " Q ", Held = true, Cleared = true },
+        };
+        Assert.Equal("Cleared across runway 24L at P. Cleared across runway 09. Cleared across runway 24L at Q.",
+            ClearedCrossingCallouts.ClearedAtCalculate(events));
+        Assert.Equal("", ClearedCrossingCallouts.ClearedAtCalculate(events.Where(e => !e.Cleared).ToList()));
+        Assert.Equal("", ClearedCrossingCallouts.ClearedAtCalculate(null));
+    }
+
+    [Fact] public void Calculate_says_each_crossing_it_clears() => ClearedAtCalculateSentences();
+
+    [Fact] public void Calculate_says_each_crossing_it_clears_under_a_comma_decimal_culture()
+        => TestCulture.Run("de-DE", () => { ClearedAtCalculateSentences(); return 0; });
+
     [Fact] public void Every_sentence_is_worded_exactly() => AllSentences();
 
     [Fact] public void Every_sentence_is_worded_exactly_under_a_comma_decimal_culture()

@@ -1135,6 +1135,29 @@ public static class ClearedCrossingCallouts
     /// <summary>A cleared crossing put back as a stop.</summary>
     public static string HoldRestored(string label, string distanceText) => $"Holding short of {label}. {distanceText}.";
 
+    /// <summary>
+    /// What the window's one standstill Calculate utterance says of the crossings the route clears ([HLD-17]): one
+    /// sentence per runway crossing cleared on it (<see cref="TaxiRouteRunwayEvent.Cleared"/>, the crossings as applied),
+    /// in route order, a crossing met twice said twice, each with its place when the event has one: "Cleared across
+    /// runway 24L at P. Cleared across runway 09." The summary names them too ("cleared across runway 24L at P",
+    /// <c>RouteRunwayCrossings.DescribeRunwayEvents</c>), but it is queued, and StartGuidance's first callout cuts it.
+    /// Empty when the route clears none.
+    /// </summary>
+    public static string ClearedAtCalculate(IReadOnlyList<TaxiRouteRunwayEvent>? events)
+    {
+        if (events is null) return "";
+        var sentences = new List<string>();
+        foreach (var e in events)
+        {
+            if (e.Kind != RunwayEventKind.Crossing || !e.Cleared || string.IsNullOrWhiteSpace(e.Designator)) continue;
+            string runway = RouteRunwayCrossings.NormalizeDesignator(e.Designator);
+            sentences.Add(string.IsNullOrWhiteSpace(e.Location)
+                ? $"Cleared across runway {runway}."
+                : $"Cleared across runway {runway} at {e.Location.Trim()}.");
+        }
+        return string.Join(" ", sentences);
+    }
+
     /// <summary>The aircraft is past a stop's line.</summary>
     public static string PastTheLine(string placedLabel) => $"Past the hold line of {placedLabel}.";
 

@@ -5044,7 +5044,8 @@ public class TaxiAssistForm : Form
     /// in-sim 2026-06-13, when spoken before StartGuidance), and it must be a SINGLE AnnounceImmediate: consecutive
     /// calls stomp each other. In order: an imported route's summary, a ticked backtrack the airport could not
     /// honour, the route's own warnings (<c>LastRouteStartWarning</c>, #355's Turn pick notes among them), the
-    /// clearance's checks (<c>CheckClearance</c>: a Cross taxiway step the route never meets), this departure's
+    /// clearance's checks (<c>CheckClearance</c>: a Cross taxiway step the route never meets), each crossing the route
+    /// clears (<c>DescribeClearedCrossings</c>: "Cleared across runway 24L at P."), this departure's
     /// intersection or holding point, the unmapped-start warning, the reach warning or else the route-start turn
     /// cue, the backtrack advisory, and last the start-hold sentence, the instruction to act on. (The Calculate
     /// sentence itself, the route summary, is queued by LoadRoute.)
@@ -5069,6 +5070,10 @@ public class TaxiAssistForm : Form
             parts.Add(_guidanceManager.LastRouteStartWarning);
         // What the clearance asked that the route does not do: "The route does not cross taxiway B."
         parts.AddRange(_guidanceManager.CheckClearance(plan));
+        // Each crossing a Cross step cleared, after the warnings: "Cleared across runway 24L at P." The summary names it
+        // too, but StartGuidance's first callout cuts that, and this is how the pilot hears BA will not stop there.
+        string clearedCrossings = _guidanceManager.DescribeClearedCrossings();
+        if (clearedCrossings.Length > 0) parts.Add(clearedCrossings);
         if (intersectionLine != null) parts.Add(intersectionLine);
         if (holdingPointLine != null) parts.Add(holdingPointLine);
         // The unmapped-start warning -- "Your position isn't connected ..." when the aircraft

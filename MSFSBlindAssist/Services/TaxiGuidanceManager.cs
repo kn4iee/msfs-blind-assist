@@ -4845,6 +4845,22 @@ public partial class TaxiGuidanceManager : IDisposable
     }
 
     /// <summary>
+    /// Each crossing the route being flown clears, as applied (its runway events after <c>AdoptRoute</c>'s pass), in route
+    /// order: "Cleared across runway 24L at P." (<see cref="Navigation.ClearedCrossingCallouts.ClearedAtCalculate"/>),
+    /// for the Taxi Guidance window's one standstill Calculate utterance ([HLD-17]). The summary names them too, but it is
+    /// queued and StartGuidance's first callout cuts it, so the pilot never heard a Cross step was applied. Empty when the
+    /// route clears none, or there is no route.
+    /// </summary>
+    public string DescribeClearedCrossings()
+    {
+        lock (_stateLock)
+        {
+            if (_route == null) return "";
+            return Navigation.ClearedCrossingCallouts.ClearedAtCalculate(_route.RunwayEvents);
+        }
+    }
+
+    /// <summary>
     /// How far along the clearance the window last calculated the aircraft is, for
     /// <see cref="Navigation.ClearanceTrim.Remaining"/>, numbered as that step list was
     /// (<see cref="Navigation.ClearanceProgressState.Report"/>): the Via steps behind
