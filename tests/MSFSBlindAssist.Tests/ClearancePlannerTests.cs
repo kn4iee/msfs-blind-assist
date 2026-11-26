@@ -188,20 +188,25 @@ public class ClearancePlannerTests
         Assert.Null(To(null, Via("A"), CrossTwy("B")).Refusal);
     }
 
+    // Final review, minor: the refusal names both steps, so the pilot knows which two to look at in the list (by
+    // number, lower first), and both names when they are the runway's two ends.
     [Fact]
     public void One_runway_cannot_be_both_crossed_and_held_short_of()
     {
-        const string expected = "Runway 24L is entered both as a crossing and as a hold short. Remove one.";
-        Assert.Equal(expected, Leg(Via("P"), CrossRwy("24L"), HoldRwy("06R")).Refusal);
-        Assert.Equal(expected, TestCulture.Run("de-DE", () => Leg(Via("P"), CrossRwy("24L"), HoldRwy("06R")).Refusal));
-        Assert.Equal(expected, To(null, Via("P"), CrossRwy("24L"), HoldRwy("24L")).Refusal);
+        const string ends = "Steps 2 and 3 both name runway 24L/06R, one as a crossing and one as a hold short. Remove one.";
+        Assert.Equal(ends, Leg(Via("P"), CrossRwy("24L"), HoldRwy("06R")).Refusal);
+        Assert.Equal(ends, TestCulture.Run("de-DE", () => Leg(Via("P"), CrossRwy("24L"), HoldRwy("06R")).Refusal));
+        Assert.Equal("Steps 2 and 3 both name runway 24L, one as a crossing and one as a hold short. Remove one.",
+            TestCulture.Run("de-DE", () => To(null, Via("P"), CrossRwy("24L"), HoldRwy("24L")).Refusal));
+        Assert.Equal("Steps 2 and 4 both name runway 04L, one as a crossing and one as a hold short. Remove one.",
+            TestCulture.Run("sv-SE", () => To(null, Via("P"), CrossRwy("04L"), HoldTwy("L"), HoldRwy("04L")).Refusal));
     }
 
     [Fact]
     public void A_crossing_said_before_any_taxiway_is_the_same_crossing_as_one_after_the_first()
     {
         // Before any Via step the whole route is searched; after the first, from its start: the same crossing.
-        const string expected = "Runway 04L is entered both as a crossing and as a hold short. Remove one.";
+        const string expected = "Steps 1 and 3 both name runway 04L, one as a crossing and one as a hold short. Remove one.";
         Assert.Equal(expected, To(null, HoldRwy("04L"), Via("A"), CrossRwy("04L")).Refusal);
         Assert.Equal(expected, Leg(CrossRwy("04L"), Via("A"), HoldRwy("04L")).Refusal);
         Assert.Equal(expected, Leg(HoldRwy("04L"), Via("A"), CrossRwy("04L")).Refusal);
@@ -245,7 +250,7 @@ public class ClearancePlannerTests
         Assert.Null(Leg(Via("P"), HoldRwyAt("24L", "B3", 42), Via("Q"), CrossRwy("24L", at: "B4", atNodeId: 43),
                         HoldTwy("L")).Refusal);
         // The same place, or a step with no place, is the same crossing.
-        const string expected = "Runway 24L is entered both as a crossing and as a hold short. Remove one.";
+        const string expected = "Steps 2 and 3 both name runway 24L, one as a crossing and one as a hold short. Remove one.";
         Assert.Equal(expected, Leg(Via("P"), HoldRwyAt("24L", "P"), CrossRwy("24L", at: "p"), HoldTwy("L")).Refusal);
         Assert.Equal(expected, Leg(Via("P"), HoldRwyAt("24L", "P"), CrossRwy("24L"), HoldTwy("L")).Refusal);
     }

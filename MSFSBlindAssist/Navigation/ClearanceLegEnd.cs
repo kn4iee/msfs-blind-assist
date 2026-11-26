@@ -287,7 +287,9 @@ public static class ClearanceLegEnd
         AlreadyAcross,
         /// <summary>Route on to the far side: the side away from the crossing's pin.</summary>
         FarSide,
-        /// <summary>The pin has no side to go by (it lies on the runway's pavement): refused, never guessed.</summary>
+        /// <summary>The pin has no side to go by (it lies on the runway's pavement, or is a reach, or there is no runway
+        /// shape): refused with <see cref="NoSideToGoBy"/>, never guessed, the aircraft clear of every runway included
+        /// (it may be across, or backed off to the near side).</summary>
         Unknown,
     }
 
@@ -300,24 +302,29 @@ public static class ClearanceLegEnd
     /// trusted. Judged on <paramref name="shape"/>, the runway as the crossing classifier saw it: the pin's side is the
     /// near side only when the pin lies off the pavement there (<see cref="RunwayShape.ContainsAlongLateral"/> with no
     /// margin, the classifier's own test; a runway table's half-width can differ); a pin on it has none. The aircraft
-    /// clear of every runway (<paramref name="aircraftClearOfRunways"/>) and on the other side, or with no side to
-    /// compare, is already across. Otherwise a pin with a side sends the leg to the far side of THAT crossing, the side
-    /// away from the pin, never the far side judged from the aircraft, which, once it is off the far edge, lies back over
-    /// the runway; a pin with none is refused. No shape for the runway (null, or degenerate): no side to go by either.
+    /// clear of every runway (<paramref name="aircraftClearOfRunways"/>) on the other side from the pin is already
+    /// across. Otherwise a pin with a side sends the leg to the far side of THAT crossing, the side away from the pin,
+    /// never the far side judged from the aircraft, which, once it is off the far edge, lies back over the runway; a pin
+    /// with none is refused (<see cref="MadeCrossingEnd.Unknown"/>), the aircraft clear included: it may be across, or
+    /// backed off to the near side, so "already across" would not be true. No shape for the runway (null, or
+    /// degenerate): no side to go by either.
     /// </summary>
     public static MadeCrossingEnd JudgeMadeCrossing(RunwayShape? shape, double pinLat, double pinLon,
         double aircraftLat, double aircraftLon, bool aircraftClearOfRunways, bool pinIsReach)
     {
-        if (shape == null || shape.IsDegenerate)
-            return aircraftClearOfRunways ? MadeCrossingEnd.AlreadyAcross : MadeCrossingEnd.Unknown;
+        if (shape == null || shape.IsDegenerate) return MadeCrossingEnd.Unknown;
         var (pinAlong, pinLateral) = shape.Project(pinLat, pinLon);
         int nearSide = pinIsReach || shape.ContainsAlongLateral(pinAlong, pinLateral, 0.0) ? 0 : Math.Sign(pinLateral);
+        if (nearSide == 0) return MadeCrossingEnd.Unknown;
         int aircraftSide = Math.Sign(shape.Project(aircraftLat, aircraftLon).Lateral);
-        if (aircraftClearOfRunways && (nearSide == 0 || aircraftSide == -nearSide))
-            return MadeCrossingEnd.AlreadyAcross;
-        return nearSide == 0 ? MadeCrossingEnd.Unknown : MadeCrossingEnd.FarSide;
+        return aircraftClearOfRunways && aircraftSide == -nearSide ? MadeCrossingEnd.AlreadyAcross : MadeCrossingEnd.FarSide;
     }
 
     /// <summary>The Calculate refusal for <see cref="MadeCrossingEnd.AlreadyAcross"/>.</summary>
     public static string AlreadyAcross(string runway) => $"You are already across runway {runway.Trim()}. Add the next step.";
+
+    /// <summary>The Calculate refusal for <see cref="MadeCrossingEnd.Unknown"/>: the pin of the crossing made has no side
+    /// to go by, so neither where the aircraft is nor where the leg ends can be told.</summary>
+    public static string NoSideToGoBy(string runway)
+        => $"Could not tell which side of runway {runway.Trim()} you are on. Add the next step.";
 }

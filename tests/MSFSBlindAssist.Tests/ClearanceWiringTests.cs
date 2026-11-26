@@ -297,6 +297,8 @@ public class ClearanceWiringTests
         Assert.Contains("ClearanceLegEnd.JudgeMadeCrossing(", leg);
         Assert.Contains("RunwayCrossingResolver.FindAcross(graph, crossRwy, stop.NodeId)", leg);
         Assert.Contains("ClearanceLegEnd.AlreadyAcross(runwayTarget)", leg);
+        // Final review, minor: a pin with no side has a sentence of its own, never "already across" or "check your entry".
+        Assert.Contains("RefuseCalculate(ClearanceLegEnd.NoSideToGoBy(runwayTarget));", leg);
         Assert.Contains("ProgressiveLegEnd.NoHoldShortClearOfARunway(taxiwayTarget, lastVia)", leg);
         Assert.Contains("ProgressiveLegEnd.NoEndClearOfARunway(lastVia)", leg);
         Assert.Contains("$\"Could not find {what} from {from}. Check your entry.\"", leg);
@@ -346,11 +348,18 @@ public class ClearanceWiringTests
         Assert.DoesNotContain("GetUserTurnPicks", form);
         Assert.DoesNotContain("cmbFirstTurn", form);
         Assert.Contains("ClearSteps()", Member(form, "private void ResetRouteShapingControls("));
+        // Final review, minor: where focus lands is set BEFORE Show(), so the window's activation lands there and the
+        // screen reader names one control once; after Show() it is focused only when activation has not.
         string dialogs = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "MainForm.Dialogs.cs"));
         string open = Member(dialogs, "private void OpenTaxiForm(");
+        int prepare = open.IndexOf("taxiAssistForm.PrepareForOpening();", StringComparison.Ordinal);
         int show = open.IndexOf("taxiAssistForm.Show();", StringComparison.Ordinal);
         int focus = open.IndexOf("taxiAssistForm.FocusForOpening();", StringComparison.Ordinal);
-        Assert.True(show >= 0 && focus > show, "OpenTaxiForm sets the focus after Show()");
+        Assert.True(prepare >= 0 && show > prepare && focus > show, "OpenTaxiForm picks the focus before Show() and makes sure after it");
+        string prepareBody = Member(form, "public void PrepareForOpening(");
+        Assert.Contains("ActiveControl = control;", prepareBody);
+        Assert.Contains("int opening = Visible ? _timesShown : _timesShown + 1;", prepareBody);
+        Assert.Contains("if (control == null || control.Focused) return;", Member(form, "public void FocusForOpening("));
 
         // Trimmed from the list as last calculated, with GetClearanceProgress's lists passed straight in.
         string trim = Member(form, "private bool TrimStepsToWhatIsAhead(");
@@ -359,9 +368,11 @@ public class ClearanceWiringTests
         Assert.Contains("progress.TurnOntoFirstRemainingMade, out var origins)", trim);
         Assert.Contains("ClearanceTrim.KeepingEdits(", trim);
         Assert.Contains("_guidanceManager.HasLiveRoute", trim);
-        Assert.Contains("TrimStepsToWhatIsAhead()", Member(form, "public void FocusForOpening("));
-        // Both successful Calculates record the list they used, after guidance has started.
-        Assert.Equal(2, Regex.Matches(form, @"StartGuidance\([^;]*\);\r?\n\s+RecordCalculatedSteps\(hasDestination: (true|false)\);").Count);
+        Assert.Contains("TrimStepsToWhatIsAhead()", prepareBody);
+        // Final review, minor: both successful Calculates record the list they use just BEFORE guidance starts, so a leg
+        // that ends as guidance starts carries the new generation and is never ignored by EmptyStepsAfterLeg's guard.
+        Assert.Equal(2, Regex.Matches(form, @"RecordCalculatedSteps\(hasDestination: (true|false)\);\r?\n\s+_guidanceManager\.StartGuidance\(").Count);
+        Assert.DoesNotMatch(@"StartGuidance\([^;]*\);\r?\n\s+RecordCalculatedSteps\(", form);
     }
 
     // Fix round 1, ruling 1: Calculate trims the finished steps first. The window can stay open, or come back by Alt+Tab,
@@ -386,7 +397,7 @@ public class ClearanceWiringTests
         Assert.DoesNotContain("SpeakStep", trimBody);
         // Only the window opening says a trim emptied the list.
         Assert.Contains("if (TrimStepsToWhatIsAhead()) SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true);",
-            Member(form, "public void FocusForOpening("));
+            Member(form, "public void PrepareForOpening("));
     }
 
     // [A380C-6]: both guidance events arrive on the manager's thread under _stateLock; the window marshals with
@@ -439,8 +450,15 @@ public class ClearanceWiringTests
         Assert.Contains("DropCompletedCrossings();", Member(form, "private void AppendStep(ClearanceStep step, bool speak, bool speakAfterFocusMove)"));
         Assert.Contains("ClearanceStepEntry.RemovalSentence(", Member(form, "private void RemoveStep("));
         Assert.Contains("ClearanceStepEntry.StepsCleared", Member(form, "private void OnClearStepsClicked("));
-        Assert.Contains("LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)",
-            Member(form, "private void EmptyStepsAfterLeg("));
+        string empty = Member(form, "private void EmptyStepsAfterLeg(");
+        Assert.Contains("LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)", empty);
+        // Final review, minor: steps typed since the last Calculate go too; in the focused window that is said once,
+        // queued behind guidance's own leg-end sentence, never over it.
+        int sentence = empty.IndexOf("ClearanceStepEntry.LegEndSentence(_stepOrigins, windowFocused: Visible && ContainsFocus)", StringComparison.Ordinal);
+        int cleared = empty.IndexOf("ClearSteps();", StringComparison.Ordinal);
+        int said = empty.IndexOf("if (sentence != null) _announcer.Announce(sentence);", StringComparison.Ordinal);
+        Assert.True(sentence >= 0 && cleared > sentence && said > cleared, "judged before the list is emptied, said after");
+        Assert.DoesNotContain("AnnounceImmediate", empty);
     }
 
     // Spec 8.2: where focus lands when the window opens.

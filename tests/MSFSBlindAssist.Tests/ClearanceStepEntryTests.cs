@@ -130,6 +130,20 @@ public class ClearanceStepEntryTests
             TestCulture.Run("de-DE", () => ClearanceStepEntry.RemovalSentence(cross, 1, fromList: false, listNowEmpty: true)));
     }
 
+    // Final review, minor ([CORE-7]): the end of a leg empties the list silently (guidance says the leg's end), but steps
+    // the pilot typed since the last Calculate (origin -1) go with it, and with the window focused they would vanish
+    // under the pilot's hands unsaid: "Steps cleared." once. With the window elsewhere, or only steps of the leg flown,
+    // nothing.
+    [Fact]
+    public void A_leg_end_says_steps_cleared_only_for_steps_typed_since_the_last_Calculate_in_the_focused_window()
+    {
+        Assert.Equal("Steps cleared.", TestCulture.Run("de-DE",
+            () => ClearanceStepEntry.LegEndSentence(new[] { 0, 1, -1 }, windowFocused: true)));
+        Assert.Null(ClearanceStepEntry.LegEndSentence(new[] { 0, 1, -1 }, windowFocused: false));
+        Assert.Null(ClearanceStepEntry.LegEndSentence(new[] { 0, 1, 2 }, windowFocused: true));
+        Assert.Null(ClearanceStepEntry.LegEndSentence(Array.Empty<int>(), windowFocused: true));
+    }
+
     [Theory]
     [InlineData(ClearanceStepKind.Via, "Via B")]
     [InlineData(ClearanceStepKind.LeftOnto, "Left onto B")]

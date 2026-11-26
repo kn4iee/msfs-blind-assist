@@ -928,10 +928,12 @@ public partial class MainForm
         // the handler or, with the -=/+= pattern previously used here, hide the fact
         // that other entry points like the Landing Exit Planner were never wired up.)
 
+        // The Airport box the first time; then the step kind list with a route live (its list trimmed to what is
+        // still ahead), else the destination type (spec 8.2). Chosen before Show(), so the window's activation lands
+        // there and the screen reader names one control once; after Show() it is focused only if activation did not.
+        taxiAssistForm.PrepareForOpening();
         taxiAssistForm.Show();
         taxiAssistForm.BringToFront();
-        // The Airport box the first time; then the step kind list with a route live (its list trimmed to what is
-        // still ahead), else the destination type (spec 8.2).
         taxiAssistForm.FocusForOpening();
     }
 

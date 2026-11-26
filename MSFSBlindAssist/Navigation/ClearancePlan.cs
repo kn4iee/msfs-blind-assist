@@ -246,7 +246,7 @@ public static class ClearancePlanner
                     ? ClearanceRunways.SamePlace(cross, hold)
                     : Math.Max(seqIndexOf[c], 0) == Math.Max(seqIndexOf[h], 0);
                 if (sameCrossing)
-                    return $"Runway {cross.Name} is entered both as a crossing and as a hold short. Remove one.";
+                    return EnteredBoth(c, cross, h, hold);
             }
         }
 
@@ -257,6 +257,19 @@ public static class ClearancePlanner
                 return $"{steps[i].Name} is read from a sign and can only end a leg.";
         }
         return null;
+    }
+
+    // The same crossing entered as a Cross step (index c) and a Hold short step (index h): both steps by number as the
+    // list reads them, lower first, so the pilot knows which two to look at; both names when they are the runway's two
+    // ends, in list order. "Steps 2 and 4 both name runway 04L, one as a crossing and one as a hold short. Remove one."
+    private static string EnteredBoth(int c, ClearanceStep cross, int h, ClearanceStep hold)
+    {
+        var (first, second) = c < h ? (cross, hold) : (hold, cross);
+        string firstName = first.Name.Trim(), secondName = second.Name.Trim();
+        string runway = string.Equals(firstName, secondName, StringComparison.OrdinalIgnoreCase)
+            ? firstName : firstName + "/" + secondName;
+        return $"Steps {Math.Min(c, h) + 1} and {Math.Max(c, h) + 1} both name runway {runway}, " +
+               "one as a crossing and one as a hold short. Remove one.";
     }
 }
 

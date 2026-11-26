@@ -198,8 +198,10 @@ public class TaxiAssistForm : Form
     // Bumped by every successful Calculate. A guidance event queues its action with the number it saw, and the action
     // is skipped when a Calculate has built a list since: a late leg end never empties the list of the leg just set.
     private int _calculateGeneration;
-    // How many times the window has been shown (FocusForOpening: the Airport box the first time only).
+    // How many times the window has been shown (PrepareForOpening: the Airport box the first time only).
     private int _timesShown;
+    // Where focus lands as the window opens (PrepareForOpening), focused by FocusForOpening if activation has not.
+    private Control? _openingFocusControl;
     // Whether the "At" box is shown (a Cross step with a runway chosen). A field, not
     // cmbStepAt.Visible, which also reads false whenever the form itself is hidden.
     private bool _stepAtShown;
@@ -4001,13 +4003,18 @@ public class TaxiAssistForm : Form
         => generationQueued == generationNow && listHoldsCalculatedLeg;
 
     /// <summary>
-    /// Called by MainForm after <c>Show()</c>: puts focus where spec 8.2 says (<see cref="OpeningFocus"/>), and with a
-    /// route live first trims the list to what is still ahead (<see cref="TrimStepsToWhatIsAhead"/>).
+    /// Called by MainForm BEFORE <c>Show()</c>: picks where focus lands (spec 8.2, <see cref="OpeningFocus"/>), with a
+    /// route live first trimming the list to what is still ahead (<see cref="TrimStepsToWhatIsAhead"/>), and makes it the
+    /// active control, so the window's own activation, which restores the active control, lands there and the screen
+    /// reader names one control, once. Set after <c>Show()</c>, activation first restored the control focused last, the
+    /// reader named it, and then the new one.
     /// </summary>
-    public void FocusForOpening()
+    public void PrepareForOpening()
     {
         bool routeLive = _guidanceManager.HasLiveRoute;
-        var target = OpeningFocus(firstShow: _timesShown <= 1, routeLive);
+        // This opening's number: a hidden window is counted when Show() makes it visible (OnVisibleChanged).
+        int opening = Visible ? _timesShown : _timesShown + 1;
+        var target = OpeningFocus(firstShow: opening <= 1, routeLive);
         // A trim that leaves the list empty is said once, after the screen reader has named the box focus moves to.
         if (target == OpeningFocusTarget.StepKind)
         {
@@ -4019,7 +4026,19 @@ public class TaxiAssistForm : Form
             OpeningFocusTarget.StepKind => cmbStepKind,
             _ => cmbDestType,
         };
-        // ActiveControl too, so the form's own activation, which restores the control focused last, lands here.
+        _openingFocusControl = control;
+        ActiveControl = control;
+    }
+
+    /// <summary>
+    /// Called by MainForm after <c>Show()</c>: focuses the control <see cref="PrepareForOpening"/> chose, only when the
+    /// window's activation has not already (a window already open is not activated again), so it is named once.
+    /// </summary>
+    public void FocusForOpening()
+    {
+        var control = _openingFocusControl;
+        _openingFocusControl = null;
+        if (control == null || control.Focused) return;
         ActiveControl = control;
         control.Focus();
     }
@@ -4077,7 +4096,9 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// A successful Calculate used the list as it stands: it is the list later trims start from, numbered afresh (every
     /// step its own origin), with whether the clearance had a destination (the trim's leg end depends on it). Bumps the
-    /// generation, so a leg end queued before this Calculate never empties the list it just used.
+    /// generation, so a leg end queued before this Calculate never empties the list it just used. Called just BEFORE
+    /// StartGuidance: called after it, a leg that ended in between (a position frame on guidance's own thread, the
+    /// aircraft already at its end) was queued with the old generation, and the guard ignored it.
     /// </summary>
     private void RecordCalculatedSteps(bool hasDestination)
     {
@@ -4103,11 +4124,15 @@ public class TaxiAssistForm : Form
 
     /// <summary>The leg the list was calculated for is over: emptied, silently (the manager speaks the arrival, the
     /// stop, the leg's end or the touchdown), unless a Calculate has built a list since or the list holds no calculated leg
-    /// (<see cref="LegEndEmptiesList"/>). The KBOS route back over 04L came from an entry that outlived its leg.</summary>
+    /// (<see cref="LegEndEmptiesList"/>). The KBOS route back over 04L came from an entry that outlived its leg. Steps the
+    /// pilot typed since that Calculate go too; with the window focused they would vanish unsaid, so "Steps cleared." is
+    /// said once, queued behind guidance's own sentence, never over it (<see cref="ClearanceStepEntry.LegEndSentence"/>).</summary>
     private void EmptyStepsAfterLeg(int generation)
     {
         if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)) return;
+        string? sentence = ClearanceStepEntry.LegEndSentence(_stepOrigins, windowFocused: Visible && ContainsFocus);
         ClearSteps();
+        if (sentence != null) _announcer.Announce(sentence);
     }
 
     /// <summary>
@@ -4687,8 +4712,9 @@ public class TaxiAssistForm : Form
 
         CheckGateOccupancy(isRunwayDest, thresholdLat, thresholdLon);
 
-        _guidanceManager.StartGuidance(settings);
+        // Recorded just before guidance starts, so a leg that ends as it starts is never ignored (RecordCalculatedSteps).
         RecordCalculatedSteps(hasDestination: true);
+        _guidanceManager.StartGuidance(settings);
 
         // The departure this runway route lines up for, said in the one Calculate utterance below.
         string rwyLabel = destName.StartsWith("Runway ", StringComparison.OrdinalIgnoreCase)
@@ -4913,8 +4939,14 @@ public class TaxiAssistForm : Form
                             RefuseCalculate(ClearanceLegEnd.AlreadyAcross(runwayTarget));
                             return;
                         }
-                        // A pin with no side (on the runway's pavement) leaves destNode unset: refused below, never
-                        // sent back over the runway. Else the far side of THAT crossing, away from the pin.
+                        // A pin with no side (on the runway's pavement, a reach, no runway shape) is refused with what is
+                        // true: the side cannot be told. Never "already across" (the aircraft may have backed off to the
+                        // near side), never sent back over the runway. Else the far side of THAT crossing, away from the pin.
+                        if (judged == ClearanceLegEnd.MadeCrossingEnd.Unknown)
+                        {
+                            RefuseCalculate(ClearanceLegEnd.NoSideToGoBy(runwayTarget));
+                            return;
+                        }
                         if (judged == ClearanceLegEnd.MadeCrossingEnd.FarSide)
                         {
                             int farSide = -Math.Sign(RunwayFrame.For(crossRwy, _aircraftLat).SignedCrossTrack(stop.Latitude, stop.Longitude));
@@ -5032,8 +5064,9 @@ public class TaxiAssistForm : Form
         _dockingManager?.SetDestinationGate(null);
         txtRouteSummary.Text = _guidanceManager.LastRouteSummary;
         lblStatus.Text = "Route loaded. Guidance active.";
-        _guidanceManager.StartGuidance(SettingsManager.Current);
+        // Recorded just before guidance starts, so a leg that ends as it starts is never ignored (RecordCalculatedSteps).
         RecordCalculatedSteps(hasDestination: false);
+        _guidanceManager.StartGuidance(SettingsManager.Current);
         SpeakCalculateUtterance(plan);
     }
 

@@ -47,6 +47,15 @@ public static class ClearanceStepEntry
         return listNowEmpty ? sentence + " " + StepsCleared : sentence;
     }
 
+    /// <summary>
+    /// What the window says when the end of a leg empties its list ([CORE-7]): nothing as a rule (guidance says the leg's
+    /// end, and the list held the leg just flown); <see cref="StepsCleared"/> once when steps the pilot added since the
+    /// last Calculate go too (<paramref name="origins"/>: -1 for each) while the window has focus
+    /// (<paramref name="windowFocused"/>), as they would vanish under the pilot's hands with nothing said. Null: say nothing.
+    /// </summary>
+    public static string? LegEndSentence(IReadOnlyList<int> origins, bool windowFocused)
+        => windowFocused && origins != null && origins.Any(o => o < 0) ? StepsCleared : null;
+
     /// <summary>The kind at a list index; Via for an index the list does not have (nothing selected).</summary>
     public static ClearanceStepKind KindAt(int index)
         => index >= 0 && index < KindItems.Count ? (ClearanceStepKind)index : ClearanceStepKind.Via;

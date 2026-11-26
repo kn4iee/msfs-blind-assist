@@ -281,7 +281,10 @@ public class ClearanceLegEndTests
     // north that a runway table's half-width could read as off it.
     [InlineData(29.0, 35.0, false, ClearanceLegEnd.MadeCrossingEnd.Unknown)]
     [InlineData(0.0, 10.0, false, ClearanceLegEnd.MadeCrossingEnd.Unknown)]            // exactly on the centreline
-    [InlineData(0.0, 150.0, true, ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross)]      // and the aircraft clear: refused
+    // And the aircraft clear: refused, but never as "already across": with no side to the pin it may have backed off to
+    // the near side (final review, minor).
+    [InlineData(0.0, 150.0, true, ClearanceLegEnd.MadeCrossingEnd.Unknown)]
+    [InlineData(0.0, -150.0, true, ClearanceLegEnd.MadeCrossingEnd.Unknown)]
     public void A_made_crossing_is_judged_from_the_side_of_its_pin_and_never_sent_back_over(
         double pinNorthM, double aircraftNorthM, bool aircraftClear, ClearanceLegEnd.MadeCrossingEnd end)
     {
@@ -323,7 +326,7 @@ public class ClearanceLegEndTests
 
         var shape = RunwayShape.For(RunwayFixture.EastWest());
         double pinLat = RunwayFixture.Lat(60), lon = RunwayFixture.Lon(500);
-        Assert.Equal(ClearanceLegEnd.MadeCrossingEnd.AlreadyAcross, ClearanceLegEnd.JudgeMadeCrossing(shape, pinLat, lon,
+        Assert.Equal(ClearanceLegEnd.MadeCrossingEnd.Unknown, ClearanceLegEnd.JudgeMadeCrossing(shape, pinLat, lon,
             RunwayFixture.Lat(150), lon, aircraftClearOfRunways: true, pinIsReach: true));
         Assert.Equal(ClearanceLegEnd.MadeCrossingEnd.Unknown, ClearanceLegEnd.JudgeMadeCrossing(shape, pinLat, lon,
             RunwayFixture.Lat(35), lon, aircraftClearOfRunways: false, pinIsReach: true));
@@ -381,5 +384,19 @@ public class ClearanceLegEndTests
         Assert.Equal(expected, ClearanceLegEnd.AlreadyAcross("24L"));
         Assert.Equal(expected, TestCulture.Run("de-DE", () => ClearanceLegEnd.AlreadyAcross("24L")));
         Assert.Equal(expected, TestCulture.Run("sv-SE", () => ClearanceLegEnd.AlreadyAcross(" 24L ")));
+    }
+
+    // Final review, minor: a made crossing whose pin has no side is refused with a sentence that is true. "You are
+    // already across" was said with the aircraft backed off to the near side; nor is the entry wrong ("Check your
+    // entry"). With no runway shape there is no side to go by either.
+    [Fact]
+    public void A_pin_with_no_side_is_refused_with_its_own_sentence()
+    {
+        const string expected = "Could not tell which side of runway 24L you are on. Add the next step.";
+        Assert.Equal(expected, ClearanceLegEnd.NoSideToGoBy("24L"));
+        Assert.Equal(expected, TestCulture.Run("de-DE", () => ClearanceLegEnd.NoSideToGoBy(" 24L ")));
+        Assert.Equal(ClearanceLegEnd.MadeCrossingEnd.Unknown, ClearanceLegEnd.JudgeMadeCrossing(null,
+            RunwayFixture.Lat(-100), RunwayFixture.Lon(500), RunwayFixture.Lat(150), RunwayFixture.Lon(500),
+            aircraftClearOfRunways: true, pinIsReach: false));
     }
 }
