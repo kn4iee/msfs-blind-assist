@@ -515,7 +515,8 @@ public class TaxiAssistForm : Form
         //   Enter on a step in the Clearance list loads it into the step boxes to change it in
         //          place: Add Step reads "Replace step N" (still Alt+D, ClearanceStepEntry's
         //          ReplaceButtonText) and Escape keeps the step; with no change open, Escape
-        //          closes the window (OnFormKeyDown)
+        //          closes the window (OnFormKeyDown); in a dropped-down combo list Escape
+        //          only closes the list, before either of those
         //
         // Tab order (top to bottom, explicit TabIndex below; a label with an access key sits
         // immediately before its control, or the key lands on whatever follows its number):

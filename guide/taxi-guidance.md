@@ -84,7 +84,7 @@ Where focus lands when the window opens:
 - After that, while no route is active, on **Destination type**, so you always hear whether a destination is set.
 - While a route is active, on **Step kind**, ready for the next instruction.
 
-Pressing Escape closes the window, except while you are changing a step, when it keeps the step as it was (see [Changing a step](#taxi-change-step)). **Closing the window does not stop guidance**; use the **Stop Guidance** button or Input Ctrl+Y for that. While a route is active, the **Clearance** list shows only what is still ahead: when you open the planner again, the steps you have already completed are gone, so amending a clearance mid-taxi is quick (see [Changing a Clearance on the Move](#taxi-amend)). The list is emptied when the leg it was calculated for is over: when you arrive, when a Progressive Taxi leg ends, when you stop guidance, and when you land. It is also emptied when you change airport.
+Pressing Escape closes the window, except that in an open drop-down list the first Escape only closes the list, and while you are changing a step it keeps the step as it was (see [Changing a step](#taxi-change-step)). **Closing the window does not stop guidance**; use the **Stop Guidance** button or Input Ctrl+Y for that. While a route is active, the **Clearance** list shows only what is still ahead: when you open the planner again, the steps you have already completed are gone, so amending a clearance mid-taxi is quick (see [Changing a Clearance on the Move](#taxi-amend)). The list is emptied when the leg it was calculated for is over: when you arrive, when a Progressive Taxi leg ends, when you stop guidance, and when you land. It is also emptied when you change airport.
 
 Here is every control, in Tab order.
 
