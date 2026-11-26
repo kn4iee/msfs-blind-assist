@@ -47,8 +47,10 @@ public static class UndrivenClearanceStart
         }
     }
 
-    /// <summary>False when one of the pilot's per-row picks (a hold short of any kind, a Turn) is
-    /// keyed to one of the first <paramref name="count"/> taxiways: leaving those out would lose it.</summary>
+    /// <summary>False when one of the given per-row picks is keyed to one of the first <paramref name="count"/>
+    /// taxiways: leaving those out would lose it. <c>LoadRoute</c> passes only the end-of-row stops (no caller sets
+    /// one today), which cannot be looked for along the route; a stop a step entered never keeps a taxiway in (it is
+    /// kept with no row, <c>ClearanceRows.WithoutKeepingStops</c>), and Turn picks go by <see cref="TurnPicksAllow"/>.</summary>
     public static bool PicksAllow(int count, params IEnumerable<int>?[] pickRows)
         => !pickRows.Any(rows => rows != null && rows.Any(row => row < count));
 
@@ -63,8 +65,10 @@ public static class UndrivenClearanceStart
 
     /// <summary>
     /// What the pilot hears when the route still turns straight back at the first cleared taxiway:
-    /// it could not be left out (a pick keyed to it, the only cleared taxiway, or a clearance the
-    /// router cannot honour without it). The route is kept, on the pavement, and said.
+    /// it could not be left out (a Turn pick keyed to it or to the first taxiway that would stay, an
+    /// end-of-row stop keyed to it, the only cleared taxiway, a clearance the router cannot honour
+    /// without it, or a runway start whose shorter route comes back onto the runway). The route is
+    /// kept, on the pavement, and said.
     /// </summary>
     public static string TurnBackNote(string taxiway)
         => $"Taxiway {taxiway} is not on the way from here. The route goes out to it and turns back the way it came.";

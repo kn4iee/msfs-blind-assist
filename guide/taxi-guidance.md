@@ -532,11 +532,11 @@ ATC often amends a clearance while you are taxiing. Open the planner again with 
 - a runway you have crossed, and a hold short you have passed, are gone;
 - a Left onto or Right onto step whose turn you have made reads as Via, so the turn is never judged again;
 - a crossing you put back with Input Alt+Y reads as *"Hold short of runway 04L"*, so calculating again does not clear it again;
-- a step BA cannot be sure about stays. A taxiway the clearance uses twice ("A, C, A") is followed along your route, so on the second A only that A is left; but once BA has had to recalculate your route, it cannot tell which A you are on, and every step stays.
+- a step BA cannot be sure about stays. A taxiway the clearance uses twice ("A, C, A") is followed along your route, so on the second A only that A is left. Once BA has recalculated your route after you went off it, and the new route no longer follows the whole clearance from its first taxiway, BA cannot tell which A you are on: every taxiway step stays, while a runway you have crossed and a hold short you have passed still go.
 
 If nothing is left, you hear *"Steps cleared."* Add the new instruction (for "cross runway 04L", Alt+X, choose 04L, Enter), remove any step ATC cancelled (select it in the Clearance list and press Delete, or press Alt+M, which removes the selected step, or the last step when none is selected), and press Calculate Route (Alt+C). The new route starts from where you are right now, not from where you were when you first opened the window. A Cross step still in the list is a fresh clearance for the new route: it clears the first crossing of that runway ahead, or the one at its At, and you hear it named as cleared once guidance starts.
 
-If your Progressive leg ends just across a runway and you calculate again once you are across, before the leg has ended, you hear *"You are already across runway 24L. Add the next step."* Add the steps ATC gave you next and calculate again. If you crossed from the runway itself (the route was calculated while you were on it), BA cannot tell which side of the runway you are now on, and says instead *"Could not tell which side of runway 24L you are on. Add the next step."*
+If your Progressive leg ends just across a runway and you calculate again once you are across, before the leg has ended, you hear *"You are already across runway 24L. Add the next step."* Add the steps ATC gave you next and calculate again. Sometimes BA cannot tell which side of the runway you are now on, and says instead *"Could not tell which side of runway 24L you are on. Add the next step."* This happens when the crossing began on the runway itself or right at its edge (the route was calculated while you were on the runway, or with its first point already across it), when the point BA kept for that crossing lies on the runway's pavement in the airport's data, or when the airport's data has no usable outline for that runway.
 
 ## SayIntentions Taxi Import {#taxi-sayintentions}
 
@@ -678,7 +678,7 @@ If Calculate fails, BA tells you why and puts the same reason in the summary box
 - *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* The same crossing is in the list twice, once as Cross and once as Hold short of, at the step numbers given (when the two steps use the runway's two ends, both are named, such as *"runway 24L/06R"*). Remove the one ATC did not say.
 - *"KK is read from a sign and can only end a leg."* A holding point read from a scenery sign is anywhere but the end of a Progressive leg.
 - *"You are already across runway 24L. Add the next step."* Your Progressive leg ends across a runway you have already crossed. Add the steps ATC gave you next.
-- *"Could not tell which side of runway 24L you are on. Add the next step."* The same, for a crossing you made from on the runway itself, where BA cannot tell which side you are on now. Add the steps ATC gave you next.
+- *"Could not tell which side of runway 24L you are on. Add the next step."* The same, but BA cannot tell which side you are on now: the crossing began on the runway itself or right at its edge, the point BA kept for it lies on the runway's pavement in the airport's data, or the data has no usable outline for that runway. Add the steps ATC gave you next.
 - *"Could not find taxiway D from C. Check your entry."*, *"Cannot taxi to VIKAS from your position. Check your entry."* and the reasons in [Progressive Taxi](#taxi-progressive): BA could not find where your Progressive leg ends.
 - *"No taxi route to Gate C 9. This stand can't be reached by the taxi network."*
 - *"No taxi route to Gate C 9. It isn't connected to the taxiway network you're on."*
@@ -695,14 +695,19 @@ The first thing you hear is one of:
 - *"Taxiway A. Steering guidance active."* You are already on your first taxiway.
 - *"Steering guidance active. Join taxiway A in 60 metres."* You are on a stand or apron, and the first named taxiway is that far ahead. If you load a route while stopped on a runway, the route starts at an exit further along that runway, your first cleared taxiway if it has one ahead, and the tone leads you down the runway to it. If you roll past that exit, the new route also starts at an exit along the runway.
 - *"Steering guidance active."* The route has no named taxiways.
-- *"Stop. Hold short of runway 22R. Press continue when cleared."* You are already standing at a runway hold line that is the route's first stop. The tone stays silent until you press Continue.
 
-Straight after that, BA may add:
+Straight after that, BA may add, in this order:
 
-- Each runway crossing you entered as a Cross step, in the order you will cross them, after any warnings: *"Cleared across runway 24L at P."* BA will not stop you there (see [Crossings you are cleared for](#cleared-crossings)).
+- For a route filled from SayIntentions, its import summary (see [SayIntentions Taxi Import](#taxi-sayintentions)).
+- *"No backtrack entrance found for this runway. Full length departure."*, when you ticked the backtrack box and BA could not plan one.
+- Any warning about the route itself, such as a runway with no stop, a step the route does not follow, or a taxiway left out (see [Warnings in the summary, and what to do](#warnings-in-the-summary-and-what-to-do)).
+- Each runway crossing you entered as a Cross step, in the order you will cross them: *"Cleared across runway 24L at P."* BA will not stop you there (see [Crossings you are cleared for](#cleared-crossings)).
 - Your intersection or holding point, for example *"Intersection B3 departure, runway 27L. About 2400 metres of runway ahead."*
-- Any warning about unmapped ground at the start, or a route that does not reach the runway.
+- Any warning about unmapped ground at the start.
+- A warning that the route does not reach the runway. When you hear it, the turn cue below is not said.
 - **A turn cue, when the route starts behind you or at a sharp angle.** This is common after a pushback, when you are facing the wrong way. You may hear *"Taxiway A is behind you. Turn left to come around."*, *"Make a U-turn to the right."*, *"Sharp turn left onto taxiway K."* or *"Sharp turn right."* When you are facing almost directly away from the route and every stand nearby is on one side, BA sends you round on that side, over the ramp, even if the other way is slightly shorter.
+- *"This runway has no full length taxiway. For the full length, recalculate with the full length departure with backtrack option."*, when you chose a runway marked *"(backtrack required)"* without ticking [Full-length departure (requires backtrack)](#full-length-departure-requires-backtrack).
+- Last of all, *"Stop. Hold short of runway 22R. Press continue when cleared."* when you are already standing at a runway hold line that is the route's first stop. You then hear none of the opening lines above, only what BA adds, ending with this. The tone stays silent until you press Continue.
 
 When a warning is spoken at the start, BA holds back its other early callouts for about twelve seconds so they do not talk over it. The tone works throughout.
 
@@ -1054,7 +1059,7 @@ This is a reference list of every taxi guidance callout, grouped by when you hea
 | *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* | The same crossing is a Cross step and a Hold short of step, at those step numbers. | Remove the one ATC did not say. |
 | *"KK is read from a sign and can only end a leg."* | A point from a scenery sign is entered anywhere but the end of a Progressive leg. | Make it the last step, or choose another point. |
 | *"You are already across runway 24L. Add the next step."* | Your Progressive leg ends across a runway you have already crossed. | Add the steps ATC gave you next. |
-| *"Could not tell which side of runway 24L you are on. Add the next step."* | Your Progressive leg ends across a runway you crossed from on the runway itself, and BA cannot tell which side you are on now. | Add the steps ATC gave you next. |
+| *"Could not tell which side of runway 24L you are on. Add the next step."* | Your Progressive leg ends across a runway you have crossed, and BA cannot tell which side you are on now: the crossing began on or right at the runway, or the airport's data does not show which side its point is on. | Add the steps ATC gave you next. |
 | *"The route does not cross taxiway B."* | A Cross taxiway step your route never meets. | Check the clearance and your steps. |
 | *"Warning: this route does not reach Runway 27L. Check your taxiway entry and reprogram."* | The route ends away from the runway. | Add the missing link taxiway and recalculate. |
 | *"Warning: BAW123 is at the destination gate."* | Your stand is occupied. | Check with ATC; choose another stand if needed. |

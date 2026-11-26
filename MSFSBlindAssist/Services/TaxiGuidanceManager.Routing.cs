@@ -602,8 +602,8 @@ public partial class TaxiGuidanceManager
                 int undriven = UndrivenClearanceStart.Count(
                     router, clearanceEntry.NodeId, destinationNodeId, taxiwaySequence, isRunwayDestination, out var settled,
                     fullClearanceRoute: runwayStart != null ? runwayStartRoute : null);
-                // Only a Turn pick keeps a first taxiway in: a stop keyed to one is kept with no row below, looked for
-                // along the whole route. The step list keeps a finished Via step in front of a stop still ahead, and a
+                // Only a Turn pick (or an end-of-row stop, below) keeps a first taxiway in: a stop a step entered keyed
+                // to one is kept with no row below, looked for along the whole route. The step list keeps a finished Via step in front of a stop still ahead, and a
                 // stop keyed to it once kept that taxiway, so the route went back along it behind the aircraft. The
                 // end-of-row stops, which no step reaches (every caller passes null), cannot be looked for that way.
                 bool leaveOut = undriven > 0
@@ -1543,8 +1543,8 @@ public partial class TaxiGuidanceManager
                 if (undrivenStartNote != null)
                     summary = undrivenStartNote + " " + summary;
                 // A first cleared taxiway the route still turns straight back at, because it could not be
-                // left out (a Turn pick keyed to it, the only cleared taxiway, a clearance the router cannot
-                // honour without it): the route stays on the pavement, and the pilot hears what it does.
+                // left out (UndrivenClearanceStart.TurnBackNote lists why): the route stays on the pavement, and
+                // the pilot hears what it does.
                 // Not for a route the router built ignoring the clearance: it never goes out to the taxiway,
                 // and its fallback reason is said already.
                 string? turnBackNote = firstCleared != null && string.IsNullOrEmpty(route.ConstrainedFallbackReason)
