@@ -34,9 +34,24 @@ public sealed record ClearanceProgress(
 /// </summary>
 public sealed record PlacedStop(int Row, ClearanceTargetKind Kind, string Name, int PointNodeId, int StopNodeId)
 {
-    /// <summary>The Hold short step it came from, as <see cref="ClearanceTrim.Remaining"/> matches a passed stop.</summary>
+    /// <summary>The Hold short step it came from, as <see cref="ClearanceTrim.Remaining"/> matches a passed stop: its row
+    /// as entered, a stop kept with no row when its taxiway was left out included (<see cref="ClearanceNumbering.AsEntered(PlacedStop)"/>).</summary>
     public ClearanceHold AsHold(ClearanceNumbering numbering)
-        => new(numbering.AsEntered(Row), new ClearanceStep(ClearanceStepKind.HoldShort, Kind, Name, NodeId: PointNodeId));
+        => new(numbering.AsEntered(this), new ClearanceStep(ClearanceStepKind.HoldShort, Kind, Name, NodeId: PointNodeId));
+
+    /// <summary>
+    /// The pilot's stops as <c>LoadRoute</c> takes them ((row, target) pairs: runways, taxiways, holding points), as stops
+    /// not placed yet (node 0), named as placing them records them, for <see cref="ClearanceNumbering.Removing(IReadOnlyCollection{int}, IEnumerable{PlacedStop})"/>.
+    /// </summary>
+    public static List<PlacedStop> Entered(IReadOnlyList<KeyValuePair<int, string>>? runway,
+        IReadOnlyList<KeyValuePair<int, string>>? taxiway, IReadOnlyList<KeyValuePair<int, HoldingPointHoldShort>>? points)
+        => (runway ?? Array.Empty<KeyValuePair<int, string>>())
+            .Select(s => new PlacedStop(s.Key, ClearanceTargetKind.Runway, s.Value, 0, 0))
+            .Concat((taxiway ?? Array.Empty<KeyValuePair<int, string>>())
+                .Select(s => new PlacedStop(s.Key, ClearanceTargetKind.Taxiway, s.Value, 0, 0)))
+            .Concat((points ?? Array.Empty<KeyValuePair<int, HoldingPointHoldShort>>())
+                .Select(s => new PlacedStop(s.Key, ClearanceTargetKind.HoldingPoint, s.Value.Name, s.Value.NodeId, 0)))
+            .ToList();
 }
 
 /// <summary>
@@ -79,6 +94,12 @@ public sealed record ClearanceProgressState(
     /// <summary>Route loading removed these rows, numbered as the clearance stands now (<see cref="ClearanceNumbering.Removing"/>).</summary>
     public ClearanceProgressState WithRowsLeftOut(IReadOnlyCollection<int> rowsNow)
         => this with { Numbering = Numbering.Removing(rowsNow) };
+
+    /// <summary>Route loading left out these first taxiways as never driven ([RTE-39]) and kept the stops on them with no
+    /// row: <paramref name="stopsNow"/> are the stops before that, numbered as the clearance stands now
+    /// (<see cref="ClearanceNumbering.Removing(IReadOnlyCollection{int}, IEnumerable{PlacedStop})"/>).</summary>
+    public ClearanceProgressState WithRowsLeftOut(IReadOnlyCollection<int> rowsNow, IEnumerable<PlacedStop> stopsNow)
+        => this with { Numbering = Numbering.Removing(rowsNow, stopsNow) };
 
     /// <summary>These crossings were used: at their line, or, with no stop of their own, where the route reaches the runway.</summary>
     public ClearanceProgressState WithUsed(IEnumerable<ClearedCrossing> used)

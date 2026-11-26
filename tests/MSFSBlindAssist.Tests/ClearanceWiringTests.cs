@@ -74,12 +74,42 @@ public class ClearanceWiringTests
         string load = Member(RoutingSource(), "public string? LoadRoute(");
 
         Assert.Contains("_clearanceProgress = _clearanceProgress.WithRowsLeftOut(droppedRowIndices);", load);
-        Assert.Contains("_clearanceProgress = _clearanceProgress.WithRowsLeftOut(leftOutRows);", load);
-        // The stops as lists follow their rows, and a stop with no row never keeps a first taxiway from being left out.
+        // The stops as lists follow their rows; a stop on a skipped runway leg goes with it (and is said).
         Assert.Contains("ClearanceRows.Without(userRunwayHoldShorts, droppedRowIndices)", load);
-        Assert.Contains("UndrivenClearanceStart.PicksAllow(", load);
         Assert.Contains("ClearanceRows.RowsOf(userRunwayHoldShorts)", load);
         Assert.DoesNotContain("userRunwayHoldShorts?.Keys", load);
+    }
+
+    // Final review, Important 1 [RTE-39]: a first taxiway left out as never driven keeps the stops entered after it, with
+    // no row of their own (looked for along the whole route, as a crossing is), remembered as entered before they are
+    // re-keyed; so no stop keeps that taxiway in the route, only a Turn pick does. A trimmed "Via A, Hold short of runway
+    // 09, Via B" with the aircraft on B kept A, and the route went back along A behind the aircraft.
+    [Fact]
+    public void A_taxiway_left_out_keeps_its_stops_and_only_a_Turn_pick_keeps_it_in()
+    {
+        string load = Member(RoutingSource(), "public string? LoadRoute(");
+
+        int gateStart = load.IndexOf("bool leaveOut = undriven > 0", StringComparison.Ordinal);
+        Assert.True(gateStart >= 0, "the leave-out gate not found");
+        string gate = load[gateStart..load.IndexOf(';', gateStart)];
+        Assert.Contains("UndrivenClearanceStart.TurnPicksAllow(undriven, turnPicks?.Keys)", gate);
+        Assert.DoesNotContain("RowsOf(", gate);
+        Assert.DoesNotContain("userRunwayHoldShorts", gate);
+        Assert.DoesNotContain("userTaxiwayHoldShorts", gate);
+        Assert.DoesNotContain("userHoldingPointHoldShorts", gate);
+
+        int remembered = load.IndexOf("_clearanceProgress = _clearanceProgress.WithRowsLeftOut(leftOutRows, Navigation.PlacedStop.Entered(" +
+                                      "userRunwayHoldShorts, userTaxiwayHoldShorts, userHoldingPointHoldShorts));", StringComparison.Ordinal);
+        int rekeyed = load.IndexOf("ClearanceRows.WithoutKeepingStops(userRunwayHoldShorts, leftOutRows)", StringComparison.Ordinal);
+        Assert.True(remembered >= 0 && rekeyed > remembered, "the stops are remembered as entered before they lose their rows");
+        Assert.Contains("ClearanceRows.WithoutKeepingStops(userTaxiwayHoldShorts, leftOutRows)", load);
+        Assert.Contains("ClearanceRows.WithoutKeepingStops(userHoldingPointHoldShorts, leftOutRows)", load);
+        Assert.DoesNotContain("ClearanceRows.Without(userRunwayHoldShorts, leftOutRows)", load);
+        Assert.DoesNotContain("_clearanceProgress = _clearanceProgress.WithRowsLeftOut(leftOutRows);", load);
+
+        // A passed stop is reported as the step it came from, numbered as entered (ClearanceRowsTests).
+        string progress = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Navigation", "ClearanceProgress.cs"));
+        Assert.Contains("=> new(numbering.AsEntered(this), new ClearanceStep(", progress);
     }
 
     // Used, put back, cleared again or passed: kept where guidance uses a crossing and where the Hold short key puts one

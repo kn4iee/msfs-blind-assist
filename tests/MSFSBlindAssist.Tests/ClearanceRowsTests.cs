@@ -142,6 +142,60 @@ public class ClearanceRowsTests
         Assert.True(UndrivenClearanceStart.PicksAllow(1, ClearanceRows.RowsOf(Stops((-1, "04L"), (1, "C")))));
     }
 
+    // [RTE-39]: a first taxiway left out as never driven keeps the stops entered after it. "Via A, Hold short of runway
+    // 09, Via B" trimmed with the aircraft on B keeps the finished A in front of the stop; the 09 stop, keyed to A, kept
+    // A in the route, which went back along A behind the aircraft and started with a U-turn (final review, Important 1).
+    // Left out, A's stops stay with no row of their own (-1), looked for along the whole route as a crossing is; a later
+    // stop moves down with its row, and one with no row keeps none.
+    [Fact]
+    public void A_stop_on_a_taxiway_left_out_stays_with_no_row()
+    {
+        var stops = Stops((0, "09"), (0, "B"), (-1, "04L"), (1, "22R"), (2, "C"));
+
+        var kept = ClearanceRows.WithoutKeepingStops(stops, ClearanceRows.Leading(1));
+
+        Assert.Equal(Stops((-1, "09"), (-1, "B"), (-1, "04L"), (0, "22R"), (1, "C")), kept);
+        Assert.Null(ClearanceRows.WithoutKeepingStops((List<KeyValuePair<int, string>>?)null, new[] { 0 }));
+        // So a stop never keeps its taxiway in the route: only a Turn pick does (TurnPicksAllow, a row up to the count).
+        Assert.False(UndrivenClearanceStart.TurnPicksAllow(1, new[] { 1 }));
+        Assert.True(UndrivenClearanceStart.TurnPicksAllow(1, new[] { 2 }));
+    }
+
+    // A stop left with no row is numbered as entered again from the stops as they stood when its row was left out (the
+    // trim matches a passed stop by its Via step), unless two alike say different rows: one entered with no row of its
+    // own and one on the row left out cannot be told apart, and the stop keeps none (the trim then keeps the step).
+    [Fact]
+    public void A_stop_left_with_no_row_is_numbered_as_entered()
+    {
+        // Entered: A (row 0), 25 (a runway leg, row 1, skipped first), B, C. Stops: 09 after A, K after B, 04L before A.
+        var asKeyed = PlacedStop.Entered(Stops((0, "09"), (-1, "04L")), Stops((1, "K")), null);
+        Assert.Equal(new[]
+        {
+            new PlacedStop(0, ClearanceTargetKind.Runway, "09", 0, 0),
+            new PlacedStop(-1, ClearanceTargetKind.Runway, "04L", 0, 0),
+            new PlacedStop(1, ClearanceTargetKind.Taxiway, "K", 0, 0),
+        }, asKeyed);
+
+        var numbering = ClearanceNumbering.For(null).Removing(new[] { 1 }).Removing(ClearanceRows.Leading(1), asKeyed);
+
+        Assert.Equal(0, numbering.AsEntered(new PlacedStop(-1, ClearanceTargetKind.Runway, "09", 0, 30)));
+        Assert.Equal(-1, numbering.AsEntered(new PlacedStop(-1, ClearanceTargetKind.Runway, "04L", 0, 40)));
+        Assert.Equal(2, numbering.AsEntered(new PlacedStop(0, ClearanceTargetKind.Taxiway, "K", 0, 50)));
+        // Another kind, or a holding point's other node, is another stop.
+        Assert.Equal(-1, numbering.AsEntered(new PlacedStop(-1, ClearanceTargetKind.Taxiway, "09", 0, 30)));
+        var points = ClearanceNumbering.For(null).Removing(ClearanceRows.Leading(1),
+            PlacedStop.Entered(null, null, new List<KeyValuePair<int, HoldingPointHoldShort>> { new(0, new HoldingPointHoldShort("L2", 77)) }));
+        Assert.Equal(0, points.AsEntered(new PlacedStop(-1, ClearanceTargetKind.HoldingPoint, "L2", 77, 77)));
+        Assert.Equal(-1, points.AsEntered(new PlacedStop(-1, ClearanceTargetKind.HoldingPoint, "L2", 78, 78)));
+
+        // 09 entered twice: before any Via step and after A, which was left out.
+        var twice = ClearanceNumbering.For(null).Removing(ClearanceRows.Leading(1),
+            PlacedStop.Entered(Stops((-1, "09"), (0, "09")), null, null));
+        Assert.Equal(-1, twice.AsEntered(new PlacedStop(-1, ClearanceTargetKind.Runway, "09", 0, 30)));
+        // Nothing left out that way: a stop with no row keeps none.
+        Assert.Equal(-1, ClearanceNumbering.For(null).AsEntered(new PlacedStop(-1, ClearanceTargetKind.Runway, "09", 0, 30)));
+    }
+
     // A recalculation numbers the stops on the remaining rows from the first of them: one behind the aircraft goes,
     // one with no row of its own stays with none, and several on one row all stay.
     [Fact]

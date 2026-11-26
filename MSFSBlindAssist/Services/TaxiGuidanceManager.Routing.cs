@@ -602,11 +602,12 @@ public partial class TaxiGuidanceManager
                 int undriven = UndrivenClearanceStart.Count(
                     router, clearanceEntry.NodeId, destinationNodeId, taxiwaySequence, isRunwayDestination, out var settled,
                     fullClearanceRoute: runwayStart != null ? runwayStartRoute : null);
+                // Only a Turn pick keeps a first taxiway in: a stop keyed to one is kept with no row below, looked for
+                // along the whole route. The step list keeps a finished Via step in front of a stop still ahead, and a
+                // stop keyed to it once kept that taxiway, so the route went back along it behind the aircraft. The
+                // end-of-row stops, which no step reaches (every caller passes null), cannot be looked for that way.
                 bool leaveOut = undriven > 0
-                    // A stop with no taxiway of its own sits on no row, so it never keeps a first taxiway in.
-                    && UndrivenClearanceStart.PicksAllow(
-                        undriven, userHoldShortIndices, ClearanceRows.RowsOf(userRunwayHoldShorts),
-                        ClearanceRows.RowsOf(userTaxiwayHoldShorts), ClearanceRows.RowsOf(userHoldingPointHoldShorts))
+                    && UndrivenClearanceStart.PicksAllow(undriven, userHoldShortIndices)
                     // A Turn pick on the first taxiway that stays names the turn from one that would go.
                     && UndrivenClearanceStart.TurnPicksAllow(undriven, turnPicks?.Keys)
                     // A runway start keeps its own rule: the route taken must not come back onto the runway.
@@ -627,14 +628,17 @@ public partial class TaxiGuidanceManager
                     // In place: _originalTaxiwaySequence is this list, and the picks are keyed by position in it.
                     taxiwaySequence.RemoveRange(0, undriven);
                     var leftOutRows = ClearanceRows.Leading(undriven);
+                    // The window's step list keeps those rows, and the stops entered after them: remembered as entered
+                    // first, so a stop passed with no row is still matched to its step.
+                    _clearanceProgress = _clearanceProgress.WithRowsLeftOut(leftOutRows, Navigation.PlacedStop.Entered(userRunwayHoldShorts, userTaxiwayHoldShorts, userHoldingPointHoldShorts));
                     userHoldShortIndices = _userHoldShortIndices = ClearanceRows.Without(userHoldShortIndices, leftOutRows);
-                    userRunwayHoldShorts = _userRunwayHoldShorts = ClearanceRows.Without(userRunwayHoldShorts, leftOutRows);
-                    userTaxiwayHoldShorts = _userTaxiwayHoldShorts = ClearanceRows.Without(userTaxiwayHoldShorts, leftOutRows);
+                    // A stop after a taxiway left out stays, with no row: looked for along the whole route.
+                    userRunwayHoldShorts = _userRunwayHoldShorts = ClearanceRows.WithoutKeepingStops(userRunwayHoldShorts, leftOutRows);
+                    userTaxiwayHoldShorts = _userTaxiwayHoldShorts = ClearanceRows.WithoutKeepingStops(userTaxiwayHoldShorts, leftOutRows);
                     userHoldingPointHoldShorts = _userHoldingPointHoldShorts =
-                        ClearanceRows.Without(userHoldingPointHoldShorts, leftOutRows);
+                        ClearanceRows.WithoutKeepingStops(userHoldingPointHoldShorts, leftOutRows);
                     turnPicks = ClearanceRows.Without(turnPicks, leftOutRows);
                     _clearRequests = ClearanceRows.Without(_clearRequests, leftOutRows)!;
-                    _clearanceProgress = _clearanceProgress.WithRowsLeftOut(leftOutRows);
                     firstCleared = taxiwaySequence[0];
                     if (runwayStart == null)
                         firstTwNode = SelectFirstTaxiwayEntry(aircraftLat, aircraftLon, firstCleared, destComponentId, destinationNodeId);
@@ -1539,7 +1543,7 @@ public partial class TaxiGuidanceManager
                 if (undrivenStartNote != null)
                     summary = undrivenStartNote + " " + summary;
                 // A first cleared taxiway the route still turns straight back at, because it could not be
-                // left out (a pick keyed to it, the only cleared taxiway, a clearance the router cannot
+                // left out (a Turn pick keyed to it, the only cleared taxiway, a clearance the router cannot
                 // honour without it): the route stays on the pavement, and the pilot hears what it does.
                 // Not for a route the router built ignoring the clearance: it never goes out to the taxiway,
                 // and its fallback reason is said already.

@@ -42,8 +42,23 @@ public static class ClearanceRows
             .ToList();
 
     /// <summary>
-    /// The rows the stops in <paramref name="picks"/> sit on, for <see cref="CountOn"/> and
-    /// <c>UndrivenClearanceStart.PicksAllow</c>: a stop with no row of its own sits on none. Null stays null.
+    /// The stops in <paramref name="picks"/> once the leading <paramref name="removedRows"/> are left out because the
+    /// route never drives them ([RTE-39]): a stop on one of them is kept with no row of its own (-1), so it is looked for
+    /// along the whole route, as a crossing whose row goes is (<see cref="Without(IReadOnlyList{ClearedCrossing}?, IReadOnlyCollection{int})"/>);
+    /// a later stop moves down with its row, and one with no row keeps none. The step list keeps a finished Via step in
+    /// front of a stop still ahead (<c>ClearanceTrim.Remaining</c>), and a stop keyed to it once kept that taxiway in the
+    /// route, which then went back along it behind the aircraft. Null stays null.
+    /// </summary>
+    public static List<KeyValuePair<int, T>>? WithoutKeepingStops<T>(IReadOnlyList<KeyValuePair<int, T>>? picks,
+                                                                   IReadOnlyCollection<int> removedRows)
+        => picks?.Select(p => p.Key < 0 ? p
+                : removedRows.Contains(p.Key) ? new KeyValuePair<int, T>(-1, p.Value)
+                : new KeyValuePair<int, T>(Renumber(p.Key, removedRows), p.Value))
+            .ToList();
+
+    /// <summary>
+    /// The rows the stops in <paramref name="picks"/> sit on, for <see cref="CountOn"/>: a stop with no row of its own
+    /// sits on none. Null stays null.
     /// </summary>
     public static IEnumerable<int>? RowsOf<T>(IReadOnlyList<KeyValuePair<int, T>>? picks)
         => picks?.Where(p => p.Key >= 0).Select(p => p.Key).ToList();
@@ -115,6 +130,45 @@ public sealed record ClearanceNumbering(IReadOnlyList<int> RemovedRows, IReadOnl
         foreach (int row in rowsNow.Select(AsEntered).ToList())
             if (row >= 0) removed.Add(row);
         return this with { RemovedRows = removed.ToList() };
+    }
+
+    /// <summary>
+    /// The pilot's stops route loading holds with no row of its own once a first taxiway was left out as never driven
+    /// ([RTE-39], <see cref="ClearanceRows.WithoutKeepingStops{T}"/>), with the row each was entered on (-1: entered with
+    /// none, recorded too, so the two cannot be mistaken for each other), for <see cref="AsEntered(PlacedStop)"/>. Empty
+    /// until rows are left out that way.
+    /// </summary>
+    public IReadOnlyList<PlacedStop> UnkeyedStops { get; init; } = Array.Empty<PlacedStop>();
+
+    /// <summary>
+    /// This numbering once the leading rows <paramref name="rowsNow"/> are left out as never driven and the stops on them
+    /// kept with no row: <paramref name="stopsNow"/> are every stop as LoadRoute holds them before that (rows numbered as
+    /// the clearance stands now, <see cref="PlacedStop.Entered"/>); those on <paramref name="rowsNow"/> and those with no
+    /// row are remembered with their row as entered (<see cref="UnkeyedStops"/>).
+    /// </summary>
+    public ClearanceNumbering Removing(IReadOnlyCollection<int> rowsNow, IEnumerable<PlacedStop> stopsNow)
+    {
+        var unkeyed = UnkeyedStops
+            .Concat(stopsNow.Where(s => s.Row < 0 || rowsNow.Contains(s.Row)).Select(s => s with { Row = AsEntered(s.Row) }))
+            .ToList();
+        return Removing(rowsNow) with { UnkeyedStops = unkeyed };
+    }
+
+    /// <summary>
+    /// The row a placed stop was entered on: its own row as entered (<see cref="AsEntered(int)"/>), or, for one placed
+    /// with no row, the row of the one stop alike in <see cref="UnkeyedStops"/> (the same kind, name and holding-point
+    /// node), so a stop whose taxiway was left out is matched to its step again. -1 when none is, or when stops alike
+    /// were entered on different rows (one with none among them): which is which cannot be told, so the step stays.
+    /// </summary>
+    public int AsEntered(PlacedStop stop)
+    {
+        if (stop.Row >= 0) return AsEntered(stop.Row);
+        var rows = UnkeyedStops
+            .Where(u => u.Kind == stop.Kind && u.Name == stop.Name && u.PointNodeId == stop.PointNodeId)
+            .Select(u => u.Row)
+            .Distinct()
+            .ToList();
+        return rows.Count == 1 ? rows[0] : -1;
     }
 
     /// <summary>A row as the clearance stands now, numbered as entered; a negative row (none) stays as it is.</summary>

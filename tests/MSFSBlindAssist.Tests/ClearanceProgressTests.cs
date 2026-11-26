@@ -307,6 +307,42 @@ public class ClearanceProgressTests
         Assert.Empty(ClearanceProgressState.For(null).TurnsMade);
     }
 
+    // Final review, Important 1, end to end: "Via A, Hold short of runway 09, Via B", the aircraft on B. The trim keeps the
+    // finished A in front of the stop; route loading leaves A out [RTE-39] and keeps the 09 stop with no row, looked for
+    // along the whole route (ClearanceRows.WithoutKeepingStops). Once the aircraft has passed it, the stop is reported
+    // as the step it came from (after A, Via step 0), so the trim drops it: never searched again, never "not crossed".
+    [Fact]
+    public void A_stop_kept_with_no_row_when_its_taxiway_is_left_out_is_trimmed_once_passed()
+    {
+        var steps = new List<ClearanceStep>
+        {
+            new(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, "A"),
+            new(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "09"),
+            new(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, "B"),
+        };
+        var plan = ClearancePlanner.Build(steps, hasDestination: false);
+        var stops = plan.Holds.Select(h => new KeyValuePair<int, string>(h.SeqIndex, h.Step.Name)).ToList();
+        Assert.Equal(new[] { new KeyValuePair<int, string>(0, "09") }, stops);
+
+        var leftOut = ClearanceRows.Leading(1);
+        var state = ClearanceProgressState.For(plan.Crossings).WithRowsLeftOut(leftOut, PlacedStop.Entered(stops, null, null));
+        var rekeyed = ClearanceRows.WithoutKeepingStops(stops, leftOut)!;
+        Assert.Equal(-1, Assert.Single(rekeyed).Key);
+
+        // Placed at node 30 with no row of its own; the aircraft has rolled past it on B.
+        state = state.WithPlaced(new[] { new PlacedStop(-1, ClearanceTargetKind.Runway, "09", 0, 30) }) with { RouteFirstRow = 0 };
+        var progress = state.Report(0, turnOntoItMade: false, Array.Empty<ClearedCrossing>(), Route, 3, holding: false);
+        Assert.Equal(0, Assert.Single(progress.HoldsPassed).SeqIndex);
+
+        var trimmed = ClearanceTrim.Remaining(steps, progress.ViaStepsDone, hasDestination: false, progress.ClearedInForce,
+            progress.ClearedUsed, progress.PutBack, progress.HoldsPassed, progress.TurnOntoFirstRemainingMade);
+        Assert.Equal(new[] { "Via A", "Via B" }, trimmed.Select(s => s.Sentence()));
+
+        // Still ahead, it stays.
+        var ahead = state.Report(0, false, Array.Empty<ClearedCrossing>(), Route, 1, holding: false);
+        Assert.Empty(ahead.HoldsPassed);
+    }
+
     // A stop with no taxiway of its own is dropped from a recalculation only when the stop it was placed at is KNOWN
     // passed, so it is never searched for again (an extra stop, or "the route does not cross it" on every later
     // "Route changed", [HLD-17]). Still ahead, held at, or never placed (a later route may meet it, and the pilot holds
