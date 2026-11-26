@@ -6,7 +6,8 @@ namespace MSFSBlindAssist.Navigation;
 /// Where a "hold short of a taxiway" stop goes on a route: set back from the junction so the aircraft
 /// stays off the taxiway, never on or inside a runway's clear margin, nor where the aircraft would be
 /// captured by the stop on one (the <see cref="ProgressiveLegEnd.CaptureRadiusM"/> before it), never
-/// splitting an off-chart leg, never before a picked turn. Pure.
+/// splitting an off-chart leg; with a Turn pick, before the turn when the taxiway lies less than the setback past
+/// it, as with none (<see cref="ChooseAroundTurn"/>). Pure.
 /// </summary>
 public static class TaxiwayHoldPlacement
 {
@@ -133,6 +134,35 @@ public static class TaxiwayHoldPlacement
         // Rule 4.
         return new Stop(StopKind.Junction, j, 0);
     }
+
+    /// <summary>
+    /// The stop for a taxiway hold on a row with a Turn pick, <paramref name="pick"/> (null without one): where
+    /// <see cref="Choose"/> places it with no floor, as if the route had no pick (owner, 2026-11-25: "Stop before the
+    /// turn"), so a taxiway less than the setback past the turn is held short of before the turn, on the taxiway before
+    /// it, the whole aircraft clear of it, and one further on after the turn, as before. One stop alone never stands:
+    /// the turn's own join node reached over a link from its departure node (<see cref="IsJoinOfALinkedTurn"/>), where
+    /// the turn is made but the leg would end with it dropped from the route, an off-chart leg ending the route and
+    /// never announced: that one is placed on the picked taxiway, floored at its first segment, as before.
+    /// </summary>
+    public static Stop ChooseAroundTurn(IReadOnlyList<TaxiRouteSegment> segments, int junctionSegmentIndex, double setbackM,
+                                        bool allowInsert, Func<double, double, bool> isClearOfRunways, AppliedTurnPick? pick)
+    {
+        var stop = Choose(segments, junctionSegmentIndex, setbackM, allowInsert, isClearOfRunways);
+        if (pick == null || !IsJoinOfALinkedTurn(stop, pick)) return stop;
+        return Choose(segments, junctionSegmentIndex, setbackM, allowInsert, isClearOfRunways, firstUsableIndex: pick.FirstTaxiwaySegment);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="stop"/> is an existing node that is <paramref name="pick"/>'s join node at the end of a
+    /// link from its departure node (an off-chart leg, or a charted link's connector): node k is the end node of
+    /// segment k, and the join node ends the segment before <see cref="AppliedTurnPick.FirstTaxiwaySegment"/>. A turn
+    /// at a junction (departure node = join node) has no link: stopping at it is stopping before the turn. A point
+    /// inserted on the link, or a node on it before the join, is before the picked taxiway, and is kept.
+    /// </summary>
+    public static bool IsJoinOfALinkedTurn(Stop stop, AppliedTurnPick pick)
+        => stop.Kind == StopKind.ExistingNode
+           && pick.FirstTaxiwaySegment > pick.FirstSegmentAfterDeparture
+           && stop.SegmentIndex == pick.FirstTaxiwaySegment - 1;
 
     /// The point metresBeforeEnd back from the segment's end node, interpolated linearly between its two nodes.
     public static (double Lat, double Lon) PointBeforeEnd(TaxiRouteSegment segment, double metresBeforeEnd)

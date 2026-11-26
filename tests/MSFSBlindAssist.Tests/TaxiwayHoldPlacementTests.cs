@@ -86,6 +86,72 @@ public class TaxiwayHoldPlacementTests
     [Fact] public void A_recalculation_finds_the_node_inserted_at_load()                  // nodes at 0, 100, 225.4, 260: 34.6 m back
         => Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(At(0, 100, 225.4, 260), 2, 35, allowInsert: false, Everywhere));
 
+    // Owner, 2026-11-25 ("Stop before the turn"): with or without a Turn pick, a taxiway held short of less than the
+    // setback past the turn is held short of BEFORE the turn, on the taxiway before it, the whole aircraft clear of
+    // it; the manager places through ChooseAroundTurn, which passes Choose no floor. Choose keeps its floor (above).
+    private static AppliedTurnPick Pick(int firstSegmentAfterDeparture, int firstTaxiwaySegment, bool offChart = false)
+        => new() { RowIndex = 1, Side = TurnSide.Left, TaxiwayName = "F",
+                   FirstSegmentAfterDeparture = firstSegmentAfterDeparture, FirstTaxiwaySegment = firstTaxiwaySegment, IsOffChart = offChart };
+
+    [Fact] public void With_a_pick_a_taxiway_too_close_past_the_turn_is_held_short_of_before_the_turn()
+    {
+        // Nodes at 0, 50, 100, 120: Z to the turn at 100, F from there, B meets F 20 m on. The floor put the stop at the
+        // junction itself (the nose on B); now it is the node 70 m back on Z, as with no pick.
+        var route = At(0, 50, 100, 120);
+        Assert.Equal(new Stop(StopKind.Junction, 2, 0), Choose(route, 2, 35, allowInsert: true, Everywhere, firstUsableIndex: 2));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(2, 2)));
+        Assert.Equal(Choose(route, 2, 35, allowInsert: true, Everywhere), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(2, 2)));
+        // A point inserted on Z when no node is in reach: nodes at 0, 100, 120, the point 15 m before the turn.
+        var inserted = ChooseAroundTurn(At(0, 100, 120), 1, 35, allowInsert: true, Everywhere, Pick(1, 1));
+        Assert.Equal((StopKind.InsertOnSegment, 0), (inserted.Kind, inserted.SegmentIndex));
+        Assert.Equal(15, inserted.MetresBeforeSegmentEnd, 6);   // setback minus a computed 20 m edge
+        Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 100, 120), 1, 35, allowInsert: true, Everywhere, firstUsableIndex: 1));
+    }
+
+    [Fact] public void With_a_pick_a_taxiway_far_enough_past_the_turn_is_held_short_of_after_the_turn()   // nodes at 0, 100, 200
+        => Assert.Equal(new Stop(StopKind.InsertOnSegment, 1, 35), ChooseAroundTurn(At(0, 100, 200), 1, 35, allowInsert: true, Everywhere, Pick(1, 1)));
+
+    [Fact] public void With_no_pick_the_stop_is_placed_as_Choose_places_it()
+    {
+        Assert.Equal(Choose(At(0, 50, 100, 120), 2, 35, allowInsert: true, Everywhere),
+                     ChooseAroundTurn(At(0, 50, 100, 120), 2, 35, allowInsert: true, Everywhere, null));
+        Assert.Equal(Choose(At(0, 130, 260), 1, 35, allowInsert: false, Everywhere),
+                     ChooseAroundTurn(At(0, 130, 260), 1, 35, allowInsert: false, Everywhere, null));
+    }
+
+    // An off-chart turn too close to the taxiway: the stop goes back across the off-chart leg (never split) to its
+    // departure node, so the leg never ends on it. Nodes at 0, 100, 160, 180: the off-chart leg 100-160, F 160-180.
+    [Fact] public void An_off_chart_turn_too_close_to_the_taxiway_is_held_short_of_before_it()
+    {
+        var route = At(0, 100, 160, 180); route[1].IsOffChartTurn = true;
+        Assert.Equal(new Stop(StopKind.Junction, 2, 0), Choose(route, 2, 35, allowInsert: true, Everywhere, firstUsableIndex: 2));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(1, 2, offChart: true)));
+    }
+
+    // The one stop that never lands before the picked taxiway: the turn's own join node reached over a link (an
+    // off-chart leg here). The leg would end with the off-chart leg as its last segment and the pick dropped, its
+    // entering sentence never said: it goes onto F, as before. Nodes at 0, 100, 160, 200: F is 40 m to B.
+    [Fact] public void A_stop_at_the_join_of_a_linked_turn_goes_onto_the_picked_taxiway()
+    {
+        var route = At(0, 100, 160, 200); route[1].IsOffChartTurn = true;
+        Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(route, 2, 35, allowInsert: true, Everywhere));
+        Assert.True(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 1, 0), Pick(1, 2, offChart: true)));
+        Assert.Equal(new Stop(StopKind.InsertOnSegment, 2, 35), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(1, 2, offChart: true)));
+    }
+
+    [Fact] public void Only_the_join_after_a_link_is_moved_onto_the_picked_taxiway()
+    {
+        var linked = Pick(1, 3);   // departure node 1 (end of segment 0), a two-segment connector, join node 3 (end of segment 2)
+        Assert.True(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 2, 0), linked));
+        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 1, 0), linked));      // on the connector: before the turn
+        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.InsertOnSegment, 2, 10), linked));  // on the connector, short of the join
+        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 0, 0), linked));      // the departure node
+        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 3, 0), linked));      // on the picked taxiway
+        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.NoSafeStop, -1, 0), linked));
+        // A turn at a junction (departure node = join node): stopping at it is stopping before the turn.
+        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 1, 0), Pick(2, 2)));
+    }
+
     // A runway crossed inside ONE edge has no node on it, so only sampling the stretch finds it (spec 8.6: move forward).
     // In the first two the band also reaches into the junction's own 25 m approach (235-260), so the junction is no
     // stop either (spec 8.5, 8.8): nothing is placed.

@@ -806,8 +806,9 @@ static (List<TaxiNode> path, (double lat, double lon) at)? ChartedWayAt(TaxiRout
 // short of (JunctionAhead; the node is the app's, read by reflection, with the harness's own pick of it
 // beside it as a cross-check). After every load the route is checked: each Turn pick's indices
 // still name its departure and join (LEGEND_PICK_INDEX), no off-chart leg is split
-// (LEGEND_OFFCHART_SPLIT) or ends the route (LEGEND_ENDS_OFFCHART), and a pick that changed the route
-// passes no node on B between its turn and its stop (LEGEND_PICK_NOT_FIRST_JUNCTION). The rest of the
+// (LEGEND_OFFCHART_SPLIT) or ends the route (LEGEND_ENDS_OFFCHART), a pick that changed the route
+// passes no node on B between its turn and its stop (LEGEND_PICK_NOT_FIRST_JUNCTION), and a pick the leg
+// ends before (dropped from the route) is never said as made (LEGEND_DROPPED_PICK_SPOKEN). The rest of the
 // route is read too: LEG_PICK_LINK_CROSSES_B on the charted link to the picked turn,
 // LEG_PASSES_B_JUNCTION without such a pick, LEG_PASSES_B_IN_RUNWAY_MARGIN for a meeting inside a
 // runway's clear margin, which the app skips by design. While flying, LEG_ENDED_ON_RUNWAY when the leg
@@ -1191,6 +1192,13 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
                 : said.Contains($"onto taxiway {lp.A} does not pass", StringComparison.OrdinalIgnoreCase) ? "NO_PIN"
                 : applied == null ? "SILENT"
                 : applied.IsOffChart ? "OFFCHART" : applied.ChangedRoute ? "CHARTED" : "MET";
+            // SILENT: the pick is off the route, refused by nothing. The leg ends before the picked turn (B lies less
+            // than the setback past it; owner, 2026-11-25: "Stop before the turn"), so the turn is never made and
+            // must never be announced as picked, nor as an off-chart leg.
+            if (applied == null
+                && (said.Contains($"onto taxiway {lp.A}, as picked", StringComparison.OrdinalIgnoreCase)
+                    || said.Contains($"off-chart {sideWord} turn onto taxiway {lp.A}", StringComparison.OrdinalIgnoreCase)))
+                fs.Add(new Finding(w.Icao, "LEGEND_DROPPED_PICK_SPOKEN", where, $"the pick is off the route, yet said: {said}"));
         }
 
         // The route as loaded: the stop placement left every pick's indices and the off-chart leg whole.

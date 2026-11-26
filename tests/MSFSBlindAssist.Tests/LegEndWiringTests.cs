@@ -77,15 +77,15 @@ public class LegEndWiringTests
     }
 
     // A hold short of a taxiway, mid-route or at the end of a leg, stops where the pure
-    // TaxiwayHoldPlacement says (TaxiwayHoldPlacementTests), and a split re-indexes the Turn picks.
-    // The leg end is cut back only while the route still ends at the junction: a recalculation that
-    // keeps a Turn pick's tail ends at the stop placed at load and is never cut again (TURN-3).
+    // TaxiwayHoldPlacement says (TaxiwayHoldPlacementTests), around any Turn pick on its row, and a split
+    // re-indexes the Turn picks. The leg end is cut back only while the route still ends at the junction: a
+    // recalculation that keeps a Turn pick's tail ends at the stop placed at load and is never cut again (TURN-3).
     [Fact]
     public void Taxiway_holds_are_placed_through_TaxiwayHoldPlacement()
     {
         string text = RoutingSource();
 
-        Assert.Contains("TaxiwayHoldPlacement.Choose(", text);
+        Assert.Contains("TaxiwayHoldPlacement.ChooseAroundTurn(", text);
         Assert.Contains("TaxiwayHoldPlacement.ShiftPicksAfterSplit(", text);
         Assert.Contains("ApplyLegEndSetback(", text);
         Assert.Contains("Segments[^1].ToNode.NodeId == _destinationNodeId", text);
@@ -155,6 +155,43 @@ public class LegEndWiringTests
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
         Assert.NotNull(field);
         Assert.Equal(MSFSBlindAssist.Navigation.ProgressiveLegEnd.CaptureRadiusM, (double)field!.GetRawConstantValue()!);
+    }
+
+    // Owner, 2026-11-25 ("Stop before the turn"): a taxiway stop no longer floors at a Turn pick's taxiway, so "Left
+    // onto F" stops where "Via F" does; the placement around the turn is the pure TaxiwayHoldPlacement.ChooseAroundTurn
+    // (TaxiwayHoldPlacementTests). A leg end that now stops before the picked turn drops the pick from the route, and
+    // the load note is composed from the picks still on the route: no "Turning left onto taxiway F, as picked." for a
+    // turn the leg ends before. A mid-route stop keeps its pick (the turn is made after Continue).
+    [Fact]
+    public void A_taxiway_stop_is_placed_around_a_picked_turn_and_the_note_names_only_turns_still_on_the_route()
+    {
+        string text = RoutingSource();
+        string place = Member(text, "private int PlaceTaxiwayHoldStop(");
+        string setback = Member(text, "private string? ApplyLegEndSetback(");
+        string load = Member(text, "public string? LoadRoute(");
+
+        Assert.Contains("TaxiwayHoldPlacement.ChooseAroundTurn(route.Segments, junctionSegmentIndex, setbackM, allowInsert,", place);
+        Assert.Contains("route.TurnPicks.FirstOrDefault(p => p.RowIndex == rowIndex)", place);
+        Assert.DoesNotContain("firstUsableIndex", place);
+        Assert.DoesNotContain("TaxiwayHoldPlacement.Choose(", place);
+
+        Assert.Contains("route.TurnPicks = route.TurnPicks.Where(q => q.FirstTaxiwaySegment <= last).ToList();", setback);
+        Assert.Matches(@"TurnPickMessages\.ComposeLoadNote\(\s*route\.TurnPicks, turnPickResult\.Refusals,", load);
+        Assert.DoesNotContain("turnPickResult.Applied, turnPickResult.Refusals", load);
+        int cut = load.IndexOf("ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways)", StringComparison.Ordinal);
+        int note = load.IndexOf("TurnPickMessages.ComposeLoadNote(", StringComparison.Ordinal);
+        Assert.True(cut >= 0 && note > cut, "the note is composed after the leg end has dropped the picks it ends before");
+        // The mid-route stops keep their picks: only the leg end drops one.
+        Assert.Single(Regex.Matches(text, @"route\.TurnPicks = route\.TurnPicks\.Where\("));
+    }
+
+    // A member's text: from its declaration to the next member at class level.
+    private static string Member(string text, string declaration)
+    {
+        int start = text.IndexOf(declaration, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"{declaration} not found");
+        var next = Regex.Match(text[(start + 1)..], @"\n    (private|public|internal|protected) ");
+        return next.Success ? text.Substring(start, next.Index + 1) : text[start..];
     }
 
     // TryRecalculateRoute's body: from its declaration to the next member at class level.
