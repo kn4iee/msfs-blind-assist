@@ -298,6 +298,9 @@ public partial class TaxiGuidanceManager : IDisposable
     private DateTime _pairedCrossingWindowFrom = DateTime.MinValue;
     private DateTime _pairedCrossingWindowUntil = DateTime.MinValue;
     private const double PAIRED_CROSSING_MAX_M = 400.0;
+    // When a Continue last released a hold and resumed taxiing (SimClock): a Continue before the line inside the
+    // same delay is a double press, ignored (PairedCrossingHoldWindow.IgnoresEarlyContinue). MinValue: none yet.
+    private DateTime _continueResumedAt = DateTime.MinValue;
 
     // LAHSO — land and hold short (VATSIM gap analysis 2026-08-31, P5). Set by
     // BeginLandingRollout(NoGraph) from the landing exit planner, cleared at
@@ -4471,6 +4474,15 @@ public partial class TaxiGuidanceManager : IDisposable
             && _currentSegmentIndex >= 0 && _currentSegmentIndex < _route.Segments.Count
             && !(_pairedCrossingSegIdx >= 0 && MSFSBlindAssist.Utils.SimClock.UtcNow < _pairedCrossingWindowFrom))
         {
+            // Nor straight after the Continue that resumed taxiing (owner, 2026-11-25: "Ignore it"): a quick double press
+            // at a hold would clear the next runway's stop, which, under about 90 m ahead, its countdown names in the
+            // first frame. Ignored and unsaid, as a press before the countdown is; one after the delay works as before.
+            if (Navigation.PairedCrossingHoldWindow.IgnoresEarlyContinue(MSFSBlindAssist.Utils.SimClock.UtcNow, _continueResumedAt))
+            {
+                _guidanceLog.Info($"Continue before the line: ignored, under {Navigation.PairedCrossingHoldWindow.MinDelaySeconds:F0} s " +
+                                  "after the Continue that resumed taxiing.");
+                return;
+            }
             var seg = _route.Segments[_currentSegmentIndex];
             if (ClearedCrossingHolds.CanClearEarly(
                     _holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced,
@@ -4624,6 +4636,8 @@ public partial class TaxiGuidanceManager : IDisposable
 
         SetState(TaxiGuidanceState.Taxiing);
         _steeringTone.Resume();
+        // A Continue before the line inside the delay from here is a double press (IgnoresEarlyContinue above).
+        _continueResumedAt = MSFSBlindAssist.Utils.SimClock.UtcNow;
 
         // Reset approach/crossing flags so the first turn or crossing on the new leg
         // isn't suppressed by flags left set during the pre-hold-short approach.

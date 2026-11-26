@@ -767,6 +767,11 @@ for line, as a run without the option.
 | HOLD | 220 | 211 | 211 "Holding short of R. N metres." | 211, none on runway pavement | | 0 to 116 m from the stop node (median 53) |
 | PAST | 220 | 214 | 214 "Past the hold line of R." | 0 | | 10.0 to 17.8 m past the stop node (median 10.4), none on runway pavement |
 
+Re-run the same day after the owner's "Ignore it" ruling (a Continue before the line within 2 s of the Continue that
+resumed taxiing does nothing, `PairedCrossingHoldWindow.IgnoresEarlyContinue`), with the "Stop before the turn" and
+"Warn at Calculate" changes in the build too: every `taxi` and `turnpicks` result and finding line the same. No key
+flight presses that soon after a resume: the double press the ruling settles is not flown.
+
 `taxi` flew 87 of each (261), `turnpicks` 133 (399). Not flown: the plans whose route crosses no runway (287 per
 variant), whose first crossing is a start hold (10 per variant), and in `taxi` 4 clearance flights whose probe found no
 route and 1 refused route (per variant). No `KEY_` finding but the not-pressed ones:

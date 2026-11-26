@@ -1450,6 +1450,7 @@ public partial class TaxiGuidanceManager
             _pairedCrossingSegIdx = -1;
             _pairedCrossingWindowFrom = DateTime.MinValue;
             _pairedCrossingWindowUntil = DateTime.MinValue;
+            _continueResumedAt = DateTime.MinValue;
 
             // Append a session-start header + CSV column row to the diagnostic
             // frame trace. Each "=== Guidance ... ===" line acts as a session

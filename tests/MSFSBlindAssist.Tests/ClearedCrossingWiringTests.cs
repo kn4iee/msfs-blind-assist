@@ -321,6 +321,29 @@ public class ClearedCrossingWiringTests
         Assert.DoesNotContain("_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", branch);
     }
 
+    // Owner, 2026-11-25 ("Ignore it"): a Continue before the line within PairedCrossingHoldWindow.MinDelaySeconds of the
+    // Continue that resumed taxiing is ignored (PairedCrossingHoldWindowTests), so a quick double press at a hold never
+    // clears the next runway's stop, whose countdown latches in the first frame when it lies under ~90 m ahead. The
+    // paired double Continue ([HLD-11]'s "press continue again if cleared across both") is tried first and unchanged;
+    // the resume stamps the time on the simulated clock [VP-1], and a new route forgets it.
+    [Fact]
+    public void An_early_Continue_straight_after_the_resuming_Continue_is_ignored()
+    {
+        string manager = ManagerSource();
+        string cont = Member(manager, "public void ContinuePastHoldShort(");
+
+        int paired = cont.IndexOf("Also cleared across {label}. No stop between the runways.", StringComparison.Ordinal);
+        int ignored = cont.IndexOf("Navigation.PairedCrossingHoldWindow.IgnoresEarlyContinue(MSFSBlindAssist.Utils.SimClock.UtcNow, _continueResumedAt)", StringComparison.Ordinal);
+        int early = cont.IndexOf("ClearedCrossingHolds.CanClearEarly(", StringComparison.Ordinal);
+        int resume = cont.IndexOf("SetState(TaxiGuidanceState.Taxiing);", StringComparison.Ordinal);
+        int stamp = cont.IndexOf("_continueResumedAt = MSFSBlindAssist.Utils.SimClock.UtcNow;", StringComparison.Ordinal);
+        Assert.True(paired >= 0 && ignored > paired && early > ignored, "ignored after the paired press and before an early clear");
+        Assert.True(resume > early && stamp > resume, "the resume stamps the time it let the aircraft go");
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(manager, @"_continueResumedAt = MSFSBlindAssist\.Utils\.SimClock\.UtcNow;"));
+        Assert.Contains("private DateTime _continueResumedAt = DateTime.MinValue;", manager);
+        Assert.Contains("_continueResumedAt = DateTime.MinValue;", Member(RoutingSource(), "public string? LoadRoute("));
+    }
+
     // ClearAt can refuse even a stop whose label names the runway (one shared with the pilot's own taxiway or holding-point
     // hold). Both Continue paths act on its answer: nothing is recorded, changed or said unless it cleared. The early press
     // then does what it always did (nothing); the paired press is never offered such a stop, and should ClearAt still
