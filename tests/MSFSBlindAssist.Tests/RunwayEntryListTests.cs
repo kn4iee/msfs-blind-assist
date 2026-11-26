@@ -150,6 +150,41 @@ public class RunwayEntryListTests
         Assert.Equal(items.ToList().IndexOf(ils), RunwayEntryList.IndexToKeep(items, ils));
     }
 
+    // Two meetings of one taxiway share kind, name and hold kind: a refill keeps the one whose runway remaining is
+    // nearest the kept one's, never the first, which would move the departure to the other meeting.
+    [Fact]
+    public void IndexToKeep_keeps_the_second_meeting_of_a_taxiway_after_a_rebuild()
+    {
+        var before = Build([Entry("B", 600, 3400), Entry("B", 1800, 2200)], []);
+        var second = before[2];
+        var first = before[1];
+
+        var after = Build([Entry("B", 605, 3390), Entry("B", 1805, 2190)], []);
+        Assert.Equal(2, RunwayEntryList.IndexToKeep(after, second));
+        Assert.Equal(1, RunwayEntryList.IndexToKeep(after, first));
+
+        // Only the second meeting is still offered: it is the one kept, for either.
+        var onlySecond = Build([Entry("B", 1805, 2190)], []);
+        Assert.Equal(1, RunwayEntryList.IndexToKeep(onlySecond, second));
+    }
+
+    // The hold kind is kept as the label reads it (trimmed, lower case), so the key a refill matches on is the label's.
+    [Fact]
+    public void The_hold_kind_is_normalised_where_the_item_is_made()
+    {
+        var items = Build([], [(Entry("A3", 0, 3600), " ILS ", false), (Entry("A1", 0, 3600), "Runway", false)]);
+
+        var a3 = items.Single(i => i.Name == "A3");
+        Assert.Equal("ils", a3.HoldKind);
+        Assert.Equal("A3 (holding point, ILS hold), 3600 metres remaining", a3.Label);
+        Assert.Equal("runway", items.Single(i => i.Name == "A1").HoldKind);
+
+        var made = new RunwayEntryItem(RunwayEntryKind.HoldingPoint, "A3", a3.Entry, false, "Ils");
+        Assert.Equal("ils", made.HoldKind);
+        Assert.Equal(items.ToList().IndexOf(a3), RunwayEntryList.IndexToKeep(items, made));
+        Assert.Equal("", new RunwayEntryItem(RunwayEntryKind.FullLength, "Full length", null, false, null!).HoldKind);
+    }
+
     [Fact]
     public void NoLongerOffered_says_it_once_and_names_the_fallback()
     {

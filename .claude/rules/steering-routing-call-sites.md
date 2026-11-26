@@ -12,7 +12,7 @@ MIRRORS: copied word for word from taxi-steering.md, which leaves this partial o
 - [STR-21] `AdvanceToNearestSegment` must not skip past a SHARP junction early (the `ADVANCE_*` hairpin guard, covering every segment past the junction); each gate is measured, so re-run a VirtualPilot A/B before touching one. Full: docs/invariants/taxi-steering.md#str-21
 
 Mirrored from runway-entry.md (it governs `ApplyHoldingPointPin` and `TryForwardFacingRunwayEntry`, and leaves this partial out for the rule budget; change them there and here together):
-- [ENT-3] The departure-entry holding-point picker skips DESCRIPTIVE OSM hold labels (`TaxiGraph.IsDescriptiveHoldLabel`); the Hold short of step's list is not filtered; a holding-point pin that cannot be made is SPOKEN, never only logged. Full: docs/invariants/runway-entry.md#ent-3
+- [ENT-3] The Runway entry list's holding points skip DESCRIPTIVE OSM hold labels (`TaxiGraph.IsDescriptiveHoldLabel`); the Hold short of step's list is not filtered; a holding-point pin that cannot be made is SPOKEN, never only logged. Full: docs/invariants/runway-entry.md#ent-3
 - [ENT-4] A full-length route arriving facing the reciprocal is re-routed to a forward-facing entry (`TryForwardFacingRunwayEntry`, `RunwayEntryDirection`), never for an intersection, holding point, backtrack or cross-component route; pilot picks run AFTER it and the pin. Full: docs/invariants/runway-entry.md#ent-4
 
 Mirrored from taxi-turn-picks.md (it governs `TryRecalculateRoute`; change it there and here together):

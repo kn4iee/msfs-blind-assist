@@ -1707,38 +1707,63 @@ public class SayIntentionsExternalRouteTests
     // --- The route-shaping state a FAILED import must put back -------------------------
     //
     // TryResolveExternalDestination promises "probing leaves no mark", but probing a gate
-    // candidate switches the destination type, and OnDestTypeChanged unticks the
-    // intersection-departure and CAT III boxes on the way out. A pilot who hand-built an
-    // intersection departure, pressed Ctrl+Shift+Y and heard "SayIntentions route
-    // unavailable" — i.e. "nothing happened" — silently lost it, and the next Calculate
-    // lined them up at the full-length threshold holding at the CAT I line.
+    // candidate switches the destination type, and OnDestTypeChanged puts the runway entry
+    // list back at Full length and unticks the CAT III box on the way out. A pilot who
+    // hand-built an intersection departure, pressed Ctrl+Shift+Y and heard "SayIntentions
+    // route unavailable" — i.e. "nothing happened" — silently lost it, and the next
+    // Calculate lined them up at the full-length threshold holding at the CAT I line. The
+    // runway entry choice is put back, a picked holding point as well (stage 4, D15: the
+    // old restore kept only the intersection).
+
+    private static TaxiGraph.RunwayIntersection RunwayEntry(string name, double along, double remaining) =>
+        new()
+        {
+            TaxiwayName = name,
+            Latitude = 50.0 + along / 111132.0,
+            Longitude = 8.0,
+            AlongMetersFromThreshold = along,
+            RemainingMeters = remaining,
+        };
+
+    private static IReadOnlyList<RunwayEntryItem> RunwayEntries(
+        IReadOnlyList<TaxiGraph.RunwayIntersection> intersections,
+        IReadOnlyList<(TaxiGraph.RunwayIntersection Entry, string Kind, bool Partway)> holds) =>
+        RunwayEntryList.Build(intersections, holds, 50.0, 8.0, 50.0 + 4000.0 / 111132.0, 8.0,
+            m => FormattableString.Invariant($"{m:0} m"));
 
     [Fact]
-    public void A_restored_intersection_departure_goes_back_to_the_taxiway_it_named()
+    public void A_restored_runway_entry_goes_back_to_the_entry_it_named()
     {
-        Assert.Equal(1, TaxiAssistForm.RestoredIntersectionIndex(
-            new[] { "T3 — 2100 m remaining", "T4 — 1800 m remaining" }, "T4 — 1800 m remaining"));
+        var before = RunwayEntries([RunwayEntry("T3", 1900, 2100), RunwayEntry("T4", 2200, 1800)],
+            [(RunwayEntry("A2", 0, 4000), "runway", false)]);
+        var t4 = before.Single(i => i.Name == "T4");
+        var a2 = before.Single(i => i.Name == "A2");
+
+        var after = RunwayEntries([RunwayEntry("T3", 1900, 2100), RunwayEntry("T4", 2200, 1800)],
+            [(RunwayEntry("A2", 0, 4000), "runway", false)]);
+        Assert.Equal(after.ToList().FindIndex(i => i.Name == "T4"), TaxiAssistForm.RestoredRunwayEntryIndex(after, t4));
+        // A picked holding point comes back too.
+        Assert.Equal(after.ToList().FindIndex(i => i.Name == "A2"), TaxiAssistForm.RestoredRunwayEntryIndex(after, a2));
     }
 
     [Fact]
-    public void A_restored_intersection_falls_back_to_the_first_when_its_taxiway_is_gone()
+    public void A_restored_runway_entry_falls_back_to_full_length_when_it_is_gone()
     {
         // The probe can leave a different runway selected than the one the pilot's
-        // intersection belonged to. A checked box over a blank list is the worse outcome:
-        // Calculate silently reverts to a full-length departure while the box still reads
-        // as ticked.
-        Assert.Equal(0, TaxiAssistForm.RestoredIntersectionIndex(
-            new[] { "T3 — 2100 m remaining" }, "T4 — 1800 m remaining"));
+        // entry belonged to: Full length, never another runway's entry.
+        var t4 = RunwayEntries([RunwayEntry("T4", 2200, 1800)], []).Single(i => i.Name == "T4");
+        var offered = RunwayEntries([RunwayEntry("T3", 1900, 2100)], []);
 
-        Assert.Equal(0, TaxiAssistForm.RestoredIntersectionIndex(
-            new[] { "T3 — 2100 m remaining" }, null));
+        Assert.Equal(0, TaxiAssistForm.RestoredRunwayEntryIndex(offered, t4));
+        Assert.Equal(RunwayEntryKind.FullLength, offered[0].Kind);
+        Assert.Equal(0, TaxiAssistForm.RestoredRunwayEntryIndex(offered, null));
     }
 
     [Fact]
-    public void A_runway_with_no_intersections_restores_nothing()
+    public void An_empty_runway_entry_list_restores_nothing()
     {
-        Assert.Equal(-1, TaxiAssistForm.RestoredIntersectionIndex(
-            Array.Empty<string>(), "T4 — 1800 m remaining"));
+        var t4 = RunwayEntries([RunwayEntry("T4", 2200, 1800)], []).Single(i => i.Name == "T4");
+        Assert.Equal(-1, TaxiAssistForm.RestoredRunwayEntryIndex(Array.Empty<RunwayEntryItem>(), t4));
     }
 
     // --- NearestSpotMatchesAssignedGate: the "at the assigned gate" status readout -----

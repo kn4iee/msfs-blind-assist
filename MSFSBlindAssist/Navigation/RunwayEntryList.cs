@@ -7,6 +7,9 @@ public enum RunwayEntryKind { FullLength, Intersection, HoldingPoint }
 public sealed record RunwayEntryItem(
     RunwayEntryKind Kind, string Label, TaxiGraph.RunwayIntersection? Entry, bool Partway, string HoldKind)
 {
+    /// <summary>The holding point's OSM kind as the label reads it: trimmed, lower case, "" when none.</summary>
+    public string HoldKind { get; init; } = RunwayEntryList.NormaliseKind(HoldKind);
+
     /// <summary>The entry's taxiway name, or "Full length".</summary>
     public string Name => Entry?.TaxiwayName ?? RunwayEntryList.FullLength;
 
@@ -43,7 +46,7 @@ public static class RunwayEntryList
         {
             string label = $"{entry.TaxiwayName} (holding point{KindWords(kind)}), {distance(entry.RemainingMeters)} remaining";
             candidates.Add((Along(entry), 1,
-                new RunwayEntryItem(RunwayEntryKind.HoldingPoint, label, entry, partway, kind ?? "")));
+                new RunwayEntryItem(RunwayEntryKind.HoldingPoint, label, entry, partway, kind)));
         }
 
         var items = new List<RunwayEntryItem>
@@ -62,27 +65,42 @@ public static class RunwayEntryList
         return items;
     }
 
+    /// <summary>A holding point's OSM kind as one spelling: trimmed, lower case, "" when none. The label's kind
+    /// words and the item's <see cref="RunwayEntryItem.HoldKind"/> both come from it, so the key matches the label.</summary>
+    internal static string NormaliseKind(string? kind) => (kind ?? "").Trim().ToLowerInvariant();
+
     private static string KindWords(string? kind) =>
-        (kind ?? "").Trim().ToLowerInvariant() switch
+        NormaliseKind(kind) switch
         {
             "ils" => ", ILS hold",
             "intermediate" => ", intermediate hold",
             _ => "",
         };
 
-    /// <summary>The index of the item that stands for <paramref name="kept"/> in a rebuilt list, or -1 when gone.</summary>
+    /// <summary>The index of the item that stands for <paramref name="kept"/> in a rebuilt list, or -1 when gone.
+    /// Two meetings of one taxiway share kind, name and hold kind, so among the matches the one whose runway remaining
+    /// is nearest the kept one's is kept: never simply the first, which would move the departure to the other
+    /// meeting.</summary>
     public static int IndexToKeep(IReadOnlyList<RunwayEntryItem> items, RunwayEntryItem? kept)
     {
         if (kept == null) return -1;
+        int best = -1;
+        double bestGap = double.MaxValue;
         for (int i = 0; i < items.Count; i++)
         {
             var it = items[i];
-            if (it.Kind == kept.Kind
-                && string.Equals(it.Name, kept.Name, StringComparison.Ordinal)
-                && string.Equals(it.HoldKind, kept.HoldKind, StringComparison.OrdinalIgnoreCase))
-                return i;
+            if (it.Kind != kept.Kind
+                || !string.Equals(it.Name, kept.Name, StringComparison.Ordinal)
+                || !string.Equals(it.HoldKind, kept.HoldKind, StringComparison.Ordinal))
+                continue;
+            double gap = Math.Abs((it.Entry?.RemainingMeters ?? 0) - (kept.Entry?.RemainingMeters ?? 0));
+            if (best < 0 || gap < bestGap)
+            {
+                best = i;
+                bestGap = gap;
+            }
         }
-        return -1;
+        return best;
     }
 
     /// <summary>Spoken once when a refill loses the chosen entry and the list falls back to Full length.</summary>

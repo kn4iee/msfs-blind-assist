@@ -86,27 +86,17 @@ public class TaxiAssistForm : Form
     private Label lblGateSearch = null!;
     private TextBox txtGateSearch = null!;
     private ComboBox cmbDestination = null!;
-    // Intersection departure (runway destinations only): tick chkIntersection to
-    // line up partway down the runway at a taxiway intersection instead of the
-    // full-length threshold. cmbIntersection lists the valid intersections for the
-    // selected runway; _intersectionMap resolves the chosen label back to the graph
-    // node + centerline point + remaining runway.
-    private CheckBox chkIntersection = null!;
-    private ComboBox cmbIntersection = null!;
-    private readonly Dictionary<string, TaxiGraph.RunwayIntersection> _intersectionMap = new();
-    // Named-holding-point departure (runway destinations only): tick chkHoldingPoint
-    // to enter the runway at a PAINTED holding point picked by name (OSM
-    // aeroway=holding_position refs — LSZH "A2"), covering entries whose stub
-    // taxiway is UNNAMED in navdata (where the intersection list can't help).
-    // Resolution is TaxiGraph.ResolveHoldingPointEntries — the painted point only
-    // SELECTS the entry node; hold-short placement stays authoritative from
-    // navdata. Partway entries reuse the intersection lineup semantics (lineup
-    // target moves to the entry's centerline projection); full-length entries
-    // keep the start-table lineup point and just force WHICH stub is used.
-    private CheckBox chkHoldingPoint = null!;
-    private ComboBox cmbHoldingPoint = null!;
-    private readonly Dictionary<string, (TaxiGraph.RunwayIntersection Entry, bool Partway)> _holdingPointMap = new();
-    // Last runway whose default (untick-everything) holding point was announced, so
+    // The Runway entry list (runway destinations only, stage 4 D9): "Full length", then every
+    // taxiway intersection and every PAINTED holding point (OSM aeroway=holding_position refs,
+    // LSZH "A2", covering entries whose stub is UNNAMED in navdata) down the runway, built by
+    // RunwayEntryList.Build (PopulateRunwayEntries). An intersection lines up partway down at
+    // that taxiway; a holding point SELECTS the entry node (hold-short placement stays
+    // navdata's), a partway one moving the lineup target too. _runwayEntries holds the items
+    // in the combo's order (the combo shows their labels); Calculate reads SelectedRunwayEntry.
+    private Label lblRunwayEntry = null!;
+    private ComboBox cmbRunwayEntry = null!;
+    private IReadOnlyList<RunwayEntryItem> _runwayEntries = Array.Empty<RunwayEntryItem>();
+    // Last runway whose default (Full length) holding point was announced, so
     // re-entering the same selection doesn't repeat the call-out. Cleared on airport
     // load. See AnnounceDefaultHoldingPoint.
     private string _lastHoldingPointAnnounceKey = "";
@@ -511,8 +501,8 @@ public class TaxiAssistForm : Form
         //   Alt+A  Airport (ICAO)                  Alt+T  Destination type
         //   Alt+G  Gate search                     Alt+E  Destination (D&estination)
         //   Alt+F  Show fitting only               Alt+O  Hide occupied stands
-        //   Alt+I  Intersection departure          Alt+P  Depart from named holding point
-        //   Alt+3  CAT III / low-visibility hold   Alt+B  Full-length departure (backtrack)
+        //   Alt+I  Runway entry list               Alt+3  CAT III / low-visibility hold
+        //   Alt+B  Full-length departure (backtrack)
         //   Alt+K  Step kind list                  Alt+W  Name box (its label follows the kind)
         //   Alt+D  Add Step                        Alt+U  Clearance list
         //   Alt+M  Remove Step                     Alt+Z  Clear Steps
@@ -529,7 +519,8 @@ public class TaxiAssistForm : Form
         //
         // Tab order (top to bottom, explicit TabIndex below; a label with an access key sits
         // immediately before its control, or the key lands on whatever follows its number):
-        //   Airport, Destination type, Gate search, Destination, the runway options, the stand
+        //   Airport, Destination type, Gate search, Destination, the runway options (Runway
+        //   entry, CAT III, backtrack), the stand
         //   filters, then the step block (Step kind, name box, At, Add Step, Clearance, Remove
         //   Step, Clear Steps), Fill from SayIntentions, Calculate, Stop, Last route summary.
 
@@ -682,19 +673,12 @@ public class TaxiAssistForm : Form
             AccessibleName = "Destination",
             AccessibleDescription = "Select the destination runway or gate"
         };
-        // Re-list intersections when the runway changes (only matters while the
-        // intersection checkbox is on and a runway destination is selected). Guard
-        // on a real selection (>= 0): repopulating the destination combo fires this
-        // with a transient SelectedIndex of -1, and re-listing then would find no
-        // runway and spuriously announce "no intersections" + untick the box.
+        // A runway picked (by the pilot or a list rebuild) puts the Runway entry list back at
+        // Full length, listing that runway's entries (D12), before the call-out below.
         cmbDestination.SelectedIndexChanged += (s, e) =>
         {
-            if (cmbDestType.SelectedIndex == 0 && chkIntersection.Checked
-                && cmbDestination.SelectedIndex >= 0)
-                ShowIntersectionListOrFallback(focusCombo: false);
-            if (cmbDestType.SelectedIndex == 0 && chkHoldingPoint.Checked
-                && cmbDestination.SelectedIndex >= 0)
-                ShowHoldingPointListOrFallback(focusCombo: false);
+            if (cmbDestType.SelectedIndex == 0)
+                PopulateRunwayEntries(keepSelection: false);
             // Tell the pilot which painted holding point a plain full-length departure
             // from this runway uses, so they can tell it apart from the one ATC named.
             AnnounceDefaultHoldingPoint();
@@ -704,70 +688,46 @@ public class TaxiAssistForm : Form
         cmbDestination.DropDownClosed += OnDestinationDropDownClosed;
         y += 30;
 
-        // Intersection departure. Runway destinations only — hidden for gate /
-        // progressive / deice. When ticked, cmbIntersection lists the taxiways
-        // that meet the selected runway (each with runway remaining ahead), and
-        // Calculate lines the aircraft up at that intersection instead of the
-        // full-length threshold. A permanent slot (like the gate-search row
-        // above) so the layout doesn't jump; the controls just hide/show.
-        chkIntersection = new CheckBox
+        // The Runway entry list (D9). Runway destinations only — hidden for gate /
+        // progressive / deice. "Full length" first, then the taxiway intersections and
+        // painted holding points down the runway, each with the runway remaining ahead; Calculate
+        // enters the runway at the one chosen (an intersection or a partway holding point lines up
+        // there instead of at the full-length threshold). A permanent slot (like the gate-search
+        // row above) so the layout doesn't jump; the controls just hide/show.
+        lblRunwayEntry = new Label
         {
-            Text = "&Intersection departure",
-            Location = new System.Drawing.Point(controlX, y),
+            Text = "Runway entry (&I):",
+            Location = new System.Drawing.Point(labelX, y),
             AutoSize = true,
             // Visible for the default (Runway) destination type. OnDestTypeChanged
             // is wired AFTER cmbDestType.SelectedIndex = 0, so it never fires during
-            // construction — the checkbox must therefore be born in the state that
+            // construction — the list must therefore be born in the state that
             // matches the default selection, or the whole feature is invisible on
             // first open until the user toggles the destination type away and back.
             Visible = cmbDestType.SelectedIndex == 0,
-            AccessibleName = "Intersection departure",
-            AccessibleDescription = "Line up at a runway intersection instead of full length"
+            AccessibleName = "Runway entry label"
         };
-        chkIntersection.CheckedChanged += OnIntersectionToggled;
-        y += 26;
-        cmbIntersection = new ComboBox
+        y += 20;
+        cmbRunwayEntry = new ComboBox
         {
             Location = new System.Drawing.Point(controlX, y),
             Width = controlWidth,
             DropDownStyle = ComboBoxStyle.DropDownList,
-            Visible = false,
-            AccessibleName = "Intersection",
-            AccessibleDescription = "Select the taxiway intersection to depart from, with runway remaining ahead"
-        };
-        y += 30;
-
-        // Named holding-point departure. Runway destinations only (same visibility
-        // rule as chkIntersection — born in the default-selection state because
-        // OnDestTypeChanged is wired after the initial SelectedIndex = 0). When
-        // ticked, cmbHoldingPoint lists the runway's PAINTED holding points by name
-        // (from online augmentation — LSZH A1/A2), and Calculate routes to that
-        // exact entry: hold short there, then the normal lineup flow (and Takeoff
-        // Assist auto-activation) continues from that entry.
-        chkHoldingPoint = new CheckBox
-        {
-            Text = "Depart from named holding &point",
-            Location = new System.Drawing.Point(controlX, y),
-            AutoSize = true,
             Visible = cmbDestType.SelectedIndex == 0,
-            AccessibleName = "Depart from named holding point",
-            AccessibleDescription = "Enter the runway at a painted holding point chosen by name, for example A2, and line up from there"
+            AccessibleName = "Runway entry",
+            AccessibleDescription = "Where to enter the runway: full length, or a taxiway intersection or painted holding point further down, each with the runway remaining ahead"
         };
-        chkHoldingPoint.CheckedChanged += OnHoldingPointToggled;
-        y += 26;
-        cmbHoldingPoint = new ComboBox
-        {
-            Location = new System.Drawing.Point(controlX, y),
-            Width = controlWidth,
-            DropDownStyle = ComboBoxStyle.DropDownList,
-            Visible = false,
-            AccessibleName = "Holding point",
-            AccessibleDescription = "Select the named holding point to enter the runway at, with runway remaining ahead"
-        };
+        // Refilled, keeping the choice, when focus arrives or the list opens (D12): the aircraft's
+        // side of the runway and the online holding points can change after it was filled, and
+        // arrowing a DropDownList never raises DropDown.
+        cmbRunwayEntry.Enter += (s, e) => PopulateRunwayEntries(keepSelection: true);
+        cmbRunwayEntry.DropDown += (s, e) => PopulateRunwayEntries(keepSelection: true);
+        // Never empty: Full length until an airport and a runway give it more.
+        PopulateRunwayEntries(keepSelection: false);
         y += 30;
 
         // CAT III / low-visibility hold. Runway destinations only (same visibility
-        // rule as chkIntersection — see the note there about being born in the
+        // rule as the Runway entry list — see the note there about being born in the
         // default-selection state because OnDestTypeChanged is wired after the
         // initial SelectedIndex = 0). Default OFF = hold at the full-length line
         // (closest to the runway, a normal clearance); ticked = hold further back
@@ -787,7 +747,7 @@ public class TaxiAssistForm : Form
         y += 30;
 
         // Full-length backtrack departure. Runway destinations only (same
-        // visibility rule as chkIntersection / chkCatIiiHold — born visible in the
+        // visibility rule as the Runway entry list / chkCatIiiHold — born visible in the
         // default runway selection because OnDestTypeChanged is wired after the
         // initial SelectedIndex = 0). Default OFF. When ticked, guidance takes the
         // pilot onto the runway at an intermediate entrance, backtracks to the
@@ -1044,10 +1004,8 @@ public class TaxiAssistForm : Form
         this.Controls.Add(lblGateSearch);
         this.Controls.Add(txtGateSearch);
         this.Controls.Add(cmbDestination);
-        this.Controls.Add(chkIntersection);
-        this.Controls.Add(cmbIntersection);
-        this.Controls.Add(chkHoldingPoint);
-        this.Controls.Add(cmbHoldingPoint);
+        this.Controls.Add(lblRunwayEntry);
+        this.Controls.Add(cmbRunwayEntry);
         this.Controls.Add(chkCatIiiHold);
         this.Controls.Add(chkFullLengthBacktrack);
         pnlSteps.Controls.Add(lblStepKind);
@@ -1085,10 +1043,8 @@ public class TaxiAssistForm : Form
         txtGateSearch.TabIndex = tabIdx++;
         lblDestination.TabIndex = tabIdx++;
         cmbDestination.TabIndex = tabIdx++;
-        chkIntersection.TabIndex = tabIdx++;
-        cmbIntersection.TabIndex = tabIdx++;
-        chkHoldingPoint.TabIndex = tabIdx++;
-        cmbHoldingPoint.TabIndex = tabIdx++;
+        lblRunwayEntry.TabIndex = tabIdx++;
+        cmbRunwayEntry.TabIndex = tabIdx++;
         chkCatIiiHold.TabIndex = tabIdx++;
         chkFullLengthBacktrack.TabIndex = tabIdx++;
         chkFitFilter.TabIndex = tabIdx++;
@@ -1274,16 +1230,15 @@ public class TaxiAssistForm : Form
     /// it was found — a failed import must not throw away the destination the pilot
     /// had already selected.
     ///
-    /// "The way it was found" includes the ROUTE-SHAPING boxes, not just the destination.
-    /// Probing a gate candidate sets the destination type, and OnDestTypeChanged unticks
-    /// the intersection-departure and CAT III / LVP boxes on the way out of runway mode
-    /// (the first also empties the intersection list and its map). Restoring the type
-    /// re-SHOWS them, unticked. So a pilot who hand-built "Runway 27L, intersection T4,
-    /// CAT III hold", pressed Ctrl+Shift+Y and heard "SayIntentions route unavailable" —
-    /// i.e. "nothing happened" — silently lost both, and their next Calculate lined them
-    /// up at the full-length threshold holding at the CAT I line. This is the mirror
-    /// image of what ResetRouteShapingControls exists to prevent on a SUCCESSFUL
-    /// import.
+    /// "The way it was found" includes the ROUTE-SHAPING controls, not just the destination.
+    /// Probing a gate candidate sets the destination type, and OnDestTypeChanged puts the
+    /// Runway entry list back at Full length and unticks the CAT III / LVP box on the way
+    /// out of runway mode. Restoring the type re-SHOWS them, reset. So a pilot who
+    /// hand-built "Runway 27L, intersection T4, CAT III hold", pressed Ctrl+Shift+Y and
+    /// heard "SayIntentions route unavailable" — i.e. "nothing happened" — silently lost
+    /// both, and their next Calculate lined them up at the full-length threshold holding
+    /// at the CAT I line. This is the mirror image of what ResetRouteShapingControls
+    /// exists to prevent on a SUCCESSFUL import.
     ///
     /// A GATE CANDIDATE IS RESOLVED IN THREE STEPS: its name, then this scenery's online
     /// ALIASES for that name, then the coordinate SayIntentions published beside it. Each
@@ -1306,8 +1261,7 @@ public class TaxiAssistForm : Form
         int priorType = cmbDestType.SelectedIndex;
         string priorSearch = txtGateSearch.Text;
         string? priorDestination = cmbDestination.SelectedItem?.ToString();
-        bool priorIntersection = chkIntersection.Checked;
-        string? priorIntersectionLabel = cmbIntersection.SelectedItem?.ToString();
+        RunwayEntryItem? priorRunwayEntry = SelectedRunwayEntry;
         bool priorCatIiiHold = chkCatIiiHold.Checked;
 
         // A gate search left over from a manual lookup filters the gate list, and a
@@ -1435,7 +1389,7 @@ public class TaxiAssistForm : Form
 
         RestoreDestinationState(
             priorType, priorSearch, priorDestination,
-            priorIntersection, priorIntersectionLabel, priorCatIiiHold);
+            priorRunwayEntry, priorCatIiiHold);
         return false;
     }
 
@@ -1593,7 +1547,7 @@ public class TaxiAssistForm : Form
 
     private void RestoreDestinationState(
         int priorType, string priorSearch, string? priorDestination,
-        bool priorIntersection, string? priorIntersectionLabel, bool priorCatIiiHold)
+        RunwayEntryItem? priorRunwayEntry, bool priorCatIiiHold)
     {
         // Silent throughout: a restore is the probe undoing itself, so it must not
         // speak — nor burn the holding-point dedup key, which would swallow the real
@@ -1626,12 +1580,12 @@ public class TaxiAssistForm : Form
             // With no load in flight the lookup above was final.
             if (!_placesLoading) _placeToReselect = null;
 
-            // Both boxes are runway-only, and the intersection list is rebuilt against
-            // whichever runway is selected — so this has to run AFTER the destination is
-            // back, or the departure is restored onto the wrong runway's intersections.
-            // Inside the suppression too: restoring the LVP tick raises CheckedChanged,
-            // which speaks the CAT III call-out.
-            RestoreIntersectionState(priorIntersection, priorIntersectionLabel);
+            // Both are runway-only, and the Runway entry list is rebuilt against whichever
+            // runway is selected — so this has to run AFTER the destination is back, or the
+            // departure is restored onto the wrong runway's entries. Inside the suppression
+            // too: restoring the LVP tick raises CheckedChanged, which speaks the CAT III
+            // call-out.
+            RestoreRunwayEntryState(priorRunwayEntry);
             if (chkCatIiiHold.Checked != priorCatIiiHold) chkCatIiiHold.Checked = priorCatIiiHold;
         }
         finally
@@ -1641,62 +1595,26 @@ public class TaxiAssistForm : Form
         }
     }
 
-    /// <summary>Puts the intersection-departure box and its selection back after a failed
-    /// destination probe.
-    ///
-    /// Deliberately NOT done by re-ticking the checkbox and letting its handler run:
-    /// OnIntersectionToggled → ShowIntersectionListOrFallback MOVES FOCUS to the
-    /// intersection combo and can announce "No runway intersections available. Full
-    /// length departure." Neither belongs to a silent restore — the pilot performed no
-    /// action here, and the announcement rule [CORE-7] reserves speech for real state
-    /// changes. So the list is rebuilt directly, with the handler detached.</summary>
-    private void RestoreIntersectionState(bool wasChecked, string? priorLabel)
+    /// <summary>Puts the Runway entry choice back after a failed destination probe: an
+    /// intersection or a holding point (D15), set DIRECTLY on the rebuilt list, so nothing
+    /// moves focus or speaks — the pilot performed no action here, and the announcement rule
+    /// [CORE-7] reserves speech for real state changes. Never through the refill that keeps
+    /// the choice, which says when the choice is gone.</summary>
+    private void RestoreRunwayEntryState(RunwayEntryItem? prior)
     {
-        if (!wasChecked)
-        {
-            if (chkIntersection.Checked) chkIntersection.Checked = false;
-            return;
-        }
-
-        chkIntersection.CheckedChanged -= OnIntersectionToggled;
-        try { chkIntersection.Checked = true; }
-        finally { chkIntersection.CheckedChanged += OnIntersectionToggled; }
-
-        PopulateIntersections();
-        int index = RestoredIntersectionIndex(ComboItemTexts(cmbIntersection), priorLabel);
-        if (index >= 0)
-        {
-            cmbIntersection.Visible = true;
-            cmbIntersection.SelectedIndex = index;
-        }
-        else
-        {
-            // Nothing to offer any more. Untick through the handler so the list and its
-            // map are cleared too — a checked box over an empty list is the worse state:
-            // Calculate silently reverts to a full-length departure while the box still
-            // reads as ticked (the bug ShowIntersectionListOrFallback exists to prevent).
-            chkIntersection.Checked = false;
-        }
+        PopulateRunwayEntries(keepSelection: false);
+        int index = RestoredRunwayEntryIndex(_runwayEntries, prior);
+        if (index >= 0 && cmbRunwayEntry.SelectedIndex != index) cmbRunwayEntry.SelectedIndex = index;
     }
 
-    /// <summary>Which intersection entry a restore selects: the one that was selected
-    /// before the probe, the FIRST when that exact intersection is no longer offered (the
-    /// probe can leave a different runway selected), and -1 when the runway offers none
-    /// at all — in which case the caller unticks rather than leaving a checked-but-empty
-    /// control.</summary>
-    internal static int RestoredIntersectionIndex(IReadOnlyList<string> offered, string? priorLabel)
+    /// <summary>Which runway entry a restore selects: the one chosen before the probe
+    /// (<see cref="RunwayEntryList.IndexToKeep"/>), Full length (item 0) when it is no longer
+    /// offered (the probe can leave a different runway selected), and -1 for an empty list.</summary>
+    internal static int RestoredRunwayEntryIndex(IReadOnlyList<RunwayEntryItem> offered, RunwayEntryItem? prior)
     {
         if (offered.Count == 0) return -1;
-
-        if (!string.IsNullOrEmpty(priorLabel))
-        {
-            for (int i = 0; i < offered.Count; i++)
-            {
-                if (string.Equals(offered[i], priorLabel, StringComparison.Ordinal)) return i;
-            }
-        }
-
-        return 0;
+        int kept = RunwayEntryList.IndexToKeep(offered, prior);
+        return kept >= 0 ? kept : 0;
     }
 
     private static List<string> ComboItemTexts(ComboBox combo)
@@ -1734,7 +1652,7 @@ public class TaxiAssistForm : Form
     /// added silently and without moving focus.
     ///
     /// An imported route starts from a CLEAN SLATE (ResetRouteShapingControls): a
-    /// leftover intersection departure, CAT III hold or step from a route the pilot
+    /// leftover runway entry, CAT III hold or step from a route the pilot
     /// built by hand would otherwise reshape the imported one with nothing said about it.
     /// Emptying the list also leaves it holding no calculated leg, so a leg end queued
     /// before the fill never empties the steps the fill wrote.
@@ -1931,10 +1849,10 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>Clears the route-SHAPING controls an imported route must not inherit.
-    /// OnDestTypeChanged only clears the runway-only boxes when the type CHANGES, so a
-    /// runway route imported over a hand-built runway route keeps the old intersection
-    /// departure and CAT III hold — a different lineup point with nothing in the
-    /// announcement to reveal it.</summary>
+    /// OnDestTypeChanged only resets the runway-only controls when the type CHANGES, so a
+    /// runway route imported over a hand-built runway route keeps the old runway entry
+    /// (an intersection or a holding point) and CAT III hold — a different lineup point
+    /// with nothing in the announcement to reveal it.</summary>
     private void ResetRouteShapingControls()
     {
         // Silent: this is the import clearing the pilot's leftovers, not a choice they
@@ -1944,16 +1862,9 @@ public class TaxiAssistForm : Form
         _suppressHoldingPointAnnounce = true;
         try
         {
-        // Unticking fires OnIntersectionToggled, which also empties the intersection
-        // list and its map.
-        if (chkIntersection.Checked) chkIntersection.Checked = false;
-        // Unticking fires OnHoldingPointToggled, which hides + clears the point list.
-        // It belongs here for exactly the reason the other two do: OnDestTypeChanged only
-        // clears it when the destination LEAVES runway mode, so a runway-to-runway import
-        // carried a hand-picked holding point straight through and silently moved the
-        // lineup point — the failure this method exists to prevent, through the one door
-        // it did not cover.
-        if (chkHoldingPoint.Checked) chkHoldingPoint.Checked = false;
+        // Full length (D15): a hand-picked intersection or holding point carried through a
+        // runway-to-runway import would silently move the lineup point.
+        SelectFullLengthRunwayEntry();
         if (chkCatIiiHold.Checked) chkCatIiiHold.Checked = false;
 
         // Repopulates the gate list on its way out, so it has to run BEFORE the
@@ -2127,6 +2038,9 @@ public class TaxiAssistForm : Form
         else ClearSteps();
 
         cmbDestination.Items.Clear();
+        // The old graph's runway entries go with it: Full length, until the runway the list
+        // below selects rebuilds it (D12). Nothing kept, nothing said.
+        PopulateRunwayEntries(keepSelection: false);
 
         // Check airport exists
         if (!_dataProvider.AirportExists(icao))
@@ -3022,22 +2936,12 @@ public class TaxiAssistForm : Form
         if (!isGate)
             txtGateSearch.Text = string.Empty;
 
-        // Intersection departure applies only to runway destinations. Leaving
-        // runway mode unticks it and hides the list so a stale intersection can't
-        // leak into a gate/progressive/deice route.
-        chkIntersection.Visible = isRunway;
-        if (!isRunway && chkIntersection.Checked)
-            chkIntersection.Checked = false; // fires OnIntersectionToggled → hides + clears
-        else if (!isRunway)
-            cmbIntersection.Visible = false;
-
-        // Named-holding-point departure is runway-only too — same stale-state rule
-        // as the intersection block above.
-        chkHoldingPoint.Visible = isRunway;
-        if (!isRunway && chkHoldingPoint.Checked)
-            chkHoldingPoint.Checked = false; // fires OnHoldingPointToggled → hides + clears
-        else if (!isRunway)
-            cmbHoldingPoint.Visible = false;
+        // The Runway entry list applies only to runway destinations. Any type change puts
+        // it back at Full length (D12), so a stale intersection or holding point can't leak
+        // into a later route; the runway the list below selects rebuilds it for that runway.
+        lblRunwayEntry.Visible = isRunway;
+        cmbRunwayEntry.Visible = isRunway;
+        PopulateRunwayEntries(keepSelection: false);
 
         // CAT III / LVP hold is runway-only too. Leaving runway mode unticks it so
         // a stale low-visibility preference can't leak into a later runway route.
@@ -3157,62 +3061,74 @@ public class TaxiAssistForm : Form
         return null;
     }
 
-    private void OnIntersectionToggled(object? sender, EventArgs e)
+    /// <summary>The entry chosen in the Runway entry list, or null when it holds nothing chosen.</summary>
+    private RunwayEntryItem? SelectedRunwayEntry =>
+        cmbRunwayEntry.SelectedIndex is int i && i >= 0 && i < _runwayEntries.Count ? _runwayEntries[i] : null;
+
+    /// <summary>Selects Full length (always item 0), without rebuilding the list.</summary>
+    private void SelectFullLengthRunwayEntry()
     {
-        if (chkIntersection.Checked)
-        {
-            ShowIntersectionListOrFallback(focusCombo: true);
-        }
-        else
-        {
-            cmbIntersection.Visible = false;
-            cmbIntersection.Items.Clear();
-            _intersectionMap.Clear();
-        }
+        if (cmbRunwayEntry.Items.Count > 0 && cmbRunwayEntry.SelectedIndex != 0) cmbRunwayEntry.SelectedIndex = 0;
     }
 
     /// <summary>
-    /// Populates the intersection combo for the current runway and either reveals
-    /// it with the first entry selected, or — if the runway has no usable
-    /// intersections — announces the full-length fallback and unticks the box.
-    /// Shared by the checkbox-toggle and runway-change paths so BOTH always leave a
-    /// valid entry selected; without this the runway-change path repopulated the
-    /// combo but never set SelectedIndex, leaving it blank so Calculate silently
-    /// reverted to a full-length departure while the box stayed checked.
+    /// Fills the Runway entry list for the selected runway (D10-D12): Full length, then its
+    /// intersections and painted holding points down the runway. With
+    /// <paramref name="keepSelection"/> (the list getting focus or dropping down) the choice is
+    /// kept (<see cref="RunwayEntryList.IndexToKeep"/>); a choice no longer offered falls back to
+    /// Full length and is said once, as a background change the pilot did not make. Without it
+    /// (a runway picked, a type change, an airport load) the list starts at Full length.
+    /// Builds through <see cref="ResolveHoldingPointsForRunway"/>, which can insert graph nodes:
+    /// UI thread only [RTE-30].
     /// </summary>
-    private void ShowIntersectionListOrFallback(bool focusCombo)
+    private void PopulateRunwayEntries(bool keepSelection)
     {
-        PopulateIntersections();
-        if (cmbIntersection.Items.Count > 0)
+        RunwayEntryItem? kept = keepSelection ? SelectedRunwayEntry : null;
+        var items = BuildRunwayEntries();
+
+        // The same labels: the combo is left alone (a refill on focus must not make the screen
+        // reader read the list again), and the fresh items stand behind the same lines.
+        bool sameLines = cmbRunwayEntry.Items.Count == items.Count
+            && items.Select(i => i.Label).SequenceEqual(_runwayEntries.Select(i => i.Label), StringComparer.Ordinal);
+        int index = sameLines && kept != null ? cmbRunwayEntry.SelectedIndex : RunwayEntryList.IndexToKeep(items, kept);
+        _runwayEntries = items;
+        if (!sameLines)
         {
-            cmbIntersection.Visible = true;
-            cmbIntersection.SelectedIndex = 0;
-            if (focusCombo)
-                cmbIntersection.Focus();
+            cmbRunwayEntry.BeginUpdate();
+            try
+            {
+                cmbRunwayEntry.Items.Clear();
+                foreach (var item in items) cmbRunwayEntry.Items.Add(item.Label);
+            }
+            finally { cmbRunwayEntry.EndUpdate(); }
         }
-        else
-        {
-            // Nothing to offer (sparse navdata, or the taxi graph has no
-            // taxiway node on this runway). Fall back to a full-length
-            // departure rather than leaving a checked-but-empty control.
-            _announcer.AnnounceImmediate("No runway intersections available. Full length departure.");
-            chkIntersection.Checked = false; // re-enters OnIntersectionToggled → hides the list
-        }
+
+        int select = index >= 0 ? index : 0;
+        if (cmbRunwayEntry.SelectedIndex != select) cmbRunwayEntry.SelectedIndex = select;
+
+        // Queued: it follows the screen reader's reading of the list rather than cutting it.
+        if (kept is { Kind: not RunwayEntryKind.FullLength } && index < 0)
+            _announcer.Announce(RunwayEntryList.NoLongerOffered(kept));
     }
 
     /// <summary>
-    /// Fills the intersection combo with the taxiways that meet the currently
-    /// selected runway, each labelled with distance from the threshold and the
-    /// runway remaining ahead in the takeoff direction.
+    /// The Runway entry list's items for the selected runway: the taxiways that meet it partway
+    /// (<see cref="TaxiGraph.GetRunwayIntersections"/>, the normal full-length entrance left out)
+    /// and its painted holding points (<see cref="ResolveHoldingPointsForRunway"/>, full-length
+    /// stubs included: choosing between two by their painted names, LSZH A2 vs A1, is the point),
+    /// merged by <see cref="RunwayEntryList.Build"/>. Full length alone with no graph, no runway
+    /// destination or nothing to offer.
     /// </summary>
-    private void PopulateIntersections()
+    private IReadOnlyList<RunwayEntryItem> BuildRunwayEntries()
     {
-        cmbIntersection.Items.Clear();
-        _intersectionMap.Clear();
+        static string Distance(double metres) => DistanceFormatter.FromMetres(metres);
+        var fullLengthOnly = RunwayEntryList.Build(
+            Array.Empty<TaxiGraph.RunwayIntersection>(),
+            Array.Empty<(TaxiGraph.RunwayIntersection, string, bool)>(), 0, 0, 0, 0, Distance);
 
-        if (_graph == null || cmbDestType.SelectedIndex != 0) return;
+        if (_graph == null || cmbDestType.SelectedIndex != 0) return fullLengthOnly;
         string? destName = cmbDestination.SelectedItem?.ToString();
-        if (string.IsNullOrEmpty(destName)) return;
+        if (string.IsNullOrEmpty(destName)) return fullLengthOnly;
 
         // "Runway 22R (backtrack required)" → "22R". destName itself stays the full
         // combo label — the _destination*Map lookups below are keyed on it.
@@ -3225,8 +3141,8 @@ public class TaxiAssistForm : Form
         // centerline — the start table sits inside the pavement at displaced
         // thresholds, which would understate the runway length / remaining. The
         // Runway model gives the departure threshold (StartLat/Lon), the far end
-        // (EndLat/Lon), and the width, so distance-from-threshold and remaining
-        // reflect the true runway.
+        // (EndLat/Lon), and the width, so remaining reflects the true runway, and the
+        // list is ordered down this one centreline.
         if (_cachedRunways == null || _cachedRunwaysIcao != _currentIcao)
         {
             _cachedRunways = _dataProvider.GetRunways(_currentIcao);
@@ -3234,7 +3150,7 @@ public class TaxiAssistForm : Form
         }
         var rwy = _cachedRunways
             .FirstOrDefault(r => string.Equals(r.RunwayID, runwayId, StringComparison.OrdinalIgnoreCase));
-        if (rwy == null) return;
+        if (rwy == null) return fullLengthOnly;
 
         // Half-width from the runway width (feet → metres); default 150 ft wide.
         double halfWidthM = (rwy.Width > 0 ? rwy.Width : 150.0) * 0.3048 / 2.0;
@@ -3252,112 +3168,18 @@ public class TaxiAssistForm : Form
         // The aircraft's side of the runway decides where an angled entry reaches the pavement
         // (GetRunwayIntersections); (0,0) = no position yet, and the list is as before.
         bool haveOwnPos = _aircraftLat != 0 || _aircraftLon != 0;
-        foreach (var ix in _graph.GetRunwayIntersections(
-                     rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon, halfWidthM,
-                     lineupLat, lineupLon,
-                     haveOwnPos ? _aircraftLat : null, haveOwnPos ? _aircraftLon : null))
-        {
-            string label =
-                $"{ix.TaxiwayName}, {DistanceFormatter.FromMetres(ix.RemainingMeters)} remaining, " +
-                $"{DistanceFormatter.FromMetres(ix.AlongMetersFromThreshold)} from threshold";
-            // Same-named taxiways now legitimately produce MULTIPLE entries (one
-            // per meeting point), distinguished by the distances in the label.
-            // This guard only fires if display rounding collapses two close
-            // meeting points to identical text — then the first (closer to the
-            // threshold) wins and the duplicate is dropped rather than shadowed.
-            if (_intersectionMap.ContainsKey(label)) continue;
-            _intersectionMap[label] = ix;
-            cmbIntersection.Items.Add(label);
-        }
+        var intersections = _graph.GetRunwayIntersections(
+            rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon, halfWidthM,
+            lineupLat, lineupLon,
+            haveOwnPos ? _aircraftLat : null, haveOwnPos ? _aircraftLon : null);
+
+        // A set-back hold keeps its kind in its label ("A3 (holding point, ILS hold)"), so a pair
+        // at one entrance (EGKK 26L A1/A3, the same entrance and distances) stays tellable apart.
+        var holdingPoints = ResolveHoldingPointsForRunway(destName);
+
+        return RunwayEntryList.Build(
+            intersections, holdingPoints, rwy.StartLat, rwy.StartLon, rwy.EndLat, rwy.EndLon, Distance);
     }
-
-    private void OnHoldingPointToggled(object? sender, EventArgs e)
-    {
-        if (chkHoldingPoint.Checked)
-        {
-            ShowHoldingPointListOrFallback(focusCombo: true);
-        }
-        else
-        {
-            cmbHoldingPoint.Visible = false;
-            cmbHoldingPoint.Items.Clear();
-            _holdingPointMap.Clear();
-            // Back to the default entry — say which one that is. Forced past the
-            // repeat-guard: the pilot has just changed which entry the route uses, so
-            // the same answer as before is new information here.
-            _lastHoldingPointAnnounceKey = "";
-            AnnounceDefaultHoldingPoint();
-        }
-    }
-
-    /// <summary>
-    /// Populates the holding-point combo for the current runway and either reveals
-    /// it with the first entry selected, or — when the airport's online data has no
-    /// named holding points resolvable to an entry on this runway — announces the
-    /// fallback and unticks the box. Same always-leave-a-valid-selection contract as
-    /// <see cref="ShowIntersectionListOrFallback"/>.
-    /// </summary>
-    private void ShowHoldingPointListOrFallback(bool focusCombo)
-    {
-        PopulateHoldingPoints();
-        if (cmbHoldingPoint.Items.Count > 0)
-        {
-            cmbHoldingPoint.Visible = true;
-            cmbHoldingPoint.SelectedIndex = 0;
-            if (focusCombo)
-                cmbHoldingPoint.Focus();
-        }
-        else
-        {
-            string? entrance = ResolveFullLengthEntranceName(cmbDestination.SelectedItem?.ToString());
-            _announcer.AnnounceImmediate(
-                entrance == null
-                    ? "No named holding points available for this runway. Full length departure."
-                    : $"No named holding points available for this runway. Full length departure via {entrance}.");
-            chkHoldingPoint.Checked = false; // re-enters OnHoldingPointToggled → hides the list
-        }
-    }
-
-    /// <summary>
-    /// Fills the holding-point combo with the PAINTED holding points (online
-    /// augmentation names — OSM holding_position refs) that resolve to an entry on
-    /// the currently selected runway, each labelled with runway remaining ahead and
-    /// distance from the threshold. Unlike the intersection list this INCLUDES
-    /// full-length entries: choosing between two full-length stubs by their painted
-    /// names (LSZH A2 vs A1) is the point of the feature.
-    /// </summary>
-    private void PopulateHoldingPoints()
-    {
-        cmbHoldingPoint.Items.Clear();
-        _holdingPointMap.Clear();
-
-        foreach (var (entry, kind, partway) in ResolveHoldingPointsForRunway(
-                     cmbDestination.SelectedItem?.ToString()))
-        {
-            // The kind suffix is what separates the two lines of a pair the pilot is
-            // choosing between — EGKK 26L offers A1 and A3 at the SAME entrance and the
-            // same distances, and only "(runway hold)" vs the set-back CAT II/III line
-            // tells them apart. Same wording as NamedHoldingPoint.DisplayLabel.
-            string label =
-                $"{entry.TaxiwayName}{HoldingPointKindSuffix(kind)}, " +
-                $"{DistanceFormatter.FromMetres(entry.RemainingMeters)} remaining, " +
-                $"{DistanceFormatter.FromMetres(entry.AlongMetersFromThreshold)} from threshold";
-            if (_holdingPointMap.ContainsKey(label)) continue;
-            _holdingPointMap[label] = (entry, partway);
-            cmbHoldingPoint.Items.Add(label);
-        }
-    }
-
-    /// <summary>Spoken-friendly suffix for an OSM <c>holding_position:type</c> tag —
-    /// same wording as <see cref="Navigation.NamedHoldingPoint.DisplayLabel"/>.</summary>
-    private static string HoldingPointKindSuffix(string kind) =>
-        kind.Trim().ToLowerInvariant() switch
-        {
-            "runway"       => " (runway hold)",
-            "ils"          => " (ILS hold)",
-            "intermediate" => " (intermediate hold)",
-            _              => "",
-        };
 
     /// <summary>
     /// Resolves this airport's PAINTED holding points onto the entries of the runway
@@ -3365,7 +3187,7 @@ public class TaxiAssistForm : Form
     /// <c>holding_position:type</c> kind and whether its entry sits meaningfully past
     /// the full-length lineup point (Partway ⇒ intersection-style lineup semantics).
     ///
-    /// Shared by the picker (<see cref="PopulateHoldingPoints"/>) and the default-hold
+    /// Shared by the Runway entry list (<see cref="BuildRunwayEntries"/>) and the default-hold
     /// call-out (<see cref="AnnounceDefaultHoldingPoint"/>) so the two can never
     /// describe the runway differently. Empty when augmentation is off/uncached, the
     /// destination is not a runway, or nothing resolves onto it.
@@ -3539,17 +3361,17 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Speaks (and writes to the status line) WHICH painted holding point a plain
     /// runway departure will use, so the pilot knows before they calculate whether the
-    /// default matches their clearance — and therefore whether they need to tick
-    /// "Depart from named holding point" and choose a different one. At EGKK 26L the
-    /// default is M1 on the starter extension, while a "line up via A1" clearance means
-    /// the A entrance 112 m further down.
+    /// default matches their clearance — and therefore whether they need to choose a
+    /// different entry in the Runway entry list. At EGKK 26L the default is M1 on the
+    /// starter extension, while a "line up via A1" clearance means the A entrance 112 m
+    /// further down.
     ///
-    /// Named from the SAME resolution the picker uses, so the two can never disagree.
+    /// Named from the SAME resolution the list uses, so the two can never disagree.
     /// This is an INDICATION of the full-length entry, not a promise about the exact
     /// stop point: hold-short placement on the route stays navdata-authoritative
     /// (TruncateToHoldShort). Silent when the airport has no online holding-point data,
-    /// when a picker/intersection selection already owns the entry, and on the repeat of
-    /// an already-spoken answer (the combo re-selects itself on every list rebuild).
+    /// when an entry other than Full length is chosen (D14), and on the repeat of an
+    /// already-spoken answer (the combo re-selects itself on every list rebuild).
     /// </summary>
     /// <param name="statusPrefix">When given, the status line keeps this text and the
     /// holding point is appended to it — used by the airport-load path, whose own
@@ -3558,9 +3380,9 @@ public class TaxiAssistForm : Form
     {
         if (_suppressHoldingPointAnnounce) return;
         if (cmbDestType.SelectedIndex != 0) return;
-        // The pilot has named an entry themselves (holding point / intersection) — that
-        // selection is the answer and the screen reader already read it out.
-        if (chkHoldingPoint.Checked || chkIntersection.Checked) return;
+        // The pilot has chosen an entry themselves (holding point / intersection) — that
+        // choice is the answer and the screen reader already read it out.
+        if (SelectedRunwayEntry is { Kind: not RunwayEntryKind.FullLength }) return;
 
         string? destName = cmbDestination.SelectedItem?.ToString();
         if (string.IsNullOrEmpty(destName)) return;
@@ -3571,7 +3393,7 @@ public class TaxiAssistForm : Form
         _lastHoldingPointAnnounceKey = key;
 
         // Full-length entries only: a partway entry is an intersection departure, which
-        // this (untick-everything) route never takes.
+        // this (Full length) route never takes.
         var fullLength = ResolveHoldingPointsForRunway(destName)
             .Where(r => !r.Partway)
             .ToList();
@@ -4852,10 +4674,12 @@ public class TaxiAssistForm : Form
         // and lines up partway down the runway instead of at the full-length
         // threshold. destHeading/destHeadingTrue stay the runway's takeoff heading —
         // the centerline is the same line, just entered further along.
+        // The Runway entry list's choice (D13): an intersection runs this branch, a holding
+        // point the next one, Full length neither.
+        RunwayEntryItem? runwayEntry = isRunwayDest ? SelectedRunwayEntry : null;
         TaxiGraph.RunwayIntersection? intersection = null;
-        if (!backtrackActive && isRunwayDest && chkIntersection.Checked
-            && cmbIntersection.SelectedItem is string interLabel
-            && _intersectionMap.TryGetValue(interLabel, out var ix))
+        if (!backtrackActive
+            && runwayEntry is { Kind: RunwayEntryKind.Intersection, Entry: { } ix })
         {
             intersection = ix;
             destNodeId = ix.NodeId;
@@ -4873,16 +4697,15 @@ public class TaxiAssistForm : Form
         // projection (intersection semantics); a full-length entry keeps the
         // start-table lineup point and just forces WHICH stub is used.
         TaxiGraph.RunwayIntersection? holdingPointEntry = null;
-        if (!backtrackActive && intersection == null && isRunwayDest && chkHoldingPoint.Checked
-            && cmbHoldingPoint.SelectedItem is string hpLabel
-            && _holdingPointMap.TryGetValue(hpLabel, out var hp))
+        if (!backtrackActive && intersection == null
+            && runwayEntry is { Kind: RunwayEntryKind.HoldingPoint, Entry: { } hp })
         {
-            holdingPointEntry = hp.Entry;
-            destNodeId = hp.Entry.NodeId;
-            if (hp.Partway)
+            holdingPointEntry = hp;
+            destNodeId = hp.NodeId;
+            if (runwayEntry.Partway)
             {
-                thresholdLat = hp.Entry.Latitude;
-                thresholdLon = hp.Entry.Longitude;
+                thresholdLat = hp.Latitude;
+                thresholdLon = hp.Longitude;
             }
         }
 

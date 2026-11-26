@@ -423,6 +423,17 @@ public class ClearanceStepEntryTests
         Assert.Contains("AccessibleName = \"CAT three, low visibility hold\"", form);
     }
 
+    // Stage 4, D9: the Runway entry list's label holds I, where "Intersection departure" did; P, which "Depart from
+    // named holding point" held, is free.
+    [Fact]
+    public void The_runway_entry_list_has_I_and_no_control_has_P()
+    {
+        var keys = AccessKeys();
+        Assert.Equal(1, keys.Count(k => k == 'I'));
+        Assert.DoesNotContain('P', keys);
+        Assert.Contains("Text = \"Runway entry (&I):\"", FormSource());
+    }
+
     // A shared letter does not cycle between its controls: Windows Forms takes the first match after the focused
     // control, so "Last route summary" sharing S with Stop Guidance (always enabled) stopped guidance from almost
     // anywhere. Every access key in the window belongs to one control, Stop Guidance alone has S, the summary N.
