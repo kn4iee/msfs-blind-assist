@@ -188,6 +188,7 @@ Each opens a window where you type a value, with the related mode buttons. The b
 
 ### Keys inside shared windows {#keys-inside-shared-windows}
 
+- **Taxi planner** (Input Shift+Y): **Alt+V**, **Alt+L**, **Alt+R**, **Alt+X** and **Alt+H** choose the step kind (Via, Left onto, Right onto, Cross, Hold short of) and move to the name box, from anywhere in the window; **Enter** adds the step; **Delete** in the Clearance list removes the selected one; **Alt+C** calculates the route, **Alt+S** stops guidance and **Alt+N** goes to the last route summary. Every key is in [Keyboard shortcuts in the planner](taxi-guidance.md#keyboard-shortcuts-in-the-planner).
 - **Surroundings window**, Frequencies list: **Enter** tunes the frequency into COM 1 standby, **Shift+Enter** straight into COM 1 active. Not on the A380, which tunes through its RMP window.
 - **Access GSX window**: **F5** opens the GSX menu, **1** to **9**, **0** and **A** to **E** choose a menu option, **C** opens GSX Settings, **Escape** hides the window.
 - **SayIntentions flight information window**: arrow keys read line by line, **Escape** closes.

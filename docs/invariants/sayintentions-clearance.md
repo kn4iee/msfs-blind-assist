@@ -73,7 +73,9 @@ Corrected 2026-10-09: "FOUR bounds" listed three; the fourth, the route-content 
 
 ## SIC-17
 
-- Each hold-short must be tied to the taxiway it FOLLOWS, never the last one in the clearance — that put the stop at the wrong crossing and dropped every hold-short after the first. Cut the clearance on the parser's OWN mask (never a second copy of the phrasing), keep a taxiway repeated across a hold-short so each gets its own row, and map a name the applied sequence lacks to -1 so it is reported rather than hung on whatever row is last. → [sayintentions.md](../sayintentions.md)
+- Each hold-short must be tied to the taxiway it FOLLOWS, never the last one in the clearance — that put the stop at the wrong crossing and dropped every hold-short after the first. Cut the clearance on the parser's OWN mask (never a second copy of the phrasing), keep a taxiway repeated across a hold-short so each gets its own step, and map a name the applied sequence lacks to -1 so it is reported rather than hung on whatever step is last. → [sayintentions.md](../sayintentions.md)
+
+  Since the step list of 2026-11 (stage 3 of the Taxi UI Redesign) each taxiway becomes a Via step and each hold-short a Hold short of runway step straight after the Via step of the mention it follows, as many after one taxiway as the clearance gave (the old rows carried one each, and a second was reported as unset). Two hold-shorts given after the SAME mention ("hold short of runways 4L and 4R", or two spans with no taxiway between) carry `ClearanceHoldShort.SameMentionAsPrevious`, so `MapHoldShortsToTaxiways` puts the second after that same mention, never after a later mention of the same name. The line said "its own row" until then.
 
 ## SIC-18
 

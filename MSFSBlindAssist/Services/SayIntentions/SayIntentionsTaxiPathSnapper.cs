@@ -186,9 +186,9 @@ public static class SayIntentionsTaxiPathSnapper
     /// still taxis along X. The worst case for the ROUTE is a genuine short detour
     /// flattened into the straight run it departed from, which is still a route the pilot
     /// can fly. It is not the worst case overall: dropping the filling also merges the two
-    /// anchors into ONE row, and rows are what hold-shorts hang on, so a clearance with two
-    /// hold-shorts on the same taxiway (the KBOS "N, hold short 15R, N" shape) loses the
-    /// second one to MapHoldShortsToTaxiways' forward-only scan. That is announced
+    /// anchors into ONE Via step, and a hold-short follows the Via step of the mention it was
+    /// given after, so a clearance with two hold-shorts on the same taxiway (the KBOS "N, hold
+    /// short 15R, N" shape) loses the second one to MapHoldShortsToTaxiways' forward-only scan. That is announced
     /// ("Could not set hold short of runway ..."), never silent — but it is a runway
     /// hold-short, so weigh it before widening anything here.
     ///

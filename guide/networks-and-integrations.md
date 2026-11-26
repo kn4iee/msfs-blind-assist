@@ -118,9 +118,9 @@ When the ground controller gives you a taxi clearance, BA can read it, work out 
 
 1. Request taxi from SayIntentions and listen to the clearance as normal. Read it back if the controller expects you to.
 2. Press Input Ctrl+Shift+Y. You hear *"Reading SayIntentions taxi clearance."*
-3. Wait a few seconds. BA reads the recent radio calls, your position and the airport's taxiway names. The taxi planner opens, filled in with the destination, the taxiways in order, and any hold-short points the controller gave.
+3. Wait a few seconds. BA reads the recent radio calls, your position and the airport's taxiway names. The taxi planner opens, filled in with the destination and the steps: the taxiways in order, and any hold-short points the controller gave.
 4. Listen to the spoken summary. It ends with *"Review the fields, then press Calculate Route to start guidance."*
-5. Check the planner's fields against what you heard: the destination, the taxiway list, and the hold-shorts.
+5. Check the planner's fields against what you heard: the destination and the Clearance list (Alt+U). Add any crossing you were cleared for with Alt+X.
 6. Press **Calculate Route** (Alt+C) to start guidance.
 
 You can also start the import from inside the taxi planner. The **Fill from SayIntentions** button (Alt+Y), just above Calculate Route, does exactly what Input Ctrl+Shift+Y does.
@@ -134,10 +134,12 @@ You can also start the import from inside the taxi planner. The **Fill from SayI
 ### What it fills in {#si-taxi-fills}
 
 - **The destination** — the runway or gate the controller cleared you to. A runway you are told to hold short of, or to cross, is never taken as your destination.
-- **The taxiways** — the cleared taxiways, in the order given. A taxiway used twice in one clearance, for example either side of a runway crossing, gets a row each time.
-- **The hold-shorts** — each hold-short is tied to the taxiway it comes after in the clearance, so the stop is placed at the right crossing.
+- **The taxiways** — the cleared taxiways, in the order given, each as a Via step in the planner's Clearance list. A taxiway the clearance comes back to after a hold short, as in "N, hold short of runway 15R, N", gets a Via step each time.
+- **The hold-shorts** — each hold-short becomes a Hold short of runway step, straight after the taxiway it comes after in the clearance, so the stop is placed at the right crossing. There can be any number after one taxiway: "hold short of runways 4L and 4R" gives two.
 
-An import replaces the whole route, including anything you had already set up by hand, such as an intersection departure or a CAT III hold. The clearance is the route.
+The fill never enters a Cross step, even when the clearance says "cross runway 22R": only you can clear a runway. Add the crossing yourself (Alt+X in the planner) before you calculate, or press Input Y once BA counts you down to that runway. It never enters a Left onto or Right onto step either: every taxiway it adds is a Via step. The steps are added silently; the summary below is what you hear.
+
+An import replaces the whole route, including anything you had already set up by hand, such as an intersection departure, a CAT III hold or steps you had entered. The clearance is the route.
 
 ### Where the taxiway list comes from {#si-taxi-source}
 
@@ -180,7 +182,7 @@ You are parked at your departure gate. SayIntentions Ground says: "Taxi to runwa
 1. You read back the clearance.
 2. You press Input Ctrl+Shift+Y. You hear *"Reading SayIntentions taxi clearance."*
 3. The taxi planner opens and BA says something like: *"SayIntentions route to Runway 27. Route from SayIntentions ground track. Via A, B. Hold short of runway 22 after B. Review the fields, then press Calculate Route to start guidance."*
-4. You Tab through the planner: destination Runway 27, taxiways A then B, a hold short of runway 22 after taxiway B. It matches what you heard.
+4. You Tab through the planner: destination Runway 27, and the Clearance list reads "Via A", "Via B", "Hold short of runway 22". It matches what you heard.
 5. You press Alt+C to calculate the route and start guidance.
 
 ### Arriving at your gate {#si-taxi-arrival}

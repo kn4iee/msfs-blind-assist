@@ -35,7 +35,7 @@ You do not need GSX to use stands or docking guidance. Without GSX, BA still lis
 
 ### What it is {#what-it-is-20}
 
-In the [taxi planner](taxi-guidance.md#taxi-planner) (Input Shift+Y), set **Destination type** to **Gate / Parking** and the **Destination** list fills with the airport's stands. This section explains that list and the controls beside it.
+In the [taxi planner](taxi-guidance.md#taxi-planner) (Input Shift+Y), set **Destination type** to **Gate, stand or parking** and the **Destination** list fills with the airport's stands. This section explains that list and the controls beside it.
 
 ### How the stands are listed {#how-the-stands-are-listed}
 
@@ -239,7 +239,7 @@ Docking guidance gets you from the end of the taxi route onto the stand, square 
 
 ### When it is used {#when-it-is-used}
 
-Docking guidance starts by itself. You only need to have taxi guidance running to a stand: choose a **Gate / Parking** (or **Deice Area**) destination in the taxi planner and start guidance. It works with or without GSX. It never starts for a runway destination.
+Docking guidance starts by itself. You only need to have taxi guidance running to a stand: choose a **Gate, stand or parking** (or **De-icing area**) destination in the taxi planner and start guidance. It works with or without GSX. It never starts for a runway destination.
 
 With GSX, the stop is GSX's own stop position for your aircraft type at that gate, which is where the jet bridge expects your door. Without GSX, the stop is the centre of the parking spot in your scenery, which is usually close but less exact.
 
@@ -259,7 +259,7 @@ With GSX, the stop is GSX's own stop position for your aircraft type at that gat
 
 ### Docking at a deicing pad {#docking-at-a-deicing-pad}
 
-If your taxi destination is a Deice Area, docking works the same way but the wording changes. The opening call is *"Deicing guidance."* with the distance and steering, there is no jet bridge or door call, and the closing phrase is *"Stop. Parking brake."* — without any claim about being aligned with a gate, because a deicing pad is wide and BA does not check your alignment there.
+If your taxi destination is a de-icing area, docking works the same way but the wording changes. The opening call is *"Deicing guidance."* with the distance and steering, there is no jet bridge or door call, and the closing phrase is *"Stop. Parking brake."* — without any claim about being aligned with a gate, because a deicing pad is wide and BA does not check your alignment there.
 
 ### When the park goes wrong: "Back up and try again" {#when-the-park-goes-wrong-back-up-and-try-again}
 
@@ -318,7 +318,7 @@ Distances follow **Use feet for distances (default: metres)**, also on the Taxi 
 
 ### Worked example: arriving at a GSX gate {#worked-example-arriving-at-a-gsx-gate}
 
-You have landed and vacated the runway. You open the taxi planner, set Gate / Parking, type "A12" in the Gate search box, choose *"A 12 - Gate Medium (Jetway) \[SafeDock\]"*, enter your taxi clearance and press Calculate Route. A moment later you hear *"GSX prepared Gate A 12."* — the jet bridge will be waiting.
+You have landed and vacated the runway. You open the taxi planner, set Gate, stand or parking, type "A12" in the Gate search box, choose *"A 12 - Gate Medium (Jetway) \[SafeDock\]"*, enter your taxi clearance and press Calculate Route. A moment later you hear *"GSX prepared Gate A 12."* — the jet bridge will be waiting.
 
 You taxi in on the tone. On the turn onto the stand you hear *"Align with Gate A 12, heading 270. Then continue ahead for docking guidance."* Rolling slowly forward, you hear *"Docking guidance. SafeDock display. 40 metres to stop. Slight right, 5 degrees. Jetway on your left."* and the slow beeping starts. You ease right until the tone falls silent. *"30 metres to stop."* ... *"20 metres to stop."* ... *"5 knots."* ... *"10 metres to stop."* The beeps get faster. *"3 knots."* ... *"5 metres to stop."* ... *"2 knots."* ... *"1 knot."* The beeps blur into a solid tone, you stop, and you hear *"GSX docking complete. Aligned with gate. Parking brake."* You set the parking brake, open the Access GSX window with Input Alt+G, press F5, and request deboarding.
 

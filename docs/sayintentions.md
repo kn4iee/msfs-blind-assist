@@ -298,7 +298,8 @@ you can act on go first.
   incomplete."** — most of the published track failed to match this airport's pavement.
   The last few points of a normal arrival are the turn into the stand, which is apron,
   so this only appears when a quarter or more of the track went unread.
-- **"Could not set hold short of runway 22."** — a hold-short that reached no row.
+- **"Could not set hold short of runway 22."** — a hold-short that became no step: it
+  followed no taxiway the airport has, or named a runway it lacks.
   Treat it as still in force: guidance will not stop you there.
 - **"Via A, B, C."** — the route that was built. On a ground-track route this is capped
   the same way the line above is (*"Via R7, E7, E6 and 9 more."*): those names come from
@@ -765,8 +766,10 @@ on a gate-bound clearance — became the leftmost "runway NN" the destination
 capture found: an aircraft routed AT a runway it was cleared to cross. The list
 tail (`RunwayList`) is one spelling shared by the mask and the hold-short
 capture, plural "runways" included, and a plural hold-short yields one
-hold-short per runway (the dialog carries one per row, so the second is
-announced as "could not set" rather than dropped in silence). The tail admits
+hold-short per runway, each its own Hold short of runway step after the same Via
+step (`ClearanceHoldShort.SameMentionAsPrevious` keeps the second after that same
+mention; until the step list of 2026-11 the dialog carried one per row, and the second
+was announced as "could not set"). The tail admits
 WRITTEN runways only (`WrittenRunwayTailToken`, at most two digits, never the
 full spoken-word branch) — a spoken multi-runway list ("runways four left and
 four right") therefore still masks only its first runway, the same coverage as
@@ -799,11 +802,14 @@ read as a route leg. That is acceptable while the phrase cannot occur on the
 wire; if SI ever adds taxiway hold-shorts this is the first thing to revisit —
 the fix belongs in the shared `HoldPrefix`/`RunwayList` consts (mask the span,
 report "could not set hold short of taxiway …"), never in a second copy of the
-phrasing. The per-row hold-short combo the import populates is runway-only too
-("Hold short of runway"), so parsing alone would not be enough — Progressive
-Taxi's separate terminator block does offer a taxiway-terminator option, but
-that block is self-contained with its own combos and sits outside the import's
-path entirely.
+phrasing. The fill writes only Hold short of RUNWAY steps (`BuildImportedSteps`
+matches the airport's runway list alone), so parsing alone would not be enough: a
+taxiway hold short would need its own branch there too. The step list itself takes a
+Hold short of taxiway step anywhere, so nothing else in the window stands in the way.
+The fill never writes a Cross step, even when the clearance says "cross": a crossing
+is cleared only by a Cross step the pilot entered or by Continue ([CLR-1]). Nor does it
+write a Left onto or Right onto step: every taxiway it adds is a Via step, as PR
+#355's import set every Turn list back to Automatic.
 
 ### Taxiway matching case asymmetry
 
@@ -892,7 +898,7 @@ Three things can go missing between the clearance and the route. All three are s
 | --- | --- | --- |
 | A taxiway this airport does not have | `ScanTaxiways` → `Unresolved` | `Could not apply …` *(clearance-sourced routes only — see below)* |
 | A taxiway the dialog could not seat | `ApplyExternalRoute` → `SkippedTaxiways` | `Could not apply …` |
-| A hold-short that reached no row | `ApplyExternalRoute` → `SkippedHoldShortRunways` | `Could not set hold short of runway …` |
+| A hold-short that became no step (no taxiway the airport has before it, or a runway it lacks) | `ApplyExternalRoute` → `BuildImportedSteps` → `SkippedHoldShortRunways` | `Could not set hold short of runway …` |
 
 The first row could not exist before: `ParseTaxiways` returns only names the graph
 knows, so a taxiway the airport lacked evaporated between the clearance and the
@@ -962,13 +968,23 @@ the sequence survives. Cutting on the parser's own mask is what keeps a second c
 the hold-short phrasing out of `MainForm.SayIntentions.cs`; two copies would drift.
 
 A taxiway repeated across a hold-short is **kept** (the KBOS "N, hold short 15R, N"
-pattern): the form carries one hold-short per row, so collapsing the repeat throws the
-second one away. A repeat across a plain crossing still collapses.
+pattern): each mention becomes its own Via step, and a hold-short given after the second
+belongs after that one, so collapsing the repeat would put it at the wrong crossing. A
+repeat across a plain crossing still collapses.
 
 `MapHoldShortsToTaxiways` then turns each hold-short's taxiway NAME into a position in
-the sequence being applied. A name that sequence does not carry maps to `-1` and gets
-reported, never hung on whatever row happens to be last — the case a clearance produces
-by naming a hold-short before it names any taxiway.
+the sequence being applied. Repeats are consumed in order; a hold-short the clearance gave
+after the SAME mention as the one before it ("hold short of runways 4L and 4R", or two
+spans with no taxiway between) carries `ClearanceHoldShort.SameMentionAsPrevious` and takes
+that one's position. A name the sequence does not carry maps to `-1` and gets reported,
+never hung on whatever Via step happens to be last — the case a clearance produces by
+naming a hold-short before it names any taxiway.
+
+The form writes the steps (`TaxiAssistForm.BuildImportedSteps`, silently, `AppendStep(speak:
+false)`): a Via step per taxiway the airport's graph knows, and after it a Hold short of
+runway step for each hold-short mapped to it, in the order given, as many as the clearance
+gave (until the step list of 2026-11 the form carried one hold-short per row, and a second
+on the same row was reported as unset). It never writes a Cross step or a turn word.
 
 ### Reading `taxi_path`: coordinates only, never names
 
@@ -1148,10 +1164,10 @@ that actually agreed. One import in fifty-six measured.
 
 There is a second cost with the same cause, and it is worth stating separately because it
 is not about the route: dropping the filling also merges the two anchor runs into **one
-row**, and rows are what hold-shorts hang on. A clearance with two hold-shorts on the same
-taxiway — the KBOS `N, hold short 15R, N` shape — has the second one consumed against the
-second `N` row by `MapHoldShortsToTaxiways`' forward-only scan. Remove that row and the
-hold-short maps to -1 and is announced as *"Could not set hold short of runway ..."*.
+Via step**, and a hold-short follows the Via step of the mention it was given after. A
+clearance with two hold-shorts on the same taxiway — the KBOS `N, hold short 15R, N` shape —
+has the second one consumed against the second `N` by `MapHoldShortsToTaxiways`'
+forward-only scan. Remove that second `N` and the hold-short maps to -1 and is announced as *"Could not set hold short of runway ..."*.
 Announced, never silent, and the clearance still owns the destination — but it is a runway
 hold-short, so weigh it before widening anything in this filter.
 
@@ -1245,15 +1261,16 @@ compares them — spacing and punctuation stripped, case-insensitive, so `"n 5 e
 
 **The comparison collapses consecutive duplicates; the delivered sequence does not.**
 `ParseClearanceTaxiPlan` deliberately keeps a taxiway repeated across a hold-short — the
-KBOS pattern, *"via November, hold short of 15R, then November, Kilo"* — because the form
-carries one hold-short per row and collapsing the repeat throws the second stop away. The
+KBOS pattern, *"via November, hold short of 15R, then November, Kilo"* — because each
+mention becomes its own Via step, and collapsing the repeat would move a later stop to the
+wrong crossing. The
 snapper structurally cannot produce that repeat: it drops unsnapped and too-short runs
 **before** collapsing consecutive duplicates, so `[N … N]` arrives as a single `N`.
 Walked raw, `[N, N, K]` could never agree with its own track `[N, K]`, and the pilot heard
 "the ground track differs from the clearance" about two descriptions of the same pavement
 — which also switched the geometry path, and the dropped-leg recovery it exists for, off
 for **every clearance of that shape**. So the walk runs against `CollapseConsecutive` and
-only the walk does; the raw list still reaches the form, and each November keeps its row.
+only the walk does; the raw list still reaches the form, and each November keeps its Via step.
 Only *adjacent* repeats collapse, so a genuine later revisit stays a leg the track has to
 carry twice.
 
@@ -1387,7 +1404,7 @@ These are decisions with their evidence attached, not open bugs.
 - **Hold-short anchors cross sources on the geometry path.** They are parsed from the
   clearance and then mapped onto whichever sequence is being applied, so a clearance
   anchor naming a taxiway the track lacks maps to `-1` and is announced as unsettable
-  rather than hung on the wrong row (see
+  rather than hung after the wrong Via step (see
   [Hold-shorts belong to their own taxiway](#hold-shorts-belong-to-their-own-taxiway)).
   A mid-taxi import whose shortened track begins after an already-crossed hold-short will
   report it that way — which is correct, and audible.
@@ -1622,6 +1639,13 @@ and CAT III hold — a different lineup point, with nothing in the announcement 
 it. `chkFitFilter` is deliberately exempt: it describes the aircraft's wingspan rather
 than the route, and forcing it either way could hide the very gate the clearance names.
 
+The step list goes with them ([SI-26]): `ResetRouteShapingControls` empties it, silently,
+before the fill writes its own steps, so a hand-entered "Cross runway 22R" can never clear
+a runway the controller did not clear on this clearance, a "Left onto C" can never turn the
+imported route, and a leftover "Hold short of" adds no stop. Emptying it also leaves the
+list holding no calculated leg, so a leg end queued before the fill never empties the
+steps the fill wrote.
+
 **A FAILED import owns nothing, and that needs its own restore.**
 `TryResolveExternalDestination` documents "probing leaves no mark", but probing a *gate*
 candidate sets `cmbDestType`, and `OnDestTypeChanged` unticks `chkIntersection` (which via
@@ -1648,7 +1672,7 @@ that intersection is no longer offered, or `-1` (untick) if the runway has none.
 snapping the ground track, showing the form — now runs *before* the destination probe, so
 `TryResolveExternalDestination` and `ApplyExternalRoute` are adjacent statements. The probe
 mutates the form on success and only restores on failure, so a throw between the two left
-the form holding SayIntentions' destination on top of the pilot's leftover taxiway rows,
+the form holding SayIntentions' destination on top of the pilot's leftover steps,
 announced as nothing more than *"SayIntentions taxi route failed."*
 
 ### One import at a time, one airport load at a time
@@ -1671,7 +1695,8 @@ path, so a click never contends with itself, and the airport load *chains* rathe
 rejects, so a nested call waits for pending work instead of deadlocking on it.
 
 `LoadAirportDataAsync` needs its own guard for a different reason: it *clears*
-`cmbFirstTaxiway`, `cmbDestination` and the dynamic taxiway rows before its awaits and
+`cmbDestination`, the airport's runway list and the step block's name box (until the step
+list of 2026-11, `cmbFirstTaxiway` and the dynamic taxiway rows) before its awaits and
 repopulates them after. A second load interleaving in that window leaves one caller
 resolving its clearance against emptied combos — every `combo.Items.IndexOf` returns `-1`,
 and the pilot hears *"No taxiways from the clearance matched this airport. Using shortest
