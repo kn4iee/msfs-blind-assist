@@ -773,6 +773,43 @@ public class ClearancePlannerTests
         Assert.Equal(new[] { Via("C"), HoldRwy("27") }, turned);
     }
 
+    // A changed step is a new step (origin -1) in the middle of the list, its old origin (1) removed.
+    private static (List<ClearanceStep> Steps, List<int> Origins) ChangedStepTrim(ClearanceStep[] trimmed, int[] trimmedOrigins)
+        => ClearanceTrim.KeepingEdits(trimmed, trimmedOrigins,
+            new[] { Via("A"), Via("B"), Via("D"), HoldRwy("27") }, new[] { 0, -1, 2, 3 }, new HashSet<int> { 1 });
+
+    [Fact]
+    public void KeepingEdits_keeps_a_changed_step_where_it_was()
+    {
+        var (steps, origins) = ChangedStepTrim(new[] { Via("A"), Via("C"), Via("D"), HoldRwy("27") }, new[] { 0, 1, 2, 3 });
+        Assert.Equal(new[] { Via("A"), Via("B"), Via("D"), HoldRwy("27") }, steps);
+        Assert.Equal(new[] { 0, -1, 2, 3 }, origins);
+    }
+
+    [Fact]
+    public void KeepingEdits_keeps_a_changed_step_after_the_step_before_it_is_finished()
+    {
+        var (steps, origins) = ChangedStepTrim(new[] { Via("C"), Via("D"), HoldRwy("27") }, new[] { 1, 2, 3 });
+        Assert.Equal(new[] { Via("B"), Via("D"), HoldRwy("27") }, steps);
+        Assert.Equal(new[] { -1, 2, 3 }, origins);
+    }
+
+    [Fact]
+    public void KeepingEdits_puts_a_changed_step_before_the_next_step_that_survives()
+    {
+        var (steps, origins) = ChangedStepTrim(new[] { HoldRwy("27") }, new[] { 3 });
+        Assert.Equal(new[] { Via("B"), HoldRwy("27") }, steps);
+        Assert.Equal(new[] { -1, 3 }, origins);
+    }
+
+    [Fact]
+    public void KeepingEdits_puts_a_changed_step_last_when_no_later_step_survives()
+    {
+        var (steps, origins) = ChangedStepTrim(Array.Empty<ClearanceStep>(), Array.Empty<int>());
+        Assert.Equal(new[] { Via("B") }, steps);
+        Assert.Equal(new[] { -1 }, origins);
+    }
+
     [Fact]
     public void A_crossing_put_back_is_found_by_its_record_numbered_as_entered()
     {

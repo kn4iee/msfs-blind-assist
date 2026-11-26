@@ -90,6 +90,42 @@ public static class ClearanceStepEntry
         _ => "Taxiway",
     };
 
+    /// <summary>The name box's accessible name while step <paramref name="changingStep"/> is being changed:
+    /// "Taxiway, changing step 3".</summary>
+    public static string NameBoxAccessibleName(ClearanceStepKind kind, int changingStep)
+        => NameBoxAccessibleName(kind) + ", changing step " + changingStep.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The Add Step button's text while step <paramref name="number"/> is being changed.</summary>
+    public static string ReplaceButtonText(int number)
+        => "Replace step " + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + " (&D)";
+
+    /// <summary>The same button's accessible name (no access key marker).</summary>
+    public static string ReplaceButtonName(int number)
+        => "Replace step " + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Spoken when the window is left, or another step asked for, with step <paramref name="number"/>
+    /// still being changed.</summary>
+    public static string StillChanging(int number)
+        => "Step " + number.ToString(System.Globalization.CultureInfo.InvariantCulture)
+           + " is still being changed. Press Enter to replace it, or Escape to keep it.";
+
+    /// <summary>
+    /// True when <paramref name="rebuilt"/>, the step the window's boxes make now, says the same as
+    /// <paramref name="entered"/>, the step being changed: the same kind, target kind, name and "at" (ordinal, case
+    /// ignored; null is empty), and the same node when the target is a holding point. Hidden data (an at-node, a
+    /// passed-stop flag) is not compared, as the boxes cannot show it.
+    /// </summary>
+    public static bool SameAsEntered(ClearanceStep entered, ClearanceStep rebuilt)
+    {
+        ArgumentNullException.ThrowIfNull(entered);
+        ArgumentNullException.ThrowIfNull(rebuilt);
+        return entered.Kind == rebuilt.Kind
+            && entered.TargetKind == rebuilt.TargetKind
+            && string.Equals(entered.Name ?? "", rebuilt.Name ?? "", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entered.At ?? "", rebuilt.At ?? "", StringComparison.OrdinalIgnoreCase)
+            && (entered.TargetKind != ClearanceTargetKind.HoldingPoint || entered.NodeId == rebuilt.NodeId);
+    }
+
     /// <summary>The name box's accessible description for a kind.</summary>
     public static string NameBoxDescription(ClearanceStepKind kind) => kind switch
     {

@@ -544,28 +544,53 @@ public static class ClearanceTrim
     /// The window's list after a trim, keeping what the pilot did since the last Calculate: the
     /// <paramref name="trimmed"/> steps (from the list as last calculated; <paramref name="trimmedOrigins"/>, their
     /// indexes in it) less those the pilot removed since (<paramref name="removed"/>, indexes in the same list), then
-    /// the steps the pilot added since, in their order (those of <paramref name="shown"/> whose
-    /// <paramref name="shownOrigins"/> is -1). A step the trim changed (a turn made, a crossing put back or pinned) is
-    /// shown as the trim has it. Returns the list and each step's origin (-1 for one added since).
+    /// the steps the pilot added or changed since (those of <paramref name="shown"/> whose
+    /// <paramref name="shownOrigins"/> is -1), each kept where the pilot put it: just before the first step after it in
+    /// <paramref name="shown"/> that is still in the output, or at the end, in their order, when none is. A changed step
+    /// is such a step in the middle of the list (its old origin in <paramref name="removed"/>), so a trim never moves
+    /// the pilot's correction. A step the trim changed (a turn made, a crossing put back or pinned) is
+    /// shown as the trim has it. Returns the list and each step's origin (-1 for one added or changed since).
     /// </summary>
     public static (List<ClearanceStep> Steps, List<int> Origins) KeepingEdits(IReadOnlyList<ClearanceStep> trimmed,
         IReadOnlyList<int> trimmedOrigins, IReadOnlyList<ClearanceStep> shown, IReadOnlyList<int> shownOrigins,
         IReadOnlySet<int> removed)
     {
-        var steps = new List<ClearanceStep>();
-        var origins = new List<int>();
+        var kept = new List<int>();
+        var keptOrigins = new HashSet<int>();
         for (int i = 0; i < trimmed.Count && i < trimmedOrigins.Count; i++)
         {
             if (removed.Contains(trimmedOrigins[i])) continue;
+            kept.Add(i);
+            keptOrigins.Add(trimmedOrigins[i]);
+        }
+
+        // Each step of the pilot's: the origin of the step it goes in front of (-1: the end).
+        var inFront = new Dictionary<int, List<ClearanceStep>>();
+        var atEnd = new List<ClearanceStep>();
+        int count = Math.Min(shown.Count, shownOrigins.Count);
+        for (int i = 0; i < count; i++)
+        {
+            if (shownOrigins[i] >= 0) continue;
+            int anchor = -1;
+            for (int j = i + 1; j < count; j++)
+            {
+                if (shownOrigins[j] >= 0 && keptOrigins.Contains(shownOrigins[j])) { anchor = shownOrigins[j]; break; }
+            }
+            if (anchor < 0) { atEnd.Add(shown[i]); continue; }
+            if (!inFront.TryGetValue(anchor, out var list)) inFront[anchor] = list = new List<ClearanceStep>();
+            list.Add(shown[i]);
+        }
+
+        var steps = new List<ClearanceStep>();
+        var origins = new List<int>();
+        foreach (int i in kept)
+        {
+            if (inFront.TryGetValue(trimmedOrigins[i], out var before))
+                foreach (var step in before) { steps.Add(step); origins.Add(-1); }
             steps.Add(trimmed[i]);
             origins.Add(trimmedOrigins[i]);
         }
-        for (int i = 0; i < shown.Count && i < shownOrigins.Count; i++)
-        {
-            if (shownOrigins[i] >= 0) continue;
-            steps.Add(shown[i]);
-            origins.Add(-1);
-        }
+        foreach (var step in atEnd) { steps.Add(step); origins.Add(-1); }
         return (steps, origins);
     }
 

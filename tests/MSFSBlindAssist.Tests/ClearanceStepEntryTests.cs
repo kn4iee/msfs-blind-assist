@@ -32,6 +32,35 @@ public class ClearanceStepEntryTests
     }
 
     [Fact]
+    public void SameAsEntered_ignores_hidden_data()
+    {
+        var entered = new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "24L", At: "P",
+            AtNodeId: 5, AtNodeIsPassedStop: true);
+        Assert.True(ClearanceStepEntry.SameAsEntered(entered,
+            ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), "P")));
+        Assert.False(ClearanceStepEntry.SameAsEntered(entered,
+            ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), "Q")));
+        Assert.True(ClearanceStepEntry.SameAsEntered(
+            ClearanceStepEntry.Build(ClearanceStepKind.Via, Taxiway("C")),
+            ClearanceStepEntry.Build(ClearanceStepKind.Via, Taxiway("c"))));
+        var seven = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort,
+            new ClearanceNameLists.Item("L2", ClearanceTargetKind.HoldingPoint, "L2", Point("L2", 7)));
+        var eight = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort,
+            new ClearanceNameLists.Item("L2", ClearanceTargetKind.HoldingPoint, "L2", Point("L2", 8)));
+        Assert.False(ClearanceStepEntry.SameAsEntered(seven, eight));
+    }
+
+    [Fact]
+    public void Replace_texts()
+    {
+        Assert.Equal("Replace step 3 (&D)", ClearanceStepEntry.ReplaceButtonText(3));
+        Assert.Equal("Replace step 3", ClearanceStepEntry.ReplaceButtonName(3));
+        Assert.Equal("Taxiway, changing step 3", ClearanceStepEntry.NameBoxAccessibleName(ClearanceStepKind.Via, 3));
+        Assert.Equal("Step 3 is still being changed. Press Enter to replace it, or Escape to keep it.",
+            ClearanceStepEntry.StillChanging(3));
+    }
+
+    [Fact]
     public void Nothing_selected_in_the_kind_list_reads_as_via()
     {
         Assert.Equal(ClearanceStepKind.Via, ClearanceStepEntry.KindAt(-1));
