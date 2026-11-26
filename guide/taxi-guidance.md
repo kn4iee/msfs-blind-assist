@@ -157,7 +157,7 @@ You enter the clearance one step at a time, in the order ATC said it. Each step 
 
 You rarely need the Step kind list itself: **Alt+V**, **Alt+L**, **Alt+R**, **Alt+X** and **Alt+H** each choose a kind (Via, Left onto, Right onto, Cross, Hold short of) and move you straight to the name box, from anywhere in the window.
 
-The **name box** (Alt+W) comes next. Its label follows the kind: **Taxiway** for Via, Left onto and Right onto, **Runway or taxiway to cross** for Cross, and **Hold short of runway or taxiway** for Hold short of. Press the first letter or digit of a name to jump to it, then Enter to add the step (see [Add Step](#add-taxiway)).
+The **name box** (Alt+W) comes next. Its name follows the kind, and your screen reader says it: "Taxiway" for Via, Left onto and Right onto, "Runway or taxiway to cross" for Cross, and "Hold short of runway, taxiway or holding point" for Hold short of. Press the first letter or digit of a name to jump to it, then Enter to add the step (see [Add Step](#add-taxiway)).
 
 For a taxiway, the list is ordered to put the likely names first:
 
@@ -452,7 +452,7 @@ Check the summary: it should say *"via A, C, A"*. If the second A turns out to b
 
 ATC: *"Taxi to runway 22R via N, hold short of runway 15R."* Then later, *"Cross runway 15R, continue on N, hold short of runway 22L."*
 
-For the first call, enter **Via N**, **Hold short of runway 15R**. When the second call comes while you hold at 15R, press Input Y: BA already stops you before 22L, as before every runway, so there is nothing more to enter.
+For the first call, enter **Via N**, **Hold short of runway 15R**. With only that entered, BA chooses its own way on from 15R, which may leave N. So when the second call comes while you hold at 15R, open the planner, add **Via N** and **Hold short of runway 22L**, and calculate again; then press Input Y when you are cleared across 15R. If the summary (or Output Y) already says your route carries on along N to 22L, you can simply press Input Y instead: BA stops you before 22L, as before every runway.
 
 When you know the whole clearance, enter it in one go: **Via N**, **Hold short of runway 15R**, **Via N**, **Hold short of runway 22L**. After the hold short, **N** is offered again, because the step just above is not a taxiway. Each runway gets its own stop, and Continue at each one clears just that runway.
 
@@ -534,7 +534,7 @@ ATC often amends a clearance while you are taxiing. Open the planner again with 
 - a crossing you put back with Input Alt+Y reads as *"Hold short of runway 04L"*, so calculating again does not clear it again;
 - a step BA cannot be sure about stays, for example when the clearance uses the same taxiway twice ("A, C, A").
 
-If nothing is left, you hear *"Steps cleared."* Add the new instruction (for "cross runway 04L", Alt+X, choose 04L, Enter), remove any step ATC cancelled (select it in the Clearance list and press Delete, or press Alt+M for the last step), and press Calculate Route (Alt+C). The new route starts from where you are right now, not from where you were when you first opened the window. A Cross step still in the list is a fresh clearance for the new route: it clears the first crossing of that runway ahead, or the one at its At, and the summary names it.
+If nothing is left, you hear *"Steps cleared."* Add the new instruction (for "cross runway 04L", Alt+X, choose 04L, Enter), remove any step ATC cancelled (select it in the Clearance list and press Delete, or press Alt+M, which removes the selected step, or the last step when none is selected), and press Calculate Route (Alt+C). The new route starts from where you are right now, not from where you were when you first opened the window. A Cross step still in the list is a fresh clearance for the new route: it clears the first crossing of that runway ahead, or the one at its At, and the summary names it.
 
 If your Progressive leg ends just across a runway and you calculate again once you are across, before the leg has ended, you hear *"You are already across runway 24L. Add the next step."* Add the steps ATC gave you next and calculate again.
 

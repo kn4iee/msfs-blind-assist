@@ -205,7 +205,7 @@ Normally you tell GSX which stand you are parking at by working through its menu
 
 ### How to use it {#how-to-use-it-12}
 
-There is nothing extra to do. The setting **Auto-select arrival gate in GSX on route calculation** is on the **Taxi Guidance** tab of Settings, and it is on by default. With it on, every time you press Calculate Route with a **Gate / Parking** destination (or a **Place** destination that is a GSX stand), BA sends the stand to GSX in the background. Your route loads straight away; it does not wait for GSX.
+There is nothing extra to do. The setting **Auto-select arrival gate in GSX on route calculation** is on the **Taxi Guidance** tab of Settings, and it is on by default. With it on, every time you press Calculate Route with a **Gate, stand or parking** destination (or a **Place** destination that is a GSX stand), BA sends the stand to GSX in the background. Your route loads straight away; it does not wait for GSX.
 
 ### What you will hear {#what-you-will-hear-3}
 

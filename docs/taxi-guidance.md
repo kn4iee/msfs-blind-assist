@@ -2126,7 +2126,7 @@ destination type.)
 **A cargo ramp or concourse that only the navdata describes is not a place**
 (`PlaceListBuilder.DuplicatesGateList`). `NavdataFeatureSource` builds a
 "Cargo ramp" from each cluster of civil cargo stands and a "Concourse B" from
-gate letters: each is a group of stands the Gate / Parking list already offers,
+gate letters: each is a group of stands the "Gate, stand or parking" list already offers,
 under a vaguer name, and as a place it routed to the group's most central stand
 — which is not how a stand is assigned. KMEM listed 40 such "Cargo ramp" places,
 one per cluster of its 156 unnamed cargo stands (live 2026-09-26). Such a
@@ -2162,7 +2162,7 @@ It fills the same destination maps the gate branch fills, so Calculate,
 `LoadRoute`, docking and the GSX stop offset need no Place-specific code:
 
 - **A stand entry** targets the stand's own position and heading, exactly as
-  the Gate / Parking type does for that stand.
+  the "Gate, stand or parking" type does for that stand.
 - **A node-only entry** writes NO heading and NO lineup target, so arrival
   takes the "no lineup data — just stop" path instead of aligning the nose on a
   building, and docking is cleared.
@@ -4269,11 +4269,11 @@ equipment applies deicing fluid.
 - `GateDataSource.GetDeiceAreas(icao)` exposes the deice-pad list for an airport.
   Deice areas are **excluded from the normal gate list** returned by
   `GetParkingSpots` — they would be confusing destinations in the taxi-to-gate
-  flow; they are surfaced only through the dedicated Deice Area destination type.
+  flow; they are surfaced only through the dedicated "De-icing area" destination type.
 
-**Taxi Assist — "Deice Area" destination type:**
-`TaxiAssistForm`'s Destination type combo box includes a **"Deice Area"** entry
-alongside Runway and Gate / Parking. When selected, the Destination combo
+**Taxi Assist — "De-icing area" destination type:**
+`TaxiAssistForm`'s Destination type combo box includes a **"De-icing area"** entry
+(index 3; "Deice Area" until 2026-11) alongside Runway and "Gate, stand or parking". When selected, the Destination combo
 populates with the airport's deice pads by `UiName` (e.g., `"De-Ice Pad 1"`). If
 no GSX profile is active or the profile has no `is_deicearea=1` sections, the
 combo shows `"No deicing areas at this airport"` and the Calculate button is
