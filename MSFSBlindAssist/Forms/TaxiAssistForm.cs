@@ -170,7 +170,8 @@ public class TaxiAssistForm : Form
     // The step block: the clearance as ATC said it, one step at a time (spec 8.2). The kind
     // list picks what the name box lists (ClearanceNameLists); the "At" box shows only for a
     // runway crossing; Add Step puts the step at the end of the Clearance list, which reads
-    // each step as a sentence. _steps is the list itself, in the order entered, and the one
+    // each step as a sentence, or, after Enter on a step there, replaces that step in place
+    // (_changingStepIndex). _steps is the list itself, in the order entered, and the one
     // thing Calculate reads (ClearancePlanner.Build).
     private Label lblStepKind = null!;
     private ComboBox cmbStepKind = null!;
@@ -195,6 +196,17 @@ public class TaxiAssistForm : Form
     // one back.
     private readonly List<int> _stepOrigins = new();
     private readonly HashSet<int> _removedOrigins = new();
+    // The step being changed in place (Enter on it in the Clearance list, BeginStepChange), -1 when none: the step boxes
+    // hold it, Add Step replaces it (ReplaceStepFromInputs), Escape keeps it (CancelStepChange). Anything else that changes
+    // the list closes the change first, so a replacement never lands on a step that has moved. UI thread only.
+    private int _changingStepIndex = -1;
+    // Add Step's own text, name and description, put back when a change closes (EndStepChange): kept here so the button's
+    // text is written as a literal once (ClearanceStepEntryTests reads the access keys from the Text literals).
+    private string _addStepText = "";
+    private string _addStepName = "";
+    private string _addStepDescription = "";
+    private const string ReplaceStepDescription =
+        "Replace the step being changed with the one in the boxes. Enter in the step kind, name or At box does the same. Escape keeps the step as it was.";
     // Bumped by every successful Calculate. A guidance event queues its action with the number it saw, and the action
     // is skipped when a Calculate has built a list since: a late leg end never empties the list of the leg just set.
     private int _calculateGeneration;
@@ -482,7 +494,7 @@ public class TaxiAssistForm : Form
         this.MaximizeBox = false;
         this.MinimizeBox = false;
         this.KeyPreview = true;
-        this.KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) this.Close(); };
+        this.KeyDown += OnFormKeyDown;
 
         int y = 15;
         int labelX = 15;
@@ -506,6 +518,10 @@ public class TaxiAssistForm : Form
         //   Alt+Y  Fill from SayIntentions         Alt+C  Calculate Route
         //   Alt+S  Stop Guidance                   Alt+N  Last route summary ("(&N)": no letter
         //          of its own words is free, and it once shared S, which stopped guidance)
+        //   Enter on a step in the Clearance list loads it into the step boxes to change it in
+        //          place: Add Step reads "Replace step N" (still Alt+D, ClearanceStepEntry's
+        //          ReplaceButtonText) and Escape keeps the step; with no change open, Escape
+        //          closes the window (OnFormKeyDown)
         //
         // Tab order (top to bottom, explicit TabIndex below; a label with an access key sits
         // immediately before its control, or the key lands on whatever follows its number):
@@ -866,6 +882,10 @@ public class TaxiAssistForm : Form
             AccessibleName = "Add Step",
             AccessibleDescription = "Add the step to the end of the clearance. Enter in the step kind, name or At box does the same."
         };
+        // While a step is being changed the button reads "Replace step N" (BeginStepChange); these put it back.
+        _addStepText = btnAddStep.Text;
+        _addStepName = btnAddStep.AccessibleName ?? "";
+        _addStepDescription = btnAddStep.AccessibleDescription ?? "";
         btnAddStep.Click += (s, e) => AddStepFromInputs();
 
         lblClearance = new Label
@@ -880,15 +900,9 @@ public class TaxiAssistForm : Form
             Height = 84,
             IntegralHeight = false,
             AccessibleName = "Clearance",
-            AccessibleDescription = "The steps of the clearance, in the order ATC said them. Delete removes the selected step."
+            AccessibleDescription = "The steps of the clearance, in the order ATC said them. Enter changes the selected step in place; Delete removes it."
         };
-        lstClearance.KeyDown += (s, e) =>
-        {
-            if (e.KeyCode != Keys.Delete || e.Modifiers != Keys.None) return;
-            e.Handled = true;
-            e.SuppressKeyPress = true;
-            RemoveStep();
-        };
+        lstClearance.KeyDown += OnClearanceListKeyDown;
 
         btnRemoveStep = new Button
         {
@@ -1126,6 +1140,22 @@ public class TaxiAssistForm : Form
             return true;
         }
         return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    /// <summary>Escape: with a step being changed (Enter on it in the Clearance list), keeps the step as it was and goes
+    /// back to it there (<see cref="CancelStepChange"/>); with none, closes the window, as it always has. The form sees
+    /// every key first (KeyPreview), so no control takes the Escape before this.</summary>
+    private void OnFormKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode != Keys.Escape) return;
+        if (_changingStepIndex >= 0)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            CancelStepChange(true);
+            return;
+        }
+        Close();
     }
 
     protected override void Dispose(bool disposing)
@@ -3631,13 +3661,20 @@ public class TaxiAssistForm : Form
         cmbStepName.Focus();
     }
 
-    /// <summary>The taxiway of the last Via, Left onto or Right onto step, or null.</summary>
+    /// <summary>The taxiway of the last Via, Left onto or Right onto step the name box lists for
+    /// (<see cref="StepsBeforeEntry"/>), or null.</summary>
     private string? LastViaStepName()
     {
-        for (int i = _steps.Count - 1; i >= 0; i--)
-            if (_steps[i].IsVia) return _steps[i].Name;
+        var before = StepsBeforeEntry();
+        for (int i = before.Count - 1; i >= 0; i--)
+            if (before[i].IsVia) return before[i].Name;
         return null;
     }
+
+    /// <summary>The steps the name box is listed for: the whole list, or, while a step is being changed, only the steps
+    /// before it (its step above and its last Via), so the change is offered what was offered when it was entered.</summary>
+    private IReadOnlyList<ClearanceStep> StepsBeforeEntry()
+        => _changingStepIndex >= 0 ? _steps.GetRange(0, Math.Min(_changingStepIndex, _steps.Count)) : _steps;
 
     /// <summary>
     /// Fills the name box for the chosen kind from <see cref="ClearanceNameLists"/>, likely names first, and sets its
@@ -3645,13 +3682,17 @@ public class TaxiAssistForm : Form
     /// an empty list for a Via kind: the nearest taxiway in the direction the aircraft faces, as the first-taxiway box
     /// did. <paramref name="keepSelection"/> keeps the pick by its label and kind when it is still listed (a late
     /// holding-point fetch, a destination type change). A holding point read from a sign is listed only for
-    /// Progressive Taxi ([HLD-18]). Refreshes the "At" box after.
+    /// Progressive Taxi ([HLD-18]). While a step is being changed the names are those offered after the steps before it
+    /// (<see cref="StepsBeforeEntry"/>), the accessible name says which step, and nothing is preselected. Refreshes the
+    /// "At" box after.
     /// </summary>
     private void RefreshStepNameList(bool keepSelection = false)
     {
         var kind = SelectedStepKind();
         lblStepName.Text = ClearanceStepEntry.NameBoxLabel(kind);
-        cmbStepName.AccessibleName = ClearanceStepEntry.NameBoxAccessibleName(kind);
+        cmbStepName.AccessibleName = _changingStepIndex >= 0
+            ? ClearanceStepEntry.NameBoxAccessibleName(kind, _changingStepIndex + 1)
+            : ClearanceStepEntry.NameBoxAccessibleName(kind);
         cmbStepName.AccessibleDescription = ClearanceStepEntry.NameBoxDescription(kind);
 
         var previous = keepSelection ? cmbStepName.SelectedItem as ClearanceNameLists.Item : null;
@@ -3667,7 +3708,7 @@ public class TaxiAssistForm : Form
             if (previous != null)
                 select = IndexOfStepName(i => i.Kind == previous.Kind
                     && string.Equals(i.Label, previous.Label, StringComparison.OrdinalIgnoreCase));
-            if (select < 0 && previous == null && _steps.Count == 0 && _graph != null
+            if (select < 0 && previous == null && _changingStepIndex < 0 && StepsBeforeEntry().Count == 0 && _graph != null
                 && kind is ClearanceStepKind.Via or ClearanceStepKind.LeftOnto or ClearanceStepKind.RightOnto
                 && _graph.GetClosestTaxiwayInDirection(_aircraftLat, _aircraftLon, AircraftHeadingTrue()) is string closest)
                 select = IndexOfStepName(i => string.Equals(i.Name, closest, StringComparison.Ordinal));
@@ -3695,6 +3736,7 @@ public class TaxiAssistForm : Form
         if (_graph == null) return new List<ClearanceNameLists.Item>();
         var graph = _graph;
         var all = graph.GetAllTaxiwayNames();
+        var before = StepsBeforeEntry();
         string? lastVia = LastViaStepName();
         // The taxiways the last Via taxiway meets (within two named-taxiway crossings), nearest the aircraft first;
         // the rest of the airport follows them alphabetically in ClearanceNameLists, so a clearance the heuristic
@@ -3718,17 +3760,17 @@ public class TaxiAssistForm : Form
         switch (kind)
         {
             case ClearanceStepKind.Cross:
-                return ClearanceNameLists.CrossTargets(_airportRunwayIds, TaxiwaysCrossing, connected, all, _steps);
+                return ClearanceNameLists.CrossTargets(_airportRunwayIds, TaxiwaysCrossing, connected, all, before);
             case ClearanceStepKind.HoldShort:
                 if (!_namedHoldingPointsResolved)
                     ResolveNamedHoldingPoints();
                 return ClearanceNameLists.HoldTargets(_airportRunwayIds, TaxiwaysCrossing, all, _namedHoldingPoints,
-                    includeSignPoints: cmbDestType.SelectedIndex == 2, _steps);
+                    includeSignPoints: cmbDestType.SelectedIndex == 2, before);
             default:
                 IReadOnlyList<string> nearestFirst = lastVia == null
                     ? graph.GetTaxiwayNamesSortedByDistance(_aircraftLat, _aircraftLon, AircraftHeadingTrue())
                     : Array.Empty<string>();
-                return ClearanceNameLists.Taxiways(nearestFirst, connected, all, _steps);
+                return ClearanceNameLists.Taxiways(nearestFirst, connected, all, before);
         }
     }
 
@@ -3808,10 +3850,17 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Add Step: the chosen kind and name (and "At") become a step at the end of the list, spoken once. With no name
     /// chosen it is refused out loud. Then the kind goes back to Via with the list refilled and focus in the name box,
-    /// so the next taxiway costs a letter and Enter.
+    /// so the next taxiway costs a letter and Enter. With a step being changed it replaces that step instead
+    /// (<see cref="ReplaceStepFromInputs"/>).
     /// </summary>
     private void AddStepFromInputs()
     {
+        if (_changingStepIndex >= 0)
+        {
+            ReplaceStepFromInputs();
+            return;
+        }
+
         var name = cmbStepName.SelectedItem as ClearanceNameLists.Item;
         string? refusal = ClearanceStepEntry.Refusal(name);
         if (refusal != null)
@@ -3820,14 +3869,181 @@ public class TaxiAssistForm : Form
             return;
         }
 
-        string? atLabel = _stepAtShown ? cmbStepAt.SelectedItem?.ToString() : null;
-        NamedHoldingPoint? atPoint = atLabel != null && _crossAtHoldPoints.TryGetValue(atLabel, out var point) ? point : null;
-        var step = ClearanceStepEntry.Build(SelectedStepKind(), name!, atLabel, atPoint);
+        var step = StepFromBoxes(name!);
 
         bool focusMoves = !cmbStepName.Focused;
         SetStepKindSilently(ClearanceStepKind.Via);
         AppendStep(step, speak: true, speakAfterFocusMove: focusMoves);
         cmbStepName.Focus();
+    }
+
+    /// <summary>The step the boxes make with <paramref name="name"/> chosen: the kind, the name and, for a runway
+    /// crossing, the "At" pick (a holding point by its node).</summary>
+    private ClearanceStep StepFromBoxes(ClearanceNameLists.Item name)
+    {
+        string? atLabel = _stepAtShown ? cmbStepAt.SelectedItem?.ToString() : null;
+        NamedHoldingPoint? atPoint = atLabel != null && _crossAtHoldPoints.TryGetValue(atLabel, out var point) ? point : null;
+        return ClearanceStepEntry.Build(SelectedStepKind(), name, atLabel, atPoint);
+    }
+
+    /// <summary>Enter on a selected step in the Clearance list changes it in place (<see cref="BeginStepChange"/>);
+    /// Delete removes it (<see cref="RemoveStep"/>).</summary>
+    private void OnClearanceListKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Modifiers != Keys.None) return;
+        if (e.KeyCode == Keys.Delete)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            RemoveStep();
+        }
+        else if (e.KeyCode == Keys.Enter && lstClearance.SelectedIndex >= 0)
+        {
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            BeginStepChange(lstClearance.SelectedIndex);
+        }
+    }
+
+    /// <summary>
+    /// Starts changing step <paramref name="index"/> in place (Enter on it in the Clearance list): the step boxes are
+    /// loaded kind, then name (listed after the steps before it, <see cref="StepsBeforeEntry"/>), then, for a runway
+    /// crossing, "At" ("(none)" when it names no place); a name or place no longer offered is left unselected. Add Step
+    /// reads "Replace step N" and focus goes to the name box, whose accessible name says "changing step N", so the screen
+    /// reader says it there and nothing is spoken here ([CORE-7]). Enter on another step while one is being changed
+    /// starts that one instead, the first kept as it was.
+    /// </summary>
+    private void BeginStepChange(int index)
+    {
+        if (index < 0 || index >= _steps.Count) return;
+        if (_changingStepIndex >= 0) CancelStepChange(false);
+        var step = _steps[index];
+        _changingStepIndex = index;
+        SetStepKindSilently(step.Kind);
+        RefreshStepNameList();
+        // The At box is rebuilt once, for the name picked, below.
+        _fillingStepName = true;
+        try { cmbStepName.SelectedIndex = IndexOfStepNameFor(step); }
+        finally { _fillingStepName = false; }
+        RefreshStepAtList();
+        if (_stepAtShown) cmbStepAt.SelectedIndex = IndexOfStepAtFor(step);
+        btnAddStep.Text = ClearanceStepEntry.ReplaceButtonText(index + 1);
+        btnAddStep.AccessibleName = ClearanceStepEntry.ReplaceButtonName(index + 1);
+        btnAddStep.AccessibleDescription = ReplaceStepDescription;
+        cmbStepName.Focus();
+    }
+
+    /// <summary>The name box's item for <paramref name="step"/>: by its target kind and name, a holding point by its
+    /// node (by its name when its node is no longer listed); -1 when it is not offered.</summary>
+    private int IndexOfStepNameFor(ClearanceStep step)
+    {
+        if (step.TargetKind == ClearanceTargetKind.HoldingPoint)
+        {
+            int byNode = step.NodeId == 0 ? -1 : IndexOfStepName(i => i.Kind == ClearanceTargetKind.HoldingPoint
+                && i.HoldingPoint?.NodeId == step.NodeId);
+            if (byNode >= 0) return byNode;
+        }
+        return IndexOfStepName(i => i.Kind == step.TargetKind
+            && string.Equals(i.Name, step.Name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The "At" box's item for a runway crossing: "(none)" when the step names no place; a taxiway by its label;
+    /// a holding point by its name (labelled with <see cref="CrossAtHoldPointSuffix"/>) or its node. A step pinned to a
+    /// holding point's node never matches a taxiway of the same name. -1 when the place is no longer offered.</summary>
+    private int IndexOfStepAtFor(ClearanceStep step)
+    {
+        if (string.IsNullOrEmpty(step.At)) return cmbStepAt.Items.IndexOf(ClearanceStepEntry.NoAtPlace);
+        bool pinnedToPoint = step.AtNodeId != 0 && !step.AtNodeIsPassedStop && !step.AtNodeIsReach;
+        for (int i = 0; i < cmbStepAt.Items.Count; i++)
+        {
+            string label = cmbStepAt.Items[i]?.ToString() ?? "";
+            if (label == ClearanceStepEntry.NoAtPlace) continue;
+            if (_crossAtHoldPoints.TryGetValue(label, out var point))
+            {
+                if (string.Equals(point.Name, step.At, StringComparison.OrdinalIgnoreCase)
+                    || (step.AtNodeId != 0 && point.NodeId == step.AtNodeId))
+                    return i;
+            }
+            else if (!pinnedToPoint && string.Equals(label, step.At, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Add Step with a step being changed: refused out loud with no name chosen, as Add Step is. A step that says what
+    /// the old one said (<see cref="ClearanceStepEntry.SameAsEntered"/>) keeps the old record and its origin, so a made
+    /// crossing's pin or a put-back hold short's place survives; anything else is a new step in the same place (origin
+    /// -1), the old step's origin kept out of every later trim. Read back once with its own number ("Step 3: via D."),
+    /// then the boxes go back to Via with focus in the name box, as after Add Step.
+    /// </summary>
+    private void ReplaceStepFromInputs()
+    {
+        int index = _changingStepIndex;
+        if (index >= _steps.Count)
+        {
+            // Never reached: whatever changes the list closes the change first. Never write a step that has moved.
+            CancelStepChange(false);
+            return;
+        }
+
+        var name = cmbStepName.SelectedItem as ClearanceNameLists.Item;
+        string? refusal = ClearanceStepEntry.Refusal(name);
+        if (refusal != null)
+        {
+            SpeakStepBlockNow(refusal);
+            return;
+        }
+
+        var rebuilt = StepFromBoxes(name!);
+        if (!ClearanceStepEntry.SameAsEntered(_steps[index], rebuilt))
+        {
+            if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);
+            _steps[index] = rebuilt;
+            _stepOrigins[index] = -1;   // changed since the last Calculate: kept where it is through a trim
+            lstClearance.Items[index] = rebuilt.Sentence();
+        }
+
+        bool focusMoves = !cmbStepName.Focused;
+        EndStepChange();
+        SetStepKindSilently(ClearanceStepKind.Via);
+        // No stale pick, as after Add Step: Remove Step with nothing selected takes the last step.
+        lstClearance.SelectedIndex = -1;
+        RefreshStepNameList();
+        SpeakStepAdded(_steps[index].Spoken(index + 1), focusMoves);
+        cmbStepName.Focus();
+    }
+
+    /// <summary>
+    /// Closes the change with the step left as it was (<paramref name="focusTheStep"/>: Escape, focus back on that step
+    /// in the Clearance list, which the screen reader reads; else silently, for whatever is about to change the list, the
+    /// window hiding, or a Calculate the change would not alter). The boxes go back to Via, listed for the whole list.
+    /// </summary>
+    private void CancelStepChange(bool focusTheStep)
+    {
+        if (_changingStepIndex < 0) return;
+        int index = _changingStepIndex;
+        EndStepChange();
+        SetStepKindSilently(ClearanceStepKind.Via);
+        RefreshStepNameList();
+        if (!focusTheStep) return;
+        // Already in the list, the reader would say nothing: focus passes through the button on its way back (a screen
+        // reader reads the last of two quick focus moves), as SelectStepKind does for the name box.
+        if (lstClearance.Focused) btnAddStep.Focus();
+        if (index < lstClearance.Items.Count) lstClearance.SelectedIndex = index;
+        lstClearance.Focus();
+    }
+
+    /// <summary>No step is being changed: Add Step's own text, name and description back. The caller refills the name
+    /// box, which takes its own accessible name back.</summary>
+    private void EndStepChange()
+    {
+        _changingStepIndex = -1;
+        btnAddStep.Text = _addStepText;
+        btnAddStep.AccessibleName = _addStepName;
+        btnAddStep.AccessibleDescription = _addStepDescription;
     }
 
     /// <summary>Adds a step at the end of the list and the Clearance list (as its sentence) and refills the name box.
@@ -3918,9 +4134,11 @@ public class TaxiAssistForm : Form
     /// button's access key clicks it without moving focus and the reader says nothing of the change, it says once which
     /// step went: "Removed step 3: cross runway 24L."; and a removal that leaves the list empty says "Steps cleared."
     /// whatever the focus, as an empty list gives the reader nothing to say ([CORE-7],
-    /// <see cref="ClearanceStepEntry.RemovalSentence"/>). A step of the leg calculated stays out of every later trim.</summary>
+    /// <see cref="ClearanceStepEntry.RemovalSentence"/>). A step of the leg calculated stays out of every later trim. A
+    /// step being changed is kept as it was first, silently (the removal is what the pilot hears).</summary>
     private void RemoveStep()
     {
+        CancelStepChange(false);
         if (_steps.Count == 0)
         {
             SpeakStepBlockNow(ClearanceStepEntry.NoStepToRemove);
@@ -3957,9 +4175,11 @@ public class TaxiAssistForm : Form
     /// <summary>Empties the step list (Clear Steps, a SayIntentions fill, an airport change, Stop Guidance, the end of
     /// the leg it was calculated for), the kind back on Via and the name box refilled; the list then holds no leg being
     /// flown (<see cref="_calculatedSteps"/>), and a step sentence still waiting is dropped, as it names a step that is
-    /// gone. Speaks nothing: Clear Steps speaks for itself (<see cref="OnClearStepsClicked"/>).</summary>
+    /// gone; a step being changed goes with the rest, its change closed first. Speaks nothing: Clear Steps speaks for
+    /// itself (<see cref="OnClearStepsClicked"/>).</summary>
     private void ClearSteps()
     {
+        CancelStepChange(false);
         CancelPendingStepSpeech();
         _steps.Clear();
         _stepOrigins.Clear();
@@ -4076,9 +4296,11 @@ public class TaxiAssistForm : Form
         return hadSteps && _steps.Count == 0;
     }
 
-    /// <summary>Replaces the list and the Clearance list's items with <paramref name="steps"/> and their origins.</summary>
+    /// <summary>Replaces the list and the Clearance list's items with <paramref name="steps"/> and their origins (a trim),
+    /// a step being changed kept as it was first, silently: its place may move or go.</summary>
     private void ShowSteps(IReadOnlyList<ClearanceStep> steps, IReadOnlyList<int> origins)
     {
+        CancelStepChange(false);
         _steps.Clear();
         _steps.AddRange(steps);
         _stepOrigins.Clear();
@@ -4153,6 +4375,8 @@ public class TaxiAssistForm : Form
     /// place, as the trim matches), never by runway name, through the progress numbered as the list was calculated
     /// (<see cref="ClearanceTrim.PutBackSteps"/>); a crossing a Continue cleared has no step. Nothing else in the list
     /// moves, and nothing is said: the key's own sentence is what the pilot hears. Skipped when a Calculate has run since.
+    /// A step being changed is kept as it was first, silently: the step put back may be that very one, and a replacement
+    /// from the boxes would clear the crossing again.
     /// </summary>
     private void FollowPutBackCrossings(IReadOnlyList<ClearedCrossing> restored, int generation)
     {
@@ -4160,6 +4384,7 @@ public class TaxiAssistForm : Form
         var progress = _guidanceManager.GetClearanceProgress();
         var putBack = ClearanceTrim.PutBackSteps(_calculatedSteps, restored, progress);
         if (putBack.Count == 0) return;
+        CancelStepChange(false);
         var steps = ClearanceTrim.FollowingPutBack(_steps, _stepOrigins, putBack);
         for (int i = 0; i < steps.Count; i++)
         {
@@ -4409,6 +4634,22 @@ public class TaxiAssistForm : Form
         // A step sentence still waiting (a step added a moment ago) must not land after the one Calculate utterance
         // ([HLD-17], [SI-22]): the clearance it confirms is in what Calculate says.
         CancelPendingStepSpeech();
+
+        // A step still being changed: Calculate goes ahead only when the boxes would make the same step (the change is
+        // closed, the step as it was); otherwise it refuses with the step's number and changes nothing. Before the trim,
+        // which would close the change itself and lose what the pilot was entering.
+        if (_changingStepIndex >= 0)
+        {
+            var rebuilt = cmbStepName.SelectedItem is ClearanceNameLists.Item picked ? StepFromBoxes(picked) : null;
+            bool same = rebuilt != null && _changingStepIndex < _steps.Count
+                && ClearanceStepEntry.SameAsEntered(_steps[_changingStepIndex], rebuilt);
+            if (!same)
+            {
+                RefuseCalculate(ClearanceStepEntry.StillChanging(_changingStepIndex + 1));
+                return;
+            }
+            CancelStepChange(false);
+        }
 
         // With a route live, the steps already finished go first (spec 8.2), silently: the window may have stayed open,
         // or come back by Alt+Tab, while the aircraft crossed 04L, and the plan built from the untrimmed list would clear
@@ -5604,6 +5845,8 @@ public class TaxiAssistForm : Form
         if (e.CloseReason == CloseReason.UserClosing)
         {
             e.Cancel = true;
+            // A step being changed is kept as it was: the window reopens on the list as trimmed, never mid-change.
+            CancelStepChange(false);
             Hide();
             return;
         }

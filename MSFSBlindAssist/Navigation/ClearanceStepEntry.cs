@@ -111,9 +111,10 @@ public static class ClearanceStepEntry
 
     /// <summary>
     /// True when <paramref name="rebuilt"/>, the step the window's boxes make now, says the same as
-    /// <paramref name="entered"/>, the step being changed: the same kind, target kind, name and "at" (ordinal, case
-    /// ignored; null is empty), and the same node when the target is a holding point. Hidden data (an at-node, a
-    /// passed-stop flag) is not compared, as the boxes cannot show it.
+    /// <paramref name="entered"/>, the step being changed: the same kind, target kind, name and, for a Cross step, "at"
+    /// (ordinal, case ignored; null is empty), and the same node when the target is a holding point. Hidden data (an
+    /// at-node, a passed-stop flag, the place a crossing put back as a hold short keeps) is not compared, as the boxes
+    /// cannot show it: only a Cross step has an "At" box.
     /// </summary>
     public static bool SameAsEntered(ClearanceStep entered, ClearanceStep rebuilt)
     {
@@ -122,7 +123,8 @@ public static class ClearanceStepEntry
         return entered.Kind == rebuilt.Kind
             && entered.TargetKind == rebuilt.TargetKind
             && string.Equals(entered.Name ?? "", rebuilt.Name ?? "", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(entered.At ?? "", rebuilt.At ?? "", StringComparison.OrdinalIgnoreCase)
+            && (entered.Kind != ClearanceStepKind.Cross
+                || string.Equals(entered.At ?? "", rebuilt.At ?? "", StringComparison.OrdinalIgnoreCase))
             && (entered.TargetKind != ClearanceTargetKind.HoldingPoint || entered.NodeId == rebuilt.NodeId);
     }
 

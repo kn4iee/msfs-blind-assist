@@ -492,6 +492,175 @@ public class ClearanceWiringTests
         Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: false));
     }
 
+    // Stage 4, D1 and D2: Enter on a selected step in the Clearance list loads it into the step boxes, kind, then name,
+    // then At, saying nothing: the name box's accessible name carries ", changing step N", which the screen reader says
+    // as focus lands there ([CORE-7]). Delete still removes the step.
+    [Fact]
+    public void Enter_on_a_step_in_the_Clearance_list_starts_a_change()
+    {
+        string form = FormSource();
+        Assert.Contains("lstClearance.KeyDown += OnClearanceListKeyDown;", form);
+        string keys = Member(form, "private void OnClearanceListKeyDown(");
+        Assert.Contains("RemoveStep();", keys);
+        int enter = keys.IndexOf("e.KeyCode == Keys.Enter && lstClearance.SelectedIndex >= 0", StringComparison.Ordinal);
+        int begin = keys.IndexOf("BeginStepChange(lstClearance.SelectedIndex);", StringComparison.Ordinal);
+        Assert.True(enter >= 0 && begin > enter, "Enter with a step selected starts the change");
+
+        string start = Member(form, "private void BeginStepChange(");
+        int index = start.IndexOf("_changingStepIndex = index;", StringComparison.Ordinal);
+        int kind = start.IndexOf("SetStepKindSilently(step.Kind);", StringComparison.Ordinal);
+        int names = start.IndexOf("RefreshStepNameList();", StringComparison.Ordinal);
+        int name = start.IndexOf("cmbStepName.SelectedIndex = IndexOfStepNameFor(step);", StringComparison.Ordinal);
+        int at = start.IndexOf("cmbStepAt.SelectedIndex = IndexOfStepAtFor(step);", StringComparison.Ordinal);
+        int focus = start.IndexOf("cmbStepName.Focus();", StringComparison.Ordinal);
+        Assert.True(index >= 0 && kind > index && names > kind && name > names && at > name && focus > at,
+            "the boxes are loaded kind, name, At, with the change open first, then focus moves to the name box");
+        Assert.Contains("btnAddStep.Text = ClearanceStepEntry.ReplaceButtonText(index + 1);", start);
+        Assert.Contains("btnAddStep.AccessibleName = ClearanceStepEntry.ReplaceButtonName(index + 1);", start);
+        Assert.DoesNotContain("_announcer.", start);
+        Assert.DoesNotContain("SpeakStep", start);
+
+        // The name box says which step it is changing, whatever kind is picked while the change is open.
+        Assert.Contains("ClearanceStepEntry.NameBoxAccessibleName(kind, _changingStepIndex + 1)",
+            Member(form, "private void RefreshStepNameList("));
+        // A holding point is found by its node, an At holding point by its label or node.
+        Assert.Contains("i.HoldingPoint?.NodeId == step.NodeId", Member(form, "private int IndexOfStepNameFor("));
+        string atFor = Member(form, "private int IndexOfStepAtFor(");
+        Assert.Contains("_crossAtHoldPoints.TryGetValue(label, out var point)", atFor);
+        Assert.Contains("point.NodeId == step.AtNodeId", atFor);
+    }
+
+    // Stage 4, D2: while a step is being changed the name box lists from the steps BEFORE it (its step above, its last
+    // Via), never from the whole list, and the first-step preselect never picks a name for it.
+    [Fact]
+    public void The_name_box_lists_from_the_steps_before_the_one_being_changed()
+    {
+        string form = FormSource();
+        string items = Member(form, "private List<ClearanceNameLists.Item> StepNameItems(");
+        Assert.Contains("var before = StepsBeforeEntry();", items);
+        Assert.DoesNotContain(", _steps)", items);
+        Assert.Equal(3, Regex.Matches(items, @", before\)").Count);
+        string lastVia = Member(form, "private string? LastViaStepName(");
+        Assert.Contains("StepsBeforeEntry()", lastVia);
+        Assert.DoesNotContain("_steps", lastVia);
+
+        string refresh = Member(form, "private void RefreshStepNameList(");
+        Assert.Contains("_changingStepIndex < 0 && StepsBeforeEntry().Count == 0", refresh);
+        Assert.DoesNotContain("_steps.Count == 0", refresh);
+        Assert.Contains("_changingStepIndex", Member(form, "private IReadOnlyList<ClearanceStep> StepsBeforeEntry("));
+    }
+
+    // Stage 4, D3 and D4: Add Step (its button, Alt+D, Enter in a step box) replaces the step being changed and reads it
+    // back with its own number. A replacement that says what the step said keeps the old record and its origin (a made
+    // crossing's pin, a put-back hold short's place); anything else is a new step, its old origin kept out of every trim.
+    // The button's own text is restored from a field, never a second "A&dd Step" literal (ClearanceStepEntryTests).
+    [Fact]
+    public void Add_Step_replaces_the_step_being_changed()
+    {
+        string form = FormSource();
+        string add = Member(form, "private void AddStepFromInputs(");
+        int open = add.IndexOf("if (_changingStepIndex >= 0)", StringComparison.Ordinal);
+        int replace = add.IndexOf("ReplaceStepFromInputs();", StringComparison.Ordinal);
+        int append = add.IndexOf("AppendStep(", StringComparison.Ordinal);
+        Assert.True(open >= 0 && replace > open && append > replace, "an open change is replaced, never appended");
+
+        string body = Member(form, "private void ReplaceStepFromInputs(");
+        int refusal = body.IndexOf("ClearanceStepEntry.Refusal(name)", StringComparison.Ordinal);
+        int same = body.IndexOf("ClearanceStepEntry.SameAsEntered(_steps[index], rebuilt)", StringComparison.Ordinal);
+        int removed = body.IndexOf("if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);", StringComparison.Ordinal);
+        int written = body.IndexOf("_steps[index] = rebuilt;", StringComparison.Ordinal);
+        int origin = body.IndexOf("_stepOrigins[index] = -1;", StringComparison.Ordinal);
+        int shown = body.IndexOf("lstClearance.Items[index] = rebuilt.Sentence();", StringComparison.Ordinal);
+        int closed = body.IndexOf("EndStepChange();", StringComparison.Ordinal);
+        int spoken = body.IndexOf("SpeakStepAdded(_steps[index].Spoken(index + 1), focusMoves);", StringComparison.Ordinal);
+        Assert.True(refusal >= 0 && same > refusal && removed > same && written > removed && origin > written
+                    && shown > origin && closed > shown && spoken > closed, "refused, compared, replaced, closed, then read back");
+        Assert.Contains("SetStepKindSilently(ClearanceStepKind.Via);", body);
+        Assert.Contains("cmbStepName.Focus();", body);
+        // The index is the one the change was opened on, taken once; it is never written once the list has changed.
+        Assert.Contains("int index = _changingStepIndex;", body);
+        Assert.DoesNotContain("_steps[_changingStepIndex] =", form);
+
+        Assert.Single(Regex.Matches(form, "\"A&dd Step\""));
+        Assert.Contains("btnAddStep.Text = _addStepText;", Member(form, "private void EndStepChange("));
+        Assert.Contains("_changingStepIndex = -1;", Member(form, "private void EndStepChange("));
+    }
+
+    // Stage 4, D6: Escape with a step being changed keeps the step as it was and goes back to it in the Clearance list
+    // (the screen reader reads it); with no change open it closes the window, as it always has. The form sees the key
+    // first (KeyPreview), so the check comes before Close().
+    [Fact]
+    public void Escape_cancels_an_open_change_and_closes_the_window_only_with_none_open()
+    {
+        string form = FormSource();
+        Assert.Contains("this.KeyDown += OnFormKeyDown;", form);
+        Assert.DoesNotContain("if (e.KeyCode == Keys.Escape) this.Close();", form);
+        string keys = Member(form, "private void OnFormKeyDown(");
+        int open = keys.IndexOf("if (_changingStepIndex >= 0)", StringComparison.Ordinal);
+        int cancel = keys.IndexOf("CancelStepChange(true);", StringComparison.Ordinal);
+        int stop = keys.IndexOf("return;", cancel < 0 ? 0 : cancel, StringComparison.Ordinal);
+        int close = keys.IndexOf("Close();", StringComparison.Ordinal);
+        Assert.True(open >= 0 && cancel > open && stop > cancel && close > stop, "a change is cancelled and the window stays open");
+
+        string cancelBody = Member(form, "private void CancelStepChange(");
+        int ended = cancelBody.IndexOf("EndStepChange();", StringComparison.Ordinal);
+        int silent = cancelBody.IndexOf("if (!focusTheStep) return;", StringComparison.Ordinal);
+        int select = cancelBody.IndexOf("lstClearance.SelectedIndex = index;", StringComparison.Ordinal);
+        int focus = cancelBody.IndexOf("lstClearance.Focus();", StringComparison.Ordinal);
+        Assert.True(ended >= 0 && silent > ended && select > silent && focus > select, "closed, then back to the step");
+        Assert.DoesNotContain("_announcer.", cancelBody);
+        Assert.DoesNotContain("_steps[", cancelBody);
+    }
+
+    // Stage 4, D7 and Review Focus 2: anything else that changes the list closes an open change first, silently, so a
+    // replacement never lands on a step that has moved or changed (a leg end, the fill, an airport change and Stop go
+    // through ClearSteps; a trim through ShowSteps; the Hold short key through FollowPutBackCrossings), and so does the
+    // window hiding.
+    [Fact]
+    public void Anything_else_that_changes_the_list_closes_an_open_change_first()
+    {
+        string form = FormSource();
+        foreach (var (member, change) in new[]
+                 {
+                     ("private void ClearSteps(", "_steps.Clear();"),
+                     ("private void ShowSteps(", "_steps.Clear();"),
+                     ("private void RemoveStep(", "_steps.RemoveAt(index);"),
+                     ("private void FollowPutBackCrossings(", "_steps[i] = steps[i];"),
+                 })
+        {
+            string body = Member(form, member);
+            int cancel = body.IndexOf("CancelStepChange(false);", StringComparison.Ordinal);
+            int changed = body.IndexOf(change, StringComparison.Ordinal);
+            Assert.True(cancel >= 0 && changed > cancel, $"{member} closes an open change before it changes the list");
+        }
+
+        string closing = Member(form, "protected override void OnFormClosing(");
+        int cancelOnHide = closing.IndexOf("CancelStepChange(false);", StringComparison.Ordinal);
+        int hide = closing.IndexOf("Hide();", StringComparison.Ordinal);
+        Assert.True(cancelOnHide >= 0 && hide > cancelOnHide, "the window hiding closes an open change");
+
+        // The paths into ClearSteps stay as pinned above (the leg end, the fill, an airport change, Stop).
+        Assert.Contains("ClearSteps();", Member(form, "private void EmptyStepsAfterLeg("));
+        Assert.Contains("ClearSteps()", Member(form, "private void ResetRouteShapingControls("));
+    }
+
+    // Stage 4, D8: Calculate with a step being changed goes ahead only when the boxes would make the same step (the
+    // change is closed); otherwise it refuses with the step's number and changes nothing: before the trim, which would
+    // otherwise close the change itself, and long before the plan is built.
+    [Fact]
+    public void Calculate_refuses_while_a_step_is_being_changed()
+    {
+        string calculate = Member(FormSource(), "private void OnCalculateClicked(");
+        int open = calculate.IndexOf("if (_changingStepIndex >= 0)", StringComparison.Ordinal);
+        int same = calculate.IndexOf("ClearanceStepEntry.SameAsEntered(", StringComparison.Ordinal);
+        int refuse = calculate.IndexOf("RefuseCalculate(ClearanceStepEntry.StillChanging(_changingStepIndex + 1));", StringComparison.Ordinal);
+        int closed = calculate.IndexOf("CancelStepChange(false);", StringComparison.Ordinal);
+        int trim = calculate.IndexOf("TrimStepsToWhatIsAhead();", StringComparison.Ordinal);
+        int build = calculate.IndexOf("ClearancePlanner.Build(_steps,", StringComparison.Ordinal);
+        Assert.True(open >= 0 && same > open && refuse > same && closed > refuse && trim > closed && build > trim,
+            "an unfinished change is refused, or closed when it changes nothing, before the trim and the plan");
+    }
+
     private static string FormSource()
         => File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Forms", "TaxiAssistForm.cs"));
 

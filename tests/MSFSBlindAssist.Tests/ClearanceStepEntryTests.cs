@@ -50,6 +50,21 @@ public class ClearanceStepEntryTests
         Assert.False(ClearanceStepEntry.SameAsEntered(seven, eight));
     }
 
+    // Review Focus 3: a crossing put back by the Hold short key reads "Hold short of runway 24L" and keeps the crossing's
+    // place (its At and node, ClearanceTrim.AsHoldShort). The Hold short of boxes have no At to show it, so "replacing" it
+    // with what it already says is the same step, and the window keeps the record with its place.
+    [Fact]
+    public void SameAsEntered_ignores_a_put_back_hold_shorts_place()
+    {
+        var putBack = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "24L", At: "P", AtNodeId: 9);
+        Assert.True(ClearanceStepEntry.SameAsEntered(putBack,
+            ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("24L"))));
+        Assert.False(ClearanceStepEntry.SameAsEntered(putBack,
+            ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("24R"))));
+        Assert.False(ClearanceStepEntry.SameAsEntered(putBack,
+            ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), "P")));
+    }
+
     [Fact]
     public void Replace_texts()
     {
