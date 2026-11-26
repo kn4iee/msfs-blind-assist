@@ -367,6 +367,42 @@ public static class ClearanceRouteChecks
         }
         return first;
     }
+
+    /// <summary>
+    /// A leg cut to its meeting with <paramref name="target"/> (the last segment's end node) that passed the last
+    /// taxiway's FIRST meeting with it because that one lies inside a runway's clear margin, where no leg ends
+    /// (<see cref="LegEndMeeting"/>, the form's lookups and a Turn pick's end all skip it): the runway beside that
+    /// meeting (<paramref name="runwayBeside"/>: a node's runway, null when it is clear of every runway), else null.
+    /// Scanned from <paramref name="fromSegment"/> (the last taxiway's run) up to, not including, the last segment's
+    /// end node. Null too when the first meeting is clear of runways (a Cross taxiway step passed over it: "first"
+    /// would not be true), when the route meets the taxiway only at the leg end, and when it drives onto the taxiway
+    /// anywhere from there (it does not cross it then).
+    /// </summary>
+    public static string? RunwayBesideFirstMeeting(IReadOnlyList<TaxiRouteSegment> segments, int fromSegment, string target,
+        Func<int, string, bool> nodeTouchesTaxiway, Func<TaxiNode, string?> runwayBeside)
+    {
+        if (segments == null || segments.Count == 0 || string.IsNullOrWhiteSpace(target)) return null;
+        int from = Math.Max(0, fromSegment);
+        for (int i = from; i < segments.Count; i++)
+            if (segments[i] != null && string.Equals(segments[i].TaxiwayName, target, StringComparison.OrdinalIgnoreCase))
+                return null;
+        for (int i = from; i < segments.Count - 1; i++)
+        {
+            var node = segments[i]?.ToNode;
+            if (node == null || !nodeTouchesTaxiway(node.NodeId, target)) continue;
+            return runwayBeside(node);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Said at Calculate, warnings first ([HLD-17]), when <see cref="RunwayBesideFirstMeeting"/> found the meeting
+    /// the leg end skipped: "Taxiway B meets taxiway A first beside runway 27; you will cross B there and hold short
+    /// of it further on."
+    /// </summary>
+    public static string MetFirstBesideARunway(string taxiway, string lastTaxiway, string runway)
+        => $"Taxiway {taxiway} meets taxiway {lastTaxiway} first beside runway {runway}; " +
+           $"you will cross {taxiway} there and hold short of it further on.";
 }
 
 /// <summary>

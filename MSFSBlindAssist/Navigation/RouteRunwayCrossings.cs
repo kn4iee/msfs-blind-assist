@@ -849,6 +849,19 @@ public static class RouteRunwayCrossings
     }
 
     /// <summary>
+    /// The runway <see cref="RunwayWithinClearMargin"/> finds at the point, named as the crossing classifier names a
+    /// runway: the designator of its end nearer the point (<see cref="RunwayShape.NameAt"/>, [HLD-7]). Null when the
+    /// point is clear of every runway.
+    /// </summary>
+    public static string? RunwayNameWithinClearMargin(
+        IReadOnlyList<TaxiGraph.RunwayCenterline>? runways, double lat, double lon)
+    {
+        if (RunwayWithinClearMargin(runways, lat, lon) is not { } rwy) return null;
+        var shape = RunwayShape.For(rwy);
+        return shape.NameAt(shape.Project(lat, lon).Along);
+    }
+
+    /// <summary>
     /// The first runway whose pavement (no margin) holds the point, or null.
     /// </summary>
     internal static TaxiGraph.RunwayCenterline? RunwayUnder(

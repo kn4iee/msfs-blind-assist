@@ -174,10 +174,39 @@ public class ClearanceWiringTests
         Assert.Contains("IReadOnlyList<string>? legEndCrossedTaxiways = null", load);
         Assert.Contains("ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways)", load);
         Assert.Contains("LegEndCrossedTaxiways: legEndCrossedTaxiways", load);
-        Assert.Contains("ClearanceRouteChecks.LegEndMeeting(", Member(routing, "private void ApplyLegEndSetback("));
+        Assert.Contains("ClearanceRouteChecks.LegEndMeeting(", Member(routing, "private string? ApplyLegEndSetback("));
 
         string applier = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Navigation", "TurnPickApplier.cs"));
         Assert.Contains("ResolveProgressiveEnd(ctx.Graph, v, ctx.Sequence[row], stepBlocked, ctx.Terminator, ctx.LegEndCrossedTaxiways)", applier);
+    }
+
+    // Owner, 2026-11-25 ("Warn at Calculate"): a leg end that skipped the last taxiway's first meeting with B because it
+    // lies inside a runway's clear margin (the form's lookups, a Turn pick's end and the meet scan all skip it) says so
+    // once, at Calculate: the route as cut is judged in ApplyLegEndSetback (ClearanceRouteChecksTests), and the sentence
+    // rides in the summary box and the warnings the form speaks first ([HLD-17]). A local, never stored: a refused load
+    // has nothing to put back [RTE-29]. A recalculation says nothing (it discards the result).
+    [Fact]
+    public void A_leg_end_that_skipped_a_meeting_beside_a_runway_says_so_at_Calculate()
+    {
+        string routing = RoutingSource();
+        string load = Member(routing, "public string? LoadRoute(");
+        string setback = Member(routing, "private string? ApplyLegEndSetback(");
+
+        Assert.Contains("ClearanceRouteChecks.RunwayBesideFirstMeeting(route.Segments, runStart, target, NodeTouchesTaxiway,", setback);
+        Assert.Contains("RouteRunwayCrossings.RunwayNameWithinClearMargin(graph.RunwayCenterlines, node.Latitude, node.Longitude)", setback);
+        Assert.Contains("ClearanceRouteChecks.MetFirstBesideARunway(target, taxiwaySequence[^1], besideRunway)", setback);
+        // Judged on the route as cut to its meeting, before the stop is set back from it.
+        int cut = setback.IndexOf("route.Segments.RemoveRange(meet + 1,", StringComparison.Ordinal);
+        int judged = setback.IndexOf("ClearanceRouteChecks.RunwayBesideFirstMeeting(", StringComparison.Ordinal);
+        int placed = setback.IndexOf("PlaceTaxiwayHoldStop(", StringComparison.Ordinal);
+        Assert.True(cut >= 0 && judged > cut && placed > judged, "judged after the cut and before the stop is placed");
+        Assert.Contains("if (allowInsert && taxiwaySequence is { Count: > 0 })", setback);
+
+        Assert.Contains("string? legEndBesideRunwayNote = ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways);", load);
+        Assert.Contains("summary = legEndBesideRunwayNote + \" \" + summary;", load);
+        Assert.Contains("mustHear.Add(legEndBesideRunwayNote);", load);
+        Assert.DoesNotContain("legEndBesideRunwayNote", FailSnapshot(routing));
+        Assert.Matches(@"if \(!keepsLoadedTail\)\s+ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\);", routing);
     }
 
     // Task 6: Calculate builds every route from ONE plan, refused for every destination type after the position is

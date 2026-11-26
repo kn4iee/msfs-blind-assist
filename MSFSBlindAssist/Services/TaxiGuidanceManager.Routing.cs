@@ -1087,8 +1087,9 @@ public partial class TaxiGuidanceManager
             // (TaxiwayHoldPlacement). On the route the Turn picks leave, as a pick can replace the route
             // and move the junction [TURN-1], and before the pilot's own picks, which then see the cut
             // route. It can end the leg at an earlier meeting with the taxiway, never one before a taxiway the pilot
-            // entered as crossed first: the local copy follows.
-            ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways);
+            // entered as crossed first: the local copy follows. A first meeting it passed beside a runway is said at
+            // Calculate (a local: nothing to put back on a refusal [RTE-29]).
+            string? legEndBesideRunwayNote = ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways);
             destinationNodeId = _destinationNodeId;
 
             // The runway roll is the route's own start, or nothing: a pass above that rebuilt the route
@@ -1518,6 +1519,10 @@ public partial class TaxiGuidanceManager
                     holdingPointName: _holdingPointName);
                 if (!string.IsNullOrEmpty(turnPickNote))
                     summary = turnPickNote + " " + summary;
+                // A leg end that crosses its taxiway beside a runway before holding short of it, for the same reason:
+                // the pilot expects to stop at the first meeting.
+                if (!string.IsNullOrEmpty(legEndBesideRunwayNote))
+                    summary = legEndBesideRunwayNote + " " + summary;
                 // A crossing the pilot was cleared for that this route could not clear, beside the Turn pick
                 // note and for the same reason: the route is not the one the pilot entered.
                 if (!string.IsNullOrEmpty(LastClearedCrossingWarning))
@@ -1572,6 +1577,8 @@ public partial class TaxiGuidanceManager
                 // What could not be cleared: a runway the route does not cross, or a stop that stays where the
                 // pilot expects none.
                 if (!string.IsNullOrEmpty(LastClearedCrossingWarning)) mustHear.Add(LastClearedCrossingWarning);
+                // The leg end's taxiway crossed beside a runway first: the summary alone is cut by StartGuidance.
+                if (!string.IsNullOrEmpty(legEndBesideRunwayNote)) mustHear.Add(legEndBesideRunwayNote);
                 // The Turn pick notes, a charted pick's "as picked" included: a Turn value left from an
                 // earlier route can turn this one, and the summary alone is cut by StartGuidance.
                 if (!string.IsNullOrEmpty(turnPickNote)) mustHear.Add(turnPickNote);
@@ -3937,15 +3944,20 @@ public partial class TaxiGuidanceManager
     /// Via step), the first meeting beyond the crossed taxiway (<see cref="ClearanceRouteChecks.LegEndMeeting"/>):
     /// the form's tie-breaker chose it (<see cref="ClearanceRouteChecks.BeyondTheCrossing"/>), and the meeting
     /// before the crossing is not the one ATC meant.
+    /// Returns, on a pilot's Calculate only, the sentence for a leg whose route passes the last taxiway's first
+    /// meeting with the taxiway beside a runway, where no leg ends (owner, 2026-11-25: "Warn at Calculate"):
+    /// "Taxiway B meets taxiway A first beside runway 27; you will cross B there and hold short of it further on."
+    /// (<see cref="ClearanceRouteChecks.RunwayBesideFirstMeeting"/>); else null.
     /// </summary>
-    private void ApplyLegEndSetback(TaxiRoute route, List<string>? taxiwaySequence, bool allowInsert,
+    private string? ApplyLegEndSetback(TaxiRoute route, List<string>? taxiwaySequence, bool allowInsert,
         IReadOnlyList<string>? crossedTaxiways = null)
     {
         if (_graph == null || _progressiveTerminator is not { Type: ProgressiveTerminatorType.HoldShortTaxiway } term)
-            return;
+            return null;
         bool endsAtJunction = route.Segments.Count > 0 && route.Segments[^1].ToNode.NodeId == _destinationNodeId;
-        if (!endsAtJunction) return;
+        if (!endsAtJunction) return null;
         var graph = _graph;
+        string? metBesideRunway = null;
 
         if (allowInsert && taxiwaySequence is { Count: > 0 })
         {
@@ -3968,6 +3980,18 @@ public partial class TaxiGuidanceManager
                 route.Segments.RemoveRange(meet + 1, route.Segments.Count - meet - 1);
                 _destinationNodeId = route.Segments[meet].ToNode.NodeId;
             }
+
+            // No leg ends beside a runway, so the form, a Turn pick's end and the scan above all pass over a meeting
+            // inside a runway's clear margin: the route then crosses the taxiway there before holding short of it,
+            // which the pilot hears at Calculate, judged on the route as cut, before the stop is set back.
+            string? besideRunway = runStart < 0 ? null : ClearanceRouteChecks.RunwayBesideFirstMeeting(route.Segments, runStart, target, NodeTouchesTaxiway,
+                node => RouteRunwayCrossings.RunwayNameWithinClearMargin(graph.RunwayCenterlines, node.Latitude, node.Longitude));
+            if (besideRunway != null)
+            {
+                metBesideRunway = ClearanceRouteChecks.MetFirstBesideARunway(target, taxiwaySequence[^1], besideRunway);
+                _guidanceLog.Info($"Leg end: taxiway {target} meets {taxiwaySequence[^1]} first beside runway {besideRunway}; " +
+                                  $"the route crosses it there and the leg ends at node {_destinationNodeId}");
+            }
         }
 
         int stop = PlaceTaxiwayHoldStop(route, route.Segments.Count - 1, allowInsert,
@@ -3979,7 +4003,7 @@ public partial class TaxiGuidanceManager
             // is on runway pavement (ProgressiveLegEnd.HeldOffByRunway).
             Log.Warn("Taxi", $"Leg end: taxiway {term.Target} meets the route at node {_destinationNodeId} inside a runway's " +
                              $"clear margin, or within {ProgressiveLegEnd.CaptureRadiusM:F0} m of one along the route; the route is left as built");
-            return;
+            return metBesideRunway;
         }
         if (stop < route.Segments.Count - 1)
             route.Segments.RemoveRange(stop + 1, route.Segments.Count - stop - 1);
@@ -3994,6 +4018,7 @@ public partial class TaxiGuidanceManager
         double total = 0;
         foreach (var s in route.Segments) total += s.DistanceMeters;
         route.TotalDistanceMeters = total;
+        return metBesideRunway;
     }
 
     /// <summary>
