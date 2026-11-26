@@ -7,7 +7,7 @@ namespace MSFSBlindAssist.Navigation;
 /// stays off the taxiway, never on or inside a runway's clear margin, nor where the aircraft would be
 /// captured by the stop on one (the <see cref="ProgressiveLegEnd.CaptureRadiusM"/> before it), never
 /// splitting an off-chart leg; with a Turn pick, before the turn when the taxiway lies less than the setback past
-/// it, as with none (<see cref="ChooseAroundTurn"/>). Pure.
+/// it, as with none, and a leg end never on a pick's link (<see cref="ChooseForLegEnd"/>). Pure.
 /// </summary>
 public static class TaxiwayHoldPlacement
 {
@@ -136,33 +136,51 @@ public static class TaxiwayHoldPlacement
     }
 
     /// <summary>
-    /// The stop for a taxiway hold on a row with a Turn pick, <paramref name="pick"/> (null without one): where
-    /// <see cref="Choose"/> places it with no floor, as if the route had no pick (owner, 2026-11-25: "Stop before the
-    /// turn"), so a taxiway less than the setback past the turn is held short of before the turn, on the taxiway before
-    /// it, the whole aircraft clear of it, and one further on after the turn, as before. One stop alone never stands:
-    /// the turn's own join node reached over a link from its departure node (<see cref="IsJoinOfALinkedTurn"/>), where
-    /// the turn is made but the leg would end with it dropped from the route, an off-chart leg ending the route and
-    /// never announced: that one is placed on the picked taxiway, floored at its first segment, as before.
+    /// The stop that ENDS a leg with no destination at a hold short of a taxiway, on a route whose Turn picks are
+    /// <paramref name="picks"/> (every row's): where <see cref="Choose"/> places it with no floor, as with no pick (owner,
+    /// 2026-11-25: "Stop before the turn"), so a taxiway less than the setback past a turn is held short of before the
+    /// turn, on the taxiway before it, and one further on after the turn. Except a stop on, or at the far end of, a
+    /// pick's link from its departure node (an off-chart leg, a connector; <see cref="IsOnALink"/>), where the leg would
+    /// end on an off-chart leg or half-way through a turn: the leg then ends where that turn starts, the turn's departure
+    /// node (the end of segment <c>FirstSegmentAfterDeparture - 1</c>) when Choose would take it, the route from the
+    /// capture radius before it to the junction clear of every runway; else the next such node before it on no link;
+    /// else <see cref="StopKind.NoSafeStop"/>. Nothing is inserted there. A mid-route stop is placed by Choose alone: the
+    /// route carries on after Continue, the turn is made and its off-chart leg announced.
     /// </summary>
-    public static Stop ChooseAroundTurn(IReadOnlyList<TaxiRouteSegment> segments, int junctionSegmentIndex, double setbackM,
-                                        bool allowInsert, Func<double, double, bool> isClearOfRunways, AppliedTurnPick? pick)
+    public static Stop ChooseForLegEnd(IReadOnlyList<TaxiRouteSegment> segments, int junctionSegmentIndex, double setbackM,
+                                       bool allowInsert, Func<double, double, bool> isClearOfRunways,
+                                       IReadOnlyList<AppliedTurnPick> picks)
     {
         var stop = Choose(segments, junctionSegmentIndex, setbackM, allowInsert, isClearOfRunways);
-        if (pick == null || !IsJoinOfALinkedTurn(stop, pick)) return stop;
-        return Choose(segments, junctionSegmentIndex, setbackM, allowInsert, isClearOfRunways, firstUsableIndex: pick.FirstTaxiwaySegment);
+        var turn = picks.FirstOrDefault(p => IsOnALink(stop, p));
+        if (turn == null) return stop;
+
+        int j = junctionSegmentIndex;
+        var along = new double[j + 2];
+        for (int i = 0; i <= j; i++) along[i + 1] = along[i] + segments[i].DistanceMeters;
+        for (int k = Math.Min(turn.FirstSegmentAfterDeparture - 1, j - 1); k >= 0; k--)
+        {
+            var node = new Stop(StopKind.ExistingNode, k, 0);
+            if (picks.Any(p => IsOnALink(node, p))) continue;
+            if (RouteClear(segments, along, Math.Max(0, along[k + 1] - ProgressiveLegEnd.CaptureRadiusM), along[j + 1], isClearOfRunways))
+                return node;
+        }
+        return new Stop(StopKind.NoSafeStop, -1, 0);
     }
 
     /// <summary>
-    /// Whether <paramref name="stop"/> is an existing node that is <paramref name="pick"/>'s join node at the end of a
-    /// link from its departure node (an off-chart leg, or a charted link's connector): node k is the end node of
-    /// segment k, and the join node ends the segment before <see cref="AppliedTurnPick.FirstTaxiwaySegment"/>. A turn
-    /// at a junction (departure node = join node) has no link: stopping at it is stopping before the turn. A point
-    /// inserted on the link, or a node on it before the join, is before the picked taxiway, and is kept.
+    /// Whether <paramref name="stop"/> lies on, or at the far end of, <paramref name="pick"/>'s link from its departure
+    /// node to its join node (an off-chart leg, or a charted link's connector): a node or the junction that ends one of
+    /// the segments from <see cref="AppliedTurnPick.FirstSegmentAfterDeparture"/> up to the one before
+    /// <see cref="AppliedTurnPick.FirstTaxiwaySegment"/> (the last ends at the join), or a point inserted on one of them
+    /// (node k is the end node of segment k). The departure node itself ends the segment before the link and is before
+    /// the turn. A turn at a junction (departure node = join node) has no link.
     /// </summary>
-    public static bool IsJoinOfALinkedTurn(Stop stop, AppliedTurnPick pick)
-        => stop.Kind == StopKind.ExistingNode
+    public static bool IsOnALink(Stop stop, AppliedTurnPick pick)
+        => stop.Kind != StopKind.NoSafeStop
            && pick.FirstTaxiwaySegment > pick.FirstSegmentAfterDeparture
-           && stop.SegmentIndex == pick.FirstTaxiwaySegment - 1;
+           && stop.SegmentIndex >= pick.FirstSegmentAfterDeparture
+           && stop.SegmentIndex <= pick.FirstTaxiwaySegment - 1;
 
     /// The point metresBeforeEnd back from the segment's end node, interpolated linearly between its two nodes.
     public static (double Lat, double Lon) PointBeforeEnd(TaxiRouteSegment segment, double metresBeforeEnd)

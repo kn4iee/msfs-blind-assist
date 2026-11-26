@@ -88,10 +88,15 @@ public class TaxiwayHoldPlacementTests
 
     // Owner, 2026-11-25 ("Stop before the turn"): with or without a Turn pick, a taxiway held short of less than the
     // setback past the turn is held short of BEFORE the turn, on the taxiway before it, the whole aircraft clear of
-    // it; the manager places through ChooseAroundTurn, which passes Choose no floor. Choose keeps its floor (above).
-    private static AppliedTurnPick Pick(int firstSegmentAfterDeparture, int firstTaxiwaySegment, bool offChart = false)
-        => new() { RowIndex = 1, Side = TurnSide.Left, TaxiwayName = "F",
+    // it. Every taxiway stop is placed by Choose with no floor (Choose keeps its floor, above); a leg end goes through
+    // ChooseForLegEnd, which moves a stop on, or at the far end of, a pick's link (an off-chart leg, a connector) back
+    // to where that turn starts, so no leg ends on an off-chart leg or half-way through a turn.
+    private static AppliedTurnPick Pick(int firstSegmentAfterDeparture, int firstTaxiwaySegment, bool offChart = false, int row = 1)
+        => new() { RowIndex = row, Side = TurnSide.Left, TaxiwayName = "F",
                    FirstSegmentAfterDeparture = firstSegmentAfterDeparture, FirstTaxiwaySegment = firstTaxiwaySegment, IsOffChart = offChart };
+
+    private static Stop LegEnd(List<TaxiRouteSegment> route, int junction, params AppliedTurnPick[] picks)
+        => ChooseForLegEnd(route, junction, 35, allowInsert: true, Everywhere, picks);
 
     [Fact] public void With_a_pick_a_taxiway_too_close_past_the_turn_is_held_short_of_before_the_turn()
     {
@@ -99,24 +104,23 @@ public class TaxiwayHoldPlacementTests
         // junction itself (the nose on B); now it is the node 70 m back on Z, as with no pick.
         var route = At(0, 50, 100, 120);
         Assert.Equal(new Stop(StopKind.Junction, 2, 0), Choose(route, 2, 35, allowInsert: true, Everywhere, firstUsableIndex: 2));
-        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(2, 2)));
-        Assert.Equal(Choose(route, 2, 35, allowInsert: true, Everywhere), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(2, 2)));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), LegEnd(route, 2, Pick(2, 2)));
+        Assert.Equal(Choose(route, 2, 35, allowInsert: true, Everywhere), LegEnd(route, 2, Pick(2, 2)));
         // A point inserted on Z when no node is in reach: nodes at 0, 100, 120, the point 15 m before the turn.
-        var inserted = ChooseAroundTurn(At(0, 100, 120), 1, 35, allowInsert: true, Everywhere, Pick(1, 1));
+        var inserted = LegEnd(At(0, 100, 120), 1, Pick(1, 1));
         Assert.Equal((StopKind.InsertOnSegment, 0), (inserted.Kind, inserted.SegmentIndex));
         Assert.Equal(15, inserted.MetresBeforeSegmentEnd, 6);   // setback minus a computed 20 m edge
         Assert.Equal(new Stop(StopKind.Junction, 1, 0), Choose(At(0, 100, 120), 1, 35, allowInsert: true, Everywhere, firstUsableIndex: 1));
     }
 
     [Fact] public void With_a_pick_a_taxiway_far_enough_past_the_turn_is_held_short_of_after_the_turn()   // nodes at 0, 100, 200
-        => Assert.Equal(new Stop(StopKind.InsertOnSegment, 1, 35), ChooseAroundTurn(At(0, 100, 200), 1, 35, allowInsert: true, Everywhere, Pick(1, 1)));
+        => Assert.Equal(new Stop(StopKind.InsertOnSegment, 1, 35), LegEnd(At(0, 100, 200), 1, Pick(1, 1)));
 
-    [Fact] public void With_no_pick_the_stop_is_placed_as_Choose_places_it()
+    [Fact] public void With_no_pick_a_leg_end_is_placed_as_Choose_places_it()
     {
-        Assert.Equal(Choose(At(0, 50, 100, 120), 2, 35, allowInsert: true, Everywhere),
-                     ChooseAroundTurn(At(0, 50, 100, 120), 2, 35, allowInsert: true, Everywhere, null));
+        Assert.Equal(Choose(At(0, 50, 100, 120), 2, 35, allowInsert: true, Everywhere), LegEnd(At(0, 50, 100, 120), 2));
         Assert.Equal(Choose(At(0, 130, 260), 1, 35, allowInsert: false, Everywhere),
-                     ChooseAroundTurn(At(0, 130, 260), 1, 35, allowInsert: false, Everywhere, null));
+                     ChooseForLegEnd(At(0, 130, 260), 1, 35, allowInsert: false, Everywhere, Array.Empty<AppliedTurnPick>()));
     }
 
     // An off-chart turn too close to the taxiway: the stop goes back across the off-chart leg (never split) to its
@@ -125,31 +129,86 @@ public class TaxiwayHoldPlacementTests
     {
         var route = At(0, 100, 160, 180); route[1].IsOffChartTurn = true;
         Assert.Equal(new Stop(StopKind.Junction, 2, 0), Choose(route, 2, 35, allowInsert: true, Everywhere, firstUsableIndex: 2));
-        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(1, 2, offChart: true)));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), LegEnd(route, 2, Pick(1, 2, offChart: true)));
     }
 
-    // The one stop that never lands before the picked taxiway: the turn's own join node reached over a link (an
-    // off-chart leg here). The leg would end with the off-chart leg as its last segment and the pick dropped, its
-    // entering sentence never said: it goes onto F, as before. Nodes at 0, 100, 160, 200: F is 40 m to B.
-    [Fact] public void A_stop_at_the_join_of_a_linked_turn_goes_onto_the_picked_taxiway()
+    // ZSPD "C2, P2, left onto P2, hold short of C": C2 to 100, a 59.2 m off-chart leg, then P2 16.4, 17.1 and 16.5 m to C.
+    // Choose takes the join, 50 m before C, the end of the off-chart leg: the leg would end on it. It ends where the turn
+    // starts instead, the departure node at 100 (the floor's re-run inserted 1.1 m before a P2 node, failed in the sim's
+    // graph and fell back to the junction: the aircraft stood 19 m from C).
+    [Fact] public void A_leg_end_at_the_far_end_of_an_off_chart_leg_stops_where_the_turn_starts()
+    {
+        var route = At(0, 100, 159.2, 175.6, 192.7, 209.2); route[1].IsOffChartTurn = true;
+        Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(route, 4, 34.8, allowInsert: true, Everywhere));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0),
+                     ChooseForLegEnd(route, 4, 34.8, allowInsert: true, Everywhere, new[] { Pick(1, 2, offChart: true) }));
+    }
+
+    // B between the setback less its 1 m node tolerance and the setback past the join (34.5 m, setback 35): Choose's rule 1
+    // takes the join; the floor's re-run used to land below the floor and fall to the junction. The departure node now.
+    [Fact] public void A_join_within_the_node_tolerance_of_the_setback_also_stops_where_the_turn_starts()
+    {
+        var route = At(0, 100, 160, 194.5); route[1].IsOffChartTurn = true;
+        Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(route, 2, 35, allowInsert: true, Everywhere));
+        Assert.Equal(new Stop(StopKind.Junction, 2, 0), Choose(route, 2, 35, allowInsert: true, Everywhere, firstUsableIndex: 2));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), LegEnd(route, 2, Pick(1, 2, offChart: true)));
+    }
+
+    // Any row's turn, not only the last row's: here an earlier row's off-chart leg 100-160 onto Z, then a junction turn
+    // onto F at 180, B 15 m on. Choose takes the earlier join at 160; the leg ends where that turn starts.
+    [Fact] public void A_leg_end_at_an_earlier_rows_off_chart_join_stops_where_that_turn_starts()
+    {
+        var route = At(0, 100, 160, 180, 195); route[1].IsOffChartTurn = true;
+        var earlier = Pick(1, 2, offChart: true, row: 1);
+        var last = Pick(3, 3, row: 2);
+        Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(route, 3, 35, allowInsert: true, Everywhere));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), LegEnd(route, 3, last));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), LegEnd(route, 3, last, earlier));
+    }
+
+    // The departure node is taken only as Choose would take a node: its 25 m approach up to the junction clear of every
+    // runway. A runway just before it (90-105) leaves no usable node before the turn: no stop, as for any such junction.
+    [Fact] public void A_departure_node_whose_approach_lies_on_a_runway_gives_no_stop()
+    {
+        var route = At(0, 100, 160, 200); route[1].IsOffChartTurn = true;
+        Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(route, 2, 35, allowInsert: true, RunwayBetween(90, 105)));
+        Assert.Equal(new Stop(StopKind.NoSafeStop, -1, 0),
+                     ChooseForLegEnd(route, 2, 35, allowInsert: true, RunwayBetween(90, 105), new[] { Pick(1, 2, offChart: true) }));
+    }
+
+    // A connector link: a stop on it short of the join (here a point Choose inserts 5 m before the connector's middle
+    // node) also goes back to the departure node.
+    [Fact] public void A_leg_end_on_a_connector_link_stops_where_the_turn_starts()
+    {
+        var route = At(0, 100, 150, 160, 180);   // Z to 100, an unnamed connector 100-150-160, F 160-180
+        var plain = Choose(route, 3, 35, allowInsert: true, Everywhere);
+        Assert.Equal((StopKind.InsertOnSegment, 1), (plain.Kind, plain.SegmentIndex));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), LegEnd(route, 3, Pick(1, 3)));
+    }
+
+    // A mid-route stop is placed by plain Choose, no floor and no exception: the route carries on after Continue, the
+    // turn is made and its off-chart leg announced, so the join of an off-chart leg is a stop like any other.
+    [Fact] public void A_mid_route_stop_at_an_off_chart_join_stays_where_Choose_puts_it()
     {
         var route = At(0, 100, 160, 200); route[1].IsOffChartTurn = true;
         Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(route, 2, 35, allowInsert: true, Everywhere));
-        Assert.True(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 1, 0), Pick(1, 2, offChart: true)));
-        Assert.Equal(new Stop(StopKind.InsertOnSegment, 2, 35), ChooseAroundTurn(route, 2, 35, allowInsert: true, Everywhere, Pick(1, 2, offChart: true)));
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), LegEnd(route, 2, Pick(1, 2, offChart: true)));   // the leg end differs
     }
 
-    [Fact] public void Only_the_join_after_a_link_is_moved_onto_the_picked_taxiway()
+    [Fact] public void A_stop_on_a_link_is_one_on_or_at_the_far_end_of_it()
     {
         var linked = Pick(1, 3);   // departure node 1 (end of segment 0), a two-segment connector, join node 3 (end of segment 2)
-        Assert.True(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 2, 0), linked));
-        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 1, 0), linked));      // on the connector: before the turn
-        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.InsertOnSegment, 2, 10), linked));  // on the connector, short of the join
-        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 0, 0), linked));      // the departure node
-        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 3, 0), linked));      // on the picked taxiway
-        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.NoSafeStop, -1, 0), linked));
-        // A turn at a junction (departure node = join node): stopping at it is stopping before the turn.
-        Assert.False(IsJoinOfALinkedTurn(new Stop(StopKind.ExistingNode, 1, 0), Pick(2, 2)));
+        Assert.True(IsOnALink(new Stop(StopKind.ExistingNode, 2, 0), linked));       // the join, its far end
+        Assert.True(IsOnALink(new Stop(StopKind.ExistingNode, 1, 0), linked));       // a connector node
+        Assert.True(IsOnALink(new Stop(StopKind.InsertOnSegment, 2, 10), linked));   // a point on the connector
+        Assert.True(IsOnALink(new Stop(StopKind.InsertOnSegment, 1, 10), linked));
+        Assert.True(IsOnALink(new Stop(StopKind.Junction, 2, 0), linked));           // B met at the join itself
+        Assert.False(IsOnALink(new Stop(StopKind.ExistingNode, 0, 0), linked));      // the departure node: before the turn
+        Assert.False(IsOnALink(new Stop(StopKind.InsertOnSegment, 0, 10), linked));  // on Z
+        Assert.False(IsOnALink(new Stop(StopKind.ExistingNode, 3, 0), linked));      // on the picked taxiway
+        Assert.False(IsOnALink(new Stop(StopKind.NoSafeStop, -1, 0), linked));
+        // A turn at a junction (departure node = join node) has no link: stopping at it is stopping before the turn.
+        Assert.False(IsOnALink(new Stop(StopKind.ExistingNode, 1, 0), Pick(2, 2)));
     }
 
     // A runway crossed inside ONE edge has no node on it, so only sampling the stretch finds it (spec 8.6: move forward).

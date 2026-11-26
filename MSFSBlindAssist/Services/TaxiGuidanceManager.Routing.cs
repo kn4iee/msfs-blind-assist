@@ -3826,9 +3826,9 @@ public partial class TaxiGuidanceManager
             }
 
             // The junction inside a runway's clear margin, or reached over one within the capture radius:
-            // no stop there. The runway's own automatic stop still stands before that runway. A stop before a
-            // Turn pick's turn keeps the pick: the turn is made after Continue. A stop found off its own taxiway's
-            // run is placed around no Turn pick of that row.
+            // no stop there. The runway's own automatic stop still stands before that runway. A mid-route stop is
+            // placed by Choose alone, whatever Turn picks the route has; one before a picked turn keeps the pick: the
+            // turn is made after Continue.
             int stopSeg = PlaceTaxiwayHoldStop(route, holdSeg, allowInsert, onOwnRun ? seqIdx + rowOffset : -1,
                 deferredRunwayPicks, userPickEvents);
             if (stopSeg < 0)
@@ -3854,12 +3854,13 @@ public partial class TaxiGuidanceManager
 
     /// <summary>
     /// The stop for a "hold short of taxiway" whose junction is the end node of segment
-    /// <paramref name="junctionSegmentIndex"/>, as <see cref="TaxiwayHoldPlacement.ChooseAroundTurn"/> places it:
+    /// <paramref name="junctionSegmentIndex"/>, as <see cref="TaxiwayHoldPlacement.Choose"/> places it:
     /// set back so the whole aircraft stays off the taxiway, never on or inside a runway's clear margin
-    /// nor behind a runway the route crosses, never with the capture radius before it on one. A Turn pick on
-    /// <paramref name="rowIndex"/> does not hold it on the picked taxiway (owner, 2026-11-25: "Stop before the
-    /// turn"): a taxiway less than the setback past the turn is held short of before the turn, as with no pick; only
-    /// the turn's own join node after a link moves onto the picked taxiway. On a pilot's
+    /// nor behind a runway the route crosses, never with the capture radius before it on one. No Turn pick holds
+    /// it on the picked taxiway (owner, 2026-11-25: "Stop before the turn"): a taxiway less than the setback past the
+    /// turn is held short of before the turn, as with no pick. A stop that ends a leg (<paramref name="endsLeg"/>)
+    /// never lies on, or at the far end of, any pick's link (an off-chart leg, a connector): the leg then ends where
+    /// that turn starts (<see cref="TaxiwayHoldPlacement.ChooseForLegEnd"/>). On a pilot's
     /// Calculate (<paramref name="allowInsert"/>) the stop can be a node inserted on the segment's own
     /// edge, through TaxiGraph's own mutator [RTE-30]: the segment's two halves replace it, and every
     /// Turn pick and deferred runway pick indexed after it moves up by one, as does every runway event's
@@ -3868,17 +3869,21 @@ public partial class TaxiGuidanceManager
     /// runway's clear margin or its own capture radius reaches one (nothing is placed).
     /// </summary>
     /// <param name="rowIndex">The row of the taxiway sequence as loaded that the stop belongs to, the
-    /// numbering of <see cref="AppliedTurnPick.RowIndex"/>.</param>
+    /// numbering of <see cref="AppliedTurnPick.RowIndex"/> (for the log).</param>
+    /// <param name="endsLeg">True for the stop that ends a leg with no destination (<see cref="ApplyLegEndSetback"/>);
+    /// false for a mid-route stop, which the route carries on past after Continue.</param>
     private int PlaceTaxiwayHoldStop(TaxiRoute route, int junctionSegmentIndex, bool allowInsert, int rowIndex,
-        List<DeferredRunwayPick>? deferredRunwayPicks = null, List<TaxiRouteRunwayEvent>? userPickEvents = null)
+        List<DeferredRunwayPick>? deferredRunwayPicks = null, List<TaxiRouteRunwayEvent>? userPickEvents = null,
+        bool endsLeg = false)
     {
         if (_graph == null) return junctionSegmentIndex;
         var graph = _graph;
         int junctionNodeId = route.Segments[junctionSegmentIndex].ToNode.NodeId;
         double setbackM = TaxiwayHoldPlacement.SetbackMetres(AircraftWingspanMetres);
-        var stop = TaxiwayHoldPlacement.ChooseAroundTurn(route.Segments, junctionSegmentIndex, setbackM, allowInsert,
-            (lat, lon) => RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, lat, lon) == null,
-            route.TurnPicks.FirstOrDefault(p => p.RowIndex == rowIndex));
+        Func<double, double, bool> clear = (lat, lon) => RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, lat, lon) == null;
+        var stop = endsLeg
+            ? TaxiwayHoldPlacement.ChooseForLegEnd(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear, route.TurnPicks)
+            : TaxiwayHoldPlacement.Choose(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear);
 
         switch (stop.Kind)
         {
@@ -3889,7 +3894,8 @@ public partial class TaxiGuidanceManager
             case TaxiwayHoldPlacement.StopKind.ExistingNode:
             case TaxiwayHoldPlacement.StopKind.Junction:
                 _guidanceLog.Info($"Taxiway hold: {stop.Kind} node {route.Segments[stop.SegmentIndex].ToNode.NodeId} " +
-                                  $"for junction node {junctionNodeId}, setback {setbackM:F0} m, row {rowIndex}");
+                                  $"for junction node {junctionNodeId}, setback {setbackM:F0} m, row {rowIndex}" +
+                                  (endsLeg ? ", leg end" : ""));
                 return stop.SegmentIndex;
         }
 
@@ -4001,7 +4007,7 @@ public partial class TaxiGuidanceManager
         }
 
         int stop = PlaceTaxiwayHoldStop(route, route.Segments.Count - 1, allowInsert,
-            rowIndex: (taxiwaySequence?.Count ?? 0) - 1);
+            rowIndex: (taxiwaySequence?.Count ?? 0) - 1, endsLeg: true);
         if (stop < 0)
         {
             // Neither the planner nor a Turn pick ends a leg inside a runway's margin, but the capture radius
@@ -4014,9 +4020,10 @@ public partial class TaxiGuidanceManager
         if (stop < route.Segments.Count - 1)
             route.Segments.RemoveRange(stop + 1, route.Segments.Count - stop - 1);
 
-        // A taxiway less than the setback past a Turn pick's turn is held short of before the turn (ChooseAroundTurn):
-        // the leg then ends before it, and the pick is dropped from the route, logged, and never announced (the load
-        // note is composed from the picks still on the route).
+        // A taxiway less than the setback past a Turn pick's turn is held short of before the turn, and a stop that would
+        // lie on, or at the far end of, a pick's link goes back to where that turn starts (ChooseForLegEnd): the leg then
+        // ends before the turn, and the pick is dropped from the route, logged, and never announced (the load note is
+        // composed from the picks still on the route).
         int last = route.Segments.Count - 1;
         foreach (var cut in route.TurnPicks.Where(q => q.FirstTaxiwaySegment > last))
             Log.Warn("Taxi", $"Leg end: the Turn pick on row {cut.RowIndex} onto {cut.TaxiwayName} lies past the stop " +

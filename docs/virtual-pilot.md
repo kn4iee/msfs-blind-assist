@@ -539,16 +539,16 @@ moved two stops beside a runway, below, and again after the owner's "Stop before
 
 | | without picks | with picks | picks that changed the route |
 |---|---|---|---|
-| legs | 113 | 122 | 42 [21] |
-| ended | 112 (99.1 %) | 122 (100 %) | 42 [21] (100 %) |
+| legs | 113 | 122 | 42 [20] |
+| ended | 112 (99.1 %) | 122 (100 %) | 42 [20] (100 %) |
 | ended or stood at or past the junction | 0 | 0 | 0 |
-| stood before the junction: min / median / p90 | 18.4 / 54.5 / 69.5 m | 16.4 / 56.5 / 75.5 m [19.0 / 59.8 / 80.6 m] | 16.4 / 55.6 / 82.1 m [19.0 / 59.6 / 89.2 m] |
-| the leg ended: min / median | 24.6 / 62.0 m | 21.1 / 63.6 m [24.8 / 66.5 m] | 21.1 / 61.6 m [24.8 / 66.9 m] |
-| the stop at load, median before the junction | 37.3 m | 35.5 m [40.5 m] | 34.8 m [40.3 m] |
+| stood before the junction: min / median / p90 | 18.4 / 54.5 / 69.5 m | 16.4 / 56.5 / 75.5 m [32.4 / 60.1 / 81.0 m] | 16.4 / 55.6 / 82.1 m [47.9 / 60.3 / 89.2 m] |
+| the leg ended: min / median | 24.6 / 62.0 m | 21.1 / 63.6 m [40.1 / 66.5 m] | 21.1 / 61.6 m [56.6 / 66.9 m] |
+| the stop at load, median before the junction | 37.3 m | 35.5 m [40.8 m] | 34.8 m [40.7 m] |
 
 Distances are along the route and on over the graph to the junction the app holds short of. What
-became of the picks: already made 24 [8], charted 35 [18], off-chart leg 7 [3], no such turn 20, does
-not lead there 36, and [37] dropped because the leg now ends before the turn (`SILENT` in the CSV).
+became of the picks: already made 24 [8], charted 35 [18], off-chart leg 7 [2], no such turn 20, does
+not lead there 36, and [38] dropped because the leg now ends before the turn (`SILENT` in the CSV).
 No `LEGEND_*` finding: every pick's indices still name its departure and join after the stop is
 placed, no off-chart leg is split or ends a route, no picked route passes a node on B between its
 turn and its stop, and no pick the leg ends before is said as made (`LEGEND_DROPPED_PICK_SPOKEN`, added
@@ -556,15 +556,18 @@ with the ruling). No leg needed a route change. The run is deterministic: four s
 235 rows as one process.
 
 **Stop before the turn** (2026-11-25). A Turn pick no longer holds a taxiway stop on the picked taxiway
-(`TaxiwayHoldPlacement.ChooseAroundTurn`, TWH-2): "Left onto A" stops where "via A" does. The same
-command before (at `4741b2b5c`, byte-identical to the stage-1 CSV) and after: the plain legs and every
-other pick unchanged, exactly 37 picked legs changed, all now ending on Z before the turn with the pick
-dropped and nothing said about it (17 charted, 16 already made, 4 off-chart). Seven of the eight picked
-legs that stood under 25 m from the junction no longer do (ZUTF "V6, K" to K2 both ways: 16.4 and 16.6
-to 52.5 and 70.9 m; OTHH, WMKK, KJFK, KMIA, EGLL). The one stop that keeps the old placement is at
-a linked turn's own join (ZSPD "C2, P2, left onto P2, hold short of C", after its 59 m off-chart leg);
-flown with that exception switched off it ended the leg on the off-chart leg itself (`LEGEND_ENDS_OFFCHART`),
-its "Off-chart leg" sentence never said.
+(TWH-2): "Left onto A" stops where "via A" does, and a leg end that would lie on, or at the far end of, a
+pick's off-chart leg or connector ends at that turn's departure node (`TaxiwayHoldPlacement.ChooseForLegEnd`).
+The same command before (at `4741b2b5c`, byte-identical to the stage-1 CSV) and after: the plain legs and
+every other pick unchanged, exactly 38 picked legs changed, all now ending on Z before the turn with the
+pick dropped and nothing said about it (17 charted, 16 already made, 5 off-chart). None of the eight
+picked legs that stood under 25 m from the junction still does (ZUTF "V6, K" to K2 both ways: 16.4 and
+16.6 to 52.5 and 70.9 m; OTHH, WMKK, KJFK, KMIA, EGLL; ZSPD "C2, P2, left onto P2, hold short of C",
+19.0 to 146.3 m: its stop is now the departure node of its 59 m off-chart leg, 128.5 m before C along the
+graph). Flown with plain `Choose` for the leg end too, ZSPD ended the leg on the off-chart leg itself
+(`LEGEND_ENDS_OFFCHART`), its "Off-chart leg" sentence never said; an interim fix that re-placed that stop
+with the old floor kept it at the C junction, the aircraft 19.0 m from C (its point to insert 1.1 m before a
+P2 node found no edge within reach).
 
 **On a runway.** No leg ended, and no "Slow down" or "Stop." of a leg end was spoken, with the aircraft
 on runway pavement (`LEG_ENDED_ON_RUNWAY`: 0). Before the review fixes the same check found two, both
@@ -594,18 +597,17 @@ Every other row of the CSV, and every CODES line, is as at the stage's end.
 - **A stop moves back before the turn onto A when the junction with B lies less than the setback past
   it.** In 46 of the 56 refused picks the route ends on Z, not A (KLSV "E, F": J is 12 m along F, the
   stop 35 m back on E; KORD "N3, N" to A10). Before the 2026-11-25 ruling a pick applied held the stop
-  on A, at the junction or the first node past the turn; now it does not, and 37 more picked legs end on
-  Z (82 of the 122).
-- **Nine legs stood under 25 m from the junction** [two since the ruling], eight turn legs whose stop
+  on A, at the junction or the first node past the turn; now it does not, and 38 more picked legs end on
+  Z (83 of the 122).
+- **Nine legs stood under 25 m from the junction** [one since the ruling], eight turn legs whose stop
   is at the junction or within 5 m of it: the picked turn lies less than the setback before B (ZUTF
   "V6, K" to K2, KJFK "B, MB" to P), or the setback point falls on the off-chart leg (OTHH "A5, A6";
   ZSPD and WMKK are off-chart legs too, not traced). They stood 16 to 23 m before it along the route, 15
-  to 19 m in a straight line: the capture radius and the braking. All but ZSPD "C2, P2" now stop before
-  the turn; ZSPD's stop is after its off-chart leg, B 50 m on, but the point to insert 1.1 m before a
-  node finds no edge within reach (logged), so the stop falls back to the junction (19.0 m), as before. The other is
-  KLSV "via A, hold short of F", whose stop is the junction because runway 03L lies just before it
-  (18.4 m). With a 36 m wingspan the nose is about 20 m ahead of the point measured, so at these stops
-  it can be on B, not just near its edge.
+  to 19 m in a straight line: the capture radius and the braking. All eight now stop before the turn;
+  ZSPD "C2, P2", whose stop fell after its off-chart leg, at its join, B 50 m on, now ends where that leg
+  starts. The one left is KLSV "via A, hold short of F", whose stop is the junction because runway 03L
+  lies just before it (18.4 m). With a 36 m wingspan the nose is about 20 m ahead of the point measured,
+  so at such a stop it can be on B, not just near its edge.
 - **A stop before the turn is set back along the route only.** Where Z itself carries on and meets B
   just past the turn, the stop can stand close to that other meeting: LTFM "B7, right onto B8A, hold
   short of A7" stops at the B7/B8A junction n5655, 16 m along B7 from n5093 on A7; KDEN "D, right onto
@@ -624,10 +626,10 @@ Every other row of the CSV, and every CODES line, is as at the stage's end.
   just past TURN-4's 80 m. The straight-line capture fires as the aircraft passes near the stop on the
   way out, before the loop is driven: 112 and 99 m before the junction along the route, 63 and 56 m in
   a straight line.
-- **83 [96] legs stood more than 60 m back**: an existing node up to 40 m beyond the setback is taken
+- **83 [97] legs stood more than 60 m back**: an existing node up to 40 m beyond the setback is taken
   before a new one is inserted, and the capture radius ends the leg 25 m before the stop. A stop before
-  the turn whose setback point falls on an off-chart leg goes back to its departure node, up to 91 m
-  before the junction (RJAA "K, E2").
+  the turn whose setback point falls on an off-chart leg goes back to its departure node, 91 m before
+  the junction at RJAA "K, E2" and 128.5 m at ZSPD "C2, P2" (along the graph; 109 m along the route).
 - **KPHL "via G, hold short of E" did not end**: it starts 34 m before the runway 17 hold line at G.
   Standing still, the runway countdown says "Hold short runway 17 at G in 35 metres. Slow down." and
   then "Hold short runway 17 at G. Stop." (the stopped-in-zone line), but the hold's standstill capture
@@ -638,7 +640,7 @@ Every other row of the CSV, and every CODES line, is as at the stage's end.
   refused (no such turn 20, does not lead there 36). The refusals were not traced one by one.
 - The junction is the app's own (`_destinationNodeId`, read by reflection): the harness's walk from
   the stop picked another node in 19 legs, all refused picks whose stop sits at a fork before the turn;
-  since the ruling in 44, the 25 more all picks the leg now ends before.
+  since the ruling in 45, the 26 more all picks the leg now ends before.
 
 ## Cleared crossings (2026-11-25, 2024 navdata, plain navdata)
 

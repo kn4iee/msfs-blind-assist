@@ -77,7 +77,7 @@ public class LegEndWiringTests
     }
 
     // A hold short of a taxiway, mid-route or at the end of a leg, stops where the pure
-    // TaxiwayHoldPlacement says (TaxiwayHoldPlacementTests), around any Turn pick on its row, and a split
+    // TaxiwayHoldPlacement says (TaxiwayHoldPlacementTests), a leg end never on a Turn pick's link, and a split
     // re-indexes the Turn picks. The leg end is cut back only while the route still ends at the junction: a
     // recalculation that keeps a Turn pick's tail ends at the stop placed at load and is never cut again (TURN-3).
     [Fact]
@@ -85,7 +85,8 @@ public class LegEndWiringTests
     {
         string text = RoutingSource();
 
-        Assert.Contains("TaxiwayHoldPlacement.ChooseAroundTurn(", text);
+        Assert.Contains("TaxiwayHoldPlacement.Choose(", text);
+        Assert.Contains("TaxiwayHoldPlacement.ChooseForLegEnd(", text);
         Assert.Contains("TaxiwayHoldPlacement.ShiftPicksAfterSplit(", text);
         Assert.Contains("ApplyLegEndSetback(", text);
         Assert.Contains("Segments[^1].ToNode.NodeId == _destinationNodeId", text);
@@ -158,22 +159,29 @@ public class LegEndWiringTests
     }
 
     // Owner, 2026-11-25 ("Stop before the turn"): a taxiway stop no longer floors at a Turn pick's taxiway, so "Left
-    // onto F" stops where "Via F" does; the placement around the turn is the pure TaxiwayHoldPlacement.ChooseAroundTurn
-    // (TaxiwayHoldPlacementTests). A leg end that now stops before the picked turn drops the pick from the route, and
-    // the load note is composed from the picks still on the route: no "Turning left onto taxiway F, as picked." for a
-    // turn the leg ends before. A mid-route stop keeps its pick (the turn is made after Continue).
+    // onto F" stops where "Via F" does. A mid-route stop is placed by plain Choose; a leg end by
+    // TaxiwayHoldPlacement.ChooseForLegEnd with every pick on the route, any row's, which ends a leg that would end on
+    // or at the far end of a pick's link where that turn starts (TaxiwayHoldPlacementTests). A leg end before a picked
+    // turn drops the pick from the route, and the load note is composed from the picks still on the route: no
+    // "Turning left onto taxiway F, as picked." for a turn the leg ends before. A mid-route stop keeps its pick (the
+    // turn is made after Continue).
     [Fact]
     public void A_taxiway_stop_is_placed_around_a_picked_turn_and_the_note_names_only_turns_still_on_the_route()
     {
         string text = RoutingSource();
         string place = Member(text, "private int PlaceTaxiwayHoldStop(");
         string setback = Member(text, "private string? ApplyLegEndSetback(");
+        string midRoute = Member(text, "private string? ApplyUserTaxiwayHoldShorts(");
         string load = Member(text, "public string? LoadRoute(");
 
-        Assert.Contains("TaxiwayHoldPlacement.ChooseAroundTurn(route.Segments, junctionSegmentIndex, setbackM, allowInsert,", place);
-        Assert.Contains("route.TurnPicks.FirstOrDefault(p => p.RowIndex == rowIndex)", place);
+        Assert.Contains("? TaxiwayHoldPlacement.ChooseForLegEnd(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear, route.TurnPicks)", place);
+        Assert.Contains(": TaxiwayHoldPlacement.Choose(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear);", place);
         Assert.DoesNotContain("firstUsableIndex", place);
-        Assert.DoesNotContain("TaxiwayHoldPlacement.Choose(", place);
+        Assert.DoesNotContain("ChooseAroundTurn", text);
+        Assert.Contains("endsLeg: true", setback);
+        var midRouteCall = Regex.Match(midRoute, @"PlaceTaxiwayHoldStop\(route, holdSeg,[^;]*;");
+        Assert.True(midRouteCall.Success, "the mid-route PlaceTaxiwayHoldStop call not found");
+        Assert.DoesNotContain("endsLeg", midRouteCall.Value);
 
         Assert.Contains("route.TurnPicks = route.TurnPicks.Where(q => q.FirstTaxiwaySegment <= last).ToList();", setback);
         Assert.Matches(@"TurnPickMessages\.ComposeLoadNote\(\s*route\.TurnPicks, turnPickResult\.Refusals,", load);
