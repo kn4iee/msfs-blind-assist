@@ -3073,42 +3073,39 @@ public class TaxiAssistForm : Form
 
     /// <summary>
     /// Fills the Runway entry list for the selected runway (D10-D12): Full length, then its
-    /// intersections and painted holding points down the runway. With
-    /// <paramref name="keepSelection"/> (the list getting focus or dropping down) the choice is
-    /// kept (<see cref="RunwayEntryList.IndexToKeep"/>); a choice no longer offered falls back to
-    /// Full length and is said once, as a background change the pilot did not make. Without it
-    /// (a runway picked, a type change, an airport load) the list starts at Full length.
-    /// Builds through <see cref="ResolveHoldingPointsForRunway"/>, which can insert graph nodes:
-    /// UI thread only [RTE-30].
+    /// intersections and painted holding points down the runway. What the refill does is
+    /// <see cref="RunwayEntryList.Refill"/>'s decision: with <paramref name="keepSelection"/> (the
+    /// list getting focus or dropping down) the choice is kept; a choice no longer offered falls
+    /// back to Full length and is said once, as a background change the pilot did not make.
+    /// Without it (a runway picked, a type change, an airport load) the list starts at Full length.
+    /// The same lines leave the combo alone. Builds through
+    /// <see cref="ResolveHoldingPointsForRunway"/>, which can insert graph nodes: UI thread only
+    /// [RTE-30].
     /// </summary>
     private void PopulateRunwayEntries(bool keepSelection)
     {
-        RunwayEntryItem? kept = keepSelection ? SelectedRunwayEntry : null;
-        var items = BuildRunwayEntries();
+        var rebuilt = BuildRunwayEntries();
+        var refill = RunwayEntryList.Refill(_runwayEntries, cmbRunwayEntry.SelectedIndex, rebuilt, keepSelection);
 
-        // The same labels: the combo is left alone (a refill on focus must not make the screen
-        // reader read the list again), and the fresh items stand behind the same lines.
-        bool sameLines = cmbRunwayEntry.Items.Count == items.Count
-            && items.Select(i => i.Label).SequenceEqual(_runwayEntries.Select(i => i.Label), StringComparer.Ordinal);
-        int index = sameLines && kept != null ? cmbRunwayEntry.SelectedIndex : RunwayEntryList.IndexToKeep(items, kept);
-        _runwayEntries = items;
-        if (!sameLines)
+        // The combo shows _runwayEntries' labels, in order; the fresh items always replace the old
+        // ones, behind the same lines when the labels did not change.
+        _runwayEntries = rebuilt;
+        if (refill.Rebuild)
         {
             cmbRunwayEntry.BeginUpdate();
             try
             {
                 cmbRunwayEntry.Items.Clear();
-                foreach (var item in items) cmbRunwayEntry.Items.Add(item.Label);
+                foreach (var item in rebuilt) cmbRunwayEntry.Items.Add(item.Label);
             }
             finally { cmbRunwayEntry.EndUpdate(); }
         }
 
-        int select = index >= 0 ? index : 0;
-        if (cmbRunwayEntry.SelectedIndex != select) cmbRunwayEntry.SelectedIndex = select;
+        if (refill.SelectIndex >= 0 && cmbRunwayEntry.SelectedIndex != refill.SelectIndex)
+            cmbRunwayEntry.SelectedIndex = refill.SelectIndex;
 
         // Queued: it follows the screen reader's reading of the list rather than cutting it.
-        if (kept is { Kind: not RunwayEntryKind.FullLength } && index < 0)
-            _announcer.Announce(RunwayEntryList.NoLongerOffered(kept));
+        if (refill.Speech != null) _announcer.Announce(refill.Speech);
     }
 
     /// <summary>

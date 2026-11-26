@@ -16,6 +16,10 @@ public sealed record RunwayEntryItem(
     public override string ToString() => Label;
 }
 
+/// <summary>What a refill of the runway entry list does: rebuild the shown lines or leave them, which item to
+/// select, and what to say (null: nothing).</summary>
+public readonly record struct RunwayEntryRefill(bool Rebuild, int SelectIndex, string? Speech);
+
 /// <summary>
 /// Merges the two departure lists the planner used to offer, intersections and painted holding
 /// points, into one list ordered down the runway from its takeoff end, "Full length" first.
@@ -23,6 +27,33 @@ public sealed record RunwayEntryItem(
 public static class RunwayEntryList
 {
     public const string FullLength = "Full length";
+
+    // [ENT-2]: the most a refill moves one entry's remaining runway (its pavement entry on the aircraft's side); a
+    // match further away is another meeting of the taxiway.
+    public const double MaxRefillMoveMetres = 300.0;
+
+    /// <summary>
+    /// What a refill of the shown list does with the <paramref name="rebuilt"/> one. The same lines leave the list as
+    /// it is (a refill on focus must not make the screen reader read it again). With <paramref name="keepSelection"/>
+    /// (the list getting focus or dropping down) the item at <paramref name="chosenIndex"/> stays chosen where it is
+    /// now (<see cref="IndexToKeep"/>); when it is gone the list goes to Full length and says so once
+    /// (<see cref="NoLongerOffered"/>), a background change the pilot did not make. Without it (a runway picked, a type
+    /// change, an airport load) the list starts at Full length, silently.
+    /// </summary>
+    public static RunwayEntryRefill Refill(
+        IReadOnlyList<RunwayEntryItem> shown, int chosenIndex, IReadOnlyList<RunwayEntryItem> rebuilt, bool keepSelection)
+    {
+        bool sameLines = shown.Count == rebuilt.Count
+            && shown.Select(i => i.Label).SequenceEqual(rebuilt.Select(i => i.Label), StringComparer.Ordinal);
+        RunwayEntryItem? chosen = keepSelection && chosenIndex >= 0 && chosenIndex < shown.Count
+            ? shown[chosenIndex]
+            : null;
+
+        int kept = chosen == null ? -1 : sameLines ? chosenIndex : IndexToKeep(rebuilt, chosen);
+        string? speech = chosen is { Kind: not RunwayEntryKind.FullLength } && kept < 0 ? NoLongerOffered(chosen) : null;
+        int select = kept >= 0 ? kept : rebuilt.Count > 0 ? 0 : -1;
+        return new RunwayEntryRefill(!sameLines, select, speech);
+    }
 
     public static IReadOnlyList<RunwayEntryItem> Build(
         IReadOnlyList<TaxiGraph.RunwayIntersection> intersections,
@@ -78,9 +109,10 @@ public static class RunwayEntryList
         };
 
     /// <summary>The index of the item that stands for <paramref name="kept"/> in a rebuilt list, or -1 when gone.
-    /// Two meetings of one taxiway share kind, name and hold kind, so among the matches the one whose runway remaining
-    /// is nearest the kept one's is kept: never simply the first, which would move the departure to the other
-    /// meeting.</summary>
+    /// Two meetings of one taxiway share kind, name and hold kind, so a match must also have its runway remaining
+    /// within <see cref="MaxRefillMoveMetres"/> of the kept one's, and among those the nearest is kept: a lost meeting
+    /// is never replaced by the other one, which would move the departure (Review Focus 5). A remaining that is not a
+    /// number cannot show it is the same meeting, so it never matches.</summary>
     public static int IndexToKeep(IReadOnlyList<RunwayEntryItem> items, RunwayEntryItem? kept)
     {
         if (kept == null) return -1;
@@ -93,8 +125,10 @@ public static class RunwayEntryList
                 || !string.Equals(it.Name, kept.Name, StringComparison.Ordinal)
                 || !string.Equals(it.HoldKind, kept.HoldKind, StringComparison.Ordinal))
                 continue;
+            // Full length has no entry: 0 against 0.
             double gap = Math.Abs((it.Entry?.RemainingMeters ?? 0) - (kept.Entry?.RemainingMeters ?? 0));
-            if (best < 0 || gap < bestGap)
+            if (!(gap <= MaxRefillMoveMetres)) continue;   // NaN fails too
+            if (gap < bestGap)
             {
                 best = i;
                 bestGap = gap;

@@ -162,10 +162,134 @@ public class RunwayEntryListTests
         var after = Build([Entry("B", 605, 3390), Entry("B", 1805, 2190)], []);
         Assert.Equal(2, RunwayEntryList.IndexToKeep(after, second));
         Assert.Equal(1, RunwayEntryList.IndexToKeep(after, first));
+    }
 
-        // Only the second meeting is still offered: it is the one kept, for either.
+    // Review Focus 5: a meeting that is gone is gone, never replaced by the other meeting of its taxiway. With only
+    // the second meeting offered, the first is not kept (the departure would move 1,210 m down the runway, the unsafe
+    // direction): the list goes to Full length and says so. The second is still kept.
+    [Fact]
+    public void IndexToKeep_never_replaces_a_lost_meeting_with_the_other()
+    {
+        var before = Build([Entry("B", 600, 3400), Entry("B", 1800, 2200)], []);
+        var first = before[1];
+        var second = before[2];
+
         var onlySecond = Build([Entry("B", 1805, 2190)], []);
+        Assert.Equal(-1, RunwayEntryList.IndexToKeep(onlySecond, first));
         Assert.Equal(1, RunwayEntryList.IndexToKeep(onlySecond, second));
+
+        var onlyFirst = Build([Entry("B", 605, 3390)], []);
+        Assert.Equal(-1, RunwayEntryList.IndexToKeep(onlyFirst, second));
+    }
+
+    // [ENT-2]: a refill moves one entry's remaining runway by at most 300 m (its pavement entry on the aircraft's
+    // side), so the same entry moved by less is kept, and a match further away is another entry.
+    [Fact]
+    public void IndexToKeep_keeps_an_entry_moved_by_under_300_metres_and_no_further()
+    {
+        var kept = Build([Entry("B3", 650, 3350)], [])[1];
+
+        Assert.Equal(1, RunwayEntryList.IndexToKeep(Build([Entry("B3", 900, 3100)], []), kept));
+        Assert.Equal(1, RunwayEntryList.IndexToKeep(Build([Entry("B3", 950, 3050)], []), kept));
+        Assert.Equal(-1, RunwayEntryList.IndexToKeep(Build([Entry("B3", 951, 3049)], []), kept));
+        Assert.Equal(300.0, RunwayEntryList.MaxRefillMoveMetres);
+    }
+
+    // A remaining runway that is not a number cannot show that a match is the same meeting: never kept.
+    [Fact]
+    public void IndexToKeep_never_keeps_by_a_remaining_that_is_not_a_number()
+    {
+        var kept = Build([Entry("B3", 650, double.NaN)], [], m => "?")[1];
+        Assert.Equal(-1, RunwayEntryList.IndexToKeep(Build([Entry("B3", 650, 3350)], []), kept));
+
+        var sound = Build([Entry("B3", 650, 3350)], [])[1];
+        Assert.Equal(-1, RunwayEntryList.IndexToKeep(Build([Entry("B3", 650, double.NaN)], [], m => "?"), sound));
+
+        // Full length has no entry and is always kept.
+        var items = Build([Entry("B3", 650, 3350)], []);
+        Assert.Equal(0, RunwayEntryList.IndexToKeep(items, items[0]));
+    }
+
+    // ---- Refill: what a refill of the shown list does (Review Focus 5) ----
+
+    // The chosen entry is gone: the list goes to Full length and says so once.
+    [Fact]
+    public void A_refill_that_loses_the_chosen_entry_goes_to_full_length_and_says_so()
+    {
+        var shown = Build([Entry("B3", 650, 3350)], []);
+        var rebuilt = Build([], []);
+
+        var refill = RunwayEntryList.Refill(shown, 1, rebuilt, keepSelection: true);
+
+        Assert.True(refill.Rebuild);
+        Assert.Equal(0, refill.SelectIndex);
+        Assert.Equal("B3 is no longer offered. Full length departure.", refill.Speech);
+    }
+
+    // The chosen entry is still offered at another place in the list: it stays chosen, nothing said.
+    [Fact]
+    public void A_refill_keeps_a_chosen_entry_that_moved_without_a_word()
+    {
+        var shown = Build([Entry("B3", 650, 3350)], [(Entry("A1", 0, 4000), "runway", false)]);
+        int chosen = shown.ToList().FindIndex(i => i.Name == "B3");
+        var rebuilt = Build([Entry("A2", 300, 3700), Entry("B3", 660, 3340)], [(Entry("A1", 0, 4000), "runway", false)]);
+
+        var refill = RunwayEntryList.Refill(shown, chosen, rebuilt, keepSelection: true);
+
+        Assert.True(refill.Rebuild);
+        Assert.Equal(rebuilt.ToList().FindIndex(i => i.Name == "B3"), refill.SelectIndex);
+        Assert.NotEqual(chosen, refill.SelectIndex);
+        Assert.Null(refill.Speech);
+    }
+
+    // The same lines: the list is left as it is, the choice with it.
+    [Fact]
+    public void A_refill_with_the_same_lines_leaves_the_list_alone()
+    {
+        var shown = Build([Entry("B3", 650, 3350)], [(Entry("A1", 0, 4000), "runway", false)]);
+        var rebuilt = Build([Entry("B3", 650, 3350.2)], [(Entry("A1", 0, 4000), "runway", false)]);
+
+        var refill = RunwayEntryList.Refill(shown, 2, rebuilt, keepSelection: true);
+
+        Assert.False(refill.Rebuild);
+        Assert.Equal(2, refill.SelectIndex);
+        Assert.Null(refill.Speech);
+    }
+
+    // A rebuild that does not keep the choice (a runway picked, a type change, an airport load, a restore) starts at
+    // Full length without a word, whatever was chosen.
+    [Fact]
+    public void A_rebuild_without_keeping_starts_at_full_length_silently()
+    {
+        var shown = Build([Entry("B3", 650, 3350)], []);
+
+        var same = RunwayEntryList.Refill(shown, 1, Build([Entry("B3", 650, 3350)], []), keepSelection: false);
+        Assert.False(same.Rebuild);
+        Assert.Equal(0, same.SelectIndex);
+        Assert.Null(same.Speech);
+
+        var gone = RunwayEntryList.Refill(shown, 1, Build([], []), keepSelection: false);
+        Assert.True(gone.Rebuild);
+        Assert.Equal(0, gone.SelectIndex);
+        Assert.Null(gone.Speech);
+    }
+
+    // Full length chosen is never "no longer offered"; an empty list (never built) selects nothing.
+    [Fact]
+    public void A_refill_from_full_length_or_from_nothing_says_nothing()
+    {
+        var shown = Build([Entry("B3", 650, 3350)], []);
+        var fromFull = RunwayEntryList.Refill(shown, 0, Build([], []), keepSelection: true);
+        Assert.Equal(0, fromFull.SelectIndex);
+        Assert.Null(fromFull.Speech);
+
+        var first = RunwayEntryList.Refill(Array.Empty<RunwayEntryItem>(), -1, Build([], []), keepSelection: true);
+        Assert.True(first.Rebuild);
+        Assert.Equal(0, first.SelectIndex);
+        Assert.Null(first.Speech);
+
+        var none = RunwayEntryList.Refill(shown, 1, Array.Empty<RunwayEntryItem>(), keepSelection: true);
+        Assert.Equal(-1, none.SelectIndex);
     }
 
     // The hold kind is kept as the label reads it (trimmed, lower case), so the key a refill matches on is the label's.

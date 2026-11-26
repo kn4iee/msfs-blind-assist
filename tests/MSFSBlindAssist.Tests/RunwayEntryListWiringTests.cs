@@ -47,10 +47,11 @@ public class RunwayEntryListWiringTests
         Assert.Contains("cmbRunwayEntry.Visible = isRunway;", typeChanged);
     }
 
-    // D10, D12: the list is built by RunwayEntryList from the same two graph calls the old lists made; a refill keeps
-    // the choice by IndexToKeep and, when it is gone, falls back to Full length and says so once.
+    // D10, D12: the list is built by RunwayEntryList from the same two graph calls the old lists made; what a refill
+    // does (rebuild or not, which item, what to say) is RunwayEntryList.Refill's decision, tested in
+    // RunwayEntryListTests, and the form only carries it out.
     [Fact]
-    public void The_list_is_built_by_RunwayEntryList_and_a_refill_keeps_the_choice()
+    public void The_list_is_built_by_RunwayEntryList_and_a_refill_does_what_Refill_decides()
     {
         string form = FormSource();
         string build = Member(form, "private IReadOnlyList<RunwayEntryItem> BuildRunwayEntries(");
@@ -59,9 +60,14 @@ public class RunwayEntryListWiringTests
         Assert.Contains("RunwayEntryList.Build(", build);
 
         string populate = Member(form, "private void PopulateRunwayEntries(bool keepSelection)");
-        Assert.Contains("BuildRunwayEntries()", populate);
-        Assert.Contains("RunwayEntryList.IndexToKeep(", populate);
-        Assert.Contains("_announcer.Announce(RunwayEntryList.NoLongerOffered(", populate);
+        Assert.Contains("var rebuilt = BuildRunwayEntries();", populate);
+        Assert.Contains(
+            "RunwayEntryList.Refill(_runwayEntries, cmbRunwayEntry.SelectedIndex, rebuilt, keepSelection)", populate);
+        Assert.Contains("if (refill.Rebuild)", populate);
+        Assert.Contains("cmbRunwayEntry.SelectedIndex = refill.SelectIndex;", populate);
+        Assert.Contains("_announcer.Announce(refill.Speech)", populate);
+        Assert.DoesNotContain("IndexToKeep(", populate);
+        Assert.DoesNotContain("NoLongerOffered(", populate);
     }
 
     // D12: picking a runway, a destination type change and an airport load rebuild the list at Full length; it is
