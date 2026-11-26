@@ -1633,11 +1633,13 @@ like once two absent numbers are read as zero.
 ### An import owns the whole route
 
 `ApplyExternalRoute` calls `ResetRouteShapingControls` first. `OnDestTypeChanged` only
-clears the runway-only boxes when the destination TYPE changes, so a runway route
-imported over a hand-built runway route otherwise keeps the old intersection departure
-and CAT III hold — a different lineup point, with nothing in the announcement to reveal
-it. `chkFitFilter` is deliberately exempt: it describes the aircraft's wingspan rather
-than the route, and forcing it either way could hide the very gate the clearance names.
+clears the runway-only controls when the destination TYPE changes, so a runway route
+imported over a hand-built runway route otherwise keeps the old runway entry (an
+intersection or a holding point) and CAT III hold — a different lineup point, with nothing
+in the announcement to reveal it. The reset puts the Runway entry list back on Full length
+(`SelectFullLengthRunwayEntry`) and unticks the CAT III box, silently. `chkFitFilter` is
+deliberately exempt: it describes the aircraft's wingspan rather than the route, and forcing
+it either way could hide the very gate the clearance names.
 
 The step list goes with them ([SI-26]): `ResetRouteShapingControls` empties it, silently,
 before the fill writes its own steps, so a hand-entered "Cross runway 22R" can never clear
@@ -1648,25 +1650,28 @@ steps the fill wrote.
 
 **A FAILED import owns nothing, and that needs its own restore.**
 `TryResolveExternalDestination` documents "probing leaves no mark", but probing a *gate*
-candidate sets `cmbDestType`, and `OnDestTypeChanged` unticks `chkIntersection` (which via
-`OnIntersectionToggled` also empties `cmbIntersection` and `_intersectionMap`) and
-`chkCatIiiHold` on the way out of runway mode. Putting the *type* back re-shows both boxes,
-unticked. So the mirror image of the bug above: a pilot hand-builds "Runway 27L,
+candidate sets `cmbDestType`, and `OnDestTypeChanged` puts the Runway entry list back on Full
+length and unticks `chkCatIiiHold` on the way out of runway mode. Putting the *type* back
+re-shows both, reset. So the mirror image of the bug above: a pilot hand-builds "Runway 27L,
 intersection departure at T4, CAT III hold", presses Ctrl+Shift+Y, the clearance names a
 gate this airport does not have, everything fails, and they hear *"SayIntentions route
 unavailable. No usable assigned runway or gate found."* — "nothing happened" — while their
 intersection departure and LVP hold are gone, and the next Calculate lines them up at the
 full-length threshold holding at the CAT I line. `RestoreDestinationState` therefore
-restores those three as well as the type, search and destination, in that order (the
-intersection list is rebuilt against whichever runway is selected, so the destination has
-to be back first).
+restores the runway entry and the CAT III box as well as the type, search and destination,
+in that order (the Runway entry list is rebuilt against whichever runway is selected, so the
+destination has to be back first).
 
-The intersection restore does **not** go through the checkbox: `OnIntersectionToggled` →
-`ShowIntersectionListOrFallback` moves focus to the combo and can announce "No runway
-intersections available. Full length departure." Neither belongs to a silent restore — the
-pilot performed no action. The handler is detached, `PopulateIntersections` is called
-directly, and `RestoredIntersectionIndex` picks the entry that was selected, the first if
-that intersection is no longer offered, or `-1` (untick) if the runway has none.
+The runway entry restore (`RestoreRunwayEntryState`) sets the choice DIRECTLY on the rebuilt
+list, never through the refill that keeps a choice (`PopulateRunwayEntries(keepSelection:
+true)`), which says *"B3 is no longer offered. Full length departure."* when the choice is
+gone: nothing belongs in a silent restore — the pilot performed no action. It rebuilds the
+list at Full length, then `RestoredRunwayEntryIndex` picks the entry that was chosen
+(`RunwayEntryList.IndexToKeep`: same kind, name and hold kind, its runway remaining within
+300 m), Full length when it is no longer offered, or `-1` for an empty list. Since stage 4 of
+the Taxi UI Redesign (2026-11) this keeps a picked holding point too, which the old restore,
+built for the "Intersection departure" box alone, lost; and a gone intersection now falls to
+Full length, where the old restore picked the first intersection still offered.
 
 **Apply atomically.** Everything that can throw — reading the graph's named edges,
 snapping the ground track, showing the form — now runs *before* the destination probe, so

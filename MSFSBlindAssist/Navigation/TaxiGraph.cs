@@ -3466,7 +3466,8 @@ public partial class TaxiGraph
     ///
     /// <paramref name="thrLat"/>/<paramref name="thrLon"/> must be the DEPARTURE
     /// lineup point (the `start` table row), never the runway_end pavement edge —
-    /// see the caller's note in TaxiAssistForm.PopulateHoldingPoints. Both along-track
+    /// see the caller's note in TaxiAssistForm.ResolveHoldingPointsForRunway (reached from
+    /// PopulateRunwayEntries). Both along-track
     /// gates below are written against that anchor.
     ///
     /// BEHIND-THRESHOLD holds (EGCC 23L): some airports paint their full-length
