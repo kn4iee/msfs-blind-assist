@@ -7,7 +7,8 @@ namespace MSFSBlindAssist.Navigation;
 /// stays off the taxiway, never on or inside a runway's clear margin, nor where the aircraft would be
 /// captured by the stop on one (the <see cref="ProgressiveLegEnd.CaptureRadiusM"/> before it), never
 /// splitting an off-chart leg; with a Turn pick, before the turn when the taxiway lies less than the setback past
-/// it, as with none, and a leg end never on a pick's link (<see cref="ChooseForLegEnd"/>). Pure.
+/// it, as with none, and a leg end on a pick's link at that turn's start where a node before it is usable
+/// (<see cref="PlaceLegEnd"/>). Pure.
 /// </summary>
 public static class TaxiwayHoldPlacement
 {
@@ -136,24 +137,34 @@ public static class TaxiwayHoldPlacement
     }
 
     /// <summary>
+    /// Where <see cref="PlaceLegEnd"/> put a leg end: <see cref="Stop"/>; <see cref="OnLinkOf"/>, the pick on whose link
+    /// <see cref="Choose"/>'s own stop lay (null when on none); <see cref="AtTurnStart"/>, true when the stop was moved
+    /// back to where that turn starts, false when Choose's stop stands.
+    /// </summary>
+    public readonly record struct LegEndStop(Stop Stop, AppliedTurnPick? OnLinkOf, bool AtTurnStart);
+
+    /// <summary>
     /// The stop that ENDS a leg with no destination at a hold short of a taxiway, on a route whose Turn picks are
     /// <paramref name="picks"/> (every row's): where <see cref="Choose"/> places it with no floor, as with no pick (owner,
     /// 2026-11-25: "Stop before the turn"), so a taxiway less than the setback past a turn is held short of before the
-    /// turn, on the taxiway before it, and one further on after the turn. Except a stop on, or at the far end of, a
+    /// turn, on the taxiway before it, and one further on after the turn. A stop of Choose's on, or at the far end of, a
     /// pick's link from its departure node (an off-chart leg, a connector; <see cref="IsOnALink"/>), where the leg would
-    /// end on an off-chart leg or half-way through a turn: the leg then ends where that turn starts, the turn's departure
+    /// end on an off-chart leg or half-way through a turn, moves back to where that turn starts: the turn's departure
     /// node (the end of segment <c>FirstSegmentAfterDeparture - 1</c>) when Choose would take it, the route from the
-    /// capture radius before it to the junction clear of every runway; else the next such node before it on no link;
-    /// else <see cref="StopKind.NoSafeStop"/>. Nothing is inserted there. A mid-route stop is placed by Choose alone: the
-    /// route carries on after Continue, the turn is made and its off-chart leg announced.
+    /// capture radius before it to the junction clear of every runway, else the next such node before it on no link
+    /// (<see cref="LegEndStop.AtTurnStart"/>). Nothing is inserted there. When no node before the turn is usable (none
+    /// before its link: a first-row turn from the route's own start; or each one's approach on a runway), Choose's own
+    /// stop stands, on the link, and so does the pick: the route makes that turn, and its notes are said (review fix
+    /// round 2: "no stop" kept the junction itself, nose on B, nothing said). Only where Choose itself finds no stop
+    /// is there none. A mid-route stop is placed by Choose alone: the route carries on after Continue.
     /// </summary>
-    public static Stop ChooseForLegEnd(IReadOnlyList<TaxiRouteSegment> segments, int junctionSegmentIndex, double setbackM,
-                                       bool allowInsert, Func<double, double, bool> isClearOfRunways,
-                                       IReadOnlyList<AppliedTurnPick> picks)
+    public static LegEndStop PlaceLegEnd(IReadOnlyList<TaxiRouteSegment> segments, int junctionSegmentIndex, double setbackM,
+                                         bool allowInsert, Func<double, double, bool> isClearOfRunways,
+                                         IReadOnlyList<AppliedTurnPick> picks)
     {
         var stop = Choose(segments, junctionSegmentIndex, setbackM, allowInsert, isClearOfRunways);
         var turn = picks.FirstOrDefault(p => IsOnALink(stop, p));
-        if (turn == null) return stop;
+        if (turn == null) return new LegEndStop(stop, null, false);
 
         int j = junctionSegmentIndex;
         var along = new double[j + 2];
@@ -163,9 +174,30 @@ public static class TaxiwayHoldPlacement
             var node = new Stop(StopKind.ExistingNode, k, 0);
             if (picks.Any(p => IsOnALink(node, p))) continue;
             if (RouteClear(segments, along, Math.Max(0, along[k + 1] - ProgressiveLegEnd.CaptureRadiusM), along[j + 1], isClearOfRunways))
-                return node;
+                return new LegEndStop(node, turn, true);
         }
-        return new Stop(StopKind.NoSafeStop, -1, 0);
+        return new LegEndStop(stop, turn, false);
+    }
+
+    /// <summary>The stop <see cref="PlaceLegEnd"/> places.</summary>
+    public static Stop ChooseForLegEnd(IReadOnlyList<TaxiRouteSegment> segments, int junctionSegmentIndex, double setbackM,
+                                       bool allowInsert, Func<double, double, bool> isClearOfRunways,
+                                       IReadOnlyList<AppliedTurnPick> picks)
+        => PlaceLegEnd(segments, junctionSegmentIndex, setbackM, allowInsert, isClearOfRunways, picks).Stop;
+
+    /// <summary>
+    /// The rows a recalculation follows to a leg end placed at a turn's start (<see cref="LegEndStop.AtTurnStart"/>):
+    /// of <paramref name="remaining"/>, the rows still ahead (a suffix of the <paramref name="sequenceCount"/> rows as
+    /// loaded), only those before the turn's own row (<paramref name="rowsBefore"/>, the pick's row), which lead to its
+    /// departure node; never one past it. Null when none is left (the aircraft is past them): the route is then the
+    /// shortest way to the stop.
+    /// </summary>
+    public static List<string>? RowsLeadingToTurnStart(IReadOnlyList<string>? remaining, int sequenceCount, int rowsBefore)
+    {
+        if (remaining == null) return null;
+        int first = sequenceCount - remaining.Count;   // the row of remaining[0] as loaded
+        int take = rowsBefore - first;
+        return take > 0 ? remaining.Take(Math.Min(take, remaining.Count)).ToList() : null;
     }
 
     /// <summary>

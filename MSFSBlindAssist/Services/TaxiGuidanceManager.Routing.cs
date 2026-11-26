@@ -180,6 +180,7 @@ public partial class TaxiGuidanceManager
         var priorHoldingPointName = _holdingPointName;
         var priorIsRunwayLineup = _isRunwayLineup;
         var priorProgressiveTerminator = _progressiveTerminator;
+        var priorLegEndAtTurnStart = _legEndAtTurnStart;
         var priorLineupTargetLat = _lineupTargetLat;
         var priorLineupTargetLon = _lineupTargetLon;
         var priorLineupHeadingMag = _lineupHeadingMag;
@@ -218,6 +219,7 @@ public partial class TaxiGuidanceManager
             _holdingPointName = priorHoldingPointName;
             _isRunwayLineup = priorIsRunwayLineup;
             _progressiveTerminator = priorProgressiveTerminator;
+            _legEndAtTurnStart = priorLegEndAtTurnStart;
             _lineupTargetLat = priorLineupTargetLat;
             _lineupTargetLon = priorLineupTargetLon;
             _lineupHeadingMag = priorLineupHeadingMag;
@@ -296,6 +298,8 @@ public partial class TaxiGuidanceManager
             // Store lineup target data (runway threshold or gate position) for lineup phase
             _isRunwayLineup = isRunwayDestination;
             _progressiveTerminator = progressiveTerminator;
+            // Set again below only when this leg's end is placed at a turn's start (ApplyLegEndSetback).
+            _legEndAtTurnStart = null;
             if (destinationThresholdLat.HasValue && destinationThresholdLon.HasValue && destinationHeading.HasValue)
             {
                 _lineupTargetLat = destinationThresholdLat.Value;
@@ -1742,7 +1746,8 @@ public partial class TaxiGuidanceManager
         long GraphGeneration,
         HashSet<int> TurnBlockedNodes,
         List<Navigation.ClearedCrossing> ClearedCrossings,
-        Navigation.ClearanceProgressState ClearanceProgress);
+        Navigation.ClearanceProgressState ClearanceProgress,
+        (int StopNodeId, int RowsBefore)? LegEndAtTurnStart);
 
     private LoadRouteRollback CaptureLoadRouteRollback() => new(
         _dataProvider, _destinationNodeId, _destinationName, _icao, _originalTaxiwaySequence,
@@ -1750,7 +1755,7 @@ public partial class TaxiGuidanceManager
         _isRunwayLineup, _progressiveTerminator, _lineupTargetLat, _lineupTargetLon,
         _lineupHeadingMag, _lineupHeadingTrue, _hasLineupTarget, _autoActivateFired,
         _postHighSpeedExitMinBearing, _graph, _graphGeneration, _turnBlockedNodes, _clearedCrossings,
-        _clearanceProgress);
+        _clearanceProgress, _legEndAtTurnStart);
 
     private void RestoreLoadRouteRollback(LoadRouteRollback r)
     {
@@ -1777,6 +1782,7 @@ public partial class TaxiGuidanceManager
         _turnBlockedNodes = r.TurnBlockedNodes;
         _clearedCrossings = r.ClearedCrossings;
         _clearanceProgress = r.ClearanceProgress;
+        _legEndAtTurnStart = r.LegEndAtTurnStart;
     }
 
     /// <summary>
@@ -2023,6 +2029,12 @@ public partial class TaxiGuidanceManager
     {
         if (_graph == null) return;
 
+        // A leg end the load placed where a Turn pick's turn starts (PlaceLegEnd, the pick dropped) is kept: the route
+        // goes to that stop node, over the rows that lead to it, and is never set back again. Routed afresh to the
+        // junction, with the pick gone, it could take the charted way and stop near B after the turn. Every other route
+        // goes to its destination as before.
+        int recalcDestinationNodeId = _legEndAtTurnStart?.StopNodeId ?? _destinationNodeId;
+
         if ((MSFSBlindAssist.Utils.SimClock.UtcNow - _lastRecalculationTime).TotalSeconds < RECALCULATION_COOLDOWN_SEC)
             return;
 
@@ -2060,8 +2072,8 @@ public partial class TaxiGuidanceManager
         // and routes backwards around the taxiway loop (VHHH J1 → K1 → backwards
         // 563 m instead of the remaining 67 m). Within 200 m of the destination
         // the tone already guides the pilot; no recalc is needed.
-        if (_destinationNodeId != 0 && _graph != null &&
-            _graph.Nodes.TryGetValue(_destinationNodeId, out var destNodeForGuard))
+        if (recalcDestinationNodeId != 0 && _graph != null &&
+            _graph.Nodes.TryGetValue(recalcDestinationNodeId, out var destNodeForGuard))
         {
             if (TaxiGraph.FastDistanceMeters(lat, lon,
                     destNodeForGuard.Latitude, destNodeForGuard.Longitude)
@@ -2097,19 +2109,24 @@ public partial class TaxiGuidanceManager
         // be defensive), fall back to no filter rather than blocking every
         // candidate — a silent recalc bailout would suppress the legitimate
         // "Off route" announcement.
-        int? destComponentId = _graph!.Nodes.ContainsKey(_destinationNodeId)
-            ? _graph.Nodes[_destinationNodeId].ComponentId
+        int? destComponentId = _graph!.Nodes.ContainsKey(recalcDestinationNodeId)
+            ? _graph.Nodes[recalcDestinationNodeId].ComponentId
             : (int?)null;
 
         // Same reachability decision as LoadRoute: when the aircraft is not on the destination's piece of
         // network, the recalculated route still starts on that piece, and its straight unmapped first leg
         // is checked once the route exists.
         var recalcReachability = destComponentId.HasValue
-            ? RouteReachability.Classify(_graph, lat, lon, _destinationNodeId)
+            ? RouteReachability.Classify(_graph, lat, lon, recalcDestinationNodeId)
             : ReachabilityClass.Unchanged;
 
         (List<string>? remainingSequence, TaxiNode? nearestNode) =
             FindRemainingSequenceByPosition(lat, lon, destComponentId);
+        // To a kept turn-start end, only the rows that lead to it (none left: the shortest way there). The stops below
+        // still read the remaining rows as a suffix of the loaded ones.
+        List<string>? routeSequence = remainingSequence;
+        if (_legEndAtTurnStart is { } keptEnd && _originalTaxiwaySequence != null)
+            routeSequence = TaxiwayHoldPlacement.RowsLeadingToTurnStart(remainingSequence, _originalTaxiwaySequence.Count, keptEnd.RowsBefore);
 
         // If no sequence taxiway is near the aircraft, fall back to the
         // heading-aware picker. The constrained path will likely fail and
@@ -2197,9 +2214,9 @@ public partial class TaxiGuidanceManager
         // no valid path exists, setting ConstrainedFallbackReason.
         TaxiRoute? BuildNormalRecalcRoute(TaxiRouter r, int startNodeId)
         {
-            if (remainingSequence != null && remainingSequence.Count > 0)
+            if (routeSequence != null && routeSequence.Count > 0)
             {
-                return r.FindConstrainedPath(startNodeId, _destinationNodeId, remainingSequence,
+                return r.FindConstrainedPath(startNodeId, recalcDestinationNodeId, routeSequence,
                     destinationIsRunway: _isRunwayLineup);
             }
             // The aircraft is near NO taxiway of the cleared sequence — it is
@@ -2209,7 +2226,7 @@ public partial class TaxiGuidanceManager
             // recalc built a 126-node loop back to a taxiway 1.5 km behind;
             // only the post-recalc sanity gate stopped it). Shortest path to
             // the destination is the honest recovery.
-            return r.FindShortestPath(startNodeId, _destinationNodeId);
+            return r.FindShortestPath(startNodeId, recalcDestinationNodeId);
         }
 
         // The recalculated route from one start node, built as it is adopted, with the router that built
@@ -2357,9 +2374,10 @@ public partial class TaxiGuidanceManager
         // A leg that ends "hold short of taxiway": a route that reaches the junction afresh is cut back
         // to its stop, never on a node inserted now [RTE-30]. A kept Turn-pick tail ends at the stop placed
         // at load and is left alone [TURN-3], also when that stop was the junction itself, which the
-        // end-node test alone would cut again. Before the gate, so it compares two cut routes.
+        // end-node test alone would cut again. Before the gate, so it compares two cut routes. A leg end kept at a turn's
+        // start is the route's end already (routed there above): never set back again.
         bool keepsLoadedTail = keptTailRoute != null && ReferenceEquals(newRoute, keptTailRoute);
-        if (!keepsLoadedTail)
+        if (!keepsLoadedTail && _legEndAtTurnStart == null)
             ApplyLegEndSetback(newRoute, _originalTaxiwaySequence, allowInsert: false);
 
         // Post-recalc sanity gate. Two failure modes are rejected here:
@@ -2403,8 +2421,8 @@ public partial class TaxiGuidanceManager
             // the destination. A difference of ≥ 120° means the route is
             // starting by moving away from the destination.
             bool firstSegHeadsBackwards = false;
-            if (_destinationNodeId != 0 && _graph != null &&
-                _graph.Nodes.TryGetValue(_destinationNodeId, out var destNodeForBearing))
+            if (recalcDestinationNodeId != 0 && _graph != null &&
+                _graph.Nodes.TryGetValue(recalcDestinationNodeId, out var destNodeForBearing))
             {
                 double bearingToDest = NavigationCalculator.CalculateBearing(
                     lat, lon, destNodeForBearing.Latitude, destNodeForBearing.Longitude);
@@ -2443,7 +2461,7 @@ public partial class TaxiGuidanceManager
         // truncation legitimately moves a REACHING route's end back to a hold line, and judging
         // the post-truncation end would read that as "ended short".
         bool recalcReachedDestination = newRoute.Segments.Count > 0 &&
-            newRoute.Segments.Any(s2 => s2.ToNode != null && s2.ToNode.NodeId == _destinationNodeId);
+            newRoute.Segments.Any(s2 => s2.ToNode != null && s2.ToNode.NodeId == recalcDestinationNodeId);
         var recalcEndNode = newRoute.Segments.Count > 0 ? newRoute.Segments[^1].ToNode : null;
 
         // Re-apply the user's explicit hold-short picks, remapped onto the
@@ -3858,9 +3876,10 @@ public partial class TaxiGuidanceManager
     /// set back so the whole aircraft stays off the taxiway, never on or inside a runway's clear margin
     /// nor behind a runway the route crosses, never with the capture radius before it on one. No Turn pick holds
     /// it on the picked taxiway (owner, 2026-11-25: "Stop before the turn"): a taxiway less than the setback past the
-    /// turn is held short of before the turn, as with no pick. A stop that ends a leg (<paramref name="endsLeg"/>)
-    /// never lies on, or at the far end of, any pick's link (an off-chart leg, a connector): the leg then ends where
-    /// that turn starts (<see cref="TaxiwayHoldPlacement.ChooseForLegEnd"/>). On a pilot's
+    /// turn is held short of before the turn, as with no pick. A stop that ends a leg (<paramref name="endsLeg"/>) and
+    /// would lie on, or at the far end of, any pick's link (an off-chart leg, a connector) ends the leg where that turn
+    /// starts instead, when a node before the turn is usable (<see cref="TaxiwayHoldPlacement.PlaceLegEnd"/>, reported
+    /// through <paramref name="movedBeforeTurn"/>); with none it stays where Choose put it. On a pilot's
     /// Calculate (<paramref name="allowInsert"/>) the stop can be a node inserted on the segment's own
     /// edge, through TaxiGraph's own mutator [RTE-30]: the segment's two halves replace it, and every
     /// Turn pick and deferred runway pick indexed after it moves up by one, as does every runway event's
@@ -3874,16 +3893,25 @@ public partial class TaxiGuidanceManager
     /// false for a mid-route stop, which the route carries on past after Continue.</param>
     private int PlaceTaxiwayHoldStop(TaxiRoute route, int junctionSegmentIndex, bool allowInsert, int rowIndex,
         List<DeferredRunwayPick>? deferredRunwayPicks = null, List<TaxiRouteRunwayEvent>? userPickEvents = null,
-        bool endsLeg = false)
+        bool endsLeg = false, Action<AppliedTurnPick>? movedBeforeTurn = null)
     {
         if (_graph == null) return junctionSegmentIndex;
         var graph = _graph;
         int junctionNodeId = route.Segments[junctionSegmentIndex].ToNode.NodeId;
         double setbackM = TaxiwayHoldPlacement.SetbackMetres(AircraftWingspanMetres);
         Func<double, double, bool> clear = (lat, lon) => RouteRunwayCrossings.RunwayWithinClearMargin(graph.RunwayCenterlines, lat, lon) == null;
-        var stop = endsLeg
-            ? TaxiwayHoldPlacement.ChooseForLegEnd(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear, route.TurnPicks)
-            : TaxiwayHoldPlacement.Choose(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear);
+        var placed = endsLeg
+            ? TaxiwayHoldPlacement.PlaceLegEnd(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear, route.TurnPicks)
+            : new TaxiwayHoldPlacement.LegEndStop(TaxiwayHoldPlacement.Choose(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear), null, false);
+        var stop = placed.Stop;
+        if (placed.OnLinkOf is { } linked)
+            _guidanceLog.Info(placed.AtTurnStart
+                ? $"Leg end: the stop lay on the link of the Turn pick on row {linked.RowIndex} onto {linked.TaxiwayName}; " +
+                  "the leg ends where that turn starts"
+                : $"Leg end: the stop lies on the link of the Turn pick on row {linked.RowIndex} onto {linked.TaxiwayName}, " +
+                  "and no node before that turn is usable; the stop stays there, and the pick with it");
+        // The manager keeps such an end through a recalculation (ApplyLegEndSetback, _legEndAtTurnStart).
+        if (placed.AtTurnStart) movedBeforeTurn?.Invoke(placed.OnLinkOf!);
 
         switch (stop.Kind)
         {
@@ -4006,13 +4034,14 @@ public partial class TaxiGuidanceManager
             }
         }
 
+        AppliedTurnPick? movedTo = null;
         int stop = PlaceTaxiwayHoldStop(route, route.Segments.Count - 1, allowInsert,
-            rowIndex: (taxiwaySequence?.Count ?? 0) - 1, endsLeg: true);
+            rowIndex: (taxiwaySequence?.Count ?? 0) - 1, endsLeg: true, movedBeforeTurn: p => movedTo = p);
         if (stop < 0)
         {
-            // Neither the planner nor a Turn pick ends a leg inside a runway's margin, but the capture radius
-            // before the junction can reach one: the leg then ends at the junction, never while the aircraft
-            // is on runway pavement (ProgressiveLegEnd.HeldOffByRunway).
+            // Choose itself found no stop (PlaceLegEnd never makes one up): the junction lies inside a runway's
+            // margin, or the capture radius before it reaches one. The leg then ends at the junction, never while
+            // the aircraft is on runway pavement (ProgressiveLegEnd.HeldOffByRunway).
             Log.Warn("Taxi", $"Leg end: taxiway {term.Target} meets the route at node {_destinationNodeId} inside a runway's " +
                              $"clear margin, or within {ProgressiveLegEnd.CaptureRadiusM:F0} m of one along the route; the route is left as built");
             return metBesideRunway;
@@ -4020,15 +4049,21 @@ public partial class TaxiGuidanceManager
         if (stop < route.Segments.Count - 1)
             route.Segments.RemoveRange(stop + 1, route.Segments.Count - stop - 1);
 
+        // An end placed where a turn starts is kept by every recalculation of this leg (TryRecalculateRoute): a fresh
+        // route to the junction, the pick gone, could take the charted way and put the stop near B after the turn.
+        if (allowInsert && movedTo is { } turn)
+            _legEndAtTurnStart = (route.Segments[^1].ToNode.NodeId, turn.RowIndex);
+
         // A taxiway less than the setback past a Turn pick's turn is held short of before the turn, and a stop that would
-        // lie on, or at the far end of, a pick's link goes back to where that turn starts (ChooseForLegEnd): the leg then
-        // ends before the turn, and the pick is dropped from the route, logged, and never announced (the load note is
-        // composed from the picks still on the route).
+        // lie on, or at the far end of, a pick's link goes back to where that turn starts (PlaceLegEnd): the leg then ends
+        // before the turn, and the pick is dropped from the route, logged, and never announced (the load note is composed
+        // from the picks still on the route). A pick whose link the leg still ends on (no usable node before its turn)
+        // is kept: the route makes that turn, and its notes and an off-chart leg's sentence are said.
         int last = route.Segments.Count - 1;
-        foreach (var cut in route.TurnPicks.Where(q => q.FirstTaxiwaySegment > last))
-            Log.Warn("Taxi", $"Leg end: the Turn pick on row {cut.RowIndex} onto {cut.TaxiwayName} lies past the stop " +
-                             $"(segment {cut.FirstTaxiwaySegment} of {route.Segments.Count}); dropped from the route");
-        route.TurnPicks = route.TurnPicks.Where(q => q.FirstTaxiwaySegment <= last).ToList();
+        foreach (var cut in route.TurnPicks.Where(q => q.FirstSegmentAfterDeparture > last))
+            Log.Warn("Taxi", $"Leg end: the Turn pick on row {cut.RowIndex} onto {cut.TaxiwayName} starts its turn past the stop " +
+                             $"(segment {cut.FirstSegmentAfterDeparture} of {route.Segments.Count}); dropped from the route");
+        route.TurnPicks = route.TurnPicks.Where(q => q.FirstSegmentAfterDeparture <= last).ToList();
 
         double total = 0;
         foreach (var s in route.Segments) total += s.DistanceMeters;

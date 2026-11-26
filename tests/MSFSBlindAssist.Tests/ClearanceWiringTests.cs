@@ -206,7 +206,7 @@ public class ClearanceWiringTests
         Assert.Contains("summary = legEndBesideRunwayNote + \" \" + summary;", load);
         Assert.Contains("mustHear.Add(legEndBesideRunwayNote);", load);
         Assert.DoesNotContain("legEndBesideRunwayNote", FailSnapshot(routing));
-        Assert.Matches(@"if \(!keepsLoadedTail\)\s+ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\);", routing);
+        Assert.Matches(@"if \(!keepsLoadedTail && _legEndAtTurnStart == null\)\s+ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\);", routing);
     }
 
     // Task 6: Calculate builds every route from ONE plan, refused for every destination type after the position is

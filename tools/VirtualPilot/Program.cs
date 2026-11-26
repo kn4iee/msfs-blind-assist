@@ -1207,8 +1207,11 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
         {
             bool depOk = p.FirstSegmentAfterDeparture >= 0 && p.FirstSegmentAfterDeparture < n
                          && route.Segments[p.FirstSegmentAfterDeparture].FromNode.NodeId == p.DepartureNodeId;
-            bool joinOk = p.FirstTaxiwaySegment >= 0 && p.FirstTaxiwaySegment < n
-                          && route.Segments[p.FirstTaxiwaySegment].FromNode.NodeId == p.JoinNodeId;
+            // A leg that ends on the pick's own link (no usable node before its turn: the pick is kept, TWH-2) has
+            // no segment from the join; its join must then be the route's last node, or lie past it on the link.
+            bool endsOnItsLink = p.FirstTaxiwaySegment >= n && depOk;
+            bool joinOk = endsOnItsLink || (p.FirstTaxiwaySegment >= 0 && p.FirstTaxiwaySegment < n
+                          && route.Segments[p.FirstTaxiwaySegment].FromNode.NodeId == p.JoinNodeId);
             if (!depOk || !joinOk)
                 fs.Add(new Finding(w.Icao, "LEGEND_PICK_INDEX", where,
                     $"row {p.RowIndex} onto {p.TaxiwayName}: segment {p.FirstSegmentAfterDeparture} should leave n{p.DepartureNodeId}, "
@@ -1220,7 +1223,10 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
                 fs.Add(new Finding(w.Icao, "LEGEND_OFFCHART_SPLIT", where, $"segments {k} and {k + 1} of {n} are both off-chart"));
                 break;
             }
-        if (route.Segments[^1].IsOffChartTurn)
+        // An off-chart leg may end a leg only with its pick kept, so it is announced: the leg end could not stop before
+        // that turn (TWH-2). One that ends the route with no such pick is never said.
+        if (route.Segments[^1].IsOffChartTurn
+            && !route.TurnPicks.Any(p => p.IsOffChart && p.FirstSegmentAfterDeparture <= n - 1 && p.FirstTaxiwaySegment > n - 1))
             fs.Add(new Finding(w.Icao, "LEGEND_ENDS_OFFCHART", where, $"the last of {n} segments is off-chart"));
 
         int appJunction = AppJunctionOf(mgr);

@@ -1002,6 +1002,11 @@ public partial class TaxiGuidanceManager : IDisposable
     // crossing is cleared through _clearedCrossings, like any other. Cleared on every
     // LoadRoute (set fresh below) and StopGuidance.
     private Navigation.ProgressiveTerminator? _progressiveTerminator;
+    // A leg end the load placed where a Turn pick's turn starts (TaxiwayHoldPlacement.PlaceLegEnd moved it off the
+    // turn's link; the pick is dropped): its stop node, and the pick's row, the rows before which lead to it. A
+    // recalculation routes there and never sets it back again (TryRecalculateRoute); null for every other leg. Set by
+    // ApplyLegEndSetback at load, cleared by LoadRoute and StopGuidance, put back on a refused load [RTE-29].
+    private (int StopNodeId, int RowsBefore)? _legEndAtTurnStart;
     // The aircraft's wingspan, metres, for how far before a taxiway a "hold short of taxiway" stop
     // goes (TaxiwayHoldPlacement.SetbackMetres); 0 = unknown, which takes the default span, never a
     // zero setback. Read only while a route is built or recalculated. Cross-thread note as for
@@ -5132,6 +5137,7 @@ public partial class TaxiGuidanceManager : IDisposable
         _lastGroundSpeedKts = 0;
         _hasLineupTarget = false;
         _progressiveTerminator = null;
+        _legEndAtTurnStart = null;
         // A crossing cleared on the route just stopped is never cleared on the next one.
         _clearedCrossings = new List<Navigation.ClearedCrossing>();
         _passedClearedLabel = null;

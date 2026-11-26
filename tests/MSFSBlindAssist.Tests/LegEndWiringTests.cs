@@ -86,7 +86,7 @@ public class LegEndWiringTests
         string text = RoutingSource();
 
         Assert.Contains("TaxiwayHoldPlacement.Choose(", text);
-        Assert.Contains("TaxiwayHoldPlacement.ChooseForLegEnd(", text);
+        Assert.Contains("TaxiwayHoldPlacement.PlaceLegEnd(", text);
         Assert.Contains("TaxiwayHoldPlacement.ShiftPicksAfterSplit(", text);
         Assert.Contains("ApplyLegEndSetback(", text);
         Assert.Contains("Segments[^1].ToNode.NodeId == _destinationNodeId", text);
@@ -124,8 +124,38 @@ public class LegEndWiringTests
         string text = RecalculationSource();
 
         Assert.Contains("bool keepsLoadedTail = keptTailRoute != null && ReferenceEquals(newRoute, keptTailRoute);", text);
-        Assert.Matches(@"if \(!keepsLoadedTail\)\s+ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\);", text);
+        Assert.Matches(@"if \(!keepsLoadedTail && _legEndAtTurnStart == null\)\s+ApplyLegEndSetback\(newRoute, _originalTaxiwaySequence, allowInsert: false\);", text);
         Assert.Single(Regex.Matches(text, @"ApplyLegEndSetback\("));
+    }
+
+    // Fix round 2: a leg end the load placed at a turn's start (ChooseForLegEnd moved it there, the pick dropped) keeps
+    // that end on a recalculation. The recalculation routes to its stop node, over the rows that lead to it
+    // (TaxiwayHoldPlacement.RowsLeadingToTurnStart), and never sets it back again (above); a fresh route to the junction
+    // with the pick gone could take the charted way and put the stop near B, after the turn. The end is stored at load
+    // only, and joins LoadRoute's reset, its Fail snapshot and its rollback [RTE-29] and StopGuidance's reset.
+    [Fact]
+    public void A_leg_end_at_a_turn_start_is_kept_by_a_recalculation()
+    {
+        string text = RoutingSource();
+        string recalc = RecalculationSource();
+        string setback = Member(text, "private string? ApplyLegEndSetback(");
+        string load = Member(text, "public string? LoadRoute(");
+        string manager = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+
+        Assert.Contains("int recalcDestinationNodeId = _legEndAtTurnStart?.StopNodeId ?? _destinationNodeId;", recalc);
+        Assert.Contains("r.FindConstrainedPath(startNodeId, recalcDestinationNodeId, routeSequence,", recalc);
+        Assert.Contains("r.FindShortestPath(startNodeId, recalcDestinationNodeId)", recalc);
+        Assert.DoesNotContain("r.FindShortestPath(startNodeId, _destinationNodeId)", recalc);
+        Assert.Contains("TaxiwayHoldPlacement.RowsLeadingToTurnStart(remainingSequence, _originalTaxiwaySequence.Count, keptEnd.RowsBefore)", recalc);
+
+        Assert.Contains("if (allowInsert && movedTo is { } turn)", setback);
+        Assert.Contains("_legEndAtTurnStart = (route.Segments[^1].ToNode.NodeId, turn.RowIndex);", setback);
+        Assert.Contains("_legEndAtTurnStart = null;", load);
+        Assert.Contains("_legEndAtTurnStart = priorLegEndAtTurnStart;", load);
+        Assert.Contains("_legEndAtTurnStart", Member(text, "private LoadRouteRollback CaptureLoadRouteRollback("));
+        Assert.Contains("_legEndAtTurnStart = r.LegEndAtTurnStart;", Member(text, "private void RestoreLoadRouteRollback("));
+        Assert.Contains("private (int StopNodeId, int RowsBefore)? _legEndAtTurnStart;", manager);
+        Assert.Contains("_legEndAtTurnStart = null;", Member(manager, "public void StopGuidance("));
     }
 
     // A recalculation runs off the UI thread and never inserts a node [RTE-30]: both of its taxiway-hold
@@ -174,8 +204,9 @@ public class LegEndWiringTests
         string midRoute = Member(text, "private string? ApplyUserTaxiwayHoldShorts(");
         string load = Member(text, "public string? LoadRoute(");
 
-        Assert.Contains("? TaxiwayHoldPlacement.ChooseForLegEnd(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear, route.TurnPicks)", place);
-        Assert.Contains(": TaxiwayHoldPlacement.Choose(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear);", place);
+        Assert.Contains("? TaxiwayHoldPlacement.PlaceLegEnd(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear, route.TurnPicks)", place);
+        Assert.Contains(": new TaxiwayHoldPlacement.LegEndStop(TaxiwayHoldPlacement.Choose(route.Segments, junctionSegmentIndex, setbackM, allowInsert, clear), null, false);", place);
+        Assert.Contains("if (placed.AtTurnStart) movedBeforeTurn?.Invoke(placed.OnLinkOf!);", place);
         Assert.DoesNotContain("firstUsableIndex", place);
         Assert.DoesNotContain("ChooseAroundTurn", text);
         Assert.Contains("endsLeg: true", setback);
@@ -183,7 +214,9 @@ public class LegEndWiringTests
         Assert.True(midRouteCall.Success, "the mid-route PlaceTaxiwayHoldStop call not found");
         Assert.DoesNotContain("endsLeg", midRouteCall.Value);
 
-        Assert.Contains("route.TurnPicks = route.TurnPicks.Where(q => q.FirstTaxiwaySegment <= last).ToList();", setback);
+        // A pick is dropped only when the leg ends before its turn starts; one whose link the leg ends on (no usable node
+        // before the turn) is kept, so its notes and an off-chart leg's sentence are said.
+        Assert.Contains("route.TurnPicks = route.TurnPicks.Where(q => q.FirstSegmentAfterDeparture <= last).ToList();", setback);
         Assert.Matches(@"TurnPickMessages\.ComposeLoadNote\(\s*route\.TurnPicks, turnPickResult\.Refusals,", load);
         Assert.DoesNotContain("turnPickResult.Applied, turnPickResult.Refusals", load);
         int cut = load.IndexOf("ApplyLegEndSetback(route, taxiwaySequence, allowInsert: true, legEndCrossedTaxiways)", StringComparison.Ordinal);

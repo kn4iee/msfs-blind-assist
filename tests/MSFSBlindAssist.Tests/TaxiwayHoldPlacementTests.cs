@@ -167,13 +167,65 @@ public class TaxiwayHoldPlacementTests
     }
 
     // The departure node is taken only as Choose would take a node: its 25 m approach up to the junction clear of every
-    // runway. A runway just before it (90-105) leaves no usable node before the turn: no stop, as for any such junction.
-    [Fact] public void A_departure_node_whose_approach_lies_on_a_runway_gives_no_stop()
+    // runway. A runway just before it (90-105) leaves no usable node before the turn: the ordinary stop, the join, which
+    // Choose found usable, stands, and the pick with it (fix round 2: never "no stop", which kept the B junction itself).
+    [Fact] public void A_runway_before_the_turn_start_keeps_the_ordinary_stop()
     {
         var route = At(0, 100, 160, 200); route[1].IsOffChartTurn = true;
+        var pick = Pick(1, 2, offChart: true);
         Assert.Equal(new Stop(StopKind.ExistingNode, 1, 0), Choose(route, 2, 35, allowInsert: true, RunwayBetween(90, 105)));
-        Assert.Equal(new Stop(StopKind.NoSafeStop, -1, 0),
-                     ChooseForLegEnd(route, 2, 35, allowInsert: true, RunwayBetween(90, 105), new[] { Pick(1, 2, offChart: true) }));
+        var placed = PlaceLegEnd(route, 2, 35, allowInsert: true, RunwayBetween(90, 105), new[] { pick });
+        Assert.Equal(new LegEndStop(new Stop(StopKind.ExistingNode, 1, 0), pick, AtTurnStart: false), placed);
+        Assert.Equal(placed.Stop, ChooseForLegEnd(route, 2, 35, allowInsert: true, RunwayBetween(90, 105), new[] { pick }));
+    }
+
+    // A first-row turn that departs from the route's own start (an already-made pick whose walk back reaches a stand's
+    // unnamed lead-in, or a pick with nothing arriving at the turn): FirstSegmentAfterDeparture 0, no node before its link.
+    // The ordinary stop, at the join 40 m before B, stands, and the pick with it.
+    [Fact] public void A_first_row_turn_from_the_route_start_keeps_the_ordinary_stop()
+    {
+        var route = At(0, 60, 100); route[0].IsOffChartTurn = true;   // the off-chart leg from the start, F 60-100
+        var pick = Pick(0, 1, offChart: true, row: 0);
+        Assert.Equal(new Stop(StopKind.ExistingNode, 0, 0), Choose(route, 1, 35, allowInsert: true, Everywhere));
+        Assert.Equal(new LegEndStop(new Stop(StopKind.ExistingNode, 0, 0), pick, AtTurnStart: false),
+                     PlaceLegEnd(route, 1, 35, allowInsert: true, Everywhere, new[] { pick }));
+        // A connector from the start (0-30-60), already made: the plain stop at its join stands too.
+        var connector = At(0, 30, 60, 100);
+        var made = Pick(0, 2, row: 0);
+        var plain = Choose(connector, 2, 35, allowInsert: true, Everywhere);
+        Assert.Equal(plain, ChooseForLegEnd(connector, 2, 35, allowInsert: true, Everywhere, new[] { made }));
+        Assert.True(IsOnALink(plain, made));
+    }
+
+    // Only a stop Choose itself cannot place is no stop: the junction's own approach on a runway (175-210).
+    [Fact] public void A_leg_end_has_no_stop_only_where_Choose_has_none()
+    {
+        var route = At(0, 100, 160, 200); route[1].IsOffChartTurn = true;
+        Assert.Equal(new Stop(StopKind.NoSafeStop, -1, 0), Choose(route, 2, 35, allowInsert: true, RunwayBetween(175, 210)));
+        Assert.Equal(new LegEndStop(new Stop(StopKind.NoSafeStop, -1, 0), null, AtTurnStart: false),
+                     PlaceLegEnd(route, 2, 35, allowInsert: true, RunwayBetween(175, 210), new[] { Pick(1, 2, offChart: true) }));
+    }
+
+    // A move to the turn's start is reported, with the turn, so the manager keeps that end on a recalculation.
+    [Fact] public void A_move_to_the_turn_start_is_reported_with_its_turn()
+    {
+        var route = At(0, 100, 160, 200); route[1].IsOffChartTurn = true;
+        var pick = Pick(1, 2, offChart: true);
+        Assert.Equal(new LegEndStop(new Stop(StopKind.ExistingNode, 0, 0), pick, AtTurnStart: true),
+                     PlaceLegEnd(route, 2, 35, allowInsert: true, Everywhere, new[] { pick }));
+        Assert.Equal(new LegEndStop(Choose(At(0, 100, 200), 1, 35, allowInsert: true, Everywhere), null, AtTurnStart: false),
+                     PlaceLegEnd(At(0, 100, 200), 1, 35, allowInsert: true, Everywhere, new[] { Pick(1, 1) }));
+    }
+
+    // A recalculation keeps a leg end placed at a turn's start: it routes over the rows still ahead that lead to it, the
+    // rows before the turn's own (rowsBefore = the pick's row), never past it.
+    [Fact] public void A_recalculation_to_a_turn_start_follows_only_the_rows_before_the_turn()
+    {
+        Assert.Equal(new[] { "Y", "Z" }, RowsLeadingToTurnStart(new[] { "Y", "Z", "F" }, 3, 2));
+        Assert.Equal(new[] { "Z" }, RowsLeadingToTurnStart(new[] { "Z", "F" }, 3, 2));
+        Assert.Null(RowsLeadingToTurnStart(new[] { "F" }, 3, 2));      // the aircraft is past every row before the turn
+        Assert.Null(RowsLeadingToTurnStart(null, 3, 2));
+        Assert.Null(RowsLeadingToTurnStart(new[] { "Y", "Z", "F" }, 3, 0));
     }
 
     // A connector link: a stop on it short of the join (here a point Choose inserts 5 m before the connector's middle
