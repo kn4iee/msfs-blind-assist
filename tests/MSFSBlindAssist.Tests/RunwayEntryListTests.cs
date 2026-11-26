@@ -6,7 +6,10 @@ using Xunit;
 
 namespace MSFSBlindAssist.Tests;
 
-/// <summary>The one ordered list of runway entries (Full length, intersections, holding points).</summary>
+/// <summary>The one ordered list of runway entries (Full length, intersections, holding points).
+/// Labels_use_the_invariant_culture sets DistanceFormatter.UnitProvider, which is process-global, hence the shared
+/// collection (DistanceUnitGlobalStateCollection).</summary>
+[Collection("DistanceUnitGlobalState")]
 public class RunwayEntryListTests
 {
     private const double RunwayLength = 4000.0;
