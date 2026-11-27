@@ -1522,6 +1522,10 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
         double? endT = null; (double lat, double lon) endAt = default;
         double budget = route.TotalDistanceMeters / 3.0 + 240;
         string countdownLead = $"Hold short taxiway {lp.B} in";
+        // When the countdown comes to each stop, the leg's end and a cleared crossing included (CountdownTiming:
+        // HOLD_COUNTDOWN_LATE, HOLD_COUNTDOWN_MISSING), measured along the route by the harness itself.
+        var cdTiming = new CountdownTiming();
+        double odo = 0;
         while (t < budget)
         {
             simNow = simNow.AddMilliseconds(100); t += 0.1;
@@ -1529,17 +1533,22 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
             if (st != TaxiGuidanceState.HoldShort) mgr.UpdatePosition(lat, lon, hdg, 0.0, gs);
             st = mgr.State;
             float pan = mgr.SteeringToneForHarness.ObservedPan;
+            bool enteredHold = st == TaxiGuidanceState.HoldShort && legPrevState != TaxiGuidanceState.HoldShort;
+            bool legEnded = st == TaxiGuidanceState.ProgressiveHold && endT == null;
             if (xc?.StopNode != null)
             {
                 // A hold entered at the cleared runway's stop: the stop segment's end node (HoldShort leaves the cursor past it).
-                if (st == TaxiGuidanceState.HoldShort && legPrevState != TaxiGuidanceState.HoldShort
+                if (enteredHold
                     && mgr.CurrentRoute is { } rNow && mgr.SegmentIndexForHarness is int si && si > 0 && si - 1 < rNow.Segments.Count
                     && rNow.Segments[si - 1].ToNode.NodeId == xc.StopNode.NodeId)
                     row.HeldAtRunway++;
                 xc.Track(mgr.CurrentRoute, lat, lon);
             }
             legPrevState = st;
-            foreach (var s in cap.TakeNew())
+            var saidNow = cap.TakeNew();
+            cdTiming.Frame(w.Icao, where, fs, st, mgr.CurrentRoute, mgr.SegmentIndexForHarness, lat, lon, gs, odo, saidNow,
+                stopped: enteredHold || legEnded, trace, legEnd: true, cleared: true);
+            foreach (var s in saidNow)
             {
                 if (trace) Console.WriteLine($"  {t,6:F1}s SPEAK {s}");
                 xc?.Hear(s, lat, lon, mgr.CurrentRoute, mgr.SegmentIndexForHarness);
@@ -1583,6 +1592,7 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
             double target = braking || st is TaxiGuidanceState.HoldShort or TaxiGuidanceState.ProgressiveHold ? 0 : pilot.TaxiTarget(pan, cap);
             pilot.Step(ref hdg, ref gs, pan, target, 0.1, holdHeading: null);
             (lat, lon) = Geo.Move(lat, lon, hdg, gs * 0.5144 * 0.1);
+            odo += gs * 0.5144 * 0.1;
             if (trace && ((int)Math.Round(t * 10)) % 10 == 0)
                 Console.WriteLine($"  {t,6:F1}s {st,-15} seg={mgr.SegmentIndexForHarness} ({lat:F6},{lon:F6}) hdg={hdg:F0} gs={gs:F1} pan={pan:F2}{(braking ? " BRAKING" : "")}");
         }
@@ -3584,47 +3594,75 @@ sealed class Cap : ScreenReaderAnnouncer
 /// (HOLD_COUNTDOWN_LATE) or never came (HOLD_COUNTDOWN_MISSING), and a "Passing the … hold line." or
 /// "Crossing …" said about the line the aircraft then stopped at (HOLD_CALLED_PASSING_BEFORE_STOP).
 /// Only a stop whose outer tier was crossed while taxiing is judged: a route that starts inside it
-/// has no room for the outer line.
+/// has no room for the outer line. With <c>legEnd</c> and <c>cleared</c> (the legends and crossthenhold
+/// modes) the next stop can also be the end of a leg with no destination, judged when the leg ends, and a
+/// stop the pilot was cleared across, judged once the guidance cursor is past it (it is never stopped at),
+/// each by its own countdown words ("Hold short taxiway B in", "Hold at VIKAS in", "Route ends in",
+/// "Runway 04L at C in"); a cleared line's own "Crossing runway …" is its call at the line, never a
+/// HOLD_CALLED_PASSING_BEFORE_STOP.
 /// </summary>
 sealed class CountdownTiming
 {
     private const double LateSlackM = 30;
     private int _node = -1;
+    private StopKind _kind;
     private double _dueAt = double.NaN, _firstAt = double.NaN, _prevAlong = double.NaN;
     private string _firstText = "", _countdownText = "";
     private (double Odo, string Name)? _passLine;
     private bool _lateReported, _missingReported, _passReported;
 
+    /// <summary>What the countdown counts down to: a hold short, a stop cleared across, the end of a leg.</summary>
+    public enum StopKind { Hold, Cleared, LegEnd }
+
     private static readonly System.Text.RegularExpressions.Regex CountdownLine = new(
-        @"\b(?:Hold short|End of route)\b[^.]* in \d", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        @"\b(?:Hold short|End of route|Hold at|Route ends)\b[^.]* in \d|^Runway\b[^.]* in \d", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     private static readonly System.Text.RegularExpressions.Regex PassLine = new(
         @"\b(?:Passing the (.+?) hold line|Crossing (runway [^.]+))\.", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>The countdown's outer tier in metres: 15 s at <paramref name="gsKt"/>, 300 to 600 ft.</summary>
     public static double OuterTierM(double gsKt) => Math.Clamp(gsKt * 1.68781 * 15.0, 300.0, 600.0) / 3.28084;
 
-    /// <summary>The next stop at or after segment <paramref name="idx"/> and the distance to it along the route.</summary>
-    public static (int NodeId, double Along)? NextStop(TaxiRoute? r, int idx, double lat, double lon)
+    /// <summary>
+    /// The next stop at or after segment <paramref name="idx"/> and the distance to it along the route: a hold short,
+    /// with <paramref name="legEnd"/> the route's last segment (a leg with no destination; it wins on its segment), and
+    /// with <paramref name="cleared"/> a stop every runway of which was cleared.
+    /// </summary>
+    public static (int NodeId, double Along, StopKind Kind)? NextStop(TaxiRoute? r, int idx, double lat, double lon,
+                                                                      bool legEnd = false, bool cleared = false)
     {
         if (r == null || idx < 0 || idx >= r.Segments.Count) return null;
         double along = Geo.Dist(lat, lon, r.Segments[idx].ToNode.Latitude, r.Segments[idx].ToNode.Longitude);
         for (int k = idx; k < r.Segments.Count; k++)
         {
             if (k > idx) along += r.Segments[k].DistanceMeters;
-            if (r.Segments[k].IsHoldShortPoint) return (r.Segments[k].ToNode.NodeId, along);
+            if (legEnd && k == r.Segments.Count - 1) return (r.Segments[k].ToNode.NodeId, along, StopKind.LegEnd);
+            if (r.Segments[k].IsHoldShortPoint) return (r.Segments[k].ToNode.NodeId, along, StopKind.Hold);
+#if !OLDAPP
+            if (cleared && r.Segments[k].ClearedRunways.Count > 0) return (r.Segments[k].ToNode.NodeId, along, StopKind.Cleared);
+#endif
         }
         return null;
     }
 
     public void Frame(string icao, string where, List<Finding> found, TaxiGuidanceState st, TaxiRoute? route, int idx,
-                      double lat, double lon, double gs, double odo, List<string> said, bool stopped, bool trace)
+                      double lat, double lon, double gs, double odo, List<string> said, bool stopped, bool trace,
+                      bool legEnd = false, bool cleared = false)
     {
+        var next = !stopped && st == TaxiGuidanceState.Taxiing ? NextStop(route, idx, lat, lon, legEnd, cleared) : null;
+        // A cleared line is never stopped at: it is judged on the frame the cursor is past it, the frame its own
+        // "Crossing runway …" is said, which is no call about a line ahead.
+        bool clearedPassed = _node >= 0 && _kind == StopKind.Cleared && st == TaxiGuidanceState.Taxiing && next?.NodeId != _node;
+        if (clearedPassed)
+        {
+            Judge(icao, where, found, odo);
+            _node = -1;
+        }
         // On the frame that stops, the cursor has already moved past the hold: judge the stop tracked so far.
-        if (!stopped && st == TaxiGuidanceState.Taxiing && NextStop(route, idx, lat, lon) is { } ns)
+        if (next is { } ns)
         {
             if (ns.NodeId != _node)
             {
-                _node = ns.NodeId; _dueAt = _firstAt = _prevAlong = double.NaN; _firstText = _countdownText = "";
+                _node = ns.NodeId; _kind = ns.Kind; _dueAt = _firstAt = _prevAlong = double.NaN; _firstText = _countdownText = "";
             }
             double outer = OuterTierM(gs);
             if (double.IsNaN(_dueAt) && !double.IsNaN(_prevAlong) && _prevAlong >= outer && ns.Along < outer)
@@ -3635,7 +3673,7 @@ sealed class CountdownTiming
             foreach (var a in said)
                 if (CountdownLine.IsMatch(a))
                 {
-                    _countdownText = a;
+                    _countdownText = CountdownText(a);
                     if (double.IsNaN(_firstAt))
                     {
                         _firstAt = ns.Along; _firstText = a;
@@ -3646,15 +3684,41 @@ sealed class CountdownTiming
         }
         foreach (var a in said)
         {
-            if (PassLine.Match(a) is { Success: true } m)
+            if (!clearedPassed && PassLine.Match(a) is { Success: true } m)
                 _passLine = (odo, m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
             if (stopped && CountdownLine.IsMatch(a))
             {
-                _countdownText = a;
+                _countdownText = CountdownText(a);
                 if (double.IsNaN(_firstAt)) { _firstAt = 0; _firstText = a; }
             }
         }
         if (!stopped || _node < 0) return;
+        Judge(icao, where, found, odo);
+        _node = -1;
+    }
+
+    // The countdown's words the pass check reads: the frame's whole utterance for a hold short, as main measured it; for a
+    // leg end or a cleared crossing the countdown's own sentence, since the frame's one utterance can carry a "Passing the
+    // … hold line." about another line the route passes (EGLL "Hold short taxiway A in 60 metres. Slow down. Passing the
+    // runway 27R at A9W hold line.", the leg ending 36 m on), which is no call about the stop.
+    private string CountdownText(string utterance)
+    {
+        if (_kind == StopKind.Hold) return utterance;
+        var m = CountdownLine.Match(utterance);
+        if (!m.Success) return utterance;
+        int end = utterance.IndexOf(". ", m.Index, StringComparison.Ordinal);
+        return end < 0 ? utterance[m.Index..] : utterance[m.Index..(end + 1)];
+    }
+
+    // The stop tracked so far, as it is reached: held at, the leg ended, or a cleared line passed.
+    private void Judge(string icao, string where, List<Finding> found, double odo)
+    {
+        string reached = _kind switch
+        {
+            StopKind.LegEnd => "the leg ended",
+            StopKind.Cleared => "passed a cleared line",
+            _ => "stopped at a hold",
+        };
         if (!double.IsNaN(_dueAt))
         {
             if (double.IsNaN(_firstAt))
@@ -3662,21 +3726,22 @@ sealed class CountdownTiming
                 if (!_missingReported)
                 {
                     _missingReported = true;
-                    found.Add(new Finding(icao, "HOLD_COUNTDOWN_MISSING", where, $"stopped at a hold with no countdown line; the outer tier was due {_dueAt:F0} m out"));
+                    found.Add(new Finding(icao, "HOLD_COUNTDOWN_MISSING", where, $"{reached} with no countdown line; the outer tier was due {_dueAt:F0} m out"));
                 }
             }
             else if (_dueAt - _firstAt > LateSlackM && !_lateReported)
             {
                 _lateReported = true;
-                found.Add(new Finding(icao, "HOLD_COUNTDOWN_LATE", where, $"first countdown line {_firstAt:F0} m out along the route, the outer tier due {_dueAt:F0} m out: \"{_firstText}\""));
+                found.Add(new Finding(icao, "HOLD_COUNTDOWN_LATE", where, $"{reached}: first countdown line {_firstAt:F0} m out along the route, the outer tier due {_dueAt:F0} m out: \"{_firstText}\""));
             }
         }
-        if (_passLine is { } p && odo - p.Odo < 80 && _countdownText.Contains(p.Name, StringComparison.OrdinalIgnoreCase) && !_passReported)
+        if (_kind != StopKind.Cleared && _passLine is { } p && odo - p.Odo < 80
+            && _countdownText.Contains(p.Name, StringComparison.OrdinalIgnoreCase) && !_passReported)
         {
             _passReported = true;
             found.Add(new Finding(icao, "HOLD_CALLED_PASSING_BEFORE_STOP", where, $"\"{p.Name}\" called passed or crossed {odo - p.Odo:F0} m before stopping at that line: \"{_countdownText}\""));
         }
-        _node = -1; _passLine = null;
+        _passLine = null;
     }
 }
 
