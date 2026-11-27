@@ -79,7 +79,11 @@ public class A330PanelSetTests
 
     internal sealed class Def : IniA330Definition
     {
-        public Def(FakeIo io, A330ControlMap? map = null) : base(map ?? Map()) { PanelIo = _ => io.Io; }
+        public Def(FakeIo io, A330ControlMap? map = null, Func<long>? clock = null) : base(map ?? Map())
+        {
+            PanelIo = _ => io.Io;
+            if (clock != null) NowMs = clock;   // the definition's own clock seam (Displays partial)
+        }
     }
 
     internal sealed class Spoken : ScreenReaderAnnouncer

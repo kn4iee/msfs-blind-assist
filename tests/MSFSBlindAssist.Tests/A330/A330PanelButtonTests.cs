@@ -129,6 +129,73 @@ public class A330PanelButtonTests
     }
 
     [Fact]
+    public async Task A_suppressed_press_reads_nothing_back()
+    {
+        // the First Officer's presses run with the announcer suppressed: no sentence now, none 1.5 s later
+        var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 1 };
+        var def = NewDef(io);
+        var said = new A330PanelSetTests.Spoken { Suppressed = true };
+        Assert.True(Press(def, KeyB, said));
+        said.Suppressed = false;
+        Assert.Equal(new[] { "press AIRLINER_TEST_B 300" }, io.Sent);   // the press itself still goes out
+        Assert.Empty(io.Delays);
+        await Task.Delay(100);
+        Assert.Empty(said.Lines);
+        Assert.Empty(io.FreshKeys);
+        // nothing is armed: the aircraft's change of the row is spoken by MainForm as ever
+        Assert.False(def.ProcessSimVarUpdate(PageRow, 1, said));
+    }
+
+    [Fact]
+    public async Task A_press_that_changes_an_announced_state_row_is_heard_once()
+    {
+        var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 1 };
+        var def = NewDef(io);
+        var said = new A330PanelSetTests.Spoken();
+        Press(def, KeyB, said);
+        // the row's own change, delivered as MainForm would: consumed, so MainForm's generic announce is not a second voice
+        Assert.True(def.ProcessSimVarUpdate(PageRow, 1, said));
+        Assert.Empty(said.Lines);
+        await Release(io);
+        Assert.Equal(new[] { "SYS B" }, said.Lines);                    // the read-back is the only line
+        // the echo ended with the read-back: a later change is spoken again (not consumed)
+        Assert.False(def.ProcessSimVarUpdate(PageRow, 0, said));
+
+        // a newer press of a key reading the row supersedes the first's echo and read-back, and ends it once
+        io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 0 };
+        def = NewDef(io);
+        said = new A330PanelSetTests.Spoken();
+        Press(def, KeyA, said);
+        Press(def, KeyB, said);
+        Assert.True(def.ProcessSimVarUpdate(PageRow, 0, said));
+        await Release(io);
+        Assert.Equal(new[] { "SYS A" }, said.Lines);
+        Assert.False(def.ProcessSimVarUpdate(PageRow, 1, said));
+
+        // a key with no state arms nothing
+        io = new A330PanelSetTests.FakeIo();
+        def = NewDef(io);
+        Press(def, Plain, said);
+        Assert.False(def.ProcessSimVarUpdate(PageRow, 1, said));
+    }
+
+    [Fact]
+    public async Task A_state_change_after_the_echo_window_is_spoken_again()
+    {
+        long now = 1_000;
+        var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 1 };
+        var def = new A330PanelSetTests.Def(io, Map(), () => now);
+        var said = new A330PanelSetTests.Spoken();
+        Press(def, KeyB, said);
+        now += 2 * IniA330Definition.ReadBackDelayMs - 1;
+        Assert.True(def.ProcessSimVarUpdate(PageRow, 1, said));          // still the press's echo
+        now += 2;                                                         // the window is over
+        Assert.False(def.ProcessSimVarUpdate(PageRow, 0, said));         // the aircraft's own change: not consumed
+        await Release(io);                                                // the read-back is still said
+        Assert.Equal(new[] { "SYS B" }, said.Lines);
+    }
+
+    [Fact]
     public async Task A_state_that_cannot_be_read_says_nothing_at_all()
     {
         var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = null };

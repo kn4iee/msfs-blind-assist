@@ -291,11 +291,28 @@ public partial class IniA330Definition
             announcer.Announce(A330Write.PressedSentence(varDef.DisplayName));
             return true;
         }
+        // an automated press (the First Officer's: announcer suppressed) is not the pilot's: nothing is armed, nothing read back (CORE-7)
+        if (announcer.Suppressed) return true;
         // keys that read one row (the ECAM pages) share a generation: the newest press's read-back is the one said
         _pickGeneration.TryGetValue(stateKey, out int generation);
         _pickGeneration[stateKey] = ++generation;
+        // the row's own change is this press's echo until the read-back says it (or the window ends): MainForm's
+        // generic announce of the row would be a second voice for it
+        _pressEchoUntil[stateKey] = NowMs() + 2L * ReadBackDelayMs;
         _ = ConfirmPressAsync(stateKey, io, announcer, generation);
         return true;
+    }
+
+    /// <summary>Until when (NowMs) a change of a state row is the pilot's own press's echo, consumed silently.</summary>
+    private readonly Dictionary<string, long> _pressEchoUntil = new(StringComparer.Ordinal);
+
+    /// <summary>True while <paramref name="stateKey"/>'s change is a press's echo; an expired window is dropped.</summary>
+    private bool IsPressEcho(string stateKey)
+    {
+        if (!_pressEchoUntil.TryGetValue(stateKey, out long until)) return false;
+        if (NowMs() < until) return true;
+        _pressEchoUntil.Remove(stateKey);
+        return false;
     }
 
     /// <summary>The row a key's <c>State</c> variable is read through: the row of this definition that reads that
@@ -325,6 +342,7 @@ public partial class IniA330Definition
             if (_pickGeneration[stateKey] != generation) return;
             double? read = await io.ReadFresh(stateKey, CancellationToken.None);
             if (_pickGeneration[stateKey] != generation) return;
+            _pressEchoUntil.Remove(stateKey);   // this read-back is the row's state now: later changes speak again
             if (read is double v && double.IsFinite(v) && GetVariables().TryGetValue(stateKey, out var row))
                 announcer.AnnounceImmediate(A330Write.StateSentence(row, v));
             else
@@ -426,6 +444,9 @@ public partial class IniA330Definition
 
     partial void ProcessPanelUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
     {
+        // a state row the pilot's own key press just moved: its read-back says it, so the change is consumed here
+        // (the row's display already followed it); the generic announce would be a second voice
+        if (IsPressEcho(varName)) { handled = true; return; }
         switch (varName)
         {
             case A330SharedKeys.Flaps:
@@ -453,5 +474,6 @@ public partial class IniA330Definition
     partial void ResetPanelBaselines(bool contextReset)
     {
         _lastFlapIndex = -1;
+        _pressEchoUntil.Clear();
     }
 }
