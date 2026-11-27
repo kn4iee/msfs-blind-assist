@@ -42,6 +42,9 @@ public sealed class IniAirbusKeys
 
     public const int ModeCrank = 0, ModeNorm = 1, ModeIgnStart = 2;
 
+    /// <summary>The predictive windshear switch's positions (measured in flight 2026-11-22: 1 shows the E/WD memo PRED W/S OFF).</summary>
+    public const int PwsAuto = 0, PwsOff = 1;
+
     // ---- Electrical ----
     public required IReadOnlyList<string> Batteries { get; init; }          // 1 = Auto (on), 0 = Off
     /// <summary>The external power pushbuttons: the First Officer switches the first ON and all OFF.</summary>
@@ -111,7 +114,7 @@ public sealed class IniAirbusKeys
     public required string TcasTraffic { get; init; }                        // 1 All
     public required string AltReporting { get; init; }                       // 1 On
     public required string WxSystem { get; init; }                           // 0 system 1, 1 Off, 2 system 2
-    public required string Pws { get; init; }                                // 0 Off, 1 Auto
+    public required string Pws { get; init; }                                // 0 Auto, 1 Off (PwsAuto, PwsOff)
 
     // ---- ECAM ----
     /// <summary>The system display's page read (INI_ECAM_ACTIVE_PAGE).</summary>

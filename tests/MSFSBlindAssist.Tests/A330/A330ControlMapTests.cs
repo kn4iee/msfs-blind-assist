@@ -54,6 +54,15 @@ public class A330ControlMapTests
     }
 
     [Fact]
+    public void Predictive_windshear_position_0_is_auto()
+    {
+        // measured in flight 2026-11-22: the switch reading 1 showed the E/WD memo PRED W/S OFF
+        var pws = Map.Controls.Single(c => c.Key == "A330_WX_PWS");
+        Assert.Equal("Auto", pws.Positions!.Single(p => p.Value == 0).Label);
+        Assert.Equal("Off", pws.Positions!.Single(p => p.Value == 1).Label);
+    }
+
+    [Fact]
     public void Autobrake_levels_map_to_their_buttons()
     {
         Assert.Equal("AIRLINER_AUTOBRK_LO", IniA330Definition.AutobrakeEvent(1));

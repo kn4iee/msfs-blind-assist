@@ -224,7 +224,7 @@ public class IniAirbusFoTests
         yield return R(k.TcasTraffic, "All", 1);
         yield return R(k.AltReporting, "On", 1);
         yield return R(k.WxSystem, "1", 0); yield return R(k.WxSystem, "Off", 1);
-        yield return R(k.Pws, "Off", 0); yield return R(k.Pws, "Auto", 1);
+        yield return R(k.Pws, "Auto", IniAirbusKeys.PwsAuto); yield return R(k.Pws, "Off", IniAirbusKeys.PwsOff);   // measured 2026-11-22: 1 shows PRED W/S OFF
 
         static object[] R(string key, string label, int value) => new object[] { key, label, value };
     }
@@ -233,6 +233,38 @@ public class IniAirbusFoTests
     [MemberData(nameof(Positions))]
     public void Every_value_the_first_officer_uses_is_the_maps_measured_position(string key, string label, int value)
         => Assert.Equal((double)value, new IniA330Definition().FoPositionValue(key, label));
+
+    [Fact]
+    public void Taxi_sets_predictive_windshear_to_auto_0()
+    {
+        var step = IniAirbusFlowDefinitions.Build(Keys).Single(f => f.Id == "TAXI").Steps.Single(x => x.Id == "TX_PWS");
+        Assert.Equal(Keys.Pws, step.EventName);
+        Assert.Equal(0, step.TargetValue);
+        var s = new S(Keys);
+        s.SetSimConnect(SeededSimConnectCache.With((Keys.WxSystem, 0), (Keys.Pws, 0)));
+        Assert.True(step.SkipCondition!(s));
+        Assert.True(s.GetValue(S.WxrOnAuto) > 0.5);
+        var off = new S(Keys);
+        off.SetSimConnect(SeededSimConnectCache.With((Keys.WxSystem, 0), (Keys.Pws, 1)));
+        Assert.False(step.SkipCondition!(off));
+        Assert.False(off.GetValue(S.WxrOnAuto) > 0.5);
+    }
+
+    [Fact]
+    public void After_landing_sets_predictive_windshear_off_1()
+    {
+        var step = IniAirbusFlowDefinitions.Build(Keys).Single(f => f.Id == "AFTER_LANDING").Steps.Single(x => x.Id == "AL_PWS_OFF");
+        Assert.Equal(Keys.Pws, step.EventName);
+        Assert.Equal(1, step.TargetValue);
+        var s = new S(Keys);
+        s.SetSimConnect(SeededSimConnectCache.With((Keys.WxSystem, 1), (Keys.Pws, 1)));
+        Assert.True(step.SkipCondition!(s));
+        Assert.True(s.GetValue(S.WxrPwsOff) > 0.5);
+        var auto = new S(Keys);
+        auto.SetSimConnect(SeededSimConnectCache.With((Keys.WxSystem, 1), (Keys.Pws, 0)));
+        Assert.False(step.SkipCondition!(auto));
+        Assert.False(auto.GetValue(S.WxrPwsOff) > 0.5);
+    }
 
     [Fact]
     public void The_apu_and_external_power_lamps_are_the_available_lights()

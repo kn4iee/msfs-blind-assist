@@ -207,7 +207,7 @@ public static class IniAirbusChecklistDefinitions
                 s => double.IsNaN(s.GetValue(IniAirbusKeys.Autobrake)),
                 "Autobrake left as it is: set MAX yourself."),
             Auto("TX_WXR", "TAXI", "Weather radar: SYSTEM 1", k.WxSystem, v => Math.Abs(v) < 0.5, (e, _) => e.Set(k.WxSystem, 0)),
-            Auto("TX_PWS", "TAXI", "Predictive windshear: AUTO", k.Pws, v => Math.Abs(v - 1) < 0.5, (e, _) => e.Set(k.Pws, 1)),
+            Auto("TX_PWS", "TAXI", "Predictive windshear: AUTO", k.Pws, v => Math.Abs(v - IniAirbusKeys.PwsAuto) < 0.5, (e, _) => e.Set(k.Pws, IniAirbusKeys.PwsAuto)),
             Auto("TX_XPDRAUTO", "TAXI", "Transponder: AUTO", k.XpdrMode, v => Math.Abs(v - 1) < 0.5, (e, _) => e.Set(k.XpdrMode, 1)),
             ActionManual("TX_CONFIG", "TAXI", "Takeoff config test", (e, _) => e.Set(k.TakeoffConfigTest, 1)))
     };
@@ -278,7 +278,7 @@ public static class IniAirbusChecklistDefinitions
             Reminder("AL_SPOILERS_CAPT", "AFTER_LANDING", "Ground spoilers: DISARM"),
             Reminder("AL_FLAPS_CAPT", "AFTER_LANDING", "Flaps: UP"),
             Auto("AL_WXR_OFF", "AFTER_LANDING", "Weather radar: OFF", k.WxSystem, v => Math.Abs(v - 1) < 0.5, (e, _) => e.Set(k.WxSystem, 1)),
-            Auto("AL_PWS_OFF", "AFTER_LANDING", "Predictive windshear: OFF", k.Pws, v => v < 0.5, (e, _) => e.Set(k.Pws, 0)),
+            Auto("AL_PWS_OFF", "AFTER_LANDING", "Predictive windshear: OFF", k.Pws, v => Math.Abs(v - IniAirbusKeys.PwsOff) < 0.5, (e, _) => e.Set(k.Pws, IniAirbusKeys.PwsOff)),
             Auto("AL_STROBE_AUTO", "AFTER_LANDING", "Strobes: AUTO", k.Strobe, v => Math.Abs(v - 1) < 0.5, (e, _) => e.Set(k.Strobe, 1)),
             Auto("AL_LANDING_OFF", "AFTER_LANDING", "Landing lights: OFF", k.LandingLight, v => v < 0.5,
                 (e, _) => e.SetLandingLights(false)),

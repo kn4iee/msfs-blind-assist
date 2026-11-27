@@ -5559,12 +5559,12 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Auto"
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Auto"
+     "label": "Off"
     }
    ]
   },

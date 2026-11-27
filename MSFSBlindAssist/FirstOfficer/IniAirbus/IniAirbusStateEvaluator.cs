@@ -237,10 +237,10 @@ public sealed class IniAirbusStateEvaluator : LVarStateEvaluator
             case IrsNav: value = All(k.IrsModeReads, v => Math.Abs(v - 1) < 0.5); return true;
             case IrsOff: value = All(k.IrsModeReads, v => v < 0.5); return true;
             case WxrOnAuto:
-                value = Both(GetValue(k.WxSystem), GetValue(k.Pws), (sys, pws) => Math.Abs(sys - 1) > 0.5 && Math.Abs(pws - 1) < 0.5);
+                value = Both(GetValue(k.WxSystem), GetValue(k.Pws), (sys, pws) => Math.Abs(sys - 1) > 0.5 && Math.Abs(pws - IniAirbusKeys.PwsAuto) < 0.5);
                 return true;
             case WxrPwsOff:
-                value = Both(GetValue(k.WxSystem), GetValue(k.Pws), (sys, pws) => Math.Abs(sys - 1) < 0.5 && pws < 0.5);
+                value = Both(GetValue(k.WxSystem), GetValue(k.Pws), (sys, pws) => Math.Abs(sys - 1) < 0.5 && Math.Abs(pws - IniAirbusKeys.PwsOff) < 0.5);
                 return true;
             case SeatBeltsOn:
             {

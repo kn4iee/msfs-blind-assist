@@ -418,7 +418,9 @@ button("XPDR_IDENT", P, TC, "Ident", "TCAS_IDENT")
 WX = "Weather Radar"
 select("WX_SYS", P, WX, "Weather radar system", "WX_SYS", "INI_WX_SYS_SWITCH", direct("1", "Off", "2"))
 select("WX_MODE", P, WX, "Weather radar mode", "WX_MODE", "INI_WXR_MODE", direct("WX", "WX plus turbulence", "Turbulence", "Map"))
-select("WX_PWS", P, WX, "Predictive windshear", "WX_PWS", "INI_WX_PWS_SWITCH", direct("Off", "Auto"))
+# Measured in flight on 2026-11-22: INI_WX_PWS_SWITCH and the input event both read 1 while the E/WD showed
+# the amber memo PRED W/S OFF; after writing 0 both read 0 and the memo went. So 0 = Auto, 1 = Off.
+select("WX_PWS", P, WX, "Predictive windshear", "WX_PWS", "INI_WX_PWS_SWITCH", [(0, 0, "Auto"), (1, 1, "Off")])
 add("WX_GAIN", P, WX, "Weather radar gain", "continuous", "WX_GAIN", "B:AIRLINER_WX_GAIN", min=0, max=100, step=10,
     notes="the input event's own 0-100 (INI_WXR_GAIN reads the same setting as 0-10)")
 add("WX_TILT", P, WX, "Weather radar tilt (15 = level)", "continuous", "WX_TILT", "B:AIRLINER_WX_TILT", min=0, max=30, step=1)
