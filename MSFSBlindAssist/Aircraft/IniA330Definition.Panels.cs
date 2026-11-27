@@ -4,6 +4,7 @@ using System.Globalization;
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft.A330;
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -189,29 +190,124 @@ public partial class IniA330Definition
         }
     }
 
+    /// <summary>How long after a pick the control is read back, so the row shows where the aircraft really is.
+    /// Until Task 4 measures each control's settle time: the BlueBird 757's read-back delay, which is also
+    /// the plan's "lagged" threshold. A measured per-control time replaces it.</summary>
+    internal const int ReadBackDelayMs = 1500;
+
+    private const int FreshReadTimeoutMs = 1500;
+
+    /// <summary>The picks' sim access, replaced by tests; null: the real one.</summary>
+    internal Func<SimConnectManager, A330PanelIo>? PanelIo { get; init; }
+
+    private A330PanelIo IoFor(SimConnectManager sim) => PanelIo?.Invoke(sim) ?? new A330PanelIo
+    {
+        CanCalc = () => sim.CalcWriteCanLand,
+        TrySetInput = sim.TrySetInputEvent,
+        Press = (inputEvent, holdMs) => PushEvent(sim, inputEvent, holdMs),
+        Calc = rpn => Write(sim, rpn),
+        Cached = sim.GetCachedVariableValue,
+        ReadFresh = (key, ct) => sim.ReadFreshAsync(key, FreshReadTimeoutMs, ct),
+        Request = key => sim.RequestVariable(key, forceUpdate: true),
+        // awaited on the caller's context (the UI thread), as PushEvent's release is (SIM-20)
+        Delay = Task.Delay,
+    };
+
+    /// <summary>True while a display window's press is being handled: the window has no combo that follows the
+    /// row, so a pick that did not land is said by the definition itself.</summary>
+    private bool _windowPress;
+
+    /// <summary>Set by a write the panel refused; read by <see cref="PressFromWindow"/> for the write in progress.</summary>
+    private bool _writeRefused;
+
+    private bool Can(SimConnectManager sim, ScreenReaderAnnouncer announcer, string what)
+    {
+        if (CanCalc(sim, announcer, what)) return true;
+        _writeRefused = true;
+        return false;
+    }
+
+    /// <summary>Sends a plan through the write paths. A refused write (nothing could be sent) says so once,
+    /// resyncs the row with a fresh read and answers false; a sent one is read back after the settle time.</summary>
+    private bool SendPick(string key, SimVarDefinition varDef, double target, A330WritePlan plan, A330PanelIo io, ScreenReaderAnnouncer announcer)
+    {
+        if (plan.Outcome == A330WriteOutcome.AtPosition) return true;   // the control already reads it: nothing to send or check
+        string? refusal = plan.Outcome == A330WriteOutcome.Refused ? $"{varDef.DisplayName} unavailable" : null;
+        if (refusal == null)
+        {
+            foreach (var call in plan.Calls)
+            {
+                if (call is A330InputEventCall ie)
+                {
+                    if (!io.TrySetInput(ie.Event, ie.Value)) refusal = $"{varDef.DisplayName} unavailable: this aircraft does not have that control.";
+                }
+                else if (!io.CanCalc())
+                {
+                    refusal = $"{varDef.DisplayName} unavailable: the MobiFlight module is not responding.";
+                }
+                if (refusal != null) break;
+                switch (call)
+                {
+                    case A330PressCall p: io.Press(p.Event, p.HoldMs); break;
+                    case A330CalcCall c: io.Calc(c.Rpn); break;
+                }
+            }
+        }
+        if (refusal != null)
+        {
+            announcer.AnnounceImmediate(refusal);
+            _writeRefused = true;
+            io.Request(key);   // the row goes back to where the aircraft is
+            return false;
+        }
+        _ = ReadBackAsync(key, varDef, target, io, announcer, _windowPress);
+        return true;
+    }
+
+    /// <summary>Waits the settle time, then resyncs the row with one fresh read. The row's combo follows that
+    /// delivery, which the screen reader reads once and which is silent when the pick landed (WinForms ignores
+    /// a same-index set); a window has no combo, so its press says the real position once when it did not land.</summary>
+    private async Task ReadBackAsync(string key, SimVarDefinition varDef, double target, A330PanelIo io, ScreenReaderAnnouncer announcer, bool fromWindow)
+    {
+        try
+        {
+            await io.Delay(ReadBackDelayMs);
+            double? now = fromWindow ? await io.ReadFresh(key, CancellationToken.None) : null;
+            io.Request(key);
+            if (now is double read && double.IsFinite(read) && Math.Abs(read - target) > 0.01)
+                announcer.Announce(A330Write.PositionSentence(varDef, read));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("A330", $"{key}: read-back failed: {ex.Message}");
+        }
+    }
+
     partial void HandlePanelSet(string varKey, double value, SimVarDefinition varDef, SimConnectManager sim, ScreenReaderAnnouncer announcer, ref bool handled)
     {
-        double? cur = sim.GetCachedVariableValue(varKey);
+        _writeRefused = false;
+        var io = IoFor(sim);
+        double? cur = io.Cached(varKey);
         switch (varKey)
         {
             case A330SharedKeys.Flaps:
-                if (CanCalc(sim, announcer, "Flaps"))
+                if (Can(sim, announcer, "Flaps"))
                     Write(sim, $"{Num(Math.Round(Math.Clamp(Math.Round(value), 0, FlapDetents.Length - 1) * 16383.0 / (FlapDetents.Length - 1)))} (>K:FLAPS_SET)");
                 handled = true; return;
             case "A330_SPDBRK":
-                if (CanCalc(sim, announcer, "Speedbrake"))
+                if (Can(sim, announcer, "Speedbrake"))
                     Write(sim, $"{Num(Math.Round(Math.Clamp(value, 0, 1) * 16383))} (>K:SPOILERS_SET)");
                 handled = true; return;
             case "A330_SPLR_ARM":
-                if (CanCalc(sim, announcer, "Ground spoilers"))
+                if (Can(sim, announcer, "Ground spoilers"))
                     Write(sim, value > 0.5 ? "(>K:SPOILERS_ARM_ON)" : "(>K:SPOILERS_ARM_OFF)");
                 handled = true; return;
             case A330SharedKeys.Gear:
-                if (CanCalc(sim, announcer, "Gear"))
+                if (Can(sim, announcer, "Gear"))
                     Write(sim, value > 0.5 ? "(>K:GEAR_DOWN)" : "(>K:GEAR_UP)");
                 handled = true; return;
             case "A330_PARKBRK":
-                SetInputEvent(sim, announcer, "Parking brake", "AIRLINER_PARKINGBRAKE", ParkingBrakeInput(value > 0.5));
+                SendPick(varKey, varDef, value > 0.5 ? 1 : 0, A330Write.ParkingBrake(cur, value > 0.5), io, announcer);
                 handled = true; return;
             case A330SharedKeys.Autobrake:
                 SetAutobrake(sim, (int)Math.Round(value), cur);
@@ -224,30 +320,25 @@ public partial class IniA330Definition
         switch (c.Mode)
         {
             case "toggle":
-                // a momentary push-button that reports its state: press once, only when the pick differs
-                // (an unknown state counts as differing, so a cold cache still actuates). The press is the
-                // control's own rpn when it has one, else its input event's _Push.
-                if ((cur is null || Math.Abs(cur.Value - value) > 0.5) && CanCalc(sim, announcer, c.Label))
-                {
-                    // {value} = the pick (the engine masters pass it to their input event's Set, right
-                    // whether that Set toggles or sets by value); a press-flag rpn carries none
-                    if (!string.IsNullOrWhiteSpace(c.Rpn)) Write(sim, c.Rpn.Replace("{value}", Num(value)));
-                    else PushEvent(sim, c.Event!, c.HoldMs ?? DefaultPushMs);
-                }
+                SendPick(varKey, varDef, value, A330Write.ToPosition(c, cur, value), io, announcer);
                 handled = true; return;
             case "push" when string.IsNullOrEmpty(c.Event):
                 return;
             case "push":
-                if (CanCalc(sim, announcer, c.Label)) PushEvent(sim, c.Event, c.HoldMs ?? DefaultPushMs);
+                if (Can(sim, announcer, c.Label)) PushEvent(sim, c.Event, c.HoldMs ?? DefaultPushMs);
                 handled = true; return;
             case "rpn":
-                if (!string.IsNullOrWhiteSpace(c.Rpn) && CanCalc(sim, announcer, c.Label))
+                if (!string.IsNullOrWhiteSpace(c.Rpn) && Can(sim, announcer, c.Label))
                     Write(sim, c.Rpn.Replace("{value}", Num(value)));
                 handled = true; return;
             default:
                 if (string.IsNullOrEmpty(c.Event)) return;
-                double input = c.Kind == "continuous" ? value : A330ControlMap.InputFor(c, value) ?? value;
-                SetInputEvent(sim, announcer, c.Label, c.Event, input);
+                if (c.Kind == "continuous")
+                {
+                    // a slider writes its own value; its read-back is sub-step 4's
+                    if (!SetInputEvent(sim, announcer, c.Label, c.Event, value)) _writeRefused = true;
+                }
+                else SendPick(varKey, varDef, value, A330Write.ToPosition(c, cur, value), io, announcer);
                 handled = true; return;
         }
     }

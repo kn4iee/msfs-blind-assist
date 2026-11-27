@@ -1,0 +1,112 @@
+using System.Globalization;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Aircraft.A330;
+
+/// <summary>What a panel pick should do to the A330.</summary>
+internal enum A330WriteOutcome
+{
+    /// <summary>The control already reads the picked position: nothing is sent.</summary>
+    AtPosition,
+
+    /// <summary>Send <see cref="A330WritePlan.Calls"/>, in order.</summary>
+    Writes,
+
+    /// <summary>Nothing can be sent for this pick: the pilot is told "{label} unavailable".</summary>
+    Refused,
+}
+
+/// <summary>One write of a plan.</summary>
+internal abstract record A330Call;
+
+/// <summary>An input event set to a value (<c>SetInputEvent</c>).</summary>
+internal sealed record A330InputEventCall(string Event, double Value) : A330Call;
+
+/// <summary>A momentary press: the event's own <c>_Push</c>, then <c>_Release</c> after the hold (<c>PushEvent</c>).</summary>
+internal sealed record A330PressCall(string Event, int HoldMs) : A330Call;
+
+/// <summary>A calculator line, sent through the sequence-prefixed <c>Write</c>.</summary>
+internal sealed record A330CalcCall(string Rpn) : A330Call;
+
+internal sealed record A330WritePlan(A330WriteOutcome Outcome, IReadOnlyList<A330Call> Calls)
+{
+    public static readonly A330WritePlan AtPosition = new(A330WriteOutcome.AtPosition, Array.Empty<A330Call>());
+    public static readonly A330WritePlan Refused = new(A330WriteOutcome.Refused, Array.Empty<A330Call>());
+    public static A330WritePlan Of(params A330Call[] calls) => new(A330WriteOutcome.Writes, calls);
+}
+
+/// <summary>
+/// The decision every selector pick makes, kept pure so it is pinned without a sim (modelled on the
+/// BlueBird 757's write planner). The control's row is a continuous subscription, so its cached value
+/// is the read: a pick that the control already reads sends nothing; a control not read yet is
+/// written, as before.
+/// </summary>
+internal static class A330Write
+{
+    /// <summary>How close a reading is to a position's value to be that position.</summary>
+    private const double PositionTolerance = 0.01;
+
+    /// <summary>A toggle's reading is a flag: anything within half a step is the same position.</summary>
+    private const double ToggleTolerance = 0.5;
+
+    /// <summary>Invariant fixed-point, as the calculator parser needs ([VAR-5]).</summary>
+    internal static string Fixed(double v) => v.ToString("0.####", CultureInfo.InvariantCulture);
+
+    private static bool Known(double? v) => v is double d && double.IsFinite(d);
+
+    /// <summary>The plan for picking <paramref name="target"/> (a position's read value) on a map
+    /// selector, from the cached reading <paramref name="current"/> (null or not finite: unread).</summary>
+    public static A330WritePlan ToPosition(A330ControlMap.Control c, double? current, double target)
+    {
+        if (!double.IsFinite(target)) return A330WritePlan.Refused;
+        switch (c.Mode)
+        {
+            case "toggle":
+                if (Known(current) && Math.Abs(current!.Value - target) <= ToggleTolerance) return A330WritePlan.AtPosition;
+                // {value} = the pick (the engine masters pass it to their input event's Set, right whether
+                // that Set toggles or sets by value); a press-flag rpn carries none
+                if (!string.IsNullOrWhiteSpace(c.Rpn)) return A330WritePlan.Of(new A330CalcCall(c.Rpn.Replace("{value}", Fixed(target))));
+                if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
+                return A330WritePlan.Of(new A330PressCall(c.Event, c.HoldMs ?? IniA330Definition.DefaultPushMs));
+            default:
+                if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
+                if (Known(current) && Math.Abs(current!.Value - target) < PositionTolerance) return A330WritePlan.AtPosition;
+                return A330WritePlan.Of(new A330InputEventCall(c.Event, A330ControlMap.InputFor(c, target) ?? target));
+        }
+    }
+
+    /// <summary>The parking brake lever: input 0 sets it, 1 releases it ([INI-1]); <paramref name="current"/>
+    /// is the status row (1 = set).</summary>
+    public static A330WritePlan ParkingBrake(double? current, bool set)
+    {
+        if (Known(current) && (current!.Value > 0.5) == set) return A330WritePlan.AtPosition;
+        return A330WritePlan.Of(new A330InputEventCall("AIRLINER_PARKINGBRAKE", IniA330Definition.ParkingBrakeInput(set)));
+    }
+
+    /// <summary>What is said when a pick did not land: the row's label and the position it reads, the form
+    /// the generic announce of an announced row speaks ("{DisplayName}: {description}", MainForm.Announcers.cs)
+    /// and its number fallback, invariant so no PC culture changes it (CORE-21).</summary>
+    public static string PositionSentence(SimVarDefinition def, double read)
+    {
+        string position = def.ValueDescriptions.TryGetValue(def.DescriptionKeyFor(read), out var described)
+            ? described : Fixed(read);
+        return $"{def.DisplayName}: {position}";
+    }
+}
+
+/// <summary>The sim access of a panel pick, replaced by tests (a <see cref="SimConnectManager"/> cannot write
+/// or read fresh in them). The default is <c>IniA330Definition.IoFor</c>.</summary>
+internal sealed class A330PanelIo
+{
+    public required Func<bool> CanCalc { get; init; }
+    public required Func<string, double, bool> TrySetInput { get; init; }
+    public required Action<string, int> Press { get; init; }
+    public required Action<string> Calc { get; init; }
+    public required Func<string, double?> Cached { get; init; }
+    public required Func<string, CancellationToken, Task<double?>> ReadFresh { get; init; }
+
+    /// <summary>A forced read of the row, delivered to MainForm like any other (its combo follows).</summary>
+    public required Action<string> Request { get; init; }
+
+    public required Func<int, Task> Delay { get; init; }
+}
