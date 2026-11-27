@@ -852,7 +852,7 @@ If you come to a stop before the last step, you hear *"Hold short runway 22R. St
 
 When you reach the line, the tone stops and you hear *"Stop. Hold short of runway 22R. Press continue when cleared."* Bring the aircraft to a stop and set the parking brake if you are waiting. Output Y reminds you: *"Holding short of runway 22R. Press continue when cleared."*
 
-You do not have to be on the centreline for this. If you come up to the line off to one side, on a wide taxiway or after cutting a corner, BA stops you as soon as you are level with it and heading the way the taxiway runs. The hold at your departure runway is the exception: there BA stops you only within 12 metres of the middle of the line, or once you have stopped within 30 metres of it, so follow the tone to the line.
+You do not have to be on the centreline for this. If you come up to the line off to one side, on a wide taxiway or after cutting a corner, BA stops you as soon as you are level with it and heading the way the taxiway runs. The hold at your departure runway is the exception: there BA stops you only within 12 metres of the middle of the line, or once you have stopped within 30 metres of it, so follow the tone to the line. The end of a Progressive Taxi leg is not caught this way either: it ends as described under [Progressive Taxi](#taxi-progressive).
 
 ### Continue {#continue}
 
