@@ -10,13 +10,18 @@ public enum SweepStepKind
     OpenGuard,
     /// <summary>Write one of the control's other positions (or one point of a continuous control).</summary>
     SetPosition,
+    /// <summary>Write the same position again, right after its <see cref="SetPosition"/>: a write that flips the
+    /// read back finds an input event that toggles instead of setting by value.</summary>
+    RepeatPosition,
     /// <summary>The one press of a button that reports a state.</summary>
     Press,
     /// <summary>Extra presses that bring a multi-press key back to where it began.</summary>
     RestorePress,
-    /// <summary>Write the position the control started in.</summary>
+    /// <summary>Put the control back where it started. Its <see cref="SweepStep.Input"/> is the map's pairing for
+    /// the start, shown in the dry run; the runner never writes it: it restores from the journal, by the input
+    /// event's own starting value (an inverted pairing would "restore" to the wrong side).</summary>
     ReturnToStart,
-    /// <summary>Close the guard again.</summary>
+    /// <summary>Close the guard again; restored from the journal like <see cref="ReturnToStart"/>.</summary>
     CloseGuard,
 }
 

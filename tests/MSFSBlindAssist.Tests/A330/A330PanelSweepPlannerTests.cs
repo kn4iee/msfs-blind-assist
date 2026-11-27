@@ -33,10 +33,11 @@ public class A330PanelSweepPlannerTests
         var plan = For(Plan(new[] { sel }, new() { ["SEL"] = 1 }), "SEL");
 
         Assert.Null(plan.SkipReason);
-        Assert.Equal(new[] { SweepStepKind.SetPosition, SweepStepKind.SetPosition, SweepStepKind.ReturnToStart },
+        // each position is written twice (the second write finds a toggle), then the start
+        Assert.Equal(new[] { SweepStepKind.SetPosition, SweepStepKind.RepeatPosition, SweepStepKind.SetPosition, SweepStepKind.RepeatPosition, SweepStepKind.ReturnToStart },
             plan.Steps.Select(s => s.Kind).ToArray());
-        Assert.Equal(new double?[] { 1, 2, 0 }, plan.Steps.Select(s => s.Input).ToArray());
-        Assert.Equal(new double?[] { 0, 2, 1 }, plan.Steps.Select(s => s.ExpectedRead).ToArray());
+        Assert.Equal(new double?[] { 1, 1, 2, 2, 0 }, plan.Steps.Select(s => s.Input).ToArray());
+        Assert.Equal(new double?[] { 0, 0, 2, 2, 1 }, plan.Steps.Select(s => s.ExpectedRead).ToArray());
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public class A330PanelSweepPlannerTests
         Assert.NotNull(guardPlan.SkipReason);
 
         var kinds = For(plan, "SW").Steps.Select(s => s.Kind).ToArray();
-        Assert.Equal(new[] { SweepStepKind.OpenGuard, SweepStepKind.SetPosition, SweepStepKind.ReturnToStart, SweepStepKind.CloseGuard }, kinds);
+        Assert.Equal(new[] { SweepStepKind.OpenGuard, SweepStepKind.SetPosition, SweepStepKind.RepeatPosition, SweepStepKind.ReturnToStart, SweepStepKind.CloseGuard }, kinds);
         Assert.All(For(plan, "SW").Steps.Where(s => s.Kind is SweepStepKind.OpenGuard or SweepStepKind.CloseGuard),
             s => Assert.Equal("COVER", s.ControlKey));
 
@@ -112,7 +113,7 @@ public class A330PanelSweepPlannerTests
         Assert.Equal(new[] { "A", "S", "C" }, plan.Controls.Select(c => c.Key).ToArray());
         Assert.Equal("start not read", For(plan, "A").SkipReason);
         Assert.Equal("read-only row", For(plan, "S").SkipReason);
-        Assert.Equal(new double?[] { 0, 50, 100, 30 }, For(plan, "C").Steps.Select(s => s.Input).ToArray());
+        Assert.Equal(new double?[] { 0, 0, 50, 50, 100, 100, 30 }, For(plan, "C").Steps.Select(s => s.Input).ToArray());
         Assert.Equal(SweepStepKind.ReturnToStart, For(plan, "C").Steps[^1].Kind);
     }
 

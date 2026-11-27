@@ -10,7 +10,7 @@ namespace MSFSBlindAssist.Aircraft.A330.Sweep;
 ///
 /// A selector visits every other position in the map's order and returns to where it started; a button
 /// that reports a state is pressed once; a continuous control goes to its minimum, middle and maximum
-/// and back. A guard row is never swept on its own: its covered switch opens it first and closes it
+/// and back. Each position (and each continuous point) is written twice in a row, to find a toggle. A guard row is never swept on its own: its covered switch opens it first and closes it
 /// last (unless it found it open). A control whose start was not read is skipped, never guessed.
 /// </summary>
 internal static class SweepPlanner
@@ -85,9 +85,16 @@ internal static class SweepPlanner
         var home = ps.FirstOrDefault(p => Same(p.Value, start.Value));
         if (home == null) return $"start {Fmt(start.Value)} matches no position";
         foreach (var p in ps.Where(p => p != home))
-            steps.Add(new SweepStep(SweepStepKind.SetPosition, c.Key, p.Input, p.Value, $"set {c.Key} to {p.Label} (write {Fmt(p.Input)})"));
-        steps.Add(new SweepStep(SweepStepKind.ReturnToStart, c.Key, home.Input, home.Value, $"return {c.Key} to {home.Label} (write {Fmt(home.Input)})"));
+            AddTwice(steps, c.Key, p.Input, p.Value, $"set {c.Key} to {p.Label} (write {Fmt(p.Input)})");
+        steps.Add(new SweepStep(SweepStepKind.ReturnToStart, c.Key, home.Input, home.Value, $"return {c.Key} to {home.Label} (its input event's own starting value)"));
         return null;
+    }
+
+    /// <summary>A position and its second write: the same input again, so a toggling input event shows itself.</summary>
+    private static void AddTwice(List<SweepStep> steps, string key, double input, double? expected, string text)
+    {
+        steps.Add(new SweepStep(SweepStepKind.SetPosition, key, input, expected, text));
+        steps.Add(new SweepStep(SweepStepKind.RepeatPosition, key, input, expected, text + ", again"));
     }
 
     private static string? ButtonSteps(Control c, List<SweepStep> steps)
@@ -105,8 +112,8 @@ internal static class SweepPlanner
         if (!starts.TryGetValue(c.Key, out var start) || start == null) return "start not read";
         double mid = (c.Min.Value + c.Max.Value) / 2;
         foreach (var (name, v) in new[] { ("minimum", c.Min.Value), ("middle", mid), ("maximum", c.Max.Value) })
-            steps.Add(new SweepStep(SweepStepKind.SetPosition, c.Key, v, null, $"set {c.Key} to its {name} (write {Fmt(v)})"));
-        steps.Add(new SweepStep(SweepStepKind.ReturnToStart, c.Key, start.Value, null, $"return {c.Key} to {Fmt(start.Value)}"));
+            AddTwice(steps, c.Key, v, null, $"set {c.Key} to its {name} (write {Fmt(v)})");
+        steps.Add(new SweepStep(SweepStepKind.ReturnToStart, c.Key, start.Value, null, $"return {c.Key} to {Fmt(start.Value)} (its input event's own starting value)"));
         return null;
     }
 
