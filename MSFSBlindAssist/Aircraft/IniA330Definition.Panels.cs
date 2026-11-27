@@ -197,6 +197,12 @@ public partial class IniA330Definition
 
     private const int FreshReadTimeoutMs = 1500;
 
+    /// <summary>MainForm's quiet start: <c>simVarMonitor.EnableAnnouncements</c> waits 5000 ms after a connect
+    /// (MainForm.AircraftSwitch.cs, <c>announcementGracePeriodTimer.Interval</c>) and after an aircraft switch
+    /// (<c>gracePeriodTimer.Interval</c>), so the settling burst of a load is never spoken. The key state rows are
+    /// announced by this definition and never reach that monitor, so they keep the same quiet start themselves.</summary>
+    internal const int StartGraceMs = 5000;
+
     /// <summary>The picks' sim access, replaced by tests; null: the real one.</summary>
     internal Func<SimConnectManager, A330PanelIo>? PanelIo { get; init; }
 
@@ -308,6 +314,12 @@ public partial class IniA330Definition
 
     private HashSet<string> StateRowKeys => _stateRowKeys ??= _map.Controls
         .Select(StateRowKey).Where(k => k != null).Select(k => k!).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>Until when (NowMs) a change of a state row is a load's settling and stays unspoken (its baseline still
+    /// moves). Started by a reset (a connect: <c>ResetAnnouncementBaselines</c>; a flight load or a lost
+    /// connection: <c>OnSimContextReset</c>) and by the first delivery of a definition no reset has reached (an
+    /// aircraft switch builds a new definition and resets nothing); MinValue: not started.</summary>
+    private long _quietUntil = long.MinValue;
 
     /// <summary>What the definition last saw of each state row; the first delivery seeds it silently.</summary>
     private readonly Dictionary<string, double> _stateBaseline = new(StringComparer.Ordinal);
@@ -465,7 +477,9 @@ public partial class IniA330Definition
             bool seen = _stateBaseline.TryGetValue(varName, out double old);
             _stateBaseline[varName] = value;
             handled = true;
-            if (echo || !seen || Math.Abs(old - value) <= 0.001) return;
+            // a definition that was never reset (a fresh one after an aircraft switch) starts its quiet time here
+            if (_quietUntil == long.MinValue) _quietUntil = NowMs() + StartGraceMs;
+            if (echo || !seen || Math.Abs(old - value) <= 0.001 || NowMs() < _quietUntil) return;
             if (!GetVariables().TryGetValue(varName, out var row) || !row.IsAnnounced || announcer.Suppressed) return;
             // the generic gate's sentence and call (MainForm.Announcers.cs, the description it builds, then Announce)
             announcer.Announce(row.ValueDescriptions.TryGetValue(row.DescriptionKeyFor(value), out var described)
@@ -502,5 +516,6 @@ public partial class IniA330Definition
         _lastFlapIndex = -1;
         _pressEchoUntil.Clear();
         _stateBaseline.Clear();
+        _quietUntil = NowMs() + StartGraceMs;
     }
 }

@@ -38,7 +38,30 @@ public class A330PanelButtonTests
         },
     };
 
-    private static A330PanelSetTests.Def NewDef(A330PanelSetTests.FakeIo io, A330ControlMap? map = null) => new(io, map ?? Map());
+    private sealed class Clock { public long Now = 100_000; }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IniA330Definition, Clock> Clocks = new();
+
+    /// <summary>A definition on a clock the test moves: it stands still until <see cref="Advance"/>.</summary>
+    private static A330PanelSetTests.Def NewDef(A330PanelSetTests.FakeIo io, A330ControlMap? map = null)
+    {
+        var clock = new Clock();
+        var def = new A330PanelSetTests.Def(io, map ?? Map(), () => clock.Now);
+        Clocks.Add(def, clock);
+        return def;
+    }
+
+    private static void Advance(IniA330Definition def, long ms)
+    {
+        if (Clocks.TryGetValue(def, out var c)) c.Now += ms;
+    }
+
+    /// <summary>The first reading of a row (silent), then the start's quiet time passes.</summary>
+    private static void Seed(IniA330Definition def, string key, double value, A330PanelSetTests.Spoken said)
+    {
+        Deliver(def, key, value, said);
+        Advance(def, IniA330Definition.StartGraceMs);
+    }
 
     private static bool Press(IniA330Definition def, string key, A330PanelSetTests.Spoken said) =>
         def.HandleUIVariableSet(key, 1, def.GetVariables()[key], new SimConnectManager(IntPtr.Zero), said);
@@ -143,7 +166,7 @@ public class A330PanelButtonTests
         Assert.Empty(said.Lines);
         Assert.Empty(io.FreshKeys);
         // nothing is armed: the aircraft's change of the row is spoken as ever
-        Deliver(def, PageRow, 0, said);
+        Seed(def, PageRow, 0, said);
         Assert.Empty(said.Lines);
         Deliver(def, PageRow, 1, said);
         Assert.Equal(new[] { "Test page: SYS B" }, said.Lines);
@@ -155,7 +178,7 @@ public class A330PanelButtonTests
         var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 1 };
         var def = NewDef(io);
         var said = new A330PanelSetTests.Spoken();
-        Deliver(def, PageRow, 0, said);   // the first reading seeds silently
+        Seed(def, PageRow, 0, said);   // the first reading seeds silently
         Press(def, KeyB, said);
         // the row's own change, delivered as MainForm would: consumed, so the row's announce is not a second voice
         Deliver(def, PageRow, 1, said);
@@ -170,7 +193,7 @@ public class A330PanelButtonTests
         io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 0 };
         def = NewDef(io);
         said = new A330PanelSetTests.Spoken();
-        Deliver(def, PageRow, 1, said);
+        Seed(def, PageRow, 1, said);
         Press(def, KeyA, said);
         Press(def, KeyB, said);
         Deliver(def, PageRow, 0, said);
@@ -183,7 +206,7 @@ public class A330PanelButtonTests
         io = new A330PanelSetTests.FakeIo();
         def = NewDef(io);
         said = new A330PanelSetTests.Spoken();
-        Deliver(def, PageRow, 0, said);
+        Seed(def, PageRow, 0, said);
         Press(def, Plain, said);
         Deliver(def, PageRow, 1, said);
         Assert.Equal(new[] { "Test plain key pressed", "Test page: SYS B" }, said.Lines);
@@ -200,7 +223,7 @@ public class A330PanelButtonTests
         var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 0 };
         var def = NewDef(io);
         var said = new A330PanelSetTests.Spoken();
-        Deliver(def, PageRow, 1, said);
+        Seed(def, PageRow, 1, said);
         Press(def, KeyA, said);
         Deliver(def, PageRow, 0, said);   // consumed: the read-back says it
         await Release(io);
@@ -216,6 +239,7 @@ public class A330PanelButtonTests
         var def = NewDef(new A330PanelSetTests.FakeIo());
         var said = new A330PanelSetTests.Spoken();
         Assert.True(Deliver(def, PageRow, 1, said));   // handled by the definition: the generic gate is never reached
+        Advance(def, IniA330Definition.StartGraceMs);
         Deliver(def, PageRow, 1, said);
         Assert.Empty(said.Lines);
         Deliver(def, PageRow, 0, said);
@@ -229,7 +253,7 @@ public class A330PanelButtonTests
         var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 1 };
         var def = NewDef(io);
         var said = new A330PanelSetTests.Spoken();
-        Deliver(def, PageRow, 0, said);
+        Seed(def, PageRow, 0, said);
         said.Suppressed = true;
         Deliver(def, PageRow, 1, said);
         said.Suppressed = false;
@@ -255,7 +279,7 @@ public class A330PanelButtonTests
         {
             var def = NewDef(new A330PanelSetTests.FakeIo());
             var said = new A330PanelSetTests.Spoken();
-            Deliver(def, PageRow, 0, said);
+            Seed(def, PageRow, 0, said);
             Deliver(def, PageRow, 2.5, said);   // a value the row names no position for
             Deliver(def, PageRow, 1, said);
             Assert.Equal(new[] { "Test page: 2.5", "Test page: SYS B" }, said.Lines);
@@ -271,6 +295,7 @@ public class A330PanelButtonTests
         var def = new A330PanelSetTests.Def(io, Map(), () => now);
         var said = new A330PanelSetTests.Spoken();
         Deliver(def, PageRow, 0, said);
+        now += IniA330Definition.StartGraceMs;
         Press(def, KeyB, said);
         now += 2 * IniA330Definition.ReadBackDelayMs - 1;
         Deliver(def, PageRow, 1, said);                                   // still the press's echo
@@ -280,6 +305,60 @@ public class A330PanelButtonTests
         Assert.Equal(new[] { "Test page: SYS A" }, said.Lines);
         await Release(io);                                                // the read-back is still said
         Assert.Equal(new[] { "Test page: SYS A", "SYS B" }, said.Lines);
+    }
+
+    [Fact]
+    public void A_state_change_inside_the_start_grace_is_silent_but_moves_the_baseline()
+    {
+        // MainForm's monitor is quiet for 5 s after a connect or a switch; the definition's own rows keep that quiet
+        var def = NewDef(new A330PanelSetTests.FakeIo());
+        var said = new A330PanelSetTests.Spoken();
+        Deliver(def, PageRow, 0, said);                       // the first reading starts the quiet time
+        Deliver(def, PageRow, 1, said);                       // a load-time settling burst
+        Assert.Empty(said.Lines);
+        Advance(def, IniA330Definition.StartGraceMs);
+        Deliver(def, PageRow, 1, said);                       // the baseline followed the burst: no change
+        Assert.Empty(said.Lines);
+        Deliver(def, PageRow, 0, said);
+        Assert.Equal(new[] { "Test page: SYS A" }, said.Lines);
+
+        // a reset (a connect, a flight load) starts the quiet time again
+        Deliver(def, PageRow, 1, said);
+        def.ResetAnnouncementBaselines();
+        Deliver(def, PageRow, 0, said);                       // seed after the reset
+        Deliver(def, PageRow, 1, said);                       // inside the new quiet time
+        Assert.Equal(new[] { "Test page: SYS A", "Test page: SYS B" }, said.Lines);
+        def.OnSimContextReset();
+        Deliver(def, PageRow, 0, said);
+        Deliver(def, PageRow, 1, said);
+        Assert.Equal(2, said.Lines.Count);
+    }
+
+    [Fact]
+    public void A_state_change_after_the_start_grace_is_spoken()
+    {
+        var def = NewDef(new A330PanelSetTests.FakeIo());
+        var said = new A330PanelSetTests.Spoken();
+        Deliver(def, PageRow, 0, said);
+        Advance(def, IniA330Definition.StartGraceMs - 1);
+        Deliver(def, PageRow, 1, said);                       // the last quiet millisecond
+        Assert.Empty(said.Lines);
+        Advance(def, 1);
+        Deliver(def, PageRow, 0, said);                       // the quiet time is over
+        Assert.Equal(new[] { "Test page: SYS A" }, said.Lines);
+    }
+
+    [Fact]
+    public async Task A_press_read_back_inside_the_start_grace_still_speaks()
+    {
+        var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 1 };
+        var def = NewDef(io);
+        var said = new A330PanelSetTests.Spoken();
+        Deliver(def, PageRow, 0, said);                       // inside the quiet time
+        Press(def, KeyB, said);
+        Deliver(def, PageRow, 1, said);
+        await Release(io);
+        Assert.Equal(new[] { "SYS B" }, said.Lines);          // a direct interaction is never held
     }
 
     [Fact]
