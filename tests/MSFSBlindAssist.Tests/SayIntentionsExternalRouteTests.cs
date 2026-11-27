@@ -380,6 +380,51 @@ public class SayIntentionsExternalRouteTests
 
     private static string[] Sentences(IEnumerable<ClearanceStep> steps) => steps.Select(s => s.Sentence()).ToArray();
 
+    // Main's #367 clearance (above) through the step list, after merging main on 2026-11-27: the fill writes Via K, Via
+    // K7 and the hold short after K7, where main's import seats it on K7's row, and the planner keeps it a stop on the
+    // way after K7 with 30R the destination, so the router carries the route on over 12R/30L ([RTE-17]) and the stop
+    // there is ATC's own. Never a Cross step: a crossing is cleared only by the pilot.
+    private static readonly string[] DubaiRunways = { "12L", "12R", "30L", "30R" };
+
+    [Theory]
+    [InlineData("Runway 30R taxi via Kilo, Kilo-7, hold short of runway 30L.")]
+    [InlineData("Taxi to runway 30 Right via K, K7, hold short of runway 30 Left.")]
+    [InlineData("Runway three zero right, taxi via Kilo, Kilo Seven, hold short of runway three zero left.")]
+    public void A_clearance_over_the_other_runway_fills_the_steps_with_its_hold_short_after_the_crossing_taxiway(string clearance)
+    {
+        var (taxiways, holdShorts, _) = MainForm.ParseClearanceTaxiPlan(clearance, DubaiTaxiways);
+        var imported = Import(taxiways, MainForm.MapHoldShortsToTaxiways(holdShorts, taxiways),
+            knownTaxiways: DubaiTaxiways, runwayIds: DubaiRunways);
+
+        Assert.Equal(new[] { "Via K", "Via K7", "Hold short of runway 30L" }, Sentences(imported.Steps));
+        Assert.Equal(new[] { new TaxiAssistForm.AppliedHoldShort("30L", "K7") }, imported.AppliedHoldShorts);
+        Assert.Empty(imported.SkippedTaxiways);
+        Assert.Empty(imported.SkippedHoldShortRunways);
+
+        var plan = ClearancePlanner.Build(imported.Steps, hasDestination: true);
+        Assert.Null(plan.Refusal);
+        Assert.Equal(new[] { "K", "K7" }, plan.TaxiwaySequence);
+        var hold = Assert.Single(plan.Holds);
+        Assert.Equal(1, hold.SeqIndex);
+        Assert.Equal(new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "30L"), hold.Step);
+        Assert.Empty(plan.Crossings);
+    }
+
+    // The list #367 imported from SayIntentions' own track ("K4, K, K, K7", hold short of 30L on K7) keeps every taxiway
+    // in its order, the repeat included, as main's rows did: the router gets the same sequence.
+    [Fact]
+    public void The_imported_track_list_keeps_its_repeat_and_its_hold_short_after_the_last_taxiway()
+    {
+        var imported = Import(new[] { "K4", "K", "K", "K7" }, new[] { new TaxiAssistForm.ExternalHoldShort(3, "30L") },
+            knownTaxiways: DubaiTaxiways, runwayIds: DubaiRunways);
+
+        Assert.Equal(new[] { "Via K4", "Via K", "Via K", "Via K7", "Hold short of runway 30L" }, Sentences(imported.Steps));
+        var plan = ClearancePlanner.Build(imported.Steps, hasDestination: true);
+        Assert.Equal(new[] { "K4", "K", "K", "K7" }, plan.TaxiwaySequence);
+        Assert.Equal(3, Assert.Single(plan.Holds).SeqIndex);
+        Assert.Empty(plan.Crossings);
+    }
+
     [Fact]
     public void Two_hold_shorts_after_one_taxiway_are_both_seated()
     {
