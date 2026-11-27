@@ -192,6 +192,20 @@ public class RouteTaxiwaySequenceTests
             new[] { "L" }, Measured(("L", 400), ("W", metresOnW), ("L", 300))));
     }
 
+    // "A, C, A" entered as Via steps ([RTE-33], the Taxi UI Redesign's guide, Example 3): the junction rule above
+    // reads only past the LAST entered taxiway, so a deliberate repeat across a C shorter than a junction is wide is
+    // still said whole, and the second A's own junctions are crossed like any last taxiway's.
+    [Theory]
+    [InlineData(60.0, "A, C, A, then D")]
+    [InlineData(500.0, "A, C, A, then D")]
+    public void ViaClause_SaysADeliberateRepeatWholeAcrossAShortTaxiway(double metresOnC, string expected)
+    {
+        Assert.Equal(expected, RouteTaxiwaySequence.ViaClause(new[] { "A", "C", "A" }, Measured(
+            ("A", 400), ("C", metresOnC), ("A", 30), ("X", 10), ("A", 200), ("D", 150))));
+        Assert.Equal("A, C, A", RouteTaxiwaySequence.ViaClause(new[] { "A", "C", "A" }, Measured(
+            ("A", 400), ("C", metresOnC), ("A", 300))));
+    }
+
     // An entered taxiway the route only touches at a junction has no segment of its own.
     // It is skipped in the walk rather than ending it, so the tail still starts after the
     // last entered taxiway the route did run along.
