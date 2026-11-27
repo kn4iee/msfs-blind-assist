@@ -68,6 +68,7 @@ public partial class IniA330Definition
         ("INI_PARKING_BRAKE_STATUS", "number", SimVarType.LVar);
 
     private int _lastFlapIndex = -1;
+    private int _lastSpoilerBand = -1;   // the speedbrake lever's 10 % band last seen; -1 until the first (silent) reading
 
     internal static string FormatTrim(double deg) =>
         Math.Abs(deg) < 0.05 ? "0.0" : $"{Math.Abs(deg).ToString("0.0", CultureInfo.InvariantCulture)} {(deg > 0 ? "up" : "down")}";
@@ -88,9 +89,8 @@ public partial class IniA330Definition
             UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
             ValueDescriptions = new Dictionary<double, string> { [0] = "Retracted", [0.5] = "Half", [1] = "Full" },
             ValueToDescriptionKey = v => v < 0.25 ? 0 : v < 0.75 ? 0.5 : 1,
-            ExcludeFromMonitorManager = true,   // consumed silently (the panel combo's read-back): no Ctrl+M row [VAR-9]
+            // said by ProcessPanelUpdate in the A32NX's 10 % bands, so it has its Ctrl+M row (MainForm's mute wrap covers it)
         });
-        _silentKeys.Add("A330_SPDBRK");
         Watched(vars, "A330_SPLR_ARM", "SPOILERS ARMED", "Ground spoilers", new() { [0] = "Disarmed", [1] = "Armed" }, units: "Bool", type: SimVarType.SimVar);
         Watched(vars, A330SharedKeys.Gear, "INI_GEAR_HANDLE_STATUS", "Landing gear lever", new() { [0] = "Up", [1] = "Down" });
         Watched(vars, "A330_PARKBRK", ParkingBrakeRead.name, "Parking brake", new() { [0] = "Off", [1] = "On" },   // the A32NX's "Parking Brake: On" (A32NX_PARK_BRAKE_LEVER_POS), the Fenix's too
@@ -514,6 +514,22 @@ public partial class IniA330Definition
         }
         switch (varName)
         {
+            case "A330_SPDBRK":
+            {
+                // as the A32NX says its handle (FlyByWireA320Definition.ProcessSimVarUpdate, A32NX_SPOILERS_HANDLE_POSITION):
+                // 10 % bands, "Spoilers retracted" / "Spoilers 30 percent" / "Spoilers full", the first reading silent.
+                // A muted row (Suppressed) says nothing but still moves the band.
+                int band = (int)Math.Round(Math.Max(0.0, Math.Min(1.0, value)) * 10.0);
+                bool first = _lastSpoilerBand < 0;
+                int before = _lastSpoilerBand;
+                _lastSpoilerBand = band;
+                handled = true;
+                if (first || band == before || announcer.Suppressed) return;
+                announcer.Announce(band == 0 ? "Spoilers retracted"
+                    : band == 10 ? "Spoilers full"
+                    : $"Spoilers {band * 10} percent");
+                return;
+            }
             case A330SharedKeys.Flaps:
             {
                 int idx = (int)Math.Round(value);
@@ -539,6 +555,7 @@ public partial class IniA330Definition
     partial void ResetPanelBaselines(bool contextReset)
     {
         _lastFlapIndex = -1;
+        _lastSpoilerBand = -1;
         _pressEchoUntil.Clear();
         _stateBaseline.Clear();
         _quietUntil = NowMs() + StartGraceMs;

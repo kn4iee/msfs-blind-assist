@@ -77,11 +77,12 @@ public class IniA330DefinitionTests
 public class A330VariableReviewTests
 {
     [Fact]
-    public void The_speedbrake_lever_cache_has_no_ctrl_m_row()
+    public void The_speedbrake_lever_has_its_ctrl_m_row()
     {
-        // ProcessSimVarUpdate consumes it silently: a row would be a checkbox that mutes nothing ([VAR-9]).
+        // plan 04 Task 4a: ProcessPanelUpdate now says the lever in the A32NX's bands, so the row mutes something
+        // ([VAR-9] no longer applies; A330SpeedbrakeTests.A_muted_row_says_nothing proves the mute).
         var rows = MonitorRowBuilder.Build(new IniA330Definition().GetVariables()).Select(r => r.Key).ToList();
-        Assert.DoesNotContain("A330_SPDBRK", rows);
+        Assert.Contains("A330_SPDBRK", rows);
     }
 
     [Fact]
