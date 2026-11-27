@@ -59,6 +59,14 @@ A330_APU_START	starts the APU
 A330_DITCHING	closes the outflow valve and the openings below the waterline
 A330_EMER_EXIT_LT	turns on the emergency exit lights, which run down the emergency battery
 
+# Pressed once, they change something the sweep cannot put back
+A330_ECAM_EMER_CANC	inhibits the current warning's aural alerts for the rest of the flight phase
+A330_RMP1_NAV	switches radio panel 1 to its NAV backup, a side effect that may not be clearable from outside
+A330_CLOCK_RST	resets the clock's elapsed time
+A330_ISIS_RST	resets the standby attitude indicator
+A330_DFDR_EVENT	writes an event to the flight data recorder
+A330_CPT_RAIN_RPL	dispenses rain repellent onto the windshield
+
 # Calls: ring the cabin crew or the ground crew
 A330_CALL_ALL	calls the whole cabin crew
 A330_CALL_FWD	calls the forward cabin crew

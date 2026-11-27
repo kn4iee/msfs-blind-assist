@@ -148,6 +148,30 @@ public class A330PanelSweepPlannerTests
         Assert.Empty(denied.Keys.Where(k => !known.Contains(k)));
     }
 
+    // What the sweep must never drive: deleting a line of the deny list for one of these must fail a test.
+    private static readonly string[] MustDeny =
+    {
+        "A330_ENG1_MASTER", "A330_ENG2_MASTER", "A330_ENG_MODE", "A330_MAN_START1", "A330_MAN_START2",
+        "A330_ENG1_FIRE", "A330_ENG2_FIRE", "A330_APU_FIRE",
+        "A330_ENG1_AGENT1", "A330_ENG1_AGENT2", "A330_ENG2_AGENT1", "A330_ENG2_AGENT2", "A330_APU_AGENT",
+        "A330_ENG_FIRE_TEST", "A330_APU_FIRE_TEST", "A330_CARGO_SMOKE_TEST", "A330_FWD_CARGO_AGENT", "A330_AFT_CARGO_AGENT",
+        "A330_IDG1", "A330_IDG2", "A330_RAT",
+        "A330_IRS1_MODE", "A330_IRS2_MODE", "A330_IRS3_MODE", "A330_IR1", "A330_IR2", "A330_IR3",
+        "A330_BAT1", "A330_BAT2", "A330_APU_BAT", "A330_EXT_A", "A330_EXT_B",
+        "A330_APU_MASTER", "A330_APU_START", "A330_DITCHING", "A330_EMER_EXIT_LT",
+        "A330_CALL_ALL", "A330_CALL_FWD", "A330_CALL_MID", "A330_CALL_AFT", "A330_CALL_PURS", "A330_CALL_EXIT", "A330_MECH_CALL",
+        "A330_ECAM_EMER_CANC",
+        "A330_RMP1_NAV", "A330_CLOCK_RST", "A330_ISIS_RST", "A330_DFDR_EVENT", "A330_CPT_RAIN_RPL",
+        "A330_GEAR", "A330_FLAPS", "A330_SPDBRK", "A330_SPLR_ARM", "A330_PARKBRK",
+    };
+
+    [Fact]
+    public void The_controls_that_cannot_be_undone_or_move_the_aircraft_stay_in_the_deny_list()
+    {
+        var denied = DenyList.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "tools", "a330-gen", "PanelSweep", "denylist.txt")));
+        Assert.Empty(MustDeny.Where(k => !denied.ContainsKey(k)));
+    }
+
     private static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
