@@ -226,6 +226,63 @@ public class LegEndWiringTests
         Assert.Single(Regex.Matches(text, @"route\.TurnPicks = route\.TurnPicks\.Where\("));
     }
 
+    // Main's #369 (merged 2026-11-27): a runway route ending more than 400 m from its runway is spoken as the end of the
+    // route ("End of route ahead.", "End of route in 35 metres. Stop.", "Stop. End of this route. It does not reach
+    // Runway 20L. …"). A leg with no destination never is: the flag is set only for a runway destination with a lineup
+    // target, on a load and on a recalculation, and the window loads a leg as no runway destination.
+    [Fact]
+    public void A_leg_never_ends_as_a_route_that_misses_its_runway()
+    {
+        string load = Member(RoutingSource(), "public string? LoadRoute(");
+        string recalc = RecalculationSource();
+        string form = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Forms", "TaxiAssistForm.cs"));
+
+        Assert.Contains("_isRunwayLineup = isRunwayDestination;", load);
+        Assert.Matches(@"_routeEndsFarFromRunway = false;\s+_routeEndVerdict = RunwayReachVerdict\.Reaches;\s+if \(isRunwayDestination && _hasLineupTarget\)\s+\{[^}]*_routeEndsFarFromRunway = RunwayReachGate\.EndsFarFromRunway\(", load);
+        Assert.Single(Regex.Matches(load, @"_routeEndsFarFromRunway = RunwayReachGate\.EndsFarFromRunway\("));
+        Assert.Matches(@"if \(_isRunwayLineup\)\s+\{[^}]*_routeEndsFarFromRunway = RunwayReachGate\.EndsFarFromRunway\([^}]*\}\s+else\s+\{[^}]*_routeEndsFarFromRunway = false;", recalc);
+        Assert.Single(Regex.Matches(recalc, @"_routeEndsFarFromRunway = RunwayReachGate\.EndsFarFromRunway\("));
+
+        string leg = Member(form, "private void CalculateLegWithNoDestination(");
+        Assert.Contains("isRunwayDestination: false,", leg);
+        Assert.Contains("progressiveTerminator: term,", leg);
+        // Only a leg is loaded with a terminator, so a runway route never takes a leg end's words.
+        Assert.Single(Regex.Matches(form, @"progressiveTerminator: "));
+    }
+
+    // And each says its own end, once: a leg's countdown and arrival come first wherever both are asked, the far end's
+    // only after them, and only for a runway route.
+    [Fact]
+    public void A_leg_end_and_a_route_end_far_from_its_runway_each_speak_their_own_words_once()
+    {
+        string manager = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+        string announcements = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.Announcements.cs"));
+
+        // The approach: a leg has no "X ahead." at all; the far end's "End of route ahead." is past that return.
+        string upcoming = Member(announcements, "private void CheckUpcomingAnnouncements(");
+        int legReturn = upcoming.IndexOf("if (_progressiveTerminator != null)", StringComparison.Ordinal);
+        int farAhead = upcoming.IndexOf("\"End of route ahead.\"", StringComparison.Ordinal);
+        Assert.True(legReturn >= 0 && farAhead > legReturn, "a leg returns before the far end's approach line");
+
+        // The countdown: one line per tier, the leg end's first, then a cleared crossing's, then `lead` ("End of route"
+        // only on a runway route's last segment that misses its runway).
+        string countdown = Member(manager, "private void CheckHoldShortCountdown(");
+        Assert.Contains("string lead = _routeEndsFarFromRunway && _route != null && _currentSegmentIndex == _route.Segments.Count - 1", countdown);
+        Assert.Equal(3, Regex.Matches(countdown, @"AnnounceInstruction\(legEnd != null\s+\? LegEndLine\(legEnd, CountdownTier\.\w+\)\s+: clearedCrossing \? ClearedLine\(\)\s+: \$""\{lead\} in ").Count);
+        Assert.Contains("if (legEnd == null && !clearedCrossing && _holdShortSlowDownAnnounced && !_holdShortStopAnnounced", countdown);
+
+        // The arrival: the leg's intercept first; the far end's needs a runway lineup.
+        string arrival = Member(manager, "private void HandleArrival(");
+        int legArrival = arrival.IndexOf("if (_progressiveTerminator is { } term)", StringComparison.Ordinal);
+        int farArrival = arrival.IndexOf("if (_hasLineupTarget && _isRunwayLineup && _routeEndsFarFromRunway)", StringComparison.Ordinal);
+        Assert.True(legArrival >= 0 && farArrival > legArrival, "a leg ends before the far end's branch is asked");
+
+        // The status: the leg names its own end; "to the end of the route" only with the far-end flag.
+        string status = Member(announcements, "public string GetStatusAnnouncement(");
+        Assert.Contains("Navigation.RunwayReachGate.StatusDistanceTarget(_destinationName, _routeEndsFarFromRunway)", status);
+        Assert.Contains("if (_state == TaxiGuidanceState.Arrived && _routeEndsFarFromRunway)", status);
+    }
+
     // A member's text: from its declaration to the next member at class level.
     private static string Member(string text, string declaration)
     {
