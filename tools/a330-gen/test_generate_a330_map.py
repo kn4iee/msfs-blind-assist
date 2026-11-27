@@ -184,5 +184,40 @@ class PredictiveWindshearTests(unittest.TestCase):
         self.assertNotIn("proven", control["positions"][0])
 
 
+class HardeningTests(unittest.TestCase):
+    def test_a_repeated_key_in_the_curation_is_refused(self):
+        import tempfile
+        gen = load_generator()
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "curation.json")
+            with open(p, "w", encoding="utf-8") as f:
+                f.write('{"controls": {"AIRLINER_A": {"key": "A330_A"}, "AIRLINER_A": {"key": "A330_B"}}}')
+            with self.assertRaisesRegex(gen.CurationError, "AIRLINER_A"):
+                gen.load_curation(p)
+
+    def test_an_orphan_override_is_refused(self):
+        gen = load_generator()
+        c = small_curation()
+        c["name_overrides"]["A330_NOBODY"] = {"label": "Nobody", "aircraft_says": None, "why": "test"}
+        with self.assertRaisesRegex(gen.CurationError, "A330_NOBODY"):
+            gen.check_curation(c)
+        c = small_curation()
+        c["position_overrides"]["A330_NOBODY"] = {"0": {"label": "x", "aircraft_says": None, "why": "test"}}
+        with self.assertRaisesRegex(gen.CurationError, "A330_NOBODY"):
+            gen.check_curation(c)
+        c = small_curation()
+        c["position_overrides"]["A330_DEMO"]["7"] = {"label": "x", "aircraft_says": None, "why": "test"}
+        with self.assertRaisesRegex(gen.CurationError, "'7'.*A330_DEMO"):
+            gen.check_curation(c)
+        gen.check_curation(small_curation())
+
+    def test_an_event_both_left_out_and_not_yet_offered_is_refused(self):
+        gen = load_generator()
+        c = small_curation()
+        c["not_yet_offered"] = ["AIRLINER_PRESSED_BY_DEFINITION"]
+        with self.assertRaisesRegex(gen.CurationError, "AIRLINER_PRESSED_BY_DEFINITION.*not_yet_offered"):
+            gen.check_catalogue(c, ["AIRLINER_DEMO", "AIRLINER_PRESSED_BY_DEFINITION"])
+
+
 if __name__ == "__main__":
     unittest.main()

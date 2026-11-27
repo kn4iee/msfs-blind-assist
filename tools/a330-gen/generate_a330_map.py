@@ -47,9 +47,18 @@ class CurationError(ValueError):
     """The curation file (or the catalogue it is checked against) is wrong; the message names why."""
 
 
+def _no_repeated_key(pairs):
+    seen = {}
+    for k, v in pairs:
+        if k in seen:
+            raise CurationError(f"the curation repeats the key {k!r} in one object")
+        seen[k] = v
+    return seen
+
+
 def load_curation(path=CURATION):
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        return json.load(f, object_pairs_hook=_no_repeated_key)
 
 
 def load_keys(path=KEYS):
@@ -135,6 +144,17 @@ def check_curation(curation):
         raise CurationError(f"duplicate keys: {dup}")
     name_over = curation.get("name_overrides", {})
     pos_over = curation.get("position_overrides", {})
+    by_key = {e["key"]: e for e in controls.values()}
+    for k in name_over:
+        if k not in by_key:
+            raise CurationError(f"name_overrides names {k}, which no control carries")
+    for k, names in pos_over.items():
+        if k not in by_key:
+            raise CurationError(f"position_overrides names {k}, which no control carries")
+        have = {p["name"] for p in by_key[k].get("positions", [])}
+        for n in names:
+            if n not in have:
+                raise CurationError(f"position_overrides names position {n!r} of {k}, which the control does not have")
     for entry_id, e in controls.items():
         k = e["key"]
         if k not in name_over or not name_over[k].get("label"):
