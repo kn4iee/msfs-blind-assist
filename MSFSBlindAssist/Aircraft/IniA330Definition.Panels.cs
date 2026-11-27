@@ -31,8 +31,10 @@ public partial class IniA330Definition
     internal static readonly string[] FlapDetents = { "Flaps up", "Flaps 1", "Flaps 2", "Flaps 3", "Flaps full" };
 
     /// <summary>What INI_AUTOBRAKE_LEVEL reads for each autobrake setting (0 off, 1 LO, 2 MED, 3 MAX).
-    /// The panel combo writes the raw value back to <c>SetAutobrake</c>.</summary>
-    internal static readonly Dictionary<double, string> AutobrakeLevels = new() { [0] = "Off", [1] = "Low", [2] = "Medium", [3] = "Max" };
+    /// The panel combo writes the raw value back to <c>SetAutobrake</c>. The words are the cockpit's, which the
+    /// A32NX says too (its A32NX_AUTOBRAKES_ARMED_MODE row: LO, MED, MAX); the A330 has no DIS word, so its rest
+    /// position stays "Off".</summary>
+    internal static readonly Dictionary<double, string> AutobrakeLevels = new() { [0] = "Off", [1] = "LO", [2] = "MED", [3] = "MAX" };
 
     /// <summary>A flap lever reading that is one of its detents (the handle index is whole).</summary>
     internal static bool IsFlapDetent(double v) =>
@@ -91,7 +93,7 @@ public partial class IniA330Definition
         _silentKeys.Add("A330_SPDBRK");
         Watched(vars, "A330_SPLR_ARM", "SPOILERS ARMED", "Ground spoilers", new() { [0] = "Disarmed", [1] = "Armed" }, units: "Bool", type: SimVarType.SimVar);
         Watched(vars, A330SharedKeys.Gear, "INI_GEAR_HANDLE_STATUS", "Landing gear lever", new() { [0] = "Up", [1] = "Down" });
-        Watched(vars, "A330_PARKBRK", ParkingBrakeRead.name, "Parking brake", new() { [0] = "Off", [1] = "Set" },
+        Watched(vars, "A330_PARKBRK", ParkingBrakeRead.name, "Parking brake", new() { [0] = "Off", [1] = "On" },   // the A32NX's "Parking Brake: On" (A32NX_PARK_BRAKE_LEVER_POS), the Fenix's too
             units: ParkingBrakeRead.units, type: ParkingBrakeRead.type);
         Watched(vars, A330SharedKeys.Autobrake, "INI_AUTOBRAKE_LEVEL", "Autobrake", new(AutobrakeLevels));
         Silent(vars, A330SharedKeys.FlapAngle, "TRAILING EDGE FLAPS LEFT ANGLE", "Flap angle", "degrees", SimVarType.SimVar);
@@ -182,7 +184,7 @@ public partial class IniA330Definition
                 {
                     Name = lr.name, DisplayName = $"{c.Label} {legend}", Type = TypeOf(lr.kind), Units = lr.units,
                     UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true,
-                    ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "Lit" },
+                    ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },   // as the Fenix says a light ("<name>: On"), never "Lit"
                     ValueToDescriptionKey = v => v > 0.5 ? 1 : 0,
                 });
                 _mapDisplayRows.Add((c.Panel, lk));
@@ -212,6 +214,11 @@ public partial class IniA330Definition
     /// Until Task 4 measures each control's settle time: the BlueBird 757's read-back delay, which is also
     /// the plan's "lagged" threshold. A measured per-control time replaces it.</summary>
     internal const int ReadBackDelayMs = 1500;
+
+    // The master warning and master caution keys (A330_MASTER_WARN, A330_MASTER_CAUT) read back through the key
+    // mechanism, by the variables their `state` names, INI_MASTER_WARNING_ACTIVE and INI_MASTER_CAUTION_ACTIVE.
+    // Those two names are UNMEASURED: until the sim sweep reads them, a wrong name reads nothing and the key
+    // stays silent (never a guess).
 
     private const int FreshReadTimeoutMs = 1500;
 

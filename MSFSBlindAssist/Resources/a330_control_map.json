@@ -3769,7 +3769,7 @@
     {
      "value": 1,
      "input": 1,
-     "label": "Lit",
+     "label": "On",
      "proven": false
     }
    ]
@@ -3793,7 +3793,7 @@
     {
      "value": 1,
      "input": 1,
-     "label": "Lit",
+     "label": "On",
      "proven": false
     }
    ]
@@ -3835,7 +3835,7 @@
     {
      "value": 1,
      "input": 1,
-     "label": "Lit",
+     "label": "On",
      "proven": false
     }
    ]

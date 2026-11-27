@@ -8600,9 +8600,9 @@
     "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
    },
    "1": {
-    "label": "Lit",
+    "label": "On",
     "aircraft_says": null,
-    "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
+    "why": "the word the other Airbus aircraft say for a lit light (plan 04 Task 4a)"
    }
   },
   "A330_MASTER_CAUT_LT": {
@@ -8612,9 +8612,9 @@
     "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
    },
    "1": {
-    "label": "Lit",
+    "label": "On",
     "aircraft_says": null,
-    "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
+    "why": "the word the other Airbus aircraft say for a lit light (plan 04 Task 4a)"
    }
   },
   "A330_AUTOLAND_LT": {
@@ -8624,9 +8624,9 @@
     "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
    },
    "1": {
-    "label": "Lit",
+    "label": "On",
     "aircraft_says": null,
-    "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
+    "why": "the word the other Airbus aircraft say for a lit light (plan 04 Task 4a)"
    }
   },
   "A330_CPT_FD": {
