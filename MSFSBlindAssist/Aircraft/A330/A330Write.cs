@@ -80,6 +80,31 @@ internal static class A330Write
         }
     }
 
+    /// <summary>A key's press: a <c>push</c> control's own <c>_Push</c> then <c>_Release</c> after its hold, an
+    /// <c>rpn</c> control's calculator line (<paramref name="value"/> = the pick, normally 1).</summary>
+    public static A330WritePlan Press(A330ControlMap.Control c, double value)
+    {
+        if (c.Mode == "rpn")
+            return string.IsNullOrWhiteSpace(c.Rpn) ? A330WritePlan.Refused
+                : A330WritePlan.Of(new A330CalcCall(c.Rpn.Replace("{value}", Fixed(value))));
+        if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
+        return A330WritePlan.Of(new A330PressCall(c.Event, c.HoldMs ?? IniA330Definition.DefaultPushMs));
+    }
+
+    /// <summary>What a key with a state says after its press: the state row's description of what it reads,
+    /// bare, as MainForm's button state read-back says it for the FlyByWire A32NX and A380
+    /// (<c>AnnounceVariableState</c>, MainForm.Announcers.cs), with its number fallback in the invariant culture
+    /// (CORE-21).</summary>
+    public static string StateSentence(SimVarDefinition stateRow, double read) =>
+        stateRow.ValueDescriptions.TryGetValue(stateRow.DescriptionKeyFor(read), out var described)
+            ? described
+            : FormattableString.Invariant($"{stateRow.DisplayName}: {read}");
+
+    /// <summary>What a key with no readable state says once, as the base class's momentary press and the Fenix's
+    /// press buttons with no light say it (<c>PulseMomentaryLVar</c>, <c>ExecuteButtonTransition</c>'s
+    /// <c>confirmPress</c>).</summary>
+    public static string PressedSentence(string label) => $"{label} pressed";
+
     /// <summary>The parking brake lever: input 0 sets it, 1 releases it ([INI-1]); <paramref name="current"/>
     /// is the status row (1 = set).</summary>
     public static A330WritePlan ParkingBrake(double? current, bool set)

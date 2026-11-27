@@ -60,6 +60,7 @@ public class A330PanelSetTests
         public double? Fresh;
         public List<string> Sent = new();
         public List<string> Requests = new();
+        public List<string> FreshKeys = new();
         public List<int> Delays = new();
         public TaskCompletionSource? Gate;
 
@@ -70,7 +71,7 @@ public class A330PanelSetTests
             Press = (e, ms) => Sent.Add($"press {e} {ms}"),
             Calc = rpn => Sent.Add($"calc {rpn}"),
             Cached = k => Cache.TryGetValue(k, out var v) ? v : null,
-            ReadFresh = (k, ct) => Task.FromResult(Fresh),
+            ReadFresh = (k, ct) => { FreshKeys.Add(k); return Task.FromResult(Fresh); },
             Request = k => Requests.Add(k),
             Delay = ms => { Delays.Add(ms); return Gate?.Task ?? Task.CompletedTask; },
         };

@@ -232,29 +232,7 @@ public partial class IniA330Definition
     private bool SendPick(string key, SimVarDefinition varDef, double target, A330WritePlan plan, A330PanelIo io, ScreenReaderAnnouncer announcer)
     {
         if (plan.Outcome == A330WriteOutcome.AtPosition) return true;   // the control already reads it: nothing to send or check
-        string? refusal = plan.Outcome == A330WriteOutcome.Refused
-            ? (plan.Reason is { } why ? $"{varDef.DisplayName} unavailable: {why}." : $"{varDef.DisplayName} unavailable")
-            : null;
-        if (refusal == null)
-        {
-            foreach (var call in plan.Calls)
-            {
-                if (call is A330InputEventCall ie)
-                {
-                    if (!io.TrySetInput(ie.Event, ie.Value)) refusal = $"{varDef.DisplayName} unavailable: this aircraft does not have that control.";
-                }
-                else if (!io.CanCalc())
-                {
-                    refusal = $"{varDef.DisplayName} unavailable: the MobiFlight module is not responding.";
-                }
-                if (refusal != null) break;
-                switch (call)
-                {
-                    case A330PressCall p: io.Press(p.Event, p.HoldMs); break;
-                    case A330CalcCall c: io.Calc(c.Rpn); break;
-                }
-            }
-        }
+        string? refusal = Dispatch(varDef, plan, io);
         if (refusal != null)
         {
             announcer.AnnounceImmediate(refusal);
@@ -267,6 +245,95 @@ public partial class IniA330Definition
         _pickGeneration[key] = ++generation;
         _ = ReadBackAsync(key, varDef, target, io, announcer, _windowPress, generation);
         return true;
+    }
+
+    /// <summary>Sends a plan's calls through the write paths; the refusal to say when nothing could be sent (null: sent).</summary>
+    private static string? Dispatch(SimVarDefinition varDef, A330WritePlan plan, A330PanelIo io)
+    {
+        if (plan.Outcome == A330WriteOutcome.Refused)
+            return plan.Reason is { } why ? $"{varDef.DisplayName} unavailable: {why}." : $"{varDef.DisplayName} unavailable";
+        foreach (var call in plan.Calls)
+        {
+            string? refusal = null;
+            if (call is A330InputEventCall ie)
+            {
+                if (!io.TrySetInput(ie.Event, ie.Value)) refusal = $"{varDef.DisplayName} unavailable: this aircraft does not have that control.";
+            }
+            else if (!io.CanCalc())
+            {
+                refusal = $"{varDef.DisplayName} unavailable: the MobiFlight module is not responding.";
+            }
+            if (refusal != null) return refusal;
+            switch (call)
+            {
+                case A330PressCall p: io.Press(p.Event, p.HoldMs); break;
+                case A330CalcCall c: io.Calc(c.Rpn); break;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>A key's press (a <c>button</c> control). A refused write says so and answers false; a sent one is
+    /// confirmed once: a key with a state row reads it after the settle time and says its description, a key with
+    /// none says "{label} pressed" at once. Never both. Nothing is resynced (a key has no combo).</summary>
+    private bool SendPress(string key, A330ControlMap.Control c, SimVarDefinition varDef, double value, A330PanelIo io, ScreenReaderAnnouncer announcer)
+    {
+        string? refusal = Dispatch(varDef, A330Write.Press(c, value), io);
+        if (refusal != null)
+        {
+            announcer.AnnounceImmediate(refusal);
+            _writeRefused = true;
+            return false;
+        }
+        string? stateKey = StateRowKey(c);
+        if (stateKey == null)
+        {
+            announcer.Announce(A330Write.PressedSentence(varDef.DisplayName));
+            return true;
+        }
+        // keys that read one row (the ECAM pages) share a generation: the newest press's read-back is the one said
+        _pickGeneration.TryGetValue(stateKey, out int generation);
+        _pickGeneration[stateKey] = ++generation;
+        _ = ConfirmPressAsync(stateKey, io, announcer, generation);
+        return true;
+    }
+
+    /// <summary>The row a key's <c>State</c> variable is read through: the row of this definition that reads that
+    /// L:var, preferring one that names its values. Null for a key with no state, or whose state no row reads.</summary>
+    private string? StateRowKey(A330ControlMap.Control c)
+    {
+        if (string.IsNullOrWhiteSpace(c.State)) return null;
+        string name = A330ControlMap.ParseReadKind(c.State).name;
+        string? any = null;
+        foreach (var (rowKey, row) in GetVariables())
+        {
+            if (row.Type != SimVarType.LVar || row.UpdateFrequency != UpdateFrequency.Continuous
+                || !string.Equals(row.Name, name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (row.ValueDescriptions.Count > 0) return rowKey;
+            any ??= rowKey;
+        }
+        return any;
+    }
+
+    /// <summary>Waits the settle time, then says what the state row reads, once, unless a newer press of a key
+    /// reading that row came in. A state that cannot be read says nothing (a guessed word would be a fiction).</summary>
+    private async Task ConfirmPressAsync(string stateKey, A330PanelIo io, ScreenReaderAnnouncer announcer, int generation)
+    {
+        try
+        {
+            await io.Delay(ReadBackDelayMs);
+            if (_pickGeneration[stateKey] != generation) return;
+            double? read = await io.ReadFresh(stateKey, CancellationToken.None);
+            if (_pickGeneration[stateKey] != generation) return;
+            if (read is double v && double.IsFinite(v) && GetVariables().TryGetValue(stateKey, out var row))
+                announcer.AnnounceImmediate(A330Write.StateSentence(row, v));
+            else
+                Log.Debug("A330", $"{stateKey}: the state was not readable after the press");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("A330", $"{stateKey}: press read-back failed: {ex.Message}");
+        }
     }
 
     /// <summary>The newest pick per row; UI thread only, like every pick.</summary>
@@ -334,6 +401,10 @@ public partial class IniA330Definition
                 handled = true; return;
             case "push" when string.IsNullOrEmpty(c.Event):
                 return;
+            case "push" when c.Kind == "button":
+            case "rpn" when c.Kind == "button":
+                SendPress(varKey, c, varDef, value, io, announcer);
+                handled = true; return;
             case "push":
                 if (Can(sim, announcer, c.Label)) PushEvent(sim, c.Event, c.HoldMs ?? DefaultPushMs);
                 handled = true; return;
