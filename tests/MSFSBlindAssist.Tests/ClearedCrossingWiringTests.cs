@@ -150,8 +150,9 @@ public class ClearedCrossingWiringTests
         Assert.Contains("if (!currentSeg.IsHoldShortPoint && legEnd == null && !clearedCrossing)", countdown);
         Assert.Contains("ClearedCrossingCallouts.Approach(", countdown);
         Assert.Contains("DistanceFormatter.FromFeet(distFeet), firstCall)", countdown);
-        // Each of the three tiers speaks the cleared line in place of the hold short's, after the leg end's.
-        Assert.Equal(3, Regex.Matches(countdown, @"\? LegEndLine\(legEnd, CountdownTier\.\w+\)\s+: clearedCrossing \? ClearedLine\(\)\s+: \$""Hold short ").Count);
+        // Each of the three tiers speaks the cleared line in place of the hold short's (or the end of a route that never
+        // reaches its runway, `lead`), after the leg end's.
+        Assert.Equal(3, Regex.Matches(countdown, @"\? LegEndLine\(legEnd, CountdownTier\.\w+\)\s+: clearedCrossing \? ClearedLine\(\)\s+: \$""\{lead\} in ").Count);
         Assert.Contains("if (legEnd == null && !clearedCrossing && _holdShortSlowDownAnnounced && !_holdShortStopAnnounced", countdown);
         Assert.DoesNotContain("_startChatterSuppressUntil", countdown);
         // "Cleared to cross" goes with the first call spoken: judged before this frame latches any tier.
@@ -560,7 +561,9 @@ public class ClearedCrossingWiringTests
         Assert.Contains("ClearedCrossingHolds.FindNextStop(_route,", status);
         Assert.Contains("leaveOutLast: true", status);
         Assert.Contains("FormatDistance(nextStop.Metres)", status);
-        Assert.Contains("return $\"{taxiway}{nextTurn}{stopClause}, {distStr} to {_destinationName}.\";", status);
+        // The sentence's end: the destination, or the end of a route that never reaches its runway (StatusDistanceTarget).
+        Assert.Contains("Navigation.RunwayReachGate.StatusDistanceTarget(_destinationName, _routeEndsFarFromRunway);", status);
+        Assert.Contains("return $\"{taxiway}{nextTurn}{stopClause}, {distStr} to {distanceTo}.\";", status);
         // The key's "Next stop" answer is the same finder's (the key itself calls DecideHoldShortKey).
         Assert.Contains("FindNextStop(route, cursor, aircraft,", Member(ClearedHoldsSource(), "public static HoldShortKeyDecision DecideHoldShortKey("));
     }
