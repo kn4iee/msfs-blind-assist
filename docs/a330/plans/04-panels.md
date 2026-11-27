@@ -237,10 +237,10 @@ Work the groups of Task 1's table, each the same way: measure what the control w
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** not started
-- **Claimed by:** none
-- **Worked by:**
-- **Started:**
+- **Status:** in progress
+- **Claimed by:** wolfman1360
+- **Worked by:** wolfman1360, with Claude (subagent-driven development: an implementer and a review a task, a whole-plan review)
+- **Started:** 2026-11-27, from 9bba156f9 (the branch tip, plans 01 to 03 landed)
 - **Landed:**
 - **Tests at landing:**
 - **Tasks:**
