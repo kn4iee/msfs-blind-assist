@@ -2,7 +2,7 @@
 paths:
   - "MSFSBlindAssist/Navigation/HoldShortAbeam.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.MathUtils.cs"
-  - "tests/MSFSBlindAssist.Tests/HoldShortAbeamTests.cs"
+  - "tests/MSFSBlindAssist.Tests/HoldShortAbeam*.cs"
 ---
 # Hold-short passed beside its node rules
 
