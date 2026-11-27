@@ -132,7 +132,9 @@ public class RouteAheadCountdownStopTests
     [Fact]
     public void Walking_a_leg_whose_last_segment_is_2_m_every_tier_comes_at_its_lead()
     {
-        var (outerAtFt, slowAtFt, stopAtFt) = Walk(LegToItsEnd(), RouteAhead.CountdownStopKind.LegEnd, legEnd: true, cleared: true);
+        var route = LegToItsEnd();
+        var (outerAtFt, slowAtFt, stopAtFt) = Walk(route, RouteAhead.CountdownStopKind.LegEnd, legEnd: true, cleared: true,
+            stopIndex: route.Count - 1);
 
         Assert.InRange(outerAtFt!.Value, Outer(13.6) - 3.0, Outer(13.6));
         Assert.InRange(slowAtFt!.Value, Slow(13.6) - 3.0, Slow(13.6));
@@ -147,10 +149,11 @@ public class RouteAheadCountdownStopTests
     public void The_leg_end_s_spoken_lines_on_a_2_m_last_segment(string culture)
     {
         var term = new ProgressiveTerminator(ProgressiveTerminatorType.HoldShortTaxiway, "M");
-        string Line(CountdownTier tier, string distance)
+        string Line(CountdownTier tier, string distance, bool first)
             => ProgressiveLegEnd.Countdown(ProgressiveLegEnd.CountdownLead(term, null), distance, tier);
 
-        var (before, after) = SpokenBothWays(LegToItsEnd(), culture, Line, legEnd: true, cleared: true);
+        var route = LegToItsEnd();
+        var (before, after) = SpokenBothWays(route, culture, Line, legEnd: true, cleared: true, stopIndex: route.Count - 1);
 
         Assert.Equal(new[] { "Hold short taxiway M in 75 feet. Stop." }, before.Feet);
         Assert.Equal(new[] { "Hold short taxiway M in 25 metres. Stop." }, before.Metres);
@@ -168,24 +171,153 @@ public class RouteAheadCountdownStopTests
         }, after.Metres);
     }
 
+    // ---- (b) a stop the pilot was cleared across ----
+
+    // A route across runway 04L at C, cleared: the stop the pass placed at C's line (2.0 m after a 6.4 m and a 28.0 m
+    // piece) is no longer a hold short, and the route runs on across the runway to a hold beyond it.
+    private static List<TaxiRouteSegment> ClearedAcrossAtC()
+    {
+        var route = new List<TaxiRouteSegment>
+        {
+            Seg("P", 94.0),
+            Seg("P", 41.0),
+            Seg("C", 60.0, turnDeg: -30.0),
+            Seg("C", 28.0),
+            Seg("C", 6.4),
+            Seg("C", 2.0, hold: true, holdLabel: "runway 04L at C"),
+            Seg("C", 70.0),
+            Seg("C", 90.0),
+            Seg("C", 40.0, hold: true, holdLabel: "runway 04R at C"),
+            Seg("D", 300.0, turnDeg: 90.0),
+        };
+        Assert.True(ClearedCrossingHolds.ClearAt(new TaxiRoute { Segments = route }, 6, "04L"));
+        return route;
+    }
+
+    [Fact]
+    public void A_cleared_crossing_is_counted_down_through_the_short_pieces_before_its_line()
+    {
+        var route = ClearedAcrossAtC();
+        Assert.True(ClearedCrossingHolds.IsFullyCleared(route[5]));
+
+        // On the 28 m piece, 20 m from its end: 20 + 6.4 + 2.0 to the line.
+        var stop = RouteAhead.NextCountdownStop(route, currentIndex: 3, toCurrentEndMetres: 20.0, LookaheadM,
+            legEnd: false, cleared: true);
+
+        Assert.NotNull(stop);
+        Assert.Equal(5, stop.Value.Index);
+        Assert.Equal(28.4, stop.Value.AlongMetres, 3);
+        Assert.Equal(RouteAhead.CountdownStopKind.ClearedCrossing, stop.Value.Kind);
+    }
+
+    // Nothing is counted down as cleared while holding (CountsDownAsCleared's taxiing): the next stop is the hold short.
+    [Fact]
+    public void While_holding_a_cleared_crossing_is_no_stop_of_the_countdown()
+    {
+        var stop = RouteAhead.NextCountdownStop(ClearedAcrossAtC(), currentIndex: 3, toCurrentEndMetres: 20.0,
+            lookaheadMetres: double.PositiveInfinity, legEnd: false, cleared: false);
+
+        Assert.NotNull(stop);
+        Assert.Equal(8, stop.Value.Index);
+        Assert.Equal(RouteAhead.CountdownStopKind.HoldShort, stop.Value.Kind);
+    }
+
+    // Past its line the cleared crossing is done with: the countdown's next stop is the next one along the route, a stop
+    // of its own (a different node, so its latches start fresh), never the cleared one again.
+    [Fact]
+    public void Past_a_cleared_crossing_the_next_stop_is_the_one_beyond_it()
+    {
+        var route = ClearedAcrossAtC();
+
+        var stop = RouteAhead.NextCountdownStop(route, currentIndex: 6, toCurrentEndMetres: 50.0, LookaheadM,
+            legEnd: false, cleared: true);
+
+        Assert.NotNull(stop);
+        Assert.Equal(8, stop.Value.Index);
+        Assert.Equal(180.0, stop.Value.AlongMetres, 3);
+        Assert.Equal(RouteAhead.CountdownStopKind.HoldShort, stop.Value.Kind);
+        Assert.NotEqual(route[5].ToNode.NodeId, route[8].ToNode.NodeId);
+    }
+
+    // A cleared crossing on a leg's last segment: the leg end wins (its countdown, not the cleared one's).
+    [Fact]
+    public void A_leg_end_on_a_cleared_stop_is_counted_down_as_the_leg_end()
+    {
+        var route = LegToItsEnd();
+        route[5] = Seg("L", 2.0, hold: true, holdLabel: "runway 04L at L");
+        Assert.True(ClearedCrossingHolds.ClearAt(new TaxiRoute { Segments = route }, 6, "04L"));
+
+        var stop = RouteAhead.NextCountdownStop(route, currentIndex: 3, toCurrentEndMetres: 20.0, LookaheadM,
+            legEnd: true, cleared: true);
+
+        Assert.NotNull(stop);
+        Assert.Equal(5, stop.Value.Index);
+        Assert.Equal(RouteAhead.CountdownStopKind.LegEnd, stop.Value.Kind);
+    }
+
+    [Fact]
+    public void Walking_to_a_cleared_line_whose_segment_is_2_m_every_tier_comes_at_its_lead()
+    {
+        var (outerAtFt, slowAtFt, stopAtFt) = Walk(ClearedAcrossAtC(), RouteAhead.CountdownStopKind.ClearedCrossing,
+            legEnd: false, cleared: true, stopIndex: 5);
+
+        Assert.InRange(outerAtFt!.Value, Outer(13.6) - 3.0, Outer(13.6));
+        Assert.InRange(slowAtFt!.Value, Slow(13.6) - 3.0, Slow(13.6));
+        Assert.InRange(stopAtFt!.Value, Stop(13.6) - 3.0, Stop(13.6));
+    }
+
+    // What the pilot hears approaching that line at 13.6 kt, up to where the cursor passes it and the line itself is said
+    // ("Crossing runway 04L at C.", PassClearedLine, 25 m before it): on its own 2 m segment alone, one call 27 m out
+    // and the line 0.3 s later; along the route, the three calls, "cleared to cross" on the first, never "Slow down" or
+    // "Stop".
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_cleared_crossing_s_spoken_lines_on_a_2_m_segment(string culture)
+    {
+        var route = ClearedAcrossAtC();
+        string Line(CountdownTier tier, string distance, bool first)
+            => ClearedCrossingCallouts.Approach(ClearedCrossingHolds.LineLabel(route[5].PlacedHoldLabel, route[5].ClearedRunways), distance, first);
+
+        var (before, after) = SpokenBothWays(route, culture, Line, legEnd: false, cleared: true, stopIndex: 5);
+
+        Assert.Equal(new[] { "Runway 04L at C in 75 feet, cleared to cross." }, before.Feet);
+        Assert.Equal(new[] { "Runway 04L at C in 25 metres, cleared to cross." }, before.Metres);
+        Assert.Equal(new[]
+        {
+            "Runway 04L at C in 350 feet, cleared to cross.",
+            "Runway 04L at C in 175 feet.",
+            "Runway 04L at C in 100 feet.",
+        }, after.Feet);
+        Assert.Equal(new[]
+        {
+            "Runway 04L at C in 100 metres, cleared to cross.",
+            "Runway 04L at C in 55 metres.",
+            "Runway 04L at C in 30 metres.",
+        }, after.Metres);
+        Assert.Equal("Crossing runway 04L at C.", ClearedCrossingCallouts.AtTheLine(
+            ClearedCrossingHolds.LineLabel(route[5].PlacedHoldLabel, route[5].ClearedRunways)));
+    }
+
     // ---- the walk ----
 
-    // The lines heard walking the route, on the last segment alone (before) and along the route (after), in both units.
+    // The lines heard walking the route to the stop ending segment `stopIndex`, on that segment alone (before) and along
+    // the route (after), in both units.
     private static ((List<string> Feet, List<string> Metres) Before, (List<string> Feet, List<string> Metres) After) SpokenBothWays(
-        List<TaxiRouteSegment> route, string culture, Func<CountdownTier, string, string> line, bool legEnd, bool cleared)
+        List<TaxiRouteSegment> route, string culture, Func<CountdownTier, string, bool, string> line, bool legEnd, bool cleared,
+        int stopIndex)
     {
         var saved = CultureInfo.CurrentCulture;
         var savedUnit = DistanceFormatter.UnitProvider;
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo(culture);
-            int last = route.Count - 1;
             List<string> Say(DistanceUnit unit, bool alongTheRoute)
             {
                 DistanceFormatter.UnitProvider = () => unit;
-                return Spoken(route, line, (cursor, toCursorEnd) => alongTheRoute
+                return Spoken(route, stopIndex, line, (cursor, toCursorEnd) => alongTheRoute
                     ? RouteAhead.NextCountdownStop(route, cursor, toCursorEnd, LookaheadM, legEnd, cleared)?.AlongMetres
-                    : cursor == last ? toCursorEnd : null);
+                    : cursor == stopIndex ? toCursorEnd : null);
             }
             return ((Say(DistanceUnit.Feet, false), Say(DistanceUnit.Metres, false)),
                     (Say(DistanceUnit.Feet, true), Say(DistanceUnit.Metres, true)));
@@ -197,17 +329,18 @@ public class RouteAheadCountdownStopTests
         }
     }
 
-    // The countdown's lines walking the route at 13.6 kt to its last 25 m, worded as CheckHoldShortCountdown words them:
-    // the first frame inside a tier speaks it, and a frame first inside a deeper tier speaks only that one.
-    private static List<string> Spoken(List<TaxiRouteSegment> route, Func<CountdownTier, string, string> line,
+    // The countdown's lines walking the route at 13.6 kt up to 25 m before the end of segment `stopIndex` (where a leg
+    // ends, or the cursor passes a cleared line), worded as CheckHoldShortCountdown words them: the first frame inside a
+    // tier speaks it, a frame first inside a deeper tier speaks only that one, and `first` is read before it latches.
+    private static List<string> Spoken(List<TaxiRouteSegment> route, int stopIndex, Func<CountdownTier, string, bool, string> line,
                                        Func<int, double, double?> stopDistanceM, double speedKt = 13.6)
     {
         var said = new List<string>();
-        double total = route.Sum(s => s.DistanceMeters);
+        double stopEnd = route.Take(stopIndex + 1).Sum(s => s.DistanceMeters);
         double stepM = speedKt * MetresPerSecondPerKnot * 0.1;
         int cursor = 0;
         bool outer = false, slow = false, stop = false;
-        for (double travelled = 0.0; total - travelled > CaptureRadiusM; travelled += stepM)
+        for (double travelled = 0.0; stopEnd - travelled > CaptureRadiusM; travelled += stepM)
         {
             double endOfCursor = route.Take(cursor + 1).Sum(s => s.DistanceMeters);
             while (cursor < route.Count - 1 && endOfCursor - travelled < CaptureRadiusM)
@@ -217,11 +350,12 @@ public class RouteAheadCountdownStopTests
             }
             if (stopDistanceM(cursor, endOfCursor - travelled) is not double m) continue;
             double ft = m * 3.28084;
+            bool first = !outer && !slow && !stop;
             if (ft < Stop(speedKt)) { outer = true; slow = true; }
             else if (ft < Slow(speedKt)) outer = true;
-            if (ft < Outer(speedKt) && !outer) { said.Add(line(CountdownTier.Outer, DistanceFormatter.FromFeet(ft))); outer = true; }
-            else if (ft < Slow(speedKt) && !slow) { said.Add(line(CountdownTier.SlowDown, DistanceFormatter.FromFeet(ft))); slow = true; }
-            else if (ft < Stop(speedKt) && !stop) { said.Add(line(CountdownTier.Stop, DistanceFormatter.FromFeet(ft))); stop = true; }
+            if (ft < Outer(speedKt) && !outer) { said.Add(line(CountdownTier.Outer, DistanceFormatter.FromFeet(ft), first)); outer = true; }
+            else if (ft < Slow(speedKt) && !slow) { said.Add(line(CountdownTier.SlowDown, DistanceFormatter.FromFeet(ft), first)); slow = true; }
+            else if (ft < Stop(speedKt) && !stop) { said.Add(line(CountdownTier.Stop, DistanceFormatter.FromFeet(ft), first)); stop = true; }
         }
         return said;
     }
@@ -230,18 +364,18 @@ public class RouteAheadCountdownStopTests
     private static double Slow(double kt) => Math.Clamp(kt * 1.68781 * 8.0, 150.0, 400.0);
     private static double Stop(double kt) => Math.Clamp(kt * 1.68781 * 4.0, 50.0, 200.0);
 
-    // Where each tier is first crossed, in feet along the route, walking the route to its last 25 m at 13.6 kt; every
-    // frame within the lookahead must find the stop of `kind` at the distance still to go.
+    // Where each tier is first crossed, in feet along the route, walking the route at 13.6 kt to 25 m before the end of
+    // segment `stopIndex`; every frame within the lookahead must find that stop, of `kind`, at the distance still to go.
     private static (double? Outer, double? Slow, double? Stop) Walk(List<TaxiRouteSegment> route, RouteAhead.CountdownStopKind kind,
-                                                                    bool legEnd, bool cleared, double speedKt = 13.6)
+                                                                    bool legEnd, bool cleared, int stopIndex, double speedKt = 13.6)
     {
-        double total = route.Sum(s => s.DistanceMeters);
+        double stopEnd = route.Take(stopIndex + 1).Sum(s => s.DistanceMeters);
         double stepM = speedKt * MetresPerSecondPerKnot * 0.1;
         int cursor = 0;
         double? outerAt = null, slowAt = null, stopAt = null;
-        for (double travelled = 0.0; total - travelled > CaptureRadiusM; travelled += stepM)
+        for (double travelled = 0.0; stopEnd - travelled > CaptureRadiusM; travelled += stepM)
         {
-            double toGo = total - travelled;
+            double toGo = stopEnd - travelled;
             double endOfCursor = route.Take(cursor + 1).Sum(s => s.DistanceMeters);
             while (cursor < route.Count - 1 && endOfCursor - travelled < CaptureRadiusM)
             {
@@ -257,7 +391,7 @@ public class RouteAheadCountdownStopTests
             }
             Assert.NotNull(stop);
             Assert.Equal(kind, stop.Value.Kind);
-            Assert.Equal(route.Count - 1, stop.Value.Index);
+            Assert.Equal(stopIndex, stop.Value.Index);
             Assert.Equal(toGo, stop.Value.AlongMetres, 6);
 
             double ft = stop.Value.AlongMetres * 3.28084;

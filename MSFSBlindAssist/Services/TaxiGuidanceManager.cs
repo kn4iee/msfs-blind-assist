@@ -3880,8 +3880,8 @@ public partial class TaxiGuidanceManager : IDisposable
     /// lead, and the cursor moves on 25 m before a segment's end, so KEWR's 2.1 m hold segment
     /// on AA began its countdown 87 ft out ("… in 75 feet. Stop.", 2026-11-26).
     /// The end of a leg with no destination (Progressive Taxi) is counted down the same way, along
-    /// the route, in its own words (<see cref="ProgressiveLegEnd"/>), and so is a current segment
-    /// the pilot was cleared across (<see cref="RouteAhead.NextCountdownStop"/>).
+    /// the route, in its own words (<see cref="ProgressiveLegEnd"/>), and so is a stop the pilot
+    /// was cleared across (<see cref="RouteAhead.NextCountdownStop"/>).
     /// <paramref name="nearARunway"/> and <paramref name="onRunwayPavement"/> are the frame's runway
     /// tests, asked only while such a leg's end is on its last segment or the countdown's next stop.
     /// </summary>
