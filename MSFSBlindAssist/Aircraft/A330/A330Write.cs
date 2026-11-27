@@ -28,10 +28,13 @@ internal sealed record A330PressCall(string Event, int HoldMs) : A330Call;
 /// <summary>A calculator line, sent through the sequence-prefixed <c>Write</c>.</summary>
 internal sealed record A330CalcCall(string Rpn) : A330Call;
 
-internal sealed record A330WritePlan(A330WriteOutcome Outcome, IReadOnlyList<A330Call> Calls)
+internal sealed record A330WritePlan(A330WriteOutcome Outcome, IReadOnlyList<A330Call> Calls, string? Reason = null)
 {
     public static readonly A330WritePlan AtPosition = new(A330WriteOutcome.AtPosition, Array.Empty<A330Call>());
     public static readonly A330WritePlan Refused = new(A330WriteOutcome.Refused, Array.Empty<A330Call>());
+
+    /// <summary>A true toggle whose reading is unknown: a press flips whatever it is, so nothing is sent.</summary>
+    public static readonly A330WritePlan Unread = new(A330WriteOutcome.Refused, Array.Empty<A330Call>(), "its position is not read yet");
     public static A330WritePlan Of(params A330Call[] calls) => new(A330WriteOutcome.Writes, calls);
 }
 
@@ -63,6 +66,8 @@ internal static class A330Write
         {
             case "toggle":
                 if (Known(current) && Math.Abs(current!.Value - target) <= ToggleTolerance) return A330WritePlan.AtPosition;
+                // a true toggle (no by-value code) flips whatever it is: unread is unknown, never "differs" ([FO-18])
+                if (!Known(current) && c.Rpn?.Contains("{value}", StringComparison.Ordinal) != true) return A330WritePlan.Unread;
                 // {value} = the pick (the engine masters pass it to their input event's Set, right whether
                 // that Set toggles or sets by value); a press-flag rpn carries none
                 if (!string.IsNullOrWhiteSpace(c.Rpn)) return A330WritePlan.Of(new A330CalcCall(c.Rpn.Replace("{value}", Fixed(target))));

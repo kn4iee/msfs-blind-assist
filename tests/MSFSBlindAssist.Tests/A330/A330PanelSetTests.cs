@@ -12,8 +12,9 @@ public class A330PanelSetTests
 {
     private const string SelectorKey = "TEST_SELECTOR";
     private const string ToggleKey = "TEST_TOGGLE";
+    private const string EngineKey = "TEST_ENGINE_MASTER";
 
-    private static A330ControlMap Map() => new()
+    internal static A330ControlMap Map() => new()
     {
         Controls =
         {
@@ -37,10 +38,22 @@ public class A330PanelSetTests
                     new A330ControlMap.Position { Value = 1, Input = 1, Label = "On" },
                 },
             },
+            // takes its position by value: pressed even when the read is unknown
+            new A330ControlMap.Control
+            {
+                Key = EngineKey, Section = "S", Panel = "P", Label = "Test engine master", Kind = "select",
+                Event = "AIRLINER_TEST_ENG", Mode = "toggle", Read = "L:INI_TEST_ENG",
+                Rpn = "{value} (>B:AIRLINER_TEST_ENG_Set)",
+                Positions = new()
+                {
+                    new A330ControlMap.Position { Value = 0, Input = 0, Label = "Off" },
+                    new A330ControlMap.Position { Value = 1, Input = 1, Label = "On" },
+                },
+            },
         },
     };
 
-    private sealed class FakeIo
+    internal sealed class FakeIo
     {
         public bool CanCalc = true, TrySetResult = true;
         public Dictionary<string, double> Cache = new();
@@ -63,12 +76,12 @@ public class A330PanelSetTests
         };
     }
 
-    private sealed class Def : IniA330Definition
+    internal sealed class Def : IniA330Definition
     {
-        public Def(FakeIo io) : base(Map()) { PanelIo = _ => io.Io; }
+        public Def(FakeIo io, A330ControlMap? map = null) : base(map ?? Map()) { PanelIo = _ => io.Io; }
     }
 
-    private sealed class Spoken : ScreenReaderAnnouncer
+    internal sealed class Spoken : ScreenReaderAnnouncer
     {
         public Spoken() : base(IntPtr.Zero) { }
         public List<string> Lines { get; } = new();
@@ -104,6 +117,7 @@ public class A330PanelSetTests
         Assert.Empty(io.Delays);                             // nothing was sent, so nothing is read back
 
         io = new FakeIo { CanCalc = false };
+        io.Cache[ToggleKey] = 0;
         def = new Def(io);
         said = new Spoken();
         Assert.True(Pick(def, ToggleKey, 1, said));
@@ -119,6 +133,7 @@ public class A330PanelSetTests
         Assert.False(new Def(refused).PressFromWindow(SelectorKey, 1, new SimConnectManager(IntPtr.Zero), new Spoken()));
 
         var calcRefused = new FakeIo { CanCalc = false };
+        calcRefused.Cache[ToggleKey] = 0;
         Assert.False(new Def(calcRefused).PressFromWindow(ToggleKey, 1, new SimConnectManager(IntPtr.Zero), new Spoken()));
 
         // a write that was sent is true, and the flag does not stay set for the next press
@@ -211,6 +226,7 @@ public class A330PanelSetTests
         // another row's pick does not cancel it
         io = new FakeIo { Gate = new TaskCompletionSource() };
         def = new Def(io);
+        io.Cache[ToggleKey] = 0;
         Pick(def, SelectorKey, 1, said);
         Pick(def, ToggleKey, 1, said);
         await Release(io);
@@ -349,5 +365,64 @@ public class A330PanelSetTests
         Assert.True(Pick(def, "A330_PARKBRK", 0, said));
         Assert.Equal(new[] { "set AIRLINER_PARKINGBRAKE 1" }, io.Sent);
         Assert.Equal(new[] { "A330_PARKBRK" }, io.Requests);
+    }
+
+    [Fact]
+    public void A_toggle_with_no_read_is_not_pressed()
+    {
+        // a press flips whatever the control is: with the read unknown it could switch the wrong way ([FO-18]: unread is
+        // unknown, never "differs"), so it refuses aloud and sends nothing
+        foreach (double? unread in new double?[] { null, double.NaN })
+        {
+            var io = new FakeIo();
+            if (unread is double nan) io.Cache[ToggleKey] = nan;
+            var def = new Def(io);
+            var said = new Spoken();
+            Assert.True(Pick(def, ToggleKey, 1, said));   // handled: MainForm never falls back to its raw SetLVar
+            Assert.Empty(io.Sent);
+            Assert.Equal(new[] { "Test toggle unavailable: its position is not read yet." }, said.Lines);
+            Assert.Equal(new[] { ToggleKey }, io.Requests);   // asks for the read again
+            Assert.Empty(io.Delays);
+            Assert.False(def.PressFromWindow(ToggleKey, 1, new SimConnectManager(IntPtr.Zero), new Spoken()));
+        }
+
+        // a read that differs still presses once
+        var read = new FakeIo();
+        read.Cache[ToggleKey] = 0;
+        Pick(new Def(read), ToggleKey, 1, new Spoken());
+        Assert.Equal(new[] { "press AIRLINER_TEST_TOGGLE 150" }, read.Sent);
+    }
+
+    [Fact]
+    public void An_engine_master_with_no_read_is_still_set_by_value()
+    {
+        var io = new FakeIo();
+        var said = new Spoken();
+        Assert.True(Pick(new Def(io), EngineKey, 1, said));
+        Assert.Equal(new[] { "calc 1 (>B:AIRLINER_TEST_ENG_Set)" }, io.Sent);
+        Assert.Empty(said.Lines);
+
+        io = new FakeIo();
+        io.Cache[EngineKey] = double.NaN;
+        Pick(new Def(io), EngineKey, 0, new Spoken());
+        Assert.Equal(new[] { "calc 0 (>B:AIRLINER_TEST_ENG_Set)" }, io.Sent);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_toggle_refusal_and_an_engine_value_do_not_depend_on_the_culture(string culture)
+    {
+        TestCulture.Run(culture, () =>
+        {
+            var io = new FakeIo();
+            var said = new Spoken();
+            Pick(new Def(io), ToggleKey, 1, said);
+            Assert.Equal(new[] { "Test toggle unavailable: its position is not read yet." }, said.Lines);
+            io = new FakeIo();
+            Pick(new Def(io), EngineKey, 1, new Spoken());
+            Assert.Equal(new[] { "calc 1 (>B:AIRLINER_TEST_ENG_Set)" }, io.Sent);
+            return 0;
+        });
     }
 }

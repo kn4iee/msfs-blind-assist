@@ -232,7 +232,9 @@ public partial class IniA330Definition
     private bool SendPick(string key, SimVarDefinition varDef, double target, A330WritePlan plan, A330PanelIo io, ScreenReaderAnnouncer announcer)
     {
         if (plan.Outcome == A330WriteOutcome.AtPosition) return true;   // the control already reads it: nothing to send or check
-        string? refusal = plan.Outcome == A330WriteOutcome.Refused ? $"{varDef.DisplayName} unavailable" : null;
+        string? refusal = plan.Outcome == A330WriteOutcome.Refused
+            ? (plan.Reason is { } why ? $"{varDef.DisplayName} unavailable: {why}." : $"{varDef.DisplayName} unavailable")
+            : null;
         if (refusal == null)
         {
             foreach (var call in plan.Calls)
