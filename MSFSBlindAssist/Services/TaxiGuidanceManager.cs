@@ -3074,7 +3074,7 @@ public partial class TaxiGuidanceManager : IDisposable
             bool legEndTaxiing = legEnd != null && _state == TaxiGuidanceState.Taxiing;
             // The leg end's own "Slow down": the countdown's latches belong to the stop they were set for
             // (_holdShortCountdownNodeId), now counted down along the route, so another stop's never ends the leg.
-            bool legEndSlowDownSaid = _holdShortSlowDownAnnounced && currentSeg.ToNode?.NodeId == _holdShortCountdownNodeId;
+            bool legEndSlowDownSaid = _holdShortSlowDownAnnounced && currentSeg.ToNode.NodeId == _holdShortCountdownNodeId;
             bool arrived = legEnd != null
                 ? legEndTaxiing && ProgressiveLegEnd.Arrived(legEnd.Type, distToTarget, groundSpeedKts,
                     legEndSlowDownSaid, nearARunway, onRunwayPavement)

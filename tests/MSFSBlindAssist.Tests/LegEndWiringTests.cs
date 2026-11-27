@@ -59,7 +59,7 @@ public class LegEndWiringTests
 
         Assert.Matches(@"bool legEndInReach = _progressiveTerminator != null\s+&& \(onFinalSegment\s+\|\| RouteAhead\.NextCountdownStop\(_route\.Segments, _currentSegmentIndex, distToTarget,\s+HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M, legEnd: true, cleared: false\)\s+is \{ Kind: RouteAhead\.CountdownStopKind\.LegEnd \}\);", text);
         Assert.Contains("bool nearARunway = legEndInReach", text);
-        Assert.Contains("bool legEndSlowDownSaid = _holdShortSlowDownAnnounced && currentSeg.ToNode?.NodeId == _holdShortCountdownNodeId;", text);
+        Assert.Contains("bool legEndSlowDownSaid = _holdShortSlowDownAnnounced && currentSeg.ToNode.NodeId == _holdShortCountdownNodeId;", text);
     }
 
     // BA never asks for a stop on a runway: the countdown takes the frame's runway tests and asks
