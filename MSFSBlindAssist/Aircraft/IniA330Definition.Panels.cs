@@ -303,6 +303,15 @@ public partial class IniA330Definition
         return true;
     }
 
+    /// <summary>The rows the keys' <c>State</c> variables are read through (built once, from the map).</summary>
+    private HashSet<string>? _stateRowKeys;
+
+    private HashSet<string> StateRowKeys => _stateRowKeys ??= _map.Controls
+        .Select(StateRowKey).Where(k => k != null).Select(k => k!).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>What the definition last saw of each state row; the first delivery seeds it silently.</summary>
+    private readonly Dictionary<string, double> _stateBaseline = new(StringComparer.Ordinal);
+
     /// <summary>Until when (NowMs) a change of a state row is the pilot's own press's echo, consumed silently.</summary>
     private readonly Dictionary<string, long> _pressEchoUntil = new(StringComparer.Ordinal);
 
@@ -344,7 +353,10 @@ public partial class IniA330Definition
             if (_pickGeneration[stateKey] != generation) return;
             _pressEchoUntil.Remove(stateKey);   // this read-back is the row's state now: later changes speak again
             if (read is double v && double.IsFinite(v) && GetVariables().TryGetValue(stateKey, out var row))
+            {
+                _stateBaseline[stateKey] = v;
                 announcer.AnnounceImmediate(A330Write.StateSentence(row, v));
+            }
             else
                 Log.Debug("A330", $"{stateKey}: the state was not readable after the press");
         }
@@ -444,9 +456,23 @@ public partial class IniA330Definition
 
     partial void ProcessPanelUpdate(string varName, double value, ScreenReaderAnnouncer announcer, ref bool handled)
     {
-        // a state row the pilot's own key press just moved: its read-back says it, so the change is consumed here
-        // (the row's display already followed it); the generic announce would be a second voice
-        if (IsPressEcho(varName)) { handled = true; return; }
+        // a row a key's state names: the definition announces it itself, with a baseline of its own that every
+        // delivery moves (an echo included), so a change back after a press is still a change; MainForm's generic
+        // gate is never reached, so it is never a second voice (the row's display followed in MainForm already)
+        if (StateRowKeys.Contains(varName))
+        {
+            bool echo = IsPressEcho(varName);
+            bool seen = _stateBaseline.TryGetValue(varName, out double old);
+            _stateBaseline[varName] = value;
+            handled = true;
+            if (echo || !seen || Math.Abs(old - value) <= 0.001) return;
+            if (!GetVariables().TryGetValue(varName, out var row) || !row.IsAnnounced || announcer.Suppressed) return;
+            // the generic gate's sentence and call (MainForm.Announcers.cs, the description it builds, then Announce)
+            announcer.Announce(row.ValueDescriptions.TryGetValue(row.DescriptionKeyFor(value), out var described)
+                ? $"{row.DisplayName}: {described}"
+                : FormattableString.Invariant($"{row.DisplayName}: {value}"));
+            return;
+        }
         switch (varName)
         {
             case A330SharedKeys.Flaps:
@@ -475,5 +501,6 @@ public partial class IniA330Definition
     {
         _lastFlapIndex = -1;
         _pressEchoUntil.Clear();
+        _stateBaseline.Clear();
     }
 }
