@@ -1,7 +1,6 @@
 ---
 paths:
   - "MSFSBlindAssist/Navigation/HoldShortAbeam.cs"
-  - "MSFSBlindAssist/Services/TaxiGuidanceManager.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.MathUtils.cs"
   - "tests/MSFSBlindAssist.Tests/HoldShortAbeamTests.cs"
 ---

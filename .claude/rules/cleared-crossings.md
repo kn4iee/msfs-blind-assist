@@ -1,7 +1,6 @@
 ---
 paths:
   - "MSFSBlindAssist/Navigation/ClearedCrossing*.cs"
-  - "MSFSBlindAssist/Services/TaxiGuidanceManager.cs"
   - "MSFSBlindAssist/Database/Models/TaxiRoute.cs"
   - "tests/MSFSBlindAssist.Tests/ClearedCrossing*.cs"
 ---

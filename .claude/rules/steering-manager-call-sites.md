@@ -4,7 +4,8 @@ paths:
 ---
 # Steering and rollout exit-turn rules for TaxiGuidanceManager.cs
 
-MIRRORS: copied word for word from taxi-steering.md and rollout-exit-turn.md, which leave this main partial out for the rule budget: these are their rules whose code it declares or runs (the steering fields and the turn cue, `exitCrossTrackPull`, the miss hold-off calls). Change a rule there and here together; ClaudeContextBudgetTests fails if the copies differ.
+MIRRORS: copied word for word from the rule file each Full: link names, whose globs leave this main partial out for the rule budget: these are their rules whose code it declares or runs (the steering fields and the turn cue, `exitCrossTrackPull`, the miss hold-off calls, the roll to a route's runway start, the capture of a hold passed beside its node).
+Change a rule there and here together; ClaudeContextBudgetTests fails if the copies differ.
 
 - [STR-1] `WAYPOINT_CAPTURE_RADIUS_M` (25m) must skip the last route segment, or it preempts the gate arrival radius and parking countdown. Full: docs/invariants/taxi-steering.md#str-1
 - [STR-13] Any new public `TaxiGuidanceManager` method touching `_route`, `_state` or `_currentSegmentIndex` must acquire `_stateLock`. Full: docs/invariants/taxi-steering.md#str-13
@@ -17,6 +18,6 @@ MIRRORS: copied word for word from taxi-steering.md and rollout-exit-turn.md, wh
 - [ROL-35] Neither missed-exit detector calls a miss while the aircraft is turning onto the exit's own path (`LandingExitPathFollow.HoldsOffMiss`, fed by `GetRolloutExitPath`); keep every gate, and never make it position-only. Full: docs/invariants/rollout-exit-turn.md#rol-35
 - [ROL-36] Both missed-exit detectors wait out the exit's on-centreline stub (`OnAxisRunMetres`; never widen the 6 m band), hold off within 15 m of the exit's path (`StillOnExitPath`) and share ONE margin (`MissMarginFeet()`), never stub + divergence summed. Full: docs/invariants/rollout-exit-turn.md#rol-36
 - [ROL-40] Both post-handoff tone sources carry the bounded cross-track pull (`exitCrossTrackPull`: 1°/m, ±20°, runway-aligned segment only, never into a sharp turn or on a turn-back exit); without it a wide, parallel aircraft reads zero error. Full: docs/invariants/rollout-exit-turn.md#rol-40
-
-Mirrored from route-runway-start.md (it governs the roll to a route's runway start, which this partial runs: `AimsAtStartNode` in the tone's target and the roll counted in `StartGuidance`; change it there and here together):
 - [RTE-37] A plain route loaded or recalculated on a runway starts on its own nodes (`RouteRunwayStart`: cleared taxiway ahead, nearest ahead, nearest behind, one per exit and bank), never an exit whose route comes back onto it nor a beeline at a parallel; a first-row Turn pick keeps that start; never a runway destination or landing-exit route. Full: docs/invariants/route-runway-start.md#rte-37
+- [HLD-24] A hold-short passed BESIDE its node latches through `HoldShortAbeam.IsReached`, measured by `TryMeasureHoldAbeam`, never by `AlongTrackToSegmentEnd` on the hold segment alone (a sub-metre segment reads level from anywhere); never on the final segment, whose hold is `HandleArrival`'s; fly a VirtualPilot A/B before changing a bound. Full: docs/invariants/hold-abeam.md#hld-24
+- [HLD-25] The abeam capture never takes an aircraft `HoldShortAbeam.IsRollingOnBehindTheLine`: over 10 m farther from the hold's runway than the node (`MetresBehindHoldLine`) AND the tone at full pan, the turn onto the connector missed; never one test alone (KCLE latches at full pan, VHHH 21 m behind); fly VirtualPilot missturn before changing either. Full: docs/invariants/hold-abeam.md#hld-25
