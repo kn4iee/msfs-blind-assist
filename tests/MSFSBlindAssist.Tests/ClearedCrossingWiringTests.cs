@@ -312,8 +312,11 @@ public class ClearedCrossingWiringTests
         string branch = cont[paired..guard];
         Assert.Contains("if (_state == TaxiGuidanceState.Taxiing && _route != null", branch);
         Assert.Contains("&& !(_pairedCrossingSegIdx >= 0 && MSFSBlindAssist.Utils.SimClock.UtcNow < _pairedCrossingWindowFrom))", branch);
-        Assert.Contains("_holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced,", branch);
-        Assert.Contains("seg.IsHoldShortPoint, seg.HoldShortRunway, _currentSegmentIndex >= _route.Segments.Count - 1)", branch);
+        // The stop the countdown has named, along the route (EarlyContinueStop, ClearedCrossingAlongRouteTests), by the node
+        // its latches belong to; never the last segment's.
+        Assert.Matches(@"int stopIdx = ClearedCrossingHolds\.EarlyContinueStop\(_route\.Segments, _currentSegmentIndex, _progressiveTerminator != null,\s+_holdShortCountdownNodeId, _holdShortOuterAnnounced \|\| _holdShortSlowDownAnnounced \|\| _holdShortStopAnnounced\);", branch);
+        Assert.Contains("seg.IsHoldShortPoint, seg.HoldShortRunway, stopIdx >= _route.Segments.Count - 1)", branch);
+        Assert.DoesNotContain("_route.Segments[_currentSegmentIndex]", branch);
         Assert.Contains("RouteRunwayCrossings.ExtractRunwayDesignator(seg.HoldShortRunway) is string runway", branch);
         // Recorded as a Continue's, never as a crossing the pilot entered (stage 3 maps only those to a Cross step).
         Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,", branch);
@@ -358,7 +361,7 @@ public class ClearedCrossingWiringTests
         // Never called for its side effect alone, its answer dropped.
         Assert.DoesNotMatch(@"(?m)^\s*(Navigation\.)?ClearedCrossingHolds\.ClearAt\(", cont);
 
-        int earlyClear = cont.IndexOf("&& ClearedCrossingHolds.ClearAt(_route, _currentSegmentIndex + 1, runway))", StringComparison.Ordinal);
+        int earlyClear = cont.IndexOf("&& ClearedCrossingHolds.ClearAt(_route, stopIdx + 1, runway))", StringComparison.Ordinal);
         int earlyRecord = cont.IndexOf("new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId, Origin: ClearedBy.Continue)", StringComparison.Ordinal);
         int earlySaid = cont.IndexOf("ClearedCrossingCallouts.EarlyContinue(", StringComparison.Ordinal);
         Assert.True(earlyClear >= 0 && earlyRecord > earlyClear && earlySaid > earlyClear,
@@ -444,7 +447,7 @@ public class ClearedCrossingWiringTests
     // "passed", and the window hears ClearedCrossingsChanged after the sentence. A stop the aircraft holds at asks for
     // every runway again (its hold stages composed afresh, [HLD-11]); a line the segment jump said early puts the cursor
     // back onto its segment, so its countdown and hold run as for any stop. Only the restored stop's OWN countdown starts
-    // fresh (it is the current segment, after any cursor move, or the aircraft holds there): resetting the latches of
+    // fresh (it is the countdown's next stop along the route, after any cursor move, or the aircraft holds there): resetting the latches of
     // another stop the aircraft is counting down to would repeat that stop's last call and cut the key's sentence off.
     [Fact]
     public void Putting_a_stop_back_restores_it_and_tells_the_window()
@@ -455,15 +458,18 @@ public class ClearedCrossingWiringTests
         Assert.Contains("ClearedCrossingHolds.RestoreStartHold(_route)", back);
         Assert.Contains("ClearedCrossingHolds.RestoreAt(_route, decision.SegmentIndex)", back);
         Assert.Contains("_clearedCrossings = ClearedCrossingHolds.WithoutStop(_clearedCrossings, stopNodeId);", back);
-        Assert.Matches(@"if \(heldHere \|\| ownSegment\)\s+_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", back);
+        Assert.Matches(@"if \(heldHere \|\| ownCountdown\)\s+_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;", back);
         Assert.Single(Regex.Matches(back, @"_holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;"));
-        Assert.Contains("bool ownSegment = !startHold && decision.SegmentIndex == _currentSegmentIndex;", back);
+        // The countdown's next stop along the route, not only the current segment (RestoreRestartsCountdown,
+        // ClearedCrossingAlongRouteTests), and its latches then belong to that stop.
+        Assert.Matches(@"bool ownCountdown = !startHold && ClearedCrossingHolds\.RestoreRestartsCountdown\(\s+_route\.Segments, _currentSegmentIndex, decision\.SegmentIndex, _progressiveTerminator != null\);", back);
+        Assert.Contains("if (ownCountdown) _holdShortCountdownNodeId = stopNodeId;", back);
         int moved = back.IndexOf("_currentSegmentIndex = decision.CursorIndex;", StringComparison.Ordinal);
-        int own = back.IndexOf("bool ownSegment = ", StringComparison.Ordinal);
-        Assert.True(moved >= 0 && own > moved, "the restored stop's own segment is judged after the cursor moves");
+        int own = back.IndexOf("bool ownCountdown = ", StringComparison.Ordinal);
+        Assert.True(moved >= 0 && own > moved, "the restored stop's own countdown is judged after the cursor moves");
         // While taxiing the key's sentence stands for the outer call only within that call's distance; further out the
         // outer call still comes as the heads-up (the first call is never "Slow down").
-        Assert.Matches(@"else if \(ownSegment && _state == TaxiGuidanceState\.Taxiing\s+&& ClearedCrossingHolds\.RestoreSaysOuterCall\(decision\.Metres, _lastGroundSpeedKts\)\)\s+\{\s+(//[^\n]*\n\s+)*_holdShortOuterAnnounced = true;", back);
+        Assert.Matches(@"else if \(ownCountdown && _state == TaxiGuidanceState\.Taxiing\s+&& ClearedCrossingHolds\.RestoreSaysOuterCall\(decision\.Metres, _lastGroundSpeedKts\)\)\s+\{\s+(//[^\n]*\n\s+)*_holdShortOuterAnnounced = true;", back);
         Assert.Contains("ComposeHoldEntry(", back);
         Assert.Contains("if (_lastIncursionWarnedNodeId == stopNodeId) _lastIncursionWarnedNodeId = -1;", back);
         Assert.Contains("if (_passedClearedNodeId == stopNodeId) ForgetPassedClearedLine();", back);

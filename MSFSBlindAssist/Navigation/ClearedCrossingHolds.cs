@@ -376,6 +376,38 @@ public static class ClearedCrossingHolds
         => countdownSpoken && isHoldShort && !isFinalSegment
            && RouteRunwayCrossings.ExtractRunwayDesignators(label).Count > 0;
 
+    /// <summary>
+    /// The segment whose stop a Continue pressed while taxiing, before the line, is about: the hold-short countdown's next
+    /// stop along the route from the <paramref name="cursor"/> (RouteAhead.NextCountdownStop, as the countdown finds it,
+    /// <paramref name="legEnd"/> for a leg with no destination), which on short navdata pieces can be several segments
+    /// past the cursor, and only once the countdown has named that very stop (<paramref name="countdownSpoken"/>, any of
+    /// its calls, for the node its latches belong to, <paramref name="countdownNodeId"/>). -1 otherwise: a stray key never
+    /// clears a runway the pilot has not been told about. <see cref="CanClearEarly"/> then judges the stop itself (a hold
+    /// short naming a runway, not on the route's last segment). Pure.
+    /// </summary>
+    public static int EarlyContinueStop(IReadOnlyList<TaxiRouteSegment> segments, int cursor, bool legEnd,
+                                        int countdownNodeId, bool countdownSpoken)
+    {
+        if (!countdownSpoken || segments is null) return -1;
+        return RouteAhead.NextCountdownStop(segments, cursor, 0.0, double.PositiveInfinity, legEnd, cleared: true) is { } stop
+               && segments[stop.Index].ToNode?.NodeId == countdownNodeId
+            ? stop.Index
+            : -1;
+    }
+
+    /// <summary>
+    /// Whether the stop the Hold short key just put back on segment <paramref name="restoredSegmentIndex"/> is the one the
+    /// hold-short countdown counts down next, along the route from the <paramref name="cursor"/>
+    /// (RouteAhead.NextCountdownStop): its countdown then starts fresh, as it always did for a stop on the current segment.
+    /// Another stop before it is the one being counted down, and its latches stay as they are, or its last call would come
+    /// again and cut the key's sentence off. Pure.
+    /// </summary>
+    public static bool RestoreRestartsCountdown(IReadOnlyList<TaxiRouteSegment> segments, int cursor, int restoredSegmentIndex,
+                                                bool legEnd)
+        => restoredSegmentIndex >= 0 && segments is not null
+           && RouteAhead.NextCountdownStop(segments, cursor, 0.0, double.PositiveInfinity, legEnd, cleared: true)?.Index
+              == restoredSegmentIndex;
+
     /// <summary>The ground speed, knots, at or above which an aircraft at a cleared start has started across it.</summary>
     public const double StartCrossingMovingKts = 2.0;
 

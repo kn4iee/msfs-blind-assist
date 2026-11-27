@@ -4863,13 +4863,17 @@ public partial class TaxiGuidanceManager : IDisposable
                                   "after the Continue that resumed taxiing.");
                 return;
             }
-            var seg = _route.Segments[_currentSegmentIndex];
-            if (ClearedCrossingHolds.CanClearEarly(
-                    _holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced,
-                    seg.IsHoldShortPoint, seg.HoldShortRunway, _currentSegmentIndex >= _route.Segments.Count - 1)
+            // The stop the countdown has named: its next stop along the route, which on short navdata pieces can be several
+            // segments past the cursor (ClearedCrossingHolds.EarlyContinueStop, by the node its latches belong to).
+            int stopIdx = ClearedCrossingHolds.EarlyContinueStop(_route.Segments, _currentSegmentIndex, _progressiveTerminator != null,
+                _holdShortCountdownNodeId, _holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced);
+            var seg = stopIdx >= 0 ? _route.Segments[stopIdx] : null;
+            if (seg != null
+                && ClearedCrossingHolds.CanClearEarly(
+                    true, seg.IsHoldShortPoint, seg.HoldShortRunway, stopIdx >= _route.Segments.Count - 1)
                 && RouteRunwayCrossings.ExtractRunwayDesignator(seg.HoldShortRunway) is string runway
                 && seg.ToNode != null
-                && ClearedCrossingHolds.ClearAt(_route, _currentSegmentIndex + 1, runway))
+                && ClearedCrossingHolds.ClearAt(_route, stopIdx + 1, runway))
             {
                 _clearedCrossings = ClearedCrossingHolds.WithCrossing(_clearedCrossings,
                     new ClearedCrossing(runway, StopNodeId: seg.ToNode.NodeId, Origin: ClearedBy.Continue));
@@ -5144,8 +5148,8 @@ public partial class TaxiGuidanceManager : IDisposable
     /// (<see cref="ClearedCrossingHolds.RestoreStartHold"/>) or a segment's (<see cref="ClearedCrossingHolds.RestoreAt"/>),
     /// with every runway it was placed with, and says so with the distance along the route. Its crossing leaves
     /// <c>_clearedCrossings</c> (a new list: replaced, never mutated), so a recalculation never clears it again; a line
-    /// the segment jump said early gets the cursor back onto its segment; when it is the current segment or the aircraft
-    /// holds there, the three countdown latches start fresh, so it is counted down and held like any stop (while taxiing,
+    /// the segment jump said early gets the cursor back onto its segment; when it is the countdown's next stop along the
+    /// route or the aircraft holds there, the three countdown latches start fresh, so it is counted down and held like any stop (while taxiing,
     /// within the outer call's distance, the key's sentence is its first call: the outer call would only cut it off with
     /// the same distance; further out the outer call still comes, <see cref="ClearedCrossingHolds.RestoreSaysOuterCall"/>), and another
     /// stop's countdown is never touched; a stop the aircraft holds at stages its runways
@@ -5178,18 +5182,22 @@ public partial class TaxiGuidanceManager : IDisposable
             _currentSegmentIndex = decision.CursorIndex;
             _lastSegmentAdvanceTime = MSFSBlindAssist.Utils.SimClock.UtcNow;
         }
-        // Only the restored stop's own countdown starts fresh: it is the current segment (after any cursor move), or the
-        // aircraft holds there. The latches of another stop the aircraft is counting down to stay as they are, or its
-        // last call would come again and cut the key's sentence off.
-        bool ownSegment = !startHold && decision.SegmentIndex == _currentSegmentIndex;
-        if (heldHere || ownSegment)
+        // Only the restored stop's own countdown starts fresh: it is the countdown's next stop along the route from the
+        // cursor (after any cursor move; ClearedCrossingHolds.RestoreRestartsCountdown), or the aircraft holds there, and
+        // the latches then belong to it (_holdShortCountdownNodeId), so the next frame never re-arms them. The latches of
+        // another stop the aircraft is counting down to stay as they are, or its last call would come again and cut the
+        // key's sentence off.
+        bool ownCountdown = !startHold && ClearedCrossingHolds.RestoreRestartsCountdown(
+            _route.Segments, _currentSegmentIndex, decision.SegmentIndex, _progressiveTerminator != null);
+        if (ownCountdown) _holdShortCountdownNodeId = stopNodeId;
+        if (heldHere || ownCountdown)
             _holdShortOuterAnnounced = _holdShortSlowDownAnnounced = _holdShortStopAnnounced = false;
         if (heldHere)
         {
             string cue = ComposeHoldEntry(startHold ? _route.StartHoldRunway : _route.Segments[decision.SegmentIndex].HoldShortRunway);
             if (startHold && LastRouteStartHoldCue != null) LastRouteStartHoldCue = cue;
         }
-        else if (ownSegment && _state == TaxiGuidanceState.Taxiing
+        else if (ownCountdown && _state == TaxiGuidanceState.Taxiing
                  && ClearedCrossingHolds.RestoreSaysOuterCall(decision.Metres, _lastGroundSpeedKts))
         {
             // Inside the outer call's distance the key's sentence is that call; further out the outer call still comes
