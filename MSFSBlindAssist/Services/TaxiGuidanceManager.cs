@@ -4247,8 +4247,9 @@ public partial class TaxiGuidanceManager : IDisposable
         }
         // The route's next stop when it ends a LATER segment within the countdown's reach along the route
         // (HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M), or once its countdown has begun: the countdown names it (it
-        // counts down along the route, RouteAhead.NextStop), so the guard never says "Crossing …" or
-        // "Passing the … hold line." about it. A 2.1 m hold segment put KEWR's 04L hold on AA
+        // counts down along the route, RouteAhead.NextCountdownStop: a hold short, a stop the pilot was cleared
+        // across, whose line PassClearedLine says where it is reached, or the end of a leg with no destination),
+        // so the guard never says "Crossing …" or "Passing the … hold line." about it (CountdownStopNodeForGuard). A 2.1 m hold segment put KEWR's 04L hold on AA
         // inside the 40 m radius while the cursor was still two segments back, and the pilot heard "Passing
         // the runway 04L at AA hold line." two seconds before the "Stop." for that very line (2026-11-26). It
         // stays a candidate and, picked, is latched and opens the cooldown exactly as the spoken line did,
@@ -4261,17 +4262,15 @@ public partial class TaxiGuidanceManager : IDisposable
         // comes within the 40 m radius before the outer tier (EFHK 34, 97 m along the route), and
         // "Passing the runway 34 hold line." came 0.4 s before the countdown's first line (VirtualPilot).
         int laterStopHsNodeId = -1;
-        if (scheduledHsNodeId < 0 && _route != null && _currentSegmentIndex < _route.Segments.Count
-            && RouteAhead.NextStop(_route.Segments, _currentSegmentIndex, 0.0, double.PositiveInfinity) is { } laterStop
-            && _route.Segments[laterStop.Index].ToNode?.NodeId is int laterStopNodeId)
+        if (scheduledHsNodeId < 0 && _route != null && _currentSegmentIndex < _route.Segments.Count)
         {
             var curEnd = _route.Segments[_currentSegmentIndex].ToNode;
-            double alongToStopM = laterStop.AlongMetres
-                + (curEnd != null ? TaxiGraph.FastDistanceMeters(lat, lon, curEnd.Latitude, curEnd.Longitude) : 0.0);
-            bool countdownBegun = laterStopNodeId == _holdShortCountdownNodeId
-                && (_holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced);
-            if (countdownBegun || alongToStopM <= HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M)
-                laterStopHsNodeId = laterStopNodeId;
+            bool taxiing = _state == TaxiGuidanceState.Taxiing;
+            laterStopHsNodeId = CountdownStopNodeForGuard(_route.Segments, _currentSegmentIndex,
+                curEnd != null ? TaxiGraph.FastDistanceMeters(lat, lon, curEnd.Latitude, curEnd.Longitude) : 0.0,
+                legEnd: _progressiveTerminator != null && taxiing, cleared: taxiing, _holdShortCountdownNodeId,
+                _holdShortOuterAnnounced || _holdShortSlowDownAnnounced || _holdShortStopAnnounced,
+                HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M);
         }
         // The cooldown is a pure TIME check. It used to also require _lastIncursionWarnedNodeId
         // != -1, which meant any path that re-armed the node id disarmed the cooldown with it —
@@ -4522,6 +4521,26 @@ public partial class TaxiGuidanceManager : IDisposable
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// The node of the route's next stop that the hold-short countdown names (<see cref="RouteAhead.NextCountdownStop"/>:
+    /// a hold short, a stop the pilot was cleared across, or the end of a leg with no destination), when it lies within
+    /// <paramref name="lookaheadMetres"/> along the route from the aircraft (<paramref name="toCurrentEndMetres"/> to the
+    /// current segment's end, then each segment after it) or its countdown has begun (<paramref name="countdownNodeId"/>
+    /// with a tier latched); -1 otherwise. The incursion guard latches that node in silence ([RTE-41]): the countdown
+    /// names it, and a cleared line is said where it is reached (PassClearedLine), so the guard's own "Crossing runway
+    /// 04L at C." on the approach doubled it. Pure — <c>IncursionCountdownStopTests</c>.
+    /// </summary>
+    internal static int CountdownStopNodeForGuard(IReadOnlyList<TaxiRouteSegment> segments, int currentIndex,
+        double toCurrentEndMetres, bool legEnd, bool cleared, int countdownNodeId, bool anyTierLatched, double lookaheadMetres)
+    {
+        if (currentIndex < 0 || currentIndex >= segments.Count
+            || RouteAhead.NextCountdownStop(segments, currentIndex, 0.0, double.PositiveInfinity, legEnd, cleared) is not { } stop
+            || segments[stop.Index].ToNode?.NodeId is not int nodeId)
+            return -1;
+        bool countdownBegun = nodeId == countdownNodeId && anyTierLatched;
+        return countdownBegun || stop.AlongMetres + toCurrentEndMetres <= lookaheadMetres ? nodeId : -1;
     }
 
     /// <summary>
