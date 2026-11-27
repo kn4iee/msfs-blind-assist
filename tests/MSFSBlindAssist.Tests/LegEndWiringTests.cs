@@ -267,7 +267,7 @@ public class LegEndWiringTests
         // The countdown: one line per tier, the leg end's first, then a cleared crossing's, then `lead` ("End of route"
         // only on a runway route's last segment that misses its runway).
         string countdown = Member(manager, "private void CheckHoldShortCountdown(");
-        Assert.Contains("string lead = _routeEndsFarFromRunway && _route != null && _currentSegmentIndex == _route.Segments.Count - 1", countdown);
+        Assert.Contains("string lead = _routeEndsFarFromRunway && stopIndex == _route.Segments.Count - 1", countdown);
         Assert.Equal(3, Regex.Matches(countdown, @"AnnounceInstruction\(legEnd != null\s+\? LegEndLine\(legEnd, CountdownTier\.\w+\)\s+: clearedCrossing \? ClearedLine\(\)\s+: \$""\{lead\} in ").Count);
         Assert.Contains("if (legEnd == null && !clearedCrossing && _holdShortSlowDownAnnounced && !_holdShortStopAnnounced", countdown);
 

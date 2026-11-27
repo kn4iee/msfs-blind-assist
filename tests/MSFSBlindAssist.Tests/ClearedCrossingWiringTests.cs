@@ -147,7 +147,7 @@ public class ClearedCrossingWiringTests
         string countdown = Member(ManagerSource(), "private void CheckHoldShortCountdown(");
 
         Assert.Contains("bool clearedCrossing = ClearedCrossingHolds.CountsDownAsCleared(currentSeg, legEnd != null, _state == TaxiGuidanceState.Taxiing);", countdown);
-        Assert.Contains("if (!currentSeg.IsHoldShortPoint && legEnd == null && !clearedCrossing)", countdown);
+        Assert.Contains("if (legEnd != null || clearedCrossing)", countdown);
         Assert.Contains("ClearedCrossingCallouts.Approach(", countdown);
         Assert.Contains("DistanceFormatter.FromFeet(distFeet), firstCall)", countdown);
         // Each of the three tiers speaks the cleared line in place of the hold short's (or the end of a route that never
