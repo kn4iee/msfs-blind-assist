@@ -35,17 +35,31 @@ public class LegEndWiringTests
     }
 
     // The countdown of a leg end runs only while Taxiing too: the frame that enters a mid-route hold after
-    // an overrun onto the last segment never adds the leg end's "... Stop." to the hold's own sentence.
+    // an overrun onto the last segment never adds the leg end's "... Stop." to the hold's own sentence. It is
+    // counted down along the route, as a hold short is (RouteAhead.NextCountdownStop, RouteAheadCountdownStopTests).
     [Fact]
     public void The_leg_end_countdown_runs_only_while_taxiing()
     {
         string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
-        int method = text.IndexOf("private void CheckHoldShortCountdown(", StringComparison.Ordinal);
-        Assert.True(method >= 0, "CheckHoldShortCountdown not found");
-        int legEndAt = text.IndexOf("var legEnd = ", method, StringComparison.Ordinal);
-        int choiceEnd = text.IndexOf("? _progressiveTerminator : null;", method, StringComparison.Ordinal);
-        Assert.True(legEndAt > method && choiceEnd > legEndAt, "the countdown's legEnd choice not found");
-        Assert.Contains("_state == TaxiGuidanceState.Taxiing", text[legEndAt..choiceEnd]);
+        string countdown = Member(text, "private void CheckHoldShortCountdown(");
+
+        Assert.Contains("bool taxiing = _state == TaxiGuidanceState.Taxiing;", countdown);
+        Assert.Matches(@"RouteAhead\.NextCountdownStop\(_route\.Segments, _currentSegmentIndex, distToTargetM, HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M,\s+legEnd: _progressiveTerminator != null && taxiing, cleared: taxiing\)", countdown);
+        Assert.Contains("var legEnd = stop.Kind == RouteAhead.CountdownStopKind.LegEnd ? _progressiveTerminator : null;", countdown);
+        Assert.DoesNotContain("RouteAhead.NextStop(", countdown);
+    }
+
+    // The frame's runway tests are asked whenever the leg end is the countdown's next stop, not only on its last segment:
+    // on a leg whose last pieces are short its "Slow down" and "Stop" come before that segment, and BA never asks for a
+    // stop on a runway (ProgressiveLegEnd.MaySpeak). The arrival reads the leg end's own "Slow down" only.
+    [Fact]
+    public void The_leg_end_s_runway_tests_and_slow_down_follow_the_along_route_countdown()
+    {
+        string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+
+        Assert.Matches(@"bool legEndInReach = _progressiveTerminator != null\s+&& \(onFinalSegment\s+\|\| RouteAhead\.NextCountdownStop\(_route\.Segments, _currentSegmentIndex, distToTarget,\s+HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M, legEnd: true, cleared: false\)\s+is \{ Kind: RouteAhead\.CountdownStopKind\.LegEnd \}\);", text);
+        Assert.Contains("bool nearARunway = legEndInReach", text);
+        Assert.Contains("bool legEndSlowDownSaid = _holdShortSlowDownAnnounced && currentSeg.ToNode?.NodeId == _holdShortCountdownNodeId;", text);
     }
 
     // BA never asks for a stop on a runway: the countdown takes the frame's runway tests and asks
@@ -73,7 +87,7 @@ public class LegEndWiringTests
 
         Assert.Contains("bool onRunwayPavement = nearARunway", text);
         Assert.Contains("Navigation.RouteRunwayCrossings.RunwayUnder(_graph?.RunwayCenterlines, lat, lon) != null;", text);
-        Assert.Matches(@"ProgressiveLegEnd\.Arrived\(legEnd\.Type, distToTarget, groundSpeedKts,\s+_holdShortSlowDownAnnounced, nearARunway, onRunwayPavement\)", text);
+        Assert.Matches(@"ProgressiveLegEnd\.Arrived\(legEnd\.Type, distToTarget, groundSpeedKts,\s+legEndSlowDownSaid, nearARunway, onRunwayPavement\)", text);
     }
 
     // A hold short of a taxiway, mid-route or at the end of a leg, stops where the pure

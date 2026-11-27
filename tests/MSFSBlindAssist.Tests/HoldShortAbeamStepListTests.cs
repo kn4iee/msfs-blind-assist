@@ -158,7 +158,8 @@ public class HoldShortAbeamStepListTests
 
         Assert.Matches(@"if \(_currentSegmentIndex < _route\.Segments\.Count - 1 && currentSeg\.IsHoldShortPoint", manager);
         string countdown = Member(manager, "private void CheckHoldShortCountdown(");
-        Assert.Matches(@"var legEnd = _currentSegmentIndex == _route\.Segments\.Count - 1", countdown);
+        // The countdown's leg end is the route's last segment (RouteAhead.NextCountdownStop, RouteAheadCountdownStopTests).
+        Assert.Contains("var legEnd = stop.Kind == RouteAhead.CountdownStopKind.LegEnd ? _progressiveTerminator : null;", countdown);
     }
 
     // The Hold short key puts a cleared stop back only while the aircraft is short of its line or beside it, never past

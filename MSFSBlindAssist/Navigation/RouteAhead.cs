@@ -58,6 +58,37 @@ public static class RouteAhead
         return null;
     }
 
+    /// <summary>What the hold-short countdown counts down to (<see cref="NextCountdownStop"/>).</summary>
+    public enum CountdownStopKind { HoldShort, ClearedCrossing, LegEnd }
+
+    /// <summary>
+    /// The hold-short countdown's next stop, measured along the route as <see cref="NextStop"/> measures a hold short:
+    /// the first segment at or after <paramref name="currentIndex"/> that ends at a hold short, or that is the route's
+    /// last segment when it ends a leg with no destination (<paramref name="legEnd"/>; the leg end wins over a hold
+    /// short on the same segment, whose label then leads its words), with the distance to its end along the route. A
+    /// stop every runway of which the pilot was cleared across (<paramref name="cleared"/>) is the current segment's
+    /// only. Null when there is none, or when it is more than <paramref name="lookaheadMetres"/> away (the scan stops
+    /// there). A leg whose last segment is 2 m long was otherwise first counted down 27 m out, inside every tier.
+    /// </summary>
+    public static (int Index, double AlongMetres, CountdownStopKind Kind)? NextCountdownStop(
+        IReadOnlyList<TaxiRouteSegment> segments, int currentIndex, double toCurrentEndMetres, double lookaheadMetres,
+        bool legEnd, bool cleared)
+    {
+        if (currentIndex < 0 || currentIndex >= segments.Count) return null;
+        int last = segments.Count - 1;
+        if (cleared && ClearedCrossingHolds.CountsDownAsCleared(segments[currentIndex], legEnd && currentIndex == last, taxiing: true))
+            return (currentIndex, toCurrentEndMetres, CountdownStopKind.ClearedCrossing);
+        double along = toCurrentEndMetres;
+        for (int i = currentIndex; i < segments.Count; i++)
+        {
+            if (i > currentIndex) along += segments[i].DistanceMeters;
+            if (along > lookaheadMetres) return null;
+            if (legEnd && i == last) return (i, along, CountdownStopKind.LegEnd);
+            if (segments[i].IsHoldShortPoint) return (i, along, CountdownStopKind.HoldShort);
+        }
+        return null;
+    }
+
     /// <summary>
     /// The next junction the turn notices speak about: the end of the first segment at or after
     /// <paramref name="currentIndex"/> where the route turns, or goes onto another named taxiway
