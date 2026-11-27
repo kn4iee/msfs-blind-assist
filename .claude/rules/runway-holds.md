@@ -9,7 +9,6 @@ paths:
   - "MSFSBlindAssist/Services/RunwayIncursionWatch.cs"
   - "tests/MSFSBlindAssist.Tests/**/*Hold*.cs"
   - "tests/MSFSBlindAssist.Tests/**/*Incursion*.cs"
-  - "MSFSBlindAssist/Services/TaxiGuidanceManager.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.Routing.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.Announcements.cs"
   - "MSFSBlindAssist/Services/TaxiGuidanceManager.Backtrack.cs"
