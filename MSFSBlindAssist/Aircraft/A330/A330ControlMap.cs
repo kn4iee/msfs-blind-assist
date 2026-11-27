@@ -32,6 +32,35 @@ internal sealed class A330ControlMap
         /// <summary>The value written to the input event to select this position.</summary>
         [JsonPropertyName("input")] public double Input { get; set; }
         [JsonPropertyName("label")] public string Label { get; set; } = "";
+        /// <summary>True only where an indication the control does not write itself followed this
+        /// position's name (see <see cref="Control.Proof"/>). A map that omits it reads as false: an
+        /// unproven name is never written to the aircraft as fact.</summary>
+        [JsonPropertyName("proven")] public bool Proven { get; set; }
+    }
+
+    /// <summary>A continuous control's spoken unit: input <c>Control.Min..Max</c> maps linearly onto
+    /// <see cref="Min"/>..<see cref="Max"/> of the unit.</summary>
+    public sealed class UnitScale
+    {
+        [JsonPropertyName("name")] public string Name { get; set; } = "";
+        [JsonPropertyName("min")] public double Min { get; set; }
+        [JsonPropertyName("max")] public double Max { get; set; }
+    }
+
+    /// <summary>The indication that proves a control's position names: one the control does not write
+    /// itself. <see cref="Kind"/> is ewd_memo, sd_page, lamp or simvar.</summary>
+    public sealed class ProofInfo
+    {
+        [JsonPropertyName("kind")] public string Kind { get; set; } = "";
+        /// <summary>The text the memo or page shows.</summary>
+        [JsonPropertyName("text")] public string? Text { get; set; }
+        /// <summary>sd_page: the page that shows it.</summary>
+        [JsonPropertyName("page")] public string? Page { get; set; }
+        /// <summary>lamp or simvar: the variable that shows it.</summary>
+        [JsonPropertyName("read")] public string? Read { get; set; }
+        /// <summary>The position (its read value, as text) at which the indication shows.</summary>
+        [JsonPropertyName("when")] public string? When { get; set; }
+        [JsonPropertyName("measured")] public string? Measured { get; set; }
     }
 
     public sealed class Lamp
@@ -69,6 +98,18 @@ internal sealed class A330ControlMap
         [JsonPropertyName("step")] public double? Step { get; set; }
         [JsonPropertyName("lamps")] public List<Lamp>? Lamps { get; set; }
         [JsonPropertyName("notes")] public string? Notes { get; set; }
+        /// <summary>The key of the guard control (the cover) over this switch; the guard's own row stays,
+        /// just before this one.</summary>
+        [JsonPropertyName("guard")] public string? Guard { get; set; }
+        /// <summary>A button: the variable its press changes (<c>INI_*</c>), or absent when the press
+        /// shows nothing readable.</summary>
+        [JsonPropertyName("state")] public string? State { get; set; }
+        /// <summary>A continuous control's spoken unit and the aircraft's own range.</summary>
+        [JsonPropertyName("unit")] public UnitScale? Unit { get; set; }
+        /// <summary>The indication that proves this control's position names.</summary>
+        [JsonPropertyName("proof")] public ProofInfo? Proof { get; set; }
+        /// <summary>A multi-press key (the chronometer): how many presses bring it back to where it began.</summary>
+        [JsonPropertyName("pressesToCycle")] public int? PressesToCycle { get; set; }
     }
 
     [JsonPropertyName("version")] public int Version { get; set; }

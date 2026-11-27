@@ -77,17 +77,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Nav"
+     "label": "Nav",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Attitude"
+     "label": "Attitude",
+     "proven": false
     }
    ]
   },
@@ -104,17 +107,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Nav"
+     "label": "Nav",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Attitude"
+     "label": "Attitude",
+     "proven": false
     }
    ]
   },
@@ -131,17 +137,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Nav"
+     "label": "Nav",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Attitude"
+     "label": "Attitude",
+     "proven": false
     }
    ]
   },
@@ -158,12 +167,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ],
    "lamps": [
@@ -186,12 +197,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ],
    "lamps": [
@@ -214,12 +227,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ],
    "lamps": [
@@ -242,12 +257,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -264,12 +281,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -286,12 +305,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -308,12 +329,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "No"
+     "label": "No",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Yes"
+     "label": "Yes",
+     "proven": false
     }
    ]
   },
@@ -330,12 +353,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "No"
+     "label": "No",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Yes"
+     "label": "Yes",
+     "proven": false
     }
    ]
   },
@@ -352,12 +377,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "No"
+     "label": "No",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Yes"
+     "label": "Yes",
+     "proven": false
     }
    ]
   },
@@ -374,12 +401,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -396,12 +425,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -418,12 +449,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -440,12 +473,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -462,12 +497,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -484,12 +521,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -506,12 +545,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -528,12 +569,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -550,12 +593,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -572,12 +617,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -594,12 +641,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -616,12 +665,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -638,12 +689,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -660,12 +713,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -682,12 +737,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Shut"
+     "label": "Shut",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -704,12 +761,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Forward"
+     "label": "Forward",
+     "proven": false
     }
    ]
   },
@@ -726,12 +785,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -748,14 +809,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_FUEL_TK_XFR_COVER"
   },
   {
    "key": "A330_INR_TK_L_COVER",
@@ -770,12 +834,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -792,14 +858,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_INR_TK_L_COVER"
   },
   {
    "key": "A330_INR_TK_R_COVER",
@@ -814,12 +883,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -836,14 +907,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_INR_TK_R_COVER"
   },
   {
    "key": "A330_BAT1",
@@ -858,12 +932,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -880,12 +956,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -902,12 +980,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -924,17 +1004,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Battery 1"
+     "label": "Battery 1",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Battery 2"
+     "label": "Battery 2",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "APU battery"
+     "label": "APU battery",
+     "proven": false
     }
    ]
   },
@@ -951,12 +1034,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -973,12 +1058,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -995,12 +1082,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -1017,12 +1106,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ],
    "lamps": [
@@ -1045,12 +1136,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -1067,12 +1160,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -1089,12 +1184,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1111,14 +1208,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Alternate"
+     "label": "Alternate",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_AC_ESS_COVER"
   },
   {
    "key": "A330_GALLEY",
@@ -1133,12 +1233,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -1155,12 +1257,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -1177,12 +1281,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1199,7 +1305,8 @@
      "read": "INI_IDG1_FAULT",
      "legend": "fault"
     }
-   ]
+   ],
+   "guard": "A330_IDG1_COVER"
   },
   {
    "key": "A330_IDG2_COVER",
@@ -1214,12 +1321,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1236,7 +1345,8 @@
      "read": "INI_IDG2_FAULT",
      "legend": "fault"
     }
-   ]
+   ],
+   "guard": "A330_IDG2_COVER"
   },
   {
    "key": "A330_HYD_GREEN_COVER",
@@ -1251,12 +1361,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1273,14 +1385,17 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_HYD_GREEN_COVER"
   },
   {
    "key": "A330_HYD_GREEN_ENG2_COVER",
@@ -1295,12 +1410,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1317,14 +1434,17 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_HYD_GREEN_ENG2_COVER"
   },
   {
    "key": "A330_HYD_BLUE_COVER",
@@ -1339,12 +1459,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1361,14 +1483,17 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_HYD_BLUE_COVER"
   },
   {
    "key": "A330_HYD_YELLOW_COVER",
@@ -1383,12 +1508,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1405,14 +1532,17 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_HYD_YELLOW_COVER"
   },
   {
    "key": "A330_HYD_GREEN_ELEC_OFF",
@@ -1427,12 +1557,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -1449,12 +1581,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1471,14 +1605,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_HYD_GREEN_ELEC_COVER"
   },
   {
    "key": "A330_HYD_BLUE_ELEC_OFF",
@@ -1493,12 +1630,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -1515,12 +1654,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1537,14 +1678,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_HYD_BLUE_ELEC_COVER"
   },
   {
    "key": "A330_HYD_YELLOW_ELEC_OFF",
@@ -1559,12 +1703,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -1581,12 +1727,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1603,14 +1751,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_HYD_YELLOW_ELEC_COVER"
   },
   {
    "key": "A330_RAT_COVER",
@@ -1625,12 +1776,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1641,7 +1794,8 @@
    "label": "RAT manual on",
    "kind": "button",
    "event": "AIRLINER_HYD_RAT_MAN",
-   "mode": "push"
+   "mode": "push",
+   "guard": "A330_RAT_COVER"
   },
   {
    "key": "A330_ENG1_FIRE_COVER",
@@ -1656,12 +1810,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1678,12 +1834,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Pulled"
+     "label": "Pulled",
+     "proven": false
     }
    ],
    "lamps": [
@@ -1691,7 +1849,8 @@
      "read": "INI_ENG1_IS_FIRE",
      "legend": "fire"
     }
-   ]
+   ],
+   "guard": "A330_ENG1_FIRE_COVER"
   },
   {
    "key": "A330_ENG1_AGENT1",
@@ -1744,12 +1903,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1766,14 +1927,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Pulled"
+     "label": "Pulled",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_APU_FIRE_COVER"
   },
   {
    "key": "A330_APU_AGENT",
@@ -1807,12 +1971,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1829,12 +1995,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Pulled"
+     "label": "Pulled",
+     "proven": false
     }
    ],
    "lamps": [
@@ -1842,7 +2010,8 @@
      "read": "INI_ENG2_IS_FIRE",
      "legend": "fire"
     }
-   ]
+   ],
+   "guard": "A330_ENG2_FIRE_COVER"
   },
   {
    "key": "A330_ENG2_AGENT1",
@@ -1925,12 +2094,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1941,7 +2112,8 @@
    "label": "Forward cargo agent",
    "kind": "button",
    "event": "AIRLINER_FWD_AGENT",
-   "mode": "push"
+   "mode": "push",
+   "guard": "A330_FWD_CARGO_AGENT_COVER"
   },
   {
    "key": "A330_AFT_CARGO_AGENT_COVER",
@@ -1956,12 +2128,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -1972,7 +2146,8 @@
    "label": "Aft cargo agent",
    "kind": "button",
    "event": "AIRLINER_AFT_AGENT",
-   "mode": "push"
+   "mode": "push",
+   "guard": "A330_AFT_CARGO_AGENT_COVER"
   },
   {
    "key": "A330_FWD_ISO",
@@ -1987,12 +2162,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Shut"
+     "label": "Shut",
+     "proven": false
     }
    ]
   },
@@ -2009,12 +2186,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Shut"
+     "label": "Shut",
+     "proven": false
     }
    ]
   },
@@ -2031,12 +2210,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Shut"
+     "label": "Shut",
+     "proven": false
     }
    ]
   },
@@ -2053,12 +2234,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ],
    "lamps": [
@@ -2086,7 +2269,8 @@
      "read": "INI_APU_AVAILABLE",
      "legend": "available"
     }
-   ]
+   ],
+   "state": "INI_APU_START_BUTTON"
   },
   {
    "key": "A330_ENG1_BLEED",
@@ -2101,12 +2285,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2123,12 +2309,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2145,12 +2333,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2167,17 +2357,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Shut"
+     "label": "Shut",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -2194,12 +2387,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ],
    "lamps": [
@@ -2222,12 +2417,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ],
    "lamps": [
@@ -2250,17 +2447,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Low"
+     "label": "Low",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "High"
+     "label": "High",
+     "proven": false
     }
    ]
   },
@@ -2277,12 +2477,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2299,12 +2501,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2373,12 +2577,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2395,12 +2601,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -2417,14 +2625,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_RAM_AIR_COVER"
   },
   {
    "key": "A330_PRESS_MODE",
@@ -2439,12 +2650,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Manual"
+     "label": "Manual",
+     "proven": false
     }
    ]
   },
@@ -2484,12 +2697,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -2506,14 +2721,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_DITCHING_COVER"
   },
   {
    "key": "A330_CAB_FANS",
@@ -2528,12 +2746,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2550,12 +2770,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Override"
+     "label": "Override",
+     "proven": false
     }
    ]
   },
@@ -2572,12 +2794,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2594,12 +2818,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2616,12 +2842,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2638,12 +2866,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2660,12 +2890,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2682,17 +2914,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2709,12 +2944,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2731,12 +2968,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2753,17 +2992,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "2"
+     "label": "2",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "1"
+     "label": "1",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2780,12 +3022,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2802,12 +3046,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2824,17 +3070,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Take-off"
+     "label": "Take-off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Taxi"
+     "label": "Taxi",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2851,12 +3100,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -2873,17 +3124,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2900,17 +3154,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Armed"
+     "label": "Armed",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2927,17 +3184,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Bright"
+     "label": "Bright",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Dim"
+     "label": "Dim",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -2954,17 +3214,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Test"
+     "label": "Test",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Bright"
+     "label": "Bright",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Dim"
+     "label": "Dim",
+     "proven": false
     }
    ]
   },
@@ -2981,12 +3244,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3003,17 +3268,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Bright"
+     "label": "Bright",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Dim"
+     "label": "Dim",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -3030,17 +3298,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Bright"
+     "label": "Bright",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Dim"
+     "label": "Dim",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -3057,17 +3328,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Slow"
+     "label": "Slow",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Fast"
+     "label": "Fast",
+     "proven": false
     }
    ]
   },
@@ -3084,17 +3358,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Slow"
+     "label": "Slow",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Fast"
+     "label": "Fast",
+     "proven": false
     }
    ]
   },
@@ -3120,17 +3397,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Crank"
+     "label": "Crank",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Ignition start"
+     "label": "Ignition start",
+     "proven": false
     }
    ]
   },
@@ -3147,12 +3427,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -3169,14 +3451,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_MAN_START1_COVER"
   },
   {
    "key": "A330_MAN_START2_COVER",
@@ -3191,12 +3476,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -3213,14 +3500,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_MAN_START2_COVER"
   },
   {
    "key": "A330_FADEC1_COVER",
@@ -3235,12 +3525,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -3257,14 +3549,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_FADEC1_COVER"
   },
   {
    "key": "A330_FADEC2_COVER",
@@ -3279,12 +3574,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -3301,14 +3598,17 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
-   ]
+   ],
+   "guard": "A330_FADEC2_COVER"
   },
   {
    "key": "A330_CREW_OXY",
@@ -3323,12 +3623,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -3408,12 +3710,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3433,7 +3737,8 @@
    "label": "Master warning (silence)",
    "kind": "button",
    "event": "AIRLINER_CPT_MASTER_WARN",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_MASTER_WARNING_ACTIVE"
   },
   {
    "key": "A330_MASTER_CAUT",
@@ -3442,7 +3747,8 @@
    "label": "Master caution (silence)",
    "kind": "button",
    "event": "AIRLINER_CPT_MASTER_CAUT",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_MASTER_CAUTION_ACTIVE"
   },
   {
    "key": "A330_MASTER_WARN_LT",
@@ -3457,12 +3763,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Lit"
+     "label": "Lit",
+     "proven": false
     }
    ]
   },
@@ -3479,12 +3787,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Lit"
+     "label": "Lit",
+     "proven": false
     }
    ]
   },
@@ -3519,12 +3829,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Lit"
+     "label": "Lit",
+     "proven": false
     }
    ]
   },
@@ -3541,12 +3853,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -3563,12 +3877,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3585,27 +3901,32 @@
     {
      "value": 0,
      "input": 0,
-     "label": "LS"
+     "label": "LS",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "VOR"
+     "label": "VOR",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "NAV"
+     "label": "NAV",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "ARC"
+     "label": "ARC",
+     "proven": false
     },
     {
      "value": 4,
      "input": 4,
-     "label": "PLAN"
+     "label": "PLAN",
+     "proven": false
     }
    ]
   },
@@ -3622,32 +3943,38 @@
     {
      "value": 0,
      "input": 0,
-     "label": "10 miles"
+     "label": "10 miles",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "20 miles"
+     "label": "20 miles",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "40 miles"
+     "label": "40 miles",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "80 miles"
+     "label": "80 miles",
+     "proven": false
     },
     {
      "value": 4,
      "input": 4,
-     "label": "160 miles"
+     "label": "160 miles",
+     "proven": false
     },
     {
      "value": 5,
      "input": 5,
-     "label": "320 miles"
+     "label": "320 miles",
+     "proven": false
     }
    ]
   },
@@ -3664,12 +3991,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3686,12 +4015,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3708,12 +4039,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3730,12 +4063,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3752,12 +4087,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3774,17 +4111,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "ADF"
+     "label": "ADF",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "VOR"
+     "label": "VOR",
+     "proven": false
     }
    ]
   },
@@ -3801,17 +4141,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "ADF"
+     "label": "ADF",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "VOR"
+     "label": "VOR",
+     "proven": false
     }
    ]
   },
@@ -3828,12 +4171,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3850,12 +4195,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "inches"
+     "label": "inches",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "hectopascals"
+     "label": "hectopascals",
+     "proven": false
     }
    ]
   },
@@ -3881,12 +4228,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -3903,12 +4252,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -3925,27 +4276,32 @@
     {
      "value": 0,
      "input": 0,
-     "label": "LS"
+     "label": "LS",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "VOR"
+     "label": "VOR",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "NAV"
+     "label": "NAV",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "ARC"
+     "label": "ARC",
+     "proven": false
     },
     {
      "value": 4,
      "input": 4,
-     "label": "PLAN"
+     "label": "PLAN",
+     "proven": false
     }
    ]
   },
@@ -3962,32 +4318,38 @@
     {
      "value": 0,
      "input": 0,
-     "label": "10 miles"
+     "label": "10 miles",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "20 miles"
+     "label": "20 miles",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "40 miles"
+     "label": "40 miles",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "80 miles"
+     "label": "80 miles",
+     "proven": false
     },
     {
      "value": 4,
      "input": 4,
-     "label": "160 miles"
+     "label": "160 miles",
+     "proven": false
     },
     {
      "value": 5,
      "input": 5,
-     "label": "320 miles"
+     "label": "320 miles",
+     "proven": false
     }
    ]
   },
@@ -4004,12 +4366,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4026,12 +4390,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4048,12 +4414,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4070,12 +4438,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4092,12 +4462,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4114,17 +4486,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "ADF"
+     "label": "ADF",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "VOR"
+     "label": "VOR",
+     "proven": false
     }
    ]
   },
@@ -4141,17 +4516,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "ADF"
+     "label": "ADF",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "VOR"
+     "label": "VOR",
+     "proven": false
     }
    ]
   },
@@ -4168,12 +4546,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4190,12 +4570,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "inches"
+     "label": "inches",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "hectopascals"
+     "label": "hectopascals",
+     "proven": false
     }
    ]
   },
@@ -4221,12 +4603,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4243,12 +4627,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4265,17 +4651,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Alternate"
+     "label": "Alternate",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Alternate, no anti-skid"
+     "label": "Alternate, no anti-skid",
+     "proven": false
     }
    ]
   },
@@ -4292,12 +4681,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -4314,12 +4705,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -4336,12 +4729,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -4358,12 +4753,14 @@
     {
      "value": 1,
      "input": 0,
-     "label": "On"
+     "label": "On",
+     "proven": false
     },
     {
      "value": 0,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     }
    ]
   },
@@ -4380,12 +4777,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -4402,17 +4801,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Captain on 3"
+     "label": "Captain on 3",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "First officer on 3"
+     "label": "First officer on 3",
+     "proven": false
     }
    ]
   },
@@ -4429,17 +4831,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Captain on 3"
+     "label": "Captain on 3",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "First officer on 3"
+     "label": "First officer on 3",
+     "proven": false
     }
    ]
   },
@@ -4456,17 +4861,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Captain on 3"
+     "label": "Captain on 3",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "First officer on 3"
+     "label": "First officer on 3",
+     "proven": false
     }
    ]
   },
@@ -4483,17 +4891,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Both on 1"
+     "label": "Both on 1",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Both on 2"
+     "label": "Both on 2",
+     "proven": false
     }
    ]
   },
@@ -4510,17 +4921,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Captain"
+     "label": "Captain",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "First officer"
+     "label": "First officer",
+     "proven": false
     }
    ]
   },
@@ -4537,17 +4951,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "1"
+     "label": "1",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "2"
+     "label": "2",
+     "proven": false
     }
    ]
   },
@@ -4564,17 +4981,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Normal"
+     "label": "Normal",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Captain on 3"
+     "label": "Captain on 3",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "First officer on 3"
+     "label": "First officer on 3",
+     "proven": false
     }
    ]
   },
@@ -4609,17 +5029,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Run"
+     "label": "Run",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Stop"
+     "label": "Stop",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Reset"
+     "label": "Reset",
+     "proven": false
     }
    ]
   },
@@ -4767,12 +5190,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ],
    "rpn": "{value} (>B:AIRLINER_ENG1_CUTOFF_Set)",
@@ -4791,12 +5216,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ],
    "rpn": "{value} (>B:AIRLINER_ENG2_CUTOFF_Set)",
@@ -4809,7 +5236,8 @@
    "label": "ECAM ENG",
    "kind": "button",
    "event": "AIRLINER_ECAM_ENG",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_BLEED",
@@ -4818,7 +5246,8 @@
    "label": "ECAM BLEED",
    "kind": "button",
    "event": "AIRLINER_ECAM_BLEED",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_PRESS",
@@ -4827,7 +5256,8 @@
    "label": "ECAM PRESS",
    "kind": "button",
    "event": "AIRLINER_ECAM_PRESS",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_ELAC",
@@ -4836,7 +5266,8 @@
    "label": "ECAM EL/AC",
    "kind": "button",
    "event": "AIRLINER_ECAM_ELAC",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_ELDC",
@@ -4845,7 +5276,8 @@
    "label": "ECAM EL/DC",
    "kind": "button",
    "event": "AIRLINER_ECAM_ELDC",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_HYD",
@@ -4854,7 +5286,8 @@
    "label": "ECAM HYD",
    "kind": "button",
    "event": "AIRLINER_ECAM_HYD",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_CB",
@@ -4872,7 +5305,8 @@
    "label": "ECAM APU",
    "kind": "button",
    "event": "AIRLINER_ECAM_APU",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_COND",
@@ -4881,7 +5315,8 @@
    "label": "ECAM COND",
    "kind": "button",
    "event": "AIRLINER_ECAM_COND",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_DOOR",
@@ -4890,7 +5325,8 @@
    "label": "ECAM DOOR",
    "kind": "button",
    "event": "AIRLINER_ECAM_DOOR",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_WHEEL",
@@ -4899,7 +5335,8 @@
    "label": "ECAM WHEEL",
    "kind": "button",
    "event": "AIRLINER_ECAM_WHEEL",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_FCTL",
@@ -4908,7 +5345,8 @@
    "label": "ECAM F/CTL",
    "kind": "button",
    "event": "AIRLINER_ECAM_FCTL",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_FUEL",
@@ -4917,7 +5355,8 @@
    "label": "ECAM FUEL",
    "kind": "button",
    "event": "AIRLINER_ECAM_FUEL",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_ALL",
@@ -4926,7 +5365,8 @@
    "label": "ECAM ALL",
    "kind": "button",
    "event": "AIRLINER_ECAM_ALL",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_ECAM_ACTIVE_PAGE"
   },
   {
    "key": "A330_ECAM_STS",
@@ -4977,12 +5417,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -4993,7 +5435,8 @@
    "label": "Emergency cancel",
    "kind": "button",
    "event": "AIRLINER_ECAM_EMERCANC",
-   "mode": "push"
+   "mode": "push",
+   "guard": "A330_ECAM_EMER_CANC_COVER"
   },
   {
    "key": "A330_TO_CONFIG",
@@ -5018,72 +5461,86 @@
     {
      "value": 1,
      "input": 1,
-     "label": "ENG"
+     "label": "ENG",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "HYD"
+     "label": "HYD",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "EL/AC"
+     "label": "EL/AC",
+     "proven": false
     },
     {
      "value": 4,
      "input": 4,
-     "label": "EL/DC"
+     "label": "EL/DC",
+     "proven": false
     },
     {
      "value": 5,
      "input": 5,
-     "label": "BLEED"
+     "label": "BLEED",
+     "proven": false
     },
     {
      "value": 6,
      "input": 6,
-     "label": "COND"
+     "label": "COND",
+     "proven": false
     },
     {
      "value": 7,
      "input": 7,
-     "label": "PRESS"
+     "label": "PRESS",
+     "proven": false
     },
     {
      "value": 8,
      "input": 8,
-     "label": "FUEL"
+     "label": "FUEL",
+     "proven": false
     },
     {
      "value": 9,
      "input": 9,
-     "label": "APU"
+     "label": "APU",
+     "proven": false
     },
     {
      "value": 10,
      "input": 10,
-     "label": "F/CTL"
+     "label": "F/CTL",
+     "proven": false
     },
     {
      "value": 11,
      "input": 11,
-     "label": "DOOR"
+     "label": "DOOR",
+     "proven": false
     },
     {
      "value": 12,
      "input": 12,
-     "label": "WHEEL"
+     "label": "WHEEL",
+     "proven": false
     },
     {
      "value": 13,
      "input": 13,
-     "label": "CRUISE"
+     "label": "CRUISE",
+     "proven": false
     },
     {
      "value": 14,
      "input": 14,
-     "label": "STATUS"
+     "label": "STATUS",
+     "proven": false
     }
    ]
   },
@@ -5100,12 +5557,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -5116,7 +5575,8 @@
    "label": "Radio panel VHF 1",
    "kind": "button",
    "event": "AIRLINER_CPT_COM_VHF1",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_SELECTED_RADIO_CPT"
   },
   {
    "key": "A330_CPT_COM_VHF2",
@@ -5125,7 +5585,8 @@
    "label": "Radio panel VHF 2",
    "kind": "button",
    "event": "AIRLINER_CPT_COM_VHF2",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_SELECTED_RADIO_CPT"
   },
   {
    "key": "A330_CPT_COM_VHF3",
@@ -5134,7 +5595,8 @@
    "label": "Radio panel VHF 3",
    "kind": "button",
    "event": "AIRLINER_CPT_COM_VHF3",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_SELECTED_RADIO_CPT"
   },
   {
    "key": "A330_CPT_COM_HF1",
@@ -5143,7 +5605,8 @@
    "label": "Radio panel HF 1",
    "kind": "button",
    "event": "AIRLINER_CPT_COM_HF1",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_SELECTED_RADIO_CPT"
   },
   {
    "key": "A330_CPT_COM_HF2",
@@ -5152,7 +5615,8 @@
    "label": "Radio panel HF 2",
    "kind": "button",
    "event": "AIRLINER_CPT_COM_HF2",
-   "mode": "push"
+   "mode": "push",
+   "state": "INI_SELECTED_RADIO_CPT"
   },
   {
    "key": "A330_CPT_COM_AM",
@@ -5185,27 +5649,32 @@
     {
      "value": 1,
      "input": 1,
-     "label": "VHF 1"
+     "label": "VHF 1",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "VHF 2"
+     "label": "VHF 2",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "VHF 3"
+     "label": "VHF 3",
+     "proven": false
     },
     {
      "value": 4,
      "input": 4,
-     "label": "HF 1"
+     "label": "HF 1",
+     "proven": false
     },
     {
      "value": 5,
      "input": 5,
-     "label": "HF 2"
+     "label": "HF 2",
+     "proven": false
     }
    ]
   },
@@ -5222,12 +5691,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Closed"
+     "label": "Closed",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Open"
+     "label": "Open",
+     "proven": false
     }
    ]
   },
@@ -5238,7 +5709,8 @@
    "label": "Radio panel NAV (backup navigation)",
    "kind": "button",
    "event": "AIRLINER_CPT_COM_NAV",
-   "mode": "push"
+   "mode": "push",
+   "guard": "A330_RMP1_NAV_COVER"
   },
   {
    "key": "A330_CPT_COM_VOR",
@@ -5361,17 +5833,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Standby"
+     "label": "Standby",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -5388,17 +5863,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Standby"
+     "label": "Standby",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "TA only"
+     "label": "TA only",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "TA/RA"
+     "label": "TA/RA",
+     "proven": false
     }
    ]
   },
@@ -5415,22 +5893,26 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Threat"
+     "label": "Threat",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "All"
+     "label": "All",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Above"
+     "label": "Above",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "Below"
+     "label": "Below",
+     "proven": false
     }
    ]
   },
@@ -5447,12 +5929,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "On"
+     "label": "On",
+     "proven": false
     }
    ]
   },
@@ -5469,12 +5953,14 @@
     {
      "value": 0,
      "input": 0,
-     "label": "1"
+     "label": "1",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "2"
+     "label": "2",
+     "proven": false
     }
    ]
   },
@@ -5500,17 +5986,20 @@
     {
      "value": 0,
      "input": 0,
-     "label": "1"
+     "label": "1",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "2"
+     "label": "2",
+     "proven": false
     }
    ]
   },
@@ -5527,22 +6016,26 @@
     {
      "value": 0,
      "input": 0,
-     "label": "WX"
+     "label": "WX",
+     "proven": false
     },
     {
      "value": 1,
      "input": 1,
-     "label": "WX plus turbulence"
+     "label": "WX plus turbulence",
+     "proven": false
     },
     {
      "value": 2,
      "input": 2,
-     "label": "Turbulence"
+     "label": "Turbulence",
+     "proven": false
     },
     {
      "value": 3,
      "input": 3,
-     "label": "Map"
+     "label": "Map",
+     "proven": false
     }
    ]
   },
@@ -5559,14 +6052,22 @@
     {
      "value": 0,
      "input": 0,
-     "label": "Auto"
+     "label": "Auto",
+     "proven": true
     },
     {
      "value": 1,
      "input": 1,
-     "label": "Off"
+     "label": "Off",
+     "proven": true
     }
-   ]
+   ],
+   "proof": {
+    "kind": "ewd_memo",
+    "text": "PRED W/S OFF",
+    "when": "1",
+    "measured": "2026-11-22"
+   }
   },
   {
    "key": "A330_WX_GAIN",
@@ -5593,7 +6094,12 @@
    "read": "B:AIRLINER_WX_TILT",
    "min": 0,
    "max": 30,
-   "step": 1
+   "step": 1,
+   "unit": {
+    "name": "degrees",
+    "min": -15,
+    "max": 15
+   }
   }
  ]
 }

@@ -16,6 +16,9 @@ Python 3, standard library only. Every path resolves from the file's own locatio
 - `data/input_events.tsv`: the simulator's input-event catalogue (not captured yet: plan 04 Task 1
   Step 2). First line: the capture's date and the simulator's version. Then one `name<TAB>hash` line
   per event. While it is absent the catalogue check is skipped (the test says so).
+- `unproven.txt`: GENERATED on every run, never hand-edited: one line per offered position whose
+  `proven` is false, `key<TAB>value<TAB>label`, sorted by key then value, under a `#` header. A test
+  checks that the committed file equals what the curation implies.
 - `generate_a330_map.py`, `test_generate_a330_map.py`.
 
 ## curation.json
@@ -36,7 +39,13 @@ Python 3, standard library only. Every path resolves from the file's own locatio
   Step 2) `name` is the read value as a string. `proven` is true only where an indication the control
   does not write itself followed the name (see `proof`). `proof` names that indication:
   `{ "kind": "ewd_memo" | "sd_page" | "lamp" | "simvar", "text": ..., "when": the position at which it
-  shows, "measured": date }`. The map does not carry `proof` yet.
+  shows, "measured": date }`. The map carries `proof` and each position's `proven`.
+  Further optional fields, written to the map after all the others in this order: `guard` (the key
+  of the guard control, the cover over this switch; the guard's own row stays, just before it),
+  `state` (a button: the variable its press changes; absent when the press shows nothing readable),
+  `unit` (a continuous control: `{ "name", "min", "max" }`, input `min..max` of the control maps
+  linearly onto the unit's `min..max`; the aircraft's own range), `pressesToCycle` (a multi-press
+  key: how many presses bring it back to where it began; none set yet), `proof`.
 - `name_overrides`: key to `{ "label", "aircraft_says", "why" }`. Today every label is an override
   with `aircraft_says: null` and the reason "kept until control_names.json lands"; Task 2 Step 2
   takes labels from the aircraft's strings and keeps an override only where the aircraft's string is
@@ -56,6 +65,9 @@ Python 3, standard library only. Every path resolves from the file's own locatio
   in `not_yet_offered`; no event is both a control and left out (or in `not_yet_offered`); a control
   or left-out event the catalogue lacks is refused; every `left_out` entry has a reason.
 - Keys: a key in `keys.txt` that no control carries must be in `retired_keys`.
+- A key repeated inside one object of `curation.json` is refused when it loads (a plain JSON load
+  would drop the first silently); a `name_overrides` or `position_overrides` entry for a key no
+  control carries, or for a position name the control lacks, is refused.
 - Duplicate keys, a control without a label, a position without a label, an empty panel that is not
   an own panel, and a control in a panel `panel_order` does not list are refused.
 

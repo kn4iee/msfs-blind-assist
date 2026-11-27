@@ -735,6 +735,7 @@
   },
   "AIRLINER_FUEL_TK_XFR": {
    "key": "A330_FUEL_TK_XFR",
+   "guard": "A330_FUEL_TK_XFR_COVER",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
@@ -779,6 +780,7 @@
   },
   "AIRLINER_INR_TK_L": {
    "key": "A330_INR_TK_L",
+   "guard": "A330_INR_TK_L_COVER",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
@@ -823,6 +825,7 @@
   },
   "AIRLINER_INR_TK_R": {
    "key": "A330_INR_TK_R",
+   "guard": "A330_INR_TK_R_COVER",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
@@ -1099,6 +1102,7 @@
   },
   "AIRLINER_ELEC_AC_ESS": {
    "key": "A330_AC_ESS",
+   "guard": "A330_AC_ESS_COVER",
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
@@ -1187,6 +1191,7 @@
   },
   "AIRLINER_ELEC_IDG1": {
    "key": "A330_IDG1",
+   "guard": "A330_IDG1_COVER",
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "button",
@@ -1222,6 +1227,7 @@
   },
   "AIRLINER_ELEC_IDG2": {
    "key": "A330_IDG2",
+   "guard": "A330_IDG2_COVER",
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "button",
@@ -1257,6 +1263,7 @@
   },
   "AIRLINER_HYD_GREEN": {
    "key": "A330_HYD_GREEN",
+   "guard": "A330_HYD_GREEN_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
@@ -1301,6 +1308,7 @@
   },
   "AIRLINER_HYD_GREEN_ENG2": {
    "key": "A330_HYD_GREEN_ENG2",
+   "guard": "A330_HYD_GREEN_ENG2_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
@@ -1345,6 +1353,7 @@
   },
   "AIRLINER_HYD_BLUE": {
    "key": "A330_HYD_BLUE",
+   "guard": "A330_HYD_BLUE_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
@@ -1389,6 +1398,7 @@
   },
   "AIRLINER_HYD_YELLOW": {
    "key": "A330_HYD_YELLOW",
+   "guard": "A330_HYD_YELLOW_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
@@ -1455,6 +1465,7 @@
   },
   "AIRLINER_HYD_GREEN_ELEC": {
    "key": "A330_HYD_GREEN_ELEC_ON",
+   "guard": "A330_HYD_GREEN_ELEC_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
@@ -1521,6 +1532,7 @@
   },
   "AIRLINER_HYD_BLUE_ELEC": {
    "key": "A330_HYD_BLUE_ELEC_ON",
+   "guard": "A330_HYD_BLUE_ELEC_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
@@ -1587,6 +1599,7 @@
   },
   "AIRLINER_HYD_YELLOW_ELEC": {
    "key": "A330_HYD_YELLOW_ELEC_ON",
+   "guard": "A330_HYD_YELLOW_ELEC_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
@@ -1631,6 +1644,7 @@
   },
   "AIRLINER_HYD_RAT_MAN": {
    "key": "A330_RAT",
+   "guard": "A330_RAT_COVER",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "button",
@@ -1660,6 +1674,7 @@
   },
   "AIRLINER_ENG1_FIRE_HANDLE": {
    "key": "A330_ENG1_FIRE",
+   "guard": "A330_ENG1_FIRE_COVER",
    "section": "Overhead",
    "panel": "Fire",
    "kind": "select",
@@ -1744,6 +1759,7 @@
   },
   "AIRLINER_APU_FIRE_HANDLE": {
    "key": "A330_APU_FIRE",
+   "guard": "A330_APU_FIRE_COVER",
    "section": "Overhead",
    "panel": "Fire",
    "kind": "select",
@@ -1805,6 +1821,7 @@
   },
   "AIRLINER_ENG2_FIRE_HANDLE": {
    "key": "A330_ENG2_FIRE",
+   "guard": "A330_ENG2_FIRE_COVER",
    "section": "Overhead",
    "panel": "Fire",
    "kind": "select",
@@ -1913,6 +1930,7 @@
   },
   "AIRLINER_FWD_AGENT": {
    "key": "A330_FWD_CARGO_AGENT",
+   "guard": "A330_FWD_CARGO_AGENT_COVER",
    "section": "Overhead",
    "panel": "Cargo Smoke",
    "kind": "button",
@@ -1942,6 +1960,7 @@
   },
   "AIRLINER_AFT_AGENT": {
    "key": "A330_AFT_CARGO_AGENT",
+   "guard": "A330_AFT_CARGO_AGENT_COVER",
    "section": "Overhead",
    "panel": "Cargo Smoke",
    "kind": "button",
@@ -2043,6 +2062,7 @@
   },
   "AIRLINER_APU_START": {
    "key": "A330_APU_START",
+   "state": "INI_APU_START_BUTTON",
    "section": "Overhead",
    "panel": "APU",
    "kind": "button",
@@ -2371,6 +2391,7 @@
   },
   "AIRLINER_RAM_AIR": {
    "key": "A330_RAM_AIR",
+   "guard": "A330_RAM_AIR_COVER",
    "section": "Overhead",
    "panel": "Air Conditioning",
    "kind": "select",
@@ -2456,6 +2477,7 @@
   },
   "AIRLINER_DITCHING": {
    "key": "A330_DITCHING",
+   "guard": "A330_DITCHING_COVER",
    "section": "Overhead",
    "panel": "Pressurization",
    "kind": "select",
@@ -3129,6 +3151,7 @@
   },
   "AIRLINER_MAN_START_1": {
    "key": "A330_MAN_START1",
+   "guard": "A330_MAN_START1_COVER",
    "section": "Overhead",
    "panel": "Engine Start",
    "kind": "select",
@@ -3173,6 +3196,7 @@
   },
   "AIRLINER_MAN_START_2": {
    "key": "A330_MAN_START2",
+   "guard": "A330_MAN_START2_COVER",
    "section": "Overhead",
    "panel": "Engine Start",
    "kind": "select",
@@ -3217,6 +3241,7 @@
   },
   "AIRLINER_FADEC_ENG1": {
    "key": "A330_FADEC1",
+   "guard": "A330_FADEC1_COVER",
    "section": "Overhead",
    "panel": "Engine Start",
    "kind": "select",
@@ -3261,6 +3286,7 @@
   },
   "AIRLINER_FADEC_ENG2": {
    "key": "A330_FADEC2",
+   "guard": "A330_FADEC2_COVER",
    "section": "Overhead",
    "panel": "Engine Start",
    "kind": "select",
@@ -3383,6 +3409,7 @@
   },
   "AIRLINER_CPT_MASTER_WARN": {
    "key": "A330_MASTER_WARN",
+   "state": "INI_MASTER_WARNING_ACTIVE",
    "section": "Glareshield",
    "panel": "Warnings",
    "kind": "button",
@@ -3390,6 +3417,7 @@
   },
   "AIRLINER_CPT_MASTER_CAUT": {
    "key": "A330_MASTER_CAUT",
+   "state": "INI_MASTER_CAUTION_ACTIVE",
    "section": "Glareshield",
    "panel": "Warnings",
    "kind": "button",
@@ -4748,6 +4776,7 @@
   },
   "AIRLINER_ECAM_ENG": {
    "key": "A330_ECAM_ENG",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4755,6 +4784,7 @@
   },
   "AIRLINER_ECAM_BLEED": {
    "key": "A330_ECAM_BLEED",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4762,6 +4792,7 @@
   },
   "AIRLINER_ECAM_PRESS": {
    "key": "A330_ECAM_PRESS",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4769,6 +4800,7 @@
   },
   "AIRLINER_ECAM_ELAC": {
    "key": "A330_ECAM_ELAC",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4776,6 +4808,7 @@
   },
   "AIRLINER_ECAM_ELDC": {
    "key": "A330_ECAM_ELDC",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4783,6 +4816,7 @@
   },
   "AIRLINER_ECAM_HYD": {
    "key": "A330_ECAM_HYD",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4797,6 +4831,7 @@
   },
   "AIRLINER_ECAM_APU": {
    "key": "A330_ECAM_APU",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4804,6 +4839,7 @@
   },
   "AIRLINER_ECAM_COND": {
    "key": "A330_ECAM_COND",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4811,6 +4847,7 @@
   },
   "AIRLINER_ECAM_DOOR": {
    "key": "A330_ECAM_DOOR",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4818,6 +4855,7 @@
   },
   "AIRLINER_ECAM_WHEEL": {
    "key": "A330_ECAM_WHEEL",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4825,6 +4863,7 @@
   },
   "AIRLINER_ECAM_FCTL": {
    "key": "A330_ECAM_FCTL",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4832,6 +4871,7 @@
   },
   "AIRLINER_ECAM_FUEL": {
    "key": "A330_ECAM_FUEL",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4839,6 +4879,7 @@
   },
   "AIRLINER_ECAM_ALL": {
    "key": "A330_ECAM_ALL",
+   "state": "INI_ECAM_ACTIVE_PAGE",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -4896,6 +4937,7 @@
   },
   "AIRLINER_ECAM_EMERCANC": {
    "key": "A330_ECAM_EMER_CANC",
+   "guard": "A330_ECAM_EMER_CANC_COVER",
    "section": "Pedestal",
    "panel": "ECAM",
    "kind": "button",
@@ -5027,6 +5069,7 @@
   },
   "AIRLINER_CPT_COM_VHF1": {
    "key": "A330_CPT_COM_VHF1",
+   "state": "INI_SELECTED_RADIO_CPT",
    "section": "Pedestal",
    "panel": "Captain Radio Panel",
    "kind": "button",
@@ -5034,6 +5077,7 @@
   },
   "AIRLINER_CPT_COM_VHF2": {
    "key": "A330_CPT_COM_VHF2",
+   "state": "INI_SELECTED_RADIO_CPT",
    "section": "Pedestal",
    "panel": "Captain Radio Panel",
    "kind": "button",
@@ -5041,6 +5085,7 @@
   },
   "AIRLINER_CPT_COM_VHF3": {
    "key": "A330_CPT_COM_VHF3",
+   "state": "INI_SELECTED_RADIO_CPT",
    "section": "Pedestal",
    "panel": "Captain Radio Panel",
    "kind": "button",
@@ -5048,6 +5093,7 @@
   },
   "AIRLINER_CPT_COM_HF1": {
    "key": "A330_CPT_COM_HF1",
+   "state": "INI_SELECTED_RADIO_CPT",
    "section": "Pedestal",
    "panel": "Captain Radio Panel",
    "kind": "button",
@@ -5055,6 +5101,7 @@
   },
   "AIRLINER_CPT_COM_HF2": {
    "key": "A330_CPT_COM_HF2",
+   "state": "INI_SELECTED_RADIO_CPT",
    "section": "Pedestal",
    "panel": "Captain Radio Panel",
    "kind": "button",
@@ -5138,6 +5185,7 @@
   },
   "AIRLINER_CPT_COM_NAV": {
    "key": "A330_RMP1_NAV",
+   "guard": "A330_RMP1_NAV_COVER",
    "section": "Pedestal",
    "panel": "Captain Radio Panel",
    "kind": "button",
@@ -5472,6 +5520,11 @@
   },
   "AIRLINER_WX_TILT": {
    "key": "A330_WX_TILT",
+   "unit": {
+    "name": "degrees",
+    "min": -15,
+    "max": 15
+   },
    "section": "Pedestal",
    "panel": "Weather Radar",
    "kind": "continuous",

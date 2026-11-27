@@ -177,11 +177,76 @@ class PredictiveWindshearTests(unittest.TestCase):
         self.assertEqual({"kind": "ewd_memo", "text": "PRED W/S OFF", "when": "1", "measured": "2026-11-22"}, entry["proof"])
         self.assertEqual([True, True], [p["proven"] for p in entry["positions"]])
 
-    def test_the_proof_is_not_in_the_map_yet(self):
+    def test_the_proof_and_proven_are_in_the_map(self):
         gen = load_generator()
         control = next(c for c in gen.build_controls(gen.load_curation()) if c["key"] == "A330_WX_PWS")
-        self.assertNotIn("proof", control)
-        self.assertNotIn("proven", control["positions"][0])
+        self.assertEqual("ewd_memo", control["proof"]["kind"])
+        self.assertEqual("PRED W/S OFF", control["proof"]["text"])
+        self.assertEqual([True, True], [p["proven"] for p in control["positions"]])
+
+
+UNPROVEN = os.path.join(HERE, "unproven.txt")
+
+
+class MapFieldTests(unittest.TestCase):
+    def test_every_offered_position_is_proven_or_listed(self):
+        gen = load_generator()
+        curation = gen.load_curation()
+        with open(UNPROVEN, "rb") as f:
+            committed = f.read().decode("utf-8").replace("\r\n", "\n")
+        self.assertEqual(gen.build_unproven(curation), committed)
+        listed = {tuple(line.split("\t")[:2]) for line in committed.splitlines() if line and not line.startswith("#")}
+        expected = set()
+        for e in curation["controls"].values():
+            for p in e.get("positions", []):
+                if not p["proven"]:
+                    expected.add((e["key"], gen.invariant_number(p["value"])))
+        self.assertEqual(expected, listed)
+        self.assertNotIn(("A330_WX_PWS", "0"), listed)
+        self.assertIn(("A330_STROBE", "0"), listed)
+
+    def test_a_guard_names_a_guard_control_of_its_panel(self):
+        gen = load_generator()
+        curation = gen.load_curation()
+        entries = list(curation["controls"].values())
+        guarded = [(i, e) for i, e in enumerate(entries) if "guard" in e]
+        self.assertEqual(27, len(guarded))
+        for i, e in guarded:
+            g = entries[i - 1]
+            self.assertEqual(g["key"], e["guard"], e["key"])
+            self.assertEqual(g["panel"], e["panel"], e["key"])
+            self.assertEqual("select", g["kind"], e["key"])
+            self.assertTrue(curation["name_overrides"][g["key"]]["label"].endswith(" guard"), e["key"])
+
+    def test_state_is_only_on_buttons(self):
+        gen = load_generator()
+        curation = gen.load_curation()
+        withstate = [e for e in curation["controls"].values() if "state" in e]
+        self.assertEqual(21, len(withstate))
+        for e in withstate:
+            self.assertEqual("button", e["kind"], e["key"])
+            self.assertTrue(e["state"].startswith("INI_"), e["key"])
+
+    def test_a_unit_is_only_on_a_continuous_control(self):
+        gen = load_generator()
+        curation = gen.load_curation()
+        withunit = [e for e in curation["controls"].values() if "unit" in e]
+        self.assertEqual(["A330_WX_TILT"], [e["key"] for e in withunit])
+        for e in withunit:
+            self.assertEqual("continuous", e["kind"], e["key"])
+            self.assertLess(e["unit"]["min"], e["unit"]["max"], e["key"])
+
+    def test_the_map_carries_guard_state_unit_and_proven(self):
+        gen = load_generator()
+        by = {c["key"]: c for c in gen.build_controls(gen.load_curation())}
+        self.assertEqual("A330_FUEL_TK_XFR_COVER", by["A330_FUEL_TK_XFR"]["guard"])
+        self.assertEqual("INI_ECAM_ACTIVE_PAGE", by["A330_ECAM_ENG"]["state"])
+        self.assertEqual({"name": "degrees", "min": -15, "max": 15}, by["A330_WX_TILT"]["unit"])
+        self.assertFalse(by["A330_STROBE"]["positions"][0]["proven"])
+        self.assertNotIn("guard", by["A330_STROBE"])
+        self.assertNotIn("proof", by["A330_STROBE"])
+        keys = list(by["A330_FUEL_TK_XFR"])
+        self.assertEqual("guard", keys[-1] if "proof" not in by["A330_FUEL_TK_XFR"] else keys[-2])
 
 
 class HardeningTests(unittest.TestCase):

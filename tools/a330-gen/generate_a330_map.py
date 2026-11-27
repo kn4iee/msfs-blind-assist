@@ -37,10 +37,12 @@ OUT = os.path.join(HERE, "..", "..", "MSFSBlindAssist", "Resources", "a330_contr
 # removes this allowance.
 PLAN_04_OPEN = True
 
-# Fields of a curation control the map does not carry (yet).
-NOT_EMITTED = {"proof"}
+UNPROVEN = os.path.join(HERE, "unproven.txt")
+
+# Fields of a curation control the map carries after every other field, in this order, when present.
+EMITTED_LAST = ("guard", "state", "unit", "pressesToCycle", "proof")
 # Fields the generator places itself, in the map's order; every other field of a control follows them.
-STRUCTURAL = {"key", "section", "panel", "kind", "mode", "read", "positions"} | NOT_EMITTED
+STRUCTURAL = {"key", "section", "panel", "kind", "mode", "read", "positions"} | set(EMITTED_LAST)
 
 
 class CurationError(ValueError):
@@ -185,13 +187,36 @@ def build_controls(curation):
         if "read" in e:
             c["read"] = e["read"]
         if e.get("positions"):
-            c["positions"] = [{"value": p["value"], "input": p["input"], "label": pos_over[k][p["name"]]["label"]}
+            c["positions"] = [{"value": p["value"], "input": p["input"], "label": pos_over[k][p["name"]]["label"],
+                               "proven": p["proven"]}
                               for p in e["positions"]]
         for x, v in e.items():
             if x not in STRUCTURAL:
                 c[x] = v
+        for x in EMITTED_LAST:
+            if x in e:
+                c[x] = e[x]
         out.append(c)
     return out
+
+
+def invariant_number(v):
+    """A number as text, the same on every PC: no culture, no trailing .0 on a whole number."""
+    return str(int(v)) if float(v).is_integer() else repr(float(v))
+
+
+def build_unproven(curation):
+    """The offered positions whose names no indication has proven, one line each: key, value, label."""
+    pos_over = curation["position_overrides"]
+    rows = []
+    for e in curation["controls"].values():
+        for p in e.get("positions", []):
+            if not p["proven"]:
+                rows.append((e["key"], p["value"], pos_over[e["key"]][p["name"]]["label"]))
+    rows.sort(key=lambda r: (r[0], r[1]))
+    head = ("# Positions the map offers whose names no indication has proven yet (generated from curation.json by "
+            "generate_a330_map.py; do not edit): key<TAB>value<TAB>label\n")
+    return head + "".join(f"{k}\t{invariant_number(v)}\t{lab}\n" for k, v, lab in rows)
 
 
 def build_doc(curation):
@@ -209,6 +234,8 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=1, ensure_ascii=False)
         f.write("\n")
+    with open(UNPROVEN, "w", encoding="utf-8", newline="\n") as f:
+        f.write(build_unproven(curation))
     print(f"wrote {len(doc['controls'])} controls to {os.path.normpath(OUT)}")
 
 
