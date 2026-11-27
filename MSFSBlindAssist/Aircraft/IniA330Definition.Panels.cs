@@ -70,6 +70,16 @@ public partial class IniA330Definition
     private int _lastFlapIndex = -1;
     private int _lastSpoilerBand = -1;   // the speedbrake lever's 10 % band last seen; -1 until the first (silent) reading
 
+    /// <summary>How long after a pilot's own lever pick the travel stays quiet if the lever never reaches the picked
+    /// band: twice the read-back delay, the same window a key's own-press echo holds ([CORE-9]'s time-only match is
+    /// consumed by the first delivery, so the rest of a sweep through several bands would speak).</summary>
+    internal const int SpeedbrakePickQuietMs = 2 * ReadBackDelayMs;
+
+    /// <summary>The pilot's own lever pick in flight: its band and when the quiet ends. Null: none.</summary>
+    private (int band, long until)? _speedbrakePick;
+
+    private static int BandOf(double v) => (int)Math.Round(Math.Max(0.0, Math.Min(1.0, v)) * 10.0);
+
     internal static string FormatTrim(double deg) =>
         Math.Abs(deg) < 0.05 ? "0.0" : $"{Math.Abs(deg).ToString("0.0", CultureInfo.InvariantCulture)} {(deg > 0 ? "up" : "down")}";
 
@@ -439,8 +449,19 @@ public partial class IniA330Definition
                     Write(sim, $"{Num(Math.Round(Math.Clamp(Math.Round(value), 0, FlapDetents.Length - 1) * 16383.0 / (FlapDetents.Length - 1)))} (>K:FLAPS_SET)");
                 handled = true; return;
             case "A330_SPDBRK":
-                if (Can(sim, announcer, "Speedbrake"))
-                    Write(sim, $"{Num(Math.Round(Math.Clamp(value, 0, 1) * 16383))} (>K:SPOILERS_SET)");
+                if (!io.CanCalc())
+                {
+                    announcer.AnnounceImmediate("Speedbrake unavailable: the MobiFlight module is not responding.");
+                    _writeRefused = true;
+                }
+                else
+                {
+                    io.Calc($"{Num(Math.Round(Math.Clamp(value, 0, 1) * 16383))} (>K:SPOILERS_SET)");
+                    // the pilot's own pick (not a First Officer write, which is Suppressed) was said by the screen reader:
+                    // the lever's travel to it is not spoken band by band
+                    if (!announcer.Suppressed) _speedbrakePick = (BandOf(value), NowMs() + SpeedbrakePickQuietMs);
+                    else _speedbrakePick = null;
+                }
                 handled = true; return;
             case "A330_SPLR_ARM":
                 if (Can(sim, announcer, "Ground spoilers"))
@@ -519,12 +540,24 @@ public partial class IniA330Definition
                 // as the A32NX says its handle (FlyByWireA320Definition.ProcessSimVarUpdate, A32NX_SPOILERS_HANDLE_POSITION):
                 // 10 % bands, "Spoilers retracted" / "Spoilers 30 percent" / "Spoilers full", the first reading silent.
                 // A muted row (Suppressed) says nothing but still moves the band.
-                int band = (int)Math.Round(Math.Max(0.0, Math.Min(1.0, value)) * 10.0);
+                int band = BandOf(value);
                 bool first = _lastSpoilerBand < 0;
                 int before = _lastSpoilerBand;
                 _lastSpoilerBand = band;
                 handled = true;
-                if (first || band == before || announcer.Suppressed) return;
+                bool ownPick = false;
+                if (_speedbrakePick is { } pick)
+                {
+                    // the pilot's own pick is travelling: band changes are silent until the lever reaches the picked
+                    // band (the screen reader said the pick) or the quiet runs out
+                    if (NowMs() >= pick.until) _speedbrakePick = null;
+                    else
+                    {
+                        ownPick = true;
+                        if (band == pick.band) _speedbrakePick = null;
+                    }
+                }
+                if (first || band == before || ownPick || announcer.Suppressed) return;
                 announcer.Announce(band == 0 ? "Spoilers retracted"
                     : band == 10 ? "Spoilers full"
                     : $"Spoilers {band * 10} percent");
@@ -556,6 +589,7 @@ public partial class IniA330Definition
     {
         _lastFlapIndex = -1;
         _lastSpoilerBand = -1;
+        _speedbrakePick = null;
         _pressEchoUntil.Clear();
         _stateBaseline.Clear();
         _quietUntil = NowMs() + StartGraceMs;
