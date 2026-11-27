@@ -131,6 +131,22 @@ public partial class IniA330Definition
                 case "button":
                     Button(vars, c.Key, c.Label);
                     break;
+                case "continuous" when read is { } ru && c.Unit is { } && !string.IsNullOrEmpty(c.Event):
+                {
+                    // offered as a combo of its steps, each in the aircraft's unit (a TrackBar can only say 0..100);
+                    // the reading snaps to the nearest step. Quiet like the slider it replaces: a pilot's own knob
+                    // turn is said by the combo itself (CORE-7).
+                    var unitControl = c;
+                    Add(vars, c.Key, new SimVarDefinition
+                    {
+                        Name = ru.Item2, DisplayName = c.Label, Type = TypeOf(ru.Item1), Units = ru.Item3,
+                        UpdateFrequency = UpdateFrequency.Continuous, IsAnnounced = true, ExcludeFromMonitorManager = true,
+                        ValueDescriptions = A330Units.Descriptions(c),
+                        ValueToDescriptionKey = v => A330Units.NearestStep(unitControl, v),
+                    });
+                    _silentKeys.Add(c.Key);
+                    break;
+                }
                 case "continuous" when read is { } rc:
                     Add(vars, c.Key, new SimVarDefinition
                     {
@@ -178,10 +194,12 @@ public partial class IniA330Definition
         // through RefreshControlWhenDefHandled: its write fires on a user commit alone, so a refresh sends nothing.
         vars[A330SharedKeys.Flaps].RefreshControlWhenDefHandled = IsFlapDetent;
         vars["A330_SPDBRK"].RefreshControlWhenDefHandled = IsSpeedbrakeAtRest;
-        foreach (var def in vars.Values)
+        foreach (var (defKey, def) in vars)
         {
             if (def.RenderAsSlider)
                 def.RefreshControlWhenDefHandled = v => !double.IsNaN(v);
+            else if (_controlsByKey.TryGetValue(defKey, out var uc) && uc.Unit != null && uc.Kind == "continuous")
+                def.RefreshControlWhenDefHandled = v => !double.IsNaN(v);   // the combo follows any reading, to its nearest step
             else if (def.DisplayName.EndsWith(" guard", StringComparison.Ordinal) && def.ValueDescriptions.Count > 0)
             {
                 var d = def;
@@ -393,7 +411,7 @@ public partial class IniA330Definition
             double? now = fromWindow ? await io.ReadFresh(key, CancellationToken.None) : null;
             if (_pickGeneration[key] != generation) return;   // a pick came in while the fresh read was out
             io.Request(key);
-            if (now is double read && double.IsFinite(read) && Math.Abs(read - target) > 0.01)
+            if (now is double read && double.IsFinite(read) && Math.Abs(varDef.DescriptionKeyFor(read) - target) > 0.01)   // a reading snaps to its step first
                 announcer.Announce(A330Write.PositionSentence(varDef, read));
         }
         catch (Exception ex)
@@ -456,7 +474,7 @@ public partial class IniA330Definition
                 handled = true; return;
             default:
                 if (string.IsNullOrEmpty(c.Event)) return;
-                if (c.Kind == "continuous")
+                if (c.Kind == "continuous" && c.Unit == null)
                 {
                     // a slider writes its own value; its read-back is sub-step 4's
                     if (!SetInputEvent(sim, announcer, c.Label, c.Event, value)) _writeRefused = true;

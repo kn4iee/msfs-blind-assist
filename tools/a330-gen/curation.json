@@ -6937,9 +6937,9 @@
    "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
   },
   "A330_WX_TILT": {
-   "label": "Weather radar tilt (15 = level)",
+   "label": "Weather radar tilt",
    "aircraft_says": null,
-   "why": "today's label, kept until control_names.json lands (plan 04 Task 2 Step 2)"
+   "why": "today's label without its input numbers: the control is offered in degrees (its unit), so the label carries none (plan 04 Task 4a)"
   }
  },
  "position_overrides": {

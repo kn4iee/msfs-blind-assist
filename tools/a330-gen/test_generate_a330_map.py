@@ -236,6 +236,15 @@ class MapFieldTests(unittest.TestCase):
             self.assertEqual("continuous", e["kind"], e["key"])
             self.assertLess(e["unit"]["min"], e["unit"]["max"], e["key"])
 
+    def test_a_label_with_a_unit_carries_no_input_numbers(self):
+        # the control is offered in its unit, so a label's own numbers (once "15 = level") would disagree with it
+        gen = load_generator()
+        curation = gen.load_curation()
+        for key, e in curation["controls"].items():
+            if "unit" in e.keys() or "unit" in curation["controls"][key]:
+                label = curation["name_overrides"][e["key"]]["label"]
+                self.assertFalse(any(ch.isdigit() for ch in label), label)
+
     def test_the_map_carries_guard_state_unit_and_proven(self):
         gen = load_generator()
         by = {c["key"]: c for c in gen.build_controls(gen.load_curation())}

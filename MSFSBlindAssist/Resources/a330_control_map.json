@@ -6087,7 +6087,7 @@
    "key": "A330_WX_TILT",
    "section": "Pedestal",
    "panel": "Weather Radar",
-   "label": "Weather radar tilt (15 = level)",
+   "label": "Weather radar tilt",
    "kind": "continuous",
    "event": "AIRLINER_WX_TILT",
    "mode": "set",

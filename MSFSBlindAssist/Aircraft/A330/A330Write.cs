@@ -75,7 +75,10 @@ internal static class A330Write
                 return A330WritePlan.Of(new A330PressCall(c.Event, c.HoldMs ?? IniA330Definition.DefaultPushMs));
             default:
                 if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
-                if (Known(current) && Math.Abs(current!.Value - target) < PositionTolerance) return A330WritePlan.AtPosition;
+                // a unit control's pick is one of its steps and its reading is continuous: within half a step is
+                // the same step (the nearest one); its input is the step's own value
+                double tolerance = c is { Kind: "continuous", Unit: not null } ? (c.Step is > 0 ? c.Step.Value : 1) / 2 : PositionTolerance;
+                if (Known(current) && Math.Abs(current!.Value - target) < tolerance) return A330WritePlan.AtPosition;
                 return A330WritePlan.Of(new A330InputEventCall(c.Event, A330ControlMap.InputFor(c, target) ?? target));
         }
     }
