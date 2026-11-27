@@ -1,0 +1,83 @@
+# PanelSweep deny list: the A330 controls the sweep NEVER writes.
+#
+# One control a line: <control key> TAB <what writing it would do>. '#' starts a comment line; blank
+# lines are ignored. Keys are the keys of MSFSBlindAssist/Resources/a330_control_map.json, or of the
+# definition's own controls (IniA330Definition.OwnPlacedControls). A line naming no control would
+# silently deny nothing, so a test fails on one. Parsed by Sweep/DenyList.cs.
+#
+# The planner also skips a switch whose guard is denied, and never sweeps a guard row on its own. A
+# denied control is tried only by hand, one at a time, with the owner's go-ahead (plan 04, Task 4 Step 4).
+# Remove a line only on purpose.
+
+# Engine masters, the start selector and the manual starts: start or stop an engine
+A330_ENG1_MASTER	starts or shuts down engine 1
+A330_ENG2_MASTER	starts or shuts down engine 2
+A330_ENG_MODE	puts the engine start selector to crank or ignition and begins a start sequence
+A330_MAN_START1	cranks engine 1 by hand
+A330_MAN_START2	cranks engine 2 by hand
+
+# Fire handles, agents and tests: discharge a bottle or cut an engine's supplies
+A330_ENG1_FIRE	pulling the handle shuts engine 1's fuel, hydraulics, bleed and generator
+A330_ENG2_FIRE	pulling the handle shuts engine 2's fuel, hydraulics, bleed and generator
+A330_APU_FIRE	pulling the handle shuts the APU down
+A330_ENG1_AGENT1	discharges engine 1's first fire bottle, which cannot be recharged
+A330_ENG1_AGENT2	discharges engine 1's second fire bottle, which cannot be recharged
+A330_ENG2_AGENT1	discharges engine 2's first fire bottle, which cannot be recharged
+A330_ENG2_AGENT2	discharges engine 2's second fire bottle, which cannot be recharged
+A330_APU_AGENT	discharges the APU's fire bottle, which cannot be recharged
+A330_ENG_FIRE_TEST	sounds the fire warnings and the master warning
+A330_APU_FIRE_TEST	sounds the APU fire warning and the master warning
+A330_CARGO_SMOKE_TEST	sounds the cargo smoke warnings and the master warning
+A330_FWD_CARGO_AGENT	discharges the forward cargo fire bottle, which cannot be recharged
+A330_AFT_CARGO_AGENT	discharges the aft cargo fire bottle, which cannot be recharged
+
+# IDG disconnects and the RAT: cannot be undone in flight or from the cockpit
+A330_IDG1	disconnects generator 1's drive, which only maintenance can reconnect
+A330_IDG2	disconnects generator 2's drive, which only maintenance can reconnect
+A330_RAT	deploys the ram air turbine, which only maintenance can stow
+
+# The ADIRS selectors and IR push-buttons: switching one off loses its alignment (measured 2026-11-19: input 1 on each put all three in NAV)
+A330_IRS1_MODE	realigns inertial reference 1, minutes with the aircraft still
+A330_IRS2_MODE	realigns inertial reference 2, minutes with the aircraft still
+A330_IRS3_MODE	realigns inertial reference 3, minutes with the aircraft still
+A330_IR1	switching IR 1 off loses its alignment and realigns it
+A330_IR2	switching IR 2 off loses its alignment and realigns it
+A330_IR3	switching IR 3 off loses its alignment and realigns it
+
+# Batteries and external power: the cockpit goes dark
+A330_BAT1	the cockpit goes dark when battery 1 is off with no other source
+A330_BAT2	the cockpit goes dark when battery 2 is off with no other source
+A330_APU_BAT	the APU's battery going off stops an APU start and its own supplies
+A330_EXT_A	external power A off blacks out the cockpit on the ground
+A330_EXT_B	external power B off blacks out the cockpit on the ground
+
+# The APU: changes the bleed and electrical state
+A330_APU_MASTER	starts or stops the APU and changes the bleed and electrical state
+A330_APU_START	starts the APU
+
+# Emergency and safety systems that affect the cabin or the aircraft
+A330_DITCHING	closes the outflow valve and the openings below the waterline
+A330_EMER_EXIT_LT	turns on the emergency exit lights, which run down the emergency battery
+
+# Calls: ring the cabin crew or the ground crew
+A330_CALL_ALL	calls the whole cabin crew
+A330_CALL_FWD	calls the forward cabin crew
+A330_CALL_MID	calls the mid cabin crew
+A330_CALL_AFT	calls the aft cabin crew
+A330_CALL_PURS	calls the purser
+A330_CALL_EXIT	calls the cabin crew to the exit
+A330_MECH_CALL	calls the ground mechanic
+
+# The definition's own controls (not in the map): they move the aircraft or its surfaces
+A330_GEAR	moves the landing gear
+A330_FLAPS	moves the flaps and slats
+A330_SPDBRK	moves the speedbrake lever
+A330_SPLR_ARM	arms or disarms the ground spoilers
+A330_PARKBRK	sets or releases the parking brake, and the aircraft may roll
+
+# Not offered by the map yet. Deny each of these the day the aircraft offers it:
+#   gravity gear extension
+#   passenger oxygen
+#   the evacuation command
+#   the cargo doors
+#   the cabin doors

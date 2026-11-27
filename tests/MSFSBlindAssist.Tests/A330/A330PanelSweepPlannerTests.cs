@@ -136,4 +136,23 @@ public class A330PanelSweepPlannerTests
         Assert.Throws<FormatException>(() => DenyList.Parse("A330_X\tone\nA330_X\ttwo\n"));
     }
 
+    [Fact]
+    public void Every_key_in_the_deny_list_file_is_a_control_the_aircraft_offers()
+    {
+        string root = RepoRoot();
+        var denied = DenyList.Parse(File.ReadAllText(Path.Combine(root, "tools", "a330-gen", "PanelSweep", "denylist.txt")));
+        var known = new HashSet<string>(A330ControlMap.Embedded.Controls.Select(c => c.Key));
+        foreach (var (_, _, key) in IniA330Definition.OwnPlacedControls) known.Add(key);
+
+        Assert.NotEmpty(denied);
+        Assert.Empty(denied.Keys.Where(k => !known.Contains(k)));
+    }
+
+    private static string RepoRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            if (File.Exists(Path.Combine(dir.FullName, "MSFSBlindAssist.sln"))) return dir.FullName;
+        throw new InvalidOperationException($"MSFSBlindAssist.sln was not found above {AppContext.BaseDirectory}");
+    }
+
 }
