@@ -5442,15 +5442,21 @@
      "value": 0,
      "input": 0,
      "name": "0",
-     "proven": false
+     "proven": true
     },
     {
      "value": 1,
      "input": 1,
      "name": "1",
-     "proven": false
+     "proven": true
     }
-   ]
+   ],
+   "proof": {
+    "kind": "ewd_memo",
+    "text": "PRED W/S OFF",
+    "when": "1",
+    "measured": "2026-11-22"
+   }
   },
   "AIRLINER_WX_GAIN": {
    "key": "A330_WX_GAIN",

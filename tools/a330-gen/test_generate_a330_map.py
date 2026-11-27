@@ -170,6 +170,19 @@ class PredictiveWindshearTests(unittest.TestCase):
         # this switch reads back what was written (INI_WX_PWS_SWITCH and B:AIRLINER_WX_PWS agree)
         self.assertEqual([(0, 0), (1, 1)], [(p["value"], p["input"]) for p in control["positions"]])
 
+    def test_predictive_windshear_carries_its_proof_and_both_positions_are_proven(self):
+        gen = load_generator()
+        entry = gen.load_curation()["controls"]["AIRLINER_WX_PWS"]
+        # the E/WD memo the aircraft drives, which the control does not write itself (measured 2026-11-22)
+        self.assertEqual({"kind": "ewd_memo", "text": "PRED W/S OFF", "when": "1", "measured": "2026-11-22"}, entry["proof"])
+        self.assertEqual([True, True], [p["proven"] for p in entry["positions"]])
+
+    def test_the_proof_is_not_in_the_map_yet(self):
+        gen = load_generator()
+        control = next(c for c in gen.build_controls(gen.load_curation()) if c["key"] == "A330_WX_PWS")
+        self.assertNotIn("proof", control)
+        self.assertNotIn("proven", control["positions"][0])
+
 
 if __name__ == "__main__":
     unittest.main()
