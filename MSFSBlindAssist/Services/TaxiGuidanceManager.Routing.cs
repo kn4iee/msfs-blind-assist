@@ -1388,7 +1388,7 @@ public partial class TaxiGuidanceManager
             _arrivedRunwayClearing = false;   // a fresh route supersedes any clearing phase
             _approachAnnounced = false;
             _curveAnnouncedSign = 0;
-            _turnImminentAnnounced = false;
+            ResetJunctionCallouts();
             _crossingAnnounced = false;
             _lastCrossingNodeId = -1;
             _lastAnnouncedTaxiway = "";
@@ -1972,8 +1972,8 @@ public partial class TaxiGuidanceManager
             var newSeg = _route.Segments[_currentSegmentIndex];
             AnnounceOrDeferTaxiwayChange(newSeg.TaxiwayName);
 
+            // The turn notices' latches stay: they belong to a junction, which may still be ahead.
             _approachAnnounced = false;
-            _turnImminentAnnounced = false;
             _crossingAnnounced = false;
         }
     }
@@ -2718,7 +2718,7 @@ public partial class TaxiGuidanceManager
         _currentSegmentIndex = 0;
         _approachAnnounced = false;
         _curveAnnouncedSign = 0;
-        _turnImminentAnnounced = false;
+        ResetJunctionCallouts();
         _crossingAnnounced = false;
         _lastCrossingNodeId = -1;
         // Reset countdown latches — otherwise stale flags from the OLD route
@@ -2884,8 +2884,8 @@ public partial class TaxiGuidanceManager
 
         _currentSegmentIndex++;
         _lastSegmentAdvanceTime = MSFSBlindAssist.Utils.SimClock.UtcNow;
+        // The turn notices' latches stay: they belong to a junction, which may still be ahead.
         _approachAnnounced = false;
-        _turnImminentAnnounced = false;
         _crossingAnnounced = false;
 
         if (_currentSegmentIndex >= _route.Segments.Count)

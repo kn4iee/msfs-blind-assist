@@ -600,6 +600,34 @@ static double TaxiPlanBearing(double la1, double lo1, TaxiNode n)
     => (Math.Atan2((n.Longitude - lo1) * Math.Cos(la1 * Math.PI / 180), n.Latitude - la1) * 180 / Math.PI + 360) % 360;
 static double TaxiPlanBearingN(TaxiNode a, TaxiNode b) => TaxiPlanBearing(a.Latitude, a.Longitude, b);
 
+// The hold-short nodes an incursion-guard call can be about — "Crossing <name>." or "Passing the <name> hold line.",
+// <name> being a node's HoldShortName ("runway" when it has none) — every such node within the guard's 40 m (45 m
+// here: the guard measures with its own fast distance), nearest first. Navdata often draws one line as two nodes a
+// few metres apart, so the call is about one of them, not necessarily the nearest. Null for anything else
+// ("Crossing taxiway Y6." names no hold). Every sentence of the frame's one utterance is tried, so a hold-line
+// call after another "Crossing …" ("Crossing taxiway Y6. Crossing runway 01C at Y5.") is still seen.
+static (List<TaxiNode> nodes, string call, bool crossing)? HoldLineCall(TaxiGraph g, string utterance, double lat, double lon)
+{
+    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+                 utterance, @"(?<=^|\. )(?:(Crossing) (.+?)|Passing the (.+?) hold line)\.(?= |$)"))
+    {
+        bool crossing = m.Groups[1].Success;
+        string name = crossing ? m.Groups[2].Value : m.Groups[3].Value;
+        var nodes = new List<(TaxiNode n, double d)>();
+        foreach (var n in g.Nodes.Values)
+        {
+            if (n.Type != TaxiNodeType.HoldShort && n.Type != TaxiNodeType.ILSHoldShort) continue;
+            string spoken = string.IsNullOrEmpty(n.HoldShortName) ? "runway" : n.HoldShortName;
+            if (!string.Equals(spoken, name, StringComparison.Ordinal)) continue;
+            double d = TaxiGraph.CalculateDistanceMeters(lat, lon, n.Latitude, n.Longitude);
+            if (d < 45) nodes.Add((n, d));
+        }
+        if (nodes.Count > 0)
+            return (nodes.OrderBy(x => x.d).Select(x => x.n).ToList(), m.Value.TrimStart('.', ' '), crossing);
+    }
+    return null;
+}
+
 void RunTaxis(World w)
 {
     foreach (var (plan, _) in PlanTaxis(w))
@@ -2815,6 +2843,17 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
 #endif
         bool lineupChecked = false, reachedLineup = false;
         var paintCross = new List<(double odo, double lat, double lon)>();   // each painted runway-hold line crossed
+        // The incursion guard's hold-line calls ("Crossing runway X." / "Passing the X hold line."): one about a
+        // line already behind the aircraft, a "Crossing" with no runway in the next 200 m, the same line twice.
+        bool holdCallBehindReported = false, crossingNoRunwayReported = false, holdCallRepeatReported = false;
+        (double odo, string text)? pendingCrossing = null;
+        (double odo, string text, string what)? pendingBehind = null;
+        (string text, double odo, int stops)? lastHoldCall = null;
+        // ...and the other way round: a runway entered on the way (not the destination) with no "Crossing" call
+        // naming it from 150 m before the entry to 100 m after it.
+        var crossingCalls = new List<(double odo, string text)>();
+        var unannouncedCheck = new List<(double odo, TaxiGraph.RunwayCenterline rwy)>();
+        bool crossedUnannouncedReported = false;
 #if !OLDAPP
         // Turn pick flights: what was said about the pick and the off-chart leg, and (the miss flight)
         // the charted way the pilot takes at the junction instead of the picked turn.
@@ -2833,6 +2872,10 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
         var divert = plan.DivertPath; int divertIdx = 0; double divertStartOdo = -1; bool diverting = false, diverted = false, excursionPastEnd = false;
         if (keys != null) keys.Flown = true;
 #endif
+        // When the hold-short countdown and the turn notices come (CountdownTiming, TurnTiming): measured
+        // along the route, from the route's own segments, never from the app's countdown.
+        var cdTiming = new CountdownTiming();
+        var turnTiming = new TurnTiming();
         while (t < budget)
         {
             simNow = simNow.AddMilliseconds(100); t += 0.1;
@@ -2877,6 +2920,9 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             }
             if (keys?.Xc is { } kTrack && !ReferenceEquals(kTrack, xc)) kTrack.Track(mgr.RouteForHarness, lat, lon);
 #endif
+            // Measured at the position UpdatePosition was given this frame (the move comes below).
+            cdTiming.Frame(w.Icao, where, found, st, mgr.RouteForHarness, mgr.SegmentIndexForHarness, lat, lon, gs, odo, saidNow, newStop != null, trace);
+            turnTiming.Frame(w.Icao, where, found, saidNow, odo, newStop != null);
             foreach (var a in saidNow)
             {
                 if (a.Contains("Hold short", StringComparison.OrdinalIgnoreCase) || a.Contains("Hold position", StringComparison.OrdinalIgnoreCase)) lastHoldSpeech = a;
@@ -2902,6 +2948,32 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                 }
 #endif
                 if (a.Contains("Lined up", StringComparison.OrdinalIgnoreCase)) linedUp = true;
+                if (HoldLineCall(w.Graph, a, lat, lon) is { } hc)
+                {
+                    // About a line already passed: every node of that line in range is behind the pilot. A
+                    // "Crossing" about one is still right while the runway it names is ahead (stopped beside the
+                    // node by the hold capture, a route that starts held at it): judged once 150 m have gone by.
+                    var near = hc.nodes[0];
+                    double rel = Math.Abs(Geo.Norm(TaxiPlanBearing(lat, lon, near) - hdg));
+                    bool allBehind = hc.nodes.All(n => Math.Abs(Geo.Norm(TaxiPlanBearing(lat, lon, n) - hdg)) > 90);
+                    string behindWhat = $"t={t:F0}s \"{hc.call}\" with n{near.NodeId} {Geo.Dist(lat, lon, near.Latitude, near.Longitude):F0} m away, {rel:F0}° off the heading ({lat:F6},{lon:F6})";
+                    if (allBehind && !hc.crossing && !holdCallBehindReported)
+                    {
+                        holdCallBehindReported = true;
+                        found.Add(new Finding(w.Icao, "HOLD_LINE_CALLED_BEHIND", where, behindWhat));
+                    }
+                    else if (allBehind && hc.crossing && pendingBehind == null) pendingBehind = (odo, hc.call, behindWhat);
+                    if (hc.crossing && pendingCrossing == null) pendingCrossing = (odo, hc.call);
+                    if (hc.crossing) crossingCalls.Add((odo, hc.call));
+                    // The same call again with no stop between: the pilot hears one line twice.
+                    if (!holdCallRepeatReported && lastHoldCall is { } lc && lc.text == hc.call && lc.stops == stops.Count && odo - lc.odo < 150)
+                    {
+                        holdCallRepeatReported = true;
+                        found.Add(new Finding(w.Icao, "HOLD_LINE_CALL_REPEATED", where,
+                            $"t={t:F0}s \"{hc.call}\" again, {odo - lc.odo:F0} m after the first, no stop between"));
+                    }
+                    lastHoldCall = (hc.call, odo, stops.Count);
+                }
                 if (a.Contains("off route", StringComparison.OrdinalIgnoreCase) && a.Contains("Warning", StringComparison.OrdinalIgnoreCase) && route != null)
                 {
                     var rpts = new List<(double Lat, double Lon)> { (route.Segments[0].FromNode.Latitude, route.Segments[0].FromNode.Longitude) };
@@ -3020,6 +3092,25 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
 
             // Runway entered?
             var rUnder = TaxiGuidanceHarnessBridge.RunwayUnder(w.Graph, lat, lon);
+            if (pendingBehind is { } pb)
+            {
+                if (rUnder != null && DepartureRig.NamesRunway(pb.text, rUnder)) pendingBehind = null;
+                else if (odo - pb.odo > 150)
+                {
+                    if (!holdCallBehindReported) { holdCallBehindReported = true; found.Add(new Finding(w.Icao, "HOLD_LINE_CALLED_BEHIND", where, pb.what)); }
+                    pendingBehind = null;
+                }
+            }
+            if (rUnder != null) pendingCrossing = null;
+            else if (pendingCrossing is { } pc0 && odo - pc0.odo > 200)
+            {
+                if (!crossingNoRunwayReported)
+                {
+                    crossingNoRunwayReported = true;
+                    found.Add(new Finding(w.Icao, "CROSSING_CALLED_NO_RUNWAY", where, $"\"{pc0.text}\" and no runway in the next {odo - pc0.odo:F0} m"));
+                }
+                pendingCrossing = null;
+            }
             if (rUnder == null && onRunway != null) { leftRunway = onRunway; leftRunwayOdo = odo; }
             bool flicker = rUnder != null && rUnder == leftRunway && odo - leftRunwayOdo < 150;
             // An ENTRY comes from off the pavement: rolling from one runway's pavement straight onto
@@ -3028,6 +3119,7 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
             {
                 string rname = $"{rUnder.Name1}/{rUnder.Name2}";
                 bool isDest = plan.DestRunway != null && (rUnder.Name1 == plan.DestRunway || rUnder.Name2 == plan.DestRunway);
+                if (!isDest) unannouncedCheck.Add((odo, rUnder));
                 bool warned = summary.Contains(rUnder.Name1) && summary.Contains("no hold short", StringComparison.OrdinalIgnoreCase)
                               || summary.Contains(rUnder.Name2) && summary.Contains("no hold short", StringComparison.OrdinalIgnoreCase);
                 // The stop that should have been for THIS runway: the last one not yet followed by a runway.
@@ -3084,6 +3176,17 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
                         where, $"entered runway {rname} at t={t:F0}s, {odo - lastHoldOdo:F0} m after the last hold (state {st})"));
             }
             onRunway = rUnder;
+            for (int ui = unannouncedCheck.Count - 1; ui >= 0; ui--)
+            {
+                var (eOdo, eRwy) = unannouncedCheck[ui];
+                if (odo - eOdo < 100) continue;
+                unannouncedCheck.RemoveAt(ui);
+                if (!crossedUnannouncedReported && !crossingCalls.Any(c => c.odo >= eOdo - 150 && c.odo <= eOdo + 100 && DepartureRig.NamesRunway(c.text, eRwy)))
+                {
+                    crossedUnannouncedReported = true;
+                    found.Add(new Finding(w.Icao, "RUNWAY_CROSSED_UNANNOUNCED", where, $"entered runway {eRwy.Name1}/{eRwy.Name2} at {eOdo:F0} m with no \"Crossing\" naming it"));
+                }
+            }
 
             double off = w.OffPavementMetres(lat, lon);
             if (off < 3) joinedPavement = true;
@@ -3107,6 +3210,13 @@ List<Finding> FlyTaxi(World w, TaxiPlan? plan, bool withClearance, bool trace)
         if (done)
             foreach (var hs in stops.Where(x => !x.Used && DepartureRig.MentionsRunway(x.Text)))
                 found.Add(new Finding(w.Icao, "HOLD_WITHOUT_RUNWAY", where, $"stopped at t={hs.T:F0}s \"{hs.Text}\" and never entered a runway after it"));
+        if (done && !crossedUnannouncedReported
+            && unannouncedCheck.FirstOrDefault(e => !crossingCalls.Any(c => c.odo >= e.odo - 150 && DepartureRig.NamesRunway(c.text, e.rwy))) is { rwy: not null } eEnd)
+            found.Add(new Finding(w.Icao, "RUNWAY_CROSSED_UNANNOUNCED", where, $"entered runway {eEnd.rwy.Name1}/{eEnd.rwy.Name2} at {eEnd.odo:F0} m with no \"Crossing\" naming it"));
+        if (done && pendingBehind is { } pbEnd && !holdCallBehindReported)
+            found.Add(new Finding(w.Icao, "HOLD_LINE_CALLED_BEHIND", where, pbEnd.what));
+        if (done && pendingCrossing is { } pcEnd && !crossingNoRunwayReported)
+            found.Add(new Finding(w.Icao, "CROSSING_CALLED_NO_RUNWAY", where, $"\"{pcEnd.text}\" and no runway before the flight ended {odo - pcEnd.odo:F0} m later"));
         if (!done) found.Add(new Finding(w.Icao, "TAXI_NOT_ARRIVED", where, $"after {t:F0}s ({odo:F0} m of {route.TotalDistanceMeters:F0} m) state={mgr.State} seg={mgr.SegmentIndexForHarness}/{route.Segments.Count} [{string.Join(", ", stateLog.TakeLast(3))}]"));
         if (maxOff > 12) found.Add(new Finding(w.Icao, "TAXI_OFF_PAVEMENT", where, $"{maxOff:F0} m off the pavement following the tone, {offWhere}"));
         if (maxOffLineup > 12) found.Add(new Finding(w.Icao, "LINEUP_LEAVES_MAPPED_PAVEMENT", where, $"{maxOffLineup:F0} m from any mapped taxi edge or runway while following the lineup tone, {lineupWhere}"));
@@ -3464,6 +3574,162 @@ sealed class Cap : ScreenReaderAnnouncer
     public override void AnnounceWithQueue(string m) => Say(m);
     public List<string> TakeNew() { var l = new List<string>(_pending); _pending.Clear(); return l; }
     public bool RecentlyToldToSlow(DateTime now) => (now - LastSlowCall).TotalSeconds < 6;
+}
+
+/// <summary>
+/// When the hold-short countdown comes, measured ALONG THE ROUTE by the harness itself: the
+/// distance through every segment to the next stop (the first segment at or after the cursor that
+/// ends at a hold short), against the countdown's outer tier (15 s at the speed then, 300 to 600 ft).
+/// Flags a stop whose first countdown line came more than 30 m after the outer tier was crossed
+/// (HOLD_COUNTDOWN_LATE) or never came (HOLD_COUNTDOWN_MISSING), and a "Passing the … hold line." or
+/// "Crossing …" said about the line the aircraft then stopped at (HOLD_CALLED_PASSING_BEFORE_STOP).
+/// Only a stop whose outer tier was crossed while taxiing is judged: a route that starts inside it
+/// has no room for the outer line.
+/// </summary>
+sealed class CountdownTiming
+{
+    private const double LateSlackM = 30;
+    private int _node = -1;
+    private double _dueAt = double.NaN, _firstAt = double.NaN, _prevAlong = double.NaN;
+    private string _firstText = "", _countdownText = "";
+    private (double Odo, string Name)? _passLine;
+    private bool _lateReported, _missingReported, _passReported;
+
+    private static readonly System.Text.RegularExpressions.Regex CountdownLine = new(
+        @"\b(?:Hold short|End of route)\b[^.]* in \d", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly System.Text.RegularExpressions.Regex PassLine = new(
+        @"\b(?:Passing the (.+?) hold line|Crossing (runway [^.]+))\.", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The countdown's outer tier in metres: 15 s at <paramref name="gsKt"/>, 300 to 600 ft.</summary>
+    public static double OuterTierM(double gsKt) => Math.Clamp(gsKt * 1.68781 * 15.0, 300.0, 600.0) / 3.28084;
+
+    /// <summary>The next stop at or after segment <paramref name="idx"/> and the distance to it along the route.</summary>
+    public static (int NodeId, double Along)? NextStop(TaxiRoute? r, int idx, double lat, double lon)
+    {
+        if (r == null || idx < 0 || idx >= r.Segments.Count) return null;
+        double along = Geo.Dist(lat, lon, r.Segments[idx].ToNode.Latitude, r.Segments[idx].ToNode.Longitude);
+        for (int k = idx; k < r.Segments.Count; k++)
+        {
+            if (k > idx) along += r.Segments[k].DistanceMeters;
+            if (r.Segments[k].IsHoldShortPoint) return (r.Segments[k].ToNode.NodeId, along);
+        }
+        return null;
+    }
+
+    public void Frame(string icao, string where, List<Finding> found, TaxiGuidanceState st, TaxiRoute? route, int idx,
+                      double lat, double lon, double gs, double odo, List<string> said, bool stopped, bool trace)
+    {
+        // On the frame that stops, the cursor has already moved past the hold: judge the stop tracked so far.
+        if (!stopped && st == TaxiGuidanceState.Taxiing && NextStop(route, idx, lat, lon) is { } ns)
+        {
+            if (ns.NodeId != _node)
+            {
+                _node = ns.NodeId; _dueAt = _firstAt = _prevAlong = double.NaN; _firstText = _countdownText = "";
+            }
+            double outer = OuterTierM(gs);
+            if (double.IsNaN(_dueAt) && !double.IsNaN(_prevAlong) && _prevAlong >= outer && ns.Along < outer)
+            {
+                _dueAt = ns.Along;
+                if (trace) Console.WriteLine($"  CD outer tier due {ns.Along:F0} m out along the route at {gs:F1} kt (stop n{ns.NodeId})");
+            }
+            foreach (var a in said)
+                if (CountdownLine.IsMatch(a))
+                {
+                    _countdownText = a;
+                    if (double.IsNaN(_firstAt))
+                    {
+                        _firstAt = ns.Along; _firstText = a;
+                        if (trace) Console.WriteLine($"  CD first line {ns.Along:F0} m out along the route");
+                    }
+                }
+            _prevAlong = ns.Along;
+        }
+        foreach (var a in said)
+        {
+            if (PassLine.Match(a) is { Success: true } m)
+                _passLine = (odo, m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value);
+            if (stopped && CountdownLine.IsMatch(a))
+            {
+                _countdownText = a;
+                if (double.IsNaN(_firstAt)) { _firstAt = 0; _firstText = a; }
+            }
+        }
+        if (!stopped || _node < 0) return;
+        if (!double.IsNaN(_dueAt))
+        {
+            if (double.IsNaN(_firstAt))
+            {
+                if (!_missingReported)
+                {
+                    _missingReported = true;
+                    found.Add(new Finding(icao, "HOLD_COUNTDOWN_MISSING", where, $"stopped at a hold with no countdown line; the outer tier was due {_dueAt:F0} m out"));
+                }
+            }
+            else if (_dueAt - _firstAt > LateSlackM && !_lateReported)
+            {
+                _lateReported = true;
+                found.Add(new Finding(icao, "HOLD_COUNTDOWN_LATE", where, $"first countdown line {_firstAt:F0} m out along the route, the outer tier due {_dueAt:F0} m out: \"{_firstText}\""));
+            }
+        }
+        if (_passLine is { } p && odo - p.Odo < 80 && _countdownText.Contains(p.Name, StringComparison.OrdinalIgnoreCase) && !_passReported)
+        {
+            _passReported = true;
+            found.Add(new Finding(icao, "HOLD_CALLED_PASSING_BEFORE_STOP", where, $"\"{p.Name}\" called passed or crossed {odo - p.Odo:F0} m before stopping at that line: \"{_countdownText}\""));
+        }
+        _node = -1; _passLine = null;
+    }
+}
+
+/// <summary>
+/// Whether a turn's "… now" had an advance notice before it: a "… now" with no "In N, left/right …"
+/// heard since the previous "… now" (or the route start, or the last stop), though the aircraft had
+/// taxied more than 150 m since then, room for one (TURN_NOW_WITHOUT_ADVANCE). An advance notice spoken
+/// in the same frame as its "… now" is dropped by the app, so it was never heard and does not count.
+/// An advance notice whose side (left, right or "continue") is not the side of the "… now" that follows
+/// it is TURN_ADVANCE_OTHER_WAY ("In 120 metres, continue onto taxiway L." then "Sharp left now").
+/// </summary>
+sealed class TurnTiming
+{
+    private const double RoomM = 150;
+    private static readonly System.Text.RegularExpressions.Regex Now = new(@"^(?:Turn )?(?:Sharp |Slight )?(left|right) now\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly System.Text.RegularExpressions.Regex Advance = new(@"^In [^,]+, (?:sharp |slight )?(left|right|continue)\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    // "Taxiway M." on joining a taxiway: a "continue onto taxiway M" notice has no "… now" of its own, and is done.
+    private static readonly System.Text.RegularExpressions.Regex Joined = new(@"^Taxiway \S+\.$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private double _since;
+    private bool _advance, _reported, _otherWayReported;
+    private string? _advanceSide, _advanceText;
+
+    public void Frame(string icao, string where, List<Finding> found, List<string> said, double odo, bool stopped)
+    {
+        foreach (var a in said)
+            foreach (var s in System.Text.RegularExpressions.Regex.Split(a, @"(?<=[.!?])\s+"))
+            {
+                if (Advance.Match(s) is { Success: true } am)
+                {
+                    _advanceSide = am.Groups[1].Value.ToLowerInvariant(); _advanceText = s;
+                    if (_advanceSide != "continue") _advance = true;
+                }
+                else if (Joined.IsMatch(s) && _advanceSide == "continue") _advanceSide = null;
+                else if (Now.Match(s) is { Success: true } nm)
+                {
+                    if (!_advance && odo - _since > RoomM && !_reported)
+                    {
+                        _reported = true;
+                        found.Add(new Finding(icao, "TURN_NOW_WITHOUT_ADVANCE", where, $"\"{s}\" with no advance notice after {odo - _since:F0} m of taxiing"));
+                    }
+                    if (_advanceSide != null && _advanceSide != nm.Groups[1].Value.ToLowerInvariant() && !_otherWayReported)
+                    {
+                        _otherWayReported = true;
+                        found.Add(new Finding(icao, "TURN_ADVANCE_OTHER_WAY", where, $"\"{_advanceText}\" then \"{s}\""));
+                    }
+                    _advance = false; _since = odo; _advanceSide = null;
+                }
+            }
+        if (stopped) { _advance = false; _since = odo; _advanceSide = null; }
+    }
 }
 
 /// <summary>
