@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.RegularExpressions;
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.A330;
 using MSFSBlindAssist.Aircraft.A330.Sweep;
 using Xunit;
@@ -468,4 +470,21 @@ public class A330PanelSweepRunnerTests
         Assert.Contains("could not be read", Assert.Single(rows, r => r.Key == "SEL").Verdict);
     }
 
+    [Fact]
+    public void The_sweep_tools_press_hold_is_the_apps()
+    {
+        // The tool cannot link IniA330Definition (it needs the whole app), so its shim restates the press hold
+        // A330Write plans with; this keeps the two equal.
+        string shim = File.ReadAllText(Path.Combine(RepoRoot(), "tools", "a330-gen", "PanelSweep", "IniA330Shim.cs"));
+        var m = Regex.Match(shim, @"DefaultPushMs\s*=\s*(\d+)\s*;");
+        Assert.True(m.Success, "IniA330Shim.cs declares no DefaultPushMs");
+        Assert.Equal(IniA330Definition.DefaultPushMs, int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static string RepoRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            if (File.Exists(Path.Combine(dir.FullName, "MSFSBlindAssist.sln"))) return dir.FullName;
+        throw new InvalidOperationException($"MSFSBlindAssist.sln was not found above {AppContext.BaseDirectory}");
+    }
 }

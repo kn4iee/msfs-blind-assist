@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Live sweep of the iniBuilds A330's cockpit controls (plan 04, Task 4): drives every control the planner plans
+    through the app's own write decision and routes, reads each back until it settles, and records a verdict a row,
+    with a journal it can restore from. It compiles the app's own map, write decision, planner and runner core
+    (linked, never copied), so what it proves is what the app ships. Not part of the solution (CORE-4); build on its own:
+      dotnet build tools/a330-gen/PanelSweep -c Debug -p:Platform=x64
+    See tools/a330-gen/PanelSweep/README.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>A330PanelSweep</RootNamespace>
+    <!-- Not the 757's PanelSweep: the two tools build side by side. -->
+    <AssemblyName>A330PanelSweep</AssemblyName>
+    <!-- CS0649: fields filled by SimConnect's marshaller (SimLink's structs) or only by the app's own harness (Log.Redirect). -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The app's GlobalUsings.cs gives its files System.Diagnostics (SimulatorDetector uses Process). -->
+    <Using Include="System.Diagnostics" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.FlightSimulator.SimConnect">
+      <HintPath>..\..\..\lib\managed\Microsoft.FlightSimulator.SimConnect.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The map, the write decision, the units, and the sweep's planner and runner core: the app's own files. -->
+    <Compile Include="..\..\..\MSFSBlindAssist\Aircraft\A330\A330ControlMap.cs" Link="Linked\A330ControlMap.cs" />
+    <Compile Include="..\..\..\MSFSBlindAssist\Aircraft\A330\A330Write.cs" Link="Linked\A330Write.cs" />
+    <Compile Include="..\..\..\MSFSBlindAssist\Aircraft\A330\A330Units.cs" Link="Linked\A330Units.cs" />
+    <Compile Include="..\..\..\MSFSBlindAssist\Aircraft\A330\Sweep\*.cs" Link="Linked\Sweep\%(Filename)%(Extension)" />
+    <!-- What those reference: A330Write's sentences take a SimVarDefinition, the journal parses with NumberParsing. -->
+    <Compile Include="..\..\..\MSFSBlindAssist\SimConnect\SimVarDefinitions.cs" Link="Linked\SimVarDefinitions.cs" />
+    <Compile Include="..\..\..\MSFSBlindAssist\Utils\NumberParsing.cs" Link="Linked\NumberParsing.cs" />
+    <!-- SimulatorDetector logs through Utils/Logging/Log ([CORE-15]), so the logger and its path authority ride along
+         (as in tools/b757-gen/PanelSweep). The logger is never started here, so nothing is written to the pilot's logs. -->
+    <Compile Include="..\..\..\MSFSBlindAssist\Utils\Logging\*.cs" Link="Linked\Logging\%(Filename)%(Extension)" />
+    <Compile Include="..\..\..\MSFSBlindAssist\Utils\AppLogs.cs" Link="Linked\AppLogs.cs" />
+    <!-- Picks the SimConnect.dll for the running sim, as the app does at start-up. -->
+    <Compile Include="..\..\..\MSFSBlindAssist\Utils\SimulatorDetector.cs" Link="Linked\SimulatorDetector.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Embedded under the name A330ControlMap.Embedded loads, exactly as the app ships it. -->
+    <EmbeddedResource Include="..\..\..\MSFSBlindAssist\Resources\a330_control_map.json" LogicalName="MSFSBlindAssist.Resources.a330_control_map.json" Link="Linked\a330_control_map.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The app copies the right one of these to SimConnect.dll when it starts (Program.EnsureCorrectSimConnectDll);
+         so does the sweep, which is why the tool ships both rather than copying the app's output. -->
+    <None Include="..\..\..\SimConnect_msfs_2020.dll" Link="SimConnect_msfs_2020.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\SimConnect_msfs_2024.dll" Link="SimConnect_msfs_2024.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="denylist.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
