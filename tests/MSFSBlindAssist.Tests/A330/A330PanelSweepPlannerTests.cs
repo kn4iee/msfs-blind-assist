@@ -1,0 +1,139 @@
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A330;
+using MSFSBlindAssist.Aircraft.A330.Sweep;
+using Xunit;
+using Control = MSFSBlindAssist.Aircraft.A330.A330ControlMap.Control;
+using Position = MSFSBlindAssist.Aircraft.A330.A330ControlMap.Position;
+using ProofInfo = MSFSBlindAssist.Aircraft.A330.A330ControlMap.ProofInfo;
+
+namespace MSFSBlindAssist.Tests;
+
+public class A330PanelSweepPlannerTests
+{
+    private static Position P(double value, double input, string label) => new() { Value = value, Input = input, Label = label };
+
+    private static Control Select(string key, params Position[] ps) => new()
+    {
+        Key = key, Label = key, Kind = "select", Event = "EV_" + key, Read = "INI_" + key, Positions = ps.ToList(),
+    };
+
+    private static Control Guard(string key) => Select(key, P(0, 0, "Closed"), P(1, 1, "Open"));
+
+    private static SweepPlan Plan(IEnumerable<Control> controls, Dictionary<string, double?>? starts = null,
+        Dictionary<string, string>? denied = null, Dictionary<string, string>? pageKeys = null) =>
+        SweepPlanner.Plan(controls.ToList(), starts ?? new(), denied ?? new(), pageKeys ?? new());
+
+    private static ControlPlan For(SweepPlan plan, string key) => plan.Controls.Single(c => c.Key == key);
+
+    [Fact]
+    public void A_selector_visits_every_other_position_and_returns()
+    {
+        // Three positions, read 0/1/2 written with inputs 1/0/2; it starts on the middle one (read 1).
+        var sel = Select("SEL", P(0, 1, "A"), P(1, 0, "B"), P(2, 2, "C"));
+        var plan = For(Plan(new[] { sel }, new() { ["SEL"] = 1 }), "SEL");
+
+        Assert.Null(plan.SkipReason);
+        Assert.Equal(new[] { SweepStepKind.SetPosition, SweepStepKind.SetPosition, SweepStepKind.ReturnToStart },
+            plan.Steps.Select(s => s.Kind).ToArray());
+        Assert.Equal(new double?[] { 1, 2, 0 }, plan.Steps.Select(s => s.Input).ToArray());
+        Assert.Equal(new double?[] { 0, 2, 1 }, plan.Steps.Select(s => s.ExpectedRead).ToArray());
+    }
+
+    [Fact]
+    public void A_denied_control_is_skipped_with_its_reason()
+    {
+        var sel = Select("BAT", P(1, 0, "Auto"), P(0, 1, "Off"));
+        var plan = For(Plan(new[] { sel }, new() { ["BAT"] = 1 }, new() { ["BAT"] = "the cockpit goes dark" }), "BAT");
+
+        Assert.Empty(plan.Steps);
+        Assert.Equal("denied: the cockpit goes dark", plan.SkipReason);
+    }
+
+    [Fact]
+    public void A_guard_is_opened_only_to_reach_its_switch_and_closed_again()
+    {
+        var guard = Guard("COVER");
+        var sw = Select("SW", P(0, 0, "Off"), P(1, 1, "On"));
+        sw.Guard = "COVER";
+        var plan = Plan(new[] { guard, sw }, new() { ["COVER"] = 0, ["SW"] = 0 });
+
+        var guardPlan = For(plan, "COVER");
+        Assert.Empty(guardPlan.Steps);
+        Assert.NotNull(guardPlan.SkipReason);
+
+        var kinds = For(plan, "SW").Steps.Select(s => s.Kind).ToArray();
+        Assert.Equal(new[] { SweepStepKind.OpenGuard, SweepStepKind.SetPosition, SweepStepKind.ReturnToStart, SweepStepKind.CloseGuard }, kinds);
+        Assert.All(For(plan, "SW").Steps.Where(s => s.Kind is SweepStepKind.OpenGuard or SweepStepKind.CloseGuard),
+            s => Assert.Equal("COVER", s.ControlKey));
+
+        // A guard that was already open is left open: the sweep puts back what it found.
+        var open = For(Plan(new[] { guard, sw }, new() { ["COVER"] = 1, ["SW"] = 0 }), "SW");
+        Assert.DoesNotContain(open.Steps, s => s.Kind is SweepStepKind.OpenGuard or SweepStepKind.CloseGuard);
+    }
+
+    [Fact]
+    public void A_button_with_no_state_is_skipped()
+    {
+        var noState = new Control { Key = "CALL", Label = "Call", Kind = "button", Event = "EV", Mode = "push" };
+        var withState = new Control { Key = "ECAM", Label = "ECAM", Kind = "button", Event = "EV2", Mode = "push", State = "INI_X" };
+        var plan = Plan(new[] { noState, withState });
+
+        Assert.Equal("no readable state", For(plan, "CALL").SkipReason);
+        Assert.Equal(new[] { SweepStepKind.Press }, For(plan, "ECAM").Steps.Select(s => s.Kind).ToArray());
+    }
+
+    [Fact]
+    public void A_proof_on_a_lower_ecam_page_selects_the_page_first()
+    {
+        var guard = Guard("COVER");
+        var sw = Select("PUMP", P(0, 0, "Off"), P(1, 1, "On"));
+        sw.Guard = "COVER";
+        sw.Proof = new ProofInfo { Kind = "sd_page", Page = "FUEL", Text = "PUMP" };
+        var pageKeys = new Dictionary<string, string> { ["FUEL"] = "ECAM_FUEL_KEY" };
+        var plan = For(Plan(new[] { guard, sw }, new() { ["COVER"] = 0, ["PUMP"] = 0 }, pageKeys: pageKeys), "PUMP");
+
+        Assert.Equal(SweepStepKind.PressEcamPage, plan.Steps[0].Kind);
+        Assert.Equal("ECAM_FUEL_KEY", plan.Steps[0].ControlKey);
+        Assert.Equal(SweepStepKind.OpenGuard, plan.Steps[1].Kind);
+
+        var missing = For(Plan(new[] { guard, sw }, new() { ["COVER"] = 0, ["PUMP"] = 0 }), "PUMP");
+        Assert.Empty(missing.Steps);
+        Assert.Contains("FUEL", missing.SkipReason);
+    }
+
+    [Fact]
+    public void Every_control_is_planned_or_skipped_once_in_the_maps_order_and_unknown_starts_are_never_guessed()
+    {
+        var a = Select("A", P(0, 0, "x"), P(1, 1, "y"));
+        var status = new Control { Key = "S", Kind = "status", Read = "INI_S" };
+        var cont = new Control { Key = "C", Kind = "continuous", Event = "E", Read = "INI_C", Min = 0, Max = 100, Step = 5 };
+        var plan = Plan(new[] { a, status, cont }, new() { ["C"] = 30 });
+
+        Assert.Equal(new[] { "A", "S", "C" }, plan.Controls.Select(c => c.Key).ToArray());
+        Assert.Equal("start not read", For(plan, "A").SkipReason);
+        Assert.Equal("read-only row", For(plan, "S").SkipReason);
+        Assert.Equal(new double?[] { 0, 50, 100, 30 }, For(plan, "C").Steps.Select(s => s.Input).ToArray());
+        Assert.Equal(SweepStepKind.ReturnToStart, For(plan, "C").Steps[^1].Kind);
+    }
+
+    [Fact]
+    public void A_multi_press_key_is_restored_by_its_presses_to_cycle()
+    {
+        var chrono = new Control { Key = "CH", Kind = "button", Event = "E", Mode = "push", State = "INI_CH", PressesToCycle = 3 };
+        var steps = For(Plan(new[] { chrono }), "CH").Steps;
+
+        Assert.Equal(new[] { SweepStepKind.Press, SweepStepKind.RestorePress, SweepStepKind.RestorePress },
+            steps.Select(s => s.Kind).ToArray());
+    }
+
+    [Fact]
+    public void Deny_list_text_parses_key_tab_reason_and_refuses_a_line_without_a_reason()
+    {
+        var d = DenyList.Parse("# comment\n\nA330_X\tcalls the cabin\r\nA330_Y\tthe cockpit goes dark\n");
+        Assert.Equal("calls the cabin", d["A330_X"]);
+        Assert.Equal(2, d.Count);
+        Assert.Throws<FormatException>(() => DenyList.Parse("A330_X\n"));
+        Assert.Throws<FormatException>(() => DenyList.Parse("A330_X\tone\nA330_X\ttwo\n"));
+    }
+
+}
