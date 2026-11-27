@@ -921,6 +921,9 @@ public partial class TaxiGuidanceManager : IDisposable
     private bool _holdShortOuterAnnounced = false;
     private bool _holdShortSlowDownAnnounced = false;
     private bool _holdShortStopAnnounced = false;
+    // Whether the aircraft has rolled since "Slow down" was said, for the stopped-in-zone "Stop."
+    // (HoldShortStoppedInZone): started false where "Slow down" is said, so it never needs a reset of its own.
+    private bool _holdShortRolledSinceSlowDown = false;
     // The stop (its hold node) the three latches above belong to: a different next stop re-arms them.
     // A stale value can only ever re-arm latches, never hold one, so the sites that reset the latches
     // need not clear it.
@@ -2959,15 +2962,18 @@ public partial class TaxiGuidanceManager : IDisposable
 
         bool onFinalSegment = _currentSegmentIndex == _route.Segments.Count - 1;
 
-        // On or within the clear margin of a runway: asked once per frame, and only while the end of a leg with no
-        // destination (Progressive Taxi) is on its last segment or the countdown's next stop along the route, for its
-        // arrival test below and its countdown (CheckHoldShortCountdown), which can reach "Slow down" and "Stop"
-        // before the last segment on a leg whose last pieces are short.
-        bool legEndInReach = _progressiveTerminator != null
-            && (onFinalSegment
-                || RouteAhead.NextCountdownStop(_route.Segments, _currentSegmentIndex, distToTarget,
-                       HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M, legEnd: true, cleared: false)
-                   is { Kind: RouteAhead.CountdownStopKind.LegEnd });
+        // The end of a leg with no destination (Progressive Taxi) while the cursor is short of its last segment: how far
+        // along the route it lies while it is the countdown's next stop (ProgressiveLegEnd.DistanceAlongTheRoute), for its
+        // arrival test below.
+        double? legEndAheadM = _progressiveTerminator != null && !onFinalSegment
+            ? ProgressiveLegEnd.DistanceAlongTheRoute(_route.Segments, _currentSegmentIndex, distToTarget,
+                  HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M)
+            : null;
+        // On or within the clear margin of a runway: asked once per frame, and only while the end of such a leg is on its
+        // last segment or the countdown's next stop along the route, for its arrival tests below and its countdown
+        // (CheckHoldShortCountdown), which can reach "Slow down" and "Stop" before the last segment on a leg whose last
+        // pieces are short.
+        bool legEndInReach = _progressiveTerminator != null && (onFinalSegment || legEndAheadM != null);
         bool nearARunway = legEndInReach
             && Navigation.RouteRunwayCrossings.RunwayWithinClearMargin(_graph?.RunwayCenterlines, lat, lon) != null;
         // On a runway's pavement (no margin), for the same leg: asked only when nearARunway, since the pavement
@@ -3057,6 +3063,23 @@ public partial class TaxiGuidanceManager : IDisposable
             }
         }
 
+        // A leg's end before its last segment: counted down along the route, its "Slow down" and "Stop." can come while the
+        // cursor is short of the last segment, and a pilot who stops where BA said ends the leg there, as on the last
+        // segment, after the leg end's own "Slow down" only (ProgressiveLegEnd.ArrivedBeforeLastSegment): never before a
+        // hold short or a cleared line, never short of a runway still to cross, never on runway pavement, only while
+        // Taxiing. The cursor goes to the last segment first: the leg ends at its end.
+        if (legEndAheadM is double legEndAlongM && _state == TaxiGuidanceState.Taxiing
+            && ProgressiveLegEnd.ArrivedBeforeLastSegment(_progressiveTerminator!.Type, _route.Segments, _currentSegmentIndex,
+                   lat, lon, legEndAlongM, groundSpeedKts,
+                   ProgressiveLegEnd.SlowDownSaidForIt(_route.Segments, _holdShortSlowDownAnnounced, _holdShortCountdownNodeId),
+                   nearARunway, onRunwayPavement, _graph?.RunwayCenterlines))
+        {
+            _guidanceLog.Info($"Leg end reached {legEndAlongM:F0} m along the route, from segment {_currentSegmentIndex} of {_route.Segments.Count}.");
+            _currentSegmentIndex = _route.Segments.Count - 1;
+            HandleArrival();
+            return;
+        }
+
         if (onFinalSegment)
         {
             // A leg with no destination (Progressive Taxi) ends the way a hold short does, not the
@@ -3074,7 +3097,8 @@ public partial class TaxiGuidanceManager : IDisposable
             bool legEndTaxiing = legEnd != null && _state == TaxiGuidanceState.Taxiing;
             // The leg end's own "Slow down": the countdown's latches belong to the stop they were set for
             // (_holdShortCountdownNodeId), now counted down along the route, so another stop's never ends the leg.
-            bool legEndSlowDownSaid = _holdShortSlowDownAnnounced && currentSeg.ToNode.NodeId == _holdShortCountdownNodeId;
+            bool legEndSlowDownSaid = ProgressiveLegEnd.SlowDownSaidForIt(_route.Segments, _holdShortSlowDownAnnounced,
+                _holdShortCountdownNodeId);
             bool arrived = legEnd != null
                 ? legEndTaxiing && ProgressiveLegEnd.Arrived(legEnd.Type, distToTarget, groundSpeedKts,
                     legEndSlowDownSaid, nearARunway, onRunwayPavement)
@@ -4004,6 +4028,7 @@ public partial class TaxiGuidanceManager : IDisposable
                 : clearedCrossing ? ClearedLine()
                 : $"{lead} in {DistanceFormatter.FromFeet(distFeet)}. Slow down.");
             _holdShortSlowDownAnnounced = true;
+            _holdShortRolledSinceSlowDown = false;
             return;
         }
         if (distFeet < stopDistFt && !_holdShortStopAnnounced && stopMaySpeak)
@@ -4021,7 +4046,11 @@ public partial class TaxiGuidanceManager : IDisposable
         // knows to hold position and await clearance. Not for a leg end: a standstill
         // there is ProgressiveLegEnd.Arrived's to judge, and after "Slow down" it ends the leg.
         // Not for a cleared crossing either: the pilot is cleared across, never told to stop there.
-        if (legEnd == null && !clearedCrossing && _holdShortSlowDownAnnounced && !_holdShortStopAnnounced && _lastGroundSpeedKts < 1.0)
+        // Only once the aircraft has rolled since "Slow down" (HoldShortStoppedInZone): a route loaded at a
+        // standstill inside the slow-down tier was told "… Stop." 0.1 s after "… Slow down." before it moved.
+        if (legEnd == null && !clearedCrossing
+            && HoldShortStoppedInZone.SaysStop(_holdShortSlowDownAnnounced, _holdShortStopAnnounced,
+                   ref _holdShortRolledSinceSlowDown, _lastGroundSpeedKts))
         {
             AnnounceInstruction($"{lead}. Stop.");
             _holdShortStopAnnounced = true;

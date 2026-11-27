@@ -57,9 +57,32 @@ public class LegEndWiringTests
     {
         string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
 
-        Assert.Matches(@"bool legEndInReach = _progressiveTerminator != null\s+&& \(onFinalSegment\s+\|\| RouteAhead\.NextCountdownStop\(_route\.Segments, _currentSegmentIndex, distToTarget,\s+HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M, legEnd: true, cleared: false\)\s+is \{ Kind: RouteAhead\.CountdownStopKind\.LegEnd \}\);", text);
+        Assert.Matches(@"double\? legEndAheadM = _progressiveTerminator != null && !onFinalSegment\s+\? ProgressiveLegEnd\.DistanceAlongTheRoute\(_route\.Segments, _currentSegmentIndex, distToTarget,\s+HOLD_SHORT_COUNTDOWN_LOOKAHEAD_M\)\s+: null;", text);
+        Assert.Contains("bool legEndInReach = _progressiveTerminator != null && (onFinalSegment || legEndAheadM != null);", text);
         Assert.Contains("bool nearARunway = legEndInReach", text);
-        Assert.Contains("bool legEndSlowDownSaid = _holdShortSlowDownAnnounced && currentSeg.ToNode.NodeId == _holdShortCountdownNodeId;", text);
+        Assert.Matches(@"bool legEndSlowDownSaid = ProgressiveLegEnd\.SlowDownSaidForIt\(_route\.Segments, _holdShortSlowDownAnnounced,\s+_holdShortCountdownNodeId\);", text);
+    }
+
+    // The leg end is judged before its last segment too, whenever it is the countdown's next stop (ProgressiveLegEnd,
+    // ProgressiveLegEndAlongRouteTests): a pilot who stops after its "Slow down" there ends the leg, only while Taxiing,
+    // with the frame's runway tests, and the cursor is moved to the last segment before the leg's end is announced.
+    [Fact]
+    public void A_leg_end_before_its_last_segment_is_judged_along_the_route()
+    {
+        string text = File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Services", "TaxiGuidanceManager.cs"));
+
+        var block = Regex.Match(text, @"if \(legEndAheadM is double legEndAlongM && _state == TaxiGuidanceState\.Taxiing\s+&& ProgressiveLegEnd\.ArrivedBeforeLastSegment\(_progressiveTerminator!\.Type, _route\.Segments, _currentSegmentIndex,\s+lat, lon, legEndAlongM, groundSpeedKts,\s+ProgressiveLegEnd\.SlowDownSaidForIt\(_route\.Segments, _holdShortSlowDownAnnounced, _holdShortCountdownNodeId\),\s+nearARunway, onRunwayPavement, _graph\?\.RunwayCenterlines\)\)\s+\{");
+        Assert.True(block.Success, "the before-the-last-segment arrival was not found");
+        int bodyEnd = text.IndexOf("return;", block.Index + block.Length, StringComparison.Ordinal);
+        Assert.True(bodyEnd > 0, "the before-the-last-segment arrival returns");
+        string body = text[(block.Index + block.Length)..bodyEnd];
+        int cursor = body.IndexOf("_currentSegmentIndex = _route.Segments.Count - 1;", StringComparison.Ordinal);
+        int arrival = body.IndexOf("HandleArrival();", StringComparison.Ordinal);
+        Assert.True(cursor >= 0 && arrival > cursor, "the cursor moves to the last segment before HandleArrival");
+
+        // Before the last segment's own block, which keeps the straight-line measure and the past-the-node backstop.
+        Assert.True(text.IndexOf("if (onFinalSegment)", block.Index + block.Length, StringComparison.Ordinal) > 0,
+            "the last segment's own arrival block follows");
     }
 
     // BA never asks for a stop on a runway: the countdown takes the frame's runway tests and asks
@@ -283,7 +306,9 @@ public class LegEndWiringTests
         string countdown = Member(manager, "private void CheckHoldShortCountdown(");
         Assert.Contains("string lead = _routeEndsFarFromRunway && stopIndex == _route.Segments.Count - 1", countdown);
         Assert.Equal(3, Regex.Matches(countdown, @"AnnounceInstruction\(legEnd != null\s+\? LegEndLine\(legEnd, CountdownTier\.\w+\)\s+: clearedCrossing \? ClearedLine\(\)\s+: \$""\{lead\} in ").Count);
-        Assert.Contains("if (legEnd == null && !clearedCrossing && _holdShortSlowDownAnnounced && !_holdShortStopAnnounced", countdown);
+        // The stopped-in-zone "Stop." is a hold short's only, never a leg end's or a cleared crossing's, and only after a roll
+        // since "Slow down" (HoldShortStoppedInZone).
+        Assert.Contains("if (legEnd == null && !clearedCrossing\n            && HoldShortStoppedInZone.SaysStop(_holdShortSlowDownAnnounced, _holdShortStopAnnounced,", countdown.Replace("\r\n", "\n"));
 
         // The arrival: the leg's intercept first; the far end's needs a runway lineup.
         string arrival = Member(manager, "private void HandleArrival(");

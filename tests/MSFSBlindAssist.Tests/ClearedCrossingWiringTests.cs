@@ -154,7 +154,8 @@ public class ClearedCrossingWiringTests
         // Each of the three tiers speaks the cleared line in place of the hold short's (or the end of a route that never
         // reaches its runway, `lead`), after the leg end's.
         Assert.Equal(3, Regex.Matches(countdown, @"\? LegEndLine\(legEnd, CountdownTier\.\w+\)\s+: clearedCrossing \? ClearedLine\(\)\s+: \$""\{lead\} in ").Count);
-        Assert.Contains("if (legEnd == null && !clearedCrossing && _holdShortSlowDownAnnounced && !_holdShortStopAnnounced", countdown);
+        // No stopped-between-tiers "Stop." for a cleared crossing (or a leg end): a hold short's only (HoldShortStoppedInZone).
+        Assert.Contains("if (legEnd == null && !clearedCrossing\n            && HoldShortStoppedInZone.SaysStop(", countdown.Replace("\r\n", "\n"));
         Assert.DoesNotContain("_startChatterSuppressUntil", countdown);
         // "Cleared to cross" goes with the first call spoken: judged before this frame latches any tier.
         int first = countdown.IndexOf("bool firstCall = ", StringComparison.Ordinal);

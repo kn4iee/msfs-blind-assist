@@ -1522,6 +1522,9 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
         double? endT = null; (double lat, double lon) endAt = default;
         double budget = route.TotalDistanceMeters / 3.0 + 240;
         string countdownLead = $"Hold short taxiway {lp.B} in";
+        // VP_LEG_BRAKE_ON_SLOWDOWN=1: the pilot brakes on the leg end's own "… Slow down." too, as the guide lets a pilot
+        // stop after it ("stop where BA tells you to: you do not need to creep up to the end", STR-25).
+        bool brakeOnSlowDown = Environment.GetEnvironmentVariable("VP_LEG_BRAKE_ON_SLOWDOWN") == "1";
         // When the countdown comes to each stop, the leg's end and a cleared crossing included (CountdownTiming:
         // HOLD_COUNTDOWN_LATE, HOLD_COUNTDOWN_MISSING), measured along the route by the harness itself.
         var cdTiming = new CountdownTiming();
@@ -1556,6 +1559,7 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
                 if (said1.EndsWith("Stop.", StringComparison.Ordinal) || said1.Contains(" Stop. ", StringComparison.Ordinal)) braking = true;
                 if (s.Contains(countdownLead, StringComparison.OrdinalIgnoreCase))
                 {
+                    if (brakeOnSlowDown && s.Contains("Slow down.", StringComparison.Ordinal)) braking = true;
                     row.Countdown++;
                     row.Tiers += s.Contains("Slow down.", StringComparison.Ordinal) ? "S" : s.Contains("Stop.", StringComparison.Ordinal) ? "X" : "O";
                     // BA never asks for a stop on a runway (spec 8.8): no "Slow down" or "Stop" of the leg end
@@ -1613,7 +1617,7 @@ LegendRow FlyLeg(World w, LegPlan lp, bool trace, List<Finding> fs)
         if (endT == null)
         {
             string at = aheadNow is { } ah2 ? $"{SignedMetresToEnd(ah2.line, lat, lon):F0} m before the junction n{ah2.node}" : "no junction found";
-            row.Note = $"not ended after {t:F0} s: {at}, {gs:F1} kt, state {mgr.State}{(braking ? ", braked on Stop." : "")}";
+            row.Note = $"not ended after {t:F0} s: {at}, {gs:F1} kt, state {mgr.State}{(braking ? brakeOnSlowDown ? ", braked on Slow down or Stop." : ", braked on Stop." : "")}";
             fs.Add(new Finding(w.Icao, "LEG_NOT_ENDED", where, row.Note));
         }
         if (xc != null)
