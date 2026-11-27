@@ -260,19 +260,27 @@ public partial class IniA330Definition
             io.Request(key);   // the row goes back to where the aircraft is
             return false;
         }
-        _ = ReadBackAsync(key, varDef, target, io, announcer, _windowPress);
+        // a newer pick of this row supersedes this one's read-back (arrowing through a selector commits one per step)
+        _pickGeneration.TryGetValue(key, out int generation);
+        _pickGeneration[key] = ++generation;
+        _ = ReadBackAsync(key, varDef, target, io, announcer, _windowPress, generation);
         return true;
     }
+
+    /// <summary>The newest pick per row; UI thread only, like every pick.</summary>
+    private readonly Dictionary<string, int> _pickGeneration = new(StringComparer.Ordinal);
 
     /// <summary>Waits the settle time, then resyncs the row with one fresh read. The row's combo follows that
     /// delivery, which the screen reader reads once and which is silent when the pick landed (WinForms ignores
     /// a same-index set); a window has no combo, so its press says the real position once when it did not land.</summary>
-    private async Task ReadBackAsync(string key, SimVarDefinition varDef, double target, A330PanelIo io, ScreenReaderAnnouncer announcer, bool fromWindow)
+    private async Task ReadBackAsync(string key, SimVarDefinition varDef, double target, A330PanelIo io, ScreenReaderAnnouncer announcer, bool fromWindow, int generation)
     {
         try
         {
             await io.Delay(ReadBackDelayMs);
+            if (_pickGeneration[key] != generation) return;   // a newer pick is settling: it resyncs the row
             double? now = fromWindow ? await io.ReadFresh(key, CancellationToken.None) : null;
+            if (_pickGeneration[key] != generation) return;   // a pick came in while the fresh read was out
             io.Request(key);
             if (now is double read && double.IsFinite(read) && Math.Abs(read - target) > 0.01)
                 announcer.Announce(A330Write.PositionSentence(varDef, read));

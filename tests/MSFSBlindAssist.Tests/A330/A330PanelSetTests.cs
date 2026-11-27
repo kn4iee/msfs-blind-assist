@@ -76,8 +76,19 @@ public class A330PanelSetTests
         public override void AnnounceImmediate(string message) => Lines.Add(message);
     }
 
-    private static bool Pick(Def def, string key, double value, Spoken said) =>
-        def.HandleUIVariableSet(key, value, def.GetVariables()[key], new SimConnectManager(IntPtr.Zero), said);
+    private static bool Pick(Def def, string key, double value, Spoken said)
+    {
+        var sim = new SimConnectManager(IntPtr.Zero);
+        return def.HandleUIVariableSet(key, value, def.GetVariables()[key], sim, said);
+    }
+
+    /// <summary>Opens the gate and yields until the read-backs it released have run, whichever context they
+    /// captured (xunit's own queues them behind the test), then a moment more so a wrong extra one would show.</summary>
+    private static async Task Release(FakeIo io)
+    {
+        io.Gate!.SetResult();
+        await Task.Delay(100);
+    }
 
     [Fact]
     public void A_refused_write_says_so_and_resyncs_its_row()
@@ -118,7 +129,7 @@ public class A330PanelSetTests
     }
 
     [Fact]
-    public void A_pick_the_aircraft_ignored_resyncs_its_row_and_says_where_it_is()
+    public async Task A_pick_the_aircraft_ignored_resyncs_its_row_and_says_where_it_is()
     {
         // panel: read first (Off), write the position's INPUT (On = 0, [INI-1]), read back only after the settle time
         var io = new FakeIo { Gate = new TaskCompletionSource() };
@@ -129,7 +140,7 @@ public class A330PanelSetTests
         Assert.Equal(new[] { "set AIRLINER_TEST_SELECTOR 0" }, io.Sent);
         Assert.Equal(new[] { IniA330Definition.ReadBackDelayMs }, io.Delays);
         Assert.Empty(io.Requests);
-        io.Gate.SetResult();
+        await Release(io);
         Assert.Equal(new[] { SelectorKey }, io.Requests);
         // the panel's combo follows the resync and the screen reader reads it: the definition adds no second voice
         Assert.Empty(said.Lines);
@@ -180,6 +191,106 @@ public class A330PanelSetTests
         io.Cache[ToggleKey] = 0;
         Pick(new Def(io), ToggleKey, 1, new Spoken());
         Assert.Equal(new[] { "press AIRLINER_TEST_TOGGLE 150" }, io.Sent);
+    }
+
+    [Fact]
+    public async Task A_newer_pick_wins_its_rows_read_back()
+    {
+        // arrowing through a selector commits one pick per step: the first pick's settle ends while the second is
+        // still settling, and its resync would set the combo back to the first position under the pilot
+        var io = new FakeIo { Gate = new TaskCompletionSource() };
+        var def = new Def(io);
+        var said = new Spoken();
+        Pick(def, SelectorKey, 1, said);
+        Pick(def, SelectorKey, 0, said);
+        Assert.Equal(2, io.Sent.Count);
+        await Release(io);
+        Assert.Equal(new[] { SelectorKey }, io.Requests);   // one resync: the newest pick's
+        Assert.Empty(said.Lines);
+
+        // another row's pick does not cancel it
+        io = new FakeIo { Gate = new TaskCompletionSource() };
+        def = new Def(io);
+        Pick(def, SelectorKey, 1, said);
+        Pick(def, ToggleKey, 1, said);
+        await Release(io);
+        Assert.Equal(new[] { SelectorKey, ToggleKey }, io.Requests.OrderBy(k => k, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public async Task A_newer_window_press_wins_its_rows_read_back()
+    {
+        // the aircraft reads Off (the second press's position): the first press, which wanted On, must not say so
+        var io = new FakeIo { Gate = new TaskCompletionSource(), Fresh = 0 };
+        var def = new Def(io);
+        var said = new Spoken();
+        var sim = new SimConnectManager(IntPtr.Zero);
+        Assert.True(def.PressFromWindow(SelectorKey, 1, sim, said));
+        Assert.True(def.PressFromWindow(SelectorKey, 0, sim, said));
+        await Release(io);
+        Assert.Empty(said.Lines);
+        Assert.Equal(new[] { SelectorKey }, io.Requests);
+    }
+
+    [Fact]
+    public void The_settle_time_is_a_second_and_a_half()
+    {
+        Assert.Equal(1500, IniA330Definition.ReadBackDelayMs);
+        var io = new FakeIo();
+        Pick(new Def(io), SelectorKey, 1, new Spoken());
+        Assert.Equal(new[] { 1500 }, io.Delays);
+    }
+
+    [Fact]
+    public void A_refusal_does_not_outlive_its_press_and_a_window_flag_does_not_leak_into_the_panel()
+    {
+        var io = new FakeIo { TrySetResult = false };
+        var def = new Def(io);
+        var sim = new SimConnectManager(IntPtr.Zero);
+        Assert.False(def.PressFromWindow(SelectorKey, 1, sim, new Spoken()));
+        io.TrySetResult = true;
+        Assert.True(def.PressFromWindow(SelectorKey, 1, sim, new Spoken()));   // the same definition, the next press
+
+        // a panel pick after a window press must not be treated as a window's: nothing said
+        io = new FakeIo { Fresh = 0 };
+        def = new Def(io);
+        Assert.True(def.PressFromWindow(SelectorKey, 0, sim, new Spoken()));
+        var said = new Spoken();
+        io.Fresh = 0;
+        Assert.True(Pick(def, SelectorKey, 1, said));   // the aircraft will read 0, but this one is a panel's
+        Assert.Empty(said.Lines);
+    }
+
+    [Fact]
+    public void A_reading_within_its_tolerance_is_the_position()
+    {
+        var set = Map().Controls[0];
+        Assert.Equal(A330WriteOutcome.AtPosition, A330Write.ToPosition(set, 0.995, 1).Outcome);
+        Assert.Equal(A330WriteOutcome.Writes, A330Write.ToPosition(set, 0.98, 1).Outcome);
+        var toggle = Map().Controls[1];
+        Assert.Equal(A330WriteOutcome.AtPosition, A330Write.ToPosition(toggle, 0.5, 0).Outcome);
+        Assert.Equal(A330WriteOutcome.Writes, A330Write.ToPosition(toggle, 0.6, 0).Outcome);
+
+        // the window's read-back judges a landing by the same hundredth
+        var io = new FakeIo { Fresh = 0.995 };
+        var said = new Spoken();
+        new Def(io).PressFromWindow(SelectorKey, 1, new SimConnectManager(IntPtr.Zero), said);
+        Assert.Empty(said.Lines);
+        io = new FakeIo { Fresh = 0.98 };
+        said = new Spoken();
+        new Def(io).PressFromWindow(SelectorKey, 1, new SimConnectManager(IntPtr.Zero), said);
+        Assert.Single(said.Lines);
+    }
+
+    [Fact]
+    public void A_control_with_nothing_to_send_is_refused()
+    {
+        var noEvent = new A330ControlMap.Control { Key = "X", Label = "X", Kind = "select", Mode = "set", Positions = new() { new() { Value = 1, Input = 1 } } };
+        Assert.Equal(A330WriteOutcome.Refused, A330Write.ToPosition(noEvent, 0, 1).Outcome);
+        var noToggle = new A330ControlMap.Control { Key = "X", Label = "X", Kind = "select", Mode = "toggle" };
+        Assert.Equal(A330WriteOutcome.Refused, A330Write.ToPosition(noToggle, 0, 1).Outcome);
+        var rpn = new A330ControlMap.Control { Key = "X", Label = "X", Kind = "select", Mode = "toggle", Rpn = "{value} (>L:INI_X)" };
+        Assert.Equal(new A330CalcCall("1 (>L:INI_X)"), Assert.Single(A330Write.ToPosition(rpn, 0, 1).Calls));
     }
 
     [Fact]
