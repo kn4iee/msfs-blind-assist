@@ -315,12 +315,14 @@ public static class HoldShortNodeResolver
     /// Finds the hold-short node on the aircraft's side of <paramref name="runway"/>,
     /// preferring the scenery's designated hold-short nodes per the tier order
     /// in the class remarks, falling back to the legacy geometric
-    /// closest-to-centerline scan.
+    /// closest-to-centerline scan. With <paramref name="onTaxiwayOnly"/> the node is
+    /// <paramref name="lastTaxiway"/>'s own (tiers 1 to 3) or none, never another
+    /// taxiway's: the place a "hold short of runway X at Z" step names.
     /// </summary>
     public static TaxiNode? ResolveNearSide(
         TaxiGraph graph, Runway runway,
         double aircraftLat, double aircraftLon, double aircraftHeadingMag,
-        string? lastTaxiway)
+        string? lastTaxiway, bool onTaxiwayOnly = false)
     {
         // No cleared taxiway (a limit said alone, "hold short of runway 24"): tiers 1-3 have nothing to anchor on, and
         // the pick is the line nearest the runway anywhere along it; the window takes NearSideHoldCandidates instead.
@@ -383,6 +385,7 @@ public static class HoldShortNodeResolver
             // Tier 3: plain node on the cleared taxiway (legacy behaviour).
             return bestOnTw;
         }
+        if (onTaxiwayOnly) return null;
 
         // Tiers 4/5: no cleared-taxiway candidate at all. A designated node is
         // preferred only when it sits at the SAME junction as the legacy pick

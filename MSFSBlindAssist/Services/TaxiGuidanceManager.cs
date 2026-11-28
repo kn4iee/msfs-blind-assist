@@ -247,8 +247,9 @@ public partial class TaxiGuidanceManager : IDisposable
     // parameters only).
     private List<int>? _userHoldShortIndices;
     // The stops on the way, as (sequence index, target) pairs: any number per taxiway, and a stop with no
-    // taxiway of its own (index -1, or one past the sequence) searched along the whole route.
-    private IReadOnlyList<KeyValuePair<int, string>>? _userRunwayHoldShorts;
+    // taxiway of its own (index -1, or one past the sequence) searched along the whole route. A runway stop
+    // carries its place too ("hold short of runway 27L at B"), which a recalculation keeps.
+    private IReadOnlyList<KeyValuePair<int, Navigation.RunwayHoldPick>>? _userRunwayHoldShorts;
     private IReadOnlyList<KeyValuePair<int, string>>? _userTaxiwayHoldShorts;
     // The holding-point flavour of the same stops ("hold short of holding point L2"):
     // (sequence index, the point). Kept so a recalculation can put a stop that is still ahead

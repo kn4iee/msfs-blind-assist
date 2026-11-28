@@ -280,6 +280,28 @@ public static class ClearanceLegEnd
         return false;
     }
 
+    /// <summary>
+    /// Where a leg ends whose last step is "Hold short of runway X at Z" (<paramref name="endStep"/>, its
+    /// <see cref="ClearanceStep.At"/> set): at X's line at that place, the way a Cross step's place picks the crossing at
+    /// a leg end, never the last Via taxiway's line. A holding point (<see cref="ClearanceStep.AtNodeId"/>): its own node,
+    /// when it is in <paramref name="componentId"/>, the aircraft's piece of network. A taxiway: X's line on the aircraft's
+    /// side on that taxiway (<see cref="HoldShortNodeResolver.ResolveNearSide"/>, the taxiway's own tiers only), never
+    /// another taxiway's. -1 for none, or for a step with no place (the window then anchors on the last Via taxiway).
+    /// </summary>
+    public static int HoldShortRunwayAt(TaxiGraph graph, Runway? runway, ClearanceStep endStep, int componentId,
+        double aircraftLat, double aircraftLon, double aircraftHeadingMag)
+    {
+        if (graph == null || runway == null || endStep == null) return -1;
+        if (endStep.AtNodeId != 0)
+            return graph.Nodes.TryGetValue(endStep.AtNodeId, out var point) && point.ComponentId == componentId
+                ? point.NodeId
+                : -1;
+        if (string.IsNullOrWhiteSpace(endStep.At)) return -1;
+        string taxiway = graph.ResolveTaxiwayName(endStep.At.Trim());
+        return HoldShortNodeResolver.ResolveNearSide(graph, runway, aircraftLat, aircraftLon, aircraftHeadingMag, taxiway,
+            onTaxiwayOnly: true)?.NodeId ?? -1;
+    }
+
     /// <summary>How a leg that ends just across a runway it has already crossed ends.</summary>
     public enum MadeCrossingEnd
     {

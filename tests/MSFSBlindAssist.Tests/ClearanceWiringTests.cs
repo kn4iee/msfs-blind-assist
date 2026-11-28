@@ -21,7 +21,7 @@ public class ClearanceWiringTests
         Assert.DoesNotContain("Dictionary<int, string>? userRunwayHoldShorts", routing);
         Assert.DoesNotContain("Dictionary<int, string>? userTaxiwayHoldShorts", routing);
         Assert.DoesNotContain("Dictionary<int, Navigation.HoldingPointHoldShort>? userHoldingPointHoldShorts", routing);
-        Assert.Contains("IReadOnlyList<KeyValuePair<int, string>>? userRunwayHoldShorts", routing);
+        Assert.Contains("IReadOnlyList<KeyValuePair<int, Navigation.RunwayHoldPick>>? userRunwayHoldShorts", routing);
         Assert.Contains("CheckClearance(", manager);
         Assert.Contains("GetClearanceProgress(", manager);
         Assert.Contains("ClearanceTrim.ViaStepsDone(", manager);

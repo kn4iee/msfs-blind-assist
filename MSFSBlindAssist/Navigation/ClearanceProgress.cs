@@ -45,8 +45,16 @@ public sealed record PlacedStop(int Row, ClearanceTargetKind Kind, string Name, 
     /// </summary>
     public static List<PlacedStop> Entered(IReadOnlyList<KeyValuePair<int, string>>? runway,
         IReadOnlyList<KeyValuePair<int, string>>? taxiway, IReadOnlyList<KeyValuePair<int, HoldingPointHoldShort>>? points)
-        => (runway ?? Array.Empty<KeyValuePair<int, string>>())
-            .Select(s => new PlacedStop(s.Key, ClearanceTargetKind.Runway, s.Value, 0, 0))
+        => Entered<string>(runway, taxiway, points);
+
+    /// <summary>
+    /// As above, for runway stops of any kind: each is named by its text, a <see cref="RunwayHoldPick"/> by its runway (as
+    /// placing it records it), its place left out.
+    /// </summary>
+    public static List<PlacedStop> Entered<TRunway>(IReadOnlyList<KeyValuePair<int, TRunway>>? runway,
+        IReadOnlyList<KeyValuePair<int, string>>? taxiway, IReadOnlyList<KeyValuePair<int, HoldingPointHoldShort>>? points)
+        => (runway ?? Array.Empty<KeyValuePair<int, TRunway>>())
+            .Select(s => new PlacedStop(s.Key, ClearanceTargetKind.Runway, s.Value?.ToString() ?? "", 0, 0))
             .Concat((taxiway ?? Array.Empty<KeyValuePair<int, string>>())
                 .Select(s => new PlacedStop(s.Key, ClearanceTargetKind.Taxiway, s.Value, 0, 0)))
             .Concat((points ?? Array.Empty<KeyValuePair<int, HoldingPointHoldShort>>())
@@ -146,12 +154,13 @@ public sealed record ClearanceProgressState(
     /// aircraft has passed there, or one passed on an earlier route (<see cref="Passed"/>). One passed is never searched
     /// for again, or the new route stops there again where it meets it, or every later "Route changed" reports it
     /// [HLD-17]. One still ahead, held at, or never placed is kept: a later route may meet it, and the pilot holds an
-    /// ATC "hold short of X".
+    /// ATC "hold short of X". A stop is known by its text: a name, or a <see cref="RunwayHoldPick"/> by its runway, which
+    /// is carried over whole, its place with it.
     /// </summary>
-    public List<KeyValuePair<int, string>> CarriedOver(IReadOnlyList<KeyValuePair<int, string>> stops, int sequenceRows,
+    public List<KeyValuePair<int, T>> CarriedOver<T>(IReadOnlyList<KeyValuePair<int, T>> stops, int sequenceRows,
         ClearanceTargetKind kind, IReadOnlyList<TaxiRouteSegment>? segments, int cursor, bool holding)
     {
-        bool Same(PlacedStop p, string name) => p.Row < 0 && p.Kind == kind && p.Name == name;
+        bool Same(PlacedStop p, T stop) => p.Row < 0 && p.Kind == kind && p.Name == stop?.ToString();
         return stops.Where(s => (s.Key >= 0 && s.Key < sequenceRows)
                                 || !(Placed.Any(p => Same(p, s.Value) && StopPassed(segments, p.StopNodeId, cursor, holding))
                                      || Passed.Any(p => Same(p, s.Value))))

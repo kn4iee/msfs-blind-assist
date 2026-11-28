@@ -1006,7 +1006,19 @@ public static class RouteRunwayCrossings
         /// <summary>It does, but no stop could be placed (already passed, no safe stop, start hold refused).</summary>
         NotHeld,
         Held,
+        /// <summary>A pick with a place: the route meets the runway, but nowhere at that place (<see cref="NotMetAt"/>).</summary>
+        NotAtPlace,
     }
+
+    /// <summary>
+    /// What the pilot is told of a runway hold short at a place the route never meets the runway at
+    /// (<see cref="UserRunwayHoldResult.NotAtPlace"/>): no stop is placed for it, and the automatic hold still stops the
+    /// pilot wherever the route meets the runway [HLD-4]. "there" for a place with no name.
+    /// </summary>
+    public static string NotMetAt(string runwayId, string? at)
+        => string.IsNullOrWhiteSpace(at)
+            ? $"Runway {runwayId.Trim()} is not met there. You will be stopped where the route meets it."
+            : $"Runway {runwayId.Trim()} is not met at {at.Trim()}. You will be stopped where the route meets it.";
 
     /// <summary>
     /// The pilot's explicit "hold short of runway X" pick for one taxiway row: honoured when the route
@@ -1039,6 +1051,11 @@ public static class RouteRunwayCrossings
     /// name a runway: the pilot picked "hold short of runway 04R" on a route to 04R, heard no mention
     /// of it in the summary, and was then stopped by a hold they were never told about.
     /// </param>
+    /// <param name="at">The place the step names ("Hold short of runway 27L at B"): a taxiway, or a holding point's name
+    /// with its node (<paramref name="atNodeId"/>). With either, the pick is about the passage of the runway at that place
+    /// (<see cref="PassageAtPlace"/>), those reached at or after <paramref name="runStartSegmentIndex"/> tried first, and
+    /// is <see cref="UserRunwayHoldResult.NotAtPlace"/> when the route meets the runway only elsewhere. With neither, the
+    /// first passage at or after <paramref name="runStartSegmentIndex"/>, as always.</param>
     public static UserRunwayHoldResult ApplyUserRunwayHold(
         TaxiRoute route,
         TaxiGraph.RunwayCenterline runway,
@@ -1046,7 +1063,9 @@ public static class RouteRunwayCrossings
         string runwayId,
         int runStartSegmentIndex,
         out TaxiRouteRunwayEvent? placed,
-        AircraftPosition? aircraft = null)
+        AircraftPosition? aircraft = null,
+        string? at = null,
+        int atNodeId = 0)
     {
         ArgumentNullException.ThrowIfNull(route);
         ArgumentNullException.ThrowIfNull(runway);
@@ -1054,9 +1073,20 @@ public static class RouteRunwayCrossings
 
         placed = null;
         var nodes = ClassificationNodes(route, aircraft, out bool aircraftPrepended);
-        var passage = RunwayRouteClassifier.Classify(nodes, RunwayShape.For(runway))
+        var passages = RunwayRouteClassifier.Classify(nodes, RunwayShape.For(runway))
             .Select(p => ToRouteIndices(p, aircraftPrepended))
-            .FirstOrDefault(p => p.ReachIndex >= runStartSegmentIndex);
+            .ToList();
+        RunwayPassage? passage;
+        if (string.IsNullOrWhiteSpace(at) && atNodeId == 0)
+        {
+            passage = passages.FirstOrDefault(p => p.ReachIndex >= runStartSegmentIndex);
+        }
+        else
+        {
+            if (passages.Count == 0) return UserRunwayHoldResult.NotOnRoute;
+            passage = PassageAtPlace(route, runway, runways, passages, at, atNodeId, runStartSegmentIndex, aircraft);
+            if (passage is null) return UserRunwayHoldResult.NotAtPlace;
+        }
         if (passage is null) return UserRunwayHoldResult.NotOnRoute;
 
         string pick = runwayId.Trim();
@@ -1074,6 +1104,44 @@ public static class RouteRunwayCrossings
             ReachNodeIndex = passage.ReachIndex,
         };
         return UserRunwayHoldResult.Held;
+    }
+
+    /// <summary>
+    /// Of <paramref name="passages"/> (<paramref name="runway"/>'s, on the route), the one at the place a pick names, by
+    /// the ONE at-place rule a Cross step's place is matched by (<see cref="ClearedCrossingHolds.EventAtPlace"/>), among
+    /// the events the automatic pass records: that pass is run on a copy of the route's stops (<see cref="StopsCopy"/>;
+    /// the route itself is never changed here), every passage held as it would be, the destination's own arrival
+    /// included. Null when none is at the place.
+    /// </summary>
+    private static RunwayPassage? PassageAtPlace(TaxiRoute route, TaxiGraph.RunwayCenterline runway,
+        IReadOnlyList<TaxiGraph.RunwayCenterline> runways, IReadOnlyList<RunwayPassage> passages,
+        string? at, int atNodeId, int runStartSegmentIndex, AircraftPosition? aircraft)
+    {
+        var all = runways.Contains(runway) ? runways : runways.Append(runway).ToList();
+        var probe = StopsCopy(route);
+        var events = InsertRunwayHoldShorts(probe, all, destinationName: "", aircraft);
+        var ofRunway = events
+            .Where(e => CenterlineHasDesignator(runway, e.Designator))
+            .OrderBy(e => e.ReachNodeIndex < 0 ? int.MaxValue : e.ReachNodeIndex)
+            .ToList();
+        var match = ClearedCrossingHolds.EventAtPlace(probe, ofRunway, at, atNodeId, events, runStartSegmentIndex);
+        if (match is null) return null;
+        // The same nodes, so the same passage: classified the same way, it reaches the runway at the same node.
+        return passages.OrderBy(p => Math.Abs(p.ReachIndex - match.ReachNodeIndex)).First();
+    }
+
+    // The route's segments as the hold pass reads and writes them (their nodes shared, never changed), so a pass run on
+    // the copy places nothing on the route.
+    private static TaxiRoute StopsCopy(TaxiRoute route)
+    {
+        var copy = new TaxiRoute { StartHoldRunway = route.StartHoldRunway };
+        foreach (var s in route.Segments)
+            copy.Segments.Add(new TaxiRouteSegment
+            {
+                FromNode = s.FromNode, ToNode = s.ToNode, DistanceMeters = s.DistanceMeters, TaxiwayName = s.TaxiwayName,
+                IsHoldShortPoint = s.IsHoldShortPoint, HoldShortRunway = s.HoldShortRunway,
+            });
+        return copy;
     }
 
     /// <summary>

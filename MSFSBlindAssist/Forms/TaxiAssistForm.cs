@@ -4312,11 +4312,6 @@ public class TaxiAssistForm : Form
         return stops.Count > 0 ? stops : null;
     }
 
-    // Task 1 adapter: the plan's runway stops carry their place now (RunwayHoldPick), but LoadRoute still takes names
-    // only; the place reaches it when LoadRoute's parameter becomes the pick list (next task).
-    private static List<KeyValuePair<int, string>>? RunwayStopNames(ClearancePlan plan)
-        => plan.RunwayHoldPicks()?.Select(p => new KeyValuePair<int, string>(p.Key, p.Value.Runway)).ToList();
-
     /// <summary>The plan's Turn picks as LoadRoute takes them: the index of the Left onto or Right onto step's own
     /// taxiway in the sequence -> the side; null when there is none. They reach guidance only this way ([TURN-1]).</summary>
     private static Dictionary<int, TurnSide>? PlanTurnPicks(ClearancePlan plan)
@@ -4746,8 +4741,9 @@ public class TaxiAssistForm : Form
             thresholdLat, thresholdLon, destHeadingTrue,
             isRunwayDest,
             prebuiltGraph: _graph,
-            // The Hold short of steps on the way, keyed by the Via step each was entered after (-1: none).
-            userRunwayHoldShorts: RunwayStopNames(plan),
+            // The Hold short of steps on the way, keyed by the Via step each was entered after (-1: none); a runway's
+            // with its place ("at B"), where it stops.
+            userRunwayHoldShorts: plan.RunwayHoldPicks(),
             userTaxiwayHoldShorts: PlanStops(plan, ClearanceTargetKind.Taxiway, s => s.Name),
             preferIlsHold: isRunwayDest && chkCatIiiHold.Checked,
             fullLengthBacktrack: backtrackActive,
@@ -4882,7 +4878,9 @@ public class TaxiAssistForm : Form
     /// <see cref="ProgressiveTerminator"/> guidance announces it by, then routed by the same <c>LoadRoute</c> as a
     /// destination, with every stop, crossing and Turn pick the steps carry, and said in the same one utterance.
     /// <list type="bullet">
-    /// <item>Hold short of a runway: the hold point on the aircraft's side, anchored on the last Via taxiway
+    /// <item>Hold short of a runway: at the step's "at", the runway's line there (a holding point's own node, or the
+    /// line on that taxiway: <see cref="ClearanceLegEnd.HoldShortRunwayAt"/>), never the last Via taxiway's; else the
+    /// hold point on the aircraft's side, anchored on the last Via taxiway
     /// (<see cref="ResolveHoldShortRunwayNode"/>); with none (a limit said alone), the first of the near side's hold
     /// lines the aircraft reaches (<see cref="HoldShortNodeResolver.NearSideHoldCandidates"/>, then
     /// <see cref="ClearanceLegEnd.NearestAhead"/>).</item>
@@ -4947,6 +4945,8 @@ public class TaxiAssistForm : Form
         NamedHoldingPoint? crossAtHold = null;
         // "Cross runway X at <taxiway>": the far side is looked for on that taxiway.
         string? crossAtTaxiway = null;
+        // "Hold short of runway X at <place>": the leg ends at X's line there.
+        string? holdShortAt = null;
         // The leg end exists, but only inside a runway's clear margin: the entry is right, so say why, not "Check
         // your entry".
         string? besideRunway = null;
@@ -4960,7 +4960,17 @@ public class TaxiAssistForm : Form
                 // does not truncate the route, so routing to the far-side node would carry the leg across the runway
                 // before the terminal announcement.)
                 runwayTarget = endStep.Name;
-                if (lastVia != null)
+                if (!string.IsNullOrWhiteSpace(endStep.At) || endStep.AtNodeId != 0)
+                {
+                    // "Hold short of runway X at Z": X's line at Z (a holding point's own node, or the line on taxiway
+                    // Z), as a Cross step's place picks the crossing; never the last Via taxiway's line.
+                    holdShortAt = string.IsNullOrWhiteSpace(endStep.At) ? null : endStep.At.Trim();
+                    destNode = _crossRunwayMap.TryGetValue($"Runway {runwayTarget}", out var atRwy)
+                        ? ClearanceLegEnd.HoldShortRunwayAt(graph, atRwy, endStep, component,
+                            _aircraftLat, _aircraftLon, _aircraftHeading)
+                        : -1;
+                }
+                else if (lastVia != null)
                 {
                     destNode = ResolveHoldShortRunwayNode(runwayTarget, lastVia)?.NodeId ?? -1;
                 }
@@ -5107,6 +5117,7 @@ public class TaxiAssistForm : Form
                 ProgressiveTerminatorType.EndOfTaxiway => $"the end of taxiway {lastVia}",
                 _ when crossAtHold != null => $"a crossing of runway {runwayTarget} at holding point {crossAtHold.Name}",
                 _ when crossAtTaxiway != null => $"taxiway {crossAtTaxiway} crossing runway {runwayTarget}",
+                ProgressiveTerminatorType.HoldShortRunway when holdShortAt != null => $"runway {runwayTarget} at {holdShortAt}",
                 _ => $"runway {runwayTarget}",
             };
             string from = lastVia ?? "your position";
@@ -5139,8 +5150,9 @@ public class TaxiAssistForm : Form
             isRunwayDestination: false,
             prebuiltGraph: graph,
             // The Hold short of steps on the way (not the one that ends the leg), keyed by the Via step each was
-            // entered after (-1: none). A leg with no destination now takes taxiway and holding-point stops too.
-            userRunwayHoldShorts: RunwayStopNames(plan),
+            // entered after (-1: none), a runway's with its place. A leg with no destination now takes taxiway and
+            // holding-point stops too.
+            userRunwayHoldShorts: plan.RunwayHoldPicks(),
             userTaxiwayHoldShorts: PlanStops(plan, ClearanceTargetKind.Taxiway, s => s.Name),
             progressiveTerminator: term,
             // Crossing at a named holding point to end the leg: pin the route THROUGH that painted line (the pin a

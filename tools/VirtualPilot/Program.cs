@@ -4119,6 +4119,9 @@ sealed class TaxiPlan
     public Func<TaxiGuidanceManager, IAirportDataProvider, World, List<string>?, string?> LoadFn = null!;
     public string? Load(TaxiGuidanceManager m, IAirportDataProvider p, World w, List<string>? seq) => LoadFn(m, p, w, seq);
 #if !OLDAPP
+    // The picks as the app's LoadRoute takes them: (row, runway) pairs, each with no place.
+    public List<KeyValuePair<int, RunwayHoldPick>>? HoldPickList()
+        => HoldPicks?.Select(p => new KeyValuePair<int, RunwayHoldPick>(p.Key, new RunwayHoldPick(p.Value))).ToList();
     // Turn picks (row -> side) as the planner's Turn lists hand them to LoadRoute; a clearance given
     // outright instead of derived from the shortest route; and, for the miss flight, the charted way
     // the pilot takes at DivertAt instead of the picked turn.
@@ -4165,8 +4168,8 @@ sealed class TaxiPlan
         int dest = e.NodeId; int? holdNode = kind == "HP" ? e.HoldNodeId : null; string? holdName = kind == "HP" ? e.TaxiwayName : null;
         tp.LoadFn = (m, p, wo, seq) => m.LoadRoute(p, wo.Icao, gate.Latitude, gate.Longitude, hdg, dest, $"Runway {rwy.RunwayID}",
 #if !OLDAPP
-            // The app takes the stops as (row, runway) pairs; a frozen build still takes the dictionary.
-            seq, userRunwayHoldShorts: tp.HoldPicks?.ToList(), destinationHeading: rwy.HeadingMag, destinationThresholdLat: thLat, destinationThresholdLon: thLon,
+            // The app takes the stops as (row, runway pick) pairs; a frozen build still takes the dictionary.
+            seq, userRunwayHoldShorts: tp.HoldPickList(), destinationHeading: rwy.HeadingMag, destinationThresholdLat: thLat, destinationThresholdLon: thLon,
 #else
             seq, userRunwayHoldShorts: tp.HoldPicks, destinationHeading: rwy.HeadingMag, destinationThresholdLat: thLat, destinationThresholdLon: thLon,
 #endif
@@ -4236,7 +4239,7 @@ sealed class TaxiPlan
         };
         tp.LoadFn = (m, p, wo, seq) => m.LoadRoute(p, wo.Icao, gate.Latitude, gate.Longitude, hdg, dest, $"Runway {rwy.RunwayID}",
 #if !OLDAPP
-                seq, userRunwayHoldShorts: tp.HoldPicks?.ToList(), destinationHeading: rwy.HeadingMag, destinationThresholdLat: lineupLat, destinationThresholdLon: lineupLon,
+                seq, userRunwayHoldShorts: tp.HoldPickList(), destinationHeading: rwy.HeadingMag, destinationThresholdLat: lineupLat, destinationThresholdLon: lineupLon,
 #else
                 seq, userRunwayHoldShorts: tp.HoldPicks, destinationHeading: rwy.HeadingMag, destinationThresholdLat: lineupLat, destinationThresholdLon: lineupLon,
 #endif

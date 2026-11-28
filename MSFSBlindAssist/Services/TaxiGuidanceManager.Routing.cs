@@ -40,13 +40,15 @@ public partial class TaxiGuidanceManager
         // we don't want three announcements fighting for audio during rollout.
         bool announceSummary = true,
         // User-explicit runway hold-shorts from the form: (taxiway-sequence index,
-        // runway designator) pairs, any number per index. After taxiway[seqIdx], guidance
+        // runway and place) pairs, any number per index. After taxiway[seqIdx], guidance
         // holds before the route enters or crosses that runway (ApplyUserRunwayHoldShorts);
         // an index of -1, or one past the sequence, is a stop with no taxiway of its own,
-        // looked for along the whole route. The automatic runway hold pass still runs on
-        // top, so most users never need this; it's the explicit override for ATC clearances
-        // where the pilot wants to confirm the SPECIFIC runway named.
-        IReadOnlyList<KeyValuePair<int, string>>? userRunwayHoldShorts = null,
+        // looked for along the whole route. With a place ("hold short of runway 27L at B"),
+        // the stop is where the route meets the runway at that place, matched as a Cross
+        // step's place is (ClearedCrossingHolds.EventAtPlace). The automatic runway hold pass
+        // still runs on top, so most users never need this; it's the explicit override for ATC
+        // clearances where the pilot wants to confirm the SPECIFIC runway named.
+        IReadOnlyList<KeyValuePair<int, Navigation.RunwayHoldPick>>? userRunwayHoldShorts = null,
         // Taxiway-flavored twin of userRunwayHoldShorts: (sequence index, taxiway name)
         // pairs, a stop short of that taxiway after that row's taxiway. "Taxi via A, hold
         // short of taxiway B" — the standard post-landing instruction at KATL/OMDB/VHHH-
@@ -3513,10 +3515,12 @@ public partial class TaxiGuidanceManager
 
     /// <summary>
     /// An explicit runway pick that met its runway on the route but found no stop before the
-    /// automatic pass ran — retried once that pass has placed its own stops.
+    /// automatic pass ran — retried once that pass has placed its own stops, at its place
+    /// (<paramref name="At"/>, <paramref name="AtNodeId"/>) when it has one.
     /// </summary>
     private sealed record DeferredRunwayPick(
-        TaxiGraph.RunwayCenterline Runway, string RunwayId, int RunStart, string TaxiwayName, int Row = -1);
+        TaxiGraph.RunwayCenterline Runway, string RunwayId, int RunStart, string TaxiwayName, int Row = -1,
+        string? At = null, int AtNodeId = 0);
 
     /// <summary>
     /// THE route-adoption seam: every route the manager takes on becomes the live route HERE,
@@ -3585,10 +3589,14 @@ public partial class TaxiGuidanceManager
     /// own (an index outside the sequence), or whose taxiway is not on the route, is looked for from the
     /// route's start; one that finds nothing from its run start is tried once more from there. The hold
     /// is placed by the same resolver as the automatic pass and labelled as the pilot typed it
-    /// (<see cref="RouteRunwayCrossings.ApplyUserRunwayHold"/>).
+    /// (<see cref="RouteRunwayCrossings.ApplyUserRunwayHold"/>). A stop with a place ("hold short of
+    /// runway 27L at B") is about where the route meets the runway at that place, matched as a Cross
+    /// step's place is (<see cref="ClearedCrossingHolds.EventAtPlace"/>), its run tried first; one the
+    /// route meets only elsewhere gets no stop, is said (<see cref="RouteRunwayCrossings.NotMetAt"/>:
+    /// the automatic pass stops the pilot where the route meets the runway) and is never deferred.
     ///
     /// Returns a warning string when one or more picks could not be set — the runway is not in the
-    /// airport data, or the route does not cross it — or null when every pick was
+    /// airport data, or the route does not cross it, or not at its place — or null when every pick was
     /// honoured. A pick that meets its runway but finds no stop is NOT warned about here: it goes to
     /// <paramref name="deferred"/>, because a runway just in front of it (intersecting or close
     /// parallel runways) gets its stop from the automatic pass that runs AFTER this, and the pick
@@ -3601,7 +3609,7 @@ public partial class TaxiGuidanceManager
     private string? ApplyUserRunwayHoldShorts(
         TaxiRoute route,
         List<string> taxiwaySequence,
-        IReadOnlyList<KeyValuePair<int, string>> userRunwayHoldShorts,
+        IReadOnlyList<KeyValuePair<int, Navigation.RunwayHoldPick>> userRunwayHoldShorts,
         double aircraftLat,
         double aircraftLon,
         List<TaxiRouteRunwayEvent> placedEvents,
@@ -3612,9 +3620,12 @@ public partial class TaxiGuidanceManager
         if (_graph == null) return null;
 
         var unmatched = new List<string>();
+        var notMetAt = new List<string>();
 
-        foreach (var (seqIdx, runwayId) in userRunwayHoldShorts)
+        foreach (var (seqIdx, pick) in userRunwayHoldShorts)
         {
+            string runwayId = pick.Runway;
+            bool hasPlace = !string.IsNullOrWhiteSpace(pick.At) || pick.AtNodeId != 0;
             bool ownRow = seqIdx >= 0 && seqIdx < taxiwaySequence.Count;
             string? taxiwayName = ownRow ? taxiwaySequence[seqIdx] : null;
             int row = ownRow ? seqIdx + rowOffset : -1;
@@ -3635,14 +3646,16 @@ public partial class TaxiGuidanceManager
             // KBOS style), each sequence entry refers to a distinct run of that taxiway in the
             // route; scanning from the START of the run (not the end) finds crossings INTERNAL to
             // the named taxiway (KSFO D over 10R/28L keeps its name on both sides). With no taxiway
-            // of its own, or one the route does not drive, the whole route.
+            // of its own, or one the route does not drive, the whole route. With a place, the run's
+            // passages are only tried first: the place decides, along the whole route.
             int runStart = ownRow ? FindTaxiwayRunStart(route, taxiwaySequence, seqIdx, taxiwayName!) : -1;
             int searchFrom = Math.Max(0, runStart);
             var result = RouteRunwayCrossings.ApplyUserRunwayHold(
                 route, targetRwy, _graph.RunwayCenterlines, runwayId, searchFrom,
                 placed: out var placedEvent,
-                aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon));
-            if (result == RouteRunwayCrossings.UserRunwayHoldResult.NotOnRoute && searchFrom > 0)
+                aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon),
+                at: pick.At, atNodeId: pick.AtNodeId);
+            if (result == RouteRunwayCrossings.UserRunwayHoldResult.NotOnRoute && searchFrom > 0 && !hasPlace)
             {
                 // Not after its own taxiway: once more from the route's start.
                 searchFrom = 0;
@@ -3664,16 +3677,32 @@ public partial class TaxiGuidanceManager
                 case RouteRunwayCrossings.UserRunwayHoldResult.NotOnRoute:
                     unmatched.Add($"runway {runwayId} (the route does not cross it)");
                     break;
+                case RouteRunwayCrossings.UserRunwayHoldResult.NotAtPlace:
+                    // Met only elsewhere: no stop of its own, nothing to retry; the automatic pass stops the
+                    // pilot where the route meets the runway, and the pilot is told so.
+                    notMetAt.Add(RouteRunwayCrossings.NotMetAt(runwayId, pick.At));
+                    break;
                 case RouteRunwayCrossings.UserRunwayHoldResult.NotHeld:
-                    // Named after its taxiway only when it was found along that taxiway's own run.
+                    // Named after its taxiway only when it was found along that taxiway's own run (by the run, not
+                    // by a place, which may lie on another taxiway).
                     deferred.Add(new DeferredRunwayPick(targetRwy, runwayId, searchFrom,
-                        runStart >= 0 && searchFrom == runStart ? taxiwayName! : "", row));
+                        runStart >= 0 && searchFrom == runStart && !hasPlace ? taxiwayName! : "", row, pick.At, pick.AtNodeId));
                     break;
             }
         }
 
-        if (unmatched.Count == 0) return null;
-        return $"Note: requested hold-short(s) could not be set — {string.Join("; ", unmatched)}.";
+        return PickWarning(unmatched, notMetAt);
+    }
+
+    // The note a pick that could not be set adds to the route's warning: those not set at all, then those met only
+    // somewhere other than their place. Null when there are none.
+    private static string? PickWarning(IReadOnlyList<string> unmatched, IReadOnlyList<string> notMetAt)
+    {
+        var parts = new List<string>();
+        if (unmatched.Count > 0)
+            parts.Add($"Note: requested hold-short(s) could not be set — {string.Join("; ", unmatched)}.");
+        parts.AddRange(notMetAt.Distinct());
+        return parts.Count == 0 ? null : string.Join(" ", parts);
     }
 
     /// <summary>
@@ -3702,25 +3731,28 @@ public partial class TaxiGuidanceManager
     {
         if (_graph == null || deferred.Count == 0) return null;
         var unheld = new List<string>();
+        var notMetAt = new List<string>();
         foreach (var pick in deferred)
         {
             var result = RouteRunwayCrossings.ApplyUserRunwayHold(
                 route, pick.Runway, _graph.RunwayCenterlines, pick.RunwayId, pick.RunStart,
                 placed: out var placedEvent,
-                aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon));
+                aircraft: new RouteRunwayCrossings.AircraftPosition(aircraftLat, aircraftLon),
+                at: pick.At, atNodeId: pick.AtNodeId);
             if (result == RouteRunwayCrossings.UserRunwayHoldResult.Held && placedEvent != null)
             {
                 RouteRunwayCrossings.MergeUserPickEvents(route, new[] { placedEvent });
                 placedStops?.Add(PlacedRunwayStop(route, pick.Row, pick.RunwayId, placedEvent.StopNodeIndex));
             }
+            else if (result == RouteRunwayCrossings.UserRunwayHoldResult.NotAtPlace)
+                notMetAt.Add(RouteRunwayCrossings.NotMetAt(pick.RunwayId, pick.At));
             else if (result != RouteRunwayCrossings.UserRunwayHoldResult.Held)
                 // A stop found along the whole route, not its own taxiway's run, names no taxiway.
                 unheld.Add(pick.TaxiwayName.Length > 0
                     ? $"runway {pick.RunwayId} (no safe place to hold short after taxiway {pick.TaxiwayName})"
                     : $"runway {pick.RunwayId} (no safe place to hold short)");
         }
-        if (unheld.Count == 0) return null;
-        return $"Note: requested hold-short(s) could not be set — {string.Join("; ", unheld)}.";
+        return PickWarning(unheld, notMetAt);
     }
 
     private static void ApplyUserHoldShorts(TaxiRoute route, List<string> taxiwaySequence, List<int> userHoldShortIndices)
