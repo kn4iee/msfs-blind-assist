@@ -38,7 +38,8 @@ internal static class PlanReport
         w.WriteLine("A330 panel sweep, dry run: nothing is connected to the sim and nothing is written.");
         w.WriteLine("Starts assumed: each control at its map's first position (a guard closed, a continuous control at its minimum,");
         w.WriteLine("a family of keys at the value its first key selects).");
-        w.WriteLine("The live run plans from the aircraft's own starting reads, and puts every control back by its input event's own starting value.");
+        w.WriteLine("The live run plans from the aircraft's own starting reads, and puts every control back by its input event's own starting value,");
+        w.WriteLine("except a push-button that toggles: by its read, pressed once when it reads otherwise.");
         w.WriteLine($"Pass: {pass}");
 
         var byKey = controls.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -74,7 +75,7 @@ internal static class PlanReport
         var familyOf = SweepSession.FamilyOf(plan.Controls.Where(c => c.Family != null).Select(c => c.Family!));
         int touched = planned.Sum(c => SweepSession.Touched(c, familyOf).Count);
         double seconds = Count(SweepStepKind.SetPosition) * SetSeconds + Count(SweepStepKind.RepeatPosition) * RepeatSeconds
-            + (Count(SweepStepKind.Press) + Count(SweepStepKind.RestorePress) + Count(SweepStepKind.PressEcamPage)) * PressSeconds
+            + (Count(SweepStepKind.Press) + Count(SweepStepKind.RestorePress) + Count(SweepStepKind.PressEcamPage) + Count(SweepStepKind.TogglePress)) * PressSeconds
             + Count(SweepStepKind.OpenGuard) * GuardSeconds + touched * RestoreSeconds;
         var units = plan.Controls.Where(c => c.Family != null).ToList();
 
@@ -82,9 +83,11 @@ internal static class PlanReport
         foreach (var g in plan.Controls.Where(c => !c.IsPlanned).GroupBy(c => Reason(c.SkipReason!)).OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal))
             w.WriteLine($"  skipped, {g.Key}: {g.Count()}");
         int familyPresses = planned.Where(c => c.Family != null).Sum(c => c.Steps.Count(s => s.Kind == SweepStepKind.Press));
-        w.WriteLine($"Steps: {Count(SweepStepKind.SetPosition)} positions, each written twice; {Count(SweepStepKind.Press)} presses"
+        int toggles = planned.Count(c => c.Steps.Any(s => s.Kind == SweepStepKind.TogglePress));
+        w.WriteLine($"Steps: {Count(SweepStepKind.SetPosition)} positions, each written twice; {toggles} push-buttons that toggle, each pressed"
+            + $" and pressed back ({Count(SweepStepKind.TogglePress)} presses by value, never written twice); {Count(SweepStepKind.Press)} key presses"
             + $" ({familyPresses} of them keys of a family; +{Count(SweepStepKind.RestorePress)} to cycle back); {Count(SweepStepKind.OpenGuard)} guards opened;"
-            + $" {Count(SweepStepKind.PressEcamPage)} ECAM page keys; {touched} put-backs from the journal.");
+            + $" {Count(SweepStepKind.PressEcamPage)} ECAM page keys; {touched} put-backs from the journal ({toggles} of them by the read).");
         foreach (var u in units)
             w.WriteLine(u.IsPlanned
                 ? $"Family {u.Key} ({u.Label}): {u.Family!.Members.Count} keys pressed in turn, put back by pressing {u.Steps[^1].ControlKey} once."

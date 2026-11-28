@@ -62,6 +62,12 @@ internal static class A330Write
 
     private static bool Known(double? v) => v is double d && double.IsFinite(d);
 
+    /// <summary>A push-button the aircraft toggles (measured 2026-11-27): a <c>toggle</c> with <c>press</c> and
+    /// <c>release</c>, an input event and no calculator line. It is pressed by value, and its state is its read alone:
+    /// its input event's own value rests at 0 whatever the switch shows.</summary>
+    public static bool PressedByValue(A330ControlMap.Control c) =>
+        c is { Mode: "toggle", Press: not null, Release: not null } && string.IsNullOrWhiteSpace(c.Rpn) && !string.IsNullOrEmpty(c.Event);
+
     /// <summary>The plan for picking <paramref name="target"/> (a position's read value) on a map
     /// selector, from the cached reading <paramref name="current"/> (null or not finite: unread).</summary>
     public static A330WritePlan ToPosition(A330ControlMap.Control c, double? current, double target)
@@ -79,8 +85,8 @@ internal static class A330Write
                 if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
                 // a push-button the aircraft toggles (measured 2026-11-27): one press by value through its input
                 // event, whichever way it goes; its positions' inputs drive no write
-                if (c is { Press: double press, Release: double release })
-                    return A330WritePlan.Of(new A330InputEventPressCall(c.Event, press, release, c.HoldMs ?? IniA330Definition.DefaultPushMs));
+                if (PressedByValue(c))
+                    return A330WritePlan.Of(new A330InputEventPressCall(c.Event, c.Press!.Value, c.Release!.Value, c.HoldMs ?? IniA330Definition.DefaultPushMs));
                 return A330WritePlan.Of(new A330PressCall(c.Event, c.HoldMs ?? IniA330Definition.DefaultPushMs));
             default:
                 if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;

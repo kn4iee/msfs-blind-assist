@@ -461,11 +461,25 @@ public class A330PanelSweepRunnerTests
         public int? ThrowOnSet;
         private int _sets;
 
+        /// <summary>Push-buttons that toggle, as measured on 2026-11-27: every set of the event is a press that flips the
+        /// variable it drives, except a change of the event's own value from 1 to 0 (the release).</summary>
+        public readonly HashSet<string> PressToggles = new(StringComparer.Ordinal);
+        /// <summary>Push-buttons whose press changes the event's own value but never flips what it drives.</summary>
+        public readonly HashSet<string> Stuck = new(StringComparer.Ordinal);
+
         public bool TrySetInputEvent(string inputEvent, double value)
         {
             if (!Events.ContainsKey(inputEvent)) return false;
             if (++_sets == ThrowOnSet) throw new InvalidOperationException("the link failed");
             Record(FormattableString.Invariant($"{inputEvent}={value}"));
+            if (PressToggles.Contains(inputEvent))
+            {
+                bool release = Events[inputEvent] == 1 && value == 0;
+                Events[inputEvent] = value;
+                if (!release && !Stuck.Contains(inputEvent) && Drives.TryGetValue(inputEvent, out var flipped))
+                    Vars[flipped] = Vars[flipped] > 0.5 ? 0 : 1;
+                return true;
+            }
             if (Ignores.TryGetValue(inputEvent, out double ignored) && ignored == value) return true;
             Events[inputEvent] = value;
             if (Drives.TryGetValue(inputEvent, out var v)) Vars[v] = value;
@@ -511,6 +525,135 @@ public class A330PanelSweepRunnerTests
             Vars[c.Read] = start;
             Drives[c.Event!] = c.Read;
         }
+
+        /// <summary>A push-button that toggles, reading <paramref name="read"/>, its input event's own value at
+        /// <paramref name="own"/> (which says nothing about the switch).</summary>
+        public void AddToggle(Control c, double read, double own)
+        {
+            Events[c.Event!] = own;
+            Vars[c.Read!] = read;
+            Drives[c.Event!] = c.Read!;
+            PressToggles.Add(c.Event!);
+        }
+    }
+
+    /// <summary>A push-button the aircraft toggles, as the map has it: On read 1, written 0; pressed by value 1 then 0.</summary>
+    private static Control Toggle(string key)
+    {
+        var c = Select(key, P(1, 0, "On"), P(0, 1, "Off"));
+        c.Mode = "toggle";
+        c.Press = 1;
+        c.Release = 0;
+        return c;
+    }
+
+    // ---------------- push-buttons that toggle ----------------
+
+    [Fact]
+    public void A_toggle_is_restored_by_its_read_not_its_events_value()
+    {
+        // On at the start, its event's own value left at 1 by an earlier write: that value says nothing about the switch
+        var t = Toggle("T");
+        var aircraft = new FakeAircraft();
+        aircraft.AddToggle(t, read: 1, own: 1);
+
+        var (outcome, rows, journal) = Sweep(aircraft, t);
+
+        Assert.Null(outcome.StopReason);
+        // pressed (to Off) and pressed back (to On), each a set of 1 then 0 in one uninterrupted call; nothing more
+        Assert.Equal(new[] { "EV_T=1", "EV_T=0", "EV_T=1", "EV_T=0" }, aircraft.Sent);
+        Assert.Equal(aircraft.CallOf[0], aircraft.CallOf[1]);
+        Assert.Equal(aircraft.CallOf[2], aircraft.CallOf[3]);
+        Assert.Equal(1, aircraft.Vars["INI_T"]);
+        // the journal keeps the read; the put-back compares the read and sends nothing, though the event now reads 0
+        Assert.Contains("start\tT\ttoggle\tEV_T\t1\tINI_T\t1", journal);
+        Assert.Equal(0, aircraft.Events["EV_T"]);
+        var back = rows.Single(r => r.Position == "(restore) start");
+        Assert.Equal("at start", back.Verdict);
+        Assert.Equal("", back.Sent);
+        Assert.Equal(new[] { "read-only", "read-only" }, rows.Where(r => r.Position.EndsWith("(press)", StringComparison.Ordinal)).Select(r => r.Verdict).ToArray());
+        Assert.Equal(new[] { "Off (press)", "On (press)" }, rows.Where(r => r.Position.EndsWith("(press)", StringComparison.Ordinal)).Select(r => r.Position).ToArray());
+        Assert.Contains("press EV_T", rows.First(r => r.Position == "Off (press)").Sent);
+        Assert.DoesNotContain(rows, r => r.Verdict == "toggle");   // not written twice any more
+
+        // a sweep stopped between the two presses: the put-back presses it once, by its read
+        var cut = new FakeAircraft();
+        cut.AddToggle(t, read: 1, own: 0);
+        var (stopped, cutRows, _) = SweepUntil(cut, () => cut.Sent.Count > 0 ? "stopped with Ctrl+C" : null, t);
+        Assert.Equal(new[] { "EV_T=1", "EV_T=0", "EV_T=1", "EV_T=0" }, cut.Sent);
+        Assert.Equal(1, cut.Vars["INI_T"]);
+        Assert.Equal("restored", cutRows.Single(r => r.Position == "(restore) start").Verdict);
+        Assert.Empty(stopped.RestoreFailures);
+    }
+
+    [Fact]
+    public void A_toggle_press_that_did_not_flip_is_dead()
+    {
+        var t = Toggle("T");
+        var aircraft = new FakeAircraft();
+        aircraft.AddToggle(t, read: 1, own: 0);
+        aircraft.Stuck.Add("EV_T");
+
+        var (outcome, rows, _) = Sweep(aircraft, t);
+
+        // one press; the press back is not sent, since the read never left On
+        Assert.Equal(new[] { "EV_T=1", "EV_T=0" }, aircraft.Sent);
+        Assert.Equal("dead", rows.Single(r => r.Position == "Off (press)").Verdict);
+        Assert.Equal(SweepSession.NothingSentWord, rows.Single(r => r.Position == "On (press)").Verdict);
+        Assert.Equal("at start", rows.Single(r => r.Position == "(restore) start").Verdict);
+        Assert.Null(outcome.StopReason);
+
+        // dead whatever else moved: a press that did not flip its read did not do what the switch does
+        var j = SweepVerdicts.Classify(new WriteObservation { Toggle = true, ReadBefore = 1, Read = Still(1), ExpectedRead = 0, SideEffects = 2 });
+        Assert.Equal(SweepVerdict.Dead, j.Verdict);
+        Assert.Contains("did not flip", j.Note);
+        Assert.Contains("2 other", j.Note);
+        // and a press that flipped it is judged as any write
+        Assert.Equal(SweepVerdict.ReadOnly,
+            SweepVerdicts.Classify(new WriteObservation { Toggle = true, ReadBefore = 1, Read = Moved(0), ExpectedRead = 0 }).Verdict);
+    }
+
+    [Fact]
+    public void Restore_presses_a_toggle_that_reads_off_its_start_once()
+    {
+        // the 2026-11-27 journal's form (an input-event line) and the toggle line: both put back by the READ
+        foreach (string line in new[] { "start\tT\tinput-event\tEV_T\t0\tINI_T\t1\n", "start\tT\ttoggle\tEV_T\t0\tINI_T\t1\n" })
+        {
+            var entry = Assert.Single(SweepJournal.Parse(line));
+            var t = Toggle("T");
+
+            // reads Off, its event's own value at its start (0): pressed once, by value, and read back On
+            var off = new FakeAircraft();
+            off.AddToggle(t, read: 0, own: 0);
+            var rows = new List<SweepRow>();
+            var session = new SweepSession(new[] { t }, new Dictionary<string, string>(), off, new SweepSinks(rows.Add, _ => { }, _ => { }));
+            Assert.True(session.Restore(entry));
+            Assert.Equal(new[] { "EV_T=1", "EV_T=0" }, off.Sent);
+            Assert.Equal(1, off.Vars["INI_T"]);
+            Assert.Equal("restored", rows.Single().Verdict);
+
+            // reads its start, its event's own value not (1): nothing sent
+            var on = new FakeAircraft();
+            on.AddToggle(t, read: 1, own: 1);
+            Assert.True(new SweepSession(new[] { t }, new Dictionary<string, string>(), on, new SweepSinks(_ => { }, _ => { }, _ => { })).Restore(entry));
+            Assert.Empty(on.Sent);
+
+            // a press that does not bring it back: one press, never a second, and not held (the sweep and --restore stop)
+            var stuck = new FakeAircraft();
+            stuck.AddToggle(t, read: 0, own: 0);
+            stuck.Stuck.Add("EV_T");
+            var stuckRows = new List<SweepRow>();
+            Assert.False(new SweepSession(new[] { t }, new Dictionary<string, string>(), stuck, new SweepSinks(stuckRows.Add, _ => { }, _ => { })).Restore(entry));
+            Assert.Equal(new[] { "EV_T=1", "EV_T=0" }, stuck.Sent);
+            Assert.StartsWith("RESTORE FAILED", stuckRows.Single().Verdict, StringComparison.Ordinal);
+        }
+
+        // the toggle line round-trips, its event's own value kept for the record only (it may be missing)
+        var kept = new JournalEntry("T", JournalKind.Toggle, "EV_T", null, "INI_T", 1);
+        Assert.Equal(kept, Assert.Single(SweepJournal.Parse(SweepJournal.Line(kept))));
+        Assert.Equal(kept, SweepJournal.EntryFor(Toggle("T"), eventValue: null, readValue: 1));
+        // with no read it cannot be put back, so it is never journaled
+        Assert.Null(SweepJournal.EntryFor(Toggle("T"), eventValue: 0, readValue: null));
     }
 
     private static (SweepOutcome outcome, List<SweepRow> rows, string journal) Sweep(FakeAircraft aircraft, params Control[] controls) =>

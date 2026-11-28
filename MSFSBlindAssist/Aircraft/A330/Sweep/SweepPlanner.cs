@@ -10,7 +10,9 @@ namespace MSFSBlindAssist.Aircraft.A330.Sweep;
 ///
 /// A selector visits every other position in the map's order and returns to where it started; a button
 /// that reports a state is pressed once; a continuous control goes to its minimum, middle and maximum
-/// and back. Each position (and each continuous point) is written twice in a row, to find a toggle. A guard row is
+/// and back. Each position (and each continuous point) is written twice in a row, to find a toggle. A push-button the
+/// aircraft toggles (<see cref="A330Write.PressedByValue"/>) is pressed and pressed back instead, and put back by its
+/// read. A guard row is
 /// never swept on its own: its covered switch opens it first and closes it last (unless it found it open). Keys that
 /// share one state variable are one unit (<see cref="KeyFamily"/>): each pressed in turn, then the one key that
 /// selects the start; a unit whose start no key is known to select is skipped before any press. A control whose start
@@ -115,6 +117,18 @@ internal static class SweepPlanner
         if (!starts.TryGetValue(c.Key, out var start) || start == null) return "start not read";
         var home = ps.FirstOrDefault(p => Same(p.Value, start.Value));
         if (home == null) return $"start {Fmt(start.Value)} matches no position";
+        if (A330Write.PressedByValue(c))
+        {
+            // a push-button the aircraft toggles: pressed (its read should flip), pressed back, each judged by its read;
+            // no position's input is written (it drives nothing), and it is put back by its read
+            if (ps.Count != 2) return $"a push-button that toggles needs two positions, not {ps.Count}";
+            var other = ps.First(p => p != home);
+            steps.Add(new SweepStep(SweepStepKind.TogglePress, c.Key, null, other.Value, $"press {c.Key} (expect {other.Label})"));
+            steps.Add(new SweepStep(SweepStepKind.TogglePress, c.Key, null, home.Value, $"press {c.Key} again (expect {home.Label})"));
+            steps.Add(new SweepStep(SweepStepKind.ReturnToStart, c.Key, null, home.Value,
+                $"return {c.Key} to {home.Label} by its read (pressed once if it reads otherwise; never by its input event's own value)"));
+            return null;
+        }
         foreach (var p in ps.Where(p => p != home))
             AddTwice(steps, c.Key, p.Input, p.Value, $"set {c.Key} to {p.Label} (write {Fmt(p.Input)})");
         steps.Add(new SweepStep(SweepStepKind.ReturnToStart, c.Key, home.Input, home.Value, $"return {c.Key} to {home.Label} (its input event's own starting value)"));

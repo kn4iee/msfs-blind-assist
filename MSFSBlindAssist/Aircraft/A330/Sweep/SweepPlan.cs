@@ -19,10 +19,14 @@ public enum SweepStepKind
     RestorePress,
     /// <summary>Put the control back where it started. Its <see cref="SweepStep.Input"/> is the map's pairing for
     /// the start, shown in the dry run; the runner never writes it: it restores from the journal, by the input
-    /// event's own starting value (an inverted pairing would "restore" to the wrong side).</summary>
+    /// event's own starting value (an inverted pairing would "restore" to the wrong side). A push-button the aircraft
+    /// toggles has no input here: it is put back by its read, pressed once when that differs from the journal's.</summary>
     ReturnToStart,
     /// <summary>Close the guard again; restored from the journal like <see cref="ReturnToStart"/>.</summary>
     CloseGuard,
+    /// <summary>One press of a push-button the aircraft toggles (a <c>toggle</c> with <c>press</c> and <c>release</c>),
+    /// by the app's own press by value; <see cref="SweepStep.ExpectedRead"/> is where its read should flip to.</summary>
+    TogglePress,
 }
 
 /// <summary>One step. <see cref="ControlKey"/> is the control it acts on (the guard's or the ECAM key's

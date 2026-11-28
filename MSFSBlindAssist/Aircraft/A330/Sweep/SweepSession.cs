@@ -69,7 +69,8 @@ internal sealed class SweepOutcome
 /// through the app's own decision (<see cref="A330Write"/>) and route, at least <see cref="SweepTiming.WriteGapMs"/>
 /// apart; after each, the control's read and its proof watched until they settle (<see cref="SettleTracker"/>), a
 /// snapshot before and after for the side effects, the system state, and a verdict (<see cref="SweepVerdicts"/>). Each
-/// position is written twice, to find a toggle. Then every control the plan touched is put back from the journal
+/// position is written twice, to find a toggle; a push-button the map already presses as a toggle is pressed and pressed
+/// back, and put back by its read. Then every control the plan touched is put back from the journal
 /// (the switch, then its guard, then an ECAM page key), read back, and the whole sweep STOPS when one did not hold.
 /// Keys that share one state (<see cref="KeyFamily"/>) are one unit: each pressed in turn (the one already selected is
 /// not pressed), then the one key seen to select the start is pressed once, and nothing more if it did not hold.
@@ -246,7 +247,7 @@ internal sealed class SweepSession
                 var target = _byKey[s.ControlKey];
                 string verdict = cp.Family is { } family ? PressFamilyKey(family, target, s, seen!) : s.Kind switch
                 {
-                    SweepStepKind.SetPosition or SweepStepKind.OpenGuard => WritePosition(target, s,
+                    SweepStepKind.SetPosition or SweepStepKind.OpenGuard or SweepStepKind.TogglePress => WritePosition(target, s,
                         repeat: i + 1 < steps.Count && steps[i + 1].Kind == SweepStepKind.RepeatPosition && steps[i + 1].ControlKey == s.ControlKey),
                     _ => Press(target, s).Verdict,
                 };
@@ -327,12 +328,15 @@ internal sealed class SweepSession
         return pressed.Verdict;
     }
 
-    /// <summary>One position (or an opened guard): read, plan with the app's decision, snapshot, send, settle, snapshot,
-    /// write it again where planned, judge, record. Returns the row's verdict.</summary>
+    /// <summary>One position (or an opened guard, or one press of a push-button that toggles): read, plan with the app's
+    /// decision, snapshot, send, settle, snapshot, write it again where planned, judge, record. Returns the row's verdict.
+    /// A toggle's press is the app's press by value toward <see cref="SweepStep.ExpectedRead"/>, sent only when the read
+    /// differs, and dead when it did not flip the read.</summary>
     private string WritePosition(Control c, SweepStep s, bool repeat)
     {
         string read = ReadOf(c) ?? throw new InvalidOperationException($"{c.Key} has no read");
-        string position = $"{PositionLabel(c, s.ExpectedRead)}(write {SweepTsv.Num(s.Input)})";
+        bool toggle = s.Kind == SweepStepKind.TogglePress;
+        string position = toggle ? $"{PositionLabel(c, s.ExpectedRead)}(press)" : $"{PositionLabel(c, s.ExpectedRead)}(write {SweepTsv.Num(s.Input)})";
         double? before = _io.Read(read);
         if (before == null) return Record(c, position, verdict: "not read before the write");
 
@@ -375,7 +379,7 @@ internal sealed class SweepSession
         var observation = new WriteObservation
         {
             ReadBefore = before, Read = settled[0], ExpectedRead = s.ExpectedRead, Positions = c.Positions ?? new(),
-            Proof = proof, Repeat = again, SideEffects = effects.Count,
+            Proof = proof, Repeat = again, SideEffects = effects.Count, Toggle = toggle,
         };
         return Judge(c, position, sent.Text, observation, proof, snapAfter, settled[0], again, repeatNote, effects);
     }
@@ -509,16 +513,21 @@ internal sealed class SweepSession
         return held;
     }
 
-    /// <summary>A control put back by its journal entry: its own starting value, never the pairing.</summary>
+    /// <summary>A control put back by its journal entry: its own starting value, never the pairing. A push-button that
+    /// toggles by its read alone (an older journal's input-event line for it too): pressed once when the read differs.</summary>
     private bool Restore(JournalEntry e, Control c)
     {
         int actions = 0;
         var sentTexts = new List<string>();
+        // its input event's own value says nothing about a push-button that toggles: neither compared nor waited for
+        bool byRead = e.Kind is JournalKind.InputEvent or JournalKind.Toggle && A330Write.PressedByValue(c);
         while (true)
         {
-            double? own = e.Kind == JournalKind.InputEvent ? _io.Read("B:" + e.Event) : null;
+            double? own = e.Kind == JournalKind.InputEvent && !byRead ? _io.Read("B:" + e.Event) : null;
             double? read = e.Read != null ? _io.Read(e.Read) : null;
-            string note = e.Kind == JournalKind.InputEvent
+            string note = byRead
+                ? $"{e.Read} {SweepTsv.Num(read)} (start {SweepTsv.Num(e.ReadValue)}), put back by its read"
+                : e.Kind == JournalKind.InputEvent
                 ? $"{e.Event} {SweepTsv.Num(own)} (start {SweepTsv.Num(e.EventValue)})" + (e.Read != null ? $", {e.Read} {SweepTsv.Num(read)} (start {SweepTsv.Num(e.ReadValue)})" : "")
                 : $"{e.Read} {SweepTsv.Num(read)} (start {SweepTsv.Num(e.ReadValue)})";
             switch (JournalRestore.Next(e, c, own, read, actions))
@@ -542,7 +551,7 @@ internal sealed class SweepSession
                         return false;
                     }
                     var channels = new List<SettleChannel>();
-                    if (e.Kind == JournalKind.InputEvent) channels.Add(new(() => _io.Read("B:" + e.Event), own));
+                    if (e.Kind == JournalKind.InputEvent && !byRead) channels.Add(new(() => _io.Read("B:" + e.Event), own));
                     if (e.Read != null) channels.Add(new(() => _io.Read(e.Read), read));
                     if (channels.Count > 0) SettleTracker.Track(channels, _io.NowMs, _io.Sleep);
                     _io.TakeWriteErrors();
@@ -555,7 +564,8 @@ internal sealed class SweepSession
 
     /// <summary>Sends a plan's calls by the app's routes: an input event by SetInputEvent; a press as the event's own
     /// <c>_Push</c>, then after its hold <c>_Release</c>, over the calculator (as <c>IniA330Definition.PushEvent</c>
-    /// writes them); a calculator line as it is. Never a write to a denied control.</summary>
+    /// writes them); a press by value as SetInputEvent of its press value, then after its hold of its release value (as
+    /// the panel's write sends it); a calculator line as it is. Never a write to a denied control.</summary>
     private Dispatched Dispatch(string key, A330WritePlan plan)
     {
         if (_denied.TryGetValue(key, out var why))
@@ -566,7 +576,7 @@ internal sealed class SweepSession
         _io.TakeWriteErrors();
         foreach (var call in plan.Calls)
         {
-            if (call is not A330InputEventCall && !_io.CalcAnswering)
+            if (call is not (A330InputEventCall or A330InputEventPressCall) && !_io.CalcAnswering)
                 return new(false, "the calculator channel is not answering (the app's CalcWriteCanLand would be false)", text);
             WaitForGap();
             bool listed = true;
@@ -576,6 +586,14 @@ internal sealed class SweepSession
                 {
                     case A330InputEventCall ie:
                         listed = _io.TrySetInputEvent(ie.Event, ie.Value);
+                        break;
+                    case A330InputEventPressCall vp:
+                        listed = _io.TrySetInputEvent(vp.Event, vp.Press);
+                        if (!listed) break;
+                        // the release always follows its press, whatever happens during the hold: a press left at 1 would
+                        // make the next set of 1 a second press
+                        try { _io.Sleep(vp.HoldMs); }
+                        finally { _io.TrySetInputEvent(vp.Event, vp.Release); }
                         break;
                     case A330PressCall p:
                         // the release always follows its push, whatever happens during the hold
@@ -591,7 +609,8 @@ internal sealed class SweepSession
                         break;
                 }
             });
-            if (!listed) return new(false, $"the aircraft does not list {((A330InputEventCall)call).Event}", text);
+            if (!listed)
+                return new(false, $"the aircraft does not list {(call is A330InputEventPressCall vpc ? vpc.Event : ((A330InputEventCall)call).Event)}", text);
             _lastWriteAt = _io.NowMs();
         }
         return new(true, null, text);

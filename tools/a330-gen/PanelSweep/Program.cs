@@ -100,7 +100,8 @@ internal static class Program
         }
 
         Console.WriteLine(journal != null
-            ? $"A330PanelSweep: put back the {journal.Count} controls of {opts.Restore}, each by its own starting value."
+            ? $"A330PanelSweep: put back the {journal.Count} controls of {opts.Restore}, each by its own starting value"
+                + " (a push-button that toggles by its read, pressed once when it reads otherwise)."
             : $"A330PanelSweep: live sweep of the A330's cockpit controls ({opts.Pass} pass).");
         Console.WriteLine();
         Console.WriteLine("Before you go on:");

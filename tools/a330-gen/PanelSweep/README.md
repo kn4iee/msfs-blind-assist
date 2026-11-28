@@ -56,7 +56,8 @@ A330PanelSweep.exe --restore journal-2026-12-01-1430.tsv
 - `--vars FILE`: more L:vars for the snapshot, one name a line (`#` comments).
 - `--out DIR`: where the files go (default: the current folder).
 - `--restore JOURNAL`: puts every control of a journal back, last first (a switch before the guard over it),
-  each by its own starting value, reads each back, and lists any that did not hold. It writes `restore-<date>.tsv`.
+  each by its own starting value, reads each back, and lists any that did not hold. A push-button that toggles is
+  put back by its read instead (below). It writes `restore-<date>.tsv`.
 
 ### Conditions for the live run (the owner runs it)
 
@@ -70,9 +71,11 @@ aircraft is airborne or an engine is running, or if the aircraft lists fewer tha
 its own (`L:A330PANELSWEEP_PROBE`) and read back; if that does not answer, the sweep still runs, input events are
 still written, and every press and calculator line is `not sent`.
 
-The dry run on 2026-11-27 planned 151 units: 149 controls (223 positions, each written twice; 2 key presses; 14
-guards opened) and the two families of keys (18 presses), with 132 skipped (18 of them the families' own keys),
-about 18 minutes plus a minute to read the starts. Each write that moves nothing waits 5 s
+The dry run of 2026-11-27, after the push-buttons that toggle were measured, planned 151 units: 149 controls (150
+positions, each written twice; 73 push-buttons that toggle, each pressed and pressed back, 146 presses by value; 2
+key presses; 14 guards opened) and the two families of keys (18 presses), with 132 skipped (18 of them the
+families' own keys), 165 put-backs (73 of them by the read), about 17 minutes plus a minute to read the starts.
+Each write that moves nothing waits 5 s
 more before it is called dead. **Ctrl+C** stops once the control in progress has been put back. A second Ctrl+C
 stops sooner, but never inside a write: it waits until the write in progress has ended (a key's push is always
 followed by its release), then exits, and `--restore` with the journal puts back what was left. In `--restore`, a
@@ -88,6 +91,9 @@ Ctrl+C finishes the control in progress and stops; a second one stops after the 
    - an input event by SetInputEvent, with the hash from the aircraft's own enumeration (an event the aircraft
      does not list is `not sent`, never `dead`);
    - a key's press as its own `_Push`, then after its hold `_Release`, over the calculator, as the app sends it;
+   - a push-button that toggles (`mode: toggle` with `press` and `release`) pressed by value: SetInputEvent of
+     its `press` value, the hold, then SetInputEvent of its `release` value, in one write (the release always
+     follows), as the app sends it;
    - a calculator line as the map gives it.
    Never a `_Set` through the calculator for a control the app sets by input event. Writes are at least 400 ms
    apart. A denied control is never written, whatever asks. A guard is opened before its switch; when the guard's
@@ -99,15 +105,45 @@ Ctrl+C finishes the control in progress and stops; a second one stops after the 
    variable the map knows (reads, lamps, states, proofs, about 177) is taken before and after.
 4. Each position is written twice in a row. The second write is watched for twice the time the first took (at
    least 1.5 s, at most 5 s); if it moves the read again, the input event toggles. A first write that moved
-   nothing is not written again.
+   nothing is not written again. A push-button that toggles is not written twice: it is pressed once (its read
+   should flip to the other position) and pressed again (back), each judged by its read after it settles; a press
+   that did not flip the read is `dead`, and then it is not pressed back (it still reads its start).
 5. Then every key the control's steps wrote is put back from the journal: the control itself, then its guard,
    then an ECAM page key. An input-event control is written its input event's own starting value, never its
    read translated through the pairing being tested (an inverted pairing would put it on the wrong side), at
-   most twice, and holds once both that value and its read are back. A key is pressed until its state reads its
+   most twice, and holds once both that value and its read are back. A push-button that toggles is put back by
+   its read alone: when its read differs from the journal's it is pressed once, its read is waited for, and it
+   holds only when the read is back. A key is pressed until its state reads its
    start, at most `pressesToCycle - 1` times; a key with no count is a push-on/push-off key, so one press. A family
    of keys that share one state is put back as one unit (below). **If a put-back did not hold, the whole sweep
    stops** (every later control reads `not reached`), and the summary says what to put back by hand and the key
    to go on from: `--from <key>`, the control the stop cut short, or else the first one not reached.
+
+## Push-buttons that toggle
+
+Measured by this sweep on 2026-11-27 (MSFS 2024 1.9.24.0, on the ground, through the app's own route:
+SetInputEvent by hash): 73 push-buttons toggle. The packs, the bleeds, the generators, the hydraulic pumps, the
+fuel pumps, the PRIMs and SECs, the flight directors and the EFIS keys are among them. The rule that fits both
+patterns seen: **every SetInputEvent is a press, except a change of the event's value from 1 to 0, which is a
+release.** So writing 1 flips the switch, writing 1 again flips it back, and writing 0 with the event at 1 does
+nothing. On 9 of them the first write was 0 with the event at 0, and that flipped too. A clean press is set 1, the
+hold, set 0: one flip, and the event is back at 0. The map now has these as `mode: toggle` with `press: 1,
+release: 0`, and the app and this tool press them that way, only when the read differs from the pick.
+
+**The trap:** a push-button's input event's own value (`B:<EVENT>`) says nothing about its state. It rests at 0
+whatever the switch shows, so it always matches the journal's. A put-back that writes that value back is no
+remedy either: a set of 0 with the event at 0 is itself a press. On 2026-11-27 the `--restore` of that day's
+journal found all 165 entries back at their start and sent nothing. Afterwards `A330_ENG1_BLEED`, `A330_PACK2`
+and `A330_GPWS_FLAP` read off where the journal says they started on. The tool had sent them nothing, and the
+cause is not known.
+
+**What the tool does now:** a push-button that toggles has a `toggle` line in the journal with its read and that
+read's value. Its event's own value is kept for the record only. Both the sweep's put-back and `--restore`
+compare the READ with the journal's read. When they differ, the button is pressed once by value, its read is
+waited for, and the sweep (or `--restore`) stops if it did not come back. It is never pressed twice. The rule
+follows the map, not the journal line, so an older journal's `input-event` line for one of these buttons is put
+back the same way: `--restore` of the 2026-11-27 journal would now press `A330_ENG1_BLEED`, `A330_PACK2` and
+`A330_GPWS_FLAP` once each, if they still read off.
 
 ## Keys that share one state
 
@@ -154,10 +190,12 @@ table exists.
 - `read-only`: the read moved to the position written, and no proof the runner can read tells this position from
   the one before.
 - `dead`: nothing moved in 5 s (not the read, not the proof, no other variable); or the proof should have changed
-  and did not while the read alone moved (the aircraft may have ignored the write).
+  and did not while the read alone moved (the aircraft may have ignored the write); or a press of a push-button
+  that toggles did not flip its read, whatever else moved (the note counts what did).
 - `lagged`: a pass (`proven` or `read-only`, named in the note) that settled only after 1.5 s. Still a pass; its
   time goes to plan 06.
-- `toggle`: the same position written a second time moved the read again.
+- `toggle`: the same position written a second time moved the read again. (A push-button the map already
+  presses as a toggle is never written twice, so it never gets this verdict.)
 - `not sent`: refused before it left (an input event the aircraft does not list, the calculator not answering,
   the simulator refusing the packet). Never called dead.
 - `mislabeled`: the read went to another position than the one written, or to none of them, or it did not move
@@ -191,8 +229,10 @@ elevation knob (`A330_LDG_ELEV`, with `INI_LANDING_ELEVATION`) and the weather r
 `INI_WXR_GAIN`). Each continuous control goes to its minimum, middle and maximum.
 
 `journal-<same stamp>.tsv`: one `start` line a control, written before the first write. An input-event control:
-its event and that event's own value, its read and the read's value. A key: its event, its `pressesToCycle`, its
-state and the state's value. A family of keys: `family`, its state and the state's start, once. Numbers are
+its event and that event's own value, its read and the read's value. A push-button that toggles: `toggle`, its
+event, that event's own value (for the record only, possibly empty), its read and the read's value, which is what
+it is put back by. A key: its event, its `pressesToCycle`, its state and the state's value. A family of keys:
+`family`, its state and the state's start, once. Numbers are
 round-trip. A comment line names the variables that moved on their own.
 
 ## Before the owner's session
@@ -221,5 +261,6 @@ cargo and cabin doors) are comment lines at the end of the deny list, to be deni
 ## Not tested in the sim
 
 The planning and the runner's decisions are pinned by the xUnit tests on in-memory controls and a fake
-aircraft, and the dry run runs; the live half has never run against the simulator. Its first run is the
-owner's (plan 04, Task 4 Step 4).
+aircraft (which models the measured rule above for the push-buttons that toggle), and the dry run runs. The live
+half first ran on 2026-11-27 (plan 04, Task 4 Step 4). The press and press-back of the push-buttons that toggle,
+and their put-back by the read, have not run against the simulator yet.

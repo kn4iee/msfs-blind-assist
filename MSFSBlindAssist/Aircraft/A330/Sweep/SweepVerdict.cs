@@ -12,11 +12,13 @@ internal enum SweepVerdict
     /// <summary>The read moved to the position written, and no proof the runner can read tells this position from the one before.</summary>
     ReadOnly,
     /// <summary>Nothing moved (not the read, not the proof, no other variable) in <see cref="SweepTiming.LimitMs"/>; or the
-    /// proof should have changed and did not, while the read (the control's own variable) moved alone.</summary>
+    /// proof should have changed and did not, while the read (the control's own variable) moved alone; or a press of a
+    /// push-button that toggles did not flip its read, whatever else moved.</summary>
     Dead,
     /// <summary>A pass (proven or read-only) that settled only after <see cref="SweepTiming.LaggedMs"/>: its time goes to plan 06.</summary>
     Lagged,
-    /// <summary>The same position written a second time moved the read again: the input event toggles.</summary>
+    /// <summary>The same position written a second time moved the read again: the input event toggles. (A control the map
+    /// already presses as a toggle is pressed and pressed back instead, never written twice, so never this.)</summary>
     Toggle,
     /// <summary>The write was refused before it left (an input event the aircraft does not list, the calculator not
     /// answering, the simulator refusing the packet): never called dead.</summary>
@@ -55,6 +57,8 @@ internal sealed record WriteObservation
     public SettleResult? Repeat { get; init; }
     /// <summary>How many other variables of the snapshot moved with the write.</summary>
     public int SideEffects { get; init; }
+    /// <summary>A press of a push-button the aircraft toggles: one that did not flip the read is dead, whatever else moved.</summary>
+    public bool Toggle { get; init; }
 }
 
 internal sealed record Judgement(SweepVerdict Verdict, string Note)
@@ -94,6 +98,15 @@ internal static class SweepVerdicts
         bool proofReadable = o.Proof.Reach == ProofReach.Variable;
         // a proof not read before the write has nothing to have moved from
         bool proofMoved = proofReadable && o.Proof.Before != null && o.Proof.After?.Moved == true;
+
+        // a push-button that toggles has done nothing a switch does unless its read flipped
+        if (o.Toggle && !readMoved)
+            return new(SweepVerdict.Dead, string.Join("; ", new[]
+            {
+                o.Read?.TimedOut == true ? "the press did not flip the read (it never settled)" : "the press did not flip the read",
+                proofMoved ? "the proof moved" : null,
+                o.SideEffects > 0 ? FormattableString.Invariant($"{o.SideEffects} other variables moved") : null,
+            }.Where(n => n != null)));
 
         if (!readMoved && !proofMoved && o.SideEffects == 0)
             return new(SweepVerdict.Dead, o.Read?.TimedOut == true ? "the read never settled" : "nothing moved");

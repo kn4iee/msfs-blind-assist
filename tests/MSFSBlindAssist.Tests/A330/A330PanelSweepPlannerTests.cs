@@ -40,6 +40,49 @@ public class A330PanelSweepPlannerTests
         Assert.Equal(new double?[] { 0, 0, 2, 2, 1 }, plan.Steps.Select(s => s.ExpectedRead).ToArray());
     }
 
+    /// <summary>A push-button the aircraft toggles (measured 2026-11-27), as the map has it: On read 1, written 0.</summary>
+    private static Control Toggle(string key)
+    {
+        var c = Select(key, P(1, 0, "On"), P(0, 1, "Off"));
+        c.Mode = "toggle";
+        c.Press = 1;
+        c.Release = 0;
+        return c;
+    }
+
+    [Fact]
+    public void The_planner_presses_a_toggle_and_presses_it_back()
+    {
+        // pressed once (its read should flip to the other position), pressed again (back), then put back by its read;
+        // never a position's input written, never the same write twice
+        var plan = For(Plan(new[] { Toggle("T") }, new() { ["T"] = 1 }), "T");
+        Assert.Null(plan.SkipReason);
+        Assert.Equal(new[] { SweepStepKind.TogglePress, SweepStepKind.TogglePress, SweepStepKind.ReturnToStart },
+            plan.Steps.Select(s => s.Kind).ToArray());
+        Assert.Equal(new double?[] { null, null, null }, plan.Steps.Select(s => s.Input).ToArray());
+        Assert.Equal(new double?[] { 0, 1, 1 }, plan.Steps.Select(s => s.ExpectedRead).ToArray());
+        Assert.Contains("by its read", plan.Steps[^1].Text);
+
+        // from Off it goes On and back
+        var off = For(Plan(new[] { Toggle("T") }, new() { ["T"] = 0 }), "T");
+        Assert.Equal(new double?[] { 1, 0, 0 }, off.Steps.Select(s => s.ExpectedRead).ToArray());
+
+        // behind a guard: opened first, closed last, as any switch
+        var guard = Guard("COVER");
+        var sw = Toggle("SW");
+        sw.Guard = "COVER";
+        var guarded = For(Plan(new[] { guard, sw }, new() { ["COVER"] = 0, ["SW"] = 1 }), "SW");
+        Assert.Equal(new[] { SweepStepKind.OpenGuard, SweepStepKind.TogglePress, SweepStepKind.TogglePress, SweepStepKind.ReturnToStart, SweepStepKind.CloseGuard },
+            guarded.Steps.Select(s => s.Kind).ToArray());
+
+        // a press flips between two states: a toggle with three positions is not swept
+        var three = Toggle("T3");
+        three.Positions!.Add(P(2, 2, "Other"));
+        Assert.Contains("two positions", For(Plan(new[] { three }, new() { ["T3"] = 1 }), "T3").SkipReason);
+        // and its start must still be read and be one of its positions
+        Assert.Equal("start not read", For(Plan(new[] { Toggle("T") }), "T").SkipReason);
+    }
+
     [Fact]
     public void A_denied_control_is_skipped_with_its_reason()
     {
