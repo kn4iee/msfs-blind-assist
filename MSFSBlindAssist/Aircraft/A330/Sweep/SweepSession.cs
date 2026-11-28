@@ -315,10 +315,17 @@ internal sealed class SweepSession
 
     /// <summary>One key of a family: the key already selected is not pressed (a second press could undo it, as an ECAM
     /// page key's does); any other is pressed through the app's own press, and what it selected is remembered for the
-    /// unit's put-back.</summary>
+    /// unit's put-back. While the shared state reads nothing, no key is pressed: which one is selected is not known.</summary>
     private string PressFamilyKey(KeyFamily f, Control c, SweepStep s, Dictionary<string, double> seen)
     {
         double? now = _io.Read(f.State);
+        if (now == null)
+        {
+            _out.Row(new SweepRow { Key = c.Key, Label = c.Label, Position = "press", Verdict = "not read before the press",
+                Note = $"{f.State} read nothing: not pressed (the {f.Noun} selected is not known, and a second press of its key could undo it)" });
+            _out.Say($"  {c.Key} press: not read before the press");
+            return "not read before the press";
+        }
         if (s.ExpectedRead is double known && SweepTiming.Same(now, known))
         {
             seen[c.Key] = known;
@@ -523,7 +530,8 @@ internal sealed class SweepSession
     }
 
     /// <summary>A family put back: if its state is not at its start, the ONE key known to select the start is pressed
-    /// once and read back. Nothing more is pressed if it did not hold, and nothing at all if no key is known.</summary>
+    /// once and read back. Nothing more is pressed if it did not hold, and nothing at all if no key is known or the
+    /// state reads nothing.</summary>
     private bool RestoreFamily(KeyFamily f, JournalEntry e, IReadOnlyDictionary<string, double>? seen)
     {
         const string position = "(restore) start";
@@ -534,6 +542,13 @@ internal sealed class SweepSession
         }
         string Note(double? v) => $"{f.State} {f.NameOf(v)} ({SweepTsv.Num(v)}), start {f.NameOf(start)} ({SweepTsv.Num(start)})";
         double? now = _io.Read(f.State);
+        if (now == null)
+        {
+            // whether it is at its start is not known, and a second press of the key already selected could undo it
+            _out.Row(new SweepRow { Key = f.Key, Label = f.Label, Position = position, Note = Note(null),
+                Verdict = $"RESTORE FAILED: {f.State} could not be read: nothing pressed" });
+            return false;
+        }
         if (SweepTiming.Same(now, start))
         {
             _out.Row(new SweepRow { Key = f.Key, Label = f.Label, Position = position, ReadBack = now, Verdict = "at start", Note = Note(now) });

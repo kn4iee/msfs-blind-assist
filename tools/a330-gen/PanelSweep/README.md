@@ -173,6 +173,9 @@ swept one by one. Each family is ONE unit:
   page); its row says `already there`.
 - Then the family is put back by pressing ONE key: the key this run saw select the start, or else the key the map
   says selects it. If that press does not bring the start back, nothing more is pressed and the sweep stops.
+- No key is ever pressed while the shared state reads nothing, in the sweep or in its put-back: which page or radio
+  is selected is not known then. A key's row says `not read before the press`; a put-back that cannot read the state
+  fails (`RESTORE FAILED: ... could not be read: nothing pressed`) and the sweep stops there.
 - If the start is a page or radio none of the family's keys selects (or it could not be read), the family is
   skipped before any press, with the reason `its start (<value>) is not a page any of its keys selects`.
 
@@ -219,7 +222,8 @@ table exists.
   "mislabeled": a position's input or value, or the control's read, is wrong).
 
 Other rows: `already there` (the control read the target, or a family's key was the one selected: nothing
-sent), `not read before the write`, `at start` and `restored` (a put-back), `RESTORE FAILED: ...`,
+sent), `not read before the write`, `not read before the press` (a family's key while the state the family shares
+reads nothing: not pressed), `at start` and `restored` (a put-back), `RESTORE FAILED: ...`,
 `skipped: ...` (`skipped: its guard did not open (...)` among them), `not reached (...)`, `interrupted (...)`,
 `error: ...`.
 

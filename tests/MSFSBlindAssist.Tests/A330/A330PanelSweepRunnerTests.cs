@@ -500,9 +500,13 @@ public class A330PanelSweepRunnerTests
             if (Presses.TryGetValue(push.Groups[1].Value, out var p)) Vars[p.Var] = p.Value;
         }
 
+        /// <summary>Variables that read nothing (a read that did not answer).</summary>
+        public readonly HashSet<string> Unreadable = new(StringComparer.Ordinal);
+
         public double? Read(string read)
         {
             var (kind, name, _) = A330ControlMap.ParseReadKind(read);
+            if (Unreadable.Contains(name)) return null;
             var from = kind == A330ControlMap.ReadKind.InputEvent ? Events : Vars;
             return from.TryGetValue(name, out double v) ? v : null;
         }
@@ -981,6 +985,44 @@ public class A330PanelSweepRunnerTests
         Assert.Contains(rows, r => r.Key == "INI_RADIO" && r.Verdict.StartsWith("RESTORE FAILED", StringComparison.Ordinal));
         Assert.DoesNotContain(aircraft.Sent, s => s.StartsWith("EV_NEXT", StringComparison.Ordinal));
         Assert.Contains(outcome.ByHand, h => h.Contains("VHF 2", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_family_key_is_never_pressed_while_the_shared_state_reads_nothing()
+    {
+        // the start was read, then the shared state stops answering: a press could select anything, and the key already
+        // selected could be pressed a second time (an ECAM page key's second press can undo its page), so none is pressed
+        var aircraft = RadioAircraft(2);
+        var rows = new List<SweepRow>();
+        var session = new SweepSession(Radios(), new Dictionary<string, string>(), aircraft, new SweepSinks(rows.Add, _ => { }, _ => { }));
+        var prepared = session.Prepare();
+        aircraft.Unreadable.Add("INI_RADIO");
+
+        var outcome = session.Run(prepared);
+
+        Assert.Empty(aircraft.Pushed);
+        Assert.Equal(new[] { "K1", "K2", "K3" },
+            rows.Where(r => r.Position == "press" && r.Verdict == "not read before the press").Select(r => r.Key).ToArray());
+        // and it is not put back blind either: the sweep stops there, for the owner
+        Assert.NotNull(outcome.StopReason);
+    }
+
+    [Fact]
+    public void A_family_is_never_put_back_blind()
+    {
+        // its state reads nothing: whether it is at its start is not known, so its key is not pressed (a second press of
+        // the key already selected could undo it); the put-back fails and says why
+        var entry = Assert.Single(SweepJournal.Parse("start\tINI_RADIO\tfamily\t\t\tINI_RADIO\t2\n"));
+        var aircraft = RadioAircraft(3);
+        aircraft.Unreadable.Add("INI_RADIO");
+        var rows = new List<SweepRow>();
+        var session = new SweepSession(Radios(), new Dictionary<string, string>(), aircraft, new SweepSinks(rows.Add, _ => { }, _ => { }));
+
+        Assert.False(session.Restore(entry));
+        Assert.Empty(aircraft.Pushed);
+        var row = Assert.Single(rows);
+        Assert.StartsWith("RESTORE FAILED", row.Verdict, StringComparison.Ordinal);
+        Assert.Contains("could not be read", row.Verdict, StringComparison.Ordinal);
     }
 
     [Fact]
