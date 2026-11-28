@@ -361,12 +361,16 @@ public class ClearanceWiringTests
         Assert.Contains("int opening = Visible ? _timesShown : _timesShown + 1;", prepareBody);
         Assert.Contains("if (control == null || control.Focused) return;", Member(form, "public void FocusForOpening("));
 
-        // Trimmed from the list as last calculated, with GetClearanceProgress's lists passed straight in.
+        // Trimmed from the list as last calculated, with GetClearanceProgress's lists passed straight in, by the ONE
+        // computation every trim uses (StepsStillAhead: the opening, Calculate and the list following guidance).
         string trim = Member(form, "private bool TrimStepsToWhatIsAhead(");
-        Assert.Contains("ClearanceTrim.Remaining(_calculatedSteps, progress.ViaStepsDone, _calculatedWithDestination,", trim);
-        Assert.Contains("progress.ClearedInForce, progress.ClearedUsed, progress.PutBack, progress.HoldsPassed,", trim);
-        Assert.Contains("progress.TurnOntoFirstRemainingMade, out var origins)", trim);
-        Assert.Contains("ClearanceTrim.KeepingEdits(", trim);
+        string ahead = Member(form, "private (List<ClearanceStep> Steps, List<int> Origins, List<int> DroppedOrigins) StepsStillAhead(");
+        Assert.Contains("ClearanceTrim.Remaining(_calculatedSteps, progress.ViaStepsDone, _calculatedWithDestination,", ahead);
+        Assert.Contains("progress.ClearedInForce, progress.ClearedUsed, progress.PutBack, progress.HoldsPassed,", ahead);
+        Assert.Contains("progress.TurnOntoFirstRemainingMade, out var origins)", ahead);
+        Assert.Contains("ClearanceTrim.KeepingEdits(", ahead);
+        Assert.Contains("ClearanceTrim.CompletedCrossings(", ahead);
+        Assert.Single(Regex.Matches(form, @"ClearanceTrim\.Remaining\(_calculatedSteps,"));
         Assert.Contains("_guidanceManager.HasLiveRoute", trim);
         Assert.Contains("TrimStepsToWhatIsAhead()", prepareBody);
         // Final review, minor: both successful Calculates record the list they use just BEFORE guidance starts, so a leg
@@ -398,6 +402,43 @@ public class ClearanceWiringTests
         // Only the window opening says a trim emptied the list.
         Assert.Contains("if (TrimStepsToWhatIsAhead()) SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true);",
             Member(form, "public void PrepareForOpening("));
+    }
+
+    // 2026-11-28 (step list follows live): the owner stays in the planner while taxiing, or Alt+Tabs to a First Officer
+    // flow and back, so the list follows guidance when the window is activated and once a second while it is the active
+    // window (a named tick, never a lambda), never while a step is being changed or a step list is dropped down. The
+    // pilot's place maps by identity (ClearanceListFollow, its own tests), the list is updated in place, the name box is
+    // refilled without a name the pilot did not choose, and only a list left empty is said, by the one constant. The
+    // timer runs only while the window is shown and goes with the window. Every trim computes through ONE helper.
+    [Fact]
+    public void The_list_follows_guidance_on_activation_and_while_active()
+    {
+        string form = FormSource();
+
+        Assert.Contains("FollowGuidance(activation: true)", Member(form, "protected override void OnActivated("));
+        string tick = Member(form, "private void OnFollowTimerTick(");
+        Assert.Contains("Form.ActiveForm == this", tick);
+        Assert.Contains("FollowGuidance(activation: false)", tick);
+        Assert.Contains("Interval = 1000", form);
+
+        string follow = Member(form, "private void FollowGuidance(");
+        foreach (string pin in new[]
+                 {
+                     "ClearanceListFollow.FollowsNow(", "_changingStepIndex >= 0", "StepListDroppedDown",
+                     "ClearanceListFollow.SelectionAfter(", "ClearanceListFollow.RemovedIndices(", "preselect: false",
+                     "ClearanceStepEntry.StepsCleared",
+                 })
+            Assert.Contains(pin, follow);
+
+        Assert.Contains("_followTimer", Member(form, "protected override void Dispose("));
+        Assert.Contains("StepsStillAhead()", Member(form, "private bool TrimStepsToWhatIsAhead("));
+
+        // Started when the window is shown, stopped when it hides, before the early return.
+        string visible = Member(form, "protected override void OnVisibleChanged(");
+        int stop = visible.IndexOf("_followTimer?.Stop();", StringComparison.Ordinal);
+        int early = visible.IndexOf("return;", StringComparison.Ordinal);
+        int start = visible.IndexOf("_followTimer.Start();", StringComparison.Ordinal);
+        Assert.True(stop >= 0 && early > stop && start > early, "the follow timer stops on hiding and starts on showing");
     }
 
     // [A380C-6]: both guidance events arrive on the manager's thread under _stateLock; the window marshals with

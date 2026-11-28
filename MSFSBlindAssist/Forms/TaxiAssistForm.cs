@@ -220,6 +220,9 @@ public class TaxiAssistForm : Form
     // moved to (see SpeakStepAdded), and the one-shot timer that speaks it.
     private string? _pendingStepSpeech;
     private System.Windows.Forms.Timer? _stepSpeechTimer;
+    // Once a second while the window is shown (started and stopped in OnVisibleChanged), created once: the step list
+    // follows guidance while this is the active window (OnFollowTimerTick, FollowGuidance).
+    private System.Windows.Forms.Timer? _followTimer;
     // Published NAMED holding points (VIKAS, N2E…) for the loaded airport:
     // online-sourced designators resolved onto navdata graph nodes by
     // NamedHoldingPointResolver. Empty when augmentation is off, the airport has
@@ -1135,6 +1138,7 @@ public class TaxiAssistForm : Form
             _guidanceManager.StateChanged -= OnGuidanceStateChanged;
             _guidanceManager.ClearedCrossingsChanged -= OnClearedCrossingsChanged;
             _stepSpeechTimer?.Dispose();
+            _followTimer?.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -2917,12 +2921,27 @@ public class TaxiAssistForm : Form
     /// announced QUEUED, never immediate: it is a background state change, not the echo of
     /// anything the pilot just did, and it must not stomp whatever the screen reader is
     /// speaking about the window that just opened.
+    /// <para>
+    /// The follow timer (<see cref="OnFollowTimerTick"/>) runs only while the window is shown:
+    /// started here when it becomes visible, stopped when it hides. A hidden window has no list
+    /// anyone is reading, and its activation catches up when it is shown again.
+    /// </para>
     /// </summary>
     protected override void OnVisibleChanged(EventArgs e)
     {
         base.OnVisibleChanged(e);
-        if (!Visible || IsDisposed) return;
+        if (!Visible || IsDisposed)
+        {
+            _followTimer?.Stop();
+            return;
+        }
         _timesShown++;
+        if (_followTimer == null)
+        {
+            _followTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _followTimer.Tick += OnFollowTimerTick;
+        }
+        _followTimer.Start();
 
         try
         {
@@ -3518,8 +3537,11 @@ public class TaxiAssistForm : Form
     /// (<see cref="StepsBeforeEntry"/>), the accessible name says which step, and nothing is preselected. Refreshes the
     /// "At" box after, keeping its pick with <paramref name="keepSelection"/>: a late holding-point fetch as focus
     /// reaches the name box (Shift+Tab back from "At") never drops "hold short of runway 27L at B".
+    /// <paramref name="preselect"/> false never makes the nearest-taxiway pick: the list following guidance
+    /// (<see cref="FollowGuidance"/>) refills the box in the background, and a background refill never picks a name the
+    /// pilot did not choose.
     /// </summary>
-    private void RefreshStepNameList(bool keepSelection = false)
+    private void RefreshStepNameList(bool keepSelection = false, bool preselect = true)
     {
         var kind = SelectedStepKind();
         lblStepName.Text = ClearanceStepEntry.NameBoxLabel(kind);
@@ -3541,7 +3563,7 @@ public class TaxiAssistForm : Form
             if (previous != null)
                 select = IndexOfStepName(i => i.Kind == previous.Kind
                     && string.Equals(i.Label, previous.Label, StringComparison.OrdinalIgnoreCase));
-            if (select < 0 && previous == null && _changingStepIndex < 0 && StepsBeforeEntry().Count == 0 && _graph != null
+            if (select < 0 && previous == null && preselect && _changingStepIndex < 0 && StepsBeforeEntry().Count == 0 && _graph != null
                 && kind is ClearanceStepKind.Via or ClearanceStepKind.LeftOnto or ClearanceStepKind.RightOnto
                 && _graph.GetClosestTaxiwayInDirection(_aircraftLat, _aircraftLon, AircraftHeadingTrue()) is string closest)
                 select = IndexOfStepName(i => string.Equals(i.Name, closest, StringComparison.Ordinal));
@@ -4092,7 +4114,9 @@ public class TaxiAssistForm : Form
     /// route live first trimming the list to what is still ahead (<see cref="TrimStepsToWhatIsAhead"/>), and makes it the
     /// active control, so the window's own activation, which restores the active control, lands there and the screen
     /// reader names one control, once. Set after <c>Show()</c>, activation first restored the control focused last, the
-    /// reader named it, and then the new one.
+    /// reader named it, and then the new one. The activation then follows guidance (<see cref="OnActivated"/>), which
+    /// finds nothing more to drop after this trim; it is what keeps the list up to date when the pilot comes back by
+    /// Alt+Tab or a click, and while the window stays open.
     /// </summary>
     public void PrepareForOpening()
     {
@@ -4128,37 +4152,173 @@ public class TaxiAssistForm : Form
         control.Focus();
     }
 
+    /// <summary>Coming back to the planner (Alt+Tab, a click, Shift+Y's <c>Show()</c>): the list follows guidance at
+    /// once (<see cref="FollowGuidance"/>), so the pilot never reads a step already finished.</summary>
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        FollowGuidance(activation: true);
+    }
+
+    /// <summary>The follow timer, once a second while the window is shown (<see cref="OnVisibleChanged"/>): the list
+    /// follows guidance only while this window is the active one, never while the pilot is in another window.</summary>
+    private void OnFollowTimerTick(object? sender, EventArgs e)
+    {
+        if (Form.ActiveForm == this) FollowGuidance(activation: false);
+    }
+
+    /// <summary>True while the step kind, name or At list is dropped down: the pilot is picking from it.</summary>
+    private bool StepListDroppedDown => cmbStepKind.DroppedDown || cmbStepName.DroppedDown || cmbStepAt.DroppedDown;
+
     /// <summary>
-    /// While a route is live, the list shows only what is still ahead (spec 8.2): <see cref="ClearanceTrim.Remaining"/>
-    /// from the list as last calculated (<see cref="_calculatedSteps"/>, the numbering guidance's progress uses), never
-    /// from one already trimmed, with <c>GetClearanceProgress</c>'s lists passed straight in; then the pilot's edits since
-    /// are kept (<see cref="ClearanceTrim.KeepingEdits"/>) and a made crossing a step now follows goes. A turn already
-    /// made reads as Via (TurnOntoFirstRemainingMade, the made turns remembered across a recalculation included), so a
-    /// later Calculate never judges it again from the aircraft's heading. With "A, C, A" the Via steps done are counted on
-    /// the route by its cursor, so on the last A only that A is left; on a route recalculated from a later row the
-    /// position cannot tell the two A apart, nothing is counted done, and nothing still ahead is dropped; a crossing still
-    /// ahead is kept (spec 8.3). Run when the window opens and
-    /// at the top of every Calculate, so the window left open, or come back to by Alt+Tab, never calculates from steps
-    /// already finished ("Cross runway 04L" clearing 04L again for the new route, "Left onto C" judged again). Speaks
-    /// nothing; returns true when it left a list that had steps empty, for the window opening to say so (Calculate's
-    /// one utterance says what it does with an empty list). Nothing to trim when the list holds no leg calculated from it.
+    /// The list follows guidance while the window is open: finished steps drop off when the pilot comes back to the
+    /// window (<paramref name="activation"/>) and, checked once a second, while it is the active one. The owner stays in
+    /// the planner while taxiing, to get to things quickly, or Alt+Tabs out to a First Officer flow and back; trimmed
+    /// only on Shift+Y and at Calculate, the list the pilot read there still held steps already finished.
+    /// <para>Never while the pilot is editing (<see cref="ClearanceListFollow.FollowsNow"/>): with a step being changed
+    /// (Enter on it in the Clearance list) the step boxes hold that step and Add Step replaces it by its place, and an
+    /// open step list is being picked from; the list waits, and the next check after catches up. The window must be the
+    /// active one, a route live and the list the leg calculated (<see cref="StepsStillAhead"/>, the one computation every
+    /// trim uses).</para>
+    /// <para>With the focus in the Clearance list the update is at once (the owner's "Update right away"): the pilot is
+    /// reading the list now, and a list that waited for them to leave it would go on reading finished steps. The list is
+    /// updated in place where it only lost steps (<see cref="ClearanceListFollow.RemovedIndices"/>), so the steps that
+    /// stay keep their items; the pilot's place maps by identity (<see cref="ClearanceListFollow.SelectionAfter"/>): the
+    /// selected step stays selected, a finished one gives its place to the step now there only with the focus in the
+    /// list, and the selection is set only when it moves, so the screen reader reads a step once, and only one it has
+    /// not just read; BA says nothing of it ([CORE-7]). The name box is refilled only when what it offers changes,
+    /// keeping its pick and never picking a name the pilot did not choose.</para>
+    /// <para>Speaks only when it leaves a list that had steps empty ("Steps cleared.": an empty list gives the screen
+    /// reader nothing to say): on coming back, after the reader names the focused control, as on Shift+Y; while open,
+    /// queued behind guidance.</para>
+    /// </summary>
+    private void FollowGuidance(bool activation)
+    {
+        if (!ClearanceListFollow.FollowsNow(activation || Form.ActiveForm == this, _guidanceManager.HasLiveRoute,
+                _calculatedSteps != null, _changingStepIndex >= 0, StepListDroppedDown))
+            return;
+        var (steps, origins, dropped) = StepsStillAhead();
+        if (steps.SequenceEqual(_steps) && origins.SequenceEqual(_stepOrigins)) return;
+
+        var oldOrigins = _stepOrigins.ToList();
+        int oldSelected = lstClearance.SelectedIndex;
+        bool listFocused = lstClearance.Focused;
+        bool hadSteps = _steps.Count > 0;
+
+        _steps.Clear();
+        _steps.AddRange(steps);
+        _stepOrigins.Clear();
+        _stepOrigins.AddRange(origins);
+        _removedOrigins.UnionWith(dropped);
+
+        var removed = ClearanceListFollow.RemovedIndices(oldOrigins, origins);
+        lstClearance.BeginUpdate();
+        try
+        {
+            if (removed != null)
+            {
+                for (int r = removed.Count - 1; r >= 0; r--) lstClearance.Items.RemoveAt(removed[r]);
+                // A step the trim changed (a turn made reads as Via, a crossing put back or pinned) shows as it is now.
+                for (int i = 0; i < _steps.Count; i++)
+                {
+                    string sentence = _steps[i].Sentence();
+                    if (!string.Equals(lstClearance.Items[i]?.ToString(), sentence, StringComparison.Ordinal))
+                        lstClearance.Items[i] = sentence;
+                }
+            }
+            else
+            {
+                lstClearance.Items.Clear();
+                foreach (var step in _steps) lstClearance.Items.Add(step.Sentence());
+            }
+        }
+        finally { lstClearance.EndUpdate(); }
+
+        int select = ClearanceListFollow.SelectionAfter(oldOrigins, oldSelected, origins, listFocused);
+        if (lstClearance.SelectedIndex != select) lstClearance.SelectedIndex = select;
+
+        if (!NameBoxLists(StepNameItems(SelectedStepKind())))
+            RefreshStepNameList(keepSelection: true, preselect: false);
+
+        if (hadSteps && _steps.Count == 0)
+        {
+            if (activation) SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true);
+            else _announcer.Announce(ClearanceStepEntry.StepsCleared);
+        }
+    }
+
+    /// <summary>Whether the name box already lists <paramref name="items"/>, item for item (kind and label, in order).</summary>
+    private bool NameBoxLists(IReadOnlyList<ClearanceNameLists.Item> items)
+    {
+        if (cmbStepName.Items.Count != items.Count) return false;
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (cmbStepName.Items[i] is not ClearanceNameLists.Item shown || shown.Kind != items[i].Kind
+                || !string.Equals(shown.Label, items[i].Label, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// While a route is live, the list shows only what is still ahead (spec 8.2), as <see cref="StepsStillAhead"/>
+    /// computes it, the list replaced as a whole (<see cref="ShowSteps"/>: a step being changed is kept as it was first,
+    /// and nothing stays selected) and the made crossings it took out kept out of every later trim. Run when the window
+    /// opens through Shift+Y (<see cref="PrepareForOpening"/>) and at the top of every Calculate; between them the window
+    /// left open, or come back to by Alt+Tab, follows guidance by itself (<see cref="FollowGuidance"/>), so the pilot
+    /// never reads, and Calculate never calculates from, steps already finished ("Cross runway 04L" clearing 04L again
+    /// for the new route, "Left onto C" judged again). Speaks nothing; returns true when it left a list that had steps
+    /// empty, for the window opening to say so (Calculate's one utterance says what it does with an empty list). Nothing
+    /// to trim when the list holds no leg calculated from it.
     /// </summary>
     private bool TrimStepsToWhatIsAhead()
     {
         if (_calculatedSteps == null || !_guidanceManager.HasLiveRoute) return false;
+        var (steps, stepOrigins, dropped) = StepsStillAhead();
+
+        bool hadSteps = _steps.Count > 0;
+        bool changed = !steps.SequenceEqual(_steps) || !stepOrigins.SequenceEqual(_stepOrigins);
+        if (!changed) return false;
+        ShowSteps(steps, stepOrigins);
+        _removedOrigins.UnionWith(dropped);
+        RefreshStepNameList();
+        return hadSteps && _steps.Count == 0;
+    }
+
+    /// <summary>
+    /// The list with only what is still ahead, the ONE computation every trim uses (the window opening, Calculate, the
+    /// list following guidance). <see cref="ClearanceTrim.Remaining"/> from the list as last calculated
+    /// (<see cref="_calculatedSteps"/>, the numbering guidance's progress uses), never from one already trimmed, with
+    /// <c>GetClearanceProgress</c>'s lists passed straight in; then the pilot's edits since are kept
+    /// (<see cref="ClearanceTrim.KeepingEdits"/>) and each made crossing a step now follows is taken out
+    /// (<see cref="ClearanceTrim.CompletedCrossings"/>), its origin, when it has one, in <c>DroppedOrigins</c> for the
+    /// caller to keep out of every later trim, as <see cref="DropCompletedCrossings"/> does. A turn already made reads as
+    /// Via (TurnOntoFirstRemainingMade, the made turns remembered across a recalculation included), so a later Calculate
+    /// never judges it again from the aircraft's heading. With "A, C, A" the Via steps done are counted on the route by
+    /// its cursor, so on the last A only that A is left; on a route recalculated from a later row the position cannot
+    /// tell the two A apart, nothing is counted done, and nothing still ahead is dropped; a crossing still ahead is kept
+    /// (spec 8.3). Changes nothing. The callers run it only with a list calculated and a route live; with no list
+    /// calculated it is the list as it stands.
+    /// </summary>
+    private (List<ClearanceStep> Steps, List<int> Origins, List<int> DroppedOrigins) StepsStillAhead()
+    {
+        if (_calculatedSteps == null) return (_steps.ToList(), _stepOrigins.ToList(), new List<int>());
         var progress = _guidanceManager.GetClearanceProgress();
         var trimmed = ClearanceTrim.Remaining(_calculatedSteps, progress.ViaStepsDone, _calculatedWithDestination,
             progress.ClearedInForce, progress.ClearedUsed, progress.PutBack, progress.HoldsPassed,
             progress.TurnOntoFirstRemainingMade, out var origins);
         var (steps, stepOrigins) = ClearanceTrim.KeepingEdits(trimmed, origins, _steps, _stepOrigins, _removedOrigins);
 
-        bool hadSteps = _steps.Count > 0;
-        bool changed = !steps.SequenceEqual(_steps) || !stepOrigins.SequenceEqual(_stepOrigins);
-        if (!changed) return false;
-        ShowSteps(steps, stepOrigins);
-        DropCompletedCrossings();
-        RefreshStepNameList();
-        return hadSteps && _steps.Count == 0;
+        var dropped = new List<int>();
+        var completed = ClearanceTrim.CompletedCrossings(steps);
+        for (int c = completed.Count - 1; c >= 0; c--)
+        {
+            int i = completed[c];
+            if (stepOrigins[i] >= 0) dropped.Add(stepOrigins[i]);
+            steps.RemoveAt(i);
+            stepOrigins.RemoveAt(i);
+        }
+        return (steps, stepOrigins, dropped);
     }
 
     /// <summary>Replaces the list and the Clearance list's items with <paramref name="steps"/> and their origins (a trim),
