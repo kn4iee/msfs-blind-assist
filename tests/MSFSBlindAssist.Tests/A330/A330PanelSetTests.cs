@@ -113,12 +113,70 @@ public class A330PanelSetTests
         return def.HandleUIVariableSet(key, value, def.GetVariables()[key], sim, said);
     }
 
-    /// <summary>Opens the gate and yields until the read-backs it released have run, whichever context they
-    /// captured (xunit's own queues them behind the test), then a moment more so a wrong extra one would show.</summary>
-    private static async Task Release(FakeIo io)
+    /// <summary>
+    /// The UI thread's queue, in a test. While it is current (from its creation to its disposal), a pick's awaits capture
+    /// it, as they capture the app's UI context (the definition awaits there, SIM-20); an opened gate hands their
+    /// continuations to it, and <see cref="Run"/> runs them on the test's own thread, and those they queue, until none
+    /// is left. So every read-back the gate released is over when <see cref="Release"/> returns, and no test waits on a
+    /// clock.
+    /// </summary>
+    internal sealed class UiQueue : SynchronizationContext, IDisposable
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> _posted = new();
+        private readonly SynchronizationContext? _previous;
+
+        public UiQueue()
+        {
+            _previous = Current;
+            SetSynchronizationContext(this);
+        }
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            lock (_posted) _posted.Enqueue((d, state));
+        }
+
+        public override void Send(SendOrPostCallback d, object? state) => d(state);
+
+        public override SynchronizationContext CreateCopy() => this;
+
+        public void Run()
+        {
+            while (true)
+            {
+                (SendOrPostCallback Callback, object? State) next;
+                lock (_posted)
+                {
+                    if (_posted.Count == 0) return;
+                    next = _posted.Dequeue();
+                }
+                next.Callback(next.State);
+            }
+        }
+
+        public void Dispose() => SetSynchronizationContext(_previous);
+    }
+
+    /// <summary>Opens the gate and runs every read-back it released to its end, on this thread.</summary>
+    internal static void Release(FakeIo io, UiQueue ui)
     {
         io.Gate!.SetResult();
-        await Task.Delay(100);
+        ui.Run();
+    }
+
+    [Fact]
+    public void The_panel_tests_never_wait_on_a_clock()
+    {
+        // a real-time wait flakes under load (one did); a gated read-back is run by the test's own UI queue instead
+        var wait = new System.Text.RegularExpressions.Regex(@"\b(Task\.Delay|Thread\.Sleep)\s*\(");
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "MSFSBlindAssist.sln"))) dir = dir.Parent;
+        Assert.NotNull(dir);
+        var files = Directory.GetFiles(Path.Combine(dir!.FullName, "tests", "MSFSBlindAssist.Tests", "A330"), "A330Panel*Tests.cs");
+        Assert.NotEmpty(files);
+        var waits = files.SelectMany(f => File.ReadAllLines(f).Select((line, i) => (f, line, i)))
+            .Where(x => wait.IsMatch(x.line)).Select(x => $"{Path.GetFileName(x.f)}:{x.i + 1}").ToList();
+        Assert.True(waits.Count == 0, string.Join(", ", waits));
     }
 
     [Fact]
@@ -162,8 +220,9 @@ public class A330PanelSetTests
     }
 
     [Fact]
-    public async Task A_pick_the_aircraft_ignored_resyncs_its_row_and_says_where_it_is()
+    public void A_pick_the_aircraft_ignored_resyncs_its_row_and_says_where_it_is()
     {
+        using var ui = new UiQueue();
         // panel: read first (Off), write the position's INPUT (On = 0, [INI-1]), read back only after the settle time
         var io = new FakeIo { Gate = new TaskCompletionSource() };
         io.Cache[SelectorKey] = 0;
@@ -173,7 +232,7 @@ public class A330PanelSetTests
         Assert.Equal(new[] { "set AIRLINER_TEST_SELECTOR 0" }, io.Sent);
         Assert.Equal(new[] { IniA330Definition.ReadBackDelayMs }, io.Delays);
         Assert.Empty(io.Requests);
-        await Release(io);
+        Release(io, ui);
         Assert.Equal(new[] { SelectorKey }, io.Requests);
         // the panel's combo follows the resync and the screen reader reads it: the definition adds no second voice
         Assert.Empty(said.Lines);
@@ -227,8 +286,9 @@ public class A330PanelSetTests
     }
 
     [Fact]
-    public async Task A_newer_pick_wins_its_rows_read_back()
+    public void A_newer_pick_wins_its_rows_read_back()
     {
+        using var ui = new UiQueue();
         // arrowing through a selector commits one pick per step: the first pick's settle ends while the second is
         // still settling, and its resync would set the combo back to the first position under the pilot
         var io = new FakeIo { Gate = new TaskCompletionSource() };
@@ -237,7 +297,7 @@ public class A330PanelSetTests
         Pick(def, SelectorKey, 1, said);
         Pick(def, SelectorKey, 0, said);
         Assert.Equal(2, io.Sent.Count);
-        await Release(io);
+        Release(io, ui);
         Assert.Equal(new[] { SelectorKey }, io.Requests);   // one resync: the newest pick's
         Assert.Empty(said.Lines);
 
@@ -247,13 +307,14 @@ public class A330PanelSetTests
         io.Cache[ToggleKey] = 0;
         Pick(def, SelectorKey, 1, said);
         Pick(def, ToggleKey, 1, said);
-        await Release(io);
+        Release(io, ui);
         Assert.Equal(new[] { SelectorKey, ToggleKey }, io.Requests.OrderBy(k => k, StringComparer.Ordinal).ToArray());
     }
 
     [Fact]
-    public async Task A_newer_window_press_wins_its_rows_read_back()
+    public void A_newer_window_press_wins_its_rows_read_back()
     {
+        using var ui = new UiQueue();
         // the aircraft reads Off (the second press's position): the first press, which wanted On, must not say so
         var io = new FakeIo { Gate = new TaskCompletionSource(), Fresh = 0 };
         var def = new Def(io);
@@ -261,7 +322,7 @@ public class A330PanelSetTests
         var sim = new SimConnectManager(IntPtr.Zero);
         Assert.True(def.PressFromWindow(SelectorKey, 1, sim, said));
         Assert.True(def.PressFromWindow(SelectorKey, 0, sim, said));
-        await Release(io);
+        Release(io, ui);
         Assert.Empty(said.Lines);
         Assert.Equal(new[] { SelectorKey }, io.Requests);
     }

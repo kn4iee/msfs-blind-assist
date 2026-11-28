@@ -96,8 +96,9 @@ public class A330PanelWordsTests
     // ---------------- master warning ----------------
 
     [Fact]
-    public async Task Master_warning_reads_back_after_its_press()
+    public void Master_warning_reads_back_after_its_press()
     {
+        using var ui = new A330PanelSetTests.UiQueue();
         // INI_MASTER_WARNING_ACTIVE / INI_MASTER_CAUTION_ACTIVE are unmeasured names: the keys read them back by
         // name, once, through the key mechanism
         foreach (var (key, row) in new[] { ("A330_MASTER_WARN", "A330_MASTER_WARN_LT"), ("A330_MASTER_CAUT", "A330_MASTER_CAUT_LT") })
@@ -107,8 +108,7 @@ public class A330PanelWordsTests
             var said = new A330PanelSetTests.Spoken();
             Assert.True(def.HandleUIVariableSet(key, 1, def.GetVariables()[key], new SimConnectManager(IntPtr.Zero), said));
             Assert.Empty(said.Lines);
-            io.Gate.SetResult();
-            await Task.Delay(100);
+            A330PanelSetTests.Release(io, ui);
             Assert.Equal(new[] { "On" }, said.Lines);
             Assert.Equal(new[] { row }, io.FreshKeys);
         }

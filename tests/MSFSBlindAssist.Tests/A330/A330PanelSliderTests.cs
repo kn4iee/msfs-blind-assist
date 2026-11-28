@@ -89,8 +89,9 @@ public class A330PanelSliderTests
     }
 
     [Fact]
-    public async Task A_step_that_did_not_land_is_said_in_the_unit()
+    public void A_step_that_did_not_land_is_said_in_the_unit()
     {
+        using var ui = new A330PanelSetTests.UiQueue();
         var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 15 };
         var def = new A330PanelSetTests.Def(io, Map());
         var said = new A330PanelSetTests.Spoken();
@@ -98,22 +99,22 @@ public class A330PanelSliderTests
 
         // the aircraft ignored the pick (a window's press has no combo to follow the row, so the definition says it)
         Assert.True(def.PressFromWindow(TiltKey, 18, new SimConnectManager(IntPtr.Zero), said));
-        io.Gate.SetResult();
-        await Task.Delay(100);
+        A330PanelSetTests.Release(io, ui);
         Assert.Equal(new[] { "Test tilt: 0 degrees" }, said.Lines);
     }
 
     [Fact]
-    public async Task A_step_that_landed_says_nothing()
+    public void A_step_that_landed_says_nothing()
     {
+        using var ui = new A330PanelSetTests.UiQueue();
         var io = new A330PanelSetTests.FakeIo { Gate = new TaskCompletionSource(), Fresh = 18 };
         var def = new A330PanelSetTests.Def(io, Map());
         var said = new A330PanelSetTests.Spoken();
         io.Cache[TiltKey] = 15;
 
         Assert.True(def.PressFromWindow(TiltKey, 18, new SimConnectManager(IntPtr.Zero), said));
-        io.Gate.SetResult();
-        await Task.Delay(100);
+        A330PanelSetTests.Release(io, ui);
+        Assert.Equal(new[] { TiltKey }, io.Requests);   // the read-back ran to its end, and said nothing
         Assert.Empty(said.Lines);
     }
 
