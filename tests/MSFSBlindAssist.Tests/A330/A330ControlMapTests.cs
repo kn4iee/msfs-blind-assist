@@ -75,6 +75,71 @@ public class A330ControlMapTests
     [InlineData(-0.4, "0.4 down")]
     [InlineData(0.01, "0.0")]
     public void Trim_reads_up_and_down(double deg, string text) => Assert.Equal(text, IniA330Definition.FormatTrim(deg));
+
+    // ---------------- the generator's guards, on the map the app embeds (CI runs these; it runs no Python) ----------------
+
+    private static string RepoRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            if (File.Exists(Path.Combine(dir.FullName, "MSFSBlindAssist.sln"))) return dir.FullName;
+        throw new InvalidOperationException($"MSFSBlindAssist.sln was not found above {AppContext.BaseDirectory}");
+    }
+
+    [Fact]
+    public void Every_key_the_map_ever_had_is_still_a_key()
+    {
+        // A control's key never changes (Ctrl+M settings, the First Officer and the display windows hold keys): every
+        // line of tools/a330-gen/keys.txt is a key of the embedded map, or retired in the curation with its reason
+        string gen = Path.Combine(RepoRoot(), "tools", "a330-gen");
+        var known = File.ReadAllLines(Path.Combine(gen, "keys.txt")).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        using var curation = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(gen, "curation.json")));
+        var retired = curation.RootElement.TryGetProperty("retired_keys", out var r)
+            ? r.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.Ordinal) : new HashSet<string>(StringComparer.Ordinal);
+        var now = Map.Controls.Select(c => c.Key).ToHashSet(StringComparer.Ordinal);
+
+        Assert.True(known.Count >= 281, $"keys.txt holds only {known.Count} keys");
+        var gone = known.Where(k => !now.Contains(k) && !retired.Contains(k)).ToList();
+        Assert.True(gone.Count == 0, "keys gone from the map: " + string.Join(", ", gone));
+    }
+
+    /// <summary>The 73 push-buttons the 2026-11-27 sweep measured as toggles (tools/a330-gen/README.md).</summary>
+    private static readonly string[] MeasuredToggles =
+    {
+        "A330_PRIM1", "A330_PRIM2", "A330_PRIM3", "A330_SEC1", "A330_SEC2",
+        "A330_FUEL1L1", "A330_FUEL1L2", "A330_FUEL1LSTBY", "A330_FUEL2R1", "A330_FUEL2R2", "A330_FUEL2RSTBY",
+        "A330_FUEL_XFEED", "A330_FUEL_TRIM_MODE", "A330_FUEL_TK_XFR", "A330_INR_TK_L", "A330_INR_TK_R",
+        "A330_GEN1", "A330_GEN2", "A330_APU_GEN", "A330_BUS_TIE", "A330_AC_ESS", "A330_GALLEY", "A330_COMMERCIAL",
+        "A330_HYD_GREEN", "A330_HYD_GREEN_ENG2", "A330_HYD_BLUE", "A330_HYD_YELLOW",
+        "A330_HYD_GREEN_ELEC_OFF", "A330_HYD_GREEN_ELEC_ON", "A330_HYD_BLUE_ELEC_OFF", "A330_HYD_BLUE_ELEC_ON",
+        "A330_HYD_YELLOW_ELEC_OFF", "A330_HYD_YELLOW_ELEC_ON",
+        "A330_BULK_ISO", "A330_ENG1_BLEED", "A330_ENG2_BLEED", "A330_APU_BLEED", "A330_PACK1", "A330_PACK2",
+        "A330_HOT_AIR1", "A330_HOT_AIR2", "A330_CARGO_HOT_AIR", "A330_RAM_AIR", "A330_CAB_FANS", "A330_EXTRACT",
+        "A330_WING_ANTI_ICE", "A330_ENG1_ANTI_ICE", "A330_ENG2_ANTI_ICE", "A330_FADEC1", "A330_FADEC2", "A330_CREW_OXY",
+        "A330_CPT_FD", "A330_CPT_LS", "A330_CPT_ND_CSTR", "A330_CPT_ND_WPT", "A330_CPT_ND_VOR", "A330_CPT_ND_NDB",
+        "A330_CPT_ND_ARPT", "A330_CPT_TERR_ON_ND",
+        "A330_FO_FD", "A330_FO_LS", "A330_FO_ND_CSTR", "A330_FO_ND_WPT", "A330_FO_ND_VOR", "A330_FO_ND_NDB",
+        "A330_FO_ND_ARPT", "A330_FO_TERR_ON_ND",
+        "A330_BRAKE_FAN", "A330_GPWS_SYS", "A330_GPWS_TERR", "A330_GPWS_GS", "A330_GPWS_FLAP", "A330_LAND_RECOVERY",
+    };
+
+    [Fact]
+    public void The_measured_toggles_are_pressed_in_the_embedded_map()
+    {
+        Assert.Equal(73, MeasuredToggles.Distinct(StringComparer.Ordinal).Count());
+        foreach (string key in MeasuredToggles)
+        {
+            var c = Map.Controls.Single(x => x.Key == key);
+            Assert.True(A330Write.PressedByValue(c), key);
+            Assert.Equal(1, c.Press);
+            // one press is one set of 1, toward whichever position, and only from a known read that differs
+            var other = c.Positions!.Single(p => p.Value != c.Positions![0].Value);
+            Assert.Equal(new A330InputEventPressCall(c.Event!, 1), Assert.Single(A330Write.ToPosition(c, c.Positions![0].Value, other.Value).Calls));
+            Assert.Equal(A330WriteOutcome.Refused, A330Write.ToPosition(c, null, other.Value).Outcome);
+        }
+        // nothing else is pressed that way: the engine masters stay toggles that write their Set's value
+        Assert.Equal(MeasuredToggles.OrderBy(k => k, StringComparer.Ordinal),
+            Map.Controls.Where(A330Write.PressedByValue).Select(c => c.Key).OrderBy(k => k, StringComparer.Ordinal));
+    }
 }
 
 /// <summary>The A330's panel words read the same on a comma-decimal PC.</summary>
