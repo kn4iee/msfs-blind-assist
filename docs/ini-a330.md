@@ -29,6 +29,28 @@ different aircraft built on the FlyByWire A32NX.
   input event and diffed all 1,936 L:vars. Regenerate it; never hand-edit. A control's `read` is
   an L:var, a stock SimVar (`A:NAME, unit`), or — where no L:var moves — its own input event
   (`B:NAME`).
+* **What a pick and a press on a panel control do** (plan 04, `IniA330Definition.Panels.cs`, the write
+  decision in `A330Write`, the units in `A330Units`):
+  * A selector pick reads the control first and writes only when the read differs. It is read back
+    after 1.5 s (`ReadBackDelayMs`, a named constant until the sweep measures settle times; no
+    settle in the 2026-11-27 sweep took longer than 1.5 s) and its row is resynced to what the aircraft shows.
+  * A refused write is said once and never reported as done. A display window's press of a refused
+    control returns false (`PressFromWindow`). The panel still reports the pick as handled, so the app
+    never falls back to writing the read L:var itself ([INI-1]).
+  * A toggle with no by-value write is never pressed while its read is unknown.
+  * A key (a momentary button) with a state variable reads it back once after its press and says it, in
+    the A32NX's form (the bare state, such as an ECAM page's name); a key with none says "<name> pressed".
+  * The key state rows (ECAM page, selected radio, master warning and caution, APU START) are announced
+    by the definition itself, with its own baseline and a quiet start of 5 s (`StartGraceMs`, the same
+    as MainForm's, which these rows never reach). The master warning and caution variable names are
+    unmeasured guesses; a wrong one reads nothing and the row stays silent.
+  * Weather radar tilt is a combo in degrees, -15 to +15, from the input's 0 to 30 (`A330Units`, the
+    A32NX's and the Fenix's wording for a signed step). The temperature and landing elevation sliders
+    still say 0 to 100 until their ranges are measured.
+  * Lamps and status rows say On and Off; the parking brake says On and Off; the autobrake says LO, MED
+    and MAX.
+  * The speedbrake lever is said in the A32NX's 10 % bands, with a Ctrl+M row. It stays quiet while it
+    travels to the pilot's own pick (`SpeedbrakePickQuietMs`, 3 s, unmeasured).
 * **Input-event READS** are a generic SimConnectManager feature (`SimVarType.InputEvent`,
   `SimConnectManager.InputEventReads.cs`): `SubscribeInputEvent` + `GetInputEvent`, request ids
   701–890 rotating. They are skipped by data-definition registration and the continuous batch
@@ -134,16 +156,67 @@ different aircraft built on the FlyByWire A32NX.
 
 ## Panel layout
 
-The section and panel order is the generator's `SECTIONS` list (`tools/a330-gen`), which follows the
-app's other Airbus aircraft (the FlyByWire A32NX and the Fenix): **Overhead** (Electrical, ADIRS,
+Where the panels come from: `tools/a330-gen/curation.json` is read by the generator
+(`tools/a330-gen/generate_a330_map.py`), which writes `MSFSBlindAssist/Resources/a330_control_map.json`.
+Never hand-edit the map ([INI-2]). The curation file holds every control's kind, panel, label overrides,
+guard, state read and proof, the panel order, and what is left out and why. Besides it, the generator
+has three data inputs, and two of them are not in the repository yet:
+
+* `tools/a330-gen/data/input_events.tsv`: the simulator's own catalogue of the aircraft's input events
+  (649, captured 2026-11-27). Present.
+* `tools/a330-gen/data/control_names.json`: the aircraft's own names for its controls. Not present: it
+  needs the private reference's export. Until it lands, today's labels are the generator's own, kept
+  as overrides in the curation file.
+* `tools/a330-gen/data/procedure_order.json`: the order source, to come with plan 04 Task 6. Not present.
+
+**Sections and panels.** The order is the curation's `panel_order`, which follows the app's other
+Airbus aircraft (the FlyByWire A32NX and the Fenix): **Overhead** (Electrical, ADIRS,
 APU, Oxygen, Fire, Hydraulics, Fuel, Air Conditioning, Bleed Air, Pressurization, Ventilation,
 Anti-Ice, Wipers, Signs, Interior Lights, Exterior Lights, Calls, GPWS, Flight Control Computers,
 Cargo Smoke, Recorders, Engine Start), **Glareshield** (FCU, Flight Modes, Captain EFIS, First
 Officer EFIS, Warnings), **Main Instrument Panel** (Landing Gear, Brakes, Standby Instrument,
 Instrument Switching, Clocks, Display Brightness) and **Pedestal** (Flaps and Speedbrake, Parking
 Brake, Engine Masters, ECAM, Weather Radar, Transponder and TCAS, Captain Radio Panel, Captain
-Audio). The FCU, Flight Modes, Landing Gear, Flaps and Speedbrake and Parking Brake panels are filled
-by the definition itself (`OWN_PANELS` in the generator); everything else comes from the map.
+Audio). The definition fills five panels itself (the curation's `own_panels`): FCU, Flight Modes,
+Landing Gear, Flaps and Speedbrake and Parking Brake. Everything else comes from the map.
+
+**What is left out, and why.** The curation's `left_out` holds 32 input events, each with its reason. By
+group: the FCU window's own buttons, knobs and dials (21: it drives them through press flags, dial
+variables and its own presses); the altimeter knobs of both sides (4, pressed by the definition's baro
+knob); the autobrake levels (3, pressed by the definition's autobrake row); the parking brake (1, set by
+the definition's own control); and the flap, speedbrake and gear levers (3, driven through stock events
+by the definition's panels). Apart from these, `not_yet_offered` lists 346 catalogued events that have
+no row yet (plan 04 Task 5 works through them); `docs/a330/evidence/04-panels.md` lists them by group.
+
+**`keys.txt`.** `tools/a330-gen/keys.txt` is the committed list of every control's key (281). A key never
+changes or disappears: Ctrl+M settings, the First Officer (`IniAirbusKeys`), the FCU plan and the display
+windows hold them. A test fails when a regenerated map lacks one.
+
+**`unproven.txt`.** `tools/a330-gen/unproven.txt` lists every position (key, value, label) not yet proven by
+an indication the control does not write itself (an E/WD memo, a lower ECAM page, a lamp, or a simulator
+variable the aircraft drives). A control's own read proves nothing here: it reads back what was written.
+Today only predictive windshear is proven (2026-11-22, in flight); every other pairing of a position's
+name with its value is unproven.
+
+**The naming rule** (until the owner rules, plan 04 Task 3): sentence case, the aircraft's abbreviations
+as it writes them, a space before a digit that follows letters, and the side first where two rows of a
+panel would read alike ("Captain ...", "First officer ..."). Today's labels are still the generator's own,
+kept as overrides until the names file lands; the generator does not apply this rule yet.
+
+**The order rule** (to come, plan 04 Task 6): what every flight uses first, in the order the simulator's
+procedures first use it; then what is set once; then non-normal and maintenance controls. Today's order
+is the cockpit's panels in the A32NX's order.
+
+**The panel sweep.** `tools/a330-gen/PanelSweep` (its README) is a live console tool, not part of the
+solution. It drives each planned control through the app's own write decision and routes, reads each
+back until it settles, and records a verdict a row; it journals every starting value first and can put
+them back (`--restore`). Its deny list keeps it off what cannot be undone or what moves the aircraft.
+It ran once, on 2026-11-27 (on the ground, engines off, external power on, 151 units): 172 read-only,
+73 toggle, 10 dead, 2 already there; none lagged and no SimConnect call threw. Its main finding is the
+push-buttons that toggle (see Mechanisms). What it cannot prove: a position proved by a display (an
+E/WD memo, an ECAM page) needs the display reader, which the tool does not use, so those stay
+unproven; and a read-only verdict is not a proof. The results, the dead controls and what was not put
+back are in `docs/a330/evidence/04-panels.md`.
 
 ## Displays
 
@@ -194,6 +267,9 @@ displays itself; the app only receives frames (`Aircraft/A330/Display/`, measure
 * A/THR, AP1/AP2, LOC and APPR pulses do nothing on the ground — expected, but unproven in the air.
 * Parking brake direction (`AIRLINER_PARKINGBRAKE` input 0 = set), landing-light position words,
   dome/wiper labels, several `B:` reads.
+* Every panel position except predictive windshear is unproven (`tools/a330-gen/unproven.txt`): the
+  2026-11-27 sweep proved no position by an independent indication, only that each read moves (or
+  does not) when written.
 * MCDU OVERFLY (needs a flight plan).
 * The First Officer's engine start and shutdown flows end to end (their writes are measured on the
   ground, see First Officer above).
