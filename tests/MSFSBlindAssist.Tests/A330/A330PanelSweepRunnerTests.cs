@@ -1047,6 +1047,38 @@ public class A330PanelSweepRunnerTests
     }
 
     [Fact]
+    public void The_snapshot_blocks_are_padded_to_their_full_size()
+    {
+        // SimConnect sends a block only as many doubles as its definition has, and the managed library copies the whole
+        // fixed-size struct out of the message: a short last block reads past the message's end (the app pads its
+        // continuous batches for the same reason, SimConnectManager.Setup.cs). So every block is exactly full.
+        var names = Enumerable.Range(0, 177).Select(i => FormattableString.Invariant($"INI_V{176 - i:000}")).ToList();
+        var blocks = SweepSnapshot.Blocks(names);
+        Assert.Equal(2, blocks.Count);
+        Assert.All(blocks, b => Assert.Equal(SweepSnapshot.SlotsPerBlock, b.Count));
+        // the names in ordinal order, first; the fillers (null) only at the end of the last block
+        var sorted = names.OrderBy(n => n, StringComparer.Ordinal).ToList();
+        Assert.Equal(sorted, blocks.SelectMany(b => b).Where(n => n != null));
+        Assert.Equal(sorted.Take(SweepSnapshot.SlotsPerBlock), blocks[0]);
+        Assert.Equal(Enumerable.Repeat<string?>(null, 2 * SweepSnapshot.SlotsPerBlock - 177), blocks[1].Skip(177 - SweepSnapshot.SlotsPerBlock));
+        // a filler sorts after every L:var, so the names keep their slots whichever order SimConnect returns them in
+        Assert.All(sorted, n => Assert.True(string.CompareOrdinal("L:" + n, SweepSnapshot.FillerDatum) < 0, n));
+        Assert.Equal(2, SweepSnapshot.Blocks(Enumerable.Range(0, 200).Select(i => $"INI_{i}").ToList()).Count);
+        Assert.Empty(SweepSnapshot.Blocks(Array.Empty<string>()));
+    }
+
+    [Fact]
+    public void The_sweep_tool_registers_the_padded_snapshot_blocks()
+    {
+        // the tool cannot be referenced from here, so its link is checked by its text: the block struct is the core's
+        // size, and the snapshot is defined from the core's padded blocks
+        string link = File.ReadAllText(Path.Combine(RepoRoot(), "tools", "a330-gen", "PanelSweep", "SimLink.cs"));
+        Assert.Matches(@"ByValArray,\s*SizeConst\s*=\s*SweepSnapshot\.SlotsPerBlock", link);
+        Assert.Contains("SweepSnapshot.Blocks(", link, StringComparison.Ordinal);
+        Assert.Contains("SweepSnapshot.FillerDatum", link, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_sweep_tools_press_hold_is_the_apps()
     {
         // The tool cannot link IniA330Definition (it needs the whole app), so its shim restates the press hold

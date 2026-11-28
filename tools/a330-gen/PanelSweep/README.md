@@ -278,6 +278,25 @@ sweeps a guard row on its own: its switch opens it first and it is closed last, 
 Controls the aircraft does not offer yet (gravity gear extension, passenger oxygen, the evacuation command, the
 cargo and cabin doors) are comment lines at the end of the deny list, to be denied the day they appear.
 
+## The crash of 2026-11-27 23:05
+
+The first attempt of the 23:05 trial died with "Internal CLR error (0x80131506)" while pressing pack 1, before it
+wrote a row (pack 1 was left at its start). The stack, innermost first:
+
+- `System.StubHelpers.MngdFixedArrayMarshaler.ConvertContentsToManaged`
+- `Marshal.PtrToStructure`
+- `SimConnect.MarshalRECVPtrToObject`
+- `ReceiveMessage`
+- `A330PanelSweep.SimLink.Pump()`
+
+The retry a minute later ran clean. The cause that fits it: the snapshot's last block defined 77 L:vars (177
+names, 100 a block), so SimConnect sent 77 doubles, while the managed SimConnect library copies the block's whole
+100-double struct (a fixed array, `ByValArray`) out of the message, reading past its end; across an unmapped page
+that is an access violation inside the marshaler, which the runtime reports as that error. The app's continuous
+batches hit the same crash and pad every batch to its full size (`SimConnectManager.Setup.cs`). Since then every
+snapshot block is filled to 100 datums with `SIMULATION TIME`, never read back (`SweepSnapshot.Blocks`). It has
+not been run in the sim since. If it recurs, run `--restore` with the journal.
+
 ## Not tested in the sim
 
 The planning and the runner's decisions are pinned by the xUnit tests on in-memory controls and a fake

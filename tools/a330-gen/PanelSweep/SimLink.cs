@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Microsoft.FlightSimulator.SimConnect;
 using MSFSBlindAssist.Aircraft.A330;
+using MSFSBlindAssist.Aircraft.A330.Sweep;
 using MSFSBlindAssist.Utils;
 using static Microsoft.FlightSimulator.SimConnect.SimConnect;
 
@@ -40,8 +41,9 @@ internal static class CalcCommand
 /// <item>Calculator lines on MobiFlight's default "MobiFlight.Command" client-data area (<see cref="CalcCommand"/>),
 /// the channel the app's ExecuteCalculatorCode writes on.</item>
 /// <item>Reads: an L:var or a simvar as a one-shot data definition request; a snapshot of many L:vars in blocks of
-/// <see cref="SnapshotSlots"/>, their names added in ordinal order (SimConnect returns a definition's datums sorted by
-/// name; the app's ContinuousBatchLayout keeps the same order).</item>
+/// <see cref="SweepSnapshot.SlotsPerBlock"/>, their names added in ordinal order (SimConnect returns a definition's
+/// datums sorted by name; the app's ContinuousBatchLayout keeps the same order), the last block filled with fillers
+/// to its full size, as the app pads its batches.</item>
 /// </list>
 /// Each write records the id of the packet it went in, so a SimConnect exception the sim raises for it can be told
 /// apart (<see cref="TakeWriteErrors"/>). A message handler that throws, or a receive that fails with anything but
@@ -58,7 +60,6 @@ internal sealed class SimLink : IDisposable
     private const uint FirstReq = 100000;
     private const int CommandBytes = 1024;
     private const uint UserObject = 0;
-    private const int SnapshotSlots = 100;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
     internal struct CommandData
@@ -73,11 +74,15 @@ internal sealed class SimLink : IDisposable
         public double value;
     }
 
-    /// <summary>One snapshot block; a block of fewer names leaves the rest unread (the app's batches do the same).</summary>
+    /// <summary>One snapshot block: exactly <see cref="SweepSnapshot.SlotsPerBlock"/> doubles, so every block's definition
+    /// is that many datums (<see cref="SweepSnapshot.Blocks"/> fills the last with fillers, never read back). A shorter
+    /// definition made SimConnect send fewer doubles than this struct, and the managed library's copy of it read past
+    /// the message: the crash of 2026-11-27 23:05 ("Internal CLR error (0x80131506)" in the ByValArray marshaler
+    /// under ReceiveMessage), which the app's own continuous batches avoid the same way.</summary>
     [StructLayout(LayoutKind.Sequential, Pack = 8)]
     internal struct SnapshotBlock
     {
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = SnapshotSlots)]
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = SweepSnapshot.SlotsPerBlock)]
         public double[] values;
     }
 
@@ -395,20 +400,24 @@ internal sealed class SimLink : IDisposable
         pending.Done.Set();
     }
 
-    /// <summary>Defines the snapshot: <paramref name="names"/> (L:vars, already in ordinal order) in blocks.</summary>
+    /// <summary>Defines the snapshot: <paramref name="names"/> (L:vars) in the core's blocks, ordinal order, each block
+    /// filled to the struct's full size so no message is ever shorter than <see cref="SnapshotBlock"/>.</summary>
     public void DefineSnapshot(IReadOnlyList<string> names)
     {
-        var sorted = names.OrderBy(n => n, StringComparer.Ordinal).ToArray();
         lock (_gate)
         {
-            for (int i = 0; i < sorted.Length; i += SnapshotSlots)
+            foreach (var block in SweepSnapshot.Blocks(names))
             {
-                var block = sorted.Skip(i).Take(SnapshotSlots).ToArray();
                 uint defId = _nextDef++;
-                foreach (string name in block)
-                    _sc.AddToDataDefinition((DEF)defId, "L:" + name, "number", SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+                foreach (string? name in block)
+                {
+                    if (name != null)
+                        _sc.AddToDataDefinition((DEF)defId, "L:" + name, "number", SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+                    else
+                        _sc.AddToDataDefinition((DEF)defId, SweepSnapshot.FillerDatum, SweepSnapshot.FillerUnits, SIMCONNECT_DATATYPE.FLOAT64, 0.0f, SIMCONNECT_UNUSED);
+                }
                 _sc.RegisterDataDefineStruct<SnapshotBlock>((DEF)defId);
-                _snapshotBlocks.Add((defId, block));
+                _snapshotBlocks.Add((defId, block.Where(n => n != null).Select(n => n!).ToArray()));
             }
         }
     }

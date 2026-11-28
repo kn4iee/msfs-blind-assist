@@ -65,6 +65,35 @@ internal static class SweepSnapshot
         return names.ToList();
     }
 
+    /// <summary>How many variables one snapshot block holds: the tool's block struct is exactly this many doubles.</summary>
+    public const int SlotsPerBlock = 100;
+
+    /// <summary>The datum that fills a block's unused slots: a simulator variable that always answers, never read back
+    /// (the app pads its continuous batches with the same one).</summary>
+    public const string FillerDatum = "SIMULATION TIME", FillerUnits = "seconds";
+
+    /// <summary>
+    /// The snapshot's data definitions as the tool registers them: <paramref name="names"/> in ordinal order,
+    /// <see cref="SlotsPerBlock"/> a block, the last block filled to its full size with fillers (null slots,
+    /// <see cref="FillerDatum"/>). SimConnect sends a block only as many doubles as its definition has, while the managed
+    /// SimConnect library copies the whole fixed-size struct out of the message, so a short block reads past the
+    /// message's end; across an unmapped page that kills the process inside the marshaler (the app's
+    /// SimConnectManager.Setup.cs records the crash and pads for it; the sweep tool crashed the same way on 2026-11-27).
+    /// A filler sorts after every <c>L:</c> name, so the names keep the first slots in either order.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<string?>> Blocks(IReadOnlyList<string> names)
+    {
+        var sorted = names.OrderBy(n => n, StringComparer.Ordinal).ToList();
+        var blocks = new List<IReadOnlyList<string?>>();
+        for (int i = 0; i < sorted.Count; i += SlotsPerBlock)
+        {
+            var block = new List<string?>(sorted.Skip(i).Take(SlotsPerBlock));
+            while (block.Count < SlotsPerBlock) block.Add(null);
+            blocks.Add(block);
+        }
+        return blocks;
+    }
+
     /// <summary>A <c>--vars</c> file: one name a line, <c>#</c> comments and blank lines ignored.</summary>
     public static IReadOnlyList<string> ParseVarsFile(string text) =>
         text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
