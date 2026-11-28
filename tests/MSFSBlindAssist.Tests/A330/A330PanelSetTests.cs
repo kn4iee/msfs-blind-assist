@@ -328,6 +328,83 @@ public class A330PanelSetTests
     }
 
     [Fact]
+    public void A_pick_and_a_quick_pick_back_both_reach_the_aircraft()
+    {
+        using var ui = new UiQueue();
+        // the cache is the continuous batch, refreshed once a second: arrowing Off to On and back within it, the second
+        // pick still sees Off. While a pick of the row is being read back, the cache is not trusted
+        var said = new Spoken();
+
+        // a selector writes anyway (writing a position again is harmless)
+        var io = new FakeIo { Gate = new TaskCompletionSource() };
+        io.Cache[SelectorKey] = 0;
+        var def = new Def(io);
+        Pick(def, SelectorKey, 1, said);
+        Pick(def, SelectorKey, 0, said);   // the cache still reads 0
+        Assert.Equal(new[] { "set AIRLINER_TEST_SELECTOR 0", "set AIRLINER_TEST_SELECTOR 1" }, io.Sent);
+        Release(io, ui);
+        Assert.Equal(new[] { SelectorKey }, io.Requests);   // one resync, the newest pick's
+        Pick(def, SelectorKey, 0, said);                    // read back: the cache is trusted again
+        Assert.Equal(2, io.Sent.Count);
+
+        // a toggle takes the pending pick as where it is: the pick back is a second press, the same pick again none
+        io = new FakeIo { Gate = new TaskCompletionSource() };
+        io.Cache[PushToggleKey] = 0;
+        def = new Def(io);
+        Pick(def, PushToggleKey, 1, said);
+        Pick(def, PushToggleKey, 0, said);
+        Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1", "set AIRLINER_TEST_PUSH 1" }, io.Sent);
+        Pick(def, PushToggleKey, 0, said);
+        Assert.Equal(2, io.Sent.Count);
+        Release(io, ui);
+        Assert.Equal(new[] { PushToggleKey }, io.Requests);
+
+        // the parking brake is a by-value write too
+        io = new FakeIo { Gate = new TaskCompletionSource() };
+        io.Cache["A330_PARKBRK"] = 0;
+        def = new Def(io);
+        Pick(def, "A330_PARKBRK", 1, said);
+        Pick(def, "A330_PARKBRK", 0, said);
+        Assert.Equal(new[] { "set AIRLINER_PARKINGBRAKE 0", "set AIRLINER_PARKINGBRAKE 1" }, io.Sent);
+        Release(io, ui);
+        Assert.Equal(new[] { "A330_PARKBRK" }, io.Requests);
+        Assert.Empty(said.Lines);
+    }
+
+    [Fact]
+    public void A_pick_planned_as_already_there_takes_over_the_read_back_of_the_pick_before_it()
+    {
+        using var ui = new UiQueue();
+        // a panel pick of On, then a window press of On before it is read back: the press finds the pending pick there
+        // and sends nothing more. It is the newest pick, so the older read-back never resyncs over it, and it is read
+        // back itself: the window, which has no combo, hears where the aircraft really is
+        var io = new FakeIo { Gate = new TaskCompletionSource(), Fresh = 0 };
+        io.Cache[PushToggleKey] = 0;
+        var def = new Def(io);
+        var said = new Spoken();
+        Assert.True(Pick(def, PushToggleKey, 1, said));
+        Assert.True(def.PressFromWindow(PushToggleKey, 1, new SimConnectManager(IntPtr.Zero), said));
+        Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1" }, io.Sent);
+        Release(io, ui);
+        Assert.Equal(new[] { "Test push toggle: Off" }, said.Lines);   // once, the window press's
+        Assert.Equal(new[] { PushToggleKey }, io.Requests);            // one resync
+
+        // a refused pick sends nothing, so the earlier pick's read-back still runs and ends its pending state
+        io = new FakeIo { Gate = new TaskCompletionSource() };
+        io.Cache[SelectorKey] = 0;
+        def = new Def(io);
+        Pick(def, SelectorKey, 1, said);
+        io.TrySetResult = false;
+        Pick(def, SelectorKey, 0, said);
+        Assert.Equal(new[] { SelectorKey }, io.Requests);              // the refusal's own resync, at once
+        Release(io, ui);
+        Assert.Equal(new[] { SelectorKey, SelectorKey }, io.Requests);  // and the sent pick's read-back
+        io.TrySetResult = true;
+        Pick(def, SelectorKey, 0, said);                                // read back: the cache (0) is trusted again
+        Assert.Equal(new[] { "set AIRLINER_TEST_SELECTOR 0" }, io.Sent);
+    }
+
+    [Fact]
     public void The_settle_time_is_a_second_and_a_half()
     {
         Assert.Equal(1500, IniA330Definition.ReadBackDelayMs);

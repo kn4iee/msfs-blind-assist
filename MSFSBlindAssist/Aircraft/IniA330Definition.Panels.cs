@@ -269,10 +269,20 @@ public partial class IniA330Definition
     }
 
     /// <summary>Sends a plan through the write paths. A refused write (nothing could be sent) says so once,
-    /// resyncs the row with a fresh read and answers false; a sent one is read back after the settle time.</summary>
+    /// resyncs the row with a fresh read and answers false; a sent one is read back after the settle time.
+    /// Every pick that sends, or that the planner found already there, is the row's newest: an older pick's read-back
+    /// never resyncs over it. One found already there while an earlier pick is still being read back takes over that
+    /// read-back (it is read back itself). A refused pick sent nothing, so it leaves the earlier pick's read-back alone.</summary>
     private bool SendPick(string key, SimVarDefinition varDef, double target, A330WritePlan plan, A330PanelIo io, ScreenReaderAnnouncer announcer)
     {
-        if (plan.Outcome == A330WriteOutcome.AtPosition) return true;   // the control already reads it: nothing to send or check
+        if (plan.Outcome == A330WriteOutcome.AtPosition)
+        {
+            // nothing to send; with no earlier pick still settling, nothing to check either
+            if (!_pendingPick.ContainsKey(key)) return true;
+            _pendingPick[key] = target;
+            _ = ReadBackAsync(key, varDef, target, io, announcer, _windowPress, NextGeneration(key));
+            return true;
+        }
         string? refusal = Dispatch(varDef, plan, io);
         if (refusal != null)
         {
@@ -282,11 +292,27 @@ public partial class IniA330Definition
             return false;
         }
         // a newer pick of this row supersedes this one's read-back (arrowing through a selector commits one per step)
-        _pickGeneration.TryGetValue(key, out int generation);
-        _pickGeneration[key] = ++generation;
-        _ = ReadBackAsync(key, varDef, target, io, announcer, _windowPress, generation);
+        _pendingPick[key] = target;
+        _ = ReadBackAsync(key, varDef, target, io, announcer, _windowPress, NextGeneration(key));
         return true;
     }
+
+    private int NextGeneration(string key)
+    {
+        _pickGeneration.TryGetValue(key, out int generation);
+        return _pickGeneration[key] = generation + 1;
+    }
+
+    /// <summary>The target of each row's pick whose read-back is still to come; UI thread only, like every pick. Until
+    /// then the row's cached reading (the continuous batch, refreshed once a second) can be from before that pick.</summary>
+    private readonly Dictionary<string, double> _pendingPick = new(StringComparer.Ordinal);
+
+    /// <summary>What a pick of <paramref name="key"/> plans from. While an earlier pick of the row is still being read
+    /// back the cache is not trusted: a by-value write writes anyway (null: unread; writing a position again is
+    /// harmless), and a toggle (<paramref name="toggle"/>) takes that pick's target as where it is, so a quick pick back
+    /// is a press too. Otherwise the cached reading.</summary>
+    private double? PlanFrom(string key, bool toggle, A330PanelIo io) =>
+        _pendingPick.TryGetValue(key, out double pending) ? (toggle ? pending : null) : io.Cached(key);
 
     /// <summary>Sends a plan's calls through the write paths; the refusal to say when nothing could be sent (null: sent).
     /// A push-button that toggles is pressed by ONE set of its press value: every set to its event is a press, so a
@@ -433,12 +459,14 @@ public partial class IniA330Definition
             if (_pickGeneration[key] != generation) return;   // a newer pick is settling: it resyncs the row
             double? now = fromWindow ? await io.ReadFresh(key, CancellationToken.None) : null;
             if (_pickGeneration[key] != generation) return;   // a pick came in while the fresh read was out
+            _pendingPick.Remove(key);   // read back: the row's cache is the aircraft's again
             io.Request(key);
             if (now is double read && double.IsFinite(read) && Math.Abs(varDef.DescriptionKeyFor(read) - target) > 0.01)   // a reading snaps to its step first
                 announcer.Announce(A330Write.PositionSentence(varDef, read));
         }
         catch (Exception ex)
         {
+            if (_pickGeneration[key] == generation) _pendingPick.Remove(key);   // never leave the cache distrusted
             Log.Error("A330", $"{key}: read-back failed: {ex.Message}");
         }
     }
@@ -478,7 +506,7 @@ public partial class IniA330Definition
                     Write(sim, value > 0.5 ? "(>K:GEAR_DOWN)" : "(>K:GEAR_UP)");
                 handled = true; return;
             case "A330_PARKBRK":
-                SendPick(varKey, varDef, value > 0.5 ? 1 : 0, A330Write.ParkingBrake(cur, value > 0.5), io, announcer);
+                SendPick(varKey, varDef, value > 0.5 ? 1 : 0, A330Write.ParkingBrake(PlanFrom(varKey, toggle: false, io), value > 0.5), io, announcer);
                 handled = true; return;
             case A330SharedKeys.Autobrake:
                 SetAutobrake(sim, (int)Math.Round(value), cur);
@@ -491,7 +519,7 @@ public partial class IniA330Definition
         switch (c.Mode)
         {
             case "toggle":
-                SendPick(varKey, varDef, value, A330Write.ToPosition(c, cur, value), io, announcer);
+                SendPick(varKey, varDef, value, A330Write.ToPosition(c, PlanFrom(varKey, toggle: true, io), value), io, announcer);
                 handled = true; return;
             case "push" when string.IsNullOrEmpty(c.Event):
                 return;
@@ -513,7 +541,7 @@ public partial class IniA330Definition
                     // a slider writes its own value; its read-back is sub-step 4's
                     if (!SetInputEvent(sim, announcer, c.Label, c.Event, value)) _writeRefused = true;
                 }
-                else SendPick(varKey, varDef, value, A330Write.ToPosition(c, cur, value), io, announcer);
+                else SendPick(varKey, varDef, value, A330Write.ToPosition(c, PlanFrom(varKey, toggle: false, io), value), io, announcer);
                 handled = true; return;
         }
     }
