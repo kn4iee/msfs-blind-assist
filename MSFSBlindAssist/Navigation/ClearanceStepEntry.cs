@@ -61,10 +61,10 @@ public static class ClearanceStepEntry
         => index >= 0 && index < KindItems.Count ? (ClearanceStepKind)index : ClearanceStepKind.Via;
 
     /// <summary>The kind an Alt+letter picks from anywhere in the window: V via, L left onto, R right onto,
-    /// X cross, H hold short of; null for anything else. Takes the KEY CODE of the letter, which is its upper-case
-    /// character: never upper-cased here, as the codes of F3, F7, F9, NumPad8 and Separator read as the lower-case
-    /// r, v, x, h and l.</summary>
-    public static ClearanceStepKind? KindForAccessKey(char letter) => letter switch
+    /// X cross, H hold short of; null for anything else. Takes the character the access-key message carries
+    /// (either case): the form handles these keys there, as every access key is, so the screen reader names the
+    /// box focus moves to (from the key-down message it said nothing).</summary>
+    public static ClearanceStepKind? KindForMnemonic(char charCode) => char.ToUpperInvariant(charCode) switch
     {
         'V' => ClearanceStepKind.Via,
         'L' => ClearanceStepKind.LeftOnto,

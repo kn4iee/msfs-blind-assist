@@ -12,6 +12,19 @@ namespace MSFSBlindAssist.Tests;
 
 public class ClearanceWiringTests
 {
+    // The step-kind keys go through the character message like every access key, so the screen reader names the
+    // box they move to (Alt+W was read, Alt+V/L/R/X/H were not while handled on the key-down message).
+    [Fact]
+    public void The_step_kind_keys_are_handled_as_access_keys()
+    {
+        string form = FormSource();
+        string mnemonic = Member(form, "protected override bool ProcessMnemonic(");
+        Assert.Contains("ClearanceStepEntry.KindForMnemonic(", mnemonic);
+        Assert.Contains("Keys.Alt", mnemonic);
+        Assert.DoesNotContain("KindForAccessKey", form);
+        Assert.Contains("cmbStepName.Select()", Member(form, "private void SelectStepKind("));
+    }
+
     [Fact]
     public void Stops_are_placed_from_lists_and_search_the_whole_route()
     {

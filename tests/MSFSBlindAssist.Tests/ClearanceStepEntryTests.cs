@@ -264,33 +264,28 @@ public class ClearanceStepEntryTests
 
     [Theory]
     [InlineData('V', ClearanceStepKind.Via)]
+    [InlineData('v', ClearanceStepKind.Via)]
     [InlineData('L', ClearanceStepKind.LeftOnto)]
+    [InlineData('l', ClearanceStepKind.LeftOnto)]
     [InlineData('R', ClearanceStepKind.RightOnto)]
+    [InlineData('r', ClearanceStepKind.RightOnto)]
     [InlineData('X', ClearanceStepKind.Cross)]
+    [InlineData('x', ClearanceStepKind.Cross)]
     [InlineData('H', ClearanceStepKind.HoldShort)]
+    [InlineData('h', ClearanceStepKind.HoldShort)]
     public void Each_kind_has_its_own_access_key(char letter, ClearanceStepKind kind)
-        => Assert.Equal(kind, ClearanceStepEntry.KindForAccessKey(letter));
+        => Assert.Equal(kind, ClearanceStepEntry.KindForMnemonic(letter));
 
+    // A function or number-pad key makes no character, so the access-key message never carries one:
+    // there is no key-code case left to pin.
     [Theory]
-    [InlineData('K')]
+    [InlineData('k')]
     [InlineData('W')]
-    [InlineData('D')]
+    [InlineData('d')]
     [InlineData('C')]
     [InlineData('3')]
     public void Other_letters_pick_no_kind(char letter)
-        => Assert.Null(ClearanceStepEntry.KindForAccessKey(letter));
-
-    // The window hands over a key code: F3 (0x72), F7 (0x76), F9 (0x78), NumPad8 (0x68) and Separator (0x6C) read as
-    // the lower-case letters r, v, x, h and l. Alt with one of those must pick no kind (Alt+NumPad8 is typing an Alt
-    // code in the Airport box); only the key codes of the letters A to Z are kind keys.
-    [Theory]
-    [InlineData('r')]
-    [InlineData('v')]
-    [InlineData('x')]
-    [InlineData('h')]
-    [InlineData('l')]
-    public void A_function_or_number_pad_key_picks_no_kind(char keyCodeAsChar)
-        => Assert.Null(ClearanceStepEntry.KindForAccessKey(keyCodeAsChar));
+        => Assert.Null(ClearanceStepEntry.KindForMnemonic(letter));
 
     [Theory]
     [InlineData(ClearanceStepKind.Via, "Taxi&way:", "Taxiway")]

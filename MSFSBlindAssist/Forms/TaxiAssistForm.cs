@@ -515,7 +515,7 @@ public class TaxiAssistForm : Form
         //   Alt+M  Remove Step                     Alt+Z  Clear Steps
         //   Alt+V, Alt+L, Alt+R, Alt+X, Alt+H  pick the step kind (Via, Left onto, Right onto,
         //          Cross, Hold short of) and put focus in the name box, from anywhere in the
-        //          window (ProcessCmdKey): no control may take these five letters
+        //          window (ProcessMnemonic): no control may take these five letters
         //   Alt+Y  Fill from SayIntentions         Alt+C  Calculate Route
         //   Alt+S  Stop Guidance                   Alt+N  Last route summary ("(&N)": no letter
         //          of its own words is free, and it once shared S, which stopped guidance)
@@ -742,7 +742,7 @@ public class TaxiAssistForm : Form
         // at the CAT III / ILS hold to protect the ILS critical area in low vis.
         chkCatIiiHold = new CheckBox
         {
-            // Alt+3: Alt+L is "Left onto" (ProcessCmdKey).
+            // Alt+3: Alt+L is "Left onto" (ProcessMnemonic).
             Text = "CAT &3 / low-visibility hold (LVP)",
             Location = new System.Drawing.Point(controlX, y),
             AutoSize = true,
@@ -1095,19 +1095,21 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>The Alt+letter step kinds (Alt+V, Alt+L, Alt+R, Alt+X, Alt+H): pick the kind and put focus
-    /// in the name box, from anywhere in the window. Handled here, before any mnemonic, so no control's
-    /// access key can take these letters. Letter keys only: Alt with a function or number-pad key (an Alt
-    /// code typed in the Airport box) is never a kind key.</summary>
-    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    /// in the name box, from anywhere in the window. Handled here, on the character message after Windows
+    /// handled the key press, like every access key: from ProcessCmdKey (the key-down message, consumed before
+    /// Windows saw it) the screen reader said nothing after the focus move, while Alt+W to the same box was read
+    /// (owner, 2026-11-28). The form is asked before its controls, so no control's access key takes these
+    /// letters. Alt must be held: this also runs for a plain letter typed while a button has focus. An Alt code
+    /// typed on the number pad makes no letter here, so the Airport box keeps it.</summary>
+    protected override bool ProcessMnemonic(char charCode)
     {
-        Keys key = keyData & Keys.KeyCode;
-        if ((keyData & Keys.Modifiers) == Keys.Alt && key >= Keys.A && key <= Keys.Z
-            && ClearanceStepEntry.KindForAccessKey((char)key) is ClearanceStepKind kind)
+        if ((ModifierKeys & Keys.Alt) == Keys.Alt
+            && ClearanceStepEntry.KindForMnemonic(charCode) is ClearanceStepKind kind)
         {
             SelectStepKind(kind, focusName: true);
             return true;
         }
-        return base.ProcessCmdKey(ref msg, keyData);
+        return base.ProcessMnemonic(charCode);
     }
 
     /// <summary>Escape: with a step being changed (Enter on it in the Clearance list), keeps the step as it was and goes
@@ -3501,15 +3503,16 @@ public class TaxiAssistForm : Form
     /// Picks the step kind (an access key, or Add Step setting it back to Via), refills the name box for it and,
     /// with <paramref name="focusName"/>, puts focus there. When focus is already in the name box the screen reader
     /// would say nothing of its new label, so focus passes through the kind list on its way back: a screen reader
-    /// reads the last of two quick focus moves, the name box under its new name.
+    /// reads the last of two quick focus moves, the name box under its new name. Focus moves with Select(), the way
+    /// a label's access key moves it (Alt+W was read where the kind keys were not).
     /// </summary>
     private void SelectStepKind(ClearanceStepKind kind, bool focusName)
     {
         SetStepKindSilently(kind);
         RefreshStepNameList();
         if (!focusName) return;
-        if (cmbStepName.Focused) cmbStepKind.Focus();
-        cmbStepName.Focus();
+        if (cmbStepName.Focused) cmbStepKind.Select();
+        cmbStepName.Select();
     }
 
     /// <summary>The taxiway of the last Via, Left onto or Right onto step the name box lists for
