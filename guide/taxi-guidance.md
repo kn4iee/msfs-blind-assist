@@ -84,7 +84,7 @@ Where focus lands when the window opens:
 - After that, while no route is active, on **Destination type**, so you always hear whether a destination is set.
 - While a route is active, on **Step kind**, ready for the next instruction.
 
-Pressing Escape closes the window, except that in an open drop-down list the first Escape only closes the list, and while you are changing a step it keeps the step as it was (see [Changing a step](#taxi-change-step)). **Closing the window does not stop guidance**; use the **Stop Guidance** button or Input Ctrl+Y for that. While a route is active, the **Clearance** list shows only what is still ahead: when you open the planner again, the steps you have already completed are gone, so amending a clearance mid-taxi is quick (see [Changing a Clearance on the Move](#taxi-amend)). The list is emptied when the leg it was calculated for is over: when you arrive, when a Progressive Taxi leg ends, when you stop guidance, and when you land. It is also emptied when you change airport.
+Pressing Escape closes the window, except that in an open drop-down list the first Escape only closes the list, and while you are changing a step it keeps the step as it was (see [Changing a step](#taxi-change-step)). **Closing the window does not stop guidance**; use the **Stop Guidance** button or Input Ctrl+Y for that. While a route is active, the **Clearance** list shows only what is still ahead: the steps you have already completed are gone when you open the planner again, when you come back to it, and while it stays open in front of you, so amending a clearance mid-taxi is quick (see [Changing a Clearance on the Move](#taxi-amend)). The list is emptied when the leg it was calculated for is over: when you arrive, when a Progressive Taxi leg ends, when you stop guidance, and when you land. It is also emptied when you change airport.
 
 Here is every control, in Tab order.
 
@@ -566,7 +566,7 @@ If the controller names the runway too, "taxi to holding point A1 runway 27 via 
 
 ## Changing a Clearance on the Move {#taxi-amend}
 
-ATC often amends a clearance while you are taxiing. Open the planner again with Input Shift+Y. Focus is on **Step kind**, and the Clearance list shows only what is still ahead:
+ATC often amends a clearance while you are taxiing. Open the planner again with Input Shift+Y. Focus is on **Step kind**. The Clearance list shows only what is still ahead, as it does whenever the planner is in front of you:
 
 - the taxiways you have finished are gone. On a Progressive leg a finished taxiway can stay, in front of a hold short still ahead that you entered after it, so the hold short does not become where the leg ends. When you calculate, BA does not send you back along that taxiway: you may hear *"Taxiway A is not on the way from here and was left out."*, and the hold short stays wherever your route meets it;
 - a runway you have crossed, and a hold short you have passed, are gone;
