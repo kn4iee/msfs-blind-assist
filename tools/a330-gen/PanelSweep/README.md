@@ -72,8 +72,10 @@ still written, and every press and calculator line is `not sent`.
 
 The dry run on 2026-11-27 planned 167 controls (223 positions, each written twice; 20 key presses; 14 guards
 opened), 114 skipped, about 18 minutes plus a minute to read the starts. Each write that moves nothing waits 5 s
-more before it is called dead. **Ctrl+C** stops once the control in progress has been put back; a second Ctrl+C
-stops at once, and `--restore` with the journal puts back what was left.
+more before it is called dead. **Ctrl+C** stops once the control in progress has been put back. A second Ctrl+C
+stops sooner, but never inside a write: it waits until the write in progress has ended (a key's push is always
+followed by its release), then exits, and `--restore` with the journal puts back what was left. In `--restore`, a
+Ctrl+C finishes the control in progress and stops; a second one stops after the write in progress.
 
 ## What it does to a control
 

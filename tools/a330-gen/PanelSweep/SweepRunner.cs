@@ -6,9 +6,19 @@ using Control = MSFSBlindAssist.Aircraft.A330.A330ControlMap.Control;
 
 namespace A330PanelSweep;
 
+/// <summary>
+/// The owner's second Ctrl+C: stop at once, but never inside a write. The handler only sets <see cref="Asked"/>; the
+/// main thread exits between calls (<see cref="LinkIo"/>), so a push is never left without its release.
+/// </summary>
+internal static class ExitNow
+{
+    public static volatile bool Asked;
+}
+
 /// <summary>The app's runner core's view of the aircraft (<see cref="ISweepIo"/>), over the link. Every read is fresh.</summary>
 internal sealed class LinkIo : ISweepIo
 {
+    private int _inCall;
     /// <summary>How long one poll's read waits for its value; a read that never answers (an L:var the aircraft does not
     /// have) costs this much per poll, not the 5 s limit.</summary>
     private const int ReadTimeoutMs = 500;
@@ -30,7 +40,30 @@ internal sealed class LinkIo : ISweepIo
     public IReadOnlyDictionary<string, double> Snapshot() => _link.Snapshot(SnapshotTimeoutMs);
     public IReadOnlyList<string> TakeWriteErrors() => _link.TakeWriteErrors();
     public long NowMs() => _clock.ElapsedMilliseconds;
-    public void Sleep(int ms) { if (ms > 0) Thread.Sleep(ms); }
+
+    /// <summary>One write as a whole; a second Ctrl+C that came during it exits once it has ended.</summary>
+    public void Uninterrupted(Action call)
+    {
+        _inCall++;
+        try { call(); }
+        finally { _inCall--; }
+        ExitIfAsked();
+    }
+
+    public void Sleep(int ms)
+    {
+        ExitIfAsked();
+        if (ms > 0) Thread.Sleep(ms);
+        ExitIfAsked();
+    }
+
+    /// <summary>Between calls only (a press's hold sleeps inside its call): exit on the owner's second Ctrl+C.</summary>
+    private void ExitIfAsked()
+    {
+        if (_inCall > 0 || !ExitNow.Asked) return;
+        Console.WriteLine("Stopped at once, between two writes. Put back what was left with --restore and the journal.");
+        Environment.Exit(130);
+    }
 }
 
 /// <summary>A tab-separated file flushed after every line, so a crash or Ctrl+C leaves everything so far. Always a new
@@ -174,7 +207,7 @@ internal static class SweepRunner
     /// press (the key the map names for its start); when that did not hold, or no key is known, the restore STOPS there
     /// and never presses through the family. Exit 0 all held, 5 some did not.</summary>
     public static int Restore(SimLink link, bool calc, IReadOnlyList<Control> controls, IReadOnlyDictionary<string, string> denied,
-        IReadOnlyList<JournalEntry> entries, string outDir, TextWriter w)
+        IReadOnlyList<JournalEntry> entries, string outDir, Func<string?> cancelled, TextWriter w)
     {
         using var tsv = LineFile.OpenNew(outDir, "restore")[0];
         tsv.WriteLine(SweepTsv.Header);
@@ -186,6 +219,8 @@ internal static class SweepRunner
         int tried = 0;
         foreach (var e in JournalRestore.RestoreOrder(entries))
         {
+            // Ctrl+C: the entry in progress was finished; stop before the next
+            if (cancelled() is string stop) { w.WriteLine($"{stop}: the rest is not tried."); break; }
             tried++;
             if (denied.ContainsKey(e.Key)) { failed.Add($"{e.Key}: denied, never written; put it back by hand"); continue; }
             string label = labels.GetValueOrDefault(e.Key) ?? (families.TryGetValue(e.Key, out var fam) ? fam.Label : "");

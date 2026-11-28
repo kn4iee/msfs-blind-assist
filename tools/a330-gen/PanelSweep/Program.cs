@@ -142,20 +142,23 @@ internal static class Program
             catch (SimLinkException ex) { Console.Error.WriteLine(ex.Message); return 3; }
 
             string outDir = opts.OutDir ?? Directory.GetCurrentDirectory();
-            if (journal != null) return SweepRunner.Restore(link, calc, controls, denied, journal, outDir, Console.Out);
-
             string? cancel = null;
             Console.CancelKeyPress += (_, e) =>
             {
-                e.Cancel = true;   // never let the default kill the process between a write and its put-back
+                // never let the default kill the process between a write and its put-back, nor a push and its release:
+                // the first Ctrl+C stops once the control (or the restore entry) in progress is put back; the second
+                // stops once the write in progress has ended (ExitNow, honoured between calls)
+                e.Cancel = true;
                 if (cancel != null)
                 {
-                    Console.WriteLine("Second Ctrl+C: stopping now. Put the control in progress back with --restore and the journal.");
-                    Environment.Exit(130);
+                    ExitNow.Asked = true;
+                    Console.WriteLine("Second Ctrl+C: stopping as soon as the write in progress has ended.");
+                    return;
                 }
                 cancel = "stopped with Ctrl+C";
-                Console.WriteLine("Ctrl+C: stopping once the control in progress is put back. Press again to stop at once.");
+                Console.WriteLine("Ctrl+C: stopping once the control in progress is put back. Press again to stop sooner (after the write in progress).");
             };
+            if (journal != null) return SweepRunner.Restore(link, calc, controls, denied, journal, outDir, () => cancel, Console.Out);
             return SweepRunner.Sweep(link, calc, controls, denied, include, extraVars, outDir, () => cancel, Console.Out);
         }
     }

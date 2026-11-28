@@ -438,10 +438,34 @@ public class A330PanelSweepRunnerTests
 
         public bool CalcAnswering { get; set; } = true;
 
+        /// <summary>For each entry of <see cref="Sent"/>, the uninterrupted call it went in (-1: outside any).</summary>
+        public readonly List<int> CallOf = new();
+        private int _call = -1, _calls;
+
+        public void Uninterrupted(Action call)
+        {
+            _call = ++_calls;
+            try { call(); }
+            finally { _call = -1; }
+        }
+
+        private void Record(string sent)
+        {
+            Sent.Add(sent);
+            CallOf.Add(_call);
+        }
+
+        /// <summary>A sleep of this length throws, once (a hold cut short).</summary>
+        public int? ThrowOnSleepOf;
+        /// <summary>The input event set of this number (1 = the first) throws, once.</summary>
+        public int? ThrowOnSet;
+        private int _sets;
+
         public bool TrySetInputEvent(string inputEvent, double value)
         {
             if (!Events.ContainsKey(inputEvent)) return false;
-            Sent.Add(FormattableString.Invariant($"{inputEvent}={value}"));
+            if (++_sets == ThrowOnSet) throw new InvalidOperationException("the link failed");
+            Record(FormattableString.Invariant($"{inputEvent}={value}"));
             if (Ignores.TryGetValue(inputEvent, out double ignored) && ignored == value) return true;
             Events[inputEvent] = value;
             if (Drives.TryGetValue(inputEvent, out var v)) Vars[v] = value;
@@ -455,7 +479,7 @@ public class A330PanelSweepRunnerTests
 
         public void Calc(string rpn)
         {
-            Sent.Add(rpn);
+            Record(rpn);
             var push = Regex.Match(rpn, @"^\(>B:(.+)_Push\)$");
             if (!push.Success) return;
             Pushed.Add(push.Groups[1].Value);
@@ -472,7 +496,12 @@ public class A330PanelSweepRunnerTests
         public IReadOnlyDictionary<string, double> Snapshot() => new Dictionary<string, double>(Vars);
         public IReadOnlyList<string> TakeWriteErrors() => Array.Empty<string>();
         public long NowMs() => Now;
-        public void Sleep(int ms) => Now += ms;
+
+        public void Sleep(int ms)
+        {
+            if (ms == ThrowOnSleepOf) { ThrowOnSleepOf = null; throw new InvalidOperationException("the hold was cut short"); }
+            Now += ms;
+        }
 
         /// <summary>A control at its start: its input event, and the L:var it drives (none when it reads its own event).</summary>
         public void Add(Control c, double start)
@@ -492,6 +521,24 @@ public class A330PanelSweepRunnerTests
             new SweepSinks(rows.Add, line => journal.Append(line), _ => { }));
         var outcome = session.Run(session.Prepare());
         return (outcome, rows, journal.ToString());
+    }
+
+    [Fact]
+    public void A_push_is_always_released_in_the_same_uninterrupted_call()
+    {
+        var key = new Control { Key = "KEY", Label = "KEY", Kind = "button", Event = "EV_KEY", Mode = "push", State = "INI_KEY_STATE" };
+        var aircraft = new FakeAircraft { ThrowOnSleepOf = IniA330Definition.DefaultPushMs };   // the hold is cut short
+        aircraft.Vars["INI_KEY_STATE"] = 0;
+
+        var (outcome, _, _) = Sweep(aircraft, key);
+
+        int push = aircraft.Sent.IndexOf("(>B:EV_KEY_Push)");
+        Assert.True(push >= 0, "the key was never pushed");
+        Assert.Equal("(>B:EV_KEY_Release)", aircraft.Sent.ElementAtOrDefault(push + 1));
+        // the push and its release went in one call, which a second Ctrl+C waits for; no write went outside one
+        Assert.Equal(aircraft.CallOf[push], aircraft.CallOf[push + 1]);
+        Assert.DoesNotContain(-1, aircraft.CallOf);
+        Assert.NotNull(outcome.StopReason);
     }
 
     [Fact]

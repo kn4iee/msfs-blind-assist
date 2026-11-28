@@ -22,6 +22,11 @@ internal interface ISweepIo
     /// <summary>One calculator line, sent once.</summary>
     void Calc(string rpn);
 
+    /// <summary>Runs one write to the aircraft (a set, a calculator line, or a press's push, hold and release together)
+    /// as a whole: a stop the owner asks for at once (a second Ctrl+C) waits until it has ended, so a push is never
+    /// left without its release.</summary>
+    void Uninterrupted(Action call);
+
     /// <summary>A fresh read of a map read (<c>INI_x</c>, <c>A:NAME, unit</c>, <c>B:EVENT</c>); null when none came.</summary>
     double? Read(string read);
 
@@ -554,20 +559,29 @@ internal sealed class SweepSession
             if (call is not A330InputEventCall && !_io.CalcAnswering)
                 return new(false, "the calculator channel is not answering (the app's CalcWriteCanLand would be false)", text);
             WaitForGap();
-            switch (call)
+            bool listed = true;
+            _io.Uninterrupted(() =>
             {
-                case A330InputEventCall ie:
-                    if (!_io.TrySetInputEvent(ie.Event, ie.Value)) return new(false, $"the aircraft does not list {ie.Event}", text);
-                    break;
-                case A330PressCall p:
-                    _io.Calc($"(>B:{p.Event}_Push)");
-                    _io.Sleep(p.HoldMs);
-                    _io.Calc($"(>B:{p.Event}_Release)");
-                    break;
-                case A330CalcCall cc:
-                    _io.Calc(cc.Rpn);
-                    break;
-            }
+                switch (call)
+                {
+                    case A330InputEventCall ie:
+                        listed = _io.TrySetInputEvent(ie.Event, ie.Value);
+                        break;
+                    case A330PressCall p:
+                        // the release always follows its push, whatever happens during the hold
+                        try
+                        {
+                            _io.Calc($"(>B:{p.Event}_Push)");
+                            _io.Sleep(p.HoldMs);
+                        }
+                        finally { _io.Calc($"(>B:{p.Event}_Release)"); }
+                        break;
+                    case A330CalcCall cc:
+                        _io.Calc(cc.Rpn);
+                        break;
+                }
+            });
+            if (!listed) return new(false, $"the aircraft does not list {((A330InputEventCall)call).Event}", text);
             _lastWriteAt = _io.NowMs();
         }
         return new(true, null, text);
