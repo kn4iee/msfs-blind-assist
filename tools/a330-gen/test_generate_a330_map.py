@@ -258,6 +258,48 @@ class MapFieldTests(unittest.TestCase):
         self.assertEqual("guard", keys[-1] if "proof" not in by["A330_FUEL_TK_XFR"] else keys[-2])
 
 
+# The push-buttons the live panel sweep of 2026-11-27 found toggling through the app's own route
+# (SetInputEvent by hash): writing the same input value twice flipped the read back.
+MEASURED_TOGGLES = [
+    "A330_PRIM1", "A330_PRIM2", "A330_PRIM3", "A330_SEC1", "A330_SEC2",
+    "A330_FUEL1L1", "A330_FUEL1L2", "A330_FUEL1LSTBY", "A330_FUEL2R1", "A330_FUEL2R2", "A330_FUEL2RSTBY",
+    "A330_FUEL_XFEED", "A330_FUEL_TRIM_MODE", "A330_FUEL_TK_XFR", "A330_INR_TK_L", "A330_INR_TK_R",
+    "A330_GEN1", "A330_GEN2", "A330_APU_GEN", "A330_BUS_TIE", "A330_AC_ESS", "A330_GALLEY", "A330_COMMERCIAL",
+    "A330_HYD_GREEN", "A330_HYD_GREEN_ENG2", "A330_HYD_BLUE", "A330_HYD_YELLOW",
+    "A330_HYD_GREEN_ELEC_OFF", "A330_HYD_GREEN_ELEC_ON", "A330_HYD_BLUE_ELEC_OFF", "A330_HYD_BLUE_ELEC_ON",
+    "A330_HYD_YELLOW_ELEC_OFF", "A330_HYD_YELLOW_ELEC_ON",
+    "A330_BULK_ISO", "A330_ENG1_BLEED", "A330_ENG2_BLEED", "A330_APU_BLEED", "A330_PACK1", "A330_PACK2",
+    "A330_HOT_AIR1", "A330_HOT_AIR2", "A330_CARGO_HOT_AIR", "A330_RAM_AIR", "A330_CAB_FANS", "A330_EXTRACT",
+    "A330_WING_ANTI_ICE", "A330_ENG1_ANTI_ICE", "A330_ENG2_ANTI_ICE", "A330_FADEC1", "A330_FADEC2", "A330_CREW_OXY",
+    "A330_CPT_FD", "A330_CPT_LS", "A330_CPT_ND_CSTR", "A330_CPT_ND_WPT", "A330_CPT_ND_VOR", "A330_CPT_ND_NDB",
+    "A330_CPT_ND_ARPT", "A330_CPT_TERR_ON_ND",
+    "A330_FO_FD", "A330_FO_LS", "A330_FO_ND_CSTR", "A330_FO_ND_WPT", "A330_FO_ND_VOR", "A330_FO_ND_NDB",
+    "A330_FO_ND_ARPT", "A330_FO_TERR_ON_ND",
+    "A330_BRAKE_FAN", "A330_GPWS_SYS", "A330_GPWS_TERR", "A330_GPWS_GS", "A330_GPWS_FLAP", "A330_LAND_RECOVERY",
+]
+
+
+class MeasuredToggleTests(unittest.TestCase):
+    def test_the_measured_toggles_are_pressed(self):
+        self.assertEqual(73, len(set(MEASURED_TOGGLES)))
+        gen = load_generator()
+        curation = gen.load_curation()
+        by = {c["key"]: c for c in gen.build_controls(curation)}
+        for k in MEASURED_TOGGLES:
+            c = by[k]
+            self.assertEqual("toggle", c["mode"], k)
+            self.assertEqual(1, c.get("press"), k)
+            self.assertEqual(0, c.get("release"), k)
+            self.assertNotIn("rpn", c, k)
+            # still a two-position selector read by its own variable: the combo and its names are unchanged
+            self.assertEqual("select", c["kind"], k)
+            self.assertTrue(c["read"].startswith("INI_"), k)
+            self.assertEqual(2, len(c["positions"]), k)
+        # nothing else is pressed by value: the engine masters stay toggles by their Set's value
+        pressed = sorted(c["key"] for c in by.values() if "press" in c or "release" in c)
+        self.assertEqual(sorted(MEASURED_TOGGLES), pressed)
+
+
 class HardeningTests(unittest.TestCase):
     def test_a_repeated_key_in_the_curation_is_refused(self):
         import tempfile

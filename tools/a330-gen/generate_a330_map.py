@@ -11,6 +11,8 @@ moved, put it back. The results live in the curation file; the probe's raw outpu
 Conventions the probe found (do not "correct" them by intuition):
   * a push-button's INPUT is the opposite of its L:var: input 0 = pushed in (on/auto, light off) and
     the L:var reads 1 (PACK 1, the batteries, generators, bleeds, hydraulic pumps, PRIMs/SECs);
+    superseded 2026-11-27 for the 73 push-buttons that toggle ("mode": "toggle" with "press" and
+    "release"): their input event's own value says nothing about their state (README.md);
   * a THREE-position switch numbers from the TOP: 0 = the top position (strobe ON, no-smoking ON,
     nose light T.O., annunciator light TEST); a TWO-position switch has 1 = the top (beacon ON);
   * a momentary key (ECAM page keys, master warning/caution, calls, agents) ignores a raw value: it

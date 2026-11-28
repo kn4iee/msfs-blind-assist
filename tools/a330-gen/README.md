@@ -33,7 +33,12 @@ Python 3, standard library only. Every path resolves from the file's own locatio
   names it (`AIRLINER_...`); a control with no event (a read-out) uses its own key as the id. Fields:
   `key` (never changes), `section`, `panel`, `kind` (`select`, `button`, `continuous`, `status`),
   `mode` (`set`, `push`, `toggle`, `rpn`), `read`, `positions`, and any extra the map carries
-  (`lamps`, `holdMs`, `rpn`, `notes`, `min`, `max`, `step`), written to the map in this order.
+  (`press`, `release`, `lamps`, `holdMs`, `rpn`, `notes`, `min`, `max`, `step`), written to the map in
+  the curation's order.
+  A `toggle` with `press` and `release` (and no `rpn`) is a push-button the aircraft toggles: a pick
+  presses it once, by value (its input event set to `press`, the hold, then set to `release`), and
+  only when its `read` differs from the pick. Its positions' `input` values drive no write; they stay
+  for the record. A `toggle` with an `rpn` (the engine masters) writes that line with `{value}`.
   A position is `{ "value": what the read shows, "input": what to send, "name": the key of the
   position's name, "proven": bool }`. Until the aircraft's own strings are available (plan 04 Task 2
   Step 2) `name` is the read value as a string. `proven` is true only where an indication the control
@@ -88,7 +93,9 @@ not kept.
 Conventions the probe found (do not "correct" them by intuition):
 
 - A push-button's input is the opposite of its L:var: input 0 = pushed in (on/auto, light off) and the
-  L:var reads 1 (PACK 1, the batteries, generators, bleeds, hydraulic pumps, PRIMs/SECs).
+  L:var reads 1 (PACK 1, the batteries, generators, bleeds, hydraulic pumps, PRIMs/SECs). Superseded on
+  2026-11-27 for 73 push-buttons (PACK 1, the generators, bleeds, hydraulic pumps and PRIMs/SECs among
+  them): they toggle, and their input event's own value says nothing about their state (see below).
 - A three-position switch numbers from the top: 0 = the top position (strobe ON, no-smoking ON, nose
   light T.O., annunciator light TEST); a two-position switch has 1 = the top (beacon ON).
 - A momentary key (ECAM page keys, master warning/caution, calls, agents) ignores a raw value: it is
@@ -116,3 +123,16 @@ Measured since:
   amber memo PRED W/S OFF; after writing 0 both read 0 and the memo went. So predictive windshear
   0 = Auto, 1 = Off. The control reads back what was written, so a read of its own variable never
   proves its names.
+- 2026-11-27, on the ground (MSFS 2024 1.9.24.0, the A330-200 VIP (GE), external power on), by the panel
+  sweep through the app's own route (SimConnect SetInputEvent by hash): 73 push-buttons toggle. Writing
+  the same input value twice flipped the read back. Every one started with its input event's own value
+  at 0, whatever the switch showed. Two patterns:
+  - 64 of them: SetInputEvent(1) flipped the read (in about 100 ms), SetInputEvent(1) again flipped it
+    back, and SetInputEvent(0) with the event at 1 changed nothing.
+  - 9 of them (the six engine-feed fuel pumps, crew oxygen and both flight directors): SetInputEvent(0)
+    with the event at 0 flipped the read, and again flipped it back.
+
+  So every SetInputEvent is a press, except a change from 1 to 0, which is a release. A clean press is
+  set 1, the hold, set 0: one flip, and the event is back at 0. These controls are now
+  `mode: toggle` with `press: 1, release: 0`. Their `read` and their positions' value and name pairing
+  are unchanged; their positions' `input` values no longer drive a write.

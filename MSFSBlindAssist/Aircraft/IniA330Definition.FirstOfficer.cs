@@ -40,6 +40,8 @@ public partial class IniA330Definition
         {
             "push" when !string.IsNullOrEmpty(c.Event) => (true, null, false, c.HoldMs ?? 0),
             "rpn" when !string.IsNullOrEmpty(c.Rpn) => (true, null, false, c.HoldMs ?? 0),
+            // the push-buttons are pressed by value through their input event (measured by the panel sweep, 2026-11-27)
+            "toggle" when c.Press is not null && string.IsNullOrEmpty(c.Rpn) && !string.IsNullOrEmpty(c.Event) => (false, c.Event, true, 0),
             "toggle" when !string.IsNullOrEmpty(c.Rpn) || !string.IsNullOrEmpty(c.Event) => (true, null, true, 0),
             "set" when !string.IsNullOrEmpty(c.Event) => (false, c.Event, false, 0),
             _ => null,

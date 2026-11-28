@@ -364,7 +364,7 @@
    "section": "Overhead",
    "panel": "Flight Control Computers",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PRIM1_STATUS",
    "positions": [
     {
@@ -379,14 +379,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FTL_CTL_PRIM2": {
    "key": "A330_PRIM2",
    "section": "Overhead",
    "panel": "Flight Control Computers",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PRIM2_STATUS",
    "positions": [
     {
@@ -401,14 +403,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FTL_CTL_PRIM3": {
    "key": "A330_PRIM3",
    "section": "Overhead",
    "panel": "Flight Control Computers",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PRIM3_STATUS",
    "positions": [
     {
@@ -423,14 +427,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FLTCTL_SEC1": {
    "key": "A330_SEC1",
    "section": "Overhead",
    "panel": "Flight Control Computers",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SEC1_STATUS",
    "positions": [
     {
@@ -445,14 +451,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FTL_CTL_SEC2": {
    "key": "A330_SEC2",
    "section": "Overhead",
    "panel": "Flight Control Computers",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SEC2_STATUS",
    "positions": [
     {
@@ -467,14 +475,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_ENG1_L1": {
    "key": "A330_FUEL1L1",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_TANK_LEFT",
    "positions": [
     {
@@ -489,14 +499,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_ENG1_L2": {
    "key": "A330_FUEL1L2",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INNER_TANK_LEFT",
    "positions": [
     {
@@ -511,14 +523,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_ENG1_LSTBY": {
    "key": "A330_FUEL1LSTBY",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_LEFT_STANDBY_PUMP",
    "positions": [
     {
@@ -533,14 +547,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_ENG2_R1": {
    "key": "A330_FUEL2R1",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INNER_TANK_RIGHT",
    "positions": [
     {
@@ -555,14 +571,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_ENG2_R2": {
    "key": "A330_FUEL2R2",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_TANK_RIGHT",
    "positions": [
     {
@@ -577,14 +595,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_ENG2_RSTBY": {
    "key": "A330_FUEL2RSTBY",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_RIGHT_STANDBY_PUMP",
    "positions": [
     {
@@ -599,7 +619,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_CTR_L": {
    "key": "A330_FUEL_CTR_L",
@@ -672,7 +694,7 @@
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_XFEED_TRANSFER_ON",
    "positions": [
     {
@@ -687,14 +709,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_MODE": {
    "key": "A330_FUEL_TRIM_MODE",
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_TRIM_TANK_MODE",
    "positions": [
     {
@@ -709,7 +733,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FUEL_TK_XFR_COVER": {
    "key": "A330_FUEL_TK_XFR_COVER",
@@ -739,7 +765,7 @@
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FUEL_XFR_BUTTON",
    "positions": [
     {
@@ -754,7 +780,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_INR_TK_L_COVER": {
    "key": "A330_INR_TK_L_COVER",
@@ -784,7 +812,7 @@
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INR_TK_L_STATE",
    "positions": [
     {
@@ -799,7 +827,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_INR_TK_R_COVER": {
    "key": "A330_INR_TK_R_COVER",
@@ -829,7 +859,7 @@
    "section": "Overhead",
    "panel": "Fuel",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INR_TK_R_STATE",
    "positions": [
     {
@@ -844,7 +874,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_BAT1": {
    "key": "A330_BAT1",
@@ -945,7 +977,7 @@
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GEN_ON",
    "positions": [
     {
@@ -960,14 +992,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_GEN2": {
    "key": "A330_GEN2",
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_GEN_ON",
    "positions": [
     {
@@ -982,14 +1016,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_APU_GEN": {
    "key": "A330_APU_GEN",
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_APU_GEN_ON",
    "positions": [
     {
@@ -1004,7 +1040,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_EXTA": {
    "key": "A330_EXT_A",
@@ -1061,7 +1099,7 @@
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BUS_TIE",
    "positions": [
     {
@@ -1076,7 +1114,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_AC_ESS_COVER": {
    "key": "A330_AC_ESS_COVER",
@@ -1106,7 +1146,7 @@
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_AC_ESS_FEED",
    "positions": [
     {
@@ -1121,14 +1161,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_GALLEY": {
    "key": "A330_GALLEY",
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GALLEY_CAB",
    "positions": [
     {
@@ -1143,14 +1185,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_COMMERCIAL": {
    "key": "A330_COMMERCIAL",
    "section": "Overhead",
    "panel": "Electrical",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_COMMERCIAL_ON",
    "positions": [
     {
@@ -1165,7 +1209,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ELEC_IDG1_COVER": {
    "key": "A330_IDG1_COVER",
@@ -1267,7 +1313,7 @@
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GREEN_PUMP_ON",
    "positions": [
     {
@@ -1282,7 +1328,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_GREEN_ENG2_COVER": {
    "key": "A330_HYD_GREEN_ENG2_COVER",
@@ -1312,7 +1360,7 @@
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_GREEN_PUMP_ON",
    "positions": [
     {
@@ -1327,7 +1375,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_BLUE_COVER": {
    "key": "A330_HYD_BLUE_COVER",
@@ -1357,7 +1407,7 @@
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_BLUE_PUMP_ON",
    "positions": [
     {
@@ -1372,7 +1422,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_YELLOW_COVER": {
    "key": "A330_HYD_YELLOW_COVER",
@@ -1402,7 +1454,7 @@
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_YELLOW_PUMP_ON",
    "positions": [
     {
@@ -1417,14 +1469,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_GREEN_OFF": {
    "key": "A330_HYD_GREEN_ELEC_OFF",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GREEN_ELEC_PUMP_LOWER_PB",
    "positions": [
     {
@@ -1439,7 +1493,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_GREEN_ELEC_COVER": {
    "key": "A330_HYD_GREEN_ELEC_COVER",
@@ -1469,7 +1525,7 @@
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GREEN_ELEC_PUMP_PB",
    "positions": [
     {
@@ -1484,14 +1540,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_BLUE_OFF": {
    "key": "A330_HYD_BLUE_ELEC_OFF",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_BLUE_ELEC_PUMP_LOWER_PB",
    "positions": [
     {
@@ -1506,7 +1564,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_BLUE_ELEC_COVER": {
    "key": "A330_HYD_BLUE_ELEC_COVER",
@@ -1536,7 +1596,7 @@
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_BLUE_ELEC_PUMP_PB",
    "positions": [
     {
@@ -1551,14 +1611,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_YELLOW_OFF": {
    "key": "A330_HYD_YELLOW_ELEC_OFF",
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_YELLOW_ELEC_PUMP_LOWER_PB",
    "positions": [
     {
@@ -1573,7 +1635,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_YELLOW_ELEC_COVER": {
    "key": "A330_HYD_YELLOW_ELEC_COVER",
@@ -1603,7 +1667,7 @@
    "section": "Overhead",
    "panel": "Hydraulics",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_YELLOW_ELEC_PUMP_PB",
    "positions": [
     {
@@ -1618,7 +1682,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HYD_RAT_MAN_COVER": {
    "key": "A330_RAT_COVER",
@@ -2015,7 +2081,7 @@
    "section": "Overhead",
    "panel": "Cargo Smoke",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BULK_ISOL_VALVE",
    "positions": [
     {
@@ -2030,7 +2096,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_APU_MASTER": {
    "key": "A330_APU_MASTER",
@@ -2084,7 +2152,7 @@
    "section": "Overhead",
    "panel": "Bleed Air",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENGINE1_BLEED",
    "positions": [
     {
@@ -2099,14 +2167,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ENG2_BLEED": {
    "key": "A330_ENG2_BLEED",
    "section": "Overhead",
    "panel": "Bleed Air",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENGINE2_BLEED",
    "positions": [
     {
@@ -2121,14 +2191,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_AIR_APU_BLEED": {
    "key": "A330_APU_BLEED",
    "section": "Overhead",
    "panel": "Bleed Air",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_APU_BLEED_BUTTON",
    "positions": [
     {
@@ -2143,7 +2215,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_XBLEED": {
    "key": "A330_XBLEED",
@@ -2178,7 +2252,7 @@
    "section": "Overhead",
    "panel": "Air Conditioning",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PACK1_BUTTON",
    "positions": [
     {
@@ -2194,6 +2268,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "lamps": [
     {
      "read": "INI_PACK1_FAULT",
@@ -2206,7 +2282,7 @@
    "section": "Overhead",
    "panel": "Air Conditioning",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PACK2_BUTTON",
    "positions": [
     {
@@ -2222,6 +2298,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "lamps": [
     {
      "read": "INI_PACK2_FAULT",
@@ -2262,7 +2340,7 @@
    "section": "Overhead",
    "panel": "Air Conditioning",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_HOT_AIR_SUPPLY1_ON",
    "positions": [
     {
@@ -2277,14 +2355,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_HOT_AIR2": {
    "key": "A330_HOT_AIR2",
    "section": "Overhead",
    "panel": "Air Conditioning",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_HOT_AIR_SUPPLY2_ON",
    "positions": [
     {
@@ -2299,7 +2379,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_COCKPIT_TEMP": {
    "key": "A330_CKPT_TEMP",
@@ -2350,7 +2432,7 @@
    "section": "Overhead",
    "panel": "Air Conditioning",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BULK_HOT_AIR_STATE",
    "positions": [
     {
@@ -2365,7 +2447,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_RAM_AIR_COVER": {
    "key": "A330_RAM_AIR_COVER",
@@ -2395,7 +2479,7 @@
    "section": "Overhead",
    "panel": "Air Conditioning",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_RAM_AIR_ON",
    "positions": [
     {
@@ -2410,7 +2494,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_MODE_SEL": {
    "key": "A330_PRESS_MODE",
@@ -2503,7 +2589,7 @@
    "section": "Overhead",
    "panel": "Ventilation",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_CABIN_FANS_BUTTON",
    "positions": [
     {
@@ -2518,14 +2604,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_VENT_EXTRACT": {
    "key": "A330_EXTRACT",
    "section": "Overhead",
    "panel": "Ventilation",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_CABIN_EXTRACT_VALVE_BUTTON",
    "positions": [
     {
@@ -2540,7 +2628,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_GND_COOL": {
    "key": "A330_GND_COOL",
@@ -2569,7 +2659,7 @@
    "section": "Overhead",
    "panel": "Anti-Ice",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_WING_ANTI_ICE",
    "positions": [
     {
@@ -2584,14 +2674,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ENG1_ICE": {
    "key": "A330_ENG1_ANTI_ICE",
    "section": "Overhead",
    "panel": "Anti-Ice",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_ANTI_ICE",
    "positions": [
     {
@@ -2606,14 +2698,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ENG2_ICE": {
    "key": "A330_ENG2_ANTI_ICE",
    "section": "Overhead",
    "panel": "Anti-Ice",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_ANTI_ICE",
    "positions": [
     {
@@ -2628,7 +2722,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_PROBE_HEAT": {
    "key": "A330_PROBE_HEAT",
@@ -3245,7 +3341,7 @@
    "section": "Overhead",
    "panel": "Engine Start",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FADEC1_GND_POWER_STATE",
    "positions": [
     {
@@ -3260,7 +3356,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FADEC_ENG2_COVER": {
    "key": "A330_FADEC2_COVER",
@@ -3290,7 +3388,7 @@
    "section": "Overhead",
    "panel": "Engine Start",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FADEC2_GND_POWER_STATE",
    "positions": [
     {
@@ -3305,14 +3403,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_OXYGEN_CREW": {
    "key": "A330_CREW_OXY",
    "section": "Overhead",
    "panel": "Oxygen",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_CREW_SUPPLY",
    "positions": [
     {
@@ -3327,7 +3427,9 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_CALL_ALL": {
    "key": "A330_CALL_ALL",
@@ -3508,7 +3610,7 @@
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FD1_ON",
    "positions": [
     {
@@ -3523,14 +3625,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_CPT_LS": {
    "key": "A330_CPT_LS",
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_LS_CAPTAIN",
    "positions": [
     {
@@ -3545,7 +3649,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_CPT_MODE": {
    "key": "A330_CPT_ND_MODE",
@@ -3638,7 +3744,7 @@
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_CONSTRAINTS",
    "positions": [
     {
@@ -3653,14 +3759,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_CPT_WPT": {
    "key": "A330_CPT_ND_WPT",
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_FIXES",
    "positions": [
     {
@@ -3675,14 +3783,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_CPT_VOR": {
    "key": "A330_CPT_ND_VOR",
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_VORS",
    "positions": [
     {
@@ -3697,14 +3807,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_CPT_NDB": {
    "key": "A330_CPT_ND_NDB",
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_NDBS",
    "positions": [
     {
@@ -3719,14 +3831,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_CPT_ARPT": {
    "key": "A330_CPT_ND_ARPT",
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_AIRPORTS",
    "positions": [
     {
@@ -3741,7 +3855,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_CPT_VOR1": {
    "key": "A330_CPT_ND_NAV1",
@@ -3804,7 +3920,7 @@
    "section": "Glareshield",
    "panel": "Captain EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_TERR_ON_CAPT",
    "positions": [
     {
@@ -3819,7 +3935,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_CPT_BARO_TOGGLE": {
    "key": "A330_CPT_BARO_UNIT",
@@ -3855,7 +3973,7 @@
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FD2_ON",
    "positions": [
     {
@@ -3870,14 +3988,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FO_LS": {
    "key": "A330_FO_LS",
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_LS_FO",
    "positions": [
     {
@@ -3892,7 +4012,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_FO_MODE": {
    "key": "A330_FO_ND_MODE",
@@ -3985,7 +4107,7 @@
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_CONSTRAINTS2",
    "positions": [
     {
@@ -4000,14 +4122,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_FO_WPT": {
    "key": "A330_FO_ND_WPT",
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_FIXES2",
    "positions": [
     {
@@ -4022,14 +4146,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_FO_VOR": {
    "key": "A330_FO_ND_VOR",
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_VORS2",
    "positions": [
     {
@@ -4044,14 +4170,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_FO_NDB": {
    "key": "A330_FO_ND_NDB",
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_NDBS2",
    "positions": [
     {
@@ -4066,14 +4194,16 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_FO_ARPT": {
    "key": "A330_FO_ND_ARPT",
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_AIRPORTS2",
    "positions": [
     {
@@ -4088,7 +4218,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_EFIS_FO_VOR1": {
    "key": "A330_FO_ND_NAV1",
@@ -4151,7 +4283,7 @@
    "section": "Glareshield",
    "panel": "First Officer EFIS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_TERR_ON_FO",
    "positions": [
     {
@@ -4166,7 +4298,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FO_BARO_TOGGLE": {
    "key": "A330_FO_BARO_UNIT",
@@ -4224,7 +4358,7 @@
    "section": "Main Instrument Panel",
    "panel": "Brakes",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BRAKE_FAN_ON",
    "positions": [
     {
@@ -4239,7 +4373,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "A330_BRAKE_SYSTEM": {
    "key": "A330_BRAKE_SYSTEM",
@@ -4274,7 +4410,7 @@
    "section": "Overhead",
    "panel": "GPWS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_SYS_STATE",
    "positions": [
     {
@@ -4289,14 +4425,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_GPWS_TERR": {
    "key": "A330_GPWS_TERR",
    "section": "Overhead",
    "panel": "GPWS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_TERR_STATE",
    "positions": [
     {
@@ -4311,14 +4449,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_GS_MODE": {
    "key": "A330_GPWS_GS",
    "section": "Overhead",
    "panel": "GPWS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_GS_STATE",
    "positions": [
     {
@@ -4333,14 +4473,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_FLAP_MODE": {
    "key": "A330_GPWS_FLAP",
    "section": "Overhead",
    "panel": "GPWS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_FLAP_STATE",
    "positions": [
     {
@@ -4355,14 +4497,16 @@
      "name": "0",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_LAND_RECOVERY": {
    "key": "A330_LAND_RECOVERY",
    "section": "Overhead",
    "panel": "GPWS",
    "kind": "select",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_LAND_RECOVERY",
    "positions": [
     {
@@ -4377,7 +4521,9 @@
      "name": "1",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   "AIRLINER_ATT_HDG_SELECT": {
    "key": "A330_ATT_HDG",

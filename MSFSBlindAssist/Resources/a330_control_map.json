@@ -395,7 +395,7 @@
    "label": "PRIM 1",
    "kind": "select",
    "event": "AIRLINER_FLTCTL_PRIM1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PRIM1_STATUS",
    "positions": [
     {
@@ -410,7 +410,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_PRIM2",
@@ -419,7 +421,7 @@
    "label": "PRIM 2",
    "kind": "select",
    "event": "AIRLINER_FTL_CTL_PRIM2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PRIM2_STATUS",
    "positions": [
     {
@@ -434,7 +436,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_PRIM3",
@@ -443,7 +447,7 @@
    "label": "PRIM 3",
    "kind": "select",
    "event": "AIRLINER_FTL_CTL_PRIM3",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PRIM3_STATUS",
    "positions": [
     {
@@ -458,7 +462,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_SEC1",
@@ -467,7 +473,7 @@
    "label": "SEC 1",
    "kind": "select",
    "event": "AIRLINER_FLTCTL_SEC1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SEC1_STATUS",
    "positions": [
     {
@@ -482,7 +488,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_SEC2",
@@ -491,7 +499,7 @@
    "label": "SEC 2",
    "kind": "select",
    "event": "AIRLINER_FTL_CTL_SEC2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SEC2_STATUS",
    "positions": [
     {
@@ -506,7 +514,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL1L1",
@@ -515,7 +525,7 @@
    "label": "Left pump 1",
    "kind": "select",
    "event": "AIRLINER_FUEL_ENG1_L1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_TANK_LEFT",
    "positions": [
     {
@@ -530,7 +540,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL1L2",
@@ -539,7 +551,7 @@
    "label": "Left pump 2",
    "kind": "select",
    "event": "AIRLINER_FUEL_ENG1_L2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INNER_TANK_LEFT",
    "positions": [
     {
@@ -554,7 +566,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL1LSTBY",
@@ -563,7 +577,7 @@
    "label": "Left standby pump",
    "kind": "select",
    "event": "AIRLINER_FUEL_ENG1_LSTBY",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_LEFT_STANDBY_PUMP",
    "positions": [
     {
@@ -578,7 +592,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL2R1",
@@ -587,7 +603,7 @@
    "label": "Right pump 1",
    "kind": "select",
    "event": "AIRLINER_FUEL_ENG2_R1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INNER_TANK_RIGHT",
    "positions": [
     {
@@ -602,7 +618,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL2R2",
@@ -611,7 +629,7 @@
    "label": "Right pump 2",
    "kind": "select",
    "event": "AIRLINER_FUEL_ENG2_R2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_TANK_RIGHT",
    "positions": [
     {
@@ -626,7 +644,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL2RSTBY",
@@ -635,7 +655,7 @@
    "label": "Right standby pump",
    "kind": "select",
    "event": "AIRLINER_FUEL_ENG2_RSTBY",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_OUTER_RIGHT_STANDBY_PUMP",
    "positions": [
     {
@@ -650,7 +670,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL_CTR_L",
@@ -731,7 +753,7 @@
    "label": "Crossfeed",
    "kind": "select",
    "event": "AIRLINER_FUEL_XFEED",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_XFEED_TRANSFER_ON",
    "positions": [
     {
@@ -746,7 +768,9 @@
      "label": "Open",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL_TRIM_MODE",
@@ -755,7 +779,7 @@
    "label": "Trim tank mode",
    "kind": "select",
    "event": "AIRLINER_FUEL_MODE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_TRIM_TANK_MODE",
    "positions": [
     {
@@ -770,7 +794,9 @@
      "label": "Forward",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FUEL_TK_XFR_COVER",
@@ -803,7 +829,7 @@
    "label": "Outer tank transfer",
    "kind": "select",
    "event": "AIRLINER_FUEL_TK_XFR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FUEL_XFR_BUTTON",
    "positions": [
     {
@@ -819,6 +845,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_FUEL_TK_XFR_COVER"
   },
   {
@@ -852,7 +880,7 @@
    "label": "Inner tank left split",
    "kind": "select",
    "event": "AIRLINER_INR_TK_L",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INR_TK_L_STATE",
    "positions": [
     {
@@ -868,6 +896,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_INR_TK_L_COVER"
   },
   {
@@ -901,7 +931,7 @@
    "label": "Inner tank right split",
    "kind": "select",
    "event": "AIRLINER_INR_TK_R",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_INR_TK_R_STATE",
    "positions": [
     {
@@ -917,6 +947,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_INR_TK_R_COVER"
   },
   {
@@ -1028,7 +1060,7 @@
    "label": "Generator 1",
    "kind": "select",
    "event": "AIRLINER_ELEC_GEN1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GEN_ON",
    "positions": [
     {
@@ -1043,7 +1075,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_GEN2",
@@ -1052,7 +1086,7 @@
    "label": "Generator 2",
    "kind": "select",
    "event": "AIRLINER_ELEC_GEN2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_GEN_ON",
    "positions": [
     {
@@ -1067,7 +1101,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_APU_GEN",
@@ -1076,7 +1112,7 @@
    "label": "APU generator",
    "kind": "select",
    "event": "AIRLINER_ELEC_APU_GEN",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_APU_GEN_ON",
    "positions": [
     {
@@ -1091,7 +1127,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_EXT_A",
@@ -1154,7 +1192,7 @@
    "label": "Bus tie",
    "kind": "select",
    "event": "AIRLINER_ELEC_BUS_TIE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BUS_TIE",
    "positions": [
     {
@@ -1169,7 +1207,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_AC_ESS_COVER",
@@ -1202,7 +1242,7 @@
    "label": "AC essential feed",
    "kind": "select",
    "event": "AIRLINER_ELEC_AC_ESS",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_AC_ESS_FEED",
    "positions": [
     {
@@ -1218,6 +1258,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_AC_ESS_COVER"
   },
   {
@@ -1227,7 +1269,7 @@
    "label": "Galley",
    "kind": "select",
    "event": "AIRLINER_ELEC_GALLEY",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GALLEY_CAB",
    "positions": [
     {
@@ -1242,7 +1284,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_COMMERCIAL",
@@ -1251,7 +1295,7 @@
    "label": "Commercial",
    "kind": "select",
    "event": "AIRLINER_ELEC_COMMERCIAL",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_COMMERCIAL_ON",
    "positions": [
     {
@@ -1266,7 +1310,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_IDG1_COVER",
@@ -1379,7 +1425,7 @@
    "label": "Green engine 1 pump",
    "kind": "select",
    "event": "AIRLINER_HYD_GREEN",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GREEN_PUMP_ON",
    "positions": [
     {
@@ -1395,6 +1441,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_HYD_GREEN_COVER"
   },
   {
@@ -1428,7 +1476,7 @@
    "label": "Green engine 2 pump",
    "kind": "select",
    "event": "AIRLINER_HYD_GREEN_ENG2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_GREEN_PUMP_ON",
    "positions": [
     {
@@ -1444,6 +1492,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_HYD_GREEN_ENG2_COVER"
   },
   {
@@ -1477,7 +1527,7 @@
    "label": "Blue engine 1 pump",
    "kind": "select",
    "event": "AIRLINER_HYD_BLUE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_BLUE_PUMP_ON",
    "positions": [
     {
@@ -1493,6 +1543,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_HYD_BLUE_COVER"
   },
   {
@@ -1526,7 +1578,7 @@
    "label": "Yellow engine 2 pump",
    "kind": "select",
    "event": "AIRLINER_HYD_YELLOW",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_YELLOW_PUMP_ON",
    "positions": [
     {
@@ -1542,6 +1594,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_HYD_YELLOW_COVER"
   },
   {
@@ -1551,7 +1605,7 @@
    "label": "Green electric pump",
    "kind": "select",
    "event": "AIRLINER_HYD_GREEN_OFF",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GREEN_ELEC_PUMP_LOWER_PB",
    "positions": [
     {
@@ -1566,7 +1620,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_HYD_GREEN_ELEC_COVER",
@@ -1599,7 +1655,7 @@
    "label": "Green electric pump on",
    "kind": "select",
    "event": "AIRLINER_HYD_GREEN_ELEC",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_GREEN_ELEC_PUMP_PB",
    "positions": [
     {
@@ -1615,6 +1671,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_HYD_GREEN_ELEC_COVER"
   },
   {
@@ -1624,7 +1682,7 @@
    "label": "Blue electric pump",
    "kind": "select",
    "event": "AIRLINER_HYD_BLUE_OFF",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_BLUE_ELEC_PUMP_LOWER_PB",
    "positions": [
     {
@@ -1639,7 +1697,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_HYD_BLUE_ELEC_COVER",
@@ -1672,7 +1732,7 @@
    "label": "Blue electric pump on",
    "kind": "select",
    "event": "AIRLINER_HYD_BLUE_ELEC",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_BLUE_ELEC_PUMP_PB",
    "positions": [
     {
@@ -1688,6 +1748,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_HYD_BLUE_ELEC_COVER"
   },
   {
@@ -1697,7 +1759,7 @@
    "label": "Yellow electric pump",
    "kind": "select",
    "event": "AIRLINER_HYD_YELLOW_OFF",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_YELLOW_ELEC_PUMP_LOWER_PB",
    "positions": [
     {
@@ -1712,7 +1774,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_HYD_YELLOW_ELEC_COVER",
@@ -1745,7 +1809,7 @@
    "label": "Yellow electric pump on",
    "kind": "select",
    "event": "AIRLINER_HYD_YELLOW_ELEC",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_YELLOW_ELEC_PUMP_PB",
    "positions": [
     {
@@ -1761,6 +1825,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_HYD_YELLOW_ELEC_COVER"
   },
   {
@@ -2204,7 +2270,7 @@
    "label": "Bulk cargo isolation valve",
    "kind": "select",
    "event": "AIRLINER_BULK_ISO_VALVE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BULK_ISOL_VALVE",
    "positions": [
     {
@@ -2219,7 +2285,9 @@
      "label": "Shut",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_APU_MASTER",
@@ -2279,7 +2347,7 @@
    "label": "Engine 1 bleed",
    "kind": "select",
    "event": "AIRLINER_ENG1_BLEED",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENGINE1_BLEED",
    "positions": [
     {
@@ -2294,7 +2362,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_ENG2_BLEED",
@@ -2303,7 +2373,7 @@
    "label": "Engine 2 bleed",
    "kind": "select",
    "event": "AIRLINER_ENG2_BLEED",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENGINE2_BLEED",
    "positions": [
     {
@@ -2318,7 +2388,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_APU_BLEED",
@@ -2327,7 +2399,7 @@
    "label": "APU bleed",
    "kind": "select",
    "event": "AIRLINER_AIR_APU_BLEED",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_APU_BLEED_BUTTON",
    "positions": [
     {
@@ -2342,7 +2414,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_XBLEED",
@@ -2381,7 +2455,7 @@
    "label": "Pack 1",
    "kind": "select",
    "event": "AIRLINER_PACK1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PACK1_BUTTON",
    "positions": [
     {
@@ -2397,6 +2471,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "lamps": [
     {
      "read": "INI_PACK1_FAULT",
@@ -2411,7 +2487,7 @@
    "label": "Pack 2",
    "kind": "select",
    "event": "AIRLINER_PACK2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_PACK2_BUTTON",
    "positions": [
     {
@@ -2427,6 +2503,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "lamps": [
     {
      "read": "INI_PACK2_FAULT",
@@ -2471,7 +2549,7 @@
    "label": "Hot air 1",
    "kind": "select",
    "event": "AIRLINER_HOT_AIR1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_HOT_AIR_SUPPLY1_ON",
    "positions": [
     {
@@ -2486,7 +2564,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_HOT_AIR2",
@@ -2495,7 +2575,7 @@
    "label": "Hot air 2",
    "kind": "select",
    "event": "AIRLINER_HOT_AIR2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_HOT_AIR_SUPPLY2_ON",
    "positions": [
     {
@@ -2510,7 +2590,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CKPT_TEMP",
@@ -2571,7 +2653,7 @@
    "label": "Cargo hot air",
    "kind": "select",
    "event": "AIRLINER_HOT_AIR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BULK_HOT_AIR_STATE",
    "positions": [
     {
@@ -2586,7 +2668,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_RAM_AIR_COVER",
@@ -2619,7 +2703,7 @@
    "label": "Ram air",
    "kind": "select",
    "event": "AIRLINER_RAM_AIR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_RAM_AIR_ON",
    "positions": [
     {
@@ -2635,6 +2719,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_RAM_AIR_COVER"
   },
   {
@@ -2740,7 +2826,7 @@
    "label": "Cabin fans",
    "kind": "select",
    "event": "AIRLINER_VENT_CAB",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_CABIN_FANS_BUTTON",
    "positions": [
     {
@@ -2755,7 +2841,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_EXTRACT",
@@ -2764,7 +2852,7 @@
    "label": "Avionics extract",
    "kind": "select",
    "event": "AIRLINER_VENT_EXTRACT",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_CABIN_EXTRACT_VALVE_BUTTON",
    "positions": [
     {
@@ -2779,7 +2867,9 @@
      "label": "Override",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_GND_COOL",
@@ -2812,7 +2902,7 @@
    "label": "Wing anti-ice",
    "kind": "select",
    "event": "AIRLINER_WING_ICE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_WING_ANTI_ICE",
    "positions": [
     {
@@ -2827,7 +2917,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_ENG1_ANTI_ICE",
@@ -2836,7 +2928,7 @@
    "label": "Engine 1 anti-ice",
    "kind": "select",
    "event": "AIRLINER_ENG1_ICE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG1_ANTI_ICE",
    "positions": [
     {
@@ -2851,7 +2943,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_ENG2_ANTI_ICE",
@@ -2860,7 +2954,7 @@
    "label": "Engine 2 anti-ice",
    "kind": "select",
    "event": "AIRLINER_ENG2_ICE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_ENG2_ANTI_ICE",
    "positions": [
     {
@@ -2875,7 +2969,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_PROBE_HEAT",
@@ -3543,7 +3639,7 @@
    "label": "FADEC 1 ground power",
    "kind": "select",
    "event": "AIRLINER_FADEC_ENG1",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FADEC1_GND_POWER_STATE",
    "positions": [
     {
@@ -3559,6 +3655,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_FADEC1_COVER"
   },
   {
@@ -3592,7 +3690,7 @@
    "label": "FADEC 2 ground power",
    "kind": "select",
    "event": "AIRLINER_FADEC_ENG2",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FADEC2_GND_POWER_STATE",
    "positions": [
     {
@@ -3608,6 +3706,8 @@
      "proven": false
     }
    ],
+   "press": 1,
+   "release": 0,
    "guard": "A330_FADEC2_COVER"
   },
   {
@@ -3617,7 +3717,7 @@
    "label": "Crew oxygen supply",
    "kind": "select",
    "event": "AIRLINER_OXYGEN_CREW",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_CREW_SUPPLY",
    "positions": [
     {
@@ -3632,7 +3732,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CALL_ALL",
@@ -3847,7 +3949,7 @@
    "label": "Captain flight director",
    "kind": "select",
    "event": "AIRLINER_CPT_FD",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FD1_ON",
    "positions": [
     {
@@ -3862,7 +3964,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_LS",
@@ -3871,7 +3975,7 @@
    "label": "Captain LS",
    "kind": "select",
    "event": "AIRLINER_CPT_LS",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_LS_CAPTAIN",
    "positions": [
     {
@@ -3886,7 +3990,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_ND_MODE",
@@ -3985,7 +4091,7 @@
    "label": "Captain ND shows constraints",
    "kind": "select",
    "event": "AIRLINER_EFIS_CPT_CSTR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_CONSTRAINTS",
    "positions": [
     {
@@ -4000,7 +4106,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_ND_WPT",
@@ -4009,7 +4117,7 @@
    "label": "Captain ND shows waypoints",
    "kind": "select",
    "event": "AIRLINER_EFIS_CPT_WPT",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_FIXES",
    "positions": [
     {
@@ -4024,7 +4132,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_ND_VOR",
@@ -4033,7 +4143,7 @@
    "label": "Captain ND shows VOR and DME",
    "kind": "select",
    "event": "AIRLINER_EFIS_CPT_VOR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_VORS",
    "positions": [
     {
@@ -4048,7 +4158,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_ND_NDB",
@@ -4057,7 +4169,7 @@
    "label": "Captain ND shows NDBs",
    "kind": "select",
    "event": "AIRLINER_EFIS_CPT_NDB",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_NDBS",
    "positions": [
     {
@@ -4072,7 +4184,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_ND_ARPT",
@@ -4081,7 +4195,7 @@
    "label": "Captain ND shows airports",
    "kind": "select",
    "event": "AIRLINER_EFIS_CPT_ARPT",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_AIRPORTS",
    "positions": [
     {
@@ -4096,7 +4210,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_ND_NAV1",
@@ -4165,7 +4281,7 @@
    "label": "Captain terrain on ND",
    "kind": "select",
    "event": "AIRLINER_CPT_TERR_ON_ND",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_TERR_ON_CAPT",
    "positions": [
     {
@@ -4180,7 +4296,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_CPT_BARO_UNIT",
@@ -4222,7 +4340,7 @@
    "label": "First officer flight director",
    "kind": "select",
    "event": "AIRLINER_FO_FD",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_FD2_ON",
    "positions": [
     {
@@ -4237,7 +4355,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_LS",
@@ -4246,7 +4366,7 @@
    "label": "First officer LS",
    "kind": "select",
    "event": "AIRLINER_FO_LS",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_LS_FO",
    "positions": [
     {
@@ -4261,7 +4381,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_ND_MODE",
@@ -4360,7 +4482,7 @@
    "label": "First officer ND shows constraints",
    "kind": "select",
    "event": "AIRLINER_EFIS_FO_CSTR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_CONSTRAINTS2",
    "positions": [
     {
@@ -4375,7 +4497,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_ND_WPT",
@@ -4384,7 +4508,7 @@
    "label": "First officer ND shows waypoints",
    "kind": "select",
    "event": "AIRLINER_EFIS_FO_WPT",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_FIXES2",
    "positions": [
     {
@@ -4399,7 +4523,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_ND_VOR",
@@ -4408,7 +4534,7 @@
    "label": "First officer ND shows VOR and DME",
    "kind": "select",
    "event": "AIRLINER_EFIS_FO_VOR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_VORS2",
    "positions": [
     {
@@ -4423,7 +4549,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_ND_NDB",
@@ -4432,7 +4560,7 @@
    "label": "First officer ND shows NDBs",
    "kind": "select",
    "event": "AIRLINER_EFIS_FO_NDB",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_NDBS2",
    "positions": [
     {
@@ -4447,7 +4575,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_ND_ARPT",
@@ -4456,7 +4586,7 @@
    "label": "First officer ND shows airports",
    "kind": "select",
    "event": "AIRLINER_EFIS_FO_ARPT",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_SHOW_AIRPORTS2",
    "positions": [
     {
@@ -4471,7 +4601,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_ND_NAV1",
@@ -4540,7 +4672,7 @@
    "label": "First officer terrain on ND",
    "kind": "select",
    "event": "AIRLINER_FO_TERR_ON_ND",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_TERR_ON_FO",
    "positions": [
     {
@@ -4555,7 +4687,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_FO_BARO_UNIT",
@@ -4621,7 +4755,7 @@
    "label": "Brake fans",
    "kind": "select",
    "event": "AIRLINER_BRK_FAN",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_BRAKE_FAN_ON",
    "positions": [
     {
@@ -4636,7 +4770,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_BRAKE_SYSTEM",
@@ -4675,7 +4811,7 @@
    "label": "GPWS system",
    "kind": "select",
    "event": "AIRLINER_GPWS_SYS",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_SYS_STATE",
    "positions": [
     {
@@ -4690,7 +4826,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_GPWS_TERR",
@@ -4699,7 +4837,7 @@
    "label": "Terrain",
    "kind": "select",
    "event": "AIRLINER_GPWS_TERR",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_TERR_STATE",
    "positions": [
     {
@@ -4714,7 +4852,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_GPWS_GS",
@@ -4723,7 +4863,7 @@
    "label": "Glide slope mode",
    "kind": "select",
    "event": "AIRLINER_GS_MODE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_GS_STATE",
    "positions": [
     {
@@ -4738,7 +4878,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_GPWS_FLAP",
@@ -4747,7 +4889,7 @@
    "label": "Flap mode",
    "kind": "select",
    "event": "AIRLINER_FLAP_MODE",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_GPWS_FLAP_STATE",
    "positions": [
     {
@@ -4762,7 +4904,9 @@
      "label": "Off",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_LAND_RECOVERY",
@@ -4771,7 +4915,7 @@
    "label": "Landing recovery",
    "kind": "select",
    "event": "AIRLINER_LAND_RECOVERY",
-   "mode": "set",
+   "mode": "toggle",
    "read": "INI_LAND_RECOVERY",
    "positions": [
     {
@@ -4786,7 +4930,9 @@
      "label": "On",
      "proven": false
     }
-   ]
+   ],
+   "press": 1,
+   "release": 0
   },
   {
    "key": "A330_ATT_HDG",
