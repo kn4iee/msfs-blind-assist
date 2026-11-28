@@ -33,12 +33,13 @@ Python 3, standard library only. Every path resolves from the file's own locatio
   names it (`AIRLINER_...`); a control with no event (a read-out) uses its own key as the id. Fields:
   `key` (never changes), `section`, `panel`, `kind` (`select`, `button`, `continuous`, `status`),
   `mode` (`set`, `push`, `toggle`, `rpn`), `read`, `positions`, and any extra the map carries
-  (`press`, `release`, `lamps`, `holdMs`, `rpn`, `notes`, `min`, `max`, `step`), written to the map in
-  the curation's order.
-  A `toggle` with `press` and `release` (and no `rpn`) is a push-button the aircraft toggles: a pick
-  presses it once, by value (its input event set to `press`, the hold, then set to `release`), and
-  only when its `read` differs from the pick. Its positions' `input` values drive no write; they stay
-  for the record. A `toggle` with an `rpn` (the engine masters) writes that line with `{value}`.
+  (`press`, `lamps`, `holdMs`, `rpn`, `notes`, `min`, `max`, `step`), written to the map in the
+  curation's order.
+  A `toggle` with `press` (and no `rpn`) is a push-button the aircraft toggles: a pick presses it
+  once, with ONE set of its input event to `press`, and only when its `read` is known and differs from
+  the pick. Nothing is sent after that set: every set to these events is a press, so a release would
+  be a second press. A `release` field is refused. Its positions' `input` values drive no write; they
+  stay for the record. A `toggle` with an `rpn` (the engine masters) writes that line with `{value}`.
   A position is `{ "value": what the read shows, "input": what to send, "name": the key of the
   position's name, "proven": bool }`. Until the aircraft's own strings are available (plan 04 Task 2
   Step 2) `name` is the read value as a string. `proven` is true only where an indication the control
@@ -95,7 +96,8 @@ Conventions the probe found (do not "correct" them by intuition):
 - A push-button's input is the opposite of its L:var: input 0 = pushed in (on/auto, light off) and the
   L:var reads 1 (PACK 1, the batteries, generators, bleeds, hydraulic pumps, PRIMs/SECs). Superseded on
   2026-11-27 for 73 push-buttons (PACK 1, the generators, bleeds, hydraulic pumps and PRIMs/SECs among
-  them): they toggle, and their input event's own value says nothing about their state (see below).
+  them): they toggle, each set of their input event is a press, and their input event's own value says
+  nothing about their state (see below).
 - A three-position switch numbers from the top: 0 = the top position (strobe ON, no-smoking ON, nose
   light T.O., annunciator light TEST); a two-position switch has 1 = the top (beacon ON).
 - A momentary key (ECAM page keys, master warning/caution, calls, agents) ignores a raw value: it is
@@ -123,23 +125,30 @@ Measured since:
   amber memo PRED W/S OFF; after writing 0 both read 0 and the memo went. So predictive windshear
   0 = Auto, 1 = Off. The control reads back what was written, so a read of its own variable never
   proves its names.
-- 2026-11-27, on the ground (MSFS 2024 1.9.24.0, the A330-200 VIP (GE), external power on), by the panel
-  sweep through the app's own route (SimConnect SetInputEvent by hash): 73 push-buttons toggle. Writing
-  the same input value twice flipped the read back. Every one started with its input event's own value
-  at 0, whatever the switch showed. Two patterns:
+- 2026-11-27 21:29, on the ground (MSFS 2024 1.9.24.0, the A330-200 VIP (GE), external power on), by
+  the panel sweep through the app's own route (SimConnect SetInputEvent by hash): 73 push-buttons
+  toggle. Writing the same input value twice flipped the read back. Every one started with its input
+  event's own value at 0, whatever the switch showed. Two patterns:
   - 64 of them: SetInputEvent(1) with the event at 0 flipped the read (in about 100 ms), and
-    SetInputEvent(1) again, with the event at 1, flipped it back. The put-back then sent SetInputEvent(0)
-    twice and the read held at its start: the first, with the event at 1, changed nothing. Whether the
-    second found the event already at 0 is not known, so a set of 0 with the event at 0 is not measured
-    on these 64.
-  - 9 of them (the six engine-feed fuel pumps, crew oxygen and both flight directors): SetInputEvent(0)
-    with the event at 0 flipped the read, and again flipped it back. Nothing else was sent to them, so a
-    set of 1 from 0, and of 0 from 1, is not measured on these 9.
+    SetInputEvent(1) again, with the event at 1, flipped it back. The put-back then sent
+    SetInputEvent(0) twice, and after the second the read was at its start. The put-back sends a second
+    write only when the first did not leave the control at its start (its input event's own value and
+    its read both back); which of the two was not back after the first is not recorded.
+  - 9 of them (the six engine-feed fuel pumps, crew oxygen and both flight directors):
+    SetInputEvent(0) with the event at 0 flipped the read, and again flipped it back. The put-back
+    found them at their start and sent nothing. Nothing else was sent to them.
+- 2026-11-27 23:05, the same flight, a trial of two of them (`--only A330_CPT_FD,A330_PACK1`): the
+  press by value then built (SetInputEvent(1), a 150 ms hold, SetInputEvent(0)) left both reads
+  where they were: `dead` on pack 1 (one of the 64) and on the captain's flight director (one of the
+  9).
 
-  The model that fits both: every SetInputEvent is a press except a change from 1 to 0, which is a
-  release. Each key's measured part is above; the rest is the model. A press is set 1, the hold, set 0.
-  On the 64 its two halves were measured, separately (set 1 from 0 flipped, set 0 from 1 changed
-  nothing); on the 9 it is the model's. These controls are now
-  `mode: toggle` with `press: 1, release: 0`. Their `read` and their positions' value and name pairing
-  are unchanged; their positions' `input` values no longer drive a write. The panel sweep's next run
-  presses each of them once and back, which measures the press on the 9.
+  The one model that fits every result: every SetInputEvent to these events is a press (one flip),
+  whatever the value. It reads the 64's two sets of 1 and the 9's two sets of 0 as two flips, the
+  64's put-back (two sets of 0) as two flips, and the 23:05 press (a set of 1, then a set of 0) as two
+  flips that cancelled. It is a model: on each key only the parts above were measured. An earlier
+  reading of the 64's put-back ("the first set of 0 changed nothing") overlooked the put-back's rule
+  above, and the 23:05 trial rules it out. These controls are now `mode: toggle` with `press: 1` and
+  no release: a press is ONE set of 1, sent only when the control's read is known and differs from
+  the pick. Their `read` and their positions' value and name pairing are unchanged; their positions'
+  `input` values drive no write. The one-set press itself has not met the simulator yet: the panel
+  sweep's next run presses each of them once and back, which measures it.

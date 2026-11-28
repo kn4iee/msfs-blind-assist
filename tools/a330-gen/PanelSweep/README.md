@@ -73,8 +73,8 @@ its own (`L:A330PANELSWEEP_PROBE`) and read back; if that does not answer, the s
 still written, and every press and calculator line is `not sent`.
 
 The dry run of 2026-11-27, after the push-buttons that toggle were measured, planned 151 units: 149 controls (150
-positions, each written twice; 73 push-buttons that toggle, each pressed and pressed back, 146 presses by value; 2
-key presses; 14 guards opened) and the two families of keys (18 presses), with 132 skipped (18 of them the
+positions, each written twice; 73 push-buttons that toggle, each pressed and pressed back, 146 presses of one
+input-event write each; 2 key presses; 14 guards opened) and the two families of keys (18 presses), with 132 skipped (18 of them the
 families' own keys), 165 put-backs (73 of them by the read), about 17 minutes plus a minute to read the starts.
 Each write that moves nothing waits 5 s
 more before it is called dead. **Ctrl+C** stops once the control in progress has been put back. A second Ctrl+C
@@ -92,9 +92,9 @@ Ctrl+C finishes the control in progress and stops; a second one stops after the 
    - an input event by SetInputEvent, with the hash from the aircraft's own enumeration (an event the aircraft
      does not list is `not sent`, never `dead`);
    - a key's press as its own `_Push`, then after its hold `_Release`, over the calculator, as the app sends it;
-   - a push-button that toggles (`mode: toggle` with `press` and `release`) pressed by value: SetInputEvent of
-     its `press` value, the hold, then SetInputEvent of its `release` value, in one write (the release always
-     follows), as the app sends it;
+   - a push-button that toggles (`mode: toggle` with `press`) pressed by ONE SetInputEvent of its `press` value,
+     with nothing after it, as the app sends it (every set to its event is a press, so a release would be a
+     second one);
    - a calculator line as the map gives it.
    Never a `_Set` through the calculator for a control the app sets by input event. Writes are at least 400 ms
    apart. A denied control is never written, whatever asks. A guard is opened before its switch; when the guard's
@@ -113,8 +113,8 @@ Ctrl+C finishes the control in progress and stops; a second one stops after the 
    then an ECAM page key. An input-event control is written its input event's own starting value, never its
    read translated through the pairing being tested (an inverted pairing would put it on the wrong side), at
    most twice, and holds once both that value and its read are back. A push-button that toggles is put back by
-   its read alone: when its read differs from the journal's it is pressed once, its read is waited for, and it
-   holds only when the read is back. A key is pressed until its state reads its
+   its read alone: when its read differs from the journal's it is pressed once (one set), its read is waited
+   for, and it holds only when the read is back. A key is pressed until its state reads its
    start, at most `pressesToCycle - 1` times; a key with no count is a push-on/push-off key, so one press. A family
    of keys that share one state is put back as one unit (below). **If a put-back did not hold, the whole sweep
    stops** (every later control reads `not reached`), and the summary says what to put back by hand and the key
@@ -126,30 +126,35 @@ Measured by this sweep on 2026-11-27 (MSFS 2024 1.9.24.0, on the ground, through
 SetInputEvent by hash): 73 push-buttons toggle. The packs, the bleeds, the generators, the hydraulic pumps, the
 fuel pumps, the PRIMs and SECs, the flight directors and the EFIS keys are among them. What was measured, by key:
 
-- On 64 of them: writing 1 with the event at 0 flipped the switch, and writing 1 again flipped it back. The
-  put-back then wrote 0 twice and the switch held: the first 0, with the event at 1, changed nothing. Whether the
-  second found the event at 0 is not known, so writing 0 with the event at 0 is not measured on these.
-- On the other 9 (the six engine-feed fuel pumps, crew oxygen and both flight directors): writing 0 with the event
-  at 0 flipped the switch, and again flipped it back. Nothing else was written to them, so writing 1 from 0, and 0
-  from 1, is not measured on these.
+- The full run at 21:29, on 64 of them: writing 1 with the event at 0 flipped the switch, and writing 1 again
+  flipped it back. The put-back then wrote 0 twice, and after the second the switch was at its start. The
+  put-back writes a second time only when the first did not leave the control at its start (its event's own value
+  and its read both back); which of the two was not back is not recorded.
+- The full run, on the other 9 (the six engine-feed fuel pumps, crew oxygen and both flight directors): writing 0
+  with the event at 0 flipped the switch, and again flipped it back. The put-back found them at their start and
+  wrote nothing.
+- The trial at 23:05 (`--only A330_CPT_FD,A330_PACK1`): the press by value then built (write 1, a 150 ms hold,
+  write 0) left both switches where they were: `dead` on pack 1 (one of the 64) and on the captain's flight
+  director (one of the 9).
 
-The model that fits both: **every SetInputEvent is a press, except a change of the event's value from 1 to 0,
-which is a release.** It is a model: each key's measured part is above. A press is set 1, the hold, set 0: on the 64
-its two halves were measured; on the 9 it is the model's, and this tool's next run measures it (each button is
-pressed and pressed back). The map now has these as `mode: toggle` with `press: 1, release: 0`, and the app and
-this tool press them that way, only when the read differs from the pick.
+The one model that fits all of it: **every SetInputEvent to these events is a press (one flip), whatever the
+value.** The two writes of 1, the two writes of 0, the put-back's two writes of 0 and the 23:05 write of 1 then 0
+were each two flips. It is a model: each key's measured part is above. The map now has these as `mode: toggle`
+with `press: 1` and no release, and the app and this tool press them with ONE write of 1, only when the read is
+known and differs from the pick. That one-write press has not met the simulator yet: this tool's next run
+measures it (each button is pressed and pressed back).
 
 **The trap:** a push-button's input event's own value (`B:<EVENT>`) says nothing about its state. All 73 started
 at 0 whatever the switch showed, so it matches the journal's whatever the switch does. Writing that value back is
-no remedy either: on the 9, writing 0 with the event at 0 was measured as a press. On 2026-11-27 the `--restore` of that day's
+no remedy either: every write is a press. On 2026-11-27 the `--restore` of that day's
 journal found all 165 entries back at their start and sent nothing. Afterwards `A330_ENG1_BLEED`, `A330_PACK2`
 and `A330_GPWS_FLAP` read off where the journal says they started on. The tool had sent them nothing, and the
 cause is not known.
 
 **What the tool does now:** a push-button that toggles has a `toggle` line in the journal with its read and that
 read's value. Its event's own value is kept for the record only. Both the sweep's put-back and `--restore`
-compare the READ with the journal's read. When they differ, the button is pressed once by value and its read is
-waited for. If it did not come back, nothing more is written: the sweep stops, and `--restore` stops there too and
+compare the READ with the journal's read. When they differ, the button is pressed once (one write of its `press`
+value) and its read is waited for. If it did not come back, nothing more is written: the sweep stops, and `--restore` stops there too and
 names it. Put that one back by hand (press it once in the cockpit if it does not show its start), then run
 `--restore` again for the rest. It is never pressed twice. The rule
 follows the map, not the journal line, so an older journal's `input-event` line for one of these buttons is put
@@ -272,6 +277,7 @@ cargo and cabin doors) are comment lines at the end of the deny list, to be deni
 ## Not tested in the sim
 
 The planning and the runner's decisions are pinned by the xUnit tests on in-memory controls and a fake
-aircraft (which models the measured rule above for the push-buttons that toggle), and the dry run runs. The live
-half first ran on 2026-11-27 (plan 04, Task 4 Step 4). The press and press-back of the push-buttons that toggle,
-and their put-back by the read, have not run against the simulator yet.
+aircraft (which models the push-buttons that toggle by the model above: every write is a press), and the dry run
+runs. The live half first ran on 2026-11-27 (plan 04, Task 4 Step 4). The one-write press and press-back of the
+push-buttons that toggle, and their put-back by the read, have not run against the simulator yet; the 23:05 trial
+ran the two-write press it replaced.
