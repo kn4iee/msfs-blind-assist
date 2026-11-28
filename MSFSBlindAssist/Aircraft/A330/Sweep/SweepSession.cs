@@ -59,6 +59,9 @@ internal sealed class SweepOutcome
     public IReadOnlySet<string> Noisy { get; set; } = new HashSet<string>();
     /// <summary>What the owner puts back by hand, one line a control that did not come back, in plain words.</summary>
     public List<string> ByHand { get; } = new();
+    /// <summary>The map key to go on from with <c>--from</c> after a stop: the control the stop cut short, else the first
+    /// not reached (a family's first key); null when nothing was left.</summary>
+    public string? ResumeFrom { get; set; }
 }
 
 /// <summary>
@@ -208,6 +211,7 @@ internal sealed class SweepSession
             {
                 _out.Row(new SweepRow { Key = cp.Key, Label = cp.Label, Verdict = $"not reached ({outcome.StopReason})" });
                 outcome.NotReached++;
+                outcome.ResumeFrom ??= FirstKey(cp);
                 continue;
             }
             _out.Say(FormattableString.Invariant($"[{number}/{total}] {cp.Key} ({cp.Label})"));
@@ -234,6 +238,7 @@ internal sealed class SweepSession
                 if (_stopRequested() is string stop)
                 {
                     outcome.StopReason ??= stop;
+                    outcome.ResumeFrom ??= FirstKey(cp);   // cut short: go on from it
                     _out.Row(new SweepRow { Key = cp.Key, Label = cp.Label, Verdict = $"interrupted ({stop})" });
                     break;
                 }
@@ -257,6 +262,7 @@ internal sealed class SweepSession
         catch (Exception ex)
         {
             outcome.StopReason ??= $"{cp.Key}: {ex.Message}";
+            outcome.ResumeFrom ??= FirstKey(cp);
             _out.Row(new SweepRow { Key = cp.Key, Label = cp.Label, Verdict = "error: " + ex.Message });
             _out.Say($"  {cp.Key}: ERROR {ex.Message}");
         }
@@ -266,6 +272,9 @@ internal sealed class SweepSession
             outcome.Swept++;
         }
     }
+
+    /// <summary>The map key <c>--from</c> takes for a planned control: a family's first key, else its own.</summary>
+    private static string FirstKey(ControlPlan cp) => cp.Family?.Members[0] ?? cp.Key;
 
     /// <summary>Everything a control's steps wrote, put back from the journal: itself, then its guard, then its page key
     /// (a family as one unit). One that does not hold stops the sweep and is named for putting back by hand.</summary>

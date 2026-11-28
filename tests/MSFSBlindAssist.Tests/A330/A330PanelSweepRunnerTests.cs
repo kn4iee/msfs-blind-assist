@@ -513,14 +513,99 @@ public class A330PanelSweepRunnerTests
         }
     }
 
-    private static (SweepOutcome outcome, List<SweepRow> rows, string journal) Sweep(FakeAircraft aircraft, params Control[] controls)
+    private static (SweepOutcome outcome, List<SweepRow> rows, string journal) Sweep(FakeAircraft aircraft, params Control[] controls) =>
+        SweepUntil(aircraft, () => null, controls);
+
+    private static (SweepOutcome outcome, List<SweepRow> rows, string journal) SweepUntil(FakeAircraft aircraft, Func<string?> stop, params Control[] controls)
     {
         var rows = new List<SweepRow>();
         var journal = new StringBuilder();
         var session = new SweepSession(controls, new Dictionary<string, string>(), aircraft,
-            new SweepSinks(rows.Add, line => journal.Append(line), _ => { }));
+            new SweepSinks(rows.Add, line => journal.Append(line), _ => { }), stop);
         var outcome = session.Run(session.Prepare());
         return (outcome, rows, journal.ToString());
+    }
+
+    // ---------------- the safety paths ----------------
+
+    [Fact]
+    public void An_exception_mid_control_still_puts_it_back()
+    {
+        var sel = Select("SEL", P(0, 0, "Off"), P(1, 1, "On"));
+        var next = Select("NEXT", P(0, 0, "Off"), P(1, 1, "On"));
+        var aircraft = new FakeAircraft { ThrowOnSet = 2 };   // the second write (the repeat) fails on the link
+        aircraft.Add(sel, 0);
+        aircraft.Add(next, 0);
+
+        var (outcome, rows, _) = Sweep(aircraft, sel, next);
+
+        Assert.Equal(0, aircraft.Events["EV_SEL"]);
+        Assert.Contains(rows, r => r.Key == "SEL" && r.Verdict == "error: the link failed");
+        Assert.Contains(rows, r => r.Key == "SEL" && r.Verdict == "restored");
+        Assert.Contains("the link failed", outcome.StopReason);
+        Assert.DoesNotContain(aircraft.Sent, s => s.StartsWith("EV_NEXT", StringComparison.Ordinal));
+        Assert.Equal("SEL", outcome.ResumeFrom);   // it did not finish: go on from it
+    }
+
+    [Fact]
+    public void Ctrl_C_stops_once_the_control_in_progress_is_put_back()
+    {
+        var a = Select("A", P(0, 0, "Low"), P(1, 1, "Normal"), P(2, 2, "High"));
+        var b = Select("B", P(0, 0, "Off"), P(1, 1, "On"));
+        var aircraft = new FakeAircraft();
+        aircraft.Add(a, 0);
+        aircraft.Add(b, 0);
+
+        // Ctrl+C comes once the first position has been written
+        var (outcome, rows, _) = SweepUntil(aircraft, () => aircraft.Sent.Count > 0 ? "stopped with Ctrl+C" : null, a, b);
+
+        Assert.Equal(new[] { "EV_A=1", "EV_A=1", "EV_A=0" }, aircraft.Sent);   // Normal twice, then put back; High never
+        Assert.Contains(rows, r => r.Key == "A" && r.Verdict == "interrupted (stopped with Ctrl+C)");
+        Assert.Contains(rows, r => r.Key == "A" && r.Verdict == "restored");
+        Assert.Contains(rows, r => r.Key == "B" && r.Verdict == "not reached (stopped with Ctrl+C)");
+        Assert.Equal("A", outcome.ResumeFrom);
+    }
+
+    [Fact]
+    public void The_guard_is_closed_even_when_its_switch_did_not_come_back()
+    {
+        var (guard, sw) = Guarded();
+        var aircraft = new FakeAircraft();
+        aircraft.Add(guard, 0);
+        aircraft.Add(sw, 0);
+        aircraft.Ignores["EV_SW"] = 0;   // the switch will not go back Off
+
+        var (outcome, rows, _) = Sweep(aircraft, guard, sw);
+
+        Assert.Contains(rows, r => r.Key == "SW" && r.Verdict.StartsWith("RESTORE FAILED", StringComparison.Ordinal));
+        Assert.Equal("EV_COVER=0", aircraft.Sent[^1]);   // the guard is still put back, last
+        Assert.Equal(0, aircraft.Events["EV_COVER"]);
+        Assert.Equal("SW (SW)", Assert.Single(outcome.RestoreFailures));
+        Assert.NotNull(outcome.StopReason);
+    }
+
+    [Fact]
+    public void A_denied_control_is_never_written_whatever_asks()
+    {
+        // a plan that names a denied control (the planner never makes one): the write is refused before it leaves
+        var bat = Select("BAT", P(0, 0, "Auto"), P(1, 1, "Off"));
+        var aircraft = new FakeAircraft();
+        aircraft.Add(bat, 0);
+        var rows = new List<SweepRow>();
+        var session = new SweepSession(new[] { bat }, new Dictionary<string, string> { ["BAT"] = "the cockpit goes dark" }, aircraft,
+            new SweepSinks(rows.Add, _ => { }, _ => { }));
+        var plan = new SweepPlan(new[]
+        {
+            new ControlPlan("BAT", "BAT", new[] { new SweepStep(SweepStepKind.SetPosition, "BAT", 1, 1, "set BAT to Off") }, null),
+        });
+        var entry = SweepJournal.EntryFor(bat, eventValue: 0, readValue: 0)!;
+
+        var outcome = session.Run(new SweepPrepared(plan, new[] { entry }));
+
+        Assert.Empty(aircraft.Sent);
+        Assert.Contains(rows, r => r.Key == "BAT" && r.Verdict.Contains("is denied", StringComparison.Ordinal));
+        Assert.Contains(rows, r => r.Key == "BAT" && r.Verdict == "at start");
+        Assert.NotNull(outcome.StopReason);
     }
 
     [Fact]
@@ -581,6 +666,8 @@ public class A330PanelSweepRunnerTests
         // the journal was written before the first write, and covers B too: --restore can put back what was not reached
         Assert.Contains("start\tA\t", journal);
         Assert.Contains("start\tB\t", journal);
+        // A was swept to the end; once it is put back by hand, the sweep goes on from B
+        Assert.Equal("B", outcome.ResumeFrom);
     }
 
     [Fact]

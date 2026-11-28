@@ -103,7 +103,8 @@ Ctrl+C finishes the control in progress and stops; a second one stops after the 
    most twice, and holds once both that value and its read are back. A key is pressed until its state reads its
    start, at most `pressesToCycle - 1` times; a key with no count is a push-on/push-off key, so one press. A family
    of keys that share one state is put back as one unit (below). **If a put-back did not hold, the whole sweep
-   stops** (every later control reads `not reached`), and the summary says what to put back by hand.
+   stops** (every later control reads `not reached`), and the summary says what to put back by hand and the key
+   to go on from: `--from <key>`, the control the stop cut short, or else the first one not reached.
 
 ## Keys that share one state
 

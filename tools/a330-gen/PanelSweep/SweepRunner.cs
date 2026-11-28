@@ -196,6 +196,8 @@ internal static class SweepRunner
             w.WriteLine("NOT PUT BACK:");
             foreach (string f in outcome.ByHand) w.WriteLine("  " + f);
         }
+        if (outcome.StopReason != null && outcome.ResumeFrom != null)
+            w.WriteLine($"To go on after this stop, once everything above is back: A330PanelSweep --from {outcome.ResumeFrom}");
         w.WriteLine($"Results: {tsv.Path}");
         w.WriteLine($"Journal: {journal.Path}");
         if (outcome.RestoreFailures.Count > 0) return 5;
