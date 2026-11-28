@@ -446,11 +446,13 @@ public class A330PanelSweepRunnerTests
         public long NowMs() => Now;
         public void Sleep(int ms) => Now += ms;
 
+        /// <summary>A control at its start: its input event, and the L:var it drives (none when it reads its own event).</summary>
         public void Add(Control c, double start)
         {
             Events[c.Event!] = start;
-            Vars[c.Read!] = start;
-            Drives[c.Event!] = c.Read!;
+            if (c.Read!.StartsWith("B:", StringComparison.Ordinal)) return;
+            Vars[c.Read] = start;
+            Drives[c.Event!] = c.Read;
         }
     }
 
@@ -523,6 +525,35 @@ public class A330PanelSweepRunnerTests
         Assert.Equal("not sent", press.Verdict);
         Assert.Contains("calculator", press.Note);
         Assert.Contains("could not be read", Assert.Single(rows, r => r.Key == "SEL").Verdict);
+    }
+
+    private static (Control guard, Control sw) Guarded()
+    {
+        var guard = Select("COVER", P(0, 0, "Closed"), P(1, 1, "Open"));
+        guard.Read = "B:EV_COVER";
+        var sw = Select("SW", P(0, 0, "Off"), P(1, 1, "On"));
+        sw.Guard = "COVER";
+        return (guard, sw);
+    }
+
+    [Fact]
+    public void A_switch_whose_guard_did_not_open_is_never_written()
+    {
+        var (guard, sw) = Guarded();
+        var other = Select("NEXT", P(0, 0, "Off"), P(1, 1, "On"));
+        var aircraft = new FakeAircraft();
+        aircraft.Add(guard, 0);
+        aircraft.Add(sw, 0);
+        aircraft.Add(other, 0);
+        aircraft.Ignores["EV_COVER"] = 1;   // the guard will not open
+
+        var (outcome, rows, _) = Sweep(aircraft, guard, sw, other);
+
+        Assert.DoesNotContain(aircraft.Sent, s => s.StartsWith("EV_SW", StringComparison.Ordinal));
+        Assert.Contains(rows, r => r.Key == "SW" && r.Verdict == "skipped: its guard did not open (dead)");
+        // the rest of the sweep goes on
+        Assert.Null(outcome.StopReason);
+        Assert.Contains(aircraft.Sent, s => s.StartsWith("EV_NEXT", StringComparison.Ordinal));
     }
 
     [Fact]

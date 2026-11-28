@@ -169,6 +169,9 @@ internal sealed class SweepSession
         return outcome;
     }
 
+    /// <summary>A row's word when the control already read the target and nothing was sent.</summary>
+    internal const string AlreadyThere = "already there";
+
     private void RunControl(ControlPlan cp, SweepOutcome outcome)
     {
         var steps = cp.Steps;
@@ -193,6 +196,13 @@ internal sealed class SweepSession
                     _ => Press(target, s),
                 };
                 outcome.Verdicts[verdict] = outcome.Verdicts.GetValueOrDefault(verdict) + 1;
+                // a switch behind a guard that did not open is never written: the rest of this control is skipped
+                if (s.Kind == SweepStepKind.OpenGuard && !SweepVerdicts.IsPass(verdict) && verdict != AlreadyThere)
+                {
+                    _out.Row(new SweepRow { Key = cp.Key, Label = cp.Label, Verdict = $"skipped: its guard did not open ({verdict})" });
+                    _out.Say($"  {cp.Key}: skipped, its guard {s.ControlKey} did not open ({verdict})");
+                    break;
+                }
             }
         }
         catch (Exception ex)
@@ -234,7 +244,7 @@ internal sealed class SweepSession
         if (before == null) return Record(c, position, verdict: "not read before the write");
 
         var plan = A330Write.ToPosition(c, before, s.ExpectedRead ?? s.Input!.Value);
-        if (plan.Outcome == A330WriteOutcome.AtPosition) return Record(c, position, verdict: "already there", readBack: before);
+        if (plan.Outcome == A330WriteOutcome.AtPosition) return Record(c, position, verdict: AlreadyThere, readBack: before);
 
         var proof = ProofOf(c, s.ExpectedRead, before);
         double? proofBefore = proof.Reach == ProofReach.Variable ? _io.Read(c.Proof!.Read!) : null;
@@ -326,7 +336,7 @@ internal sealed class SweepSession
     private string Record(Control c, string position, string verdict, double? readBack = null)
     {
         _out.Row(new SweepRow { Key = c.Key, Label = c.Label, Position = position, ReadBack = readBack, Verdict = verdict });
-        if (verdict != "already there") _out.Say($"  {c.Key} {position}: {verdict}");
+        if (verdict != AlreadyThere) _out.Say($"  {c.Key} {position}: {verdict}");
         return verdict;
     }
 

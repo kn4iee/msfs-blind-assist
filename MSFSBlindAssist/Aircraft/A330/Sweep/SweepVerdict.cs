@@ -81,6 +81,10 @@ internal static class SweepVerdicts
     /// <summary>A verdict that counts as a pass: the control went where it was sent (lagged is still one).</summary>
     public static bool IsPass(SweepVerdict v) => v is SweepVerdict.Proven or SweepVerdict.ReadOnly or SweepVerdict.Lagged;
 
+    /// <summary>A row's verdict word that is a pass (any other word, "already there" included, is not).</summary>
+    public static bool IsPass(string word) =>
+        word == Word(SweepVerdict.Proven) || word == Word(SweepVerdict.ReadOnly) || word == Word(SweepVerdict.Lagged);
+
     public static Judgement Classify(WriteObservation o)
     {
         if (!o.Sent) return new(SweepVerdict.NotSent, o.NotSentReason ?? "");
