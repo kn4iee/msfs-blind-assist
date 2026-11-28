@@ -3501,19 +3501,22 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>
-    /// Picks the step kind (an access key, or Add Step setting it back to Via), refills the name box for it and,
-    /// with <paramref name="focusName"/>, puts focus there. When focus is already in the name box the screen reader
-    /// would say nothing of its new label, so focus passes through the kind list on its way back: a screen reader
-    /// reads the last of two quick focus moves, the name box under its new name. Focus moves with Select(), the way
-    /// a label's access key moves it (Alt+W was read where the kind keys were not).
+    /// Picks the step kind (today only the access keys call it, through <c>ProcessMnemonic</c>), refills the name box
+    /// for it and, with <paramref name="focusName"/>, puts focus there [CORE-7]. From anywhere else focus moves to the
+    /// name box with Select(), the way a label's access key moves it, and the screen reader names the box, so the
+    /// window says nothing. When focus is already in the name box nothing moves and the reader says nothing (it
+    /// keeps only the last focus event of a quick burst and ignores one for the object that has focus), so the window
+    /// speaks the box's new name once, at once, dropping any step sentence still waiting.
     /// </summary>
     private void SelectStepKind(ClearanceStepKind kind, bool focusName)
     {
+        bool alreadyInNameBox = cmbStepName.Focused;
         SetStepKindSilently(kind);
         RefreshStepNameList();
         if (!focusName) return;
-        if (cmbStepName.Focused) cmbStepKind.Select();
-        cmbStepName.Select();
+        string? readback = ClearanceStepEntry.KindKeyReadback(alreadyInNameBox, cmbStepName.AccessibleName);
+        if (readback != null) SpeakStepBlockNow(readback);
+        else cmbStepName.Select();
     }
 
     /// <summary>The taxiway of the last Via, Left onto or Right onto step the name box lists for

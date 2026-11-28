@@ -287,10 +287,26 @@ public class ClearanceStepEntryTests
     public void Other_letters_pick_no_kind(char letter)
         => Assert.Null(ClearanceStepEntry.KindForMnemonic(letter));
 
+    [Fact]
+    public void The_five_kinds_have_different_accessible_names()
+    {
+        var names = System.Enum.GetValues<ClearanceStepKind>().Select(k => ClearanceStepEntry.NameBoxAccessibleName(k)).ToList();
+        Assert.Equal(5, names.Count);
+        Assert.Equal(names.Count, names.Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData(true, "Left onto taxiway", "Left onto taxiway")]
+    [InlineData(true, "Left onto taxiway, changing step 2", "Left onto taxiway, changing step 2")]
+    [InlineData(false, "Left onto taxiway", null)]
+    [InlineData(false, "Left onto taxiway, changing step 2", null)]
+    public void A_kind_key_speaks_the_name_only_when_focus_is_already_in_the_name_box(bool already, string name, string? expected)
+        => Assert.Equal(expected, ClearanceStepEntry.KindKeyReadback(already, name));
+
     [Theory]
     [InlineData(ClearanceStepKind.Via, "Taxi&way:", "Taxiway")]
-    [InlineData(ClearanceStepKind.LeftOnto, "Taxi&way:", "Taxiway")]
-    [InlineData(ClearanceStepKind.RightOnto, "Taxi&way:", "Taxiway")]
+    [InlineData(ClearanceStepKind.LeftOnto, "Taxi&way:", "Left onto taxiway")]
+    [InlineData(ClearanceStepKind.RightOnto, "Taxi&way:", "Right onto taxiway")]
     [InlineData(ClearanceStepKind.Cross, "Runway or taxi&way to cross:", "Runway or taxiway to cross")]
     [InlineData(ClearanceStepKind.HoldShort, "Hold short of runway or taxi&way:", "Hold short of runway, taxiway or holding point")]
     public void The_name_box_follows_the_kind_and_keeps_Alt_W(ClearanceStepKind kind, string label, string accessibleName)

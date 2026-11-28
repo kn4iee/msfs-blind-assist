@@ -27,6 +27,19 @@ public class ClearanceWiringTests
     }
 
     [Fact]
+    public void A_kind_key_with_focus_already_in_the_name_box_speaks_its_new_name_and_never_bounces_focus()
+    {
+        string select = Member(FormSource(), "private void SelectStepKind(");
+        Assert.Contains("ClearanceStepEntry.KindKeyReadback(", select);
+        Assert.Contains("SpeakStepBlockNow(", select);
+        Assert.Contains("cmbStepName.Select()", select);
+        Assert.DoesNotContain("cmbStepKind.Select()", select);
+        int focused = select.IndexOf("cmbStepName.Focused", StringComparison.Ordinal);
+        Assert.True(focused >= 0);
+        Assert.True(focused < select.IndexOf("RefreshStepNameList(", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Stops_are_placed_from_lists_and_search_the_whole_route()
     {
         string routing = RoutingSource();

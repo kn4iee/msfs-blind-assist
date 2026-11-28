@@ -64,6 +64,7 @@ A state read back after the press:
 - The value-dialog toggle read-back. In `ValueInputForm` (`ToggleButtonDef`), 1.2 s after a toggle button is pressed the dialog refreshes every toggle's label and speaks the pressed toggle's new state with `AnnounceImmediate`, unless the toggle's `SuppressStateAnnounce` says the aircraft refused the press (the announce would cut off the refusal). The PMDG 777 and 737, HS787, iFly 737 and MD-11 dialogs use it.
 - The A380 FCU push/pull panel buttons speak the resulting selected or managed value through `FlyByWireA380Definition.OnPanelButtonFired` (`FlyByWireA380Definition.HotkeysAndMotion.cs`), exactly as their hotkeys do.
 - The Fenix DCDU window (`FenixChannelDcduReadback`, `FenixChannelDcduForm`): the status after an answer key and an info line after a press, read from the DCDU itself about a second later, and the Bright and Dim buttons' level.
+- The Taxi Guidance window's step-kind keys (Alt+V, Alt+L, Alt+R, Alt+X, Alt+H; `TaxiAssistForm.SelectStepKind`, `ClearanceStepEntry.KindKeyReadback`). Pressed with focus already in the name box, focus does not move, so the screen reader says nothing, and the window speaks the box's new name once. From anywhere else focus moves there, the reader names the box, and the window says nothing.
 
 "<name> pressed" for an action with no readable state:
 

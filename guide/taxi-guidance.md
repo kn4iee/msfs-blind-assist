@@ -159,9 +159,9 @@ You enter the clearance one step at a time, in the order ATC said it. Each step 
 - **Cross** — a runway ATC cleared you to cross, or a taxiway ATC said you cross. See [Cross and the At box](#taxi-step-cross).
 - **Hold short of** — a runway, a taxiway or a named holding point to stop before. See [Hold short of](#hold-short-of-runway-after-the-first-taxiway).
 
-You rarely need the Step kind list itself: **Alt+V**, **Alt+L**, **Alt+R**, **Alt+X** and **Alt+H** each choose a kind (Via, Left onto, Right onto, Cross, Hold short of) and move you straight to the name box, from anywhere in the window.
+You rarely need the Step kind list itself: **Alt+V**, **Alt+L**, **Alt+R**, **Alt+X** and **Alt+H** each choose a kind (Via, Left onto, Right onto, Cross, Hold short of) and move you straight to the name box, from anywhere in the window. If you are already in the name box, you stay there and BA says the box's new name, for example *"Hold short of runway, taxiway or holding point"*.
 
-The **name box** (Alt+W) comes next. Its name follows the kind, and your screen reader says it: "Taxiway" for Via, Left onto and Right onto, "Runway or taxiway to cross" for Cross, and "Hold short of runway, taxiway or holding point" for Hold short of. Press the first letter or digit of a name to jump to it, then Enter to add the step (see [Add Step](#add-taxiway)).
+The **name box** (Alt+W) comes next. Its name follows the kind, and your screen reader says it: "Taxiway" for Via, "Left onto taxiway" for Left onto, "Right onto taxiway" for Right onto, "Runway or taxiway to cross" for Cross, and "Hold short of runway, taxiway or holding point" for Hold short of. Press the first letter or digit of a name to jump to it, then Enter to add the step (see [Add Step](#add-taxiway)).
 
 For a taxiway, the list is ordered to put the likely names first:
 

@@ -82,13 +82,22 @@ public static class ClearanceStepEntry
         _ => "Taxi&way:",
     };
 
-    /// <summary>The name box's accessible name for a kind.</summary>
+    /// <summary>The name box's accessible name for a kind; the five kinds sound different, so the pilot hears which
+    /// turn a kind key chose.</summary>
     public static string NameBoxAccessibleName(ClearanceStepKind kind) => kind switch
     {
+        ClearanceStepKind.LeftOnto => "Left onto taxiway",
+        ClearanceStepKind.RightOnto => "Right onto taxiway",
         ClearanceStepKind.Cross => "Runway or taxiway to cross",
         ClearanceStepKind.HoldShort => "Hold short of runway, taxiway or holding point",
         _ => "Taxiway",
     };
+
+    /// <summary>What a step-kind key says [CORE-7]. Moving focus to the name box lets the screen reader name it, so the
+    /// app says nothing (null). With focus already there nothing moves and the reader says nothing, so the app speaks
+    /// the box's new name once.</summary>
+    public static string? KindKeyReadback(bool focusAlreadyInNameBox, string nameBoxAccessibleName)
+        => focusAlreadyInNameBox ? nameBoxAccessibleName : null;
 
     /// <summary>The name box's accessible name while step <paramref name="changingStep"/> is being changed:
     /// "Taxiway, changing step 3".</summary>
