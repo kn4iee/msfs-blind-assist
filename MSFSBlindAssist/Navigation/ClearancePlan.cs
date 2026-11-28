@@ -23,6 +23,16 @@ public enum ClearanceEndKind { Destination, HoldShortRunway, HoldShortTaxiway, H
 public sealed record ClearanceHold(int SeqIndex, ClearanceStep Step);
 
 /// <summary>
+/// A runway hold short on the way, as <c>LoadRoute</c> takes it: the runway and, when the step names one, the place
+/// ("Hold short of runway 27L at B"): a taxiway label, or a holding point's name with its node
+/// (<paramref name="AtNodeId"/>, 0 for a taxiway). Reads as the runway, so a list of picks prints like the old list of names.
+/// </summary>
+public sealed record RunwayHoldPick(string Runway, string? At = null, int AtNodeId = 0)
+{
+    public override string ToString() => Runway;
+}
+
+/// <summary>
 /// What <see cref="ClearancePlanner.Build"/> makes of a clearance: everything <c>LoadRoute</c> takes.
 /// <list type="bullet">
 /// <item><see cref="TaxiwaySequence"/>: the Via, Left onto and Right onto steps' taxiways, in order; one used twice is
@@ -74,6 +84,20 @@ public sealed record ClearancePlan(
     /// which <c>LoadRoute</c> takes as <c>holdingPointName</c>. Null when that is null.
     /// </summary>
     public string? CrossAtHoldingPointName { get; init; }
+
+    /// <summary>
+    /// The runway hold-short stops on the way, as <c>LoadRoute</c> takes them: (the taxiway-sequence index of the Via
+    /// step entered before it, -1 when none, the runway and its place) pairs. Null when there is none.
+    /// </summary>
+    public IReadOnlyList<KeyValuePair<int, RunwayHoldPick>>? RunwayHoldPicks()
+    {
+        var picks = Holds
+            .Where(h => h.Step.TargetKind == ClearanceTargetKind.Runway)
+            .Select(h => new KeyValuePair<int, RunwayHoldPick>(h.SeqIndex,
+                new RunwayHoldPick(h.Step.Name, string.IsNullOrWhiteSpace(h.Step.At) ? null : h.Step.At, h.Step.AtNodeId)))
+            .ToList();
+        return picks.Count > 0 ? picks : null;
+    }
 }
 
 /// <summary>Turns the clearance steps into a <see cref="ClearancePlan"/>. Spec 8.1.</summary>

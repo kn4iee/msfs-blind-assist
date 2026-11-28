@@ -255,6 +255,32 @@ public class ClearancePlannerTests
         Assert.Equal(expected, Leg(Via("P"), HoldRwyAt("24L", "P"), CrossRwy("24L"), HoldTwy("L")).Refusal);
     }
 
+    // Review Focus 5: a Hold short of runway at P and a crossing of it at Q are different places, not refused; the same
+    // place is refused with the existing text.
+    [Fact]
+    public void A_runway_hold_short_at_one_place_and_a_crossing_at_another_are_not_refused()
+    {
+        Assert.Null(Leg(Via("A"), CrossRwy("24L", at: "P"), Via("B"), HoldRwyAt("24L", "Q"), HoldTwy("L")).Refusal);
+        Assert.Equal("Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one.",
+            Leg(Via("A"), CrossRwy("24L", at: "P"), Via("B"), HoldRwyAt("24L", "P"), HoldTwy("L")).Refusal);
+    }
+
+    // The planner's runway stops carry the step's place to LoadRoute.
+    [Fact]
+    public void A_runway_hold_short_at_a_place_yields_a_pick_with_it_at_its_row()
+    {
+        var plan = Leg(Via("A"), Via("B"), HoldRwyAt("27L", "B"), HoldRwy("09"), HoldRwyAt("04L", "A2", 7), Via("C"));
+        var picks = plan.RunwayHoldPicks()!;
+        Assert.Equal(new[]
+        {
+            new KeyValuePair<int, RunwayHoldPick>(1, new RunwayHoldPick("27L", "B")),
+            new KeyValuePair<int, RunwayHoldPick>(1, new RunwayHoldPick("09")),
+            new KeyValuePair<int, RunwayHoldPick>(1, new RunwayHoldPick("04L", "A2", 7)),
+        }, picks);
+        Assert.Equal("27L", picks[0].Value.ToString());
+        Assert.Null(Leg(Via("A"), HoldTwy("B"), Via("C")).RunwayHoldPicks());
+    }
+
     // [HLD-18] since main's 2026-11-24 reversal, merged into the step list 2026-11-26: a holding point read from a sign
     // is a stop like a painted one anywhere in the list, with a destination too, and still ends a leg as its last step.
     // Until then Calculate refused one anywhere but the end of a leg with no destination ("KK is read from a sign and

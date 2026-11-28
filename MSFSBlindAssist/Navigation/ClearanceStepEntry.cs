@@ -113,8 +113,8 @@ public static class ClearanceStepEntry
     /// True when <paramref name="rebuilt"/>, the step the window's boxes make now, says the same as
     /// <paramref name="entered"/>, the step being changed: the same kind, target kind, name and, for a Cross step, "at"
     /// (ordinal, case ignored; null is empty), and the same node when the target is a holding point. Hidden data (an
-    /// at-node, a passed-stop flag, the place a crossing put back as a hold short keeps) is not compared, as the boxes
-    /// cannot show it: only a Cross step has an "At" box.
+    /// at-node, a passed-stop flag) is not compared, as the boxes cannot show it: only a Cross or Hold short of runway
+    /// step has an "At" box, and a crossing put back as a hold short shows its place there.
     /// </summary>
     public static bool SameAsEntered(ClearanceStep entered, ClearanceStep rebuilt)
     {
@@ -123,7 +123,7 @@ public static class ClearanceStepEntry
         return entered.Kind == rebuilt.Kind
             && entered.TargetKind == rebuilt.TargetKind
             && string.Equals(entered.Name ?? "", rebuilt.Name ?? "", StringComparison.OrdinalIgnoreCase)
-            && (entered.Kind != ClearanceStepKind.Cross
+            && (!HasAtBox(entered)
                 || string.Equals(entered.At ?? "", rebuilt.At ?? "", StringComparison.OrdinalIgnoreCase))
             && (entered.TargetKind != ClearanceTargetKind.HoldingPoint || entered.NodeId == rebuilt.NodeId);
     }
@@ -183,7 +183,7 @@ public static class ClearanceStepEntry
     public static string? OwnPlaceLabel(ClearanceStep changing, string? chosenRunway, bool placeOffered, bool placeIsHoldingPoint)
     {
         ArgumentNullException.ThrowIfNull(changing);
-        if (placeOffered || changing is not { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }
+        if (placeOffered || !HasAtBox(changing)
             || string.IsNullOrWhiteSpace(changing.At)
             || !string.Equals(chosenRunway, changing.Name, StringComparison.OrdinalIgnoreCase))
             return null;
@@ -201,11 +201,10 @@ public static class ClearanceStepEntry
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(changing);
-        if (ownPlaceLabel != null && atLabel == ownPlaceLabel && kind == ClearanceStepKind.Cross
+        if (ownPlaceLabel != null && atLabel == ownPlaceLabel && kind == changing.Kind && HasAtBox(changing)
             && name.Kind == ClearanceTargetKind.Runway
-            && changing is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }
             && string.Equals(name.Name, changing.Name, StringComparison.OrdinalIgnoreCase))
-            return new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, name.Name,
+            return new ClearanceStep(kind, ClearanceTargetKind.Runway, name.Name,
                 At: changing.At, AtNodeId: changing.AtNodeId);
         return Build(kind, name, atLabel, atPoint);
     }
@@ -230,12 +229,16 @@ public static class ClearanceStepEntry
         for (int i = 0; previous != null && i < items.Count; i++)
             if (items[i] == previous) { kept = i; break; }
 
-        bool ownRunway = changing is { Kind: ClearanceStepKind.Cross, TargetKind: ClearanceTargetKind.Runway }
+        bool ownRunway = changing != null && HasAtBox(changing)
             && string.Equals(chosenRunway, changing.Name, StringComparison.OrdinalIgnoreCase);
         if (!ownRunway) return kept >= 0 ? kept : 0;
         bool pickedOwnPlace = previous != null && previous == previousOwnLabel;
         return kept >= 0 && !pickedOwnPlace ? kept : ownPlaceIndex;
     }
+
+    // Only a Cross or a Hold short of a RUNWAY step has an "At" box (a place on the runway's hold line).
+    private static bool HasAtBox(ClearanceStep step)
+        => step is { TargetKind: ClearanceTargetKind.Runway, Kind: ClearanceStepKind.Cross or ClearanceStepKind.HoldShort };
 
     // A crossing cleared at a holding point carries its node; a crossing already made carries the stop it passed (or
     // the reach) there instead.
@@ -260,8 +263,8 @@ public static class ClearanceStepEntry
     /// <summary>
     /// The step a pick makes. Via, Left onto and Right onto name a taxiway. Cross names a runway or a taxiway; only a
     /// runway takes an "at": <paramref name="atPoint"/> (a holding point: its name and node) when one was picked, else
-    /// <paramref name="atLabel"/> (a taxiway) unless it is <see cref="NoAtPlace"/>. Hold short of names a runway, a
-    /// taxiway or a holding point (its node, its kind, and whether it was read from a sign).
+    /// <paramref name="atLabel"/> (a taxiway) unless it is <see cref="NoAtPlace"/>. Hold short of names a runway (which
+    /// takes an "at" the same way), a taxiway or a holding point (its node, its kind, and whether it was read from a sign).
     /// </summary>
     public static ClearanceStep Build(ClearanceStepKind kind, ClearanceNameLists.Item name,
         string? atLabel = null, NamedHoldingPoint? atPoint = null)
@@ -290,7 +293,13 @@ public static class ClearanceStepEntry
                 if (name.Kind == ClearanceTargetKind.HoldingPoint && name.HoldingPoint is { } point)
                     return new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.HoldingPoint, point.Name,
                         NodeId: point.NodeId, HoldingPointKind: point.Kind, FromSign: point.IsFromSign);
-                return new ClearanceStep(ClearanceStepKind.HoldShort, name.Kind, name.Name);
+                if (name.Kind != ClearanceTargetKind.Runway)
+                    return new ClearanceStep(ClearanceStepKind.HoldShort, name.Kind, name.Name);
+                if (atPoint != null)
+                    return new ClearanceStep(ClearanceStepKind.HoldShort, name.Kind, name.Name,
+                        At: atPoint.Name, AtNodeId: atPoint.NodeId);
+                string? holdAt = string.IsNullOrWhiteSpace(atLabel) || atLabel == NoAtPlace ? null : atLabel.Trim();
+                return new ClearanceStep(ClearanceStepKind.HoldShort, name.Kind, name.Name, At: holdAt);
             }
         }
     }

@@ -42,7 +42,9 @@ public sealed record ClearanceStep(
             {
                 return TargetKind switch
                 {
-                    ClearanceTargetKind.Runway => "Hold short of runway " + Name,
+                    ClearanceTargetKind.Runway => string.IsNullOrEmpty(At)
+                        ? "Hold short of runway " + Name
+                        : "Hold short of runway " + Name + " at " + At,
                     ClearanceTargetKind.Taxiway => "Hold short of taxiway " + Name,
                     _ => "Hold short of " + Name
                         + (FromSign ? HoldShortTargetList.SignHoldingPointSuffix : HoldShortTargetList.HoldingPointSuffix),

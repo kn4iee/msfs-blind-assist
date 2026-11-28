@@ -50,15 +50,18 @@ public class ClearanceStepEntryTests
         Assert.False(ClearanceStepEntry.SameAsEntered(seven, eight));
     }
 
-    // Review Focus 3: a crossing put back by the Hold short key reads "Hold short of runway 24L" and keeps the crossing's
-    // place (its At and node, ClearanceTrim.AsHoldShort). The Hold short of boxes have no At to show it, so "replacing" it
-    // with what it already says is the same step, and the window keeps the record with its place.
+    // Review Focus 3: a crossing put back by the Hold short key reads "Hold short of runway 24L at P" and keeps the
+    // crossing's place (its At and node, ClearanceTrim.AsHoldShort). The Hold short of runway step has an At box now, so
+    // "replacing" it with no place is another step, and with its own place (BuildForChange) the same one: the window keeps
+    // the record, with its node.
     [Fact]
-    public void SameAsEntered_ignores_a_put_back_hold_shorts_place()
+    public void SameAsEntered_compares_a_put_back_hold_shorts_place()
     {
         var putBack = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "24L", At: "P", AtNodeId: 9);
-        Assert.True(ClearanceStepEntry.SameAsEntered(putBack,
+        Assert.False(ClearanceStepEntry.SameAsEntered(putBack,
             ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("24L"))));
+        Assert.True(ClearanceStepEntry.SameAsEntered(putBack,
+            ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("24L"), "P")));
         Assert.False(ClearanceStepEntry.SameAsEntered(putBack,
             ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("24R"))));
         Assert.False(ClearanceStepEntry.SameAsEntered(putBack,
@@ -84,7 +87,8 @@ public class ClearanceStepEntryTests
         Assert.Null(ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, "06", placeOffered: false, placeIsHoldingPoint: true));
         Assert.Null(ClearanceStepEntry.OwnPlaceLabel(MadeAtB3, null, placeOffered: false, placeIsHoldingPoint: true));
         Assert.Null(ClearanceStepEntry.OwnPlaceLabel(MadeAtB3 with { At = null }, "24L", placeOffered: false, placeIsHoldingPoint: false));
-        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "24L",
+        // A Hold short of taxiway carries no place: nothing added (a Hold short of runway does, see below).
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Taxiway, "24L",
             At: "B3", AtNodeId: 9), "24L", placeOffered: false, placeIsHoldingPoint: true));
         Assert.Null(ClearanceStepEntry.OwnPlaceLabel(new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Taxiway, "24L"),
             "24L", placeOffered: false, placeIsHoldingPoint: false));
@@ -206,8 +210,8 @@ public class ClearanceStepEntryTests
         Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, null, "24L", -1));
         var viaC = ClearanceStepEntry.Build(ClearanceStepKind.Via, Taxiway("C"));
         Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, viaC, "24L", 2));
-        var putBack = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "24L", At: "C", AtNodeId: 9);
-        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, putBack, "24L", 2));
+        var holdShortTaxiway = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Taxiway, "24L", At: "C", AtNodeId: 9);
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, holdShortTaxiway, "24L", 2));
         // A pick still listed stays, whatever runway.
         Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(for06, "D", null, MadeAtB3, "06", 1));
         Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, "C", null, null, "24L", -1));
@@ -387,6 +391,68 @@ public class ClearanceStepEntryTests
         Assert.Equal(0, step.AtNodeId);
         Assert.Equal("Step 2: cross runway 24L at P.", TestCulture.Run("de-DE", () => step.Spoken(2)));
         Assert.Equal("Step 2: cross runway 24L at P.", TestCulture.Run("sv-SE", () => step.Spoken(2)));
+    }
+
+    // ---- Hold short of runway Y at Z ----
+
+    [Fact]
+    public void Build_hold_short_of_runway_takes_its_At()
+    {
+        var taxiway = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "B");
+        Assert.Equal(ClearanceTargetKind.Runway, taxiway.TargetKind);
+        Assert.Equal("B", taxiway.At);
+        Assert.Equal(0, taxiway.AtNodeId);
+
+        var point = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"),
+            "A2" + HoldShortTargetList.HoldingPointSuffix, Point("A2", 7));
+        Assert.Equal("A2", point.At);
+        Assert.Equal(7, point.AtNodeId);
+
+        Assert.Null(ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), ClearanceStepEntry.NoAtPlace).At);
+        Assert.Null(ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L")).At);
+        // A taxiway or a holding point held short of has no At box.
+        Assert.Null(ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Taxiway("B"), "C").At);
+    }
+
+    [Fact]
+    public void Hold_short_of_runway_reads_its_place()
+    {
+        var step = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "B");
+        Assert.Equal("Hold short of runway 27L at B", step.Sentence());
+        Assert.Equal("Step 2: hold short of runway 27L at B.", TestCulture.Run("de-DE", () => step.Spoken(2)));
+        Assert.Equal("Hold short of runway 27L at A2", ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"),
+            "A2", Point("A2", 7)).Sentence());
+        Assert.Equal("Hold short of runway 27L", ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L")).Sentence());
+    }
+
+    [Fact]
+    public void SameAsEntered_compares_a_runway_hold_shorts_place()
+    {
+        var atB = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "B");
+        Assert.False(ClearanceStepEntry.SameAsEntered(atB, ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "C")));
+        Assert.True(ClearanceStepEntry.SameAsEntered(atB, ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "b")));
+
+        // Review Focus 3: a put-back crossing changed with its own place is the same step, hidden node kept.
+        var putBack = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "04L", At: "C", AtNodeId: 5);
+        string own = ClearanceStepEntry.OwnPlaceLabel(putBack, "04L", placeOffered: false, placeIsHoldingPoint: true)!;
+        Assert.Equal("C (holding point)", own);
+        var rebuilt = ClearanceStepEntry.BuildForChange(ClearanceStepKind.HoldShort, Runway("04L"), own, null, putBack, own);
+        Assert.Equal(putBack, rebuilt);
+        Assert.True(ClearanceStepEntry.SameAsEntered(putBack, rebuilt));
+        // A Cross rebuilt from a hold short's own place is not it (kind differs).
+        Assert.NotEqual(ClearanceStepKind.Cross, rebuilt.Kind);
+        Assert.Equal(ClearanceStepKind.Cross, ClearanceStepEntry.BuildForChange(ClearanceStepKind.Cross, Runway("04L"), own, null, putBack, own).Kind);
+    }
+
+    [Fact]
+    public void Own_place_and_refill_apply_to_a_runway_hold_short_as_to_a_crossing()
+    {
+        var held = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "24L", At: "B3", AtNodeId: 9);
+        Assert.Equal("B3 (holding point)", ClearanceStepEntry.OwnPlaceLabel(held, "24L", false, true));
+        Assert.Equal("B3", ClearanceStepEntry.OwnPlaceLabel(held, "24l", false, false));
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(held, "06", false, true));
+        Assert.Equal(3, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, held, "24L", 3));
+        Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, held, "06", 3));
     }
 
     [Fact]

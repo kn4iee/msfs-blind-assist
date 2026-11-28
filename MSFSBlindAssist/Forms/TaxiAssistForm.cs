@@ -4312,6 +4312,11 @@ public class TaxiAssistForm : Form
         return stops.Count > 0 ? stops : null;
     }
 
+    // Task 1 adapter: the plan's runway stops carry their place now (RunwayHoldPick), but LoadRoute still takes names
+    // only; the place reaches it when LoadRoute's parameter becomes the pick list (next task).
+    private static List<KeyValuePair<int, string>>? RunwayStopNames(ClearancePlan plan)
+        => plan.RunwayHoldPicks()?.Select(p => new KeyValuePair<int, string>(p.Key, p.Value.Runway)).ToList();
+
     /// <summary>The plan's Turn picks as LoadRoute takes them: the index of the Left onto or Right onto step's own
     /// taxiway in the sequence -> the side; null when there is none. They reach guidance only this way ([TURN-1]).</summary>
     private static Dictionary<int, TurnSide>? PlanTurnPicks(ClearancePlan plan)
@@ -4742,7 +4747,7 @@ public class TaxiAssistForm : Form
             isRunwayDest,
             prebuiltGraph: _graph,
             // The Hold short of steps on the way, keyed by the Via step each was entered after (-1: none).
-            userRunwayHoldShorts: PlanStops(plan, ClearanceTargetKind.Runway, s => s.Name),
+            userRunwayHoldShorts: RunwayStopNames(plan),
             userTaxiwayHoldShorts: PlanStops(plan, ClearanceTargetKind.Taxiway, s => s.Name),
             preferIlsHold: isRunwayDest && chkCatIiiHold.Checked,
             fullLengthBacktrack: backtrackActive,
@@ -5135,7 +5140,7 @@ public class TaxiAssistForm : Form
             prebuiltGraph: graph,
             // The Hold short of steps on the way (not the one that ends the leg), keyed by the Via step each was
             // entered after (-1: none). A leg with no destination now takes taxiway and holding-point stops too.
-            userRunwayHoldShorts: PlanStops(plan, ClearanceTargetKind.Runway, s => s.Name),
+            userRunwayHoldShorts: RunwayStopNames(plan),
             userTaxiwayHoldShorts: PlanStops(plan, ClearanceTargetKind.Taxiway, s => s.Name),
             progressiveTerminator: term,
             // Crossing at a named holding point to end the leg: pin the route THROUGH that painted line (the pin a
