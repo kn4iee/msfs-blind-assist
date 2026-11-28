@@ -30,11 +30,11 @@ public class A330PanelSweepRunnerTests
     [Fact]
     public void A_proof_that_follows_the_positions_name_is_proven()
     {
-        // Off is read 1; the memo shows at Off. Written to Off, the read went 0 -> 1 and the memo came on.
+        // Off is read 1; the memo shows at Off. Written from On to Off, the read went 0 -> 1 and the memo came on.
         var j = SweepVerdicts.Classify(new WriteObservation
         {
             ReadBefore = 0, Read = Moved(1), ExpectedRead = 1,
-            Proof = new ProofReading(ProofReach.Variable, Before: 0, After: Moved(1), ExpectedShown: true),
+            Proof = new ProofReading(ProofReach.Variable, Before: 0, After: Moved(1), ExpectedShown: true, ExpectedShownBefore: false),
         });
         Assert.Equal(SweepVerdict.Proven, j.Verdict);
         Assert.Equal("proven", j.Word);
@@ -43,13 +43,68 @@ public class A330PanelSweepRunnerTests
     [Fact]
     public void A_proof_that_follows_the_other_name_is_inverted()
     {
-        // Written to On (the memo should stay off), the memo came on: the indication followed the other name.
+        // Written from Off to On (the memo should go off), the memo came on: it followed the other name.
         var j = SweepVerdicts.Classify(new WriteObservation
         {
             ReadBefore = 1, Read = Moved(0), ExpectedRead = 0,
-            Proof = new ProofReading(ProofReach.Variable, Before: 0, After: Moved(1), ExpectedShown: false),
+            Proof = new ProofReading(ProofReach.Variable, Before: 0, After: Moved(1), ExpectedShown: false, ExpectedShownBefore: true),
         });
         Assert.Equal(SweepVerdict.Inverted, j.Verdict);
+    }
+
+    [Fact]
+    public void A_proof_that_cannot_tell_the_two_positions_apart_leaves_the_row_read_only()
+    {
+        // A three-position selector, B to C, the memo showing only at A: the memo stays off, as it should, and that
+        // says nothing about the names. It is never proven.
+        var ps = new[] { P(0, 0, "A"), P(1, 1, "B"), P(2, 2, "C") };
+        var j = SweepVerdicts.Classify(new WriteObservation
+        {
+            ReadBefore = 1, Read = Moved(2), ExpectedRead = 2, Positions = ps,
+            Proof = new ProofReading(ProofReach.Variable, Before: 0, After: Still(0), ExpectedShown: false, ExpectedShownBefore: false),
+        });
+        Assert.Equal(SweepVerdict.ReadOnly, j.Verdict);
+        Assert.Contains("cannot tell", j.Note);
+
+        // and a memo that came on between two positions where it should stay off is no pass
+        var on = SweepVerdicts.Classify(new WriteObservation
+        {
+            ReadBefore = 1, Read = Moved(2), ExpectedRead = 2, Positions = ps,
+            Proof = new ProofReading(ProofReach.Variable, Before: 0, After: Moved(1), ExpectedShown: false, ExpectedShownBefore: false),
+        });
+        Assert.False(SweepVerdicts.IsPass(on.Verdict));
+    }
+
+    [Fact]
+    public void A_proof_that_should_have_changed_and_did_not_is_not_a_pass()
+    {
+        // Written from On to Off, the read (the control's own variable) moved, but the memo never came on: the
+        // aircraft may have ignored the write.
+        var j = SweepVerdicts.Classify(new WriteObservation
+        {
+            ReadBefore = 0, Read = Moved(1), ExpectedRead = 1,
+            Proof = new ProofReading(ProofReach.Variable, Before: 0, After: Still(0), ExpectedShown: true, ExpectedShownBefore: false),
+        });
+        Assert.False(SweepVerdicts.IsPass(j.Verdict));
+        Assert.Equal(SweepVerdict.Dead, j.Verdict);
+        Assert.Contains("did not", j.Note);
+    }
+
+    [Fact]
+    public void A_proof_not_read_before_the_write_is_never_counted_as_moved()
+    {
+        var j = SweepVerdicts.Classify(new WriteObservation
+        {
+            ReadBefore = 0, Read = Moved(1), ExpectedRead = 1,
+            Proof = new ProofReading(ProofReach.Variable, Before: null, After: Still(1), ExpectedShown: true, ExpectedShownBefore: false),
+        });
+        Assert.NotEqual(SweepVerdict.Proven, j.Verdict);
+        Assert.Contains("not read before", j.Note);
+
+        // nor does the settle tracker call a reading moved when there was nothing to compare it with
+        long now = 0;
+        var r = SettleTracker.Track(() => 1, baseline: null, () => now, ms => now += ms, quietMs: 300);
+        Assert.False(r.Moved);
     }
 
     [Fact]

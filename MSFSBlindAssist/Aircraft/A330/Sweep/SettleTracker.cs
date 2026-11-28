@@ -88,7 +88,8 @@ internal static class SettleTracker
         return results;
     }
 
-    /// <summary>A reading differs from its baseline; with no baseline (it was not read before), any reading counts.</summary>
+    /// <summary>A reading differs from its baseline. With no baseline (it was not read before) nothing can be said to
+    /// have moved: the reading is "not read" before, never "moved".</summary>
     private static bool Moved(double? value, double? baseline) =>
-        value is double v && (baseline is not double b || Math.Abs(v - b) > SweepTiming.SameTolerance);
+        value is double v && baseline is double b && Math.Abs(v - b) > SweepTiming.SameTolerance;
 }

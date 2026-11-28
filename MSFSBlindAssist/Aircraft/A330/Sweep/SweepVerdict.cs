@@ -5,13 +5,14 @@ namespace MSFSBlindAssist.Aircraft.A330.Sweep;
 /// <summary>What one write of the sweep showed (plan 04, Task 4 Step 2).</summary>
 internal enum SweepVerdict
 {
-    /// <summary>The proof (an indication the control does not write itself) followed the position's name.</summary>
+    /// <summary>The proof (an indication the control does not write itself) moved into the state the position's name gives.</summary>
     Proven,
     /// <summary>The proof followed the other name: the pairing of names and values is swapped.</summary>
     Inverted,
-    /// <summary>The read moved to the position written, and there is no proof the runner can read.</summary>
+    /// <summary>The read moved to the position written, and no proof the runner can read tells this position from the one before.</summary>
     ReadOnly,
-    /// <summary>Nothing moved: not the read, not the proof, no other variable, in <see cref="SweepTiming.LimitMs"/>.</summary>
+    /// <summary>Nothing moved (not the read, not the proof, no other variable) in <see cref="SweepTiming.LimitMs"/>; or the
+    /// proof should have changed and did not, while the read (the control's own variable) moved alone.</summary>
     Dead,
     /// <summary>A pass (proven or read-only) that settled only after <see cref="SweepTiming.LaggedMs"/>: its time goes to plan 06.</summary>
     Lagged,
@@ -29,9 +30,12 @@ internal enum SweepVerdict
 /// simvar), or only through the display reader (an E/WD memo, a lower ECAM page), which this tool does not reach.</summary>
 internal enum ProofReach { None, Variable, DisplayReader }
 
-/// <summary>A proof around one write. <see cref="ExpectedShown"/>: whether the indication should show at the position
-/// written (from the proof's <c>when</c>); null when there is nothing to compare with.</summary>
-internal sealed record ProofReading(ProofReach Reach, double? Before = null, SettleResult? After = null, bool? ExpectedShown = null, string? Text = null);
+/// <summary>A proof around one write. <see cref="Before"/>: its reading before the write, null when it was not read
+/// (never taken as moved). <see cref="ExpectedShown"/> and <see cref="ExpectedShownBefore"/>: whether the indication
+/// should show at the position written and at the one the control was in before (from the proof's <c>when</c>); null
+/// when there is nothing to compare with.</summary>
+internal sealed record ProofReading(ProofReach Reach, double? Before = null, SettleResult? After = null, bool? ExpectedShown = null,
+    string? Text = null, bool? ExpectedShownBefore = null);
 
 /// <summary>Everything one write of a position showed, for <see cref="SweepVerdicts.Classify"/>.</summary>
 internal sealed record WriteObservation
@@ -84,7 +88,8 @@ internal static class SweepVerdicts
         var notes = new List<string>();
         bool readMoved = o.Read?.Moved == true;
         bool proofReadable = o.Proof.Reach == ProofReach.Variable;
-        bool proofMoved = proofReadable && o.Proof.After?.Moved == true;
+        // a proof not read before the write has nothing to have moved from
+        bool proofMoved = proofReadable && o.Proof.Before != null && o.Proof.After?.Moved == true;
 
         if (!readMoved && !proofMoved && o.SideEffects == 0)
             return new(SweepVerdict.Dead, o.Read?.TimedOut == true ? "the read never settled" : "nothing moved");
@@ -104,23 +109,16 @@ internal static class SweepVerdicts
                 + $", not {(meant != null ? $"{meant.Label} ({SweepTsv.Num(expected)})" : SweepTsv.Num(expected))}";
         }
 
+        SweepVerdict? byProof = proofReadable ? JudgeProof(o.Proof, readMoved, notes) : null;
         SweepVerdict verdict;
-        if (proofReadable && o.Proof.ExpectedShown is bool shouldShow && o.Proof.After?.Value is double shown
-            && (readMoved || proofMoved) && (shown > 0.5) == shouldShow)
+        if (byProof is SweepVerdict judged)
         {
-            verdict = SweepVerdict.Proven;
-            if (wentElsewhere != null) notes.Add(wentElsewhere);
-            if (!readMoved) notes.Add("the read did not move");
-        }
-        else if (proofReadable && o.Proof.ExpectedShown is bool && proofMoved)
-        {
-            verdict = SweepVerdict.Inverted;
-            notes.Add($"the proof {(o.Proof.ExpectedShown == true ? "did not show" : "showed")} at this position");
-            if (wentElsewhere != null) notes.Add(wentElsewhere);
+            verdict = judged;
+            if (judged != SweepVerdict.Dead && wentElsewhere != null) notes.Add(wentElsewhere);
+            if (judged == SweepVerdict.Proven && !readMoved) notes.Add("the read did not move");
         }
         else
         {
-            if (proofReadable) notes.Add(o.Proof.ExpectedShown is bool ? "the proof did not follow" : "the proof has no position to compare with");
             if (o.Proof.Reach == ProofReach.DisplayReader) notes.Add($"proof: needs the display reader ({o.Proof.Text})");
             if (!readMoved)
             {
@@ -148,6 +146,44 @@ internal static class SweepVerdicts
             }
         }
         return new(verdict, string.Join("; ", notes));
+    }
+
+    /// <summary>
+    /// What a readable proof says, or null to leave the verdict to the read (with a note saying why). It proves a name
+    /// only by moving INTO the state the position written should show, from the state the position before should
+    /// show. Moving the other way is inverted. Not moving when it should is dead: the read alone moved, and a read of
+    /// the control's own variable can follow a write the aircraft ignored. Between two positions the proof cannot tell
+    /// apart, staying put says nothing (the read decides, read-only at best) and changing is mislabeled.
+    /// </summary>
+    private static SweepVerdict? JudgeProof(ProofReading p, bool readMoved, List<string> notes)
+    {
+        bool? was = p.Before is double b ? b > 0.5 : null;
+        bool? now = p.After?.Value is double a ? a > 0.5 : null;
+        bool? shouldBe = p.ExpectedShown, shouldHaveBeen = p.ExpectedShownBefore;
+        if (was == null) { notes.Add("the proof was not read before the write"); return null; }
+        if (now == null) { notes.Add("the proof was not read after the write"); return null; }
+        if (shouldBe == null || shouldHaveBeen == null) { notes.Add("the proof has no position to compare with"); return null; }
+
+        string Change(bool on) => on ? "come on" : "gone off";
+        if (shouldBe != shouldHaveBeen)
+        {
+            if (was == shouldHaveBeen && now == shouldBe) return SweepVerdict.Proven;
+            if (was == shouldBe && now == shouldHaveBeen)
+            {
+                notes.Add($"the proof {(now == true ? "came on" : "went off")} where it should have {Change(shouldBe.Value)}");
+                return SweepVerdict.Inverted;
+            }
+            notes.Add($"the proof should have {Change(shouldBe.Value)} and did not"
+                + (readMoved ? "; the read moved alone, so the aircraft may have ignored the write" : ""));
+            return SweepVerdict.Dead;
+        }
+        if (now == shouldBe)
+        {
+            notes.Add("the proof cannot tell these two positions apart");
+            return null;
+        }
+        notes.Add($"the proof {(now == true ? "came on" : "went off")} between two positions where it should not change");
+        return SweepVerdict.Mislabeled;
     }
 
     private static int? Max(int? a, int? b) => a is int x ? (b is int y ? Math.Max(x, y) : x) : b;

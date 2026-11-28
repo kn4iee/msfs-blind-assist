@@ -236,19 +236,23 @@ internal sealed class SweepSession
         var plan = A330Write.ToPosition(c, before, s.ExpectedRead ?? s.Input!.Value);
         if (plan.Outcome == A330WriteOutcome.AtPosition) return Record(c, position, verdict: "already there", readBack: before);
 
-        var proof = ProofOf(c, s.ExpectedRead);
+        var proof = ProofOf(c, s.ExpectedRead, before);
         double? proofBefore = proof.Reach == ProofReach.Variable ? _io.Read(c.Proof!.Read!) : null;
         var snapBefore = _io.Snapshot();
         var sent = Dispatch(c.Key, plan);
         if (!sent.Sent)
             return Judge(c, position, sent.Text, new WriteObservation { Sent = false, NotSentReason = sent.Reason, ReadBefore = before }, proof, snapBefore, null);
 
+        // a proof not read before has nothing to settle from: it is read once afterwards, for the row, and never taken as moved
+        bool trackProof = proof.Reach == ProofReach.Variable && proofBefore != null;
         var channels = new List<SettleChannel> { new(() => _io.Read(read), before) };
-        if (proof.Reach == ProofReach.Variable) channels.Add(new(() => _io.Read(c.Proof!.Read!), proofBefore));
+        if (trackProof) channels.Add(new(() => _io.Read(c.Proof!.Read!), proofBefore));
         var settled = SettleTracker.Track(channels, _io.NowMs, _io.Sleep);
         var refused = _io.TakeWriteErrors();
         var snapAfter = _io.Snapshot();
-        proof = proof with { Before = proofBefore, After = channels.Count > 1 ? settled[1] : null };
+        SettleResult? proofAfter = trackProof ? settled[1]
+            : proof.Reach == ProofReach.Variable ? new SettleResult(_io.Read(c.Proof!.Read!), null, Moved: false, TimedOut: false) : null;
+        proof = proof with { Before = proofBefore, After = proofAfter };
         if (refused.Count > 0)
             return Judge(c, position, sent.Text, new WriteObservation { Sent = false, NotSentReason = "the simulator refused it: " + string.Join(", ", refused), ReadBefore = before },
                 proof, snapAfter, settled[0]);
@@ -424,15 +428,17 @@ internal sealed class SweepSession
     }
 
     /// <summary>A control's proof as the runner reaches it. A lamp or simvar proof is shown while it reads over 0.5;
-    /// it should show at the position whose read value is its <c>when</c>.</summary>
-    private static ProofReading ProofOf(Control c, double? expectedRead)
+    /// it should show at the position whose read value is its <c>when</c>: at the position written, and at the one the
+    /// control read before the write.</summary>
+    private static ProofReading ProofOf(Control c, double? expectedRead, double? readBefore)
     {
         if (c.Proof is not { } p) return new(ProofReach.None);
         if (p.Kind is "ewd_memo" or "sd_page") return new(ProofReach.DisplayReader, Text: p.Text ?? p.Page);
         if (p.Kind is "lamp" or "simvar" && !string.IsNullOrWhiteSpace(p.Read))
         {
-            bool? shows = expectedRead is double e && NumberParsing.TryParseExternal(p.When, out double when) ? SweepTiming.Same(e, when) : null;
-            return new(ProofReach.Variable, ExpectedShown: shows, Text: p.Text);
+            bool known = NumberParsing.TryParseExternal(p.When, out double when);
+            bool? ShowsAt(double? read) => known && read is double r ? SweepTiming.Same(r, when) : null;
+            return new(ProofReach.Variable, ExpectedShown: ShowsAt(expectedRead), Text: p.Text, ExpectedShownBefore: ShowsAt(readBefore));
         }
         return new(ProofReach.None);
     }
