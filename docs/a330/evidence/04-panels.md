@@ -837,7 +837,9 @@ The trial at 23:05 (`--only A330_CPT_FD,A330_PACK1`, the same flight): the press
 
 The one model that fits every result: every `SetInputEvent` to these events is a press, one flip, whatever the value. It reads each pair of writes above as two flips: the two sets of 1 on the 64, the two sets of 0 on the 9, the 64's put-back of two sets of 0, and the 23:05 press of a set of 1 then a set of 0, which cancelled. An earlier reading of the 64's put-back, that its first set of 0 changed nothing, overlooked the put-back's rule; the 23:05 trial rules it out. Only the parts above were measured; the rest is the model.
 
-The app and the tool now press these 73 with ONE `SetInputEvent` of 1 and nothing after it, only when the control's read is known and differs from the pick. That press has not met the simulator yet; the sweep's next run presses each once and back, which measures it.
+The app and the tool now press these 73 with ONE `SetInputEvent` of 1 and nothing after it, only when the control's read is known and differs from the pick.
+
+Measured at 23:54 the same evening, after that change (`--only A330_PACK1,A330_CPT_FD`, the tool's own route): pack 1 (one of the 64) and the captain's flight director (one of the 9) each flipped on one set of 1 (read settled in about 100 ms) and flipped back on a second set of 1; both ended at their start. So the single set works on one key of each group. The other 71 are not yet pressed this way.
 
 ### Dead controls
 
@@ -854,13 +856,12 @@ Already there (the control was at the position being tried): `A330_CPT_COM_VHF1`
 
 Every read-only position remains unproven. The tool checks the control's own read and, where a lamp or a simulator variable exists, that one. It cannot yet check a position by a display (an E/WD memo, an ECAM page), which needs the display reader. No position got an independent proof, so predictive windshear is still the only proven one (`tools/a330-gen/unproven.txt`).
 
-### What was not put back afterwards
+### Putting the cockpit back
 
-- Pack 2 (`A330_PACK2`): it started on (`INI_PACK2_BUTTON` 1) and reads off (0). One press by value from the restore (set 1, a hold, set 0: by the model above, two presses) did not bring it back, and it ignored calculator writes too. Switch it on by hand.
-- Engine 1 bleed (`A330_ENG1_BLEED`): it started on (`INI_ENGINE1_BLEED` 1) and was read off after the sweep. The restore stopped at pack 2 before reaching it, so the tool has not checked it. One calculator write to it changed nothing visible.
-- Flap mode (`A330_GPWS_FLAP`) is not a leftover: the restore's own read shows it at its start (1).
-
-The first restore (21:46) called all 165 controls "at start". That was the tool's defect: it judged a push-button by its input event's own value, which rests at 0. The second restore (22:40, after the fix) stopped at pack 2 with 105 of 165 at start and 59 not tried, engine 1 bleed among them. After switching pack 2 on by hand, run `--restore` again with the 21:29 journal for the rest.
+- The first restore (21:46) called all 165 controls "at start" and sent nothing. That was the tool's defect: it judged a push-button by its input event's own value, which rests at 0.
+- The second restore (22:40, judging push-buttons by their read) stopped at pack 2: its press was the two-set press, which by the model above is two presses, so pack 2 did not come back. 105 of 165 were at start; 59 were not tried.
+- The third restore (23:54, the single-set press) put back all 165. It pressed two controls, once each: pack 2 (`A330_PACK2`) and engine 1 bleed (`A330_ENG1_BLEED`), both started on and were off; the tool read both on after the press. Flap mode (`A330_GPWS_FLAP`) was never a leftover (the tool read it at its start each time).
+- Not settled: the simulator-link MCP still read pack 2 and engine 1 bleed as 0 right after the 23:54 restore, while the tool read 1. The MCP has been wrong before on this aircraft (flap mode read 0 twice, then 1), so the tool's read is the likelier, but the owner should confirm both in the cockpit or in the app's Air Conditioning and Bleed Air panels.
 
 ### Measurement traps
 
