@@ -1307,7 +1307,7 @@ This is a reference list of every taxi guidance callout, grouped by when you hea
 
 **The planner opened with fewer steps than I entered.** While a route is active, the Clearance list shows only what is still ahead, so the steps you have completed are gone. The list also updates while the planner is open in front of you and when you come back to it with Alt+Tab or a click. If you hear *"Steps cleared."*, every step was completed. See [Changing a Clearance on the Move](#taxi-amend).
 
-**My steps were gone when I opened the planner.** The list is emptied when the leg it was calculated for is over (you arrived, your Progressive leg ended, you stopped guidance or you landed) and when you change airport, so a clearance never carries over to the next route. Enter the new clearance.
+**My steps were gone when I opened the planner.** The list is emptied when the leg it was calculated for is over (you arrived, you stopped guidance or you landed) and when you change airport, so a clearance never carries over to the next route. When a Progressive leg ends, only that leg's steps go; steps you typed since your last Calculate stay. Enter the new clearance.
 
 **A taxiway ATC named isn't in the list.** Your scenery's data does not have it under that name. Switch on online taxiway names, rebuild your database if you have changed scenery, or pick the nearest equivalent. See [Taxiway names you can't find](#taxi-clearances).
 
