@@ -211,7 +211,7 @@ A Hold short of step is a stop: guidance stops you there and waits for you to pr
 
 Where a step applies is decided by your route, not by its place in the list. BA looks for the runway, taxiway or holding point from the taxiway of the Via step before it, and if your route does not reach it after that, anywhere along the route. So a hold short a controller gives at the end, although it lies in the middle of the route, can simply be entered last.
 
-- **A runway.** BA already stops you before every runway your route crosses or enters, so this is optional, but it makes sure the stop is exactly the one ATC named, labelled the way you chose it. When ATC says where, use the At box, below. "Hold short of" your own departure runway, as the built-in MSFS ATC says it, is accepted and adds nothing: BA already holds you there.
+- **A runway.** BA already stops you before every runway your route crosses or enters, so this is optional, but it makes sure the stop is exactly the one ATC named, labelled the way you chose it. When ATC says where, use the At box, below. "Hold short of" your own departure runway, as the built-in MSFS ATC says it, is accepted and adds nothing: BA already holds you there. Its At box changes nothing either: choose where you enter your departure runway in the Runway entry list (see [Holding points in the Runway entry list](#depart-from-named-holding-point)).
 - **A taxiway or a holding point.** See the next section.
 
 When ATC names the place, as in "hold short of runway 27L on B":
