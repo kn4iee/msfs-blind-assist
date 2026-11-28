@@ -220,8 +220,9 @@ internal sealed class SweepSession
         return outcome;
     }
 
-    /// <summary>A row's word when the control already read the target and nothing was sent.</summary>
-    internal const string AlreadyThere = "already there";
+    /// <summary>A row's word when the control already read the target and nothing was sent. (Its name avoids the one a GSX
+    /// rule gives its own code: the rule-budget test would take this for that code.)</summary>
+    internal const string NothingSentWord = "already there";
 
     private void RunControl(ControlPlan cp, SweepOutcome outcome)
     {
@@ -251,7 +252,7 @@ internal sealed class SweepSession
                 };
                 outcome.Verdicts[verdict] = outcome.Verdicts.GetValueOrDefault(verdict) + 1;
                 // a switch behind a guard that did not open is never written: the rest of this control is skipped
-                if (s.Kind == SweepStepKind.OpenGuard && !SweepVerdicts.IsPass(verdict) && verdict != AlreadyThere)
+                if (s.Kind == SweepStepKind.OpenGuard && !SweepVerdicts.IsPass(verdict) && verdict != NothingSentWord)
                 {
                     _out.Row(new SweepRow { Key = cp.Key, Label = cp.Label, Verdict = $"skipped: its guard did not open ({verdict})" });
                     _out.Say($"  {cp.Key}: skipped, its guard {s.ControlKey} did not open ({verdict})");
@@ -316,9 +317,9 @@ internal sealed class SweepSession
         if (s.ExpectedRead is double known && SweepTiming.Same(now, known))
         {
             seen[c.Key] = known;
-            _out.Row(new SweepRow { Key = c.Key, Label = c.Label, Position = "press", ReadBack = now, Verdict = AlreadyThere,
+            _out.Row(new SweepRow { Key = c.Key, Label = c.Label, Position = "press", ReadBack = now, Verdict = NothingSentWord,
                 Note = $"{f.NameOf(known)} is the selected {f.Noun}: not pressed (a second press could undo it)" });
-            return AlreadyThere;
+            return NothingSentWord;
         }
         var names = f.ValueNames.Select(kv => new Position { Value = kv.Key, Input = kv.Key, Label = kv.Value }).ToList();
         var pressed = Press(c, s, s.ExpectedRead, names);
@@ -336,7 +337,7 @@ internal sealed class SweepSession
         if (before == null) return Record(c, position, verdict: "not read before the write");
 
         var plan = A330Write.ToPosition(c, before, s.ExpectedRead ?? s.Input!.Value);
-        if (plan.Outcome == A330WriteOutcome.AtPosition) return Record(c, position, verdict: AlreadyThere, readBack: before);
+        if (plan.Outcome == A330WriteOutcome.AtPosition) return Record(c, position, verdict: NothingSentWord, readBack: before);
 
         var proof = ProofOf(c, s.ExpectedRead, before);
         double? proofBefore = proof.Reach == ProofReach.Variable ? _io.Read(c.Proof!.Read!) : null;
@@ -436,7 +437,7 @@ internal sealed class SweepSession
     private string Record(Control c, string position, string verdict, double? readBack = null)
     {
         _out.Row(new SweepRow { Key = c.Key, Label = c.Label, Position = position, ReadBack = readBack, Verdict = verdict });
-        if (verdict != AlreadyThere) _out.Say($"  {c.Key} {position}: {verdict}");
+        if (verdict != NothingSentWord) _out.Say($"  {c.Key} {position}: {verdict}");
         return verdict;
     }
 
