@@ -407,15 +407,30 @@ public class ClearanceWiringTests
     // 2026-11-28 (step list follows live): the owner stays in the planner while taxiing, or Alt+Tabs to a First Officer
     // flow and back, so the list follows guidance when the window is activated and once a second while it is the active
     // window (a named tick, never a lambda), never while a step is being changed or a step list is dropped down. The
-    // pilot's place maps by identity (ClearanceListFollow, its own tests), the list is updated in place, the name box is
-    // refilled without a name the pilot did not choose, and only a list left empty is said, by the one constant. The
-    // timer runs only while the window is shown and goes with the window. Every trim computes through ONE helper.
+    // pilot's place maps by identity (ClearanceListFollow, its own tests), the list is updated in place
+    // (ClearanceListSyncTests), the name box is refilled without a name the pilot did not choose, and only a list left
+    // empty is said, by the one constant. The timer runs only while the window is shown and goes with the window. Every
+    // trim computes through ONE helper.
+    // Review fix round 1, finding 2: WinForms restores focus while it handles WM_ACTIVATE, BEFORE OnActivated, so a
+    // follow there was heard after the screen reader had named a finished step. The activation follow runs before
+    // WinForms handles the message, and "the list has focus" is the control focus goes back to (ActiveControl), in both
+    // paths, never lstClearance.Focused, which is still false then.
     [Fact]
     public void The_list_follows_guidance_on_activation_and_while_active()
     {
         string form = FormSource();
 
-        Assert.Contains("FollowGuidance(activation: true)", Member(form, "protected override void OnActivated("));
+        string activate = Member(form, "protected override void WndProc(");
+        int message = activate.IndexOf("m.Msg == WM_ACTIVATE", StringComparison.Ordinal);
+        int inactive = activate.IndexOf("!= WA_INACTIVE", StringComparison.Ordinal);
+        int followed = activate.IndexOf("FollowGuidance(activation: true);", StringComparison.Ordinal);
+        int handled = activate.IndexOf("base.WndProc(ref m);", StringComparison.Ordinal);
+        Assert.True(message >= 0 && inactive > message && followed > inactive && handled > followed,
+            "an activation follows guidance before WinForms restores focus");
+        Assert.Contains("private const int WM_ACTIVATE = 0x0006;", form);
+        Assert.Contains("private const int WA_INACTIVE = 0;", form);
+        Assert.DoesNotContain("protected override void OnActivated(", form);
+
         string tick = Member(form, "private void OnFollowTimerTick(");
         Assert.Contains("Form.ActiveForm == this", tick);
         Assert.Contains("FollowGuidance(activation: false)", tick);
@@ -426,9 +441,11 @@ public class ClearanceWiringTests
                  {
                      "ClearanceListFollow.FollowsNow(", "_changingStepIndex >= 0", "StepListDroppedDown",
                      "ClearanceListFollow.SelectionAfter(", "ClearanceListFollow.RemovedIndices(", "preselect: false",
-                     "ClearanceStepEntry.StepsCleared",
+                     "ClearanceStepEntry.StepsCleared", "ActiveControl == lstClearance", "ApplyFollowToList(lstClearance,",
+                     "SpeakStepAdded(ClearanceStepEntry.StepsCleared, afterFocusMove: true)",
                  })
             Assert.Contains(pin, follow);
+        Assert.DoesNotContain("lstClearance.Focused", follow);
 
         Assert.Contains("_followTimer", Member(form, "protected override void Dispose("));
         Assert.Contains("StepsStillAhead()", Member(form, "private bool TrimStepsToWhatIsAhead("));

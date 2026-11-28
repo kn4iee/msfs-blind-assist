@@ -4114,7 +4114,7 @@ public class TaxiAssistForm : Form
     /// route live first trimming the list to what is still ahead (<see cref="TrimStepsToWhatIsAhead"/>), and makes it the
     /// active control, so the window's own activation, which restores the active control, lands there and the screen
     /// reader names one control, once. Set after <c>Show()</c>, activation first restored the control focused last, the
-    /// reader named it, and then the new one. The activation then follows guidance (<see cref="OnActivated"/>), which
+    /// reader named it, and then the new one. The activation then follows guidance (<see cref="WndProc"/>), which
     /// finds nothing more to drop after this trim; it is what keeps the list up to date when the pilot comes back by
     /// Alt+Tab or a click, and while the window stays open.
     /// </summary>
@@ -4152,12 +4152,28 @@ public class TaxiAssistForm : Form
         control.Focus();
     }
 
+    // The activation message, and the LOWORD of its wParam that means the window is being deactivated (WA_ACTIVE and
+    // WA_CLICKACTIVE activate it).
+    private const int WM_ACTIVATE = 0x0006;
+    private const int WA_INACTIVE = 0;
+
     /// <summary>Coming back to the planner (Alt+Tab, a click, Shift+Y's <c>Show()</c>): the list follows guidance at
-    /// once (<see cref="FollowGuidance"/>), so the pilot never reads a step already finished.</summary>
-    protected override void OnActivated(EventArgs e)
+    /// once (<see cref="FollowGuidance"/>), so the pilot never reads a step already finished. Before WinForms handles
+    /// the activation, never in <c>OnActivated</c>: WinForms puts focus back on the active control while it handles
+    /// WM_ACTIVATE, before it raises <c>OnActivated</c>, so a follow there came after the screen reader had named a step
+    /// that finished while the pilot was away, and then the step now in its place. Here the list is up to date when focus
+    /// lands, and the reader names one step, the right one. WinForms handles the message whatever the follow does.</summary>
+    protected override void WndProc(ref Message m)
     {
-        base.OnActivated(e);
-        FollowGuidance(activation: true);
+        try
+        {
+            if (m.Msg == WM_ACTIVATE && (m.WParam.ToInt64() & 0xFFFF) != WA_INACTIVE)
+                FollowGuidance(activation: true);
+        }
+        finally
+        {
+            base.WndProc(ref m);
+        }
     }
 
     /// <summary>The follow timer, once a second while the window is shown (<see cref="OnVisibleChanged"/>): the list
@@ -4181,13 +4197,16 @@ public class TaxiAssistForm : Form
     /// active one, a route live and the list the leg calculated (<see cref="StepsStillAhead"/>, the one computation every
     /// trim uses).</para>
     /// <para>With the focus in the Clearance list the update is at once (the owner's "Update right away"): the pilot is
-    /// reading the list now, and a list that waited for them to leave it would go on reading finished steps. The list is
-    /// updated in place where it only lost steps (<see cref="ClearanceListFollow.RemovedIndices"/>), so the steps that
-    /// stay keep their items; the pilot's place maps by identity (<see cref="ClearanceListFollow.SelectionAfter"/>): the
-    /// selected step stays selected, a finished one gives its place to the step now there only with the focus in the
-    /// list, and the selection is set only when it moves, so the screen reader reads a step once, and only one it has
-    /// not just read; BA says nothing of it ([CORE-7]). The name box is refilled only when what it offers changes,
-    /// keeping its pick and never picking a name the pilot did not choose.</para>
+    /// reading the list now, and a list that waited for them to leave it would go on reading finished steps. "In the
+    /// list" is the control the focus is in or goes back to (<c>ActiveControl</c>), the same rule for both paths: on
+    /// activation this runs before focus is put back, so the list does not have the focus yet. The list is updated in
+    /// place where it only lost steps (<see cref="ClearanceListFollow.RemovedIndices"/>, <see cref="ApplyFollowToList"/>),
+    /// so the steps that stay keep their items; the pilot's place maps by identity
+    /// (<see cref="ClearanceListFollow.SelectionAfter"/>): the selected step stays selected, a finished one gives its place
+    /// to the step now there only with the focus in the list, and the selection is set only when it moves, so the screen
+    /// reader reads a step once, and only one it has not just read; BA says nothing of it ([CORE-7]). The name box is
+    /// refilled only when what it offers changes, keeping its pick and never picking a name the pilot did not
+    /// choose.</para>
     /// <para>Speaks only when it leaves a list that had steps empty ("Steps cleared.": an empty list gives the screen
     /// reader nothing to say): on coming back, after the reader names the focused control, as on Shift+Y; while open,
     /// queued behind guidance.</para>
@@ -4202,7 +4221,8 @@ public class TaxiAssistForm : Form
 
         var oldOrigins = _stepOrigins.ToList();
         int oldSelected = lstClearance.SelectedIndex;
-        bool listFocused = lstClearance.Focused;
+        // The control focus is in, or goes back to: on activation this runs before focus is put back (WndProc).
+        bool listFocused = ActiveControl == lstClearance;
         bool hadSteps = _steps.Count > 0;
 
         _steps.Clear();
@@ -4211,31 +4231,9 @@ public class TaxiAssistForm : Form
         _stepOrigins.AddRange(origins);
         _removedOrigins.UnionWith(dropped);
 
-        var removed = ClearanceListFollow.RemovedIndices(oldOrigins, origins);
-        lstClearance.BeginUpdate();
-        try
-        {
-            if (removed != null)
-            {
-                for (int r = removed.Count - 1; r >= 0; r--) lstClearance.Items.RemoveAt(removed[r]);
-                // A step the trim changed (a turn made reads as Via, a crossing put back or pinned) shows as it is now.
-                for (int i = 0; i < _steps.Count; i++)
-                {
-                    string sentence = _steps[i].Sentence();
-                    if (!string.Equals(lstClearance.Items[i]?.ToString(), sentence, StringComparison.Ordinal))
-                        lstClearance.Items[i] = sentence;
-                }
-            }
-            else
-            {
-                lstClearance.Items.Clear();
-                foreach (var step in _steps) lstClearance.Items.Add(step.Sentence());
-            }
-        }
-        finally { lstClearance.EndUpdate(); }
-
-        int select = ClearanceListFollow.SelectionAfter(oldOrigins, oldSelected, origins, listFocused);
-        if (lstClearance.SelectedIndex != select) lstClearance.SelectedIndex = select;
+        ApplyFollowToList(lstClearance, ClearanceListFollow.RemovedIndices(oldOrigins, origins),
+            _steps.Select(step => step.Sentence()).ToList(),
+            ClearanceListFollow.SelectionAfter(oldOrigins, oldSelected, origins, listFocused));
 
         if (!NameBoxLists(StepNameItems(SelectedStepKind())))
             RefreshStepNameList(keepSelection: true, preselect: false);
@@ -4246,6 +4244,54 @@ public class TaxiAssistForm : Form
             else _announcer.Announce(ClearanceStepEntry.StepsCleared);
         }
     }
+
+    /// <summary>
+    /// The Clearance list after the list followed guidance: with <paramref name="removed"/> (the old list's indexes of the
+    /// steps that went, <see cref="ClearanceListFollow.RemovedIndices"/>) the items are updated in place, each removed
+    /// from the highest down, then each item set only where its text differs (a step the trim changed: a turn made reads
+    /// as Via, a crossing put back or pinned); with none, the list is rebuilt from <paramref name="sentences"/>. Then
+    /// <paramref name="select"/> (<see cref="ClearanceListFollow.SelectionAfter"/>) is selected only when the selection
+    /// differs, so the screen reader never reads the same step again. A list box has a selected item and a focused item
+    /// (its caret): removing an item above the selection moves the selection up but leaves the caret where it was, and
+    /// focus back in the list (Tab, Shift+Tab, Alt+Tab) names the focused item while Enter and Delete act on the selected
+    /// one. So when the selection did not move, the caret is put back on it with <c>LB_SETCURSEL</c>, which raises no
+    /// SelectedIndexChanged. Internal static so it is tested on a list box never shown (ClearanceListSyncTests).
+    /// </summary>
+    internal static void ApplyFollowToList(ListBox list, IReadOnlyList<int>? removed, IReadOnlyList<string> sentences,
+                                           int select)
+    {
+        list.BeginUpdate();
+        try
+        {
+            if (removed != null)
+            {
+                for (int r = removed.Count - 1; r >= 0; r--) list.Items.RemoveAt(removed[r]);
+                for (int i = 0; i < sentences.Count; i++)
+                {
+                    if (!string.Equals(list.Items[i]?.ToString(), sentences[i], StringComparison.Ordinal))
+                        list.Items[i] = sentences[i];
+                }
+            }
+            else
+            {
+                list.Items.Clear();
+                foreach (string sentence in sentences) list.Items.Add(sentence);
+            }
+        }
+        finally { list.EndUpdate(); }
+
+        if (list.SelectedIndex != select) list.SelectedIndex = select;
+        if (select >= 0 && list.IsHandleCreated
+            && (int)SendMessage(list.Handle, LB_GETCARETINDEX, IntPtr.Zero, IntPtr.Zero) != select)
+            SendMessage(list.Handle, LB_SETCURSEL, (IntPtr)select, IntPtr.Zero);
+    }
+
+    // The list box caret and selection messages ApplyFollowToList uses: WinForms reads the caret but never sets it.
+    private const int LB_SETCURSEL = 0x0186;
+    private const int LB_GETCARETINDEX = 0x019F;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
     /// <summary>Whether the name box already lists <paramref name="items"/>, item for item (kind and label, in order).</summary>
     private bool NameBoxLists(IReadOnlyList<ClearanceNameLists.Item> items)
