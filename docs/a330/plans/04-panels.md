@@ -232,19 +232,44 @@ Work the groups of Task 1's table, each the same way: measure what the control w
 - **Pilot-facing:** the panels' names are the cockpit's; controls are ordered by daily use; the new panels (list them). Guide: the A330's panels. Changelog `improvement`.
 - **Rule proposals:** [INI-2] reworded for the curation file and the three inputs; INI-14: every catalogued input event is a control or is in `left_out` with a reason, and a name or position name comes from `control_names.json` or carries an override with the aircraft's string and a reason; INI-15: a key never changes or disappears (`keys.txt`).
 - **Frozen files:** `Aircraft/IniA330Definition.Handlers.cs`, by the named exception of Task 4a (`PressFromWindow` returns false for a refused write); a key that had to change, for plans 05, 06, 08, 09.
+- **As landed so far (2026-11-27):** no key changed or disappeared (`keys.txt`: 281, additions only). Pilot-facing changes so far: a pick is read back and a refused write is never reported as done; 73 push-buttons are pressed by value only when their read differs (they toggle); a key's press is confirmed once by its state or "<name> pressed"; weather radar tilt is a combo in degrees; lamps, status rows and the parking brake say On and Off, the autobrake LO, MED and MAX; the speedbrake lever is said in the A32NX's bands, with a Ctrl+M row "Speedbrake lever". Names and order are not yet the aircraft's (Tasks 1, 3, 6 wait). Guide: the A330 panels chapter (what a pick and a press say). Changelog: `improvement`.
+- **Rule proposals from this work:** a new INI rule (number at plan 12) for the measured toggles: "A push-button the aircraft toggles (`A330Write.PressedByValue`: `mode: toggle` with `press`/`release`) is pressed once by value (set press, the hold, set release; the release is always sent), only when its READ is known and differs. Its positions' inputs are never written, and it is never judged or restored by its input event's own value, which rests at 0 (measured 2026-11-27)." [INI-1]'s "push-button 0 = ON" then points to it, with its mirrors and `docs/ini-a330.md`'s convention line changed together. CORE-4's count of standalone `tools/*` projects becomes 18 (`tools/a330-gen/PanelSweep` is new); `docs/development.md` lists it.
+- **Requests for frozen or other plans' files:** plan 06's `Aircraft/IniA330Definition.FirstOfficer.cs` was changed by one named-exception branch (`FoWriteRoute`: a pushed toggle routes by its input event, `A330Write.PressedByValue`), because plan 06 was not claimed. For plan 06: 19 First Officer keys now refuse to press while their read is unknown (they were blind sets that toggle), and a write sent again before the read updates (after the 150 ms hold) would press again, so the First Officer's write spacing must outlast the read's update. Plan 01's `tests/MSFSBlindAssist.Tests/A330/IniA330DefinitionTests.cs`: `The_speedbrake_lever_cache_has_no_ctrl_m_row` inverted to `The_speedbrake_lever_has_its_ctrl_m_row` (the row came back, Task 4a). For MainForm (frozen): a slider-unit hook would let a continuous control stay a slider and speak its unit (today a control with a unit is a combo of its steps). Also seen on the A32NX: its speedbrake bands speak the lever's travel after the pilot's own pick.
 
 ## Execution record
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** in progress
+- **Status:** waiting on owner (the code tasks that needed no names or order are done and reviewed; Tasks 1 Step 1, 3, 4 Steps 0 and 4's by-hand part, 5, 6 and the in-sim checks wait, below). Not pushed: the claim and every commit are on the local branch `a330-p04-panels` only.
 - **Claimed by:** wolfman1360
 - **Worked by:** wolfman1360, with Claude (subagent-driven development: an implementer and a review a task, a whole-plan review)
 - **Started:** 2026-11-27, from 9bba156f9 (the branch tip, plans 01 to 03 landed)
 - **Landed:**
-- **Tests at landing:**
+- **Tests at landing:** 26,319 passed, 0 failed (filter `FullyQualifiedName!~ClaudeRulesHookTests`; 26,190 at the start); the generator's 28 Python tests pass (none at the start).
 - **Tasks:**
+  - 0 claim 4095bab2b.
+  - 2a predictive windshear with plan 06's Task 1a 302fdad9d; its Step 2 (the proof in the curation) 8c9ce1de9.
+  - 1 Step 2, the catalogue (649 events), 09c3770d1; Step 3, the catalogue table, 726c8b3b3 and ec9035d99. Step 1 (the names file) waits.
+  - 2 Step 1, the curation file, f0d9b4d33, with the rest of every event accounted for in 726c8b3b3 and ec9035d99 (271 controls, 32 left out, 346 not offered yet). Step 2 waits on the names file.
+  - 2b (controller's, from Task 2's Interfaces and Task 4 Step 6): the map carries guard, state, unit, proof and proven, and the unproven list `tools/a330-gen/unproven.txt`, 37aa939ed and 944a36426. Task 4 Step 6's gate is its tests.
+  - 4 Step 1 planner 8ea3ee810; Step 3 deny list 41adc81a1, 1284d272c; Steps 2 and 2b the runner 86a9df963, 0f90640db, fixes ab7afa452 to 00b59045d; Step 4 the sweep, run once (In-sim results); Step 5 for its first cause (the push-buttons toggle) 1790229dc, a5219c55f, 799710f21, 8785aed8e.
+  - 4a: a pick is read back ce6dbaa57, b474af667; a toggle never presses blind 1afe87380; a key's press confirmed once cb27f8886, 5accf342f, 7591cabfc, 7123a8059; sliders in units 6263983f4; the announcements c9ed0d8e4; the speedbrake 37348fa6d, fe9716fbe. The guarded-switch step and Step 6 wait.
+  - 7 Step 1 checked and Step 2 written for what is true now, fdc0686a3.
 - **Waiting on the owner:**
-- **In-sim results:**
+  - Pack 2 (`A330_PACK2`) reads off; it was on when the sweep began. A press by value did not bring it back. Switch it on by hand, then run `A330PanelSweep --restore` with `journal-2026-11-27-2129.tsv` again for the 59 controls the stopped restore did not reach (engine 1 bleed among them).
+  - Task 1 Step 1 and Task 6 Step 1: the names file and the procedure order from the private reference (not on this machine).
+  - Task 3: the naming rule, heard.
+  - Task 4 Step 0 (the proofs, from plan 08's lists), Step 4's by-hand part (the denied controls one at a time, the guards with their guards closed, the doubtful names by their proofs), the APU-bleed pass, and Step 5 for the other causes (the evidence file's waiting list).
+  - Task 4a's guarded-switch step and Step 6 (lamp values), Task 5, Task 6, and the plan's in-sim checks.
+  - Questions: deny FADEC ground power, the generators and crew oxygen too? Tilt 0 said "0 degrees" (neither the A32NX nor the Fenix says "Level"): keep? The autobrake's rest word stays "Off" (the A32NX says "DIS"): keep?
+- **In-sim results:** 2026-11-27, MSFS 2024 1.9.24.0, A330-200 VIP (GE), on the ground, engines off, external power on (the batteries and external power A switched on by Claude for it). The catalogue: 649 input events, all 271 map events among them. The sweep (`tools/a330-gen/PanelSweep`, the app's own write route), 151 units, about 13 minutes, no SimConnect exception: read-only 172, toggle 73, dead 10, already there 2, none lagged. The 73 push-buttons toggle (the evidence file has the measured rule); the dead are ADR 1 to 3, pressurization MODE SEL, master warning and caution, and four radio panel keys. Every position except predictive windshear stays unproven. Measurement traps found: the simconnect MCP's first read of an L:var returns 0 (and sometimes later reads too), and its calculator `_Set` route toggles a push-button on every write, unlike the app's route.
 - **Changed from the plan:**
-- **Rulings made while working:**
+  - The sweep planner and runner core live in the app (`Aircraft/A330/Sweep/`), xUnit-tested; the tool links them (the 757's planner is not in the test project, and the test project is frozen).
+  - The unproven list is a generated file under `tools/a330-gen`, not the evidence file (no test may read `docs/a330/`).
+  - A refused write stays handled, so MainForm never writes the read L:var raw; `PressFromWindow` returns false for it.
+  - A continuous control with a unit is a combo of its steps (MainForm's slider always speaks 0 to 100); only tilt has a unit until the others' ranges are measured.
+  - The key state rows (ECAM page, selected radio, master warning and caution, APU START) are announced by the definition with its own baseline and a 5 s quiet start, so a press is heard once and a change back is still spoken.
+  - The sweep's eighth verdict `mislabeled`, its stricter settle rule, the families of keys sharing one state, and the restore of a toggle by its read.
+  - The catalogue was captured with the worktree's own Debug build (the `navdatareader` folder copied into its output from the installed copy, for the runtime check).
+  - Plan 01's speedbrake Ctrl+M test inverted; one branch in plan 06's `FoWriteRoute` (Handoff).
+- **Rulings made while working** (Claude's; the owner may reverse any): the worktree from the branch tip; nothing pushed without the owner's word; the catalogue test skips while the catalogue is absent; the planner in the app; the unproven list generated; a refused write stays handled; the read-back waits 1.5 s until settle times are measured; a unit only where the scale is known; the runner after Task 4a's write planner; packs and hot air not re-marked as toggles until the sweep said so (it did, with the other 71); the sweep's family rule; Ctrl+C never splits a press from its release; `--restore` stops at a push-button that did not come back; the FCU's events offered by its own flags are left out; the evidence file's tables kept small for a screen reader; the FirstOfficer branch as a named exception.
