@@ -33,15 +33,40 @@ internal sealed class LinkIo : ISweepIo
     public void Sleep(int ms) { if (ms > 0) Thread.Sleep(ms); }
 }
 
-/// <summary>A tab-separated file flushed after every line, so a crash or Ctrl+C leaves everything so far.</summary>
+/// <summary>A tab-separated file flushed after every line, so a crash or Ctrl+C leaves everything so far. Always a new
+/// file: it is opened create-new, never over an earlier run's.</summary>
 internal sealed class LineFile : IDisposable
 {
     private readonly StreamWriter _w;
 
-    public LineFile(string path)
+    private LineFile(string path)
     {
         Path = path;
-        _w = new StreamWriter(path, append: false, new UTF8Encoding(false)) { AutoFlush = true };
+        _w = new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read), new UTF8Encoding(false)) { AutoFlush = true };
+    }
+
+    /// <summary>One run's files in <paramref name="dir"/>, <c>&lt;stem&gt;-&lt;stamp&gt;.tsv</c> for each stem, with the
+    /// same suffix when any is taken (<see cref="SweepTsv.FreeNames"/>). A file that appears between the check and the
+    /// open moves them all to the next suffix.</summary>
+    public static LineFile[] OpenNew(string dir, params string[] stems)
+    {
+        Directory.CreateDirectory(dir);
+        string stamp = DateTime.Now.ToString("yyyy-MM-dd-HHmm", System.Globalization.CultureInfo.InvariantCulture);
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            var names = SweepTsv.FreeNames(stamp, n => File.Exists(System.IO.Path.Combine(dir, n)), stems);
+            var opened = new List<LineFile>();
+            try
+            {
+                foreach (string n in names) opened.Add(new LineFile(System.IO.Path.Combine(dir, n)));
+                return opened.ToArray();
+            }
+            catch (IOException) when (names.Any(n => File.Exists(System.IO.Path.Combine(dir, n))))
+            {
+                foreach (var f in opened) f.Dispose();   // another run took one of them first: try the next suffix
+            }
+        }
+        throw new IOException($"Could not create new result files in {dir}.");
     }
 
     public string Path { get; }
@@ -111,10 +136,9 @@ internal static class SweepRunner
         Func<ControlPlan, bool>? include, IReadOnlyList<string> extraVars, string outDir, Func<string?> cancelled, TextWriter w)
     {
         link.DefineSnapshot(SweepSnapshot.Names(controls, extraVars));
-        string stamp = DateTime.Now.ToString("yyyy-MM-dd-HHmm", System.Globalization.CultureInfo.InvariantCulture);
-        Directory.CreateDirectory(outDir);
-        using var tsv = new LineFile(Path.Combine(outDir, $"sweep-{stamp}.tsv"));
-        using var journal = new LineFile(Path.Combine(outDir, $"journal-{stamp}.tsv"));
+        var files = LineFile.OpenNew(outDir, "sweep", "journal");
+        using var tsv = files[0];
+        using var journal = files[1];
         tsv.WriteLine(SweepTsv.Header);
 
         string? Stop() => link.Fault != null ? "stopped: SimConnect fault" : link.SimQuit ? "stopped: the sim quit" : cancelled();
@@ -152,9 +176,7 @@ internal static class SweepRunner
     public static int Restore(SimLink link, bool calc, IReadOnlyList<Control> controls, IReadOnlyDictionary<string, string> denied,
         IReadOnlyList<JournalEntry> entries, string outDir, TextWriter w)
     {
-        string stamp = DateTime.Now.ToString("yyyy-MM-dd-HHmm", System.Globalization.CultureInfo.InvariantCulture);
-        Directory.CreateDirectory(outDir);
-        using var tsv = new LineFile(Path.Combine(outDir, $"restore-{stamp}.tsv"));
+        using var tsv = LineFile.OpenNew(outDir, "restore")[0];
         tsv.WriteLine(SweepTsv.Header);
         var session = new SweepSession(controls, denied, new LinkIo(link, calc),
             new SweepSinks(row => tsv.WriteLine(SweepTsv.Format(row)), _ => { }, w.WriteLine));

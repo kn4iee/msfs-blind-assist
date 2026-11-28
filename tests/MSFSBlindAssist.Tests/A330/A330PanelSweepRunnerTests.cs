@@ -379,6 +379,22 @@ public class A330PanelSweepRunnerTests
         Assert.Equal(e, TestCulture.Run("de-DE", () => SweepJournal.Parse(journal).Single()));
     }
 
+    [Fact]
+    public void A_rerun_in_the_same_minute_never_overwrites_its_files()
+    {
+        const string stamp = "2026-11-27-1430";
+        Assert.Equal(new[] { "sweep-2026-11-27-1430.tsv", "journal-2026-11-27-1430.tsv" },
+            SweepTsv.FreeNames(stamp, _ => false, "sweep", "journal"));
+
+        // a clash on either file moves both to the same next suffix, so a sweep and its journal stay a pair
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "journal-2026-11-27-1430.tsv" };
+        Assert.Equal(new[] { "sweep-2026-11-27-1430-2.tsv", "journal-2026-11-27-1430-2.tsv" },
+            SweepTsv.FreeNames(stamp, taken.Contains, "sweep", "journal"));
+        taken.Add("sweep-2026-11-27-1430-2.tsv");
+        Assert.Equal(new[] { "sweep-2026-11-27-1430-3.tsv", "journal-2026-11-27-1430-3.tsv" },
+            SweepTsv.FreeNames(stamp, taken.Contains, "sweep", "journal"));
+    }
+
     // ---------------- the planner's second write ----------------
 
     [Fact]

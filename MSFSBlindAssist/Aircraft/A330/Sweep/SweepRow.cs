@@ -63,4 +63,19 @@ internal static class SweepTsv
     };
 
     private static string Clean(string s) => s.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
+
+    /// <summary>
+    /// The files of one run, never an earlier run's: <c>&lt;stem&gt;-&lt;stamp&gt;.tsv</c> for each stem, or, when any of
+    /// them is taken (<paramref name="exists"/>), all with the same next free suffix (<c>-2</c>, <c>-3</c>, ...), so a
+    /// sweep and its journal stay a pair. The tool opens them create-new, so even a clash in between is never an overwrite.
+    /// </summary>
+    public static IReadOnlyList<string> FreeNames(string stamp, Func<string, bool> exists, params string[] stems)
+    {
+        for (int n = 1; ; n++)
+        {
+            string suffix = n == 1 ? "" : "-" + n.ToString(CultureInfo.InvariantCulture);
+            var names = stems.Select(s => $"{s}-{stamp}{suffix}.tsv").ToList();
+            if (!names.Any(exists)) return names;
+        }
+    }
 }

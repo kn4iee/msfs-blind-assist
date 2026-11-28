@@ -159,7 +159,9 @@ Other rows: `already there` (the control read the target: nothing sent), `not re
 ## The files
 
 `sweep-<yyyy-MM-dd-HHmm>.tsv`, tab-separated, UTF-8, one row a position written (twice), a press, a put-back, or
-a control not swept. Every number is written in the invariant culture. The columns: `key`, `label`, `position`,
+a control not swept. No file of an earlier run is ever overwritten: a second run in the same minute writes
+`sweep-<stamp>-2.tsv` and `journal-<stamp>-2.tsv` (then `-3`, and so on), the pair always with the same suffix, and
+`--restore` writes `restore-<stamp>.tsv` the same way. Every number is written in the invariant culture. The columns: `key`, `label`, `position`,
 `sent`, `read back` (after the first write), `settle ms`, `proof before`, `proof after`, `verdict`, then `note`,
 `second read back`, `proof settle ms`, `aircraft value`, `side effects` (every other variable that moved:
 `NAME before -> after`, a candidate proof; radio panel 1's NAV backup is the known side effect) and
