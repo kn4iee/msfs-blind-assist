@@ -181,6 +181,10 @@ public class TaxiAssistForm : Form
     // leg being flown: none calculated yet, or emptied since (Clear Steps, the fill, an airport change, a leg's end).
     private List<ClearanceStep>? _calculatedSteps;
     private bool _calculatedWithDestination;
+    // True while the list holds the steps a Progressive leg's end kept for the next leg (EmptyStepsAfterLeg): it holds no
+    // calculated leg then, yet the next leg end that reaches it (guidance stopped, a landing) still empties it, so a typed
+    // departure step never reaches the taxi-in. Cleared when a Calculate records its list and when the list is emptied.
+    private bool _listKeptFromLeg;
     // For each step in _steps, its index in _calculatedSteps; -1 for a step added since. And the indexes of the
     // calculated steps the pilot removed since (Remove Step, a made crossing dropped by an append): a trim never brings
     // one back.
@@ -4097,10 +4101,11 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>Empties the step list (Clear Steps, a SayIntentions fill, an airport change, Stop Guidance, the end of
-    /// the leg it was calculated for), the kind back on Via and the name box refilled; the list then holds no leg being
-    /// flown (<see cref="_calculatedSteps"/>), and a step sentence still waiting is dropped, as it names a step that is
-    /// gone; a step being changed goes with the rest, its change closed first. Speaks nothing: Clear Steps speaks for
-    /// itself (<see cref="OnClearStepsClicked"/>).</summary>
+    /// the leg it was calculated for or the steps a Progressive leg's end kept from it), the kind back on Via and the name
+    /// box refilled; the list then holds no leg being flown (<see cref="_calculatedSteps"/>) nor kept steps
+    /// (<see cref="_listKeptFromLeg"/>), and a step sentence still waiting is dropped, as it names a step that is gone; a
+    /// step being changed goes with the rest, its change closed first. Speaks nothing: Clear Steps speaks for itself
+    /// (<see cref="OnClearStepsClicked"/>).</summary>
     private void ClearSteps()
     {
         CancelStepChange(false);
@@ -4109,6 +4114,7 @@ public class TaxiAssistForm : Form
         _stepOrigins.Clear();
         _removedOrigins.Clear();
         _calculatedSteps = null;
+        _listKeptFromLeg = false;
         lstClearance.Items.Clear();
         SetStepKindSilently(ClearanceStepKind.Via);
         RefreshStepNameList();
@@ -4144,12 +4150,15 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Whether a leg end queued with <paramref name="generationQueued"/> empties the list now: only when no Calculate
     /// has built a list since (<paramref name="generationNow"/> unchanged), and only when the list holds the leg it was
-    /// calculated for (<paramref name="listHoldsCalculatedLeg"/>). Steps entered after the last leg ended, or before any
-    /// Calculate (a taxi-in clearance typed during the landing rollout, after the landing emptied the departure's list),
-    /// are for the leg to come and stay.
+    /// calculated for (<paramref name="listHoldsCalculatedLeg"/>) or the steps a Progressive leg's end kept from it
+    /// (<paramref name="keptFromLeg"/>): those are for the next leg, and the next leg end that reaches them first (guidance
+    /// stopped, a landing) empties them, or a typed departure "Cross runway 15R" survived the flight and the taxi-in
+    /// cleared 15R. Steps entered after the last leg ended, or before any Calculate (a taxi-in clearance typed during the
+    /// landing rollout, after the landing emptied the departure's list), are for the leg to come and stay.
     /// </summary>
-    internal static bool LegEndEmptiesList(int generationQueued, int generationNow, bool listHoldsCalculatedLeg)
-        => generationQueued == generationNow && listHoldsCalculatedLeg;
+    internal static bool LegEndEmptiesList(int generationQueued, int generationNow, bool listHoldsCalculatedLeg,
+                                           bool keptFromLeg)
+        => generationQueued == generationNow && (listHoldsCalculatedLeg || keptFromLeg);
 
     /// <summary>
     /// Called by MainForm BEFORE <c>Show()</c>: picks where focus lands (spec 8.2, <see cref="OpeningFocus"/>), with a
@@ -4484,11 +4493,13 @@ public class TaxiAssistForm : Form
     /// step its own origin), with whether the clearance had a destination (the trim's leg end depends on it). Bumps the
     /// generation, so a leg end queued before this Calculate never empties the list it just used. Called just BEFORE
     /// StartGuidance: called after it, a leg that ended in between (a position frame on guidance's own thread, the
-    /// aircraft already at its end) was queued with the old generation, and the guard ignored it.
+    /// aircraft already at its end) was queued with the old generation, and the guard ignored it. Steps a Progressive
+    /// leg's end kept are this Calculate's list now, no longer kept ones (<see cref="_listKeptFromLeg"/>).
     /// </summary>
     private void RecordCalculatedSteps(bool hasDestination)
     {
         _calculatedSteps = _steps.ToList();
+        _listKeptFromLeg = false;
         _calculatedWithDestination = hasDestination;
         _stepOrigins.Clear();
         _stepOrigins.AddRange(Enumerable.Range(0, _steps.Count));
@@ -4510,25 +4521,27 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>
-    /// The leg the list was calculated for is over: nothing changes when a Calculate has built a list since or the list
-    /// holds no calculated leg (<see cref="LegEndEmptiesList"/>). The KBOS route back over 04L came from an entry that
-    /// outlived its leg.
+    /// The leg the list was calculated for is over: nothing changes when a Calculate has built a list since, or the list
+    /// holds neither a calculated leg nor the steps a Progressive leg's end kept from one (<see cref="LegEndEmptiesList"/>).
+    /// The KBOS route back over 04L came from an entry that outlived its leg.
     /// <para>A Progressive leg's end (<see cref="LegEndKeepsTypedSteps"/>) keeps the steps typed or changed since that
     /// Calculate (<see cref="ClearanceStepEntry.KeptAtProgressiveLegEnd"/>), in order, for the next leg (spec 2026-11-28):
     /// the pilot types the next instruction while stopped at the end of this one. A step being changed is closed first,
     /// silently, before any step moves, and a step sentence still waiting is dropped, as its number may be gone. The leg's
     /// own steps go, the Clearance list updated in place with the pilot's place mapped as the follow maps it
     /// (<see cref="ApplyFollowToList"/>), and the list then holds no calculated leg, so the follow never trims the kept
-    /// steps before Calculate. Nothing is said: guidance says the leg's end, and every step the pilot typed is still
-    /// there ([CORE-7]).</para>
+    /// steps before Calculate, but is marked as kept (<see cref="_listKeptFromLeg"/>), so the next leg end that is not a
+    /// Progressive one (guidance stopped by Input Ctrl+Y or take-off assist, a landing) still empties it: a typed departure
+    /// step never reaches the taxi-in. The name box is refilled only when what it offers changed, as the follow does.
+    /// Nothing is said: guidance says the leg's end, and every step the pilot typed is still there ([CORE-7]).</para>
     /// <para>Otherwise, and with nothing typed, the list is emptied, silently (the manager speaks the arrival, the stop,
-    /// the leg's end or the touchdown). Steps the pilot typed since that Calculate go too; with the window focused they
-    /// would vanish unsaid, so "Steps cleared." is said once, queued behind guidance's own sentence, never over it
-    /// (<see cref="ClearanceStepEntry.LegEndSentence"/>).</para>
+    /// the leg's end or the touchdown). Steps the pilot typed since that Calculate go too, kept ones included; with the
+    /// window focused they would vanish unsaid, so "Steps cleared." is said once, queued behind guidance's own sentence,
+    /// never over it (<see cref="ClearanceStepEntry.LegEndSentence"/>).</para>
     /// </summary>
     private void EmptyStepsAfterLeg(int generation, TaxiGuidanceState state)
     {
-        if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)) return;
+        if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null, _listKeptFromLeg)) return;
         var kept = LegEndKeepsTypedSteps(state) ? ClearanceStepEntry.KeptAtProgressiveLegEnd(_stepOrigins) : Array.Empty<int>();
         if (kept.Count > 0)
         {
@@ -4546,11 +4559,13 @@ public class TaxiAssistForm : Form
             _stepOrigins.AddRange(kept.Select(_ => -1));
             _removedOrigins.Clear();
             _calculatedSteps = null;
+            _listKeptFromLeg = true;
 
             ApplyFollowToList(lstClearance, ClearanceListFollow.RemovedIndices(oldOrigins, _stepOrigins),
                 _steps.Select(step => step.Sentence()).ToList(),
                 ClearanceListFollow.SelectionAfter(oldOrigins, oldSelected, _stepOrigins, listFocused));
-            RefreshStepNameList(keepSelection: true, preselect: false);
+            if (!NameBoxLists(StepNameItems(SelectedStepKind())))
+                RefreshStepNameList(keepSelection: true, preselect: false);
             return;
         }
 

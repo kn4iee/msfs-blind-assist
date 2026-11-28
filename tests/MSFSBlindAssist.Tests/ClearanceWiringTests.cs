@@ -551,7 +551,7 @@ public class ClearanceWiringTests
         Assert.Contains("ClearanceStepEntry.RemovalSentence(", Member(form, "private void RemoveStep("));
         Assert.Contains("ClearanceStepEntry.StepsCleared", Member(form, "private void OnClearStepsClicked("));
         string empty = Member(form, "private void EmptyStepsAfterLeg(");
-        Assert.Contains("LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)", empty);
+        Assert.Contains("LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null, _listKeptFromLeg)", empty);
         // Final review, minor: steps typed since the last Calculate go too; in the focused window that is said once,
         // queued behind guidance's own leg-end sentence, never over it.
         int sentence = empty.IndexOf("ClearanceStepEntry.LegEndSentence(_stepOrigins, windowFocused: Visible && ContainsFocus)", StringComparison.Ordinal);
@@ -587,9 +587,37 @@ public class ClearanceWiringTests
                      Services.TaxiGuidanceState.HoldShort, Services.TaxiGuidanceState.LiningUp })
             Assert.False(Forms.TaxiAssistForm.EndsTheLeg(state));
 
-        Assert.True(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: true));
-        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 4, listHoldsCalculatedLeg: true));
-        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: false));
+        Assert.True(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: true, keptFromLeg: false));
+        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 4, listHoldsCalculatedLeg: true, keptFromLeg: false));
+        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: false, keptFromLeg: false));
+    }
+
+    // Final review, Important 1 (2026-11-28): a list a Progressive leg's end kept holds no calculated leg, yet the next
+    // leg end that reaches it (Input Ctrl+Y, take-off assist stopping guidance, a landing) must still empty it, or a typed
+    // departure "Cross runway 15R" survived the flight and the taxi-in Calculate cleared 15R. A leg end queued before a
+    // Calculate never empties the list that Calculate built: the generation still decides first.
+    [Fact]
+    public void A_kept_list_is_emptied_by_the_next_leg_end_queued_since_it_was_kept()
+    {
+        Assert.True(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: false, keptFromLeg: true));
+        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 4, listHoldsCalculatedLeg: false, keptFromLeg: true));
+        Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 4, listHoldsCalculatedLeg: true, keptFromLeg: true));
+        Assert.True(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: true, keptFromLeg: true));
+
+        // The keep marks the list, and only a Calculate recording its list or an emptying unmarks it; the guard reads it.
+        string form = FormSource();
+        Assert.Contains("private bool _listKeptFromLeg;", form);
+        Assert.Equal(3, Regex.Matches(form, @"_listKeptFromLeg = (true|false);").Count);
+        Assert.Contains("_listKeptFromLeg = false;", Member(form, "private void ClearSteps("));
+        Assert.Contains("_listKeptFromLeg = false;", Member(form, "private void RecordCalculatedSteps("));
+        string empty = Member(form, "private void EmptyStepsAfterLeg(");
+        Assert.Contains("if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null, _listKeptFromLeg)) return;", empty);
+        int noLeg = empty.IndexOf("_calculatedSteps = null;", StringComparison.Ordinal);
+        int marked = empty.IndexOf("_listKeptFromLeg = true;", StringComparison.Ordinal);
+        int follow = empty.IndexOf("ApplyFollowToList(", StringComparison.Ordinal);
+        int sentence = empty.IndexOf("ClearanceStepEntry.LegEndSentence(", StringComparison.Ordinal);
+        Assert.True(noLeg >= 0 && marked > noLeg && follow > marked && sentence > follow,
+            "the keep leaves no calculated leg and marks the list; any other leg end takes the emptying path");
     }
 
     // Spec 2026-11-28: only a Progressive leg's end keeps the steps typed for the next leg; every other leg end (the
@@ -617,7 +645,7 @@ public class ClearanceWiringTests
 
         string empty = Member(form, "private void EmptyStepsAfterLeg(");
         Assert.StartsWith("private void EmptyStepsAfterLeg(int generation, TaxiGuidanceState state)", empty);
-        int guard = empty.IndexOf("if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)) return;", StringComparison.Ordinal);
+        int guard = empty.IndexOf("if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null, _listKeptFromLeg)) return;", StringComparison.Ordinal);
         int keeps = empty.IndexOf("LegEndKeepsTypedSteps(state)", StringComparison.Ordinal);
         int kept = empty.IndexOf("ClearanceStepEntry.KeptAtProgressiveLegEnd(_stepOrigins)", StringComparison.Ordinal);
         int closed = empty.IndexOf("CancelStepChange(false);", StringComparison.Ordinal);
@@ -626,7 +654,12 @@ public class ClearanceWiringTests
         int moved = empty.IndexOf("_steps.Clear();", StringComparison.Ordinal);
         int noLeg = empty.IndexOf("_calculatedSteps = null;", StringComparison.Ordinal);
         int follow = empty.IndexOf("ApplyFollowToList(", StringComparison.Ordinal);
-        int names = empty.IndexOf("RefreshStepNameList(keepSelection: true, preselect: false);", StringComparison.Ordinal);
+        // Final review, minor 1: the name box is refilled only when what it offers changed, as the follow does, so a pilot
+        // typing in it as the leg ends is not read the box again ([CORE-7]).
+        int names = empty.IndexOf("if (!NameBoxLists(StepNameItems(SelectedStepKind())))", StringComparison.Ordinal);
+        int refill = empty.IndexOf("RefreshStepNameList(keepSelection: true, preselect: false);", StringComparison.Ordinal);
+        Assert.True(names >= 0 && refill > names, "the refill is guarded by what the box already lists");
+        Assert.Single(Regex.Matches(empty, @"RefreshStepNameList\("));
         int sentence = empty.IndexOf("ClearanceStepEntry.LegEndSentence(", StringComparison.Ordinal);
         Assert.True(guard >= 0 && keeps > guard && kept > guard && closed > keeps && closed > kept && dropped > closed
                     && focused > dropped && moved > focused && noLeg > moved && follow > noLeg && names > follow
