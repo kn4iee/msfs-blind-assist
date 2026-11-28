@@ -134,10 +134,10 @@ internal static class SweepRunner
             w.WriteLine($"Moving with nothing written, so left out of the side effects: {string.Join(", ", outcome.Noisy.OrderBy(n => n, StringComparer.Ordinal))}.");
         w.WriteLine($"SimConnect exceptions: {link.Exceptions}.");
         if (outcome.StopReason != null) w.WriteLine($"STOPPED: {outcome.StopReason}.");
-        if (outcome.RestoreFailures.Count > 0)
+        if (outcome.ByHand.Count > 0)
         {
-            w.WriteLine("NOT PUT BACK (set these by hand, or run --restore with the journal):");
-            foreach (string f in outcome.RestoreFailures) w.WriteLine("  " + f);
+            w.WriteLine("NOT PUT BACK:");
+            foreach (string f in outcome.ByHand) w.WriteLine("  " + f);
         }
         w.WriteLine($"Results: {tsv.Path}");
         w.WriteLine($"Journal: {journal.Path}");
@@ -146,7 +146,9 @@ internal static class SweepRunner
     }
 
     /// <summary><c>--restore</c>: puts every journaled control back, last first (a switch before the guard over it), each
-    /// by its own starting value, and lists any that did not hold. Exit 0 all held, 5 some did not.</summary>
+    /// by its own starting value, and lists any that did not hold. A family of keys that share one state gets at most one
+    /// press (the key the map names for its start); when that did not hold, or no key is known, the restore STOPS there
+    /// and never presses through the family. Exit 0 all held, 5 some did not.</summary>
     public static int Restore(SimLink link, bool calc, IReadOnlyList<Control> controls, IReadOnlyDictionary<string, string> denied,
         IReadOnlyList<JournalEntry> entries, string outDir, TextWriter w)
     {
@@ -156,20 +158,30 @@ internal static class SweepRunner
         tsv.WriteLine(SweepTsv.Header);
         var session = new SweepSession(controls, denied, new LinkIo(link, calc),
             new SweepSinks(row => tsv.WriteLine(SweepTsv.Format(row)), _ => { }, w.WriteLine));
-        var byKey = controls.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var families = KeyFamilies.Find(controls, denied).ToDictionary(f => f.Key, StringComparer.Ordinal);
+        var labels = controls.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First().Label, StringComparer.Ordinal);
         var failed = new List<string>();
+        int tried = 0;
         foreach (var e in JournalRestore.RestoreOrder(entries))
         {
-            if (!byKey.TryGetValue(e.Key, out var c)) { failed.Add($"{e.Key}: not a control of this map"); continue; }
+            tried++;
             if (denied.ContainsKey(e.Key)) { failed.Add($"{e.Key}: denied, never written; put it back by hand"); continue; }
+            string label = labels.GetValueOrDefault(e.Key) ?? (families.TryGetValue(e.Key, out var fam) ? fam.Label : "");
             bool held;
-            try { held = session.Restore(e, c); }
+            try { held = session.Restore(e); }
             catch (SimLinkException ex) { held = false; w.WriteLine($"  {e.Key}: {ex.Message}"); }
-            w.WriteLine($"{e.Key} ({c.Label}): {(held ? "back at its start" : "NOT put back")}");
-            if (!held) failed.Add($"{e.Key} ({c.Label})");
+            w.WriteLine($"{e.Key} ({label}): {(held ? "back at its start" : "NOT put back")}");
+            if (held) continue;
+            if (e.Kind == JournalKind.Family && families.TryGetValue(e.Key, out var f) && e.ReadValue is double start)
+            {
+                failed.Add($"{f.Label} ({e.Key}): set the {f.Noun} back to {f.NameOf(start)} by hand, pressing the key for {f.NameOf(start)} once in the cockpit.");
+                w.WriteLine($"Stopped at the {f.Label}: nothing more is pressed. Put it back by hand, then run --restore again for the rest.");
+                break;
+            }
+            failed.Add($"{e.Key} ({label})");
         }
         w.WriteLine();
-        w.WriteLine($"Restore: {entries.Count - failed.Count} of {entries.Count} back at their start.");
+        w.WriteLine($"Restore: {tried - failed.Count} of {entries.Count} back at their start" + (tried < entries.Count ? $", {entries.Count - tried} not tried." : "."));
         foreach (string f in failed) w.WriteLine("  NOT PUT BACK: " + f);
         w.WriteLine($"Results: {tsv.Path}");
         return failed.Count > 0 ? 5 : 0;

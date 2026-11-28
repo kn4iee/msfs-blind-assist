@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Utils;
 using Control = MSFSBlindAssist.Aircraft.A330.A330ControlMap.Control;
+using Position = MSFSBlindAssist.Aircraft.A330.A330ControlMap.Position;
 
 namespace MSFSBlindAssist.Aircraft.A330.Sweep;
 
@@ -51,6 +52,8 @@ internal sealed class SweepOutcome
     public int Swept { get; set; }
     public int NotReached { get; set; }
     public IReadOnlySet<string> Noisy { get; set; } = new HashSet<string>();
+    /// <summary>What the owner puts back by hand, one line a control that did not come back, in plain words.</summary>
+    public List<string> ByHand { get; } = new();
 }
 
 /// <summary>
@@ -60,6 +63,8 @@ internal sealed class SweepOutcome
 /// snapshot before and after for the side effects, the system state, and a verdict (<see cref="SweepVerdicts"/>). Each
 /// position is written twice, to find a toggle. Then every control the plan touched is put back from the journal
 /// (the switch, then its guard, then an ECAM page key), read back, and the whole sweep STOPS when one did not hold.
+/// Keys that share one state (<see cref="KeyFamily"/>) are one unit: each pressed in turn (the one already selected is
+/// not pressed), then the one key seen to select the start is pressed once, and nothing more if it did not hold.
 /// A denied control is never written, whatever asks.
 /// </summary>
 internal sealed class SweepSession
@@ -70,6 +75,10 @@ internal sealed class SweepSession
     private readonly ISweepIo _io;
     private readonly SweepSinks _out;
     private readonly Func<string?> _stopRequested;
+    private readonly Dictionary<string, KeyFamily> _familyByKey;
+    private readonly Dictionary<string, KeyFamily> _familyOf;
+    /// <summary>What each family's keys were seen to select in this run, by family key.</summary>
+    private readonly Dictionary<string, Dictionary<string, double>> _seen = new(StringComparer.Ordinal);
     private Dictionary<string, JournalEntry> _journal = new(StringComparer.Ordinal);
     private IReadOnlySet<string> _noisy = new HashSet<string>();
     private long? _lastWriteAt;
@@ -83,6 +92,18 @@ internal sealed class SweepSession
         _io = io;
         _out = sinks;
         _stopRequested = stopRequested ?? (() => null);
+        var families = KeyFamilies.Find(controls, denied);
+        _familyByKey = families.ToDictionary(f => f.Key, StringComparer.Ordinal);
+        _familyOf = FamilyOf(families);
+    }
+
+    /// <summary>Each family key's family.</summary>
+    internal static Dictionary<string, KeyFamily> FamilyOf(IEnumerable<KeyFamily> families)
+    {
+        var of = new Dictionary<string, KeyFamily>(StringComparer.Ordinal);
+        foreach (var f in families)
+            foreach (string m in f.Members) of[m] = f;
+        return of;
     }
 
     /// <summary>The variable a control is read by: a key's state, any other control's read.</summary>
@@ -94,8 +115,19 @@ internal sealed class SweepSession
                 && !string.IsNullOrEmpty(c.State) && c.Label.StartsWith("ECAM ", StringComparison.Ordinal))
             .GroupBy(c => c.Label[5..].Trim()).ToDictionary(g => g.Key, g => g.First().Key, StringComparer.Ordinal);
 
-    /// <summary>The keys a control's steps write, in the order they are first written (its ECAM page key, its guard, itself).</summary>
-    internal static IReadOnlyList<string> Touched(ControlPlan cp) => cp.Steps.Select(s => s.ControlKey).Distinct(StringComparer.Ordinal).ToList();
+    /// <summary>What a control's steps write, as the journal keeps it, in the order first written (its ECAM page key,
+    /// its guard, itself): a key of a family counts as its family, and a family unit is itself.</summary>
+    internal static IReadOnlyList<string> Touched(ControlPlan cp, IReadOnlyDictionary<string, KeyFamily> familyOf)
+    {
+        if (cp.Family != null) return new[] { cp.Key };
+        return cp.Steps.Select(s => familyOf.TryGetValue(s.ControlKey, out var f) ? f.Key : s.ControlKey).Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private IReadOnlyList<string> Touched(ControlPlan cp) => Touched(cp, _familyOf);
+
+    /// <summary>A family's shared start: the first of its keys' starting reads that came.</summary>
+    private static double? FamilyStart(KeyFamily f, IReadOnlyDictionary<string, double?> starts) =>
+        f.Members.Select(m => starts.GetValueOrDefault(m)).FirstOrDefault(v => v != null);
 
     /// <summary>Reads every control's start (its read, and an input event's own value), plans, and journals every key the
     /// plan will write. A control a key of which cannot be journaled is skipped: what cannot be put back is never written.
@@ -123,8 +155,18 @@ internal sealed class SweepSession
             string? why = null;
             foreach (string key in Touched(cp))
             {
-                var entry = _byKey.TryGetValue(key, out var kc) ? SweepJournal.EntryFor(kc, events.GetValueOrDefault(key), starts.GetValueOrDefault(key)) : null;
-                if (entry == null) { why = $"{key}'s starting value could not be read, so it could not be put back"; break; }
+                JournalEntry? entry;
+                if (_familyByKey.TryGetValue(key, out var f))
+                {
+                    double? start = FamilyStart(f, starts);
+                    entry = SweepJournal.FamilyEntry(f, start);
+                    if (entry == null) { why = $"{key}: its start ({(start is double s ? SweepTsv.Num(s) : "not read")}) is not a {f.Noun} any of its keys selects"; break; }
+                }
+                else
+                {
+                    entry = _byKey.TryGetValue(key, out var kc) ? SweepJournal.EntryFor(kc, events.GetValueOrDefault(key), starts.GetValueOrDefault(key)) : null;
+                    if (entry == null) { why = $"{key}'s starting value could not be read, so it could not be put back"; break; }
+                }
                 mine.Add(entry);
             }
             if (why != null) { kept.Add(cp with { Steps = Array.Empty<SweepStep>(), SkipReason = why }); continue; }
@@ -175,6 +217,8 @@ internal sealed class SweepSession
     private void RunControl(ControlPlan cp, SweepOutcome outcome)
     {
         var steps = cp.Steps;
+        Dictionary<string, double>? seen = null;
+        if (cp.Family != null) _seen[cp.Key] = seen = new Dictionary<string, double>(StringComparer.Ordinal);
         try
         {
             for (int i = 0; i < steps.Count; i++)
@@ -189,11 +233,11 @@ internal sealed class SweepSession
                     break;
                 }
                 var target = _byKey[s.ControlKey];
-                string verdict = s.Kind switch
+                string verdict = cp.Family is { } family ? PressFamilyKey(family, target, s, seen!) : s.Kind switch
                 {
                     SweepStepKind.SetPosition or SweepStepKind.OpenGuard => WritePosition(target, s,
                         repeat: i + 1 < steps.Count && steps[i + 1].Kind == SweepStepKind.RepeatPosition && steps[i + 1].ControlKey == s.ControlKey),
-                    _ => Press(target, s),
+                    _ => Press(target, s).Verdict,
                 };
                 outcome.Verdicts[verdict] = outcome.Verdicts.GetValueOrDefault(verdict) + 1;
                 // a switch behind a guard that did not open is never written: the rest of this control is skipped
@@ -213,25 +257,59 @@ internal sealed class SweepSession
         }
         finally
         {
-            // everything this control's steps wrote, put back from the journal: itself, then its guard, then its page key
-            foreach (string key in Touched(cp).Reverse())
-            {
-                bool held;
-                try { held = Restore(key); }
-                catch (Exception ex)
-                {
-                    held = false;
-                    _out.Row(new SweepRow { Key = key, Label = LabelOf(key), Position = "(restore) start", Verdict = "RESTORE FAILED: " + ex.Message });
-                }
-                if (!held)
-                {
-                    outcome.RestoreFailures.Add($"{key} ({LabelOf(key)})");
-                    outcome.StopReason ??= $"the restore of {key} did not hold";
-                    _out.Say($"  RESTORE FAILED: {key} ({LabelOf(key)}): put it back by hand.");
-                }
-            }
+            PutBack(cp, outcome);
             outcome.Swept++;
         }
+    }
+
+    /// <summary>Everything a control's steps wrote, put back from the journal: itself, then its guard, then its page key
+    /// (a family as one unit). One that does not hold stops the sweep and is named for putting back by hand.</summary>
+    private void PutBack(ControlPlan cp, SweepOutcome outcome)
+    {
+        foreach (string key in Touched(cp).Reverse())
+        {
+            bool held;
+            try { held = Restore(key); }
+            catch (Exception ex)
+            {
+                held = false;
+                _out.Row(new SweepRow { Key = key, Label = LabelOf(key), Position = "(restore) start", Verdict = "RESTORE FAILED: " + ex.Message });
+            }
+            if (held) continue;
+            outcome.RestoreFailures.Add($"{key} ({LabelOf(key)})");
+            outcome.StopReason ??= $"the restore of {key} did not hold";
+            string byHand = ByHand(key);
+            outcome.ByHand.Add(byHand);
+            _out.Say("  RESTORE FAILED: " + byHand);
+        }
+    }
+
+    /// <summary>What the owner does by hand for a key that did not come back, in plain words.</summary>
+    private string ByHand(string key)
+    {
+        if (_familyByKey.TryGetValue(key, out var f) && _journal.GetValueOrDefault(key)?.ReadValue is double start)
+            return $"{f.Label} ({key}): set the {f.Noun} back to {f.NameOf(start)} by hand, pressing the key for {f.NameOf(start)} once in the cockpit. "
+                + "Do not press through the others: --restore presses at most one key of a family, and stops there.";
+        return $"{key} ({LabelOf(key)}): put it back by hand, or run --restore with the journal.";
+    }
+
+    /// <summary>One key of a family: the key already selected is not pressed (a second press could undo it, as an ECAM
+    /// page key's does); any other is pressed through the app's own press, and what it selected is remembered for the
+    /// unit's put-back.</summary>
+    private string PressFamilyKey(KeyFamily f, Control c, SweepStep s, Dictionary<string, double> seen)
+    {
+        double? now = _io.Read(f.State);
+        if (s.ExpectedRead is double known && SweepTiming.Same(now, known))
+        {
+            seen[c.Key] = known;
+            _out.Row(new SweepRow { Key = c.Key, Label = c.Label, Position = "press", ReadBack = now, Verdict = AlreadyThere,
+                Note = $"{f.NameOf(known)} is the selected {f.Noun}: not pressed (a second press could undo it)" });
+            return AlreadyThere;
+        }
+        var names = f.ValueNames.Select(kv => new Position { Value = kv.Key, Input = kv.Key, Label = kv.Value }).ToList();
+        var pressed = Press(c, s, s.ExpectedRead, names);
+        if (pressed.Moved && pressed.Gave is double gave) seen[c.Key] = gave;
+        return pressed.Verdict;
     }
 
     /// <summary>One position (or an opened guard): read, plan with the app's decision, snapshot, send, settle, snapshot,
@@ -287,8 +365,12 @@ internal sealed class SweepSession
         return Judge(c, position, sent.Text, observation, proof, snapAfter, settled[0], again, repeatNote, effects);
     }
 
-    /// <summary>One press of a key (its state is its read): sent through the app's own press.</summary>
-    private string Press(Control c, SweepStep s)
+    /// <summary>A press's verdict, the state it settled on, and whether that state moved.</summary>
+    private sealed record Pressed(string Verdict, double? Gave, bool Moved);
+
+    /// <summary>One press of a key (its state is its read): sent through the app's own press. A key of a family is judged
+    /// against the value the map says it selects (<paramref name="expected"/>, named from <paramref name="names"/>).</summary>
+    private Pressed Press(Control c, SweepStep s, double? expected = null, IReadOnlyList<Position>? names = null)
     {
         string state = ReadOf(c) ?? throw new InvalidOperationException($"{c.Key} has no state");
         string position = s.Kind switch
@@ -302,15 +384,19 @@ internal sealed class SweepSession
         var sent = Dispatch(c.Key, A330Write.Press(c, 1));
         var none = new ProofReading(ProofReach.None);
         if (!sent.Sent)
-            return Judge(c, position, sent.Text, new WriteObservation { Sent = false, NotSentReason = sent.Reason, ReadBefore = before }, none, snapBefore, null);
+            return new(Judge(c, position, sent.Text, new WriteObservation { Sent = false, NotSentReason = sent.Reason, ReadBefore = before }, none, snapBefore, null), null, false);
         var settled = SettleTracker.Track(() => _io.Read(state), before, _io.NowMs, _io.Sleep);
         var refused = _io.TakeWriteErrors();
         var snapAfter = _io.Snapshot();
         var effects = SweepSnapshot.Moved(snapBefore, snapAfter, new[] { LVarName(state) }, _noisy);
         var observation = refused.Count > 0
             ? new WriteObservation { Sent = false, NotSentReason = "the simulator refused it: " + string.Join(", ", refused), ReadBefore = before }
-            : new WriteObservation { ReadBefore = before, Read = settled, SideEffects = effects.Count };
-        return Judge(c, position, sent.Text, observation, none, snapAfter, settled, effects: effects);
+            : new WriteObservation
+            {
+                ReadBefore = before, Read = settled, ExpectedRead = expected, Positions = names ?? Array.Empty<Position>(), SideEffects = effects.Count,
+            };
+        string verdict = Judge(c, position, sent.Text, observation, none, snapAfter, settled, effects: effects);
+        return new(verdict, settled.Value, refused.Count == 0 && settled.Moved);
     }
 
     /// <summary>Classifies a write and records its row (with the system state of <paramref name="snapAfter"/>).</summary>
@@ -343,16 +429,73 @@ internal sealed class SweepSession
     /// <summary>Puts one journaled control back and reads it back; false when it did not hold.</summary>
     public bool Restore(string key)
     {
-        if (!_journal.TryGetValue(key, out var e) || !_byKey.TryGetValue(key, out var c))
+        if (!_journal.TryGetValue(key, out var e))
         {
             _out.Row(new SweepRow { Key = key, Position = "(restore) start", Verdict = "RESTORE FAILED: not in the journal" });
             return false;
         }
-        return Restore(e, c);
+        return Restore(e);
     }
 
-    /// <summary>Puts a journal entry back (also <c>--restore</c>'s path): its own starting value, never the pairing.</summary>
-    public bool Restore(JournalEntry e, Control c)
+    /// <summary>Puts a journal entry back (also <c>--restore</c>'s path): a control by its own starting value, never the
+    /// pairing; a family by pressing the one key that selects its start (one seen in this run, else the one the map
+    /// names), once.</summary>
+    public bool Restore(JournalEntry e)
+    {
+        if (e.Kind == JournalKind.Family)
+        {
+            if (_familyByKey.TryGetValue(e.Key, out var f)) return RestoreFamily(f, e, _seen.GetValueOrDefault(e.Key));
+        }
+        else if (_byKey.TryGetValue(e.Key, out var c)) return Restore(e, c);
+        _out.Row(new SweepRow { Key = e.Key, Position = "(restore) start", Verdict = "RESTORE FAILED: not a control of this map" });
+        return false;
+    }
+
+    /// <summary>A family put back: if its state is not at its start, the ONE key known to select the start is pressed
+    /// once and read back. Nothing more is pressed if it did not hold, and nothing at all if no key is known.</summary>
+    private bool RestoreFamily(KeyFamily f, JournalEntry e, IReadOnlyDictionary<string, double>? seen)
+    {
+        const string position = "(restore) start";
+        if (e.ReadValue is not double start)
+        {
+            _out.Row(new SweepRow { Key = f.Key, Label = f.Label, Position = position, Verdict = "RESTORE FAILED: the journal has no start" });
+            return false;
+        }
+        string Note(double? v) => $"{f.State} {f.NameOf(v)} ({SweepTsv.Num(v)}), start {f.NameOf(start)} ({SweepTsv.Num(start)})";
+        double? now = _io.Read(f.State);
+        if (SweepTiming.Same(now, start))
+        {
+            _out.Row(new SweepRow { Key = f.Key, Label = f.Label, Position = position, ReadBack = now, Verdict = "at start", Note = Note(now) });
+            return true;
+        }
+        string? key = f.RestoreKey(start, seen);
+        if (key == null || !_byKey.TryGetValue(key, out var c))
+        {
+            _out.Row(new SweepRow { Key = f.Key, Label = f.Label, Position = position, ReadBack = now, Note = Note(now),
+                Verdict = $"RESTORE FAILED: no key of the {f.Label} is known to select its start ({f.NameOf(start)}): nothing pressed" });
+            return false;
+        }
+        var sent = Dispatch(key, A330Write.Press(c, 1));
+        if (!sent.Sent)
+        {
+            _out.Row(new SweepRow { Key = f.Key, Label = f.Label, Position = position, Sent = sent.Text, ReadBack = now, Note = Note(now),
+                Verdict = "RESTORE FAILED: not sent: " + sent.Reason });
+            return false;
+        }
+        SettleTracker.Track(() => _io.Read(f.State), now, _io.NowMs, _io.Sleep);
+        _io.TakeWriteErrors();
+        double? back = _io.Read(f.State);
+        bool held = SweepTiming.Same(back, start);
+        _out.Row(new SweepRow
+        {
+            Key = f.Key, Label = f.Label, Position = position, Sent = sent.Text, ReadBack = back, Note = Note(back),
+            Verdict = held ? "restored" : $"RESTORE FAILED: pressing {key} gave {f.NameOf(back)}, not its start; nothing more is pressed",
+        });
+        return held;
+    }
+
+    /// <summary>A control put back by its journal entry: its own starting value, never the pairing.</summary>
+    private bool Restore(JournalEntry e, Control c)
     {
         int actions = 0;
         var sentTexts = new List<string>();
@@ -470,5 +613,6 @@ internal sealed class SweepSession
     private static string PositionLabel(Control c, double? expectedRead) =>
         expectedRead is double v && c.Positions?.FirstOrDefault(p => SweepTiming.Same(p.Value, v)) is { } p ? p.Label + " " : "";
 
-    private string LabelOf(string key) => _byKey.TryGetValue(key, out var c) ? c.Label : "";
+    private string LabelOf(string key) =>
+        _byKey.TryGetValue(key, out var c) ? c.Label : _familyByKey.TryGetValue(key, out var f) ? f.Label : "";
 }

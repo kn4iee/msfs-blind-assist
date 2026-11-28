@@ -4,16 +4,17 @@ using Control = MSFSBlindAssist.Aircraft.A330.A330ControlMap.Control;
 
 namespace MSFSBlindAssist.Aircraft.A330.Sweep;
 
-/// <summary>How a journaled control is put back: by its input event's own value, or by pressing it.</summary>
-internal enum JournalKind { InputEvent, Press }
+/// <summary>How a journaled control is put back: by its input event's own value, by pressing it, or, for a family of
+/// keys that share one state, by pressing the one key that selects the start.</summary>
+internal enum JournalKind { InputEvent, Press, Family }
 
 /// <summary>
 /// One control's start, written before the sweep's first write. An input-event control (a selector, a guard, a
 /// continuous control) keeps its input event's OWN value (<c>B:&lt;Event&gt;</c>) in <see cref="EventValue"/>, which
 /// is what the restore writes back: never its read translated through the pairing being tested. A pressed control (a
 /// key) keeps its state's reading and, for a multi-press key, how many presses bring it round
-/// (<see cref="PressesToCycle"/>). <see cref="Read"/> and <see cref="ReadValue"/> are the map's read and its value,
-/// which the restore also checks.
+/// (<see cref="PressesToCycle"/>). A <see cref="KeyFamily"/> keeps its shared state's start once, keyed by the state.
+/// <see cref="Read"/> and <see cref="ReadValue"/> are the map's read and its value, which the restore also checks.
 /// </summary>
 internal sealed record JournalEntry(string Key, JournalKind Kind, string Event, double? EventValue, string? Read, double? ReadValue, int? PressesToCycle = null);
 
@@ -21,19 +22,31 @@ internal sealed record JournalEntry(string Key, JournalKind Kind, string Event, 
 /// written round-trip in the invariant culture (CORE-21), so a restore writes back exactly what was read.</summary>
 internal static class SweepJournal
 {
-    private const string InputEventWord = "input-event", PressWord = "press";
+    private const string InputEventWord = "input-event", PressWord = "press", FamilyWord = "family";
 
     public static string Header() =>
         "# A330 panel sweep journal: every planned control's start, written before the first write.\n" +
         "# Put them back after a crash or Ctrl+C with: A330PanelSweep --restore <this file>\n" +
         "# start <TAB> key <TAB> input-event <TAB> event <TAB> its own value <TAB> read <TAB> read value\n" +
-        "# start <TAB> key <TAB> press <TAB> event <TAB> presses to cycle <TAB> state <TAB> state value\n";
+        "# start <TAB> key <TAB> press <TAB> event <TAB> presses to cycle <TAB> state <TAB> state value\n" +
+        "# start <TAB> state <TAB> family <TAB> <TAB> <TAB> state <TAB> state value (keys that share one state)\n";
 
     public static string Line(JournalEntry e)
     {
-        string third = e.Kind == JournalKind.InputEvent ? Num(e.EventValue) : e.PressesToCycle?.ToString(CultureInfo.InvariantCulture) ?? "";
-        return string.Join('\t', "start", e.Key, e.Kind == JournalKind.InputEvent ? InputEventWord : PressWord, e.Event, third, e.Read ?? "", Num(e.ReadValue)) + "\n";
+        string third = e.Kind switch
+        {
+            JournalKind.InputEvent => Num(e.EventValue),
+            JournalKind.Press => e.PressesToCycle?.ToString(CultureInfo.InvariantCulture) ?? "",
+            _ => "",
+        };
+        string word = e.Kind switch { JournalKind.InputEvent => InputEventWord, JournalKind.Press => PressWord, _ => FamilyWord };
+        return string.Join('\t', "start", e.Key, word, e.Event, third, e.Read ?? "", Num(e.ReadValue)) + "\n";
     }
+
+    /// <summary>A family's journal line, or null when it could not be put back: its start was not read, or no key is
+    /// known to select it.</summary>
+    public static JournalEntry? FamilyEntry(KeyFamily f, double? start) =>
+        start is double s && f.KnownKeyFor(s) != null ? new JournalEntry(f.Key, JournalKind.Family, "", null, f.State, s) : null;
 
     public static List<JournalEntry> Parse(string text)
     {
@@ -45,9 +58,9 @@ internal static class SweepJournal
             string line = raw.TrimEnd('\r');
             if (line.Trim().Length == 0 || line.TrimStart().StartsWith('#')) continue;
             var f = line.Split('\t');
-            if (f.Length != 7 || f[0] != "start" || f[1].Length == 0 || (f[2] != InputEventWord && f[2] != PressWord))
+            if (f.Length != 7 || f[0] != "start" || f[1].Length == 0 || (f[2] != InputEventWord && f[2] != PressWord && f[2] != FamilyWord))
                 throw new FormatException($"journal line {lineNo}: expected 'start' and six tab-separated fields, got '{line}'");
-            var kind = f[2] == InputEventWord ? JournalKind.InputEvent : JournalKind.Press;
+            var kind = f[2] == InputEventWord ? JournalKind.InputEvent : f[2] == PressWord ? JournalKind.Press : JournalKind.Family;
             double? eventValue = null;
             int? presses = null;
             if (kind == JournalKind.InputEvent)
@@ -55,6 +68,11 @@ internal static class SweepJournal
                 if (f[3].Length == 0 || !NumberParsing.TryParseExternal(f[4], out double ev))
                     throw new FormatException($"journal line {lineNo}: an input-event line needs its event and its own value");
                 eventValue = ev;
+            }
+            else if (kind == JournalKind.Family)
+            {
+                if (f[5].Length == 0 || f[6].Length == 0)
+                    throw new FormatException($"journal line {lineNo}: a family line needs its state and its start");
             }
             else if (f[4].Length > 0)
             {
@@ -111,6 +129,8 @@ internal static class JournalRestore
 
     public static RestoreStep Next(JournalEntry e, Control c, double? eventNow, double? readNow, int actionsSoFar)
     {
+        // a family is put back by pressing the one key that selects its start (SweepSession), never key by key
+        if (e.Kind == JournalKind.Family) return new RestoreStep.Failed("a family of keys is put back as one unit");
         if (e.Kind == JournalKind.InputEvent)
         {
             if (eventNow == null) return new RestoreStep.Failed($"{e.Event}'s own value could not be read");

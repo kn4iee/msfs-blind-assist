@@ -127,6 +127,58 @@ public class A330PanelSweepPlannerTests
             steps.Select(s => s.Kind).ToArray());
     }
 
+    // Three keys that each select one radio, read by one variable, and the status row that names its values.
+    private static Control RadioKey(string key, string label) => new()
+    {
+        Key = key, Label = label, Kind = "button", Event = "EV_" + key, Mode = "push", State = "INI_RADIO",
+    };
+
+    private static Control[] Radios() => new[]
+    {
+        RadioKey("K1", "Radio VHF 1"), RadioKey("K2", "Radio VHF 2"), RadioKey("K3", "Radio VHF 3"),
+        new Control { Key = "RADIO_SEL", Label = "Radio panel selected radio", Kind = "status", Read = "INI_RADIO",
+            Positions = new() { P(1, 1, "VHF 1"), P(2, 2, "VHF 2"), P(3, 3, "VHF 3") } },
+    };
+
+    private static Dictionary<string, double?> RadioStarts(double? v) => new() { ["K1"] = v, ["K2"] = v, ["K3"] = v, ["RADIO_SEL"] = v };
+
+    [Fact]
+    public void Keys_that_share_one_state_are_one_unit_pressed_in_turn_and_put_back_by_the_key_that_selects_the_start()
+    {
+        var plan = Plan(Radios(), RadioStarts(2));
+
+        var unit = For(plan, "INI_RADIO");
+        Assert.NotNull(unit.Family);
+        Assert.Null(unit.SkipReason);
+        Assert.Equal("radio", unit.Family!.Noun);
+        Assert.Equal("K3", unit.Family.KnownKeyFor(3));
+        // each key pressed in turn, then the ONE key that selects the start
+        Assert.Equal(new[] { SweepStepKind.Press, SweepStepKind.Press, SweepStepKind.Press, SweepStepKind.ReturnToStart }, unit.Steps.Select(s => s.Kind).ToArray());
+        Assert.Equal(new[] { "K1", "K2", "K3", "K2" }, unit.Steps.Select(s => s.ControlKey).ToArray());
+        Assert.Equal(new double?[] { 1, 2, 3, 2 }, unit.Steps.Select(s => s.ExpectedRead).ToArray());
+
+        // the unit stands where its first key does; each key is listed once, as pressed with the unit
+        var keys = plan.Controls.Select(c => c.Key).ToList();
+        Assert.Equal(keys.IndexOf("K1") - 1, keys.IndexOf("INI_RADIO"));
+        foreach (string k in new[] { "K1", "K2", "K3" })
+        {
+            Assert.Empty(For(plan, k).Steps);
+            Assert.Contains("INI_RADIO", For(plan, k).SkipReason);
+        }
+    }
+
+    [Fact]
+    public void A_family_whose_start_no_key_selects_is_skipped_before_any_press()
+    {
+        var unknown = For(Plan(Radios(), RadioStarts(9)), "INI_RADIO");
+        Assert.Empty(unknown.Steps);
+        Assert.Equal("its start (9) is not a radio any of its keys selects", unknown.SkipReason);
+
+        var unread = For(Plan(Radios(), RadioStarts(null)), "INI_RADIO");
+        Assert.Empty(unread.Steps);
+        Assert.Equal("its start (not read) is not a radio any of its keys selects", unread.SkipReason);
+    }
+
     [Fact]
     public void Deny_list_text_parses_key_tab_reason_and_refuses_a_line_without_a_reason()
     {

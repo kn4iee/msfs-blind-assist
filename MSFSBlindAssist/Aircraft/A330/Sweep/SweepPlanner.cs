@@ -10,8 +10,11 @@ namespace MSFSBlindAssist.Aircraft.A330.Sweep;
 ///
 /// A selector visits every other position in the map's order and returns to where it started; a button
 /// that reports a state is pressed once; a continuous control goes to its minimum, middle and maximum
-/// and back. Each position (and each continuous point) is written twice in a row, to find a toggle. A guard row is never swept on its own: its covered switch opens it first and closes it
-/// last (unless it found it open). A control whose start was not read is skipped, never guessed.
+/// and back. Each position (and each continuous point) is written twice in a row, to find a toggle. A guard row is
+/// never swept on its own: its covered switch opens it first and closes it last (unless it found it open). Keys that
+/// share one state variable are one unit (<see cref="KeyFamily"/>): each pressed in turn, then the one key that
+/// selects the start; a unit whose start no key is known to select is skipped before any press. A control whose start
+/// was not read is skipped, never guessed.
 /// </summary>
 internal static class SweepPlanner
 {
@@ -24,6 +27,9 @@ internal static class SweepPlanner
     {
         var byKey = controls.ToDictionary(c => c.Key);
         var guardKeys = new HashSet<string>(controls.Where(c => c.Guard != null).Select(c => c.Guard!));
+        var familyOf = new Dictionary<string, KeyFamily>(StringComparer.Ordinal);
+        foreach (var f in KeyFamilies.Find(controls, denied))
+            foreach (string m in f.Members) familyOf[m] = f;
         var plans = new List<ControlPlan>();
         foreach (var c in controls)
         {
@@ -31,10 +37,35 @@ internal static class SweepPlanner
             var steps = new List<SweepStep>();
             if (denied.TryGetValue(c.Key, out var why)) skip = "denied: " + why;
             else if (guardKeys.Contains(c.Key)) skip = "guard row: opened only with its switch";
+            else if (familyOf.TryGetValue(c.Key, out var family))
+            {
+                if (family.Members[0] == c.Key) plans.Add(FamilyPlan(family, starts));
+                skip = $"pressed with the {family.Label} ({family.Key})";
+            }
             else skip = Build(c, byKey, starts, denied, ecamPageKeys, steps);
             plans.Add(new ControlPlan(c.Key, c.Label, skip == null ? steps : Array.Empty<SweepStep>(), skip));
         }
         return new SweepPlan(plans);
+    }
+
+    /// <summary>A family of keys as one unit: each key pressed in turn, then the one key the map says selects the start.</summary>
+    private static ControlPlan FamilyPlan(KeyFamily f, IReadOnlyDictionary<string, double?> starts)
+    {
+        double? start = f.Members.Select(m => starts.TryGetValue(m, out var v) ? v : null).FirstOrDefault(v => v != null);
+        string? back = start is double s ? f.KnownKeyFor(s) : null;
+        if (back == null)
+            return new ControlPlan(f.Key, f.Label, Array.Empty<SweepStep>(),
+                $"its start ({(start is double v ? Fmt(v) : "not read")}) is not a {f.Noun} any of its keys selects", f);
+        var steps = new List<SweepStep>();
+        foreach (string m in f.Members)
+        {
+            bool known = f.KnownValues.TryGetValue(m, out double value);
+            steps.Add(new SweepStep(SweepStepKind.Press, m, null, known ? value : null,
+                known ? $"press {m} (selects {f.NameOf(value)}, {Fmt(value)})" : $"press {m} (what it selects is not known)"));
+        }
+        steps.Add(new SweepStep(SweepStepKind.ReturnToStart, back, null, start,
+            $"return {f.State} to {f.NameOf(start)} ({Fmt(start!.Value)}) by pressing {back} once"));
+        return new ControlPlan(f.Key, f.Label, steps, null, f);
     }
 
     private static string? Build(Control c, Dictionary<string, Control> byKey, IReadOnlyDictionary<string, double?> starts,

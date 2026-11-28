@@ -432,7 +432,19 @@ public class A330PanelSweepRunnerTests
             return true;
         }
 
-        public void Calc(string rpn) => Sent.Add(rpn);
+        /// <summary>A key's push and what it selects: the state variable and the value it sets it to.</summary>
+        public readonly Dictionary<string, (string Var, double Value)> Presses = new(StringComparer.Ordinal);
+        /// <summary>The input events pushed, in order.</summary>
+        public readonly List<string> Pushed = new();
+
+        public void Calc(string rpn)
+        {
+            Sent.Add(rpn);
+            var push = Regex.Match(rpn, @"^\(>B:(.+)_Push\)$");
+            if (!push.Success) return;
+            Pushed.Add(push.Groups[1].Value);
+            if (Presses.TryGetValue(push.Groups[1].Value, out var p)) Vars[p.Var] = p.Value;
+        }
 
         public double? Read(string read)
         {
@@ -554,6 +566,85 @@ public class A330PanelSweepRunnerTests
         // the rest of the sweep goes on
         Assert.Null(outcome.StopReason);
         Assert.Contains(aircraft.Sent, s => s.StartsWith("EV_NEXT", StringComparison.Ordinal));
+    }
+
+    // ---------------- keys that share one state ----------------
+
+    private static Control RadioKey(string key, string label) => new()
+    {
+        Key = key, Label = label, Kind = "button", Event = "EV_" + key, Mode = "push", State = "INI_RADIO",
+    };
+
+    private static Control[] Radios() => new[]
+    {
+        RadioKey("K1", "Radio VHF 1"), RadioKey("K2", "Radio VHF 2"), RadioKey("K3", "Radio VHF 3"),
+        new Control { Key = "RADIO_SEL", Label = "Radio panel selected radio", Kind = "status", Read = "INI_RADIO",
+            Positions = new() { P(1, 1, "VHF 1"), P(2, 2, "VHF 2"), P(3, 3, "VHF 3") } },
+    };
+
+    private static FakeAircraft RadioAircraft(double start)
+    {
+        var aircraft = new FakeAircraft();
+        aircraft.Vars["INI_RADIO"] = start;
+        foreach (var (k, v) in new[] { ("K1", 1.0), ("K2", 2.0), ("K3", 3.0) }) aircraft.Presses["EV_" + k] = ("INI_RADIO", v);
+        return aircraft;
+    }
+
+    [Fact]
+    public void A_family_is_put_back_by_pressing_the_one_key_seen_to_give_its_start()
+    {
+        var aircraft = RadioAircraft(2);
+        var (outcome, rows, journal) = Sweep(aircraft, Radios());
+
+        Assert.Null(outcome.StopReason);
+        Assert.Contains("start\tINI_RADIO\tfamily\t\t\tINI_RADIO\t2", journal);
+        Assert.Equal(new[] { "EV_K1", "EV_K2", "EV_K3", "EV_K2" }, aircraft.Pushed);
+        Assert.Equal(2, aircraft.Vars["INI_RADIO"]);
+        Assert.Contains(rows, r => r.Key == "INI_RADIO" && r.Verdict == "restored");
+        Assert.Equal(3, rows.Count(r => r.Key is "K1" or "K2" or "K3" && r.Verdict == "read-only"));
+
+        // the key already selected is not pressed (a second press could undo it), and it is the one that puts it back
+        var atFirst = RadioAircraft(1);
+        Sweep(atFirst, Radios());
+        Assert.Equal(new[] { "EV_K2", "EV_K3", "EV_K1" }, atFirst.Pushed);
+    }
+
+    [Fact]
+    public void A_family_that_did_not_come_back_stops_the_sweep_and_nothing_more_is_pressed()
+    {
+        var aircraft = RadioAircraft(2);
+        aircraft.Presses.Remove("EV_K2");   // VHF 2's key does nothing
+        var next = Select("NEXT", P(0, 0, "Off"), P(1, 1, "On"));
+        aircraft.Add(next, 0);
+
+        var (outcome, rows, _) = Sweep(aircraft, Radios().Append(next).ToArray());
+
+        Assert.Equal(new[] { "EV_K1", "EV_K2", "EV_K3", "EV_K2" }, aircraft.Pushed);   // one press to put it back, no more
+        Assert.NotNull(outcome.StopReason);
+        Assert.Contains(rows, r => r.Key == "INI_RADIO" && r.Verdict.StartsWith("RESTORE FAILED", StringComparison.Ordinal));
+        Assert.DoesNotContain(aircraft.Sent, s => s.StartsWith("EV_NEXT", StringComparison.Ordinal));
+        Assert.Contains(outcome.ByHand, h => h.Contains("VHF 2", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_restore_of_a_family_from_its_journal_presses_the_key_the_map_names_or_nothing()
+    {
+        var entry = Assert.Single(SweepJournal.Parse("start\tINI_RADIO\tfamily\t\t\tINI_RADIO\t2\n"));
+        Assert.Equal(JournalKind.Family, entry.Kind);
+        Assert.Equal(entry, Assert.Single(SweepJournal.Parse(SweepJournal.Line(entry))));
+
+        var aircraft = RadioAircraft(3);
+        var session = new SweepSession(Radios(), new Dictionary<string, string>(), aircraft, new SweepSinks(_ => { }, _ => { }, _ => { }));
+        Assert.True(session.Restore(entry));
+        Assert.Equal(new[] { "EV_K2" }, aircraft.Pushed);
+
+        // a start no key is known to select: said so, and nothing is pressed
+        var none = RadioAircraft(3);
+        var rows = new List<SweepRow>();
+        var lost = new SweepSession(Radios(), new Dictionary<string, string>(), none, new SweepSinks(rows.Add, _ => { }, _ => { }));
+        Assert.False(lost.Restore(SweepJournal.Parse("start\tINI_RADIO\tfamily\t\t\tINI_RADIO\t9\n").Single()));
+        Assert.Empty(none.Pushed);
+        Assert.Contains(rows, r => r.Verdict.Contains("no key", StringComparison.Ordinal));
     }
 
     [Fact]

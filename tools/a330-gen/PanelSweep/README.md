@@ -99,9 +99,33 @@ stops at once, and `--restore` with the journal puts back what was left.
    then an ECAM page key. An input-event control is written its input event's own starting value, never its
    read translated through the pairing being tested (an inverted pairing would put it on the wrong side), at
    most twice, and holds once both that value and its read are back. A key is pressed until its state reads its
-   start, at most `pressesToCycle - 1` times; a key with no count is a push-on/push-off key, so one press. **If a
-   put-back did not hold, the whole sweep stops** (every later control reads `not reached`), and the summary names
-   the control to put back by hand.
+   start, at most `pressesToCycle - 1` times; a key with no count is a push-on/push-off key, so one press. A family
+   of keys that share one state is put back as one unit (below). **If a put-back did not hold, the whole sweep
+   stops** (every later control reads `not reached`), and the summary says what to put back by hand.
+
+## Keys that share one state
+
+The 13 ECAM page keys all select the page `INI_ECAM_ACTIVE_PAGE` shows, and the radio panel's 5 radio keys all
+select the radio `INI_SELECTED_RADIO_CPT` shows. Pressing one of these keys again never undoes it, so they are not
+swept one by one. Each family is ONE unit:
+
+- The journal keeps the family's start once (the page or radio selected when the sweep began).
+- Each key is pressed in turn, and its row says what it selected and its verdict. The key whose page or radio is
+  already selected is not pressed (pressing an ECAM page key a second time can take the display back to another
+  page); its row says `already there`.
+- Then the family is put back by pressing ONE key: the key this run saw select the start, or else the key the map
+  says selects it. If that press does not bring the start back, nothing more is pressed and the sweep stops.
+- If the start is a page or radio none of the family's keys selects (or it could not be read), the family is
+  skipped before any press, with the reason `its start (<value>) is not a page any of its keys selects`.
+
+What the map says each key selects comes from the status row that names the shared state's values (the system
+display page, the radio panel's selected radio), matched to the key by its name ("ECAM FUEL" selects FUEL).
+
+If the sweep stops on a family, the summary says which page or radio to put back. Put it back by hand: press the key
+for that page or radio once in the cockpit, and only that key. Then go on with `--from` and the key the summary
+names. `--restore` treats a family the same way: it presses at most the one key the map names for the start, and if
+that does not hold, or no key is known, it stops there and presses nothing more. Put that one back by hand, then run
+`--restore` again for the rest.
 
 ## Proofs
 
@@ -153,18 +177,16 @@ elevation knob (`A330_LDG_ELEV`, with `INI_LANDING_ELEVATION`) and the weather r
 
 `journal-<same stamp>.tsv`: one `start` line a control, written before the first write. An input-event control:
 its event and that event's own value, its read and the read's value. A key: its event, its `pressesToCycle`, its
-state and the state's value. Numbers are round-trip. A comment line names the variables that moved on their own.
+state and the state's value. A family of keys: `family`, its state and the state's start, once. Numbers are
+round-trip. A comment line names the variables that moved on their own.
 
 ## Before the owner's session
 
 - **The MCDU brightness knobs** (`A330_CPT_MCDU_BRT`, `A330_FO_MCDU_BRT`): their minimum blanks that MCDU, which
   the MCDU and display readers need on. They are journaled and put back like any other; if the sweep stops while
   one is at its minimum, run `--restore` with the journal.
-- **Keys that share one state**: the ECAM page keys all read `INI_ECAM_ACTIVE_PAGE`, and the radio panel's radio
-  keys all read `INI_SELECTED_RADIO_CPT`. A key's put-back presses that same key once more, which may not bring
-  the shared state back (pressing VHF 2 again leaves VHF 2 selected); then the sweep stops there. Put the page or
-  the radio back by hand, then go on with `--from` the next key. A key already selected reads `dead` (nothing
-  moved), which is not a fault of the key.
+- **The ECAM page keys and the radio keys** are two families, each swept and put back as one unit (above). If the
+  sweep stops on one, press the one key the summary names in the cockpit, and nothing else of that family.
 - **The guard pairings** are put back by their input events' own values, like every other control; the guard is
   closed after its switch has been put back.
 - The proof of predictive windshear is checked by ear (above).

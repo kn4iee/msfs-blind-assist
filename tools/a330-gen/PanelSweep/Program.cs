@@ -170,8 +170,10 @@ internal static class Program
         var pass = o.Pass == ApuBleedPass ? new HashSet<string>(SweepSnapshot.ApuBleedPassKeys, StringComparer.Ordinal) : null;
         int from = o.From != null ? order[o.From] : 0;
         if (pass == null && o.Only == null && o.From == null) return null;
-        return cp => (pass == null || pass.Contains(cp.Key)) && (o.Only == null || o.Only.Contains(cp.Key))
-            && (!order.TryGetValue(cp.Key, out int i) || i >= from);
+        // a family of keys that share one state is kept whole when any of its keys is
+        bool Keep(string key) => (pass == null || pass.Contains(key)) && (o.Only == null || o.Only.Contains(key))
+            && (!order.TryGetValue(key, out int i) || i >= from);
+        return cp => cp.Family is { } f ? f.Members.Any(Keep) : Keep(cp.Key);
     }
 
     private static Options ParseArgs(string[] args)

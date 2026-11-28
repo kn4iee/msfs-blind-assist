@@ -27,19 +27,23 @@ public enum SweepStepKind
 
 /// <summary>One step. <see cref="ControlKey"/> is the control it acts on (the guard's or the ECAM key's
 /// for those steps); <see cref="Input"/> the value to write (null for a press); <see cref="ExpectedRead"/>
-/// the read-back the map gives that position, null where there is none (a press, a continuous point).</summary>
+/// the read-back the map gives that position, null where there is none (a press, a continuous point). A key of a
+/// <see cref="KeyFamily"/>: the value the map says its press selects, and for the unit's <see cref="SweepStepKind.ReturnToStart"/>
+/// the start, with the key that selects it.</summary>
 public sealed record SweepStep(SweepStepKind Kind, string ControlKey, double? Input, double? ExpectedRead, string Text)
 {
     public override string ToString() => Text;
 }
 
-/// <summary>The plan for one control: its steps in order, or no steps and the reason it is skipped.</summary>
-public sealed record ControlPlan(string Key, string Label, IReadOnlyList<SweepStep> Steps, string? SkipReason)
+/// <summary>The plan for one control: its steps in order, or no steps and the reason it is skipped. A
+/// <see cref="Family"/> unit is keyed by its shared state variable, and its keys' own plans say they are pressed with it.</summary>
+public sealed record ControlPlan(string Key, string Label, IReadOnlyList<SweepStep> Steps, string? SkipReason, KeyFamily? Family = null)
 {
     public bool IsPlanned => SkipReason == null;
 }
 
-/// <summary>The whole plan: every control of the map once, in the map's order, planned or skipped.</summary>
+/// <summary>The whole plan: every control of the map once, in the map's order, planned or skipped, and each family of
+/// keys that share one state as one unit, just before its first key.</summary>
 public sealed record SweepPlan(IReadOnlyList<ControlPlan> Controls)
 {
     public int PlannedCount => Controls.Count(c => c.IsPlanned);
