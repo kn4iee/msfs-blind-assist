@@ -812,7 +812,7 @@ Rows with no A330 match: ELEC 3, APU 2, Oxygen 3, Hydraulics 4, Fuel 1, Pressuri
 
 ### Conditions
 
-Simulator: MSFS 2024 1.9.24.0. Aircraft: iniBuilds A330-200 VIP (GE), on the ground, engines off, stopped, parking brake set, external power on. Before the sweep the two batteries and the APU battery were switched to AUTO and external power A on, by calculator writes (main bus 28 V). The tool is `tools/a330-gen/PanelSweep` (its README): it writes through the app's own routes (SimConnect `SetInputEvent` by hash), reads each control back until it settles, and journals every control's starting value before its first write. The full run started at 21:29 and took about 13 minutes: 151 units (149 controls and 2 key families), none not reached, no SimConnect exception. Its files (the sweep table, its journal and the two restores) are kept outside the repository.
+Simulator: MSFS 2024 1.9.24.0. Aircraft: iniBuilds A330-200 VIP (GE), on the ground, engines off, stopped, parking brake set, external power on. Before the sweep the two batteries and the APU battery were switched to AUTO and external power A on, by calculator writes (main bus 28 V): ONE write each, and each came on, which fits the model below (one write, one press). The tool is `tools/a330-gen/PanelSweep` (its README): it writes through the app's own routes (SimConnect `SetInputEvent` by hash), reads each control back until it settles, and journals every control's starting value before its first write. The full run started at 21:29 and took about 13 minutes: 151 units (149 controls and 2 key families), none not reached, no SimConnect exception. Its files (the sweep table, its journal and the two restores) are kept outside the repository.
 
 ### Counts by verdict
 
@@ -833,7 +833,7 @@ The 9 controls where `SetInputEvent(0)` with the event at 0 flipped the read, an
 
 The other 64 controls: `SetInputEvent(1)` with the event at 0 flipped the read (in about 100 ms), and `SetInputEvent(1)` again, with the event at 1, flipped it back. The put-back then sent `SetInputEvent(0)` twice, and after the second the read was at its start. The put-back sends a second write only when the first did not leave the control at its start (its event's own value and its read both back); which of the two was not back is not recorded. The 64 are: A330_AC_ESS, A330_APU_BLEED, A330_APU_GEN, A330_BRAKE_FAN, A330_BULK_ISO, A330_BUS_TIE, A330_CAB_FANS, A330_CARGO_HOT_AIR, A330_COMMERCIAL, A330_CPT_LS, A330_CPT_ND_ARPT, A330_CPT_ND_CSTR, A330_CPT_ND_NDB, A330_CPT_ND_VOR, A330_CPT_ND_WPT, A330_CPT_TERR_ON_ND, A330_ENG1_ANTI_ICE, A330_ENG1_BLEED, A330_ENG2_ANTI_ICE, A330_ENG2_BLEED, A330_EXTRACT, A330_FADEC1, A330_FADEC2, A330_FO_LS, A330_FO_ND_ARPT, A330_FO_ND_CSTR, A330_FO_ND_NDB, A330_FO_ND_VOR, A330_FO_ND_WPT, A330_FO_TERR_ON_ND, A330_FUEL_TK_XFR, A330_FUEL_TRIM_MODE, A330_FUEL_XFEED, A330_GALLEY, A330_GEN1, A330_GEN2, A330_GPWS_FLAP, A330_GPWS_GS, A330_GPWS_SYS, A330_GPWS_TERR, A330_HOT_AIR1, A330_HOT_AIR2, A330_HYD_BLUE, A330_HYD_BLUE_ELEC_OFF, A330_HYD_BLUE_ELEC_ON, A330_HYD_GREEN, A330_HYD_GREEN_ELEC_OFF, A330_HYD_GREEN_ELEC_ON, A330_HYD_GREEN_ENG2, A330_HYD_YELLOW, A330_HYD_YELLOW_ELEC_OFF, A330_HYD_YELLOW_ELEC_ON, A330_INR_TK_L, A330_INR_TK_R, A330_LAND_RECOVERY, A330_PACK1, A330_PACK2, A330_PRIM1, A330_PRIM2, A330_PRIM3, A330_RAM_AIR, A330_SEC1, A330_SEC2, A330_WING_ANTI_ICE.
 
-The trial at 23:05 (`--only A330_CPT_FD,A330_PACK1`, the same flight): the press by value built after the full run (`SetInputEvent(1)`, a 150 ms hold, `SetInputEvent(0)`) left both reads where they were. Both rows read `dead`: pack 1, one of the 64, and the captain's flight director, one of the 9. An earlier attempt of the same trial crashed inside SimConnect's own message handling before it wrote a row; the retry a minute later ran clean.
+The trial at 23:05 (`--only A330_CPT_FD,A330_PACK1`, the same flight): the press by value built after the full run (`SetInputEvent(1)`, a 150 ms hold, `SetInputEvent(0)`) left both reads where they were. Both rows read `dead`: pack 1, one of the 64, and the captain's flight director, one of the 9. An earlier attempt of the same trial crashed inside SimConnect's own message handling before it wrote a row; the retry a minute later ran clean. The cause that fits the crash is the tool's own (a snapshot block shorter than its struct, read past the message's end), fixed since; the tool's README has the stack.
 
 The one model that fits every result: every `SetInputEvent` to these events is a press, one flip, whatever the value. It reads each pair of writes above as two flips: the two sets of 1 on the 64, the two sets of 0 on the 9, the 64's put-back of two sets of 0, and the 23:05 press of a set of 1 then a set of 0, which cancelled. An earlier reading of the 64's put-back, that its first set of 0 changed nothing, overlooked the put-back's rule; the 23:05 trial rules it out. Only the parts above were measured; the rest is the model.
 
@@ -873,9 +873,48 @@ What still has to be done, by the owner's session or someone with access:
 
 1. The names file (plan 04 Task 1 Step 1): `control_names.json`, from someone with access to the private reference. Until then the map's labels are the generator's own.
 2. The naming rule to hear (Task 3): the Electrical, ADIRS and Captain EFIS panels three ways (capitals as written; sentence case with the aircraft's abbreviations; digits set apart from letters). The owner rules.
-3. The sweep, run again (Task 4 Step 4): for the denied controls by hand, one at a time, each with the owner's go-ahead; for the proofs the display reader gives (E/WD memos, ECAM pages); and the APU-bleed pass (`--pass apu-bleed`, the APU started by hand first). Questions the code review raised, by key: `A330_XPDR_MODE` and `A330_TCAS_MODE` (the transponder and TCAS selectors may be crossed); `A330_EFIS_DMC` (Normal at 0); `A330_CLOCK_RST` (the clock's elapsed-time reset, spring-loaded on Airbus clocks); the fuel pumps (left pump 1 reads OUTER, right pump 1 reads INNER); `A330_PRESS_MODE`; the radio panel's selected radio; `A330_CPT_BARO_UNIT` and `A330_FO_BARO_UNIT` (the read is the control's own event); the parking brake's direction; the landing and nose light position words (`A330_NOSE_LT`); `A330_DOME` and the wipers (`A330_CPT_WIPER`, `A330_FO_WIPER`); every guarded control with its guard closed (does the aircraft refuse it?).
+3. The sweep, run again (Task 4 Step 4):
+   - the 73 push-buttons that toggle, each pressed and pressed back with the one-set press (it has not met the simulator yet);
+   - the denied controls by hand, one at a time, each with the owner's go-ahead (item 9 has the push-buttons among them);
+   - the proofs the display reader gives (E/WD memos, ECAM pages);
+   - the APU-bleed pass (`--pass apu-bleed`, the APU started by hand first).
+
+   Questions the code review raised, by key:
+   - `A330_XPDR_MODE` and `A330_TCAS_MODE`: the transponder and TCAS selectors may be crossed.
+   - `A330_EFIS_DMC`: Normal at 0.
+   - `A330_CLOCK_RST`: the clock's elapsed-time reset, spring-loaded on Airbus clocks.
+   - The fuel pumps: left pump 1 reads OUTER, right pump 1 reads INNER.
+   - `A330_PRESS_MODE`.
+   - The radio panel's selected radio.
+   - `A330_CPT_BARO_UNIT` and `A330_FO_BARO_UNIT`: the read is the control's own event.
+   - The parking brake's direction.
+   - The landing and nose light position words (`A330_NOSE_LT`).
+   - `A330_DOME` and the wipers (`A330_CPT_WIPER`, `A330_FO_WIPER`).
+   - Every guarded control with its guard closed: does the aircraft refuse it?
 4. The ADIRS selectors (measured 2026-11-19: input 1 on each put all three in NAV): the sweep denied them. Move them by hand, then run the ADR buttons again.
 5. Put back by hand: pack 2 on, then `--restore` again for the rest (engine 1 bleed among them).
 6. The order capture (Task 6 Step 1): the simulator's own procedures in order, with the private reference, to make `procedure_order.json`.
-7. Measurement items the code relies on: each control's settle time (a pick is read back after a fixed 1.5 s until then); the weather radar tilt scale (its read `B:AIRLINER_WX_TILT` and its input share the 0 to 30 scale; whether the label at 0 says "0 degrees" or "Level"); the master warning and caution variable names (`INI_MASTER_WARNING_ACTIVE` and `INI_MASTER_CAUTION_ACTIVE` are guesses); the speedbrake lever's travel time (the 3 s quiet is unmeasured); that NVDA reads a focused combo's snap-back once when the aircraft ignored a pick; that the transmit keys (PA, CAB, INT) select audio and ring no call; the temperature and landing elevation ranges (the sliders say 0 to 100 until measured).
+7. Measurement items the code relies on:
+   - Each control's settle time: a pick is read back after a fixed 1.5 s until then.
+   - The weather radar tilt scale: its read `B:AIRLINER_WX_TILT` and its input share the 0 to 30 scale; whether the label at 0 says "0 degrees" or "Level".
+   - The master warning and caution variable names: `INI_MASTER_WARNING_ACTIVE` and `INI_MASTER_CAUTION_ACTIVE` are guesses.
+   - The speedbrake lever's travel time: the 3 s quiet is unmeasured.
+   - That NVDA reads a focused combo's snap-back once when the aircraft ignored a pick.
+   - That the transmit keys (PA, CAB, INT) select audio and ring no call.
+   - The temperature and landing elevation ranges: the sliders say 0 to 100 until measured.
 8. Owner decision on the deny list: whether to deny FADEC ground power, the generators and crew oxygen (the sweep drove `A330_FADEC1`, `A330_FADEC2`, `A330_GEN1`, `A330_GEN2` and `A330_CREW_OXY`), and the autobrake.
+9. The denied push-buttons of the same build. They keep `mode: set` (a pick sets the position's input by value), but every push-button of this shape the sweep reached turned out to be a toggle, and the First Officer switches the batteries and external power. The keys and the L:var each reads:
+   - `A330_BAT1` (BAT 1): `INI_OVHD_ELEC_BAT_1_PB_IS_AUTO`.
+   - `A330_BAT2` (BAT 2): `INI_OVHD_ELEC_BAT_2_PB_IS_AUTO`.
+   - `A330_APU_BAT` (APU BAT): `INI_OVHD_ELEC_BAT_3_PB_IS_AUTO`.
+   - `A330_EXT_A` (EXT A): `INI_GEN_EXT_A_ONLINE`.
+   - `A330_EXT_B` (EXT B): `INI_GEN_EXT_B_ONLINE`.
+   - `A330_IR1`, `A330_IR2`, `A330_IR3` (IR 1 to 3): `INI_IR1_STATE`, `INI_IR2_STATE`, `INI_IR3_STATE`. Switching an IR off loses its alignment.
+   - `A330_APU_MASTER` (the APU master): `INI_APU_MASTER_SWITCH`.
+
+   The check, for each one, with the owner's go-ahead:
+   - Press it once through the app's route: one pick of its other position in its panel row.
+   - Read its L:var, then again after a pause of about 2 s.
+   - Press it back the same way, and read the L:var twice again, with the same pause.
+   - Each press should leave the L:var at the picked position on both reads; one that does not is a finding.
+   - A press each way cannot tell a toggle from a set by value: only writing the same value twice can, as the sweep did on the 73. That is a further step, with its own go-ahead. A key found toggling joins the 73 (`mode: toggle`, `press: 1`).

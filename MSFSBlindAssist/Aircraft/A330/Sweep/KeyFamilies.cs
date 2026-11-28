@@ -4,9 +4,10 @@ namespace MSFSBlindAssist.Aircraft.A330.Sweep;
 
 /// <summary>
 /// Keys that share one state variable (the ECAM page keys on <c>INI_ECAM_ACTIVE_PAGE</c>, the radio panel's radio keys
-/// on <c>INI_SELECTED_RADIO_CPT</c>): each press selects that key's value, and pressing a key again never undoes it. The
-/// sweep takes them as ONE unit: the journal keeps the shared start once, each key is pressed in turn, and the unit is
-/// put back by pressing the ONE key that selects the start.
+/// on <c>INI_SELECTED_RADIO_CPT</c>): each press selects that key's value, and a press of the key already selected can
+/// undo it (an ECAM page key's second press can take the display back to another page), so the selected key is never
+/// pressed. The sweep takes them as ONE unit: the journal keeps the shared start once, each key is pressed in turn,
+/// and the unit is put back by pressing the ONE key that selects the start.
 /// <see cref="Key"/> is the state variable; <see cref="Members"/> the keys in the map's order, denied keys left out;
 /// <see cref="KnownValues"/> what the map says each key selects (from the status row that names the state's values,
 /// by the key's label ending in the value's name); <see cref="Noun"/> what one value is ("page", "radio").

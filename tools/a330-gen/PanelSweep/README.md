@@ -164,8 +164,9 @@ back the same way: `--restore` of the 2026-11-27 journal would now press `A330_E
 ## Keys that share one state
 
 The 13 ECAM page keys all select the page `INI_ECAM_ACTIVE_PAGE` shows, and the radio panel's 5 radio keys all
-select the radio `INI_SELECTED_RADIO_CPT` shows. Pressing one of these keys again never undoes it, so they are not
-swept one by one. Each family is ONE unit:
+select the radio `INI_SELECTED_RADIO_CPT` shows. Each key selects its own page or radio, and a second press of the key
+already selected can undo it (an ECAM page key's can take the display back to another page), so they are not swept
+one by one. Each family is ONE unit:
 
 - The journal keeps the family's start once (the page or radio selected when the sweep began).
 - Each key is pressed in turn, and its row says what it selected and its verdict. The key whose page or radio is

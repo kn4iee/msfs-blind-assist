@@ -34,19 +34,25 @@ different aircraft built on the FlyByWire A32NX.
   (`B:NAME`).
 * **What a pick and a press on a panel control do** (plan 04, `IniA330Definition.Panels.cs`, the write
   decision in `A330Write`, the units in `A330Units`):
-  * A selector pick reads the control first and writes only when the read differs. It is read back
+  * A selector pick plans from the control's cached reading (the continuous batch, refreshed about
+    once a second), not a fresh read, and writes only when that reading differs. It is read back
     after 1.5 s (`ReadBackDelayMs`, a named constant until the sweep measures settle times; no
     settle in the 2026-11-27 sweep took longer than 1.5 s) and its row is resynced to what the aircraft shows.
+  * While a row's pick is still being read back, the cache is not trusted: a selector or the parking
+    brake writes anyway (writing a position again is harmless), and a toggle takes that pick as where it
+    is, so a quick pick back is pressed too.
   * A refused write is said once and never reported as done. A display window's press of a refused
     control returns false (`PressFromWindow`). The panel still reports the pick as handled, so the app
     never falls back to writing the read L:var itself ([INI-1]).
-  * A toggle with no by-value write is never pressed while its read is unknown.
+  * A toggle whose read is unknown is refused ("unavailable: its position is not read yet"), except one
+    whose calculator line carries the pick itself (the engine masters), which writes it.
   * A key (a momentary button) with a state variable reads it back once after its press and says it, in
     the A32NX's form (the bare state, such as an ECAM page's name); a key with none says "<name> pressed".
+    An automated press (the First Officer's, with the announcer suppressed) reads nothing back.
   * The key state rows (ECAM page, selected radio, master warning and caution, APU START) are announced
     by the definition itself, with its own baseline and a quiet start of 5 s (`StartGraceMs`, the same
     as MainForm's, which these rows never reach). The master warning and caution variable names are
-    unmeasured guesses; a wrong one reads nothing and the row stays silent.
+    unmeasured guesses; what a wrong name would do is unmeasured too.
   * Weather radar tilt is a combo in degrees, -15 to +15, from the input's 0 to 30 (`A330Units`, the
     A32NX's and the Fenix's wording for a signed step). The temperature and landing elevation sliders
     still say 0 to 100 until their ranges are measured.
