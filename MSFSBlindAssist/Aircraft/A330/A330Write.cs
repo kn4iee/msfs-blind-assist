@@ -25,6 +25,11 @@ internal sealed record A330InputEventCall(string Event, double Value) : A330Call
 /// <summary>A momentary press: the event's own <c>_Push</c>, then <c>_Release</c> after the hold (<c>PushEvent</c>).</summary>
 internal sealed record A330PressCall(string Event, int HoldMs) : A330Call;
 
+/// <summary>A press by value of a push-button the aircraft toggles: its input event set to <paramref name="Press"/>,
+/// then, after the hold, to <paramref name="Release"/> (<c>SetInputEvent</c> twice). Measured 2026-11-27: every set is a
+/// press except a change from 1 to 0, so set 1 then 0 is one flip and leaves the event at 0.</summary>
+internal sealed record A330InputEventPressCall(string Event, double Press, double Release, int HoldMs) : A330Call;
+
 /// <summary>A calculator line, sent through the sequence-prefixed <c>Write</c>.</summary>
 internal sealed record A330CalcCall(string Rpn) : A330Call;
 
@@ -72,6 +77,10 @@ internal static class A330Write
                 // that Set toggles or sets by value); a press-flag rpn carries none
                 if (!string.IsNullOrWhiteSpace(c.Rpn)) return A330WritePlan.Of(new A330CalcCall(c.Rpn.Replace("{value}", Fixed(target))));
                 if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
+                // a push-button the aircraft toggles (measured 2026-11-27): one press by value through its input
+                // event, whichever way it goes; its positions' inputs drive no write
+                if (c is { Press: double press, Release: double release })
+                    return A330WritePlan.Of(new A330InputEventPressCall(c.Event, press, release, c.HoldMs ?? IniA330Definition.DefaultPushMs));
                 return A330WritePlan.Of(new A330PressCall(c.Event, c.HoldMs ?? IniA330Definition.DefaultPushMs));
             default:
                 if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
