@@ -84,7 +84,7 @@ Where focus lands when the window opens:
 - After that, while no route is active, on **Destination type**, so you always hear whether a destination is set.
 - While a route is active, on **Step kind**, ready for the next instruction.
 
-Pressing Escape closes the window, except that in an open drop-down list the first Escape only closes the list, and while you are changing a step it keeps the step as it was (see [Changing a step](#taxi-change-step)). **Closing the window does not stop guidance**; use the **Stop Guidance** button or Input Ctrl+Y for that. While a route is active, the **Clearance** list shows only what is still ahead: the steps you have already completed are gone when you open the planner again, when you come back to it, and while it stays open in front of you, so amending a clearance mid-taxi is quick (see [Changing a Clearance on the Move](#taxi-amend)). The list is emptied when the leg it was calculated for is over: when you arrive, when a Progressive Taxi leg ends, when you stop guidance, and when you land. It is also emptied when you change airport.
+Pressing Escape closes the window, except that in an open drop-down list the first Escape only closes the list, and while you are changing a step it keeps the step as it was (see [Changing a step](#taxi-change-step)). **Closing the window does not stop guidance**; use the **Stop Guidance** button or Input Ctrl+Y for that. While a route is active, the **Clearance** list shows only what is still ahead: the steps you have already completed are gone when you open the planner again, when you come back to it, and while it stays open in front of you, so amending a clearance mid-taxi is quick (see [Changing a Clearance on the Move](#taxi-amend)). The list is emptied when the leg it was calculated for is over: when you arrive, when you stop guidance, and when you land. When a Progressive Taxi leg ends, only the finished leg's steps go: the steps you typed or changed since your last Calculate stay (see [Progressive Taxi](#taxi-progressive)). The list is also emptied when you change airport.
 
 Here is every control, in Tab order.
 
@@ -183,7 +183,7 @@ Choose **Left onto taxiway** (Alt+L) or **Right onto taxiway** (Alt+R) instead o
 
 On the first step, left and right are judged from the way your aircraft is facing when you press Calculate Route. The exception is a route that first follows another named taxiway to reach it, or more than 200 metres (about 650 feet) of unnamed taxi lines: then they are judged from the direction you arrive from. At a nose-in stand, calculate after pushback, when you are facing the way you will taxi, or enter the first taxiway as Via; calculated before pushback, the turn would be judged from a heading that points at the terminal. When your position is not connected to the taxiway network, a turn onto the first taxiway is made from where the route starts, never from another point, so the unmapped stretch BA warned you about stays the one you taxi across. On every later step, left and right are from the direction of the taxiway before it.
 
-A Left onto or Right onto step is part of the clearance like any other step: it goes when the list is emptied after the leg, so it never turns the next route, and the SayIntentions fill never enters one. Once you have made the turn and are on that taxiway, the planner shows the step as Via, so calculating again never judges the turn a second time.
+A Left onto or Right onto step is part of the clearance like any other step: it goes when the leg it was calculated for is over, so it never turns the next route, and the SayIntentions fill never enters one. Once you have made the turn and are on that taxiway, the planner shows the step as Via, so calculating again never judges the turn a second time.
 
 When BA cannot make the turn you entered, it tells you and keeps its own route. See [Warnings in the summary](#warnings-in-the-summary-and-what-to-do), and [Off-chart legs](#taxi-off-chart-legs) for the case where the airport's taxi data has no link that way.
 
@@ -191,7 +191,22 @@ When BA cannot make the turn you entered, it tells you and keeps its own route. 
 
 Choose **Cross** (Alt+X) when ATC clears you across a runway: "cross runway 24L". The name box lists the runways first, those the taxiway of your last Via step crosses at the top, then the taxiways. Press the runway's first digit to jump to it. The step reads *"Cross runway 24L"*.
 
-A Cross runway step clears that one crossing. BA does not stop you at that runway's hold line, but still counts you down to it and names it as you cross (see [Crossings you are cleared for](#cleared-crossings)). Every other runway, and any other crossing of the same runway, keeps its stop. If ATC takes the crossing back, press Input Alt+Y to stop at the hold line after all (see [Holding short after all](#holding-short-after-all)). A runway entered both as a Cross step and as a Hold short of step for the same crossing is refused when you calculate, naming both steps by their number in the Clearance list: *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* The two are the same crossing when their At boxes name the same place, or, when either has none, when they follow the same Via step.
+A Cross runway step clears that one crossing. BA does not stop you at that runway's hold line, but still counts you down to it and names it as you cross (see [Crossings you are cleared for](#cleared-crossings)). Every other runway, and any other crossing of the same runway, keeps its stop. If ATC takes the crossing back, press Input Alt+Y to stop at the hold line after all (see [Holding short after all](#holding-short-after-all)). ATC often tells you to hold short and then clears you across before you get there. A later instruction replaces an earlier one, so when you add a Cross step for a runway the list already holds a Hold short of step for, the Cross step takes that step's place:
+
+1. Press Alt+X, choose the runway, press Enter.
+2. You hear, for example, *"Step 3: cross runway 15R, replacing hold short of runway 15R."*
+3. Press Calculate Route.
+
+Adding a Hold short of step for a runway the list crosses works the same way: *"Step 2: hold short of runway 15R, replacing cross runway 15R at N."* The new step takes the old one's place in the list, and the old one is gone.
+
+For example, you are cleared to taxi to runway 27 via A, C, N and hold short of runway 15R. The list is Via A, Via C, Via N, Hold short of runway 15R. On C, ATC says "cross runway 15R, continue via N". Switch the destination type to Runway 27 (the steps stay as they are), add Cross runway 15R, which replaces the hold short, add Via N, and calculate. At Boston the list may be Via E1, K, B, N, Hold short of runway 15R, and ATC then says "cross 15R, continue via N, hold short of 15L". Add Cross runway 15R, Via N and Hold short of runway 15L. The first replaces the hold short of 15R; 15L is another runway, so the last is simply added.
+
+- A step is replaced only when it names the same runway. Either end counts as the same runway: runway 15R and runway 33L are one. Runway 15L and runway 15R are two.
+- Only the first such step is replaced.
+- When both steps have a place in the At box and the places differ, both stay: they are two different crossings.
+- Nothing is replaced for the runway you are taxiing to, for a crossing you have already made, or while you are changing a step (see [Changing a step](#taxi-change-step)).
+
+A runway entered both as a Cross step and as a Hold short of step for the same crossing is refused when you calculate, naming both steps by their number in the Clearance list: *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* This only happens when a list gets both steps another way: a step you changed, or the SayIntentions fill. The two are the same crossing when their At boxes name the same place, or, when either has none, when they follow the same Via step.
 
 When the name is a runway, an **At (optional)** box appears just after the name box; press Tab to reach it. It starts on **(none)**, then lists the taxiways that cross that runway, then the painted holding points from which you can cross it on your side, each marked "(holding point)". Choose one when ATC says where: "cross runway 24L at P" reads *"Cross runway 24L at P"*.
 
@@ -250,7 +265,7 @@ When the holding point you chose is your runway's own hold line, the countdown n
 
 ### Add Step {#add-taxiway}
 
-**Add Step** (Alt+D) adds the step to the end of the Clearance list. Enter in the Step kind list, the name box or the At box does the same. BA reads the step back once, numbered, for example *"Step 2: cross runway 24L at P."* Focus then stays in, or comes back to, the name box, with the kind back on Via taxiway and no name chosen, so the next taxiway costs a letter and Enter.
+**Add Step** (Alt+D) adds the step to the end of the Clearance list. Enter in the Step kind list, the name box or the At box does the same. BA reads the step back once, numbered, for example *"Step 2: cross runway 24L at P."* A Cross or Hold short of step for a runway the list already holds the opposite for replaces that step; see [Cross and the At box](#taxi-step-cross). Focus then stays in, or comes back to, the name box, with the kind back on Via taxiway and no name chosen, so the next taxiway costs a letter and Enter.
 
 While you are changing a step, the button reads **Replace step 3** (still Alt+D) and replaces that step instead of adding one; see [Changing a step](#taxi-change-step).
 
@@ -375,7 +390,7 @@ If BA cannot find a suitable entrance, it says *"No backtrack entrance found for
 
 ### Progressive Taxi {#progressive-taxi}
 
-Choose **Progressive Taxi (no destination)** when ATC gives you part of a route at a time, or a clearance with no destination: the leg ends where your steps say. See [Progressive Taxi](#taxi-progressive).
+Choose **Progressive Taxi (no destination)** when ATC gives you part of a route at a time, or a clearance with no destination: the leg ends where your steps say. See [Progressive Taxi](#taxi-progressive). Changing the destination type never changes the steps in the Clearance list.
 
 ### De-icing area {#deice-area}
 
@@ -626,7 +641,7 @@ When the leg ends, the tone stops and you hear one of the sentences listed next.
 - *"Hold at VIKAS. Set a new route when cleared."*
 - *"Route ended. Hold position. Set a new route when cleared."*
 
-When the leg ends, the Clearance list is emptied. Steps you had already added for the next piece, without calculating, go too; if the planner is open in front of you, you hear *"Steps cleared."* after the end-of-leg sentence, so enter them again. When ATC gives you the next piece, open the planner (focus is on Step kind), enter the next leg's steps, and calculate again. Pressing Continue does nothing at the end of a Progressive leg, because there is no further route to continue along.
+When the leg ends, the steps of the finished leg leave the Clearance list. Steps you added or changed since your last Calculate, for the next piece, stay, in order, and BA says nothing about them. When ATC gives you the next piece, open the planner (focus is on Step kind), add what is still missing and calculate again. At the leg's last stop you can add the Cross step for a runway you held short of, the way [Cross and the At box](#taxi-step-cross) describes, and then press Calculate: the Cross step replaces the hold short and the next leg starts from where you are. Arriving, Stop Guidance and a landing still empty the whole list. Pressing Continue does nothing at the end of a Progressive leg, because there is no further route to continue along.
 
 Other runways on a Progressive leg are still protected. If the leg crosses any runway you have not entered a Cross step for, BA still stops you before it, and the same goes for any other crossing of a runway you did enter.
 
@@ -724,7 +739,7 @@ If Calculate fails, BA tells you why and puts the same reason in the summary box
 - *"Please select a destination."*
 - *"Enter a step, or choose a destination."* Progressive Taxi with an empty Clearance list.
 - *"A leg cannot end on cross taxiway B. Add where to hold short, or the next taxiway."* A Progressive leg's last step is a Cross taxiway step.
-- *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* The same crossing is in the list twice, once as Cross and once as Hold short of, at the step numbers given (when the two steps use the runway's two ends, both are named, such as *"runway 24L/06R"*). Remove the one ATC did not say.
+- *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* The same crossing is in the list twice, once as Cross and once as Hold short of, at the step numbers given (when the two steps use the runway's two ends, both are named, such as *"runway 24L/06R"*). Remove the one ATC did not say. Adding the second step with Add Step replaces the first instead, so you hear this only for a list built another way: a step you changed, or the SayIntentions fill.
 - *"You are already across runway 24L. Add the next step."* Your Progressive leg ends across a runway you have already crossed. Add the steps ATC gave you next.
 - *"Could not tell which side of runway 24L you are on. Add the next step."* The same, but BA cannot tell which side you are on now: the crossing began on the runway itself or right at its edge, the point BA kept for it lies on the runway's pavement in the airport's data, or the data has no usable outline for that runway. Add the steps ATC gave you next.
 - *"Could not find taxiway D from C. Check your entry."*, *"Cannot taxi to VIKAS from your position. Check your entry."* and the reasons in [Progressive Taxi](#taxi-progressive): BA could not find where your Progressive leg ends.
@@ -903,6 +918,7 @@ ATC often clears you across a runway while you are still rolling toward it. You 
 - At a stop that guards two runways, one press clears only the first: *"Cleared across runway 09. Still holding short of runway 01."* If ATC has cleared you across runway 01 as well, press Input Y again: *"Cleared across runway 01. No stop."*, one press per runway. Otherwise BA still stops you at the line for runway 01; when ATC clears you for it, press Continue, and you hear *"Continuing. Crossing runway 09 and runway 01."*, then the taxiway, as you move off.
 - It never works at the last stop of your route: the hold for your departure runway, or the end of a Progressive Taxi leg. At the departure runway, stop and press Continue as usual; at the end of a Progressive leg, stop and plan the next leg.
 - If the hold line is also a hold short you entered yourself (a Hold short of step for a taxiway or a holding point, at the same place), the press does nothing, and you hear nothing: your own stop stays.
+- Stopped at the end of a Progressive leg, which is the last stop of your route, and cleared across? Add the Cross step and press Calculate Route (see [Progressive Taxi](#taxi-progressive)).
 - Pressed by mistake? Press Input Alt+Y to put the stop back (see [Holding short after all](#holding-short-after-all)).
 
 ### Holding short after all {#holding-short-after-all}
@@ -1107,11 +1123,11 @@ This is a reference list of every taxi guidance callout, grouped by when you hea
 | *"Step 3 is still being changed. Press Enter to replace it, or Escape to keep it."* | You pressed Calculate Route while changing step 3, with something else in the step boxes. | Press Enter to replace the step, or Escape to keep it, then calculate. |
 | *"Removed step 3: cross runway 24L."* | Remove Step took that step out of the Clearance list. | Nothing, if that is the one you meant. |
 | *"No step to remove."* | Remove Step found the Clearance list empty. | Nothing. |
-| *"Steps cleared."* | The Clearance list is now empty: you cleared it, removed its last step, opened the planner or came back to it after every step was completed, every step was completed while the planner was open, or the leg ended with the planner open while it held steps you had not calculated yet. | Enter the next steps when ATC gives them. |
+| *"Steps cleared."* | The Clearance list is now empty: you cleared it, removed its last step, opened the planner or came back to it after every step was completed, every step was completed while the planner was open, or a leg with a destination ended with the planner open while it held steps you had not calculated yet. A Progressive leg's end never says it: those steps stay. | Enter the next steps when ATC gives them. |
 | *"Route to Runway 27L via A, B. 1450 metres, crossing runway 22R."* | The route summary. | Check it matches your clearance. |
 | *"Enter a step, or choose a destination."* | Progressive Taxi with no steps. | Enter the clearance's steps. |
 | *"A leg cannot end on cross taxiway B. Add where to hold short, or the next taxiway."* | A Progressive leg cannot end on a Cross taxiway step. | Add the hold short or taxiway ATC gave you next. |
-| *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* | The same crossing is a Cross step and a Hold short of step, at those step numbers. | Remove the one ATC did not say. |
+| *"Steps 2 and 4 both name runway 24L, one as a crossing and one as a hold short. Remove one."* | The same crossing is a Cross step and a Hold short of step, at those step numbers, in a list built another way (a changed step, the SayIntentions fill): adding one with Add Step replaces the other. | Remove the one ATC did not say. |
 | *"You are already across runway 24L. Add the next step."* | Your Progressive leg ends across a runway you have already crossed. | Add the steps ATC gave you next. |
 | *"Could not tell which side of runway 24L you are on. Add the next step."* | Your Progressive leg ends across a runway you have crossed, and BA cannot tell which side you are on now: the crossing began on or right at the runway, or the airport's data does not show which side its point is on. | Add the steps ATC gave you next. |
 | *"The route does not cross taxiway B."* | A Cross taxiway step your route never meets. | Check the clearance and your steps. |
@@ -1305,7 +1321,7 @@ This is a reference list of every taxi guidance callout, grouped by when you hea
 
 **BA says there is no place to hold short of a taxiway clear of a runway.** At the end of a Progressive leg (*"There is no place to hold short of taxiway D on C clear of a runway."*), every place your last taxiway C meets D is on a runway or right beside one; where only some are, BA skips those and ends the leg before a later one, and when it skips the first, Calculate says so (*"Taxiway D meets taxiway C first beside runway 27; you will cross D there and hold short of it further on."*). For a Hold short of taxiway step on the way (*"Note: no place to hold short of taxiway B clear of the runway; no stop will be called there."*), the first place your route meets B after the taxiway before that step is on a runway, right beside one, or just past one, and BA places no stop for B at all. Either way, check the clearance with ATC; if the stop they mean is the runway's hold line, enter a hold short of that runway instead.
 
-**BA stopped me at a runway ATC had already cleared me across.** That is by design: BA cannot hear ATC. Press Input Y and carry on. Next time, press Input Y as soon as BA has counted you down to that runway (*"Hold short runway 22R in 120 metres."*), and it will not stop you there; see [Continue before the line](#continue-before-the-line). When the crossing is part of the clearance you enter, enter it as a Cross step (Alt+X) before you calculate, and BA does not stop you there at all.
+**BA stopped me at a runway ATC had already cleared me across.** That is by design: BA cannot hear ATC. Press Input Y and carry on. Next time, press Input Y as soon as BA has counted you down to that runway (*"Hold short runway 22R in 120 metres."*), and it will not stop you there; see [Continue before the line](#continue-before-the-line). When the crossing is part of the clearance you enter, enter it as a Cross step (Alt+X) before you calculate, and BA does not stop you there at all. If you already hold short of that runway in the list, the Cross step replaces the hold short; see [Cross and the At box](#taxi-step-cross).
 
 **Calculate says two steps both name a runway, one as a crossing and one as a hold short.** You have a Cross step and a Hold short of step for the same crossing, at the two step numbers it gives. ATC gave you one or the other: remove the one ATC did not say (select it in the Clearance list and press Delete).
 
