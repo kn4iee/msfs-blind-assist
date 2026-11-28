@@ -56,6 +56,60 @@ public static class ClearanceStepEntry
     public static string? LegEndSentence(IReadOnlyList<int> origins, bool windowFocused)
         => windowFocused && origins != null && origins.Any(o => o < 0) ? StepsCleared : null;
 
+    /// <summary>
+    /// The index of the step a newly added runway Cross or Hold short of step replaces, or -1 (spec 2026-11-28, a later
+    /// instruction replaces an earlier one: "hold short of runway 15R", then ATC clears "cross runway 15R"). The first
+    /// step of the opposite kind naming the same runway (either end, never another runway), skipped when both name a place
+    /// and the places differ. Never a taxiway or holding point target, never when either step names the destination
+    /// runway, never a Cross already made (<see cref="ClearanceStep.AtNodeIsPassedStop"/>, <see cref="ClearanceStep.AtNodeIsReach"/>).
+    /// </summary>
+    public static int IndexReplacedOnAdd(IReadOnlyList<ClearanceStep> steps, ClearanceStep added, string? destinationRunway)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+        ArgumentNullException.ThrowIfNull(added);
+        if (added.TargetKind != ClearanceTargetKind.Runway
+            || added.Kind is not (ClearanceStepKind.Cross or ClearanceStepKind.HoldShort)) return -1;
+        if (ClearanceRunways.Same(added.Name, destinationRunway)) return -1;
+        for (int i = 0; i < steps.Count; i++)
+        {
+            ClearanceStep s = steps[i];
+            if (s.TargetKind != ClearanceTargetKind.Runway || s.Kind == added.Kind
+                || s.Kind is not (ClearanceStepKind.Cross or ClearanceStepKind.HoldShort)) continue;
+            if (!ClearanceRunways.Same(s.Name, added.Name)) continue;
+            if (s.Kind == ClearanceStepKind.Cross && (s.AtNodeIsPassedStop || s.AtNodeIsReach)) continue;
+            if (!ClearanceRunways.SamePlace(s, added)) continue;
+            return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// What the window says when <paramref name="added"/> replaced <paramref name="replaced"/> ([CORE-7]: the pilot did not
+    /// hear it from the screen reader): "Step 3: cross runway 15R, replacing hold short of runway 15R." The added step's
+    /// numbered sentence without its final full stop, then the replaced step's sentence in lower case.
+    /// </summary>
+    public static string ReplacedOnAdd(ClearanceStep added, int number, ClearanceStep replaced)
+    {
+        ArgumentNullException.ThrowIfNull(added);
+        ArgumentNullException.ThrowIfNull(replaced);
+        string spoken = added.Spoken(number);
+        string old = replaced.Sentence();
+        return spoken.TrimEnd('.') + ", replacing " + char.ToLowerInvariant(old[0]) + old.Substring(1) + ".";
+    }
+
+    /// <summary>
+    /// The indexes a Progressive leg's end keeps, ascending (spec 2026-11-28): the steps whose origin is below 0, typed or
+    /// changed since the last Calculate (<paramref name="origins"/>, one per step), which the leg's end must not discard.
+    /// </summary>
+    public static IReadOnlyList<int> KeptAtProgressiveLegEnd(IReadOnlyList<int> origins)
+    {
+        ArgumentNullException.ThrowIfNull(origins);
+        var kept = new List<int>();
+        for (int i = 0; i < origins.Count; i++)
+            if (origins[i] < 0) kept.Add(i);
+        return kept;
+    }
+
     /// <summary>The kind at a list index; Via for an index the list does not have (nothing selected).</summary>
     public static ClearanceStepKind KindAt(int index)
         => index >= 0 && index < KindItems.Count ? (ClearanceStepKind)index : ClearanceStepKind.Via;
