@@ -70,8 +70,9 @@ aircraft is airborne or an engine is running, or if the aircraft lists fewer tha
 its own (`L:A330PANELSWEEP_PROBE`) and read back; if that does not answer, the sweep still runs, input events are
 still written, and every press and calculator line is `not sent`.
 
-The dry run on 2026-11-27 planned 167 controls (223 positions, each written twice; 20 key presses; 14 guards
-opened), 114 skipped, about 18 minutes plus a minute to read the starts. Each write that moves nothing waits 5 s
+The dry run on 2026-11-27 planned 151 units: 149 controls (223 positions, each written twice; 2 key presses; 14
+guards opened) and the two families of keys (18 presses), with 132 skipped (18 of them the families' own keys),
+about 18 minutes plus a minute to read the starts. Each write that moves nothing waits 5 s
 more before it is called dead. **Ctrl+C** stops once the control in progress has been put back. A second Ctrl+C
 stops sooner, but never inside a write: it waits until the write in progress has ended (a key's push is always
 followed by its release), then exits, and `--restore` with the journal puts back what was left. In `--restore`, a
@@ -89,7 +90,9 @@ Ctrl+C finishes the control in progress and stops; a second one stops after the 
    - a key's press as its own `_Push`, then after its hold `_Release`, over the calculator, as the app sends it;
    - a calculator line as the map gives it.
    Never a `_Set` through the calculator for a control the app sets by input event. Writes are at least 400 ms
-   apart. A denied control is never written, whatever asks.
+   apart. A denied control is never written, whatever asks. A guard is opened before its switch; when the guard's
+   write is not a pass (dead, mislabeled, not sent, not read), the switch is never written behind it: the row says
+   `skipped: its guard did not open (<verdict>)`, the control is put back, and the sweep goes on.
 3. After each write: the control's read and its proof (where the runner can read it) are polled every 100 ms
    until each has settled (two reads in a row agree, and the reading has moved; an unmoved reading counts as
    settled only once the limit passes) or 5 s pass. The time each took is recorded. A snapshot of every `INI_*`
@@ -135,7 +138,10 @@ that does not hold, or no key is known, it stops there and presses nothing more.
 A position's name is proven only by an indication the control does not write itself: a read of the control's own
 variable can read back exactly what was written while the aircraft ignored it. The runner reads a proof of kind
 `lamp` or `simvar` itself (shown while it reads over 0.5; it should show at the position whose read value is the
-proof's `when`). A proof of kind `ewd_memo` or `sd_page` needs the display reader, which this tool does not
+proof's `when`). It judges the proof against both the position the control was in and the one written: the name is
+proven only when the proof moved into the state the written position should show. Between two positions the proof
+cannot tell apart (a memo off at both), it says nothing and the read decides; a proof that should have changed and
+did not makes the write dead; a proof not read before the write is never counted as having moved. A proof of kind `ewd_memo` or `sd_page` needs the display reader, which this tool does not
 reach: its row says `needs the display reader`, its verdict is taken from the read alone and is never `proven`,
 and **the owner checks that proof by ear in the session**. Today only predictive windshear (`A330_WX_PWS`, the
 PRED W/S OFF memo) has a proof, of that kind. Wiring the display reader in is a follow-up, once Step 0's proof
@@ -143,21 +149,25 @@ table exists.
 
 ## Verdicts
 
-- `proven`: the proof followed the position's name.
-- `inverted`: the proof followed the other name.
-- `read-only`: the read moved to the position written, and there is no proof the runner can read.
-- `dead`: nothing moved in 5 s: not the read, not the proof, no other variable.
+- `proven`: the proof moved into the state the position's name gives.
+- `inverted`: the proof moved the other way: it followed the other name.
+- `read-only`: the read moved to the position written, and no proof the runner can read tells this position from
+  the one before.
+- `dead`: nothing moved in 5 s (not the read, not the proof, no other variable); or the proof should have changed
+  and did not while the read alone moved (the aircraft may have ignored the write).
 - `lagged`: a pass (`proven` or `read-only`, named in the note) that settled only after 1.5 s. Still a pass; its
   time goes to plan 06.
 - `toggle`: the same position written a second time moved the read again.
 - `not sent`: refused before it left (an input event the aircraft does not list, the calculator not answering,
   the simulator refusing the packet). Never called dead.
 - `mislabeled`: the read went to another position than the one written, or to none of them, or it did not move
-  while other variables did (Step 5's "mislabeled": a position's input or value, or the control's read, is wrong).
+  while other variables did, or the proof changed between two positions where it should not (Step 5's
+  "mislabeled": a position's input or value, or the control's read, is wrong).
 
-Other rows: `already there` (the control read the target: nothing sent), `not read before the write`,
-`at start` and `restored` (a put-back), `RESTORE FAILED: ...`, `skipped: ...`, `not reached (...)`,
-`interrupted (...)`, `error: ...`.
+Other rows: `already there` (the control read the target, or a family's key was the one selected: nothing
+sent), `not read before the write`, `at start` and `restored` (a put-back), `RESTORE FAILED: ...`,
+`skipped: ...` (`skipped: its guard did not open (...)` among them), `not reached (...)`, `interrupted (...)`,
+`error: ...`.
 
 ## The files
 
