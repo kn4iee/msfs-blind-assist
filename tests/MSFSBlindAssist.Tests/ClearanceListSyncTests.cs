@@ -9,6 +9,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using MSFSBlindAssist.Forms;
+using MSFSBlindAssist.Navigation;
 
 namespace MSFSBlindAssist.Tests;
 
@@ -65,6 +66,29 @@ public class ClearanceListSyncTests
         Assert.Equal(0, list.SelectedIndex);
         Assert.Equal(0, CaretIndex(list));
         Assert.Equal("step 3", list.AccessibilityObject.GetFocused()?.Name);
+    }
+
+    // Spec 2026-11-28 (Review Focus 3): a Progressive leg's end keeps only the steps typed for the next leg (origin -1)
+    // and drops the leg's own, with the same in-place update and mapping as the follow. With the focus in the list on a
+    // finished step, the place goes to the first step kept, selected and focused alike, so the screen reader reads the
+    // step Enter and Delete act on.
+    [Fact]
+    public void A_Progressive_leg_end_gives_a_finished_selected_step_place_to_the_first_typed_step()
+    {
+        using var list = HiddenList("Via A", "Hold short of runway 15R", "Via B", "Hold short of runway 27");
+        list.SelectedIndex = 0;
+        int[] oldOrigins = { 0, 1, -1, -1 };
+        int[] newOrigins = { -1, -1 };
+
+        TaxiAssistForm.ApplyFollowToList(list, ClearanceListFollow.RemovedIndices(oldOrigins, newOrigins),
+            new[] { "Via B", "Hold short of runway 27" },
+            ClearanceListFollow.SelectionAfter(oldOrigins, 0, newOrigins, listFocused: true));
+
+        Assert.Equal(new[] { "Via B", "Hold short of runway 27" }, list.Items.Cast<string>());
+        Assert.Equal(0, list.SelectedIndex);
+        Assert.Equal(0, TaxiAssistForm.FocusedItem(list));
+        Assert.Equal(0, CaretIndex(list));
+        Assert.Equal("Via B", list.AccessibilityObject.GetFocused()?.Name);
     }
 
     // A list that is not only the old one with steps taken out is rebuilt, the selection set where it is asked.

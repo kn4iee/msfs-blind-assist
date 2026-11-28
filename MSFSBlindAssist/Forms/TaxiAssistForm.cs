@@ -3744,6 +3744,13 @@ public class TaxiAssistForm : Form
     /// chosen it is refused out loud. Then the kind goes back to Via with the list refilled and focus in the name box,
     /// so the next taxiway costs a letter and Enter. With a step being changed it replaces that step instead
     /// (<see cref="ReplaceStepFromInputs"/>).
+    /// <para>A runway crossing or hold short added where the list already holds the other for the same runway (either
+    /// end, never another runway) replaces that step in place: ATC's later instruction replaces the earlier one (spec
+    /// 2026-11-28, <see cref="ClearanceStepEntry.IndexReplacedOnAdd"/>: the first such step, never one naming the
+    /// destination runway, never a crossing already made). Said once with what it replaced, "Step 3: cross runway 15R,
+    /// replacing hold short of runway 15R." ([CORE-7]: the screen reader cannot say it), queued after the focus move as an
+    /// added step's is (<see cref="SpeakStepAdded"/>); the boxes then go back to Via with focus in the name box, as after
+    /// an append.</para>
     /// </summary>
     private void AddStepFromInputs()
     {
@@ -3764,6 +3771,20 @@ public class TaxiAssistForm : Form
         var step = StepFromBoxes(name!);
 
         bool focusMoves = !cmbStepName.Focused;
+        int replaced = ClearanceStepEntry.IndexReplacedOnAdd(_steps, step, PlanDestinationRunway(cmbDestType.SelectedIndex == 0));
+        if (replaced >= 0)
+        {
+            var old = _steps[replaced];
+            ReplaceStepAt(replaced, step);
+            SetStepKindSilently(ClearanceStepKind.Via);
+            // No stale pick, as after Add Step: Remove Step with nothing selected takes the last step.
+            lstClearance.SelectedIndex = -1;
+            RefreshStepNameList();
+            SpeakStepAdded(ClearanceStepEntry.ReplacedOnAdd(step, replaced + 1, old), focusMoves);
+            cmbStepName.Focus();
+            return;
+        }
+
         SetStepKindSilently(ClearanceStepKind.Via);
         AppendStep(step, speak: true, speakAfterFocusMove: focusMoves);
         cmbStepName.Focus();
@@ -3870,9 +3891,10 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Add Step with a step being changed: refused out loud with no name chosen, as Add Step is. A step that says what
     /// the old one said (<see cref="ClearanceStepEntry.SameAsEntered"/>) keeps the old record and its origin, so a made
-    /// crossing's pin or a put-back hold short's place survives; anything else is a new step in the same place (origin
-    /// -1), the old step's origin kept out of every later trim. Read back once with its own number ("Step 3: via D."),
-    /// then the boxes go back to Via with focus in the name box, as after Add Step.
+    /// crossing's pin or a put-back hold short's place survives; anything else is a new step in the same place
+    /// (<see cref="ReplaceStepAt"/>). Read back once with its own number ("Step 3: via D."), then the boxes go back to Via
+    /// with focus in the name box, as after Add Step. A change never replaces another step for its runway
+    /// (<see cref="ClearanceStepEntry.IndexReplacedOnAdd"/> is Add Step's only).
     /// </summary>
     private void ReplaceStepFromInputs()
     {
@@ -3892,13 +3914,7 @@ public class TaxiAssistForm : Form
         }
 
         var (rebuilt, same) = RebuildStepBeingChanged();
-        if (!same && rebuilt != null)
-        {
-            if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);
-            _steps[index] = rebuilt;
-            _stepOrigins[index] = -1;   // changed since the last Calculate: kept where it is through a trim
-            lstClearance.Items[index] = rebuilt.Sentence();
-        }
+        if (!same && rebuilt != null) ReplaceStepAt(index, rebuilt);
 
         bool focusMoves = !cmbStepName.Focused;
         EndStepChange();
@@ -3908,6 +3924,19 @@ public class TaxiAssistForm : Form
         RefreshStepNameList();
         SpeakStepAdded(_steps[index].Spoken(index + 1), focusMoves);
         cmbStepName.Focus();
+    }
+
+    /// <summary>Puts <paramref name="step"/> in place of step <paramref name="index"/>, the ONE write both replacements
+    /// make (Replace, <see cref="ReplaceStepFromInputs"/>; a runway step added in place of the other for its runway,
+    /// <see cref="AddStepFromInputs"/>): a new step in the same place (origin -1, changed since the last Calculate, so a
+    /// trim keeps it where it is), the old step's origin, when it has one, kept out of every later trim so a trim never
+    /// brings it back, and the Clearance list's item set to its sentence. Selects and speaks nothing: the callers do.</summary>
+    private void ReplaceStepAt(int index, ClearanceStep step)
+    {
+        if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);
+        _steps[index] = step;
+        _stepOrigins[index] = -1;   // changed since the last Calculate: kept where it is through a trim
+        lstClearance.Items[index] = step.Sentence();
     }
 
     /// <summary>
@@ -4106,6 +4135,11 @@ public class TaxiAssistForm : Form
     internal static bool EndsTheLeg(TaxiGuidanceState state)
         => state is TaxiGuidanceState.Arrived or TaxiGuidanceState.Inactive or TaxiGuidanceState.ProgressiveHold
             or TaxiGuidanceState.LandingRollout;
+
+    /// <summary>Whether a leg's end keeps the steps typed or changed since the last Calculate (spec 2026-11-28): only a
+    /// Progressive leg's (<see cref="TaxiGuidanceState.ProgressiveHold"/>), where the pilot types the next leg's
+    /// instruction while stopped at the end of this one. Every other leg end empties the list (<see cref="EmptyStepsAfterLeg"/>).</summary>
+    internal static bool LegEndKeepsTypedSteps(TaxiGuidanceState state) => state == TaxiGuidanceState.ProgressiveHold;
 
     /// <summary>
     /// Whether a leg end queued with <paramref name="generationQueued"/> empties the list now: only when no Calculate
@@ -4464,24 +4498,62 @@ public class TaxiAssistForm : Form
 
     /// <summary>
     /// <see cref="TaxiGuidanceManager.StateChanged"/>, raised under the manager's lock on its own thread: a state that
-    /// ends the leg (<see cref="EndsTheLeg"/>) queues the emptying on the UI thread with the generation seen now, never
+    /// ends the leg (<see cref="EndsTheLeg"/>) queues the emptying on the UI thread with the generation seen now and the
+    /// state (a Progressive leg's end keeps the steps typed for the next, <see cref="LegEndKeepsTypedSteps"/>), never
     /// waiting for it ([A380C-6]).
     /// </summary>
     private void OnGuidanceStateChanged(object? sender, TaxiGuidanceState state)
     {
         if (!EndsTheLeg(state)) return;
         int generation = Volatile.Read(ref _calculateGeneration);
-        SafeBeginInvoke(() => EmptyStepsAfterLeg(generation));
+        SafeBeginInvoke(() => EmptyStepsAfterLeg(generation, state));
     }
 
-    /// <summary>The leg the list was calculated for is over: emptied, silently (the manager speaks the arrival, the
-    /// stop, the leg's end or the touchdown), unless a Calculate has built a list since or the list holds no calculated leg
-    /// (<see cref="LegEndEmptiesList"/>). The KBOS route back over 04L came from an entry that outlived its leg. Steps the
-    /// pilot typed since that Calculate go too; with the window focused they would vanish unsaid, so "Steps cleared." is
-    /// said once, queued behind guidance's own sentence, never over it (<see cref="ClearanceStepEntry.LegEndSentence"/>).</summary>
-    private void EmptyStepsAfterLeg(int generation)
+    /// <summary>
+    /// The leg the list was calculated for is over: nothing changes when a Calculate has built a list since or the list
+    /// holds no calculated leg (<see cref="LegEndEmptiesList"/>). The KBOS route back over 04L came from an entry that
+    /// outlived its leg.
+    /// <para>A Progressive leg's end (<see cref="LegEndKeepsTypedSteps"/>) keeps the steps typed or changed since that
+    /// Calculate (<see cref="ClearanceStepEntry.KeptAtProgressiveLegEnd"/>), in order, for the next leg (spec 2026-11-28):
+    /// the pilot types the next instruction while stopped at the end of this one. A step being changed is closed first,
+    /// silently, before any step moves, and a step sentence still waiting is dropped, as its number may be gone. The leg's
+    /// own steps go, the Clearance list updated in place with the pilot's place mapped as the follow maps it
+    /// (<see cref="ApplyFollowToList"/>), and the list then holds no calculated leg, so the follow never trims the kept
+    /// steps before Calculate. Nothing is said: guidance says the leg's end, and every step the pilot typed is still
+    /// there ([CORE-7]).</para>
+    /// <para>Otherwise, and with nothing typed, the list is emptied, silently (the manager speaks the arrival, the stop,
+    /// the leg's end or the touchdown). Steps the pilot typed since that Calculate go too; with the window focused they
+    /// would vanish unsaid, so "Steps cleared." is said once, queued behind guidance's own sentence, never over it
+    /// (<see cref="ClearanceStepEntry.LegEndSentence"/>).</para>
+    /// </summary>
+    private void EmptyStepsAfterLeg(int generation, TaxiGuidanceState state)
     {
         if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)) return;
+        var kept = LegEndKeepsTypedSteps(state) ? ClearanceStepEntry.KeptAtProgressiveLegEnd(_stepOrigins) : Array.Empty<int>();
+        if (kept.Count > 0)
+        {
+            CancelStepChange(false);
+            CancelPendingStepSpeech();
+            var oldOrigins = _stepOrigins.ToList();
+            int oldSelected = lstClearance.SelectedIndex;
+            // The control focus is in, or goes back to, as the follow reads it.
+            bool listFocused = ActiveControl == lstClearance;
+
+            var keptSteps = kept.Select(i => _steps[i]).ToList();
+            _steps.Clear();
+            _steps.AddRange(keptSteps);
+            _stepOrigins.Clear();
+            _stepOrigins.AddRange(kept.Select(_ => -1));
+            _removedOrigins.Clear();
+            _calculatedSteps = null;
+
+            ApplyFollowToList(lstClearance, ClearanceListFollow.RemovedIndices(oldOrigins, _stepOrigins),
+                _steps.Select(step => step.Sentence()).ToList(),
+                ClearanceListFollow.SelectionAfter(oldOrigins, oldSelected, _stepOrigins, listFocused));
+            RefreshStepNameList(keepSelection: true, preselect: false);
+            return;
+        }
+
         string? sentence = ClearanceStepEntry.LegEndSentence(_stepOrigins, windowFocused: Visible && ContainsFocus);
         ClearSteps();
         if (sentence != null) _announcer.Announce(sentence);

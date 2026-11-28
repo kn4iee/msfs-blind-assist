@@ -592,6 +592,72 @@ public class ClearanceWiringTests
         Assert.False(Forms.TaxiAssistForm.LegEndEmptiesList(3, 3, listHoldsCalculatedLeg: false));
     }
 
+    // Spec 2026-11-28: only a Progressive leg's end keeps the steps typed for the next leg; every other leg end (the
+    // arrival, guidance stopping, a landing) empties the list as before.
+    [Fact]
+    public void Only_a_Progressive_leg_end_keeps_the_steps_typed_since_the_last_Calculate()
+    {
+        Assert.True(Forms.TaxiAssistForm.LegEndKeepsTypedSteps(Services.TaxiGuidanceState.ProgressiveHold));
+        foreach (var state in new[] { Services.TaxiGuidanceState.Arrived, Services.TaxiGuidanceState.Inactive,
+                     Services.TaxiGuidanceState.LandingRollout, Services.TaxiGuidanceState.Taxiing })
+            Assert.False(Forms.TaxiAssistForm.LegEndKeepsTypedSteps(state));
+    }
+
+    // Spec 2026-11-28: a Progressive leg's end keeps the steps whose origin is -1 (typed or changed since the last
+    // Calculate), in order, says nothing, and leaves the list holding no calculated leg, so the once-a-second follow never
+    // trims them before Calculate (Review Focus 4). An open change is closed first, before any step moves, so no write
+    // ever targets a moved index (Review Focus 2); the Clearance list is updated in place with the pilot's place mapped
+    // (Review Focus 3, ClearanceListSyncTests). The leg-end guard stays first; with nothing typed, today's emptying runs.
+    [Fact]
+    public void A_Progressive_leg_end_keeps_the_typed_steps_in_place_and_says_nothing()
+    {
+        string form = FormSource();
+        string state = Member(form, "private void OnGuidanceStateChanged(");
+        Assert.Contains("EmptyStepsAfterLeg(generation, state)", state);
+
+        string empty = Member(form, "private void EmptyStepsAfterLeg(");
+        Assert.StartsWith("private void EmptyStepsAfterLeg(int generation, TaxiGuidanceState state)", empty);
+        int guard = empty.IndexOf("if (IsDisposed || !LegEndEmptiesList(generation, _calculateGeneration, _calculatedSteps != null)) return;", StringComparison.Ordinal);
+        int keeps = empty.IndexOf("LegEndKeepsTypedSteps(state)", StringComparison.Ordinal);
+        int kept = empty.IndexOf("ClearanceStepEntry.KeptAtProgressiveLegEnd(_stepOrigins)", StringComparison.Ordinal);
+        int closed = empty.IndexOf("CancelStepChange(false);", StringComparison.Ordinal);
+        int dropped = empty.IndexOf("CancelPendingStepSpeech();", StringComparison.Ordinal);
+        int focused = empty.IndexOf("bool listFocused = ActiveControl == lstClearance;", StringComparison.Ordinal);
+        int moved = empty.IndexOf("_steps.Clear();", StringComparison.Ordinal);
+        int noLeg = empty.IndexOf("_calculatedSteps = null;", StringComparison.Ordinal);
+        int follow = empty.IndexOf("ApplyFollowToList(", StringComparison.Ordinal);
+        int names = empty.IndexOf("RefreshStepNameList(keepSelection: true, preselect: false);", StringComparison.Ordinal);
+        int sentence = empty.IndexOf("ClearanceStepEntry.LegEndSentence(", StringComparison.Ordinal);
+        Assert.True(guard >= 0 && keeps > guard && kept > guard && closed > keeps && closed > kept && dropped > closed
+                    && focused > dropped && moved > focused && noLeg > moved && follow > noLeg && names > follow
+                    && sentence > names,
+            "the guard first; then the change closed and the speech dropped before any step moves; the list updated; and only otherwise today's emptying");
+        Assert.Contains("_removedOrigins.Clear();", empty);
+        Assert.Contains("ClearanceListFollow.RemovedIndices(", empty);
+        Assert.Contains("ClearanceListFollow.SelectionAfter(", empty);
+
+        // The keep says nothing and never empties the list through ClearSteps.
+        string keep = empty[keeps..sentence];
+        Assert.DoesNotContain("_announcer.", keep);
+        Assert.DoesNotContain("SpeakStep", keep);
+        Assert.DoesNotContain("ClearSteps(", keep);
+    }
+
+    // Spec 2026-11-28: switching the destination type keeps the steps (a Progressive leg's typed steps survive picking
+    // Runway for the next leg); only Clear Steps, the fill, an airport change, Stop and a leg end empty the list.
+    [Fact]
+    public void Switching_the_destination_type_keeps_the_steps()
+    {
+        string form = FormSource();
+        foreach (string member in new[] { "private void OnDestTypeChanged(", "private void PopulateDestinations(" })
+        {
+            string body = Member(form, member);
+            Assert.DoesNotContain("ClearSteps(", body);
+            Assert.DoesNotContain("_steps.Clear(", body);
+            Assert.DoesNotContain("lstClearance.Items.Clear(", body);
+        }
+    }
+
     // Stage 4, D1 and D2: Enter on a selected step in the Clearance list loads it into the step boxes, kind, then name,
     // then At, saying nothing: the name box's accessible name carries ", changing step N", which the screen reader says
     // as focus lands there ([CORE-7]). Delete still removes the step.
@@ -749,14 +815,24 @@ public class ClearanceWiringTests
         int refusal = body.IndexOf("ClearanceStepEntry.Refusal(cmbStepName.SelectedItem as ClearanceNameLists.Item)", StringComparison.Ordinal);
         int same = body.IndexOf("var (rebuilt, same) = RebuildStepBeingChanged();", StringComparison.Ordinal);
         Assert.Contains("if (!same && rebuilt != null)", body);
-        int removed = body.IndexOf("if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);", StringComparison.Ordinal);
-        int written = body.IndexOf("_steps[index] = rebuilt;", StringComparison.Ordinal);
-        int origin = body.IndexOf("_stepOrigins[index] = -1;", StringComparison.Ordinal);
-        int shown = body.IndexOf("lstClearance.Items[index] = rebuilt.Sentence();", StringComparison.Ordinal);
+        int replaced = body.IndexOf("ReplaceStepAt(index, rebuilt);", StringComparison.Ordinal);
         int closed = body.IndexOf("EndStepChange();", StringComparison.Ordinal);
         int spoken = body.IndexOf("SpeakStepAdded(_steps[index].Spoken(index + 1), focusMoves);", StringComparison.Ordinal);
-        Assert.True(refusal >= 0 && same > refusal && removed > same && written > removed && origin > written
-                    && shown > origin && closed > shown && spoken > closed, "refused, compared, replaced, closed, then read back");
+        Assert.True(refusal >= 0 && same > refusal && replaced > same && closed > replaced && spoken > closed,
+            "refused, compared, replaced, closed, then read back");
+        Assert.DoesNotContain("_steps[index] =", body);
+
+        // Spec 2026-11-28 (Review Focus 5): Replace and a runway step added in place of another write through ONE helper,
+        // which keeps a calculated step's origin out of every later trim, so a trim never brings the old step back.
+        string at = Member(form, "private void ReplaceStepAt(int index, ClearanceStep step)");
+        int removed = at.IndexOf("if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);", StringComparison.Ordinal);
+        int written = at.IndexOf("_steps[index] = step;", StringComparison.Ordinal);
+        int origin = at.IndexOf("_stepOrigins[index] = -1;", StringComparison.Ordinal);
+        int shown = at.IndexOf("lstClearance.Items[index] = step.Sentence();", StringComparison.Ordinal);
+        Assert.True(removed >= 0 && written > removed && origin > written && shown > origin,
+            "the old origin kept out of every trim, then the step, its origin and its item written");
+        Assert.DoesNotContain("_announcer.", at);
+        Assert.DoesNotContain("SpeakStep", at);
         Assert.Contains("SetStepKindSilently(ClearanceStepKind.Via);", body);
         Assert.Contains("cmbStepName.Focus();", body);
         // The index is the one the change was opened on, taken once; it is never written once the list has changed.
@@ -766,6 +842,44 @@ public class ClearanceWiringTests
         Assert.Single(Regex.Matches(form, "\"A&dd Step\""));
         Assert.Contains("btnAddStep.Text = _addStepText;", Member(form, "private void EndStepChange("));
         Assert.Contains("_changingStepIndex = -1;", Member(form, "private void EndStepChange("));
+    }
+
+    // Spec 2026-11-28, a later instruction replaces an earlier one: Add Step with a runway Cross or Hold short of step
+    // replaces, in place, the first step of the other kind for the same runway (ClearanceStepEntry.IndexReplacedOnAdd,
+    // ClearanceReplaceOnAddTests: either end, never another runway, never one naming the destination runway), and says so
+    // once, "Step 3: cross runway 15R, replacing hold short of runway 15R." ([CORE-7]: the screen reader cannot say it).
+    // Review Focus 1: with focus moving to the name box (the button, Enter in the At box) the sentence is queued after
+    // the focus move, as an added step's is, never cut off. Never while a step is being changed (that is Replace), never
+    // for the SayIntentions fill (AppendStep).
+    [Fact]
+    public void A_runway_step_added_replaces_the_opposite_step_for_its_runway_in_place()
+    {
+        string form = FormSource();
+        string add = Member(form, "private void AddStepFromInputs(");
+        int open = add.IndexOf("ReplaceStepFromInputs();", StringComparison.Ordinal);
+        int built = add.IndexOf("var step = StepFromBoxes(name!);", StringComparison.Ordinal);
+        int moves = add.IndexOf("bool focusMoves = !cmbStepName.Focused;", StringComparison.Ordinal);
+        int found = add.IndexOf("ClearanceStepEntry.IndexReplacedOnAdd(_steps, step, PlanDestinationRunway(", StringComparison.Ordinal);
+        int replaced = add.IndexOf("ReplaceStepAt(", StringComparison.Ordinal);
+        int spoken = add.IndexOf("SpeakStepAdded(ClearanceStepEntry.ReplacedOnAdd(", StringComparison.Ordinal);
+        int focus = add.IndexOf("cmbStepName.Focus();", StringComparison.Ordinal);
+        int done = add.IndexOf("return;", spoken < 0 ? 0 : spoken, StringComparison.Ordinal);
+        int append = add.IndexOf("AppendStep(", StringComparison.Ordinal);
+        Assert.True(open >= 0 && built > open && moves > built && found > moves && replaced > found && spoken > replaced
+                    && focus > spoken && done > focus && append > done,
+            "an open change is Replace; otherwise the replacement is found, written, read back and focus moves, before any append");
+        Assert.Contains("ClearanceStepEntry.ReplacedOnAdd(step, replaced + 1, old), focusMoves);", add);
+        Assert.Contains("PlanDestinationRunway(cmbDestType.SelectedIndex == 0)", add);
+        string branch = add[found..append];
+        Assert.Contains("SetStepKindSilently(ClearanceStepKind.Via);", branch);
+        Assert.Contains("lstClearance.SelectedIndex = -1;", branch);
+        Assert.Contains("RefreshStepNameList();", branch);
+
+        // ONE place looks for a step to replace: never the fill, never Replace.
+        Assert.Single(Regex.Matches(form, @"ClearanceStepEntry\.IndexReplacedOnAdd\("));
+        Assert.DoesNotContain("IndexReplacedOnAdd", Member(form, "private void AppendStep(ClearanceStep step, bool speak, bool speakAfterFocusMove)"));
+        Assert.DoesNotContain("IndexReplacedOnAdd", Member(form, "private void ReplaceStepFromInputs("));
+        Assert.Contains("ReplaceStepAt(", Member(form, "private void ReplaceStepFromInputs("));
     }
 
     // Stage 4, D6: Escape with a step being changed keeps the step as it was and goes back to it in the Clearance list
@@ -829,6 +943,7 @@ public class ClearanceWiringTests
                      ("private void ShowSteps(", "_steps.Clear();"),
                      ("private void RemoveStep(", "_steps.RemoveAt(index);"),
                      ("private void FollowPutBackCrossings(", "_steps[i] = steps[i];"),
+                     ("private void EmptyStepsAfterLeg(", "_steps.Clear();"),
                  })
         {
             string body = Member(form, member);
