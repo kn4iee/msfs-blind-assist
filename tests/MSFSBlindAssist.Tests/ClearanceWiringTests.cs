@@ -13,14 +13,15 @@ namespace MSFSBlindAssist.Tests;
 public class ClearanceWiringTests
 {
     // The step-kind keys go through the character message like every access key, so the screen reader names the
-    // box they move to (Alt+W was read, Alt+V/L/R/X/H were not while handled on the key-down message).
+    // box they move to (Alt+W was read, Alt+V/L/R/X/H were not while handled on the key-down message). Alt without
+    // Ctrl: AltGr is Ctrl+Alt on many keyboard layouts, and a letter typed with it is not a step-kind key.
     [Fact]
     public void The_step_kind_keys_are_handled_as_access_keys()
     {
         string form = FormSource();
         string mnemonic = Member(form, "protected override bool ProcessMnemonic(");
         Assert.Contains("ClearanceStepEntry.KindForMnemonic(", mnemonic);
-        Assert.Contains("Keys.Alt", mnemonic);
+        Assert.Contains("(ModifierKeys & (Keys.Alt | Keys.Control)) == Keys.Alt", mnemonic);
         Assert.DoesNotContain("KindForAccessKey", form);
         Assert.Contains("cmbStepName.Select()", Member(form, "private void SelectStepKind("));
     }
@@ -424,10 +425,12 @@ public class ClearanceWiringTests
     // (ClearanceListSyncTests), the name box is refilled without a name the pilot did not choose, and only a list left
     // empty is said, by the one constant. The timer runs only while the window is shown and goes with the window. Every
     // trim computes through ONE helper.
-    // Review fix round 1, finding 2: WinForms restores focus while it handles WM_ACTIVATE, BEFORE OnActivated, so a
-    // follow there was heard after the screen reader had named a finished step. The activation follow runs before
-    // WinForms handles the message, and "the list has focus" is the control focus goes back to (ActiveControl), in both
-    // paths, never lstClearance.Focused, which is still false then.
+    // WinForms restores focus while it handles WM_ACTIVATE, BEFORE OnActivated, so a follow there was heard after the
+    // screen reader had named a finished step. The activation follow runs before WinForms handles the message, and "the
+    // list has focus" is the control focus goes back to (ActiveControl), in both paths, never lstClearance.Focused,
+    // which is still false then. Both callers go through one wrapper that never throws (a failure is logged once until
+    // it changes, never every second, and never stops the activation) and logs a follow slower than 50 ms, as the UI
+    // thread takes guidance's lock once a second.
     [Fact]
     public void The_list_follows_guidance_on_activation_and_while_active()
     {
@@ -436,7 +439,7 @@ public class ClearanceWiringTests
         string activate = Member(form, "protected override void WndProc(");
         int message = activate.IndexOf("m.Msg == WM_ACTIVATE", StringComparison.Ordinal);
         int inactive = activate.IndexOf("!= WA_INACTIVE", StringComparison.Ordinal);
-        int followed = activate.IndexOf("FollowGuidance(activation: true);", StringComparison.Ordinal);
+        int followed = activate.IndexOf("FollowGuidanceSafely(activation: true);", StringComparison.Ordinal);
         int handled = activate.IndexOf("base.WndProc(ref m);", StringComparison.Ordinal);
         Assert.True(message >= 0 && inactive > message && followed > inactive && handled > followed,
             "an activation follows guidance before WinForms restores focus");
@@ -446,8 +449,21 @@ public class ClearanceWiringTests
 
         string tick = Member(form, "private void OnFollowTimerTick(");
         Assert.Contains("Form.ActiveForm == this", tick);
-        Assert.Contains("FollowGuidance(activation: false)", tick);
+        Assert.Contains("FollowGuidanceSafely(activation: false)", tick);
         Assert.Contains("Interval = 1000", form);
+
+        string safely = Member(form, "private void FollowGuidanceSafely(");
+        int called = safely.IndexOf("FollowGuidance(activation);", StringComparison.Ordinal);
+        int caught = safely.IndexOf("catch (Exception ex)", StringComparison.Ordinal);
+        Assert.True(called >= 0 && caught > called, "the follow is caught");
+        Assert.Contains("if (failure != _lastFollowFailure)", safely);
+        Assert.Contains("_taxiFormLog.Error(", safely);
+        Assert.Contains("Stopwatch.GetTimestamp()", safely);
+        Assert.Contains("if (elapsed > SlowFollowMs)", safely);
+        Assert.Contains("_taxiFormLog.Info(FormattableString.Invariant(", safely);
+        Assert.Contains("private const double SlowFollowMs = 50;", form);
+        Assert.Equal(2, Regex.Matches(form, @"FollowGuidanceSafely\(activation: (true|false)\)").Count);
+        Assert.Single(Regex.Matches(form, @"[^y]FollowGuidance\(activation\)"));
 
         string follow = Member(form, "private void FollowGuidance(");
         foreach (string pin in new[]
@@ -573,9 +589,19 @@ public class ClearanceWiringTests
         Assert.Contains("lstClearance.KeyDown += OnClearanceListKeyDown;", form);
         string keys = Member(form, "private void OnClearanceListKeyDown(");
         Assert.Contains("RemoveStep();", keys);
-        int enter = keys.IndexOf("e.KeyCode == Keys.Enter && lstClearance.SelectedIndex >= 0", StringComparison.Ordinal);
-        int begin = keys.IndexOf("BeginStepChange(lstClearance.SelectedIndex);", StringComparison.Ordinal);
-        Assert.True(enter >= 0 && begin > enter, "Enter with a step selected starts the change");
+        int enter = keys.IndexOf("e.KeyCode == Keys.Enter && StepActedOn(lstClearance, fromList: true) is int index and >= 0", StringComparison.Ordinal);
+        int begin = keys.IndexOf("BeginStepChange(index);", StringComparison.Ordinal);
+        Assert.True(enter >= 0 && begin > enter, "Enter on the step selected, or with none the step focused, starts the change");
+
+        // With nothing selected, Delete and Enter in the list act on its focused step, the one the screen reader named
+        // (StepActedOn, ClearanceListSyncTests); from outside the list Remove Step still takes the last step. The caret
+        // is read in ONE place.
+        string remove = Member(form, "private void RemoveStep(");
+        Assert.Contains("int acted = StepActedOn(lstClearance, fromList);", remove);
+        Assert.Contains("int index = acted >= 0 && acted < _steps.Count ? acted : _steps.Count - 1;", remove);
+        Assert.Contains("return fromList ? FocusedItem(list) : -1;", Member(form, "internal static int StepActedOn("));
+        Assert.Contains("FocusedItem(list) != select", Member(form, "internal static void ApplyFollowToList("));
+        Assert.Single(Regex.Matches(form, @"LB_GETCARETINDEX, IntPtr\.Zero, IntPtr\.Zero"));
 
         string start = Member(form, "private void BeginStepChange(");
         int index = start.IndexOf("_changingStepIndex = index;", StringComparison.Ordinal);

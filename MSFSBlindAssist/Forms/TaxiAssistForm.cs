@@ -1099,11 +1099,12 @@ public class TaxiAssistForm : Form
     /// handled the key press, like every access key: from ProcessCmdKey (the key-down message, consumed before
     /// Windows saw it) the screen reader said nothing after the focus move, while Alt+W to the same box was read
     /// (owner, 2026-11-28). The form is asked before its controls, so no control's access key takes these
-    /// letters. Alt must be held: this also runs for a plain letter typed while a button has focus. An Alt code
-    /// typed on the number pad makes no letter here, so the Airport box keeps it.</summary>
+    /// letters. Alt must be held, without Ctrl: this also runs for a plain letter typed while a button has focus,
+    /// and AltGr is Ctrl+Alt on many keyboard layouts, so a letter typed with AltGr is never a step kind. An Alt
+    /// code typed on the number pad makes no letter here, so the Airport box keeps it.</summary>
     protected override bool ProcessMnemonic(char charCode)
     {
-        if ((ModifierKeys & Keys.Alt) == Keys.Alt
+        if ((ModifierKeys & (Keys.Alt | Keys.Control)) == Keys.Alt
             && ClearanceStepEntry.KindForMnemonic(charCode) is ClearanceStepKind kind)
         {
             SelectStepKind(kind, focusName: true);
@@ -3791,7 +3792,8 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>Enter on a selected step in the Clearance list changes it in place (<see cref="BeginStepChange"/>);
-    /// Delete removes it (<see cref="RemoveStep"/>).</summary>
+    /// Delete removes it (<see cref="RemoveStep"/>). With nothing selected both act on the list's focused step, the one
+    /// the screen reader named (<see cref="StepActedOn"/>).</summary>
     private void OnClearanceListKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Modifiers != Keys.None) return;
@@ -3801,11 +3803,11 @@ public class TaxiAssistForm : Form
             e.SuppressKeyPress = true;
             RemoveStep();
         }
-        else if (e.KeyCode == Keys.Enter && lstClearance.SelectedIndex >= 0)
+        else if (e.KeyCode == Keys.Enter && StepActedOn(lstClearance, fromList: true) is int index and >= 0)
         {
             e.Handled = true;
             e.SuppressKeyPress = true;
-            BeginStepChange(lstClearance.SelectedIndex);
+            BeginStepChange(index);
         }
     }
 
@@ -4018,12 +4020,13 @@ public class TaxiAssistForm : Form
         _announcer.AnnounceImmediate(text);
     }
 
-    /// <summary>Remove Step (the button or Alt+M, or Delete in the Clearance list): removes the selected step, or the
-    /// last one when none is selected; refused out loud when the list is empty. From the Clearance list it speaks
-    /// nothing while a step remains (the screen reader reads the step now in its place); from anywhere else, where the
-    /// button's access key clicks it without moving focus and the reader says nothing of the change, it says once which
-    /// step went: "Removed step 3: cross runway 24L."; and a removal that leaves the list empty says "Steps cleared."
-    /// whatever the focus, as an empty list gives the reader nothing to say ([CORE-7],
+    /// <summary>Remove Step (the button or Alt+M, or Delete in the Clearance list): removes the selected step; with none
+    /// selected, from inside the list the step the list's focus is on, the one the screen reader named
+    /// (<see cref="StepActedOn"/>), and from anywhere else the last one; refused out loud when the list is empty. From
+    /// the Clearance list it speaks nothing while a step remains (the screen reader reads the step now in its place);
+    /// from anywhere else, where the button's access key clicks it without moving focus and the reader says nothing of
+    /// the change, it says once which step went: "Removed step 3: cross runway 24L."; and a removal that leaves the list
+    /// empty says "Steps cleared." whatever the focus, as an empty list gives the reader nothing to say ([CORE-7],
     /// <see cref="ClearanceStepEntry.RemovalSentence"/>). A step of the leg calculated stays out of every later trim. A
     /// step being changed is kept as it was first, silently (the removal is what the pilot hears).</summary>
     private void RemoveStep()
@@ -4035,9 +4038,8 @@ public class TaxiAssistForm : Form
             return;
         }
         bool fromList = lstClearance.Focused;
-        int index = lstClearance.SelectedIndex >= 0 && lstClearance.SelectedIndex < _steps.Count
-            ? lstClearance.SelectedIndex
-            : _steps.Count - 1;
+        int acted = StepActedOn(lstClearance, fromList);
+        int index = acted >= 0 && acted < _steps.Count ? acted : _steps.Count - 1;
         var removed = _steps[index];
         if (_stepOrigins[index] >= 0) _removedOrigins.Add(_stepOrigins[index]);
         _steps.RemoveAt(index);
@@ -4165,25 +4167,53 @@ public class TaxiAssistForm : Form
     /// the activation, never in <c>OnActivated</c>: WinForms puts focus back on the active control while it handles
     /// WM_ACTIVATE, before it raises <c>OnActivated</c>, so a follow there came after the screen reader had named a step
     /// that finished while the pilot was away, and then the step now in its place. Here the list is up to date when focus
-    /// lands, and the reader names one step, the right one. WinForms handles the message whatever the follow does.</summary>
+    /// lands, and the reader names one step, the right one. The follow never throws (<see cref="FollowGuidanceSafely"/>),
+    /// so WinForms always handles the message.</summary>
     protected override void WndProc(ref Message m)
     {
-        try
-        {
-            if (m.Msg == WM_ACTIVATE && (m.WParam.ToInt64() & 0xFFFF) != WA_INACTIVE)
-                FollowGuidance(activation: true);
-        }
-        finally
-        {
-            base.WndProc(ref m);
-        }
+        if (m.Msg == WM_ACTIVATE && (m.WParam.ToInt64() & 0xFFFF) != WA_INACTIVE)
+            FollowGuidanceSafely(activation: true);
+        base.WndProc(ref m);
     }
 
     /// <summary>The follow timer, once a second while the window is shown (<see cref="OnVisibleChanged"/>): the list
     /// follows guidance only while this window is the active one, never while the pilot is in another window.</summary>
     private void OnFollowTimerTick(object? sender, EventArgs e)
     {
-        if (Form.ActiveForm == this) FollowGuidance(activation: false);
+        if (Form.ActiveForm == this) FollowGuidanceSafely(activation: false);
+    }
+
+    // The last failure of the follow logged (its type and message), and how long one follow may take before it is logged.
+    private string? _lastFollowFailure;
+    private const double SlowFollowMs = 50;
+
+    /// <summary>
+    /// <see cref="FollowGuidance"/> for its two callers, the activation (<see cref="WndProc"/>) and the tick. It never
+    /// throws: a failure must neither stop the window's activation nor raise an error once a second. A failure is logged
+    /// the first time and again only when it changes, never every second. A follow slower than
+    /// <see cref="SlowFollowMs"/> is logged with its time: the window takes guidance's lock once a second
+    /// (<c>GetClearanceProgress</c>), and the log shows whether that ever holds the window up.
+    /// </summary>
+    private void FollowGuidanceSafely(bool activation)
+    {
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            FollowGuidance(activation);
+        }
+        catch (Exception ex)
+        {
+            string failure = ex.GetType().Name + ": " + ex.Message;
+            if (failure != _lastFollowFailure)
+            {
+                _lastFollowFailure = failure;
+                _taxiFormLog.Error($"The step list could not follow guidance (activation: {activation}): {ex}");
+            }
+        }
+        double elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        if (elapsed > SlowFollowMs)
+            _taxiFormLog.Info(FormattableString.Invariant(
+                $"The step list took {elapsed:F0} ms to follow guidance (activation: {activation})."));
     }
 
     /// <summary>True while the step kind, name or At list is dropped down: the pilot is picking from it.</summary>
@@ -4284,12 +4314,35 @@ public class TaxiAssistForm : Form
         finally { list.EndUpdate(); }
 
         if (list.SelectedIndex != select) list.SelectedIndex = select;
-        if (select >= 0 && list.IsHandleCreated
-            && (int)SendMessage(list.Handle, LB_GETCARETINDEX, IntPtr.Zero, IntPtr.Zero) != select)
+        if (select >= 0 && list.IsHandleCreated && FocusedItem(list) != select)
             SendMessage(list.Handle, LB_SETCURSEL, (IntPtr)select, IntPtr.Zero);
     }
 
-    // The list box caret and selection messages ApplyFollowToList uses: WinForms reads the caret but never sets it.
+    /// <summary>
+    /// The step Delete, Enter or Remove Step acts on in the Clearance list: the selected step; with none selected and the
+    /// key pressed in the list (<paramref name="fromList"/>), the list's focused item (<see cref="FocusedItem"/>), the
+    /// step the screen reader named as focus came into the list. Nothing stays selected after a step selected with the
+    /// focus elsewhere finishes, or after Add Step, Replace and the opening trim, but the focused item is still on a step:
+    /// Delete took the LAST step then, silently from inside the list, and Enter did nothing. -1 for none: from outside
+    /// the list Remove Step then takes the last step, as it always has.
+    /// </summary>
+    internal static int StepActedOn(ListBox list, bool fromList)
+    {
+        if (list.SelectedIndex >= 0 && list.SelectedIndex < list.Items.Count) return list.SelectedIndex;
+        return fromList ? FocusedItem(list) : -1;
+    }
+
+    /// <summary>The list box's focused item (its caret, <c>LB_GETCARETINDEX</c>), the one the screen reader names as focus
+    /// comes into it, which can differ from the selected one; -1 for none (no handle, or an empty list). The one caret
+    /// read (<see cref="ApplyFollowToList"/>, <see cref="StepActedOn"/>).</summary>
+    internal static int FocusedItem(ListBox list)
+    {
+        if (!list.IsHandleCreated) return -1;
+        int caret = (int)SendMessage(list.Handle, LB_GETCARETINDEX, IntPtr.Zero, IntPtr.Zero);
+        return caret >= 0 && caret < list.Items.Count ? caret : -1;
+    }
+
+    // The list box caret and selection messages: WinForms reads the caret but never sets it.
     private const int LB_SETCURSEL = 0x0186;
     private const int LB_GETCARETINDEX = 0x019F;
 

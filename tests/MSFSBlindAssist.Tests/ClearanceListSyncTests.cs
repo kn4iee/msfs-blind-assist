@@ -1,8 +1,10 @@
-// The Clearance list following guidance (TaxiAssistForm.ApplyFollowToList), on a real Win32 list box that is never
-// shown: Visible is false and a parentless control's handle sits on WinForms' hidden parking window, so nothing appears
-// on screen and no input is sent. A list box has a SELECTED item and a FOCUSED item (its caret); the screen reader names
-// the focused one when focus comes back into the list, while Enter and Delete act on the selected one. Removing an item
-// above the selection moves the selection up but leaves the caret where it was, so the two must be put back together.
+// The Clearance list following guidance (TaxiAssistForm.ApplyFollowToList) and the step a key in it acts on
+// (TaxiAssistForm.StepActedOn), on a real Win32 list box that is never shown: Visible is false and a parentless
+// control's handle sits on WinForms' hidden parking window, so nothing appears on screen and no input is sent. A list
+// box has a SELECTED item and a FOCUSED item (its caret); the screen reader names the focused one when focus comes back
+// into the list, while Enter and Delete act on the selected one. Removing an item above the selection moves the
+// selection up but leaves the caret where it was, so the two must be put back together; with nothing selected, the
+// step acted on is the focused one, the one the reader named.
 
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
@@ -12,9 +14,9 @@ namespace MSFSBlindAssist.Tests;
 
 public class ClearanceListSyncTests
 {
-    // Review fix round 1, Important 1 (measured): a step above the kept selection finishes. Before the fix the selection
-    // read "step 3" and the caret "step 4", so focus back in the list named step 4 while Enter and Delete acted on step 3.
-    // The selection did not move, so nothing says it changed.
+    // Measured: a step above the kept selection finishes. Without the realign the selection read "step 3" and the caret
+    // "step 4", so focus back in the list named step 4 while Enter and Delete acted on step 3. The selection did not
+    // move, so nothing says it changed.
     [Fact]
     public void A_step_finished_above_the_selection_keeps_the_selected_and_focused_step_together()
     {
@@ -91,6 +93,54 @@ public class ClearanceListSyncTests
 
         Assert.Equal(-1, list.SelectedIndex);
         Assert.Equal(0, changes);
+    }
+
+    // Measured: the selected step finishes with the focus elsewhere in the window, so nothing stays selected, but the
+    // list's focused item lands on another step: the one the screen reader names when focus comes back into the list.
+    // Delete took the LAST step then (the runway hold short), silently from inside the list, and Enter did nothing. With
+    // nothing selected, a key in the list acts on the focused step, the one named; Remove Step from outside the list
+    // still takes the last step.
+    [Fact]
+    public void With_nothing_selected_a_key_in_the_list_acts_on_the_step_the_reader_names()
+    {
+        using var list = HiddenList("Via A", "Via B", "Hold short of runway 27L");
+        list.SelectedIndex = 0;
+
+        TaxiAssistForm.ApplyFollowToList(list, removed: new[] { 0 }, new[] { "Via B", "Hold short of runway 27L" }, select: -1);
+
+        Assert.Equal(-1, list.SelectedIndex);
+        Assert.Equal("Via B", list.AccessibilityObject.GetFocused()?.Name);
+        Assert.Equal(0, TaxiAssistForm.StepActedOn(list, fromList: true));
+        Assert.Equal(-1, TaxiAssistForm.StepActedOn(list, fromList: false));
+    }
+
+    // The same state after Add Step, Replace or the opening trim, which leave nothing selected: the step a key in the
+    // list acts on is the one the reader names.
+    [Fact]
+    public void A_list_left_with_nothing_selected_acts_on_its_focused_step()
+    {
+        using var list = HiddenList("Via A", "Via B", "Via C");
+        list.SelectedIndex = 2;
+        list.SelectedIndex = -1;
+
+        int acted = TaxiAssistForm.StepActedOn(list, fromList: true);
+
+        Assert.True(acted >= 0, "a step is acted on");
+        Assert.Equal(list.AccessibilityObject.GetFocused()?.Name, list.Items[acted]);
+    }
+
+    // A selected step is the one acted on, wherever the key is pressed; an empty list has none.
+    [Fact]
+    public void The_selected_step_is_acted_on_and_an_empty_list_has_none()
+    {
+        using var list = HiddenList("Via A", "Via B", "Via C");
+        list.SelectedIndex = 1;
+        Assert.Equal(1, TaxiAssistForm.StepActedOn(list, fromList: true));
+        Assert.Equal(1, TaxiAssistForm.StepActedOn(list, fromList: false));
+
+        using var empty = HiddenList();
+        Assert.Equal(-1, TaxiAssistForm.StepActedOn(empty, fromList: true));
+        Assert.Equal(-1, TaxiAssistForm.StepActedOn(empty, fromList: false));
     }
 
     private static ListBox HiddenList(params string[] items)
