@@ -245,7 +245,7 @@ Work the groups of Task 1's table, each the same way: measure what the control w
 
 Kept in this file only, so no other plan's push ever touches it.
 
-- **Status:** waiting on owner (the code tasks that needed no names or order are done and reviewed; Tasks 1 Step 1, 3, 4 Steps 0 and 4's by-hand part, 5, 6 and the in-sim checks wait, below). Not pushed: the claim and every commit are on the local branch `a330-p04-panels` only.
+- **Status:** waiting on owner (the code tasks that needed no names or order are done and reviewed; Tasks 1 Step 1, 3, 4 Steps 0 and 4's by-hand part, 5, 6 and the in-sim checks wait, below). Pushed 2026-11-28 to the shared branch at the owner's word (9bba156f9..ba0613c65, a fast-forward, the claim included). The private push check could not run on this machine; the diff and the commit messages were re-read against spec section 4 instead (no location of the private reference, nothing on how the display reader works, no local paths).
 - **Claimed by:** wolfman1360
 - **Worked by:** wolfman1360, with Claude (subagent-driven development: an implementer and a review a task, a whole-plan review)
 - **Started:** 2026-11-27, from 9bba156f9 (the branch tip, plans 01 to 03 landed)
