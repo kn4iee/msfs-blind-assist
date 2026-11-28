@@ -208,8 +208,8 @@ public class TaxiAssistForm : Form
     private int _timesShown;
     // Where focus lands as the window opens (PrepareForOpening), focused by FocusForOpening if activation has not.
     private Control? _openingFocusControl;
-    // Whether the "At" box is shown (a Cross step with a runway chosen). A field, not
-    // cmbStepAt.Visible, which also reads false whenever the form itself is hidden.
+    // Whether the "At" box is shown (a Cross or Hold short of step with a runway chosen, ClearanceStepEntry.ShowsAtBox).
+    // A field, not cmbStepAt.Visible, which also reads false whenever the form itself is hidden.
     private bool _stepAtShown;
     // Set while the kind is set by code (an access key, Add Step), so the kind list's own
     // change handler does not refill the name box a second time.
@@ -233,10 +233,10 @@ public class TaxiAssistForm : Form
     // early-returns before scanning), but once raw data has arrived the O(points × nodes)
     // scan must not repeat on every list refill.
     private bool _namedHoldingPointsResolved;
-    // "At" HOLDING POINTS offered for a runway crossing ("cross runway 23R at P1"), keyed by
-    // their label in the "At" box. Rebuilt with that list (RefreshStepAtList) and read when
-    // the step is added, so a label only ever resolves to a point that had a genuine crossing
-    // when it was offered.
+    // "At" HOLDING POINTS offered for a runway crossing or hold short ("cross runway 23R at P1",
+    // "hold short of runway 27L at A2"), keyed by their label in the "At" box. Rebuilt with that
+    // list (RefreshStepAtList) and read when the step is added, so a label only ever resolves to
+    // a point that had a genuine crossing when it was offered.
     private readonly Dictionary<string, NamedHoldingPoint> _crossAtHoldPoints = new();
     private const string CrossAtHoldPointSuffix = HoldShortTargetList.HoldingPointSuffix;
     private Button btnSayIntentions = null!;
@@ -813,8 +813,8 @@ public class TaxiAssistForm : Form
         // arrives, but only when they have just been found (never refilled on every focus).
         cmbStepName.Enter += (s, e) => EnsureHoldingPointsListed();
 
-        // "At", for a runway crossing only: where ATC cleared it (RefreshStepAtList). No access
-        // key: Tab reaches it from the name box.
+        // "At", for a runway crossed or held short of only: where ATC said (RefreshStepAtList, which
+        // sets the description for the kind). No access key: Tab reaches it from the name box.
         lblStepAt = new Label
         {
             Text = "At (optional):",
@@ -828,7 +828,7 @@ public class TaxiAssistForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList,
             Visible = false,
             AccessibleName = "At taxiway or holding point, optional",
-            AccessibleDescription = "Optional: where ATC cleared you to cross the runway, a taxiway or a holding point such as P1. Lists only those that cross the runway chosen in the name box. Leave at (none) to cross where the route first meets the runway."
+            AccessibleDescription = ClearanceStepEntry.AtBoxDescription(ClearanceStepKind.Cross)
         };
         cmbStepAt.KeyDown += OnStepBoxKeyDown;
         // Its holding points come from the same online fetch as the name box's, which can land after the list was
@@ -3516,7 +3516,8 @@ public class TaxiAssistForm : Form
     /// holding-point fetch). A holding point read from a sign is listed for every destination type ([HLD-18] since
     /// 2026-11-24). While a step is being changed the names are those offered after the steps before it
     /// (<see cref="StepsBeforeEntry"/>), the accessible name says which step, and nothing is preselected. Refreshes the
-    /// "At" box after.
+    /// "At" box after, keeping its pick with <paramref name="keepSelection"/>: a late holding-point fetch as focus
+    /// reaches the name box (Shift+Tab back from "At") never drops "hold short of runway 27L at B".
     /// </summary>
     private void RefreshStepNameList(bool keepSelection = false)
     {
@@ -3551,7 +3552,7 @@ public class TaxiAssistForm : Form
             cmbStepName.EndUpdate();
             _fillingStepName = false;
         }
-        RefreshStepAtList();
+        RefreshStepAtList(keepSelection);
     }
 
     private int IndexOfStepName(Func<ClearanceNameLists.Item, bool> matches)
@@ -3606,10 +3607,12 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>
-    /// Shows the "At" box only for a Cross step with a runway chosen, and fills it: "(none)" (the first crossing the
-    /// route makes), then the taxiways that cross that runway, then the painted holding points from which it can be
-    /// crossed on the aircraft's side (never one read from a sign, [HLD-18]). While a runway crossing is being changed
-    /// with its own runway chosen, its own place follows when none of those names it
+    /// Shows the "At" box only for a Cross or Hold short of step with a runway chosen
+    /// (<see cref="ClearanceStepEntry.ShowsAtBox"/>), its description for that kind, and fills it the same way for both:
+    /// "(none)" (where the route first meets the runway), then the taxiways that cross that runway, then the painted
+    /// holding points from which it can be crossed on the aircraft's side (never one read from a sign, [HLD-18]). Hidden,
+    /// it holds nothing, and <see cref="StepFromBoxes"/> reads no "at" from it. While a runway crossing or hold short is
+    /// being changed with its own runway chosen, its own place follows when none of those names it
     /// (<see cref="ClearanceStepEntry.OwnPlaceLabel"/>): a crossing made at a holding point now behind the aircraft keeps
     /// its place and pin. <paramref name="keepSelection"/> (the box's own refresh when focus arrives or its list opens)
     /// keeps the pick by its label when it is still offered. Otherwise, and when that pick was the step's own place under
@@ -3622,10 +3625,12 @@ public class TaxiAssistForm : Form
         string? previous = keepSelection ? cmbStepAt.SelectedItem?.ToString() : null;
         string? previousOwnLabel = _changingOwnAtLabel;
         Runway? runway = null;
-        string? pickedRunway = (cmbStepName.SelectedItem as ClearanceNameLists.Item)?.Name;
-        bool show = SelectedStepKind() == ClearanceStepKind.Cross
-            && cmbStepName.SelectedItem is ClearanceNameLists.Item { Kind: ClearanceTargetKind.Runway } picked
-            && _crossRunwayMap.TryGetValue($"Runway {picked.Name}", out runway);
+        var kind = SelectedStepKind();
+        var picked = cmbStepName.SelectedItem as ClearanceNameLists.Item;
+        string? pickedRunway = picked?.Name;
+        bool show = ClearanceStepEntry.ShowsAtBox(kind, picked?.Kind)
+            && _crossRunwayMap.TryGetValue($"Runway {picked!.Name}", out runway);
+        if (show) cmbStepAt.AccessibleDescription = ClearanceStepEntry.AtBoxDescription(kind);
 
         cmbStepAt.BeginUpdate();
         try
@@ -3736,8 +3741,9 @@ public class TaxiAssistForm : Form
     }
 
     /// <summary>The step the boxes make with <paramref name="name"/> chosen: the kind, the name and, for a runway
-    /// crossing, the "At" pick (a holding point by its node). While a step is being changed, its own place picked in the
-    /// "At" box keeps that step's place (<see cref="ClearanceStepEntry.BuildForChange"/>).</summary>
+    /// crossed or held short of, the "At" pick (a holding point by its node), read only while the box is shown. While a
+    /// step is being changed, its own place picked in the "At" box keeps that step's place
+    /// (<see cref="ClearanceStepEntry.BuildForChange"/>).</summary>
     private ClearanceStep StepFromBoxes(ClearanceNameLists.Item name)
     {
         string? atLabel = _stepAtShown ? cmbStepAt.SelectedItem?.ToString() : null;
@@ -3781,8 +3787,9 @@ public class TaxiAssistForm : Form
     /// <summary>
     /// Starts changing step <paramref name="index"/> in place (Enter on it in the Clearance list): the step boxes are
     /// loaded kind, then name (listed after the steps before it, <see cref="StepsBeforeEntry"/>), then, for a runway
-    /// crossing, "At" ("(none)" when it names no place; its own place, listed for the change, when no offered item names
-    /// it, so a made crossing keeps its pin); a name no longer offered is left unselected. Add Step
+    /// crossed or held short of, "At" ("(none)" when it names no place; its own place, listed for the change, when no
+    /// offered item names it, so a made crossing keeps its pin and a put-back one its place); a name no longer offered is
+    /// left unselected. Add Step
     /// reads "Replace step N" and focus goes to the name box, whose accessible name says "changing step N", so the screen
     /// reader says it there and nothing is spoken here ([CORE-7]). Enter on another step while one is being changed
     /// starts that one instead, the first kept as it was.
@@ -3813,12 +3820,13 @@ public class TaxiAssistForm : Form
     private int IndexOfStepNameFor(ClearanceStep step)
         => IndexOfStepName(i => ClearanceStepEntry.NameItemMatches(i, step));
 
-    /// <summary>The "At" box's item for a runway crossing: "(none)" when the step names no place; else an item a pick of
-    /// which rebuilds the same place (<see cref="ClearanceStepEntry.AtItemMatches"/>), or the step's own place listed for
-    /// the change (<see cref="_changingOwnAtLabel"/>; only ever set for the step being changed). -1 when none names it.</summary>
+    /// <summary>The "At" box's item for a runway crossing or hold short: "(none)" when the step names no place (a blank
+    /// "at" is none); else an item a pick of which rebuilds the same place (<see cref="ClearanceStepEntry.AtItemMatches"/>),
+    /// or the step's own place listed for the change (<see cref="_changingOwnAtLabel"/>; only ever set for the step being
+    /// changed). -1 when none names it.</summary>
     private int IndexOfStepAtFor(ClearanceStep step)
     {
-        if (string.IsNullOrEmpty(step.At)) return cmbStepAt.Items.IndexOf(ClearanceStepEntry.NoAtPlace);
+        if (string.IsNullOrWhiteSpace(step.At)) return cmbStepAt.Items.IndexOf(ClearanceStepEntry.NoAtPlace);
         for (int i = 0; i < cmbStepAt.Items.Count; i++)
         {
             string label = cmbStepAt.Items[i]?.ToString() ?? "";
@@ -4573,6 +4581,10 @@ public class TaxiAssistForm : Form
         // (ClearancePlanner.Build). Its refusal is checked here for every type, before anything is looked up,
         // and leaves the route being flown as it is ([RTE-29]).
         bool hasDestination = cmbDestType.SelectedIndex != 2;
+        // Diagnostics: the steps the plan is built from (trimmed to what is ahead) and the destination, so a report
+        // can be read from the logs.
+        _taxiRouterLog.Info(ClearanceStepEntry.LogLine(_steps, cmbDestType.SelectedItem?.ToString() ?? "",
+            hasDestination ? cmbDestination.SelectedItem?.ToString() : null));
         var plan = ClearancePlanner.Build(_steps, hasDestination, PlanDestinationRunway(hasDestination));
         if (plan.Refusal != null)
         {

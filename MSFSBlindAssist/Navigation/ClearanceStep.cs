@@ -36,13 +36,14 @@ public sealed record ClearanceStep(
             {
                 string target = TargetKind == ClearanceTargetKind.Taxiway ? "taxiway " : "runway ";
                 string text = "Cross " + target + Name;
-                return string.IsNullOrEmpty(At) ? text : text + " at " + At;
+                // A blank "at" is no place, as everywhere a step's place is read (ClearanceRunways.HasPlace).
+                return string.IsNullOrWhiteSpace(At) ? text : text + " at " + At;
             }
             default:
             {
                 return TargetKind switch
                 {
-                    ClearanceTargetKind.Runway => string.IsNullOrEmpty(At)
+                    ClearanceTargetKind.Runway => string.IsNullOrWhiteSpace(At)
                         ? "Hold short of runway " + Name
                         : "Hold short of runway " + Name + " at " + At,
                     ClearanceTargetKind.Taxiway => "Hold short of taxiway " + Name,

@@ -754,6 +754,90 @@ public class ClearanceWiringTests
             "an unfinished change is refused, or closed when it changes nothing, before the trim and the plan");
     }
 
+    // Hold short of runway Y at Z, Task 3: the At box shows for Hold short of with a runway chosen, by the ONE pure
+    // condition the step's own At handling uses (ClearanceStepEntry.ShowsAtBox, ClearanceStepEntryTests), with the same
+    // list as Cross: one builder, never a branch on the kind. Its description follows the kind. Hidden, it holds no item
+    // and no holding point, and no step reads it, so a stale At never reaches a step or the route. No access key: Tab
+    // reaches it from the name box, and Tab from it reaches Add Step.
+    [Fact]
+    public void The_At_box_shows_for_Hold_short_of_a_runway_with_the_same_list_as_Cross()
+    {
+        string form = FormSource();
+        string at = Member(form, "private void RefreshStepAtList(");
+
+        Assert.Contains("bool show = ClearanceStepEntry.ShowsAtBox(kind, picked?.Kind)", at);
+        Assert.DoesNotContain("ClearanceStepKind.", at);
+        Assert.Single(Regex.Matches(at, @"GetTaxiwaysCrossingRunway\(runway\)"));
+        Assert.Single(Regex.Matches(at, @"GetHoldingPointsCrossingRunway\(runway\)"));
+        Assert.Contains("cmbStepAt.AccessibleDescription = ClearanceStepEntry.AtBoxDescription(kind);", at);
+        Assert.Contains("AccessibleDescription = ClearanceStepEntry.AtBoxDescription(ClearanceStepKind.Cross)", form);
+        Assert.DoesNotContain("where ATC cleared you to cross the runway", form);
+
+        // Emptied on every refill before it is filled, so a hidden box holds nothing; read only while shown.
+        int cleared = at.IndexOf("cmbStepAt.Items.Clear();", StringComparison.Ordinal);
+        int points = at.IndexOf("_crossAtHoldPoints.Clear();", StringComparison.Ordinal);
+        int filled = at.IndexOf("if (show && runway != null)", StringComparison.Ordinal);
+        Assert.True(cleared >= 0 && points > cleared && filled > points, "the box is emptied before it is filled");
+        Assert.Contains("string? atLabel = _stepAtShown ? cmbStepAt.SelectedItem?.ToString() : null;",
+            Member(form, "private ClearanceStep StepFromBoxes("));
+
+        // No access key, and the tab order name box, At, Add Step.
+        Assert.Contains("Text = \"At (optional):\",", form);
+        int name = form.IndexOf("cmbStepName.TabIndex = tabIdx++;", StringComparison.Ordinal);
+        int box = form.IndexOf("cmbStepAt.TabIndex = tabIdx++;", StringComparison.Ordinal);
+        int add = form.IndexOf("btnAddStep.TabIndex = tabIdx++;", StringComparison.Ordinal);
+        Assert.True(name >= 0 && box > name && add > box, "Tab goes name box, At, Add Step");
+    }
+
+    // Task 3: a change of a Hold short of runway step loads its At and keeps it, as a Cross step's: nothing on the way
+    // asks for a Cross step. A refill that keeps the name's pick (a late holding-point fetch as focus reaches the name
+    // box) keeps the At pick too, so Shift+Tab back to the name box never drops "at B".
+    [Fact]
+    public void A_change_of_a_Hold_short_of_runway_step_loads_its_At_and_keeps_it()
+    {
+        string form = FormSource();
+        foreach (string member in new[] { "private void BeginStepChange(", "private ClearanceStep StepFromBoxes(",
+                     "private int IndexOfStepAtFor(", "private (ClearanceStep? Rebuilt, bool Same) RebuildStepBeingChanged(" })
+            Assert.DoesNotContain("ClearanceStepKind.Cross", Member(form, member));
+        Assert.Contains("if (_stepAtShown) cmbStepAt.SelectedIndex = IndexOfStepAtFor(step);", Member(form, "private void BeginStepChange("));
+        Assert.Contains("if (string.IsNullOrWhiteSpace(step.At)) return cmbStepAt.Items.IndexOf(ClearanceStepEntry.NoAtPlace);",
+            Member(form, "private int IndexOfStepAtFor("));
+
+        string names = Member(form, "private void RefreshStepNameList(");
+        Assert.Contains("RefreshStepAtList(keepSelection);", names);
+        Assert.DoesNotContain("RefreshStepAtList();", names);
+    }
+
+    // Task 3 (Task 2 made it so; pinned here): every runway stop reaches LoadRoute as the plan's pick, with its place,
+    // never through the names-only stop list.
+    [Fact]
+    public void Runway_stops_reach_LoadRoute_with_their_place()
+    {
+        string form = FormSource();
+        Assert.DoesNotContain("PlanStops(plan, ClearanceTargetKind.Runway", form);
+        Assert.Equal(2, Regex.Matches(form, @"userRunwayHoldShorts: plan\.RunwayHoldPicks\(\),").Count);
+        Assert.Equal(2, Regex.Matches(form, @"userTaxiwayHoldShorts: PlanStops\(plan, ClearanceTargetKind\.Taxiway, s => s\.Name\),").Count);
+    }
+
+    // Diagnostics (owner-approved): Calculate writes the steps it is about to plan from and the destination to the
+    // taxi_router log, through the form's channel [CORE-15], after the trim and before the plan is built.
+    [Fact]
+    public void Calculate_logs_the_steps_before_it_builds_the_plan()
+    {
+        string form = FormSource();
+        Assert.Contains("private static readonly LogChannel _taxiRouterLog = Log.Channel(\"taxi_router\");", form);
+        string calculate = Member(form, "private void OnCalculateClicked(");
+
+        int trim = calculate.IndexOf("TrimStepsToWhatIsAhead();", StringComparison.Ordinal);
+        int destination = calculate.IndexOf("bool hasDestination = cmbDestType.SelectedIndex != 2;", StringComparison.Ordinal);
+        int log = calculate.IndexOf("_taxiRouterLog.Info(ClearanceStepEntry.LogLine(_steps, cmbDestType.SelectedItem?.ToString() ?? \"\",", StringComparison.Ordinal);
+        int build = calculate.IndexOf("ClearancePlanner.Build(_steps, hasDestination, PlanDestinationRunway(hasDestination))", StringComparison.Ordinal);
+        Assert.True(trim >= 0 && destination > trim && log > destination && build > log,
+            "the steps are logged after the trim and before the plan is built");
+        Assert.Contains("hasDestination ? cmbDestination.SelectedItem?.ToString() : null));", calculate);
+        Assert.Single(Regex.Matches(form, @"ClearanceStepEntry\.LogLine\("));
+    }
+
     private static string FormSource()
         => File.ReadAllText(Path.Combine(RepoRoot(), "MSFSBlindAssist", "Forms", "TaxiAssistForm.cs"));
 

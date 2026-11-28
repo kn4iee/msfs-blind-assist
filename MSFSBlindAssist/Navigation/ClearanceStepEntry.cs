@@ -111,9 +111,10 @@ public static class ClearanceStepEntry
 
     /// <summary>
     /// True when <paramref name="rebuilt"/>, the step the window's boxes make now, says the same as
-    /// <paramref name="entered"/>, the step being changed: the same kind, target kind, name and, for a Cross step, "at"
-    /// (ordinal, case ignored; null is empty), and the same node when the target is a holding point. Hidden data (an
-    /// at-node, a passed-stop flag) is not compared, as the boxes cannot show it: only a Cross or Hold short of runway
+    /// <paramref name="entered"/>, the step being changed: the same kind, target kind, name and, for a runway crossed or
+    /// held short of, "at" (ordinal, case ignored; a blank "at" is none), and the same node when the target is a holding
+    /// point. Hidden data
+    /// (an at-node, a passed-stop flag) is not compared, as the boxes cannot show it: only a Cross or Hold short of runway
     /// step has an "At" box, and a crossing put back as a hold short shows its place there.
     /// </summary>
     public static bool SameAsEntered(ClearanceStep entered, ClearanceStep rebuilt)
@@ -124,7 +125,7 @@ public static class ClearanceStepEntry
             && entered.TargetKind == rebuilt.TargetKind
             && string.Equals(entered.Name ?? "", rebuilt.Name ?? "", StringComparison.OrdinalIgnoreCase)
             && (!HasAtBox(entered)
-                || string.Equals(entered.At ?? "", rebuilt.At ?? "", StringComparison.OrdinalIgnoreCase))
+                || string.Equals((entered.At ?? "").Trim(), (rebuilt.At ?? "").Trim(), StringComparison.OrdinalIgnoreCase))
             && (entered.TargetKind != ClearanceTargetKind.HoldingPoint || entered.NodeId == rebuilt.NodeId);
     }
 
@@ -144,15 +145,15 @@ public static class ClearanceStepEntry
     }
 
     /// <summary>
-    /// Whether an "At" box item names the place of <paramref name="step"/>, a runway crossing being changed: only when
-    /// a pick of it rebuilds the same place (<see cref="SameAsEntered"/>): a holding point (<paramref name="point"/>, the
-    /// box's point for the label) by its name; a taxiway by its label, unless the step is pinned to a holding point's node
-    /// (a taxiway of the same name is another place). Never <see cref="NoAtPlace"/>.
+    /// Whether an "At" box item names the place of <paramref name="step"/>, a runway crossing or hold short being changed:
+    /// only when a pick of it rebuilds the same place (<see cref="SameAsEntered"/>): a holding point (<paramref name="point"/>,
+    /// the box's point for the label) by its name; a taxiway by its label, unless the step is pinned to a holding point's
+    /// node (a taxiway of the same name is another place). Never <see cref="NoAtPlace"/>, nor a blank place.
     /// </summary>
     public static bool AtItemMatches(string label, NamedHoldingPoint? point, ClearanceStep step)
     {
         ArgumentNullException.ThrowIfNull(step);
-        if (string.IsNullOrEmpty(step.At) || string.IsNullOrEmpty(label) || label == NoAtPlace) return false;
+        if (string.IsNullOrWhiteSpace(step.At) || string.IsNullOrWhiteSpace(label) || label == NoAtPlace) return false;
         if (point != null) return string.Equals(point.Name, step.At, StringComparison.OrdinalIgnoreCase);
         return !PinnedToHoldingPoint(step) && string.Equals(label, step.At, StringComparison.OrdinalIgnoreCase);
     }
@@ -165,7 +166,7 @@ public static class ClearanceStepEntry
     public static bool PlaceIsHoldingPoint(ClearanceStep step, IEnumerable<string> taxiwayNames, IEnumerable<string> holdingPointNames)
     {
         ArgumentNullException.ThrowIfNull(step);
-        if (string.IsNullOrEmpty(step.At)) return false;
+        if (string.IsNullOrWhiteSpace(step.At)) return false;
         if (PinnedToHoldingPoint(step)) return true;
         return !taxiwayNames.Any(n => string.Equals(n, step.At, StringComparison.OrdinalIgnoreCase))
             && holdingPointNames.Any(n => string.Equals(n, step.At, StringComparison.OrdinalIgnoreCase));
@@ -236,9 +237,35 @@ public static class ClearanceStepEntry
         return kept >= 0 && !pickedOwnPlace ? kept : ownPlaceIndex;
     }
 
+    /// <summary>
+    /// Whether the window shows its "At" box: for a Cross or a Hold short of step with a runway chosen in the name box
+    /// (<paramref name="chosen"/>, null with nothing chosen), the place on that runway's hold line ATC named ("cross runway
+    /// 24L at P", "hold short of runway 27L at B"); never for a taxiway or a holding point. The one rule for the box and
+    /// for a step's own "at" (<see cref="SameAsEntered"/>, <see cref="OwnPlaceLabel"/>, <see cref="BuildForChange"/>).
+    /// </summary>
+    public static bool ShowsAtBox(ClearanceStepKind kind, ClearanceTargetKind? chosen)
+        => chosen == ClearanceTargetKind.Runway && (kind is ClearanceStepKind.Cross or ClearanceStepKind.HoldShort);
+
+    /// <summary>The "At" box's accessible description for the kind it is shown for (<see cref="ShowsAtBox"/>).</summary>
+    public static string AtBoxDescription(ClearanceStepKind kind) => kind == ClearanceStepKind.HoldShort
+        ? "Optional: where ATC told you to hold short of the runway, a taxiway or a holding point such as A2. Lists only those that cross the runway chosen in the name box. Leave at (none) to hold short where the route first meets the runway."
+        : "Optional: where ATC cleared you to cross the runway, a taxiway or a holding point such as P1. Lists only those that cross the runway chosen in the name box. Leave at (none) to cross where the route first meets the runway.";
+
+    /// <summary>
+    /// The line Calculate writes to the taxi_router log, so a report can be read from the logs: the destination type as
+    /// listed, the destination when there is one, and the steps as they read, in order.
+    /// "Calculate: Progressive Taxi (no destination); steps: Via 5 | Hold short of taxiway AK";
+    /// "Calculate: Runway, destination Runway 09; steps: (none)".
+    /// </summary>
+    public static string LogLine(IReadOnlyList<ClearanceStep> steps, string destinationType, string? destination)
+    {
+        string where = string.IsNullOrWhiteSpace(destination) ? destinationType : destinationType + ", destination " + destination;
+        string said = steps is { Count: > 0 } ? string.Join(" | ", steps.Select(s => s.Sentence())) : "(none)";
+        return "Calculate: " + where + "; steps: " + said;
+    }
+
     // Only a Cross or a Hold short of a RUNWAY step has an "At" box (a place on the runway's hold line).
-    private static bool HasAtBox(ClearanceStep step)
-        => step is { TargetKind: ClearanceTargetKind.Runway, Kind: ClearanceStepKind.Cross or ClearanceStepKind.HoldShort };
+    private static bool HasAtBox(ClearanceStep step) => ShowsAtBox(step.Kind, step.TargetKind);
 
     // A crossing cleared at a holding point carries its node; a crossing already made carries the stop it passed (or
     // the reach) there instead.

@@ -455,6 +455,145 @@ public class ClearanceStepEntryTests
         Assert.Equal(0, ClearanceStepEntry.AtIndexAfterRefill(AtBoxFor24L, null, null, held, "06", 3));
     }
 
+    // Task 3: the window shows its At box for Hold short of with a runway chosen, as for Cross, and for nothing else: a
+    // taxiway or a holding point held short of, a taxiway crossed, a taxiway followed, nothing chosen.
+    [Fact]
+    public void The_At_box_shows_for_a_runway_crossed_or_held_short_of_only()
+    {
+        Assert.True(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.Cross, ClearanceTargetKind.Runway));
+        Assert.True(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway));
+        Assert.False(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.HoldShort, ClearanceTargetKind.Taxiway));
+        Assert.False(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.HoldShort, ClearanceTargetKind.HoldingPoint));
+        Assert.False(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.Cross, ClearanceTargetKind.Taxiway));
+        Assert.False(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway));
+        Assert.False(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.LeftOnto, ClearanceTargetKind.Runway));
+        Assert.False(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.Cross, null));
+        Assert.False(ClearanceStepEntry.ShowsAtBox(ClearanceStepKind.HoldShort, null));
+    }
+
+    // The At box's description says what the place is for the kind chosen: Cross's, as it always was, and Hold short of's.
+    [Fact]
+    public void The_At_box_description_follows_the_kind()
+    {
+        Assert.Equal("Optional: where ATC cleared you to cross the runway, a taxiway or a holding point such as P1. Lists only those that cross the runway chosen in the name box. Leave at (none) to cross where the route first meets the runway.",
+            ClearanceStepEntry.AtBoxDescription(ClearanceStepKind.Cross));
+        Assert.Equal("Optional: where ATC told you to hold short of the runway, a taxiway or a holding point such as A2. Lists only those that cross the runway chosen in the name box. Leave at (none) to hold short where the route first meets the runway.",
+            ClearanceStepEntry.AtBoxDescription(ClearanceStepKind.HoldShort));
+    }
+
+    // Task 3: Enter on "Hold short of runway 27L at B" in the Clearance list loads B into the At box (the box shows for
+    // it, and B is the item a pick of which rebuilds the same place), a refill keeps it, and Enter again keeps the step.
+    [Fact]
+    public void A_change_of_a_hold_short_of_runway_at_B_loads_B_and_keeps_it()
+    {
+        var atB = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "B");
+        Assert.True(ClearanceStepEntry.ShowsAtBox(atB.Kind, atB.TargetKind));
+        string[] items = { ClearanceStepEntry.NoAtPlace, "A", "B", "C", "A2 (holding point)" };
+        Assert.True(ClearanceStepEntry.AtItemMatches("B", null, atB));
+        Assert.False(ClearanceStepEntry.AtItemMatches("A2 (holding point)", Point("A2", 7), atB));
+        // B is offered, so no own place is added.
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(atB, "27L", placeOffered: true, placeIsHoldingPoint: false));
+        // The change opens with B selected (BeginStepChange's refill keeps no pick), and a refill keeping the pick keeps B.
+        Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(items, null, null, atB, "27L", ownPlaceIndex: 2));
+        Assert.Equal(2, ClearanceStepEntry.AtIndexAfterRefill(items, "B", null, atB, "27L", ownPlaceIndex: 2));
+        var rebuilt = ClearanceStepEntry.BuildForChange(ClearanceStepKind.HoldShort, Runway("27L"), items[2], null, atB, null);
+        Assert.Equal(atB, rebuilt);
+        Assert.True(ClearanceStepEntry.SameAsEntered(atB, rebuilt));
+        // Another place picked is another step.
+        Assert.False(ClearanceStepEntry.SameAsEntered(atB,
+            ClearanceStepEntry.BuildForChange(ClearanceStepKind.HoldShort, Runway("27L"), "C", null, atB, null)));
+
+        // At a holding point: its labelled item, by the point's name.
+        var atA2 = ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "A2 (holding point)", Point("A2", 7));
+        Assert.True(ClearanceStepEntry.AtItemMatches("A2 (holding point)", Point("A2", 7), atA2));
+        Assert.False(ClearanceStepEntry.AtItemMatches("A2", null, atA2));
+        Assert.True(ClearanceStepEntry.SameAsEntered(atA2, ClearanceStepEntry.BuildForChange(ClearanceStepKind.HoldShort,
+            Runway("27L"), "A2 (holding point)", Point("A2", 7), atA2, null)));
+    }
+
+    // Review Focus 3, carried from Task 1: a crossing put back by Input Alt+Y reads "Hold short of runway 04L at C" with
+    // the crossing's hidden data. Changed with Enter and then Enter again, the box shows for it, lists its own place when
+    // C is behind the aircraft (not offered), opens on that place, and rebuilds the very record: nothing is lost.
+    [Theory]
+    [InlineData("C", 0, "C")]                       // cleared at taxiway C
+    [InlineData("C3", 41, "C3 (holding point)")]    // cleared at holding point C3, its node kept
+    public void A_put_back_crossing_changed_with_Enter_and_Enter_again_keeps_its_place_and_hidden_data(
+        string place, int node, string ownLabel)
+    {
+        var entered = new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "04L", At: place, AtNodeId: node);
+        var putBack = ClearanceTrim.AsHoldShort(entered);
+        Assert.Equal("Hold short of runway 04L at " + place, putBack.Sentence());
+        Assert.True(ClearanceStepEntry.ShowsAtBox(putBack.Kind, putBack.TargetKind));
+
+        // Its place not offered (behind the aircraft): listed as the step's own place, the change opening on it.
+        var items = new List<string> { ClearanceStepEntry.NoAtPlace, "A", "B" };
+        string own = ClearanceStepEntry.OwnPlaceLabel(putBack, "04L", placeOffered: false,
+            ClearanceStepEntry.PlaceIsHoldingPoint(putBack, new[] { "A", "B", "C" }, new[] { "C3" }))!;
+        Assert.Equal(ownLabel, own);
+        items.Add(own);
+        int opened = ClearanceStepEntry.AtIndexAfterRefill(items, null, null, putBack, "04L", ownPlaceIndex: items.Count - 1);
+        Assert.Equal(own, items[opened]);
+        var rebuilt = ClearanceStepEntry.BuildForChange(ClearanceStepKind.HoldShort, Runway("04L"), items[opened], null, putBack, own);
+        Assert.Equal(putBack, rebuilt);
+        Assert.True(ClearanceStepEntry.SameAsEntered(putBack, rebuilt));
+        // Without the box (as before this task) the place was lost and the step replaced.
+        Assert.False(ClearanceStepEntry.SameAsEntered(putBack, ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("04L"))));
+    }
+
+    // The same put-back crossing with its taxiway offered: picking it says the same, so the window keeps the old record
+    // (ReplaceStepFromInputs), hidden data and all.
+    [Fact]
+    public void A_put_back_crossing_at_an_offered_taxiway_is_kept_by_picking_it()
+    {
+        var putBack = ClearanceTrim.AsHoldShort(new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "04L", At: "C"));
+        Assert.True(ClearanceStepEntry.AtItemMatches("C", null, putBack));
+        Assert.True(ClearanceStepEntry.SameAsEntered(putBack,
+            ClearanceStepEntry.BuildForChange(ClearanceStepKind.HoldShort, Runway("04L"), "C", null, putBack, null)));
+    }
+
+    // Task 1's deferred minor: a blank At is no place, wherever a step's place is read (the sentence, the window's
+    // comparison and item match, the planner's runway pick), as Build already makes one.
+    [Fact]
+    public void A_blank_At_is_no_place_everywhere()
+    {
+        var hold = new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Runway, "27L", At: "  ");
+        var cross = new ClearanceStep(ClearanceStepKind.Cross, ClearanceTargetKind.Runway, "24L", At: " ");
+        Assert.Equal("Hold short of runway 27L", hold.Sentence());
+        Assert.Equal("Cross runway 24L", cross.Sentence());
+        Assert.True(ClearanceStepEntry.SameAsEntered(hold, ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"))));
+        Assert.True(ClearanceStepEntry.SameAsEntered(cross, ClearanceStepEntry.Build(ClearanceStepKind.Cross, Runway("24L"), ClearanceStepEntry.NoAtPlace)));
+        Assert.False(ClearanceStepEntry.AtItemMatches("  ", null, hold));
+        Assert.False(ClearanceStepEntry.PlaceIsHoldingPoint(hold, Array.Empty<string>(), new[] { "  " }));
+        Assert.Null(ClearanceStepEntry.OwnPlaceLabel(hold, "27L", placeOffered: false, placeIsHoldingPoint: false));
+        var plan = ClearancePlanner.Build(new[] { new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, "A"), hold },
+            hasDestination: true);
+        Assert.Null(plan.RunwayHoldPicks()![0].Value.At);
+    }
+
+    // Task 3: at Calculate the window writes the steps and the destination to the taxi_router log, so a report can be
+    // read from the logs: the destination type as listed, the destination when there is one, the steps as they read.
+    [Fact]
+    public void The_log_line_names_the_destination_and_the_steps_as_they_read()
+    {
+        var steps = new[]
+        {
+            new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, "5"),
+            new ClearanceStep(ClearanceStepKind.HoldShort, ClearanceTargetKind.Taxiway, "AK"),
+        };
+        Assert.Equal("Calculate: Progressive Taxi (no destination); steps: Via 5 | Hold short of taxiway AK",
+            TestCulture.Run("de-DE", () => ClearanceStepEntry.LogLine(steps, "Progressive Taxi (no destination)", null)));
+        Assert.Equal("Calculate: Runway, destination Runway 09; steps: Via A | Hold short of runway 27L at B",
+            ClearanceStepEntry.LogLine(new[]
+            {
+                new ClearanceStep(ClearanceStepKind.Via, ClearanceTargetKind.Taxiway, "A"),
+                ClearanceStepEntry.Build(ClearanceStepKind.HoldShort, Runway("27L"), "B"),
+            }, "Runway", "Runway 09"));
+        Assert.Equal("Calculate: Runway, destination Runway 09; steps: (none)",
+            ClearanceStepEntry.LogLine(Array.Empty<ClearanceStep>(), "Runway", "Runway 09"));
+        Assert.Equal("Calculate: Gate, stand or parking; steps: (none)",
+            ClearanceStepEntry.LogLine(null!, "Gate, stand or parking", "  "));
+    }
+
     [Fact]
     public void A_crossing_with_no_place_named_has_no_at()
     {
