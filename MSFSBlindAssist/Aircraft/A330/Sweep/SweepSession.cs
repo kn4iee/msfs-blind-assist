@@ -22,7 +22,7 @@ internal interface ISweepIo
     /// <summary>One calculator line, sent once.</summary>
     void Calc(string rpn);
 
-    /// <summary>Runs one write to the aircraft (a set, a calculator line, or a press's push, hold and release together)
+    /// <summary>Runs one write to the aircraft (a set, a calculator line, or a key's push, hold and release together)
     /// as a whole: a stop the owner asks for at once (a second Ctrl+C) waits until it has ended, so a push is never
     /// left without its release.</summary>
     void Uninterrupted(Action call);
@@ -334,7 +334,7 @@ internal sealed class SweepSession
 
     /// <summary>One position (or an opened guard, or one press of a push-button that toggles): read, plan with the app's
     /// decision, snapshot, send, settle, snapshot, write it again where planned, judge, record. Returns the row's verdict.
-    /// A toggle's press is the app's press by value toward <see cref="SweepStep.ExpectedRead"/>, sent only when the read
+    /// A toggle's press is the app's press (one set) toward <see cref="SweepStep.ExpectedRead"/>, sent only when the read
     /// differs, and dead when it did not flip the read.</summary>
     private string WritePosition(Control c, SweepStep s, bool repeat)
     {
@@ -616,8 +616,8 @@ internal sealed class SweepSession
 
     /// <summary>Sends a plan's calls by the app's routes: an input event by SetInputEvent; a press as the event's own
     /// <c>_Push</c>, then after its hold <c>_Release</c>, over the calculator (as <c>IniA330Definition.PushEvent</c>
-    /// writes them); a press by value as SetInputEvent of its press value, then after its hold of its release value (as
-    /// the panel's write sends it); a calculator line as it is. Never a write to a denied control.</summary>
+    /// writes them); a push-button that toggles as ONE SetInputEvent of its press value, nothing after it (as the panel's
+    /// write sends it: every set to its event is a press); a calculator line as it is. Never a write to a denied control.</summary>
     private Dispatched Dispatch(string key, A330WritePlan plan)
     {
         if (_denied.TryGetValue(key, out var why))
@@ -641,11 +641,6 @@ internal sealed class SweepSession
                         break;
                     case A330InputEventPressCall vp:
                         listed = _io.TrySetInputEvent(vp.Event, vp.Press);
-                        if (!listed) break;
-                        // the release always follows its press, whatever happens during the hold, so the event is left
-                        // released at 0, where a clean press leaves it
-                        try { _io.Sleep(vp.HoldMs); }
-                        finally { _io.TrySetInputEvent(vp.Event, vp.Release); }
                         break;
                     case A330PressCall p:
                         // the release always follows its push, whatever happens during the hold

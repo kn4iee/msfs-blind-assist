@@ -380,8 +380,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FTL_CTL_PRIM2": {
    "key": "A330_PRIM2",
@@ -404,8 +403,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FTL_CTL_PRIM3": {
    "key": "A330_PRIM3",
@@ -428,8 +426,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FLTCTL_SEC1": {
    "key": "A330_SEC1",
@@ -452,8 +449,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FTL_CTL_SEC2": {
    "key": "A330_SEC2",
@@ -476,8 +472,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_ENG1_L1": {
    "key": "A330_FUEL1L1",
@@ -500,8 +495,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_ENG1_L2": {
    "key": "A330_FUEL1L2",
@@ -524,8 +518,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_ENG1_LSTBY": {
    "key": "A330_FUEL1LSTBY",
@@ -548,8 +541,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_ENG2_R1": {
    "key": "A330_FUEL2R1",
@@ -572,8 +564,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_ENG2_R2": {
    "key": "A330_FUEL2R2",
@@ -596,8 +587,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_ENG2_RSTBY": {
    "key": "A330_FUEL2RSTBY",
@@ -620,8 +610,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_CTR_L": {
    "key": "A330_FUEL_CTR_L",
@@ -710,8 +699,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_MODE": {
    "key": "A330_FUEL_TRIM_MODE",
@@ -734,8 +722,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FUEL_TK_XFR_COVER": {
    "key": "A330_FUEL_TK_XFR_COVER",
@@ -781,8 +768,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_INR_TK_L_COVER": {
    "key": "A330_INR_TK_L_COVER",
@@ -828,8 +814,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_INR_TK_R_COVER": {
    "key": "A330_INR_TK_R_COVER",
@@ -875,8 +860,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_BAT1": {
    "key": "A330_BAT1",
@@ -993,8 +977,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_GEN2": {
    "key": "A330_GEN2",
@@ -1017,8 +1000,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_APU_GEN": {
    "key": "A330_APU_GEN",
@@ -1041,8 +1023,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_EXTA": {
    "key": "A330_EXT_A",
@@ -1115,8 +1096,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_AC_ESS_COVER": {
    "key": "A330_AC_ESS_COVER",
@@ -1162,8 +1142,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_GALLEY": {
    "key": "A330_GALLEY",
@@ -1186,8 +1165,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_COMMERCIAL": {
    "key": "A330_COMMERCIAL",
@@ -1210,8 +1188,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ELEC_IDG1_COVER": {
    "key": "A330_IDG1_COVER",
@@ -1329,8 +1306,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_GREEN_ENG2_COVER": {
    "key": "A330_HYD_GREEN_ENG2_COVER",
@@ -1376,8 +1352,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_BLUE_COVER": {
    "key": "A330_HYD_BLUE_COVER",
@@ -1423,8 +1398,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_YELLOW_COVER": {
    "key": "A330_HYD_YELLOW_COVER",
@@ -1470,8 +1444,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_GREEN_OFF": {
    "key": "A330_HYD_GREEN_ELEC_OFF",
@@ -1494,8 +1467,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_GREEN_ELEC_COVER": {
    "key": "A330_HYD_GREEN_ELEC_COVER",
@@ -1541,8 +1513,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_BLUE_OFF": {
    "key": "A330_HYD_BLUE_ELEC_OFF",
@@ -1565,8 +1536,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_BLUE_ELEC_COVER": {
    "key": "A330_HYD_BLUE_ELEC_COVER",
@@ -1612,8 +1582,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_YELLOW_OFF": {
    "key": "A330_HYD_YELLOW_ELEC_OFF",
@@ -1636,8 +1605,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_YELLOW_ELEC_COVER": {
    "key": "A330_HYD_YELLOW_ELEC_COVER",
@@ -1683,8 +1651,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HYD_RAT_MAN_COVER": {
    "key": "A330_RAT_COVER",
@@ -2097,8 +2064,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_APU_MASTER": {
    "key": "A330_APU_MASTER",
@@ -2168,8 +2134,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ENG2_BLEED": {
    "key": "A330_ENG2_BLEED",
@@ -2192,8 +2157,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_AIR_APU_BLEED": {
    "key": "A330_APU_BLEED",
@@ -2216,8 +2180,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_XBLEED": {
    "key": "A330_XBLEED",
@@ -2269,7 +2232,6 @@
     }
    ],
    "press": 1,
-   "release": 0,
    "lamps": [
     {
      "read": "INI_PACK1_FAULT",
@@ -2299,7 +2261,6 @@
     }
    ],
    "press": 1,
-   "release": 0,
    "lamps": [
     {
      "read": "INI_PACK2_FAULT",
@@ -2356,8 +2317,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_HOT_AIR2": {
    "key": "A330_HOT_AIR2",
@@ -2380,8 +2340,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_COCKPIT_TEMP": {
    "key": "A330_CKPT_TEMP",
@@ -2448,8 +2407,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_RAM_AIR_COVER": {
    "key": "A330_RAM_AIR_COVER",
@@ -2495,8 +2453,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_MODE_SEL": {
    "key": "A330_PRESS_MODE",
@@ -2605,8 +2562,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_VENT_EXTRACT": {
    "key": "A330_EXTRACT",
@@ -2629,8 +2585,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_GND_COOL": {
    "key": "A330_GND_COOL",
@@ -2675,8 +2630,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ENG1_ICE": {
    "key": "A330_ENG1_ANTI_ICE",
@@ -2699,8 +2653,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ENG2_ICE": {
    "key": "A330_ENG2_ANTI_ICE",
@@ -2723,8 +2676,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_PROBE_HEAT": {
    "key": "A330_PROBE_HEAT",
@@ -3357,8 +3309,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FADEC_ENG2_COVER": {
    "key": "A330_FADEC2_COVER",
@@ -3404,8 +3355,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_OXYGEN_CREW": {
    "key": "A330_CREW_OXY",
@@ -3428,8 +3378,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_CALL_ALL": {
    "key": "A330_CALL_ALL",
@@ -3626,8 +3575,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_CPT_LS": {
    "key": "A330_CPT_LS",
@@ -3650,8 +3598,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_CPT_MODE": {
    "key": "A330_CPT_ND_MODE",
@@ -3760,8 +3707,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_CPT_WPT": {
    "key": "A330_CPT_ND_WPT",
@@ -3784,8 +3730,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_CPT_VOR": {
    "key": "A330_CPT_ND_VOR",
@@ -3808,8 +3753,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_CPT_NDB": {
    "key": "A330_CPT_ND_NDB",
@@ -3832,8 +3776,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_CPT_ARPT": {
    "key": "A330_CPT_ND_ARPT",
@@ -3856,8 +3799,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_CPT_VOR1": {
    "key": "A330_CPT_ND_NAV1",
@@ -3936,8 +3878,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_CPT_BARO_TOGGLE": {
    "key": "A330_CPT_BARO_UNIT",
@@ -3989,8 +3930,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FO_LS": {
    "key": "A330_FO_LS",
@@ -4013,8 +3953,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_FO_MODE": {
    "key": "A330_FO_ND_MODE",
@@ -4123,8 +4062,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_FO_WPT": {
    "key": "A330_FO_ND_WPT",
@@ -4147,8 +4085,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_FO_VOR": {
    "key": "A330_FO_ND_VOR",
@@ -4171,8 +4108,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_FO_NDB": {
    "key": "A330_FO_ND_NDB",
@@ -4195,8 +4131,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_FO_ARPT": {
    "key": "A330_FO_ND_ARPT",
@@ -4219,8 +4154,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_EFIS_FO_VOR1": {
    "key": "A330_FO_ND_NAV1",
@@ -4299,8 +4233,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FO_BARO_TOGGLE": {
    "key": "A330_FO_BARO_UNIT",
@@ -4374,8 +4307,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "A330_BRAKE_SYSTEM": {
    "key": "A330_BRAKE_SYSTEM",
@@ -4426,8 +4358,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_GPWS_TERR": {
    "key": "A330_GPWS_TERR",
@@ -4450,8 +4381,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_GS_MODE": {
    "key": "A330_GPWS_GS",
@@ -4474,8 +4404,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_FLAP_MODE": {
    "key": "A330_GPWS_FLAP",
@@ -4498,8 +4427,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_LAND_RECOVERY": {
    "key": "A330_LAND_RECOVERY",
@@ -4522,8 +4450,7 @@
      "proven": false
     }
    ],
-   "press": 1,
-   "release": 0
+   "press": 1
   },
   "AIRLINER_ATT_HDG_SELECT": {
    "key": "A330_ATT_HDG",

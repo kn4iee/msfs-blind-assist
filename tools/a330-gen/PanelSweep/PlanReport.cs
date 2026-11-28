@@ -85,7 +85,7 @@ internal static class PlanReport
         int familyPresses = planned.Where(c => c.Family != null).Sum(c => c.Steps.Count(s => s.Kind == SweepStepKind.Press));
         int toggles = planned.Count(c => c.Steps.Any(s => s.Kind == SweepStepKind.TogglePress));
         w.WriteLine($"Steps: {Count(SweepStepKind.SetPosition)} positions, each written twice; {toggles} push-buttons that toggle, each pressed"
-            + $" and pressed back ({Count(SweepStepKind.TogglePress)} presses by value, never written twice); {Count(SweepStepKind.Press)} key presses"
+            + $" and pressed back ({Count(SweepStepKind.TogglePress)} presses, one input-event set each, never written twice); {Count(SweepStepKind.Press)} key presses"
             + $" ({familyPresses} of them keys of a family; +{Count(SweepStepKind.RestorePress)} to cycle back); {Count(SweepStepKind.OpenGuard)} guards opened;"
             + $" {Count(SweepStepKind.PressEcamPage)} ECAM page keys; {touched} put-backs from the journal ({toggles} of them by the read).");
         foreach (var u in units)

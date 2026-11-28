@@ -14,7 +14,6 @@ public class A330PanelSetTests
     private const string ToggleKey = "TEST_TOGGLE";
     private const string EngineKey = "TEST_ENGINE_MASTER";
     private const string PushToggleKey = "TEST_PUSH_TOGGLE";
-    private const string HeldPushToggleKey = "TEST_HELD_PUSH_TOGGLE";
 
     internal static A330ControlMap Map() => new()
     {
@@ -52,23 +51,12 @@ public class A330PanelSetTests
                     new A330ControlMap.Position { Value = 1, Input = 1, Label = "On" },
                 },
             },
-            // a push-button the aircraft toggles (measured 2026-11-27): pressed by value, set 1 then 0. Its positions'
-            // inputs are the opposite of the press on purpose: they must drive no write
+            // a push-button the aircraft toggles (measured 2026-11-27): pressed by one set of its press value. Its
+            // positions' inputs are the opposite of the press on purpose: they must drive no write
             new A330ControlMap.Control
             {
                 Key = PushToggleKey, Section = "S", Panel = "P", Label = "Test push toggle", Kind = "select",
-                Event = "AIRLINER_TEST_PUSH", Mode = "toggle", Read = "L:INI_TEST_PUSH", Press = 1, Release = 0,
-                Positions = new()
-                {
-                    new A330ControlMap.Position { Value = 1, Input = 0, Label = "On" },
-                    new A330ControlMap.Position { Value = 0, Input = 1, Label = "Off" },
-                },
-            },
-            new A330ControlMap.Control
-            {
-                Key = HeldPushToggleKey, Section = "S", Panel = "P", Label = "Test held push toggle", Kind = "select",
-                Event = "AIRLINER_TEST_HELD_PUSH", Mode = "toggle", Read = "L:INI_TEST_HELD_PUSH", Press = 1, Release = 0,
-                HoldMs = 400,
+                Event = "AIRLINER_TEST_PUSH", Mode = "toggle", Read = "L:INI_TEST_PUSH", Press = 1,
                 Positions = new()
                 {
                     new A330ControlMap.Position { Value = 1, Input = 0, Label = "On" },
@@ -457,10 +445,11 @@ public class A330PanelSetTests
     }
 
     [Fact]
-    public void A_toggle_push_button_is_pressed_by_value_when_its_read_differs()
+    public void A_toggle_push_button_is_pressed_by_one_set_when_its_read_differs()
     {
-        // the model the 2026-11-27 sweep fits (every SetInputEvent is a press except a change from 1 to 0): one clean
-        // press is set 1, the hold, set 0, whichever way the switch goes; the positions' own inputs (On 0, Off 1) are never sent
+        // every SetInputEvent to these events is a press, whatever the value (the model the 2026-11-27 sweep and its 23:05
+        // trial fit: set 1, a hold and set 0 left the read where it was): a press is ONE set of the press value, whichever
+        // way the switch goes, with no release after it; the positions' own inputs (On 0, Off 1) are never sent
         foreach (var (read, pick) in new[] { (0.0, 1.0), (1.0, 0.0) })
         {
             var io = new FakeIo { CanCalc = false };   // an input event needs no MobiFlight
@@ -468,7 +457,8 @@ public class A330PanelSetTests
             var def = new Def(io);
             var said = new Spoken();
             Assert.True(Pick(def, PushToggleKey, pick, said));
-            Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1", "set AIRLINER_TEST_PUSH 0" }, io.Sent);
+            Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1" }, io.Sent);
+            Assert.Equal(new[] { IniA330Definition.ReadBackDelayMs }, io.Delays);   // no hold: only the read-back waits
             Assert.Empty(said.Lines);
             Assert.Equal(new[] { PushToggleKey }, io.Requests);   // read back and resynced like any pick
         }
@@ -480,7 +470,7 @@ public class A330PanelSetTests
         Assert.Empty(unread.Sent);
         Assert.Equal(new[] { "Test push toggle unavailable: its position is not read yet." }, unreadSaid.Lines);
 
-        // an event the aircraft does not list: refused aloud, the row resynced, no release sent
+        // an event the aircraft does not list: refused aloud, the row resynced, nothing waited for
         var missing = new FakeIo { TrySetResult = false };
         missing.Cache[PushToggleKey] = 0;
         var missingSaid = new Spoken();
@@ -489,10 +479,11 @@ public class A330PanelSetTests
         Assert.Equal(new[] { PushToggleKey }, missing.Requests);
         Assert.Empty(missing.Delays);
 
-        // the planner: one input-event press, the map's press and release values, the default hold
+        // the planner: one input-event press of the map's press value
         var c = Map().Controls.Single(x => x.Key == PushToggleKey);
-        Assert.Equal(new A330InputEventPressCall("AIRLINER_TEST_PUSH", 1, 0, IniA330Definition.DefaultPushMs),
-            Assert.Single(A330Write.ToPosition(c, 0, 1).Calls));
+        Assert.True(A330Write.PressedByValue(c));
+        Assert.Equal(new A330InputEventPressCall("AIRLINER_TEST_PUSH", 1), Assert.Single(A330Write.ToPosition(c, 0, 1).Calls));
+        Assert.Equal(new A330InputEventPressCall("AIRLINER_TEST_PUSH", 1), Assert.Single(A330Write.ToPosition(c, 1, 0).Calls));
 
         // the First Officer's route for it: the input event, no calculator, refused while unread
         Assert.Equal<(bool, string?, bool, int)?>((false, "AIRLINER_TEST_PUSH", true, 0), new Def(new FakeIo()).FoWriteRoute(PushToggleKey));
@@ -512,54 +503,5 @@ public class A330PanelSetTests
             Assert.Empty(io.Requests);
             Assert.Empty(said.Lines);
         }
-    }
-
-    [Fact]
-    public async Task The_release_is_sent_after_the_hold()
-    {
-        var io = new FakeIo { Gate = new TaskCompletionSource() };
-        io.Cache[PushToggleKey] = 0;
-        io.Cache[HeldPushToggleKey] = 1;
-        var def = new Def(io);
-        var said = new Spoken();
-        Assert.True(Pick(def, PushToggleKey, 1, said));
-        Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1" }, io.Sent);   // the release waits for the hold
-        Assert.Equal(new[] { IniA330Definition.DefaultPushMs, IniA330Definition.ReadBackDelayMs }, io.Delays);
-
-        // a newer pick (another row's, with its own hold) does not cancel the first press's release
-        Assert.True(Pick(def, HeldPushToggleKey, 0, said));
-        Assert.Equal(new[] { IniA330Definition.DefaultPushMs, IniA330Definition.ReadBackDelayMs, 400, IniA330Definition.ReadBackDelayMs },
-            io.Delays);
-        await Release(io);
-        // both releases sent once, after both presses (the two holds end on one gate, in either order)
-        Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1", "set AIRLINER_TEST_HELD_PUSH 1" }, io.Sent.Take(2).ToArray());
-        Assert.Equal(new[] { "set AIRLINER_TEST_HELD_PUSH 0", "set AIRLINER_TEST_PUSH 0" },
-            io.Sent.Skip(2).OrderBy(s => s, StringComparer.Ordinal).ToArray());
-        Assert.Empty(said.Lines);
-    }
-
-    [Fact]
-    public async Task A_pick_while_its_press_is_held_presses_nothing_more()
-    {
-        // a second press inside the hold would be a set of 1 with the event at 1 (a press), and its release a set of 0
-        // with the event already at 0 (measured as a press on 9 of these buttons): up to three flips for two picks. So
-        // nothing more is sent; the first pick's read-back puts the row where the aircraft is
-        var io = new FakeIo { Gate = new TaskCompletionSource() };
-        io.Cache[PushToggleKey] = 0;
-        var def = new Def(io);
-        var said = new Spoken();
-        Assert.True(Pick(def, PushToggleKey, 1, said));
-        io.Cache[PushToggleKey] = 1;   // the aircraft has flipped it, the release not sent yet
-        Assert.True(Pick(def, PushToggleKey, 0, said));
-        Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1" }, io.Sent);
-        await Release(io);
-        Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1", "set AIRLINER_TEST_PUSH 0" }, io.Sent);
-        Assert.Equal(new[] { PushToggleKey }, io.Requests);   // the first pick's resync: the combo shows the real position
-        Assert.Empty(said.Lines);
-
-        // once released, the next pick presses again
-        Assert.True(Pick(def, PushToggleKey, 0, said));
-        Assert.Equal(new[] { "set AIRLINER_TEST_PUSH 1", "set AIRLINER_TEST_PUSH 0", "set AIRLINER_TEST_PUSH 1",
-            "set AIRLINER_TEST_PUSH 0" }, io.Sent);
     }
 }

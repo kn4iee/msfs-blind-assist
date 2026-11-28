@@ -58,7 +58,7 @@ internal static class SweepTsv
     {
         A330InputEventCall ie => $"set {ie.Event} = {Num(ie.Value)}",
         A330PressCall p => $"press {p.Event} ({p.HoldMs.ToString(CultureInfo.InvariantCulture)} ms)",
-        A330InputEventPressCall vp => $"press {vp.Event} by value (set {Num(vp.Press)}, {vp.HoldMs.ToString(CultureInfo.InvariantCulture)} ms, set {Num(vp.Release)})",
+        A330InputEventPressCall vp => $"press {vp.Event} (set {Num(vp.Press)})",
         A330CalcCall c => $"calc {c.Rpn}",
         _ => call.ToString() ?? "",
     };

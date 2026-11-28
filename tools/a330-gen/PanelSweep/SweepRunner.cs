@@ -206,8 +206,8 @@ internal static class SweepRunner
 
     /// <summary><c>--restore</c>: puts every journaled control back, last first (a switch before the guard over it), each
     /// by its own starting value, and lists any that did not hold. A push-button that toggles (by the map, whatever line
-    /// the journal gave it) is put back by its read: pressed once by value when the read differs from the journal's, never
-    /// by its input event's own value. A family of keys that share one state gets at most one
+    /// the journal gave it) is put back by its read: pressed once (one set of its press value) when the read differs from
+    /// the journal's, never by its input event's own value. A family of keys that share one state gets at most one
     /// press (the key the map names for its start); when that did not hold, or no key is known, the restore STOPS there
     /// and never presses through the family. Exit 0 all held, 5 some did not.</summary>
     public static int Restore(SimLink link, bool calc, IReadOnlyList<Control> controls, IReadOnlyDictionary<string, string> denied,

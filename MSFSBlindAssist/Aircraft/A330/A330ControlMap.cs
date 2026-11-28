@@ -88,9 +88,10 @@ internal sealed class A330ControlMap
         /// <summary>The read-back variable: an <c>INI_*</c> L:var name, or <c>A:NAME, unit</c>.</summary>
         [JsonPropertyName("read")] public string? Read { get; set; }
         [JsonPropertyName("positions")] public List<Position>? Positions { get; set; }
-        /// <summary>A button: the input value of the press (released back to <see cref="Release"/>).</summary>
+        /// <summary>A push-button the aircraft toggles (a <c>toggle</c>): the value of the ONE input-event set that is its
+        /// press. Nothing is sent after it: every set to these events is a press (A330Write.PressedByValue).</summary>
         [JsonPropertyName("press")] public double? Press { get; set; }
-        [JsonPropertyName("release")] public double? Release { get; set; }
+        /// <summary>A momentary key's hold between its <c>_Push</c> and its <c>_Release</c>.</summary>
         [JsonPropertyName("holdMs")] public int? HoldMs { get; set; }
         /// <summary>A continuous control's range (input values; the read-back shows the same scale).</summary>
         [JsonPropertyName("min")] public double? Min { get; set; }

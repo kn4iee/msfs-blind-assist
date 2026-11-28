@@ -259,7 +259,8 @@ class MapFieldTests(unittest.TestCase):
 
 
 # The push-buttons the live panel sweep of 2026-11-27 found toggling through the app's own route
-# (SetInputEvent by hash): writing the same input value twice flipped the read back.
+# (SetInputEvent by hash): writing the same input value twice flipped the read back. Its 23:05 trial found a
+# press of set 1, a hold and set 0 left the read where it was, so a press is ONE set of `press` (README.md).
 MEASURED_TOGGLES = [
     "A330_PRIM1", "A330_PRIM2", "A330_PRIM3", "A330_SEC1", "A330_SEC2",
     "A330_FUEL1L1", "A330_FUEL1L2", "A330_FUEL1LSTBY", "A330_FUEL2R1", "A330_FUEL2R2", "A330_FUEL2RSTBY",
@@ -289,15 +290,28 @@ class MeasuredToggleTests(unittest.TestCase):
             c = by[k]
             self.assertEqual("toggle", c["mode"], k)
             self.assertEqual(1, c.get("press"), k)
-            self.assertEqual(0, c.get("release"), k)
+            # a press is one set: no release value is sent after it (a second set is a second press)
+            self.assertNotIn("release", c, k)
             self.assertNotIn("rpn", c, k)
             # still a two-position selector read by its own variable: the combo and its names are unchanged
             self.assertEqual("select", c["kind"], k)
             self.assertTrue(c["read"].startswith("INI_"), k)
             self.assertEqual(2, len(c["positions"]), k)
-        # nothing else is pressed by value: the engine masters stay toggles by their Set's value
-        pressed = sorted(c["key"] for c in by.values() if "press" in c or "release" in c)
+        # nothing else is pressed by one set: the engine masters stay toggles by their Set's value
+        pressed = sorted(c["key"] for c in by.values() if "press" in c)
         self.assertEqual(sorted(MEASURED_TOGGLES), pressed)
+        self.assertEqual([], [c["key"] for c in by.values() if "release" in c])
+
+    def test_a_release_value_is_refused(self):
+        # set 1, a hold, set 0 was two presses on these buttons (the 23:05 trial): a release in the curation would
+        # bring that dead press back
+        gen = load_generator()
+        c = small_curation()
+        c["controls"]["AIRLINER_DEMO"].update({"mode": "toggle", "press": 1, "release": 0})
+        with self.assertRaisesRegex(gen.CurationError, "A330_DEMO.*release"):
+            gen.check_curation(c)
+        del c["controls"]["AIRLINER_DEMO"]["release"]
+        gen.check_curation(c)
 
 
 class HardeningTests(unittest.TestCase):

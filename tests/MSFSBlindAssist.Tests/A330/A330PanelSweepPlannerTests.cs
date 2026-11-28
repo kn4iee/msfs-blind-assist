@@ -46,7 +46,6 @@ public class A330PanelSweepPlannerTests
         var c = Select(key, P(1, 0, "On"), P(0, 1, "Off"));
         c.Mode = "toggle";
         c.Press = 1;
-        c.Release = 0;
         return c;
     }
 

@@ -24,8 +24,8 @@ public enum SweepStepKind
     ReturnToStart,
     /// <summary>Close the guard again; restored from the journal like <see cref="ReturnToStart"/>.</summary>
     CloseGuard,
-    /// <summary>One press of a push-button the aircraft toggles (a <c>toggle</c> with <c>press</c> and <c>release</c>),
-    /// by the app's own press by value; <see cref="SweepStep.ExpectedRead"/> is where its read should flip to.</summary>
+    /// <summary>One press of a push-button the aircraft toggles (a <c>toggle</c> with <c>press</c>), by the app's own
+    /// press, one set of its press value; <see cref="SweepStep.ExpectedRead"/> is where its read should flip to.</summary>
     TogglePress,
 }
 

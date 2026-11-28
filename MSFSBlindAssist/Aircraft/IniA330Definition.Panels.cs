@@ -273,11 +273,6 @@ public partial class IniA330Definition
     private bool SendPick(string key, SimVarDefinition varDef, double target, A330WritePlan plan, A330PanelIo io, ScreenReaderAnnouncer announcer)
     {
         if (plan.Outcome == A330WriteOutcome.AtPosition) return true;   // the control already reads it: nothing to send or check
-        // a push-button still held by an earlier press: a second press now would be a set of 1 with its event at 1 (a
-        // press, measured), and its release a set of 0 with the event already at 0, which was measured as a press on 9
-        // of these buttons: two picks could flip the switch three times. So nothing more is sent, and the earlier
-        // pick's read-back puts the row where the aircraft is
-        if (plan.Calls.Any(call => call is A330InputEventPressCall p && _heldPresses.Contains(p.Event))) return true;
         string? refusal = Dispatch(varDef, plan, io);
         if (refusal != null)
         {
@@ -293,10 +288,9 @@ public partial class IniA330Definition
         return true;
     }
 
-    /// <summary>The input events of the push-buttons pressed by value whose release is not sent yet; UI thread only.</summary>
-    private readonly HashSet<string> _heldPresses = new(StringComparer.Ordinal);
-
-    /// <summary>Sends a plan's calls through the write paths; the refusal to say when nothing could be sent (null: sent).</summary>
+    /// <summary>Sends a plan's calls through the write paths; the refusal to say when nothing could be sent (null: sent).
+    /// A push-button that toggles is pressed by ONE set of its press value: every set to its event is a press, so a
+    /// release would be a second one (the 2026-11-27 sweep's 23:05 trial).</summary>
     private string? Dispatch(SimVarDefinition varDef, A330WritePlan plan, A330PanelIo io)
     {
         if (plan.Outcome == A330WriteOutcome.Refused)
@@ -321,33 +315,9 @@ public partial class IniA330Definition
             {
                 case A330PressCall p: io.Press(p.Event, p.HoldMs); break;
                 case A330CalcCall c: io.Calc(c.Rpn); break;
-                case A330InputEventPressCall vp:
-                    _heldPresses.Add(vp.Event);
-                    _ = ReleaseAfterHoldAsync(vp, io);
-                    break;
             }
         }
         return null;
-    }
-
-    /// <summary>A press by value's release, after its hold. Always sent, whatever pick comes in meanwhile, so the event is
-    /// left released at 0, where a clean press leaves it. Awaited on the caller's context, the UI thread, as
-    /// <c>PressByValue</c>'s release is: the input-event hashes and the SimConnect handle belong to it.</summary>
-    private async Task ReleaseAfterHoldAsync(A330InputEventPressCall press, A330PanelIo io)
-    {
-        try
-        {
-            await io.Delay(press.HoldMs);
-            io.TrySetInput(press.Event, press.Release);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("A330", $"{press.Event}: the release after the press failed: {ex.Message}");
-        }
-        finally
-        {
-            _heldPresses.Remove(press.Event);
-        }
     }
 
     /// <summary>A key's press (a <c>button</c> control). A refused write says so and answers false; a sent one is

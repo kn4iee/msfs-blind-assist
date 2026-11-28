@@ -149,8 +149,8 @@ internal abstract record RestoreStep
 /// (<see cref="A330Write.Press"/>) until its state reads its start, at most <c>PressesToCycle - 1</c> times; a key with
 /// no count is a push-on/push-off key, so one press. A push-button the aircraft toggles (<see cref="A330Write.PressedByValue"/>,
 /// whatever kind of line the journal gave it, so an older journal's input-event line too) is put back by its READ: held
-/// when the read is its start, else pressed once by value through the app's own decision, and failed if that did not
-/// hold. Its input event's own value is never compared: it rests at 0 whatever the switch shows. Pure.
+/// when the read is its start, else pressed once (one set of its press value) through the app's own decision, and
+/// failed if that did not hold. Its input event's own value is never compared: it says nothing about the switch. Pure.
 /// </summary>
 internal static class JournalRestore
 {

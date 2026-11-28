@@ -25,11 +25,11 @@ internal sealed record A330InputEventCall(string Event, double Value) : A330Call
 /// <summary>A momentary press: the event's own <c>_Push</c>, then <c>_Release</c> after the hold (<c>PushEvent</c>).</summary>
 internal sealed record A330PressCall(string Event, int HoldMs) : A330Call;
 
-/// <summary>A press by value of a push-button the aircraft toggles: its input event set to <paramref name="Press"/>,
-/// then, after the hold, to <paramref name="Release"/> (<c>SetInputEvent</c> twice). The model the 2026-11-27 sweep
-/// fits (every set is a press except a change from 1 to 0; which part was measured on which keys is in
-/// tools/a330-gen/README.md): set 1 then 0 is one flip and leaves the event released at 0.</summary>
-internal sealed record A330InputEventPressCall(string Event, double Press, double Release, int HoldMs) : A330Call;
+/// <summary>A press of a push-button the aircraft toggles: ONE <c>SetInputEvent</c> of its input event to
+/// <paramref name="Press"/>, and nothing after it. The model the 2026-11-27 sweep and its 23:05 trial fit: every set to
+/// these events is a press (one flip), whatever the value, so a set of 1, a hold and a set of 0 was two presses and left
+/// the switch where it was (what was measured on which keys is in tools/a330-gen/README.md).</summary>
+internal sealed record A330InputEventPressCall(string Event, double Press) : A330Call;
 
 /// <summary>A calculator line, sent through the sequence-prefixed <c>Write</c>.</summary>
 internal sealed record A330CalcCall(string Rpn) : A330Call;
@@ -63,11 +63,12 @@ internal static class A330Write
 
     private static bool Known(double? v) => v is double d && double.IsFinite(d);
 
-    /// <summary>A push-button the aircraft toggles (measured 2026-11-27): a <c>toggle</c> with <c>press</c> and
-    /// <c>release</c>, an input event and no calculator line. It is pressed by value, and its state is its read alone:
-    /// its input event's own value says nothing (all 73 started at 0, whatever the switch showed).</summary>
+    /// <summary>A push-button the aircraft toggles (measured 2026-11-27): a <c>toggle</c> with <c>press</c>, an input
+    /// event and no calculator line. It is pressed by one set of its <c>press</c> value, and its state is its read
+    /// alone: its input event's own value says nothing (all 73 started at 0, whatever the switch showed). The app's
+    /// pick, the First Officer's route and the panel sweep all take this one definition.</summary>
     public static bool PressedByValue(A330ControlMap.Control c) =>
-        c is { Mode: "toggle", Press: not null, Release: not null } && string.IsNullOrWhiteSpace(c.Rpn) && !string.IsNullOrEmpty(c.Event);
+        c is { Mode: "toggle", Press: not null } && string.IsNullOrWhiteSpace(c.Rpn) && !string.IsNullOrEmpty(c.Event);
 
     /// <summary>The plan for picking <paramref name="target"/> (a position's read value) on a map
     /// selector, from the cached reading <paramref name="current"/> (null or not finite: unread).</summary>
@@ -84,10 +85,10 @@ internal static class A330Write
                 // that Set toggles or sets by value); a press-flag rpn carries none
                 if (!string.IsNullOrWhiteSpace(c.Rpn)) return A330WritePlan.Of(new A330CalcCall(c.Rpn.Replace("{value}", Fixed(target))));
                 if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
-                // a push-button the aircraft toggles (measured 2026-11-27): one press by value through its input
-                // event, whichever way it goes; its positions' inputs drive no write
+                // a push-button the aircraft toggles (measured 2026-11-27): one press, ONE set of its press value through
+                // its input event, whichever way it goes; its positions' inputs drive no write
                 if (PressedByValue(c))
-                    return A330WritePlan.Of(new A330InputEventPressCall(c.Event, c.Press!.Value, c.Release!.Value, c.HoldMs ?? IniA330Definition.DefaultPushMs));
+                    return A330WritePlan.Of(new A330InputEventPressCall(c.Event, c.Press!.Value));
                 return A330WritePlan.Of(new A330PressCall(c.Event, c.HoldMs ?? IniA330Definition.DefaultPushMs));
             default:
                 if (string.IsNullOrEmpty(c.Event)) return A330WritePlan.Refused;
