@@ -37,12 +37,13 @@ public class A330PanelWordsTests
             Assert.Equal(fenix[0], vars[key].ValueDescriptions[0]);
             Assert.Equal(fenix[1], vars[key].ValueDescriptions[1]);
         }
-        // and said: the generated status row of the master warning lamp, a change after the quiet start
+        // and said: the generated status row of the master warning lamp, a change after the quiet start, as
+        // "<the row's name>: <the Fenix's word>" (the name is the generator's, so it is taken from the row)
         var said = new A330PanelSetTests.Spoken();
         def.ProcessSimVarUpdate("A330_MASTER_WARN_LT", 0, said);
         clock.Now += IniA330Definition.StartGraceMs;
         def.ProcessSimVarUpdate("A330_MASTER_WARN_LT", 1, said);
-        Assert.Equal(new[] { "Master warning: On" }, said.Lines);
+        Assert.Equal(new[] { $"{vars["A330_MASTER_WARN_LT"].DisplayName}: {fenix[1]}" }, said.Lines);
     }
 
     [Fact]
@@ -109,7 +110,8 @@ public class A330PanelWordsTests
             Assert.True(def.HandleUIVariableSet(key, 1, def.GetVariables()[key], new SimConnectManager(IntPtr.Zero), said));
             Assert.Empty(said.Lines);
             A330PanelSetTests.Release(io, ui);
-            Assert.Equal(new[] { "On" }, said.Lines);
+            // the lamp row's own word for 1, bare (the A32NX's button read-back form); the word is the generator's
+            Assert.Equal(new[] { def.GetVariables()[row].ValueDescriptions[1] }, said.Lines);
             Assert.Equal(new[] { row }, io.FreshKeys);
         }
     }
@@ -119,7 +121,7 @@ public class A330PanelWordsTests
     [InlineData("sv-SE")]
     public void The_words_do_not_depend_on_the_culture(string culture)
     {
-        var (said, words) = TestCulture.Run(culture, () =>
+        var (said, words, name) = TestCulture.Run(culture, () =>
         {
             var (def, clock) = NewDef();
             var s = new A330PanelSetTests.Spoken();
@@ -127,9 +129,10 @@ public class A330PanelWordsTests
             clock.Now += IniA330Definition.StartGraceMs;
             def.ProcessSimVarUpdate("A330_MASTER_WARN_LT", 1, s);
             var v = def.GetVariables();
-            return (s.Lines, string.Join("|", v["A330_PARKBRK"].ValueDescriptions.Values.Concat(v[A330SharedKeys.Autobrake].ValueDescriptions.Values)));
+            return (s.Lines, string.Join("|", v["A330_PARKBRK"].ValueDescriptions.Values.Concat(v[A330SharedKeys.Autobrake].ValueDescriptions.Values)),
+                v["A330_MASTER_WARN_LT"].DisplayName);
         });
         Assert.Equal("Off|On|Off|LO|MED|MAX", words);
-        Assert.Equal(new[] { "Master warning: On" }, said);
+        Assert.Equal(new[] { $"{name}: {FenixOffOn()[1]}" }, said);
     }
 }

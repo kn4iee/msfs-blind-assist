@@ -76,11 +76,30 @@ class MapFromCurationTests(unittest.TestCase):
 class CatalogueTests(unittest.TestCase):
     CATALOGUE = os.path.join(HERE, "data", "input_events.tsv")
 
-    @unittest.skipUnless(os.path.exists(CATALOGUE), "data/input_events.tsv not captured yet (plan 04 Task 1 Step 2)")
     def test_every_catalogued_event_is_a_control_or_left_out_with_a_reason(self):
         gen = load_generator()
         _, names = gen.load_catalogue(self.CATALOGUE)
         gen.check_catalogue(gen.load_curation(), names)
+
+    def test_a_missing_catalogue_is_an_error(self):
+        import tempfile
+        gen = load_generator()
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaisesRegex(gen.CurationError, "input_events.tsv"):
+                gen.load_catalogue(os.path.join(d, "input_events.tsv"))
+
+    def test_the_map_is_never_generated_without_the_catalogue_check(self):
+        # the catalogue is committed: a missing one stops the generator before it writes anything
+        import tempfile
+        gen = load_generator()
+        with tempfile.TemporaryDirectory() as d:
+            gen.CATALOGUE = os.path.join(d, "input_events.tsv")
+            gen.OUT = os.path.join(d, "a330_control_map.json")
+            gen.UNPROVEN = os.path.join(d, "unproven.txt")
+            with self.assertRaises(gen.CurationError):
+                gen.main()
+            self.assertFalse(os.path.exists(gen.OUT))
+            self.assertFalse(os.path.exists(gen.UNPROVEN))
 
     def test_an_unaccounted_event_is_refused_naming_it(self):
         gen = load_generator()

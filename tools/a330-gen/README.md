@@ -13,9 +13,10 @@ Python 3, standard library only. Every path resolves from the file's own locatio
 
 - `curation.json`: every control, in the map's order, and everything the checks need.
 - `keys.txt`: every key the map has ever had, one a line. A key never disappears (see below).
-- `data/input_events.tsv`: the simulator's input-event catalogue (not captured yet: plan 04 Task 1
+- `data/input_events.tsv`: the simulator's input-event catalogue (captured 2026-11-27, plan 04 Task 1
   Step 2). First line: the capture's date and the simulator's version. Then one `name<TAB>hash` line
-  per event. While it is absent the catalogue check is skipped (the test says so).
+  per event. It is committed: when it is missing the generator stops with an error before writing
+  anything.
 - `unproven.txt`: GENERATED on every run, never hand-edited: one line per offered position whose
   `proven` is false, `key<TAB>value<TAB>label`, sorted by key then value, under a `#` header. A test
   checks that the committed file equals what the curation implies.
@@ -67,7 +68,7 @@ Python 3, standard library only. Every path resolves from the file's own locatio
 
 ## Checks (a failure names the offending event or key)
 
-- Catalogue (when `data/input_events.tsv` exists): every event in it is a control, in `left_out` or
+- Catalogue (`data/input_events.tsv`, which must exist): every event in it is a control, in `left_out` or
   in `not_yet_offered`; no event is both a control and left out (or in `not_yet_offered`); a control
   or left-out event the catalogue lacks is refused; every `left_out` entry has a reason.
 - Keys: a key in `keys.txt` that no control carries must be in `retired_keys`.
@@ -80,8 +81,9 @@ Python 3, standard library only. Every path resolves from the file's own locatio
 ## Adding a control
 
 Add its entry to `controls` at its place in the map's order, with a `name_overrides` row (and a
-`position_overrides` row per position), add its key to `keys.txt`, regenerate, and run the tests. If
-the catalogue is present, the event must be in it.
+`position_overrides` row per position), add its key to `keys.txt`, regenerate, and run the tests. The
+event must be in the catalogue. `keys.txt`'s guard and the 73 toggles' press also have C# tests
+(`A330ControlMapTests`), since CI runs the C# suite and not these Python tests.
 
 ## Measurement history
 

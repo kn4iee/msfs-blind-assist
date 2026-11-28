@@ -73,7 +73,11 @@ def load_keys(path=KEYS):
 
 def load_catalogue(path=CATALOGUE):
     """The simulator's input-event catalogue: a first line with the date and the simulator's version,
-    then `name<TAB>hash` lines. Returns (header, [names])."""
+    then `name<TAB>hash` lines. Returns (header, [names]). The catalogue is committed, so a missing one
+    is an error: the map is never generated without its check."""
+    if not os.path.exists(path):
+        raise CurationError(f"{path} is missing: the input-event catalogue is committed, and the map is never "
+                            f"generated without checking it")
     with open(path, encoding="utf-8") as f:
         lines = [line.rstrip("\r\n") for line in f]
     if not lines or not lines[0].strip():
@@ -234,8 +238,7 @@ def main():
     curation = load_curation()
     check_curation(curation)
     check_keys(curation, load_keys())
-    if os.path.exists(CATALOGUE):
-        check_catalogue(curation, load_catalogue()[1])
+    check_catalogue(curation, load_catalogue(CATALOGUE)[1])
     doc = build_doc(curation)
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(doc, f, indent=1, ensure_ascii=False)

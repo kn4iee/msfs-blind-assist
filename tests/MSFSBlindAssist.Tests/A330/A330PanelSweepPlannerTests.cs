@@ -274,4 +274,60 @@ public class A330PanelSweepPlannerTests
         throw new InvalidOperationException($"MSFSBlindAssist.sln was not found above {AppContext.BaseDirectory}");
     }
 
+    [Fact]
+    public void The_dry_run_of_the_embedded_map_plans_every_guarded_switch_and_both_families()
+    {
+        // The planner finds a guard's Open and Closed positions, a family key's value and an ECAM page key by the map's
+        // labels. A label renamed (the aircraft's own names, Task 2 Step 2 and Task 3) would skip them all without a
+        // word, so the dry run's coverage is pinned here, by key and count. Starts as the dry run assumes them: each
+        // control at its first position, a continuous control at its minimum, a family at its first key's value.
+        var map = A330ControlMap.Embedded.Controls;
+        var denied = DenyList.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "tools", "a330-gen", "PanelSweep", "denylist.txt")));
+        var starts = map.ToDictionary(c => c.Key, c => c.Kind == "continuous" ? c.Min : c.Positions is { Count: > 0 } ps ? ps[0].Value : (double?)null);
+        var families = KeyFamilies.Find(map, denied);
+        foreach (var f in families)
+            if (f.KnownValues.TryGetValue(f.Members[0], out double first))
+                foreach (string m in f.Members) starts[m] = first;
+        var pageKeys = SweepSession.EcamPageKeys(map);
+        var plan = SweepPlanner.Plan(map, starts, denied, pageKeys);
+
+        // every one of the 27 guarded switches is planned with its guard opened and closed, or denied (its own or its guard's)
+        var guarded = map.Where(c => c.Guard != null).ToList();
+        Assert.Equal(27, guarded.Count);
+        var opened = new List<string>();
+        foreach (var c in guarded)
+        {
+            var cp = For(plan, c.Key);
+            if (!cp.IsPlanned)
+            {
+                Assert.True(cp.SkipReason!.StartsWith("denied", StringComparison.Ordinal) || cp.SkipReason.StartsWith("its guard", StringComparison.Ordinal),
+                    $"{c.Key}: {cp.SkipReason}");
+                continue;
+            }
+            Assert.Equal(SweepStepKind.OpenGuard, cp.Steps[0].Kind);
+            Assert.Equal(c.Guard, cp.Steps[0].ControlKey);
+            Assert.Equal(SweepStepKind.CloseGuard, cp.Steps[^1].Kind);
+            opened.Add(c.Key);
+        }
+        Assert.Equal(14, opened.Count);
+
+        // both families, each planned as one unit, the value of every key known but ECAM ALL's (it shows no single page)
+        Assert.Equal(new[] { "INI_ECAM_ACTIVE_PAGE", "INI_SELECTED_RADIO_CPT" }, families.Select(f => f.Key).ToArray());
+        var ecam = families[0];
+        Assert.Equal(13, ecam.Members.Count);
+        Assert.Equal(ecam.Members.Where(m => m != "A330_ECAM_ALL"), ecam.Members.Where(ecam.KnownValues.ContainsKey));
+        var radio = families[1];
+        Assert.Equal(5, radio.Members.Count);
+        Assert.Equal(radio.Members, radio.Members.Where(radio.KnownValues.ContainsKey));
+        foreach (var f in families)
+        {
+            var unit = For(plan, f.Key);
+            Assert.True(unit.IsPlanned, unit.SkipReason);
+            Assert.Equal(f.Members.Count, unit.Steps.Count(s => s.Kind == SweepStepKind.Press));
+        }
+
+        // every ECAM page key is found by its page's name, for a proof on a lower ECAM page
+        Assert.Equal(13, pageKeys.Count);
+        Assert.Equal("A330_ECAM_FUEL", pageKeys["FUEL"]);
+    }
 }
