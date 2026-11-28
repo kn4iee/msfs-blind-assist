@@ -26,8 +26,9 @@ internal sealed record A330InputEventCall(string Event, double Value) : A330Call
 internal sealed record A330PressCall(string Event, int HoldMs) : A330Call;
 
 /// <summary>A press by value of a push-button the aircraft toggles: its input event set to <paramref name="Press"/>,
-/// then, after the hold, to <paramref name="Release"/> (<c>SetInputEvent</c> twice). Measured 2026-11-27: every set is a
-/// press except a change from 1 to 0, so set 1 then 0 is one flip and leaves the event at 0.</summary>
+/// then, after the hold, to <paramref name="Release"/> (<c>SetInputEvent</c> twice). The model the 2026-11-27 sweep
+/// fits (every set is a press except a change from 1 to 0; which part was measured on which keys is in
+/// tools/a330-gen/README.md): set 1 then 0 is one flip and leaves the event released at 0.</summary>
 internal sealed record A330InputEventPressCall(string Event, double Press, double Release, int HoldMs) : A330Call;
 
 /// <summary>A calculator line, sent through the sequence-prefixed <c>Write</c>.</summary>
@@ -64,7 +65,7 @@ internal static class A330Write
 
     /// <summary>A push-button the aircraft toggles (measured 2026-11-27): a <c>toggle</c> with <c>press</c> and
     /// <c>release</c>, an input event and no calculator line. It is pressed by value, and its state is its read alone:
-    /// its input event's own value rests at 0 whatever the switch shows.</summary>
+    /// its input event's own value says nothing (all 73 started at 0, whatever the switch showed).</summary>
     public static bool PressedByValue(A330ControlMap.Control c) =>
         c is { Mode: "toggle", Press: not null, Release: not null } && string.IsNullOrWhiteSpace(c.Rpn) && !string.IsNullOrEmpty(c.Event);
 

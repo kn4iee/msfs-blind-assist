@@ -127,12 +127,19 @@ Measured since:
   sweep through the app's own route (SimConnect SetInputEvent by hash): 73 push-buttons toggle. Writing
   the same input value twice flipped the read back. Every one started with its input event's own value
   at 0, whatever the switch showed. Two patterns:
-  - 64 of them: SetInputEvent(1) flipped the read (in about 100 ms), SetInputEvent(1) again flipped it
-    back, and SetInputEvent(0) with the event at 1 changed nothing.
+  - 64 of them: SetInputEvent(1) with the event at 0 flipped the read (in about 100 ms), and
+    SetInputEvent(1) again, with the event at 1, flipped it back. The put-back then sent SetInputEvent(0)
+    twice and the read held at its start: the first, with the event at 1, changed nothing. Whether the
+    second found the event already at 0 is not known, so a set of 0 with the event at 0 is not measured
+    on these 64.
   - 9 of them (the six engine-feed fuel pumps, crew oxygen and both flight directors): SetInputEvent(0)
-    with the event at 0 flipped the read, and again flipped it back.
+    with the event at 0 flipped the read, and again flipped it back. Nothing else was sent to them, so a
+    set of 1 from 0, and of 0 from 1, is not measured on these 9.
 
-  So every SetInputEvent is a press, except a change from 1 to 0, which is a release. A clean press is
-  set 1, the hold, set 0: one flip, and the event is back at 0. These controls are now
+  The model that fits both: every SetInputEvent is a press except a change from 1 to 0, which is a
+  release. Each key's measured part is above; the rest is the model. A press is set 1, the hold, set 0.
+  On the 64 its two halves were measured, separately (set 1 from 0 flipped, set 0 from 1 changed
+  nothing); on the 9 it is the model's. These controls are now
   `mode: toggle` with `press: 1, release: 0`. Their `read` and their positions' value and name pairing
-  are unchanged; their positions' `input` values no longer drive a write.
+  are unchanged; their positions' `input` values no longer drive a write. The panel sweep's next run
+  presses each of them once and back, which measures the press on the 9.

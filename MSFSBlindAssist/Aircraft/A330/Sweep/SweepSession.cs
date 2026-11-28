@@ -41,6 +41,10 @@ internal interface ISweepIo
     void Sleep(int ms);
 }
 
+/// <summary>What <c>--restore</c> did: how many entries it tried, what it could not put back (one line each, in plain
+/// words), and the entry it stopped at (null when it went to the end or was cancelled).</summary>
+internal sealed record RestoreRun(int Tried, IReadOnlyList<string> NotPutBack, string? StoppedAt);
+
 /// <summary>Where the session's output goes: each row, each journal line (written as it comes, before any write),
 /// and a short line of progress.</summary>
 internal sealed record SweepSinks(Action<SweepRow> Row, Action<string> Journal, Action<string> Say);
@@ -445,6 +449,54 @@ internal sealed class SweepSession
         return verdict;
     }
 
+    /// <summary>
+    /// <c>--restore</c>: every journal entry put back, last first (a switch before the guard over it), through
+    /// <see cref="Restore(JournalEntry)"/>, with a line of progress each. A denied entry is never written (listed for
+    /// putting back by hand). A family of keys, or a push-button that toggles, that did not come back STOPS the restore
+    /// there: nothing more is written, and the owner puts it back by hand and runs <c>--restore</c> again. Any other
+    /// entry that did not hold is listed and the restore goes on. <paramref name="cancelled"/> (Ctrl+C) stops before
+    /// the next entry; an exception <paramref name="isLinkFault"/> accepts is that entry not put back, any other is thrown.
+    /// </summary>
+    public RestoreRun RestoreJournal(IReadOnlyList<JournalEntry> entries, Func<string?> cancelled, Func<Exception, bool> isLinkFault)
+    {
+        var failed = new List<string>();
+        int tried = 0;
+        string? stoppedAt = null;
+        foreach (var e in JournalRestore.RestoreOrder(entries))
+        {
+            // Ctrl+C: the entry in progress was finished; stop before the next
+            if (cancelled() is string stop) { _out.Say($"{stop}: the rest is not tried."); break; }
+            tried++;
+            if (_denied.ContainsKey(e.Key)) { failed.Add($"{e.Key}: denied, never written; put it back by hand"); continue; }
+            string label = LabelOf(e.Key);
+            bool held;
+            try { held = Restore(e); }
+            catch (Exception ex) when (isLinkFault(ex)) { held = false; _out.Say($"  {e.Key}: {ex.Message}"); }
+            _out.Say($"{e.Key} ({label}): {(held ? "back at its start" : "NOT put back")}");
+            if (held) continue;
+            if (e.Kind == JournalKind.Family && _familyByKey.TryGetValue(e.Key, out var f) && e.ReadValue is double start)
+            {
+                failed.Add($"{f.Label} ({e.Key}): set the {f.Noun} back to {f.NameOf(start)} by hand, pressing the key for {f.NameOf(start)} once in the cockpit.");
+                _out.Say($"Stopped at the {f.Label}: nothing more is pressed. Put it back by hand, then run --restore again for the rest.");
+                stoppedAt = e.Key;
+                break;
+            }
+            // a push-button that toggles was pressed once at most and did not come back: pressing on could flip it the
+            // wrong way, so nothing more is written, as at a family
+            if (e.Kind is JournalKind.InputEvent or JournalKind.Toggle && _byKey.TryGetValue(e.Key, out var t) && A330Write.PressedByValue(t))
+            {
+                string at = PositionLabel(t, e.ReadValue).Trim() is { Length: > 0 } name ? name : SweepTsv.Num(e.ReadValue);
+                failed.Add($"{e.Key} ({label}): put back by its read and it did not come back. Set it back to {at} by hand, "
+                    + $"pressing it once in the cockpit if it does not show {at}, then run --restore again for the rest.");
+                _out.Say($"Stopped at {e.Key} ({label}): nothing more is written. Put it back by hand, then run --restore again for the rest.");
+                stoppedAt = e.Key;
+                break;
+            }
+            failed.Add($"{e.Key} ({label})");
+        }
+        return new RestoreRun(tried, failed, stoppedAt);
+    }
+
     /// <summary>Puts one journaled control back and reads it back; false when it did not hold.</summary>
     public bool Restore(string key)
     {
@@ -590,8 +642,8 @@ internal sealed class SweepSession
                     case A330InputEventPressCall vp:
                         listed = _io.TrySetInputEvent(vp.Event, vp.Press);
                         if (!listed) break;
-                        // the release always follows its press, whatever happens during the hold: a press left at 1 would
-                        // make the next set of 1 a second press
+                        // the release always follows its press, whatever happens during the hold, so the event is left
+                        // released at 0, where a clean press leaves it
                         try { _io.Sleep(vp.HoldMs); }
                         finally { _io.TrySetInputEvent(vp.Event, vp.Release); }
                         break;

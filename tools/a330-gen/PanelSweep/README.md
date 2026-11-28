@@ -57,7 +57,8 @@ A330PanelSweep.exe --restore journal-2026-12-01-1430.tsv
 - `--out DIR`: where the files go (default: the current folder).
 - `--restore JOURNAL`: puts every control of a journal back, last first (a switch before the guard over it),
   each by its own starting value, reads each back, and lists any that did not hold. A push-button that toggles is
-  put back by its read instead (below). It writes `restore-<date>.tsv`.
+  put back by its read instead, and the restore stops at one that did not come back, as it does at a family of
+  keys (both below). It writes `restore-<date>.tsv`.
 
 ### Conditions for the live run (the owner runs it)
 
@@ -123,24 +124,34 @@ Ctrl+C finishes the control in progress and stops; a second one stops after the 
 
 Measured by this sweep on 2026-11-27 (MSFS 2024 1.9.24.0, on the ground, through the app's own route:
 SetInputEvent by hash): 73 push-buttons toggle. The packs, the bleeds, the generators, the hydraulic pumps, the
-fuel pumps, the PRIMs and SECs, the flight directors and the EFIS keys are among them. The rule that fits both
-patterns seen: **every SetInputEvent is a press, except a change of the event's value from 1 to 0, which is a
-release.** So writing 1 flips the switch, writing 1 again flips it back, and writing 0 with the event at 1 does
-nothing. On 9 of them the first write was 0 with the event at 0, and that flipped too. A clean press is set 1, the
-hold, set 0: one flip, and the event is back at 0. The map now has these as `mode: toggle` with `press: 1,
-release: 0`, and the app and this tool press them that way, only when the read differs from the pick.
+fuel pumps, the PRIMs and SECs, the flight directors and the EFIS keys are among them. What was measured, by key:
 
-**The trap:** a push-button's input event's own value (`B:<EVENT>`) says nothing about its state. It rests at 0
-whatever the switch shows, so it always matches the journal's. A put-back that writes that value back is no
-remedy either: a set of 0 with the event at 0 is itself a press. On 2026-11-27 the `--restore` of that day's
+- On 64 of them: writing 1 with the event at 0 flipped the switch, and writing 1 again flipped it back. The
+  put-back then wrote 0 twice and the switch held: the first 0, with the event at 1, changed nothing. Whether the
+  second found the event at 0 is not known, so writing 0 with the event at 0 is not measured on these.
+- On the other 9 (the six engine-feed fuel pumps, crew oxygen and both flight directors): writing 0 with the event
+  at 0 flipped the switch, and again flipped it back. Nothing else was written to them, so writing 1 from 0, and 0
+  from 1, is not measured on these.
+
+The model that fits both: **every SetInputEvent is a press, except a change of the event's value from 1 to 0,
+which is a release.** It is a model: each key's measured part is above. A press is set 1, the hold, set 0: on the 64
+its two halves were measured; on the 9 it is the model's, and this tool's next run measures it (each button is
+pressed and pressed back). The map now has these as `mode: toggle` with `press: 1, release: 0`, and the app and
+this tool press them that way, only when the read differs from the pick.
+
+**The trap:** a push-button's input event's own value (`B:<EVENT>`) says nothing about its state. All 73 started
+at 0 whatever the switch showed, so it matches the journal's whatever the switch does. Writing that value back is
+no remedy either: on the 9, writing 0 with the event at 0 was measured as a press. On 2026-11-27 the `--restore` of that day's
 journal found all 165 entries back at their start and sent nothing. Afterwards `A330_ENG1_BLEED`, `A330_PACK2`
 and `A330_GPWS_FLAP` read off where the journal says they started on. The tool had sent them nothing, and the
 cause is not known.
 
 **What the tool does now:** a push-button that toggles has a `toggle` line in the journal with its read and that
 read's value. Its event's own value is kept for the record only. Both the sweep's put-back and `--restore`
-compare the READ with the journal's read. When they differ, the button is pressed once by value, its read is
-waited for, and the sweep (or `--restore`) stops if it did not come back. It is never pressed twice. The rule
+compare the READ with the journal's read. When they differ, the button is pressed once by value and its read is
+waited for. If it did not come back, nothing more is written: the sweep stops, and `--restore` stops there too and
+names it. Put that one back by hand (press it once in the cockpit if it does not show its start), then run
+`--restore` again for the rest. It is never pressed twice. The rule
 follows the map, not the journal line, so an older journal's `input-event` line for one of these buttons is put
 back the same way: `--restore` of the 2026-11-27 journal would now press `A330_ENG1_BLEED`, `A330_PACK2` and
 `A330_GPWS_FLAP` once each, if they still read off.

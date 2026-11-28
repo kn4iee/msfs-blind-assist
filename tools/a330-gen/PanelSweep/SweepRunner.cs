@@ -217,34 +217,13 @@ internal static class SweepRunner
         tsv.WriteLine(SweepTsv.Header);
         var session = new SweepSession(controls, denied, new LinkIo(link, calc),
             new SweepSinks(row => tsv.WriteLine(SweepTsv.Format(row)), _ => { }, w.WriteLine));
-        var families = KeyFamilies.Find(controls, denied).ToDictionary(f => f.Key, StringComparer.Ordinal);
-        var labels = controls.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First().Label, StringComparer.Ordinal);
-        var failed = new List<string>();
-        int tried = 0;
-        foreach (var e in JournalRestore.RestoreOrder(entries))
-        {
-            // Ctrl+C: the entry in progress was finished; stop before the next
-            if (cancelled() is string stop) { w.WriteLine($"{stop}: the rest is not tried."); break; }
-            tried++;
-            if (denied.ContainsKey(e.Key)) { failed.Add($"{e.Key}: denied, never written; put it back by hand"); continue; }
-            string label = labels.GetValueOrDefault(e.Key) ?? (families.TryGetValue(e.Key, out var fam) ? fam.Label : "");
-            bool held;
-            try { held = session.Restore(e); }
-            catch (SimLinkException ex) { held = false; w.WriteLine($"  {e.Key}: {ex.Message}"); }
-            w.WriteLine($"{e.Key} ({label}): {(held ? "back at its start" : "NOT put back")}");
-            if (held) continue;
-            if (e.Kind == JournalKind.Family && families.TryGetValue(e.Key, out var f) && e.ReadValue is double start)
-            {
-                failed.Add($"{f.Label} ({e.Key}): set the {f.Noun} back to {f.NameOf(start)} by hand, pressing the key for {f.NameOf(start)} once in the cockpit.");
-                w.WriteLine($"Stopped at the {f.Label}: nothing more is pressed. Put it back by hand, then run --restore again for the rest.");
-                break;
-            }
-            failed.Add($"{e.Key} ({label})");
-        }
+        // the loop and its stops are the core's (SweepSession.RestoreJournal), pinned by the runner tests
+        var run = session.RestoreJournal(entries, cancelled, ex => ex is SimLinkException);
         w.WriteLine();
-        w.WriteLine($"Restore: {tried - failed.Count} of {entries.Count} back at their start" + (tried < entries.Count ? $", {entries.Count - tried} not tried." : "."));
-        foreach (string f in failed) w.WriteLine("  NOT PUT BACK: " + f);
+        w.WriteLine($"Restore: {run.Tried - run.NotPutBack.Count} of {entries.Count} back at their start"
+            + (run.Tried < entries.Count ? $", {entries.Count - run.Tried} not tried." : "."));
+        foreach (string f in run.NotPutBack) w.WriteLine("  NOT PUT BACK: " + f);
         w.WriteLine($"Results: {tsv.Path}");
-        return failed.Count > 0 ? 5 : 0;
+        return run.NotPutBack.Count > 0 ? 5 : 0;
     }
 }

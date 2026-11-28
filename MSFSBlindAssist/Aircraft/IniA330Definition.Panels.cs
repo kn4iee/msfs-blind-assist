@@ -274,8 +274,9 @@ public partial class IniA330Definition
     {
         if (plan.Outcome == A330WriteOutcome.AtPosition) return true;   // the control already reads it: nothing to send or check
         // a push-button still held by an earlier press: a second press now would be a set of 1 with its event at 1 (a
-        // press) and its release a set of 0 with the event already at 0 (a press too), so nothing more is sent and the
-        // earlier pick's read-back puts the row where the aircraft is
+        // press, measured), and its release a set of 0 with the event already at 0, which was measured as a press on 9
+        // of these buttons: two picks could flip the switch three times. So nothing more is sent, and the earlier
+        // pick's read-back puts the row where the aircraft is
         if (plan.Calls.Any(call => call is A330InputEventPressCall p && _heldPresses.Contains(p.Event))) return true;
         string? refusal = Dispatch(varDef, plan, io);
         if (refusal != null)
@@ -329,8 +330,8 @@ public partial class IniA330Definition
         return null;
     }
 
-    /// <summary>A press by value's release, after its hold. Always sent, whatever pick comes in meanwhile (a press left at
-    /// 1 would make the next set of 1 a second press). Awaited on the caller's context, the UI thread, as
+    /// <summary>A press by value's release, after its hold. Always sent, whatever pick comes in meanwhile, so the event is
+    /// left released at 0, where a clean press leaves it. Awaited on the caller's context, the UI thread, as
     /// <c>PressByValue</c>'s release is: the input-event hashes and the SimConnect handle belong to it.</summary>
     private async Task ReleaseAfterHoldAsync(A330InputEventPressCall press, A330PanelIo io)
     {

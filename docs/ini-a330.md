@@ -14,10 +14,12 @@ different aircraft built on the FlyByWire A32NX.
   * selectors and latching switches: `SetInputEvent(hash, value)` where the value is the POSITION;
   * momentary keys only react to the calculator form `(>B:NAME_Push)` / `(>B:NAME_Release)` —
     SetInputEvent with 1 then 0 does nothing on them.
-  * push-buttons that toggle (73, measured 2026-11-27: `mode: toggle` with `press` / `release` in
-    the map): every SetInputEvent is a press except a change from 1 to 0, so a pick presses once by
-    value (set 1, the hold, set 0), only when the control's read differs from the pick. Their input
-    event's own value rests at 0 whatever the switch shows.
+  * push-buttons that toggle (73, found 2026-11-27: `mode: toggle` with `press` / `release` in
+    the map): a pick presses once by value (set 1, the hold, set 0), only when the control's read
+    differs from the pick. The model behind it, that every SetInputEvent is a press except a change
+    from 1 to 0, fits what was measured; which part was measured on which keys is in
+    `tools/a330-gen/README.md`. All 73 started with their input event's own value at 0, whatever the
+    switch showed.
   Conventions (measured, encoded in the map's `positions`): a push-button's input 0 = ON (its
   L:var reads 1; for the push-buttons that toggle the input drives no write), a 3-position switch is
   numbered from the TOP (0 = top), a 2-position switch has 1 = top. Never assume the L:var value

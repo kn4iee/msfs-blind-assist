@@ -459,8 +459,8 @@ public class A330PanelSetTests
     [Fact]
     public void A_toggle_push_button_is_pressed_by_value_when_its_read_differs()
     {
-        // measured 2026-11-27: every SetInputEvent is a press except a change from 1 to 0, so one clean press is set 1,
-        // the hold, set 0, whichever way the switch goes; the positions' own inputs (On 0, Off 1) are never sent
+        // the model the 2026-11-27 sweep fits (every SetInputEvent is a press except a change from 1 to 0): one clean
+        // press is set 1, the hold, set 0, whichever way the switch goes; the positions' own inputs (On 0, Off 1) are never sent
         foreach (var (read, pick) in new[] { (0.0, 1.0), (1.0, 0.0) })
         {
             var io = new FakeIo { CanCalc = false };   // an input event needs no MobiFlight
@@ -542,8 +542,8 @@ public class A330PanelSetTests
     public async Task A_pick_while_its_press_is_held_presses_nothing_more()
     {
         // a second press inside the hold would be a set of 1 with the event at 1 (a press), and its release a set of 0
-        // with the event already at 0 (a press too): three flips for two picks. So nothing more is sent; the first
-        // pick's read-back puts the row where the aircraft is
+        // with the event already at 0 (measured as a press on 9 of these buttons): up to three flips for two picks. So
+        // nothing more is sent; the first pick's read-back puts the row where the aircraft is
         var io = new FakeIo { Gate = new TaskCompletionSource() };
         io.Cache[PushToggleKey] = 0;
         var def = new Def(io);

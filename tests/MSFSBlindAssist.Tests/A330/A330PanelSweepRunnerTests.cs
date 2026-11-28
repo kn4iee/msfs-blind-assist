@@ -461,8 +461,9 @@ public class A330PanelSweepRunnerTests
         public int? ThrowOnSet;
         private int _sets;
 
-        /// <summary>Push-buttons that toggle, as measured on 2026-11-27: every set of the event is a press that flips the
-        /// variable it drives, except a change of the event's own value from 1 to 0 (the release).</summary>
+        /// <summary>Push-buttons that toggle, by the model the 2026-11-27 sweep fits (tools/a330-gen/README.md says which
+        /// part was measured on which keys): every set of the event is a press that flips the variable it drives, except a
+        /// change of the event's own value from 1 to 0 (the release).</summary>
         public readonly HashSet<string> PressToggles = new(StringComparer.Ordinal);
         /// <summary>Push-buttons whose press changes the event's own value but never flips what it drives.</summary>
         public readonly HashSet<string> Stuck = new(StringComparer.Ordinal);
@@ -611,6 +612,73 @@ public class A330PanelSweepRunnerTests
         // and a press that flipped it is judged as any write
         Assert.Equal(SweepVerdict.ReadOnly,
             SweepVerdicts.Classify(new WriteObservation { Toggle = true, ReadBefore = 1, Read = Moved(0), ExpectedRead = 0 }).Verdict);
+    }
+
+    [Fact]
+    public void Restore_stops_at_a_toggle_that_did_not_come_back()
+    {
+        // put back last first: U (a selector that will not come back: listed, and the restore goes on), then T (a
+        // push-button pressed once that did not come back: the restore stops there), then S (never written)
+        var s = Select("S", P(0, 0, "Off"), P(1, 1, "On"));
+        var t = Toggle("T");
+        var u = Select("U", P(0, 0, "Off"), P(1, 1, "On"));
+        var aircraft = new FakeAircraft();
+        aircraft.Add(s, 1);   // S is On, its journal says Off
+        aircraft.AddToggle(t, read: 0, own: 0);
+        aircraft.Stuck.Add("EV_T");
+        aircraft.Add(u, 1);
+        aircraft.Ignores["EV_U"] = 0;   // U will not go back Off
+        var entries = SweepJournal.Parse(
+            "start\tS\tinput-event\tEV_S\t0\tINI_S\t0\n" +
+            "start\tT\ttoggle\tEV_T\t0\tINI_T\t1\n" +
+            "start\tU\tinput-event\tEV_U\t0\tINI_U\t0\n");
+        var said = new List<string>();
+        var session = new SweepSession(new[] { s, t, u }, new Dictionary<string, string>(), aircraft, new SweepSinks(_ => { }, _ => { }, said.Add));
+
+        var run = session.RestoreJournal(entries, () => null, _ => false);
+
+        Assert.Equal("T", run.StoppedAt);
+        Assert.Equal(2, run.Tried);
+        Assert.DoesNotContain(aircraft.Sent, x => x.StartsWith("EV_S", StringComparison.Ordinal));
+        Assert.Equal(new[] { "EV_T=1", "EV_T=0" }, aircraft.Sent.Where(x => x.StartsWith("EV_T", StringComparison.Ordinal)).ToArray());   // once
+        Assert.Equal(2, run.NotPutBack.Count);
+        Assert.StartsWith("U", run.NotPutBack[0], StringComparison.Ordinal);
+        Assert.Contains("T (T)", run.NotPutBack[1], StringComparison.Ordinal);
+        Assert.Contains("by hand", run.NotPutBack[1], StringComparison.Ordinal);
+        Assert.Contains("On", run.NotPutBack[1], StringComparison.Ordinal);   // the position it started at
+        Assert.Contains(said, l => l.StartsWith("Stopped at T", StringComparison.Ordinal) && l.Contains("run --restore again", StringComparison.Ordinal));
+
+        // a toggle that came back does not stop it: every entry is tried
+        var fine = new FakeAircraft();
+        fine.Add(s, 0);
+        fine.AddToggle(t, read: 0, own: 0);
+        fine.Add(u, 0);
+        var all = new SweepSession(new[] { s, t, u }, new Dictionary<string, string>(), fine, new SweepSinks(_ => { }, _ => { }, _ => { }))
+            .RestoreJournal(entries, () => null, _ => false);
+        Assert.Null(all.StoppedAt);
+        Assert.Equal(3, all.Tried);
+        Assert.Empty(all.NotPutBack);
+    }
+
+    [Fact]
+    public void A_toggles_press_is_released_in_the_same_uninterrupted_call_even_when_the_hold_throws()
+    {
+        var t = Toggle("T");
+        var aircraft = new FakeAircraft { ThrowOnSleepOf = IniA330Definition.DefaultPushMs };   // the first press's hold is cut short
+        aircraft.AddToggle(t, read: 1, own: 0);
+
+        var (outcome, rows, _) = Sweep(aircraft, t);
+
+        Assert.Equal("EV_T=1", aircraft.Sent[0]);
+        Assert.Equal("EV_T=0", aircraft.Sent[1]);   // released, though the hold threw
+        Assert.Equal(aircraft.CallOf[0], aircraft.CallOf[1]);
+        Assert.DoesNotContain(-1, aircraft.CallOf);
+        Assert.NotNull(outcome.StopReason);
+        Assert.Contains(rows, r => r.Key == "T" && r.Verdict.StartsWith("error:", StringComparison.Ordinal));
+        // the put-back then pressed it once, by its read, and it came back; the event is left released
+        Assert.Equal("restored", rows.Single(r => r.Position == "(restore) start").Verdict);
+        Assert.Equal(1, aircraft.Vars["INI_T"]);
+        Assert.Equal(0, aircraft.Events["EV_T"]);
     }
 
     [Fact]
